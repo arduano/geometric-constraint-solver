@@ -7,12 +7,13 @@ use crate::{
     AuditBinding, CoreError, EvaluationError, LocalJacobian, ResidualBlock, ResidualCategory,
     ResidualId, SourceConstraint, SourceConstraintId, VariableBlock, VariableId, VariableKind,
     VariableValue,
+    analysis::{AliasElimination, DecompositionCache, FixedElimination},
 };
 
 #[derive(Debug)]
-struct StableStore<K: Key, V> {
-    values: SlotMap<K, V>,
-    insertion_order: Vec<K>,
+pub(crate) struct StableStore<K: Key, V> {
+    pub(crate) values: SlotMap<K, V>,
+    pub(crate) insertion_order: Vec<K>,
 }
 
 impl<K: Key, V> StableStore<K, V> {
@@ -29,11 +30,11 @@ impl<K: Key, V> StableStore<K, V> {
         key
     }
 
-    fn get(&self, key: K) -> Option<&V> {
+    pub(crate) fn get(&self, key: K) -> Option<&V> {
         self.values.get(key)
     }
 
-    fn get_mut(&mut self, key: K) -> Option<&mut V> {
+    pub(crate) fn get_mut(&mut self, key: K) -> Option<&mut V> {
         self.values.get_mut(key)
     }
 
@@ -41,7 +42,7 @@ impl<K: Key, V> StableStore<K, V> {
         self.values.remove(key)
     }
 
-    fn iter(&self) -> impl Iterator<Item = (K, &V)> {
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (K, &V)> {
         self.insertion_order
             .iter()
             .filter_map(|&key| self.values.get(key).map(|value| (key, value)))
@@ -187,6 +188,16 @@ pub struct AuditRowSnapshot {
     pub scale: f64,
     pub raw_residual: f64,
     pub normalized_residual: f64,
+    pub evaluation_status: AuditEvaluationStatus,
+    pub evaluation_error: Option<String>,
+    pub annotations: AuditAnnotations,
+}
+
+/// Whether executable value/Jacobian evaluation succeeded for an audit row.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AuditEvaluationStatus {
+    Evaluated,
+    Failed,
 }
 
 /// One incident variable evaluated at the audit snapshot state.
@@ -202,6 +213,18 @@ pub struct AuditSourceSnapshot {
     pub source_id: SourceConstraintId,
     pub source_label: String,
     pub rows: Vec<AuditRowSnapshot>,
+    pub annotations: AuditAnnotations,
+}
+
+/// Diagnostic flags evaluated at the same returned state as audit values.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct AuditAnnotations {
+    pub eliminated: bool,
+    pub suppressed: bool,
+    pub redundant: bool,
+    pub conflicting: bool,
+    pub singular: bool,
 }
 
 /// Deterministically ordered equation audit for a finite problem state.
@@ -261,9 +284,12 @@ impl JacobianCheckReport {
 /// Domain-independent storage and assembly for one equality problem.
 #[derive(Debug)]
 pub struct Problem {
-    variables: StableStore<VariableId, VariableBlock>,
-    residuals: StableStore<ResidualId, ResidualBlock>,
-    sources: StableStore<SourceConstraintId, SourceConstraint>,
+    pub(crate) variables: StableStore<VariableId, VariableBlock>,
+    pub(crate) residuals: StableStore<ResidualId, ResidualBlock>,
+    pub(crate) sources: StableStore<SourceConstraintId, SourceConstraint>,
+    pub(crate) fixed_eliminations: Vec<FixedElimination>,
+    pub(crate) alias_eliminations: Vec<AliasElimination>,
+    pub(crate) decomposition_cache: Option<DecompositionCache>,
 }
 
 #[derive(Clone, Debug)]
@@ -284,6 +310,9 @@ impl Problem {
             variables: StableStore::new(),
             residuals: StableStore::new(),
             sources: StableStore::new(),
+            fixed_eliminations: Vec::new(),
+            alias_eliminations: Vec::new(),
+            decomposition_cache: None,
         }
     }
 
@@ -510,54 +539,96 @@ impl Problem {
     /// value is invalid. Rows are grouped in deterministic source-store order.
     pub fn audit_snapshot(&self) -> Result<AuditSnapshot, CoreError> {
         let state = self.variable_state();
-        let mut snapshot = AuditSnapshot::default();
-        for (source_id, source) in self.sources.iter() {
-            if self
-                .residuals
-                .iter()
-                .any(|(_, residual)| residual.source() == source_id)
-            {
-                snapshot.sources.push(AuditSourceSnapshot {
-                    source_id,
-                    source_label: source.label().to_owned(),
-                    rows: Vec::new(),
-                });
-            }
-        }
+        let mut snapshot = self.audit_source_shell();
         for (residual_id, residual) in self.residuals.iter() {
             let variables = Self::incident_values_from_state(residual, &state)?;
             let raw_values = evaluate_values(residual_id, residual, &variables)?;
             let normalized_values = normalize_residuals(residual, &raw_values)?;
-            let incident_variables: Vec<_> = residual
-                .incident_variables()
-                .iter()
-                .copied()
-                .zip(variables.iter().copied())
-                .map(|(variable_id, value)| AuditVariableSnapshot { variable_id, value })
-                .collect();
-
-            let source_index = snapshot
-                .sources
-                .iter()
-                .position(|item| item.source_id == residual.source())
-                .ok_or(CoreError::UnknownSource(residual.source()))?;
-            let source_snapshot = &mut snapshot.sources[source_index];
-            for (row_in_block, audit) in residual.audit_rows().iter().enumerate() {
-                source_snapshot.rows.push(AuditRowSnapshot {
-                    residual_id,
-                    category: residual.category(),
-                    row_in_block,
-                    template: audit.template.clone(),
-                    bindings: audit.bindings.clone(),
-                    incident_variables: incident_variables.clone(),
-                    unit: audit.unit.clone(),
-                    scale: residual.scales()[row_in_block],
-                    raw_residual: raw_values[row_in_block],
-                    normalized_residual: normalized_values[row_in_block],
-                });
-            }
+            append_audit_rows(
+                &mut snapshot,
+                residual_id,
+                residual,
+                &variables,
+                &raw_values,
+                &normalized_values,
+            )?;
         }
         Ok(snapshot)
+    }
+
+    pub(crate) fn audit_snapshot_partial(&self) -> AuditSnapshot {
+        let state = self.variable_state();
+        let mut snapshot = self.audit_source_shell();
+        for (residual_id, residual) in self.residuals.iter() {
+            let variables = match Self::incident_values_from_state(residual, &state) {
+                Ok(variables) => variables,
+                Err(error) => {
+                    append_failed_audit_rows(
+                        &mut snapshot,
+                        residual_id,
+                        residual,
+                        &[],
+                        &error.to_string(),
+                    );
+                    continue;
+                }
+            };
+            let raw_values = match evaluate_values(residual_id, residual, &variables) {
+                Ok(values) => values,
+                Err(error) => {
+                    append_failed_audit_rows(
+                        &mut snapshot,
+                        residual_id,
+                        residual,
+                        &variables,
+                        &error.to_string(),
+                    );
+                    continue;
+                }
+            };
+            let normalized_values = match normalize_residuals(residual, &raw_values) {
+                Ok(values) => values,
+                Err(error) => {
+                    append_failed_audit_rows(
+                        &mut snapshot,
+                        residual_id,
+                        residual,
+                        &variables,
+                        &error.to_string(),
+                    );
+                    continue;
+                }
+            };
+            let _ = append_audit_rows(
+                &mut snapshot,
+                residual_id,
+                residual,
+                &variables,
+                &raw_values,
+                &normalized_values,
+            );
+        }
+        snapshot
+    }
+
+    fn audit_source_shell(&self) -> AuditSnapshot {
+        AuditSnapshot {
+            sources: self
+                .sources
+                .iter()
+                .filter(|(source_id, _)| {
+                    self.residuals
+                        .iter()
+                        .any(|(_, residual)| residual.source() == *source_id)
+                })
+                .map(|(source_id, source)| AuditSourceSnapshot {
+                    source_id,
+                    source_label: source.label().to_owned(),
+                    rows: Vec::new(),
+                    annotations: AuditAnnotations::default(),
+                })
+                .collect(),
+        }
     }
 
     /// Evaluates and validates all blocks before constructing dense matrices.
@@ -575,12 +646,31 @@ impl Problem {
         &self,
         state: &VariableState,
     ) -> Result<DenseAssembly, CoreError> {
+        self.assemble_dense_for_state_filtered(state, None)
+    }
+
+    pub(crate) fn assemble_dense_for_residuals(
+        &self,
+        state: &VariableState,
+        residual_ids: &[ResidualId],
+    ) -> Result<DenseAssembly, CoreError> {
+        self.assemble_dense_for_state_filtered(state, Some(residual_ids))
+    }
+
+    fn assemble_dense_for_state_filtered(
+        &self,
+        state: &VariableState,
+        residual_filter: Option<&[ResidualId]>,
+    ) -> Result<DenseAssembly, CoreError> {
         self.validate_variable_state(state)?;
         let variable_layout = self.packed_layout()?;
         let mut evaluated_blocks = Vec::new();
         let mut total_rows = 0usize;
 
         for (residual_id, residual) in self.residuals.iter() {
+            if residual_filter.is_some_and(|filter| !filter.contains(&residual_id)) {
+                continue;
+            }
             let values = Self::incident_values_from_state(residual, state)?;
             let residual_values = evaluate_values(residual_id, residual, &values)?;
             let jacobians = evaluate_jacobians(residual_id, residual, &values, self)?;
@@ -791,15 +881,27 @@ impl Problem {
         self.sources.iter().map(|(id, _)| id).collect()
     }
 
-    pub(crate) fn normalized_category_values(
+    pub(crate) fn normalized_category_values_for_residuals(
         &self,
         state: &VariableState,
         category: ResidualCategory,
+        residual_ids: &[ResidualId],
+    ) -> Result<Vec<(ResidualId, usize, SourceConstraintId, f64)>, CoreError> {
+        self.normalized_category_values_filtered(state, category, Some(residual_ids))
+    }
+
+    fn normalized_category_values_filtered(
+        &self,
+        state: &VariableState,
+        category: ResidualCategory,
+        residual_filter: Option<&[ResidualId]>,
     ) -> Result<Vec<(ResidualId, usize, SourceConstraintId, f64)>, CoreError> {
         self.validate_variable_state(state)?;
         let mut values = Vec::new();
         for (residual_id, residual) in self.residuals.iter() {
-            if residual.category() != category {
+            if residual.category() != category
+                || residual_filter.is_some_and(|filter| !filter.contains(&residual_id))
+            {
                 continue;
             }
             let variables = Self::incident_values_from_state(residual, state)?;
@@ -851,6 +953,86 @@ impl Problem {
             value.validate_finite()?;
         }
         Ok(())
+    }
+}
+
+fn append_audit_rows(
+    snapshot: &mut AuditSnapshot,
+    residual_id: ResidualId,
+    residual: &ResidualBlock,
+    variables: &[VariableValue],
+    raw_values: &[f64],
+    normalized_values: &[f64],
+) -> Result<(), CoreError> {
+    let incident_variables: Vec<_> = residual
+        .incident_variables()
+        .iter()
+        .copied()
+        .zip(variables.iter().copied())
+        .map(|(variable_id, value)| AuditVariableSnapshot { variable_id, value })
+        .collect();
+    let source_snapshot = snapshot
+        .sources
+        .iter_mut()
+        .find(|item| item.source_id == residual.source())
+        .ok_or(CoreError::UnknownSource(residual.source()))?;
+    for (row_in_block, audit) in residual.audit_rows().iter().enumerate() {
+        source_snapshot.rows.push(AuditRowSnapshot {
+            residual_id,
+            category: residual.category(),
+            row_in_block,
+            template: audit.template.clone(),
+            bindings: audit.bindings.clone(),
+            incident_variables: incident_variables.clone(),
+            unit: audit.unit.clone(),
+            scale: residual.scales()[row_in_block],
+            raw_residual: raw_values[row_in_block],
+            normalized_residual: normalized_values[row_in_block],
+            evaluation_status: AuditEvaluationStatus::Evaluated,
+            evaluation_error: None,
+            annotations: AuditAnnotations::default(),
+        });
+    }
+    Ok(())
+}
+
+fn append_failed_audit_rows(
+    snapshot: &mut AuditSnapshot,
+    residual_id: ResidualId,
+    residual: &ResidualBlock,
+    variables: &[VariableValue],
+    error: &str,
+) {
+    let incident_variables: Vec<_> = residual
+        .incident_variables()
+        .iter()
+        .copied()
+        .zip(variables.iter().copied())
+        .map(|(variable_id, value)| AuditVariableSnapshot { variable_id, value })
+        .collect();
+    let Some(source_snapshot) = snapshot
+        .sources
+        .iter_mut()
+        .find(|item| item.source_id == residual.source())
+    else {
+        return;
+    };
+    for (row_in_block, audit) in residual.audit_rows().iter().enumerate() {
+        source_snapshot.rows.push(AuditRowSnapshot {
+            residual_id,
+            category: residual.category(),
+            row_in_block,
+            template: audit.template.clone(),
+            bindings: audit.bindings.clone(),
+            incident_variables: incident_variables.clone(),
+            unit: audit.unit.clone(),
+            scale: residual.scales()[row_in_block],
+            raw_residual: 0.0,
+            normalized_residual: 0.0,
+            evaluation_status: AuditEvaluationStatus::Failed,
+            evaluation_error: Some(error.to_owned()),
+            annotations: AuditAnnotations::default(),
+        });
     }
 }
 

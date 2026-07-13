@@ -2,23 +2,31 @@
 
 use slotmap::new_key_type;
 
+mod analysis;
 mod error;
 mod problem;
 mod residual;
 mod solver;
 mod variable;
 
+pub use analysis::{
+    ComponentStructuralSummary, IncidenceAnalysis, IncidenceComponent, IncidenceEdge,
+    StructuralSummary,
+};
 pub use error::CoreError;
 pub use problem::{
-    AuditRowDescriptor, AuditRowSnapshot, AuditSnapshot, AuditSourceSnapshot,
-    AuditVariableSnapshot, BlockLayout, DenseAssembly, JacobianBlockReport, JacobianCheckReport,
-    PackedLayout, PackedState, Problem, ResidualLayout,
+    AuditAnnotations, AuditEvaluationStatus, AuditRowDescriptor, AuditRowSnapshot, AuditSnapshot,
+    AuditSourceSnapshot, AuditVariableSnapshot, BlockLayout, DenseAssembly, JacobianBlockReport,
+    JacobianCheckReport, PackedLayout, PackedState, Problem, ResidualLayout,
 };
 pub use residual::{
     AuditBinding, EvaluationError, LocalJacobian, ResidualBlock, ResidualCategory,
     ResidualEvaluator, ResidualRowAudit, SourceConstraint,
 };
-pub use solver::{SolveReport, SolveTermination, SolveTrace, SolveTraceRecord, SolverConfig};
+pub use solver::{
+    ComponentSolveReport, RedundancyKind, RedundantRowCandidate, ResidualRowRef, SolveReport,
+    SolveTermination, SolveTrace, SolveTraceRecord, SolverConfig,
+};
 pub use variable::{VariableBlock, VariableKind, VariableValue};
 
 new_key_type! {

@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use thiserror::Error;
 
 use crate::variable::validate_scales;
-use crate::{CoreError, SourceConstraintId, VariableId, VariableValue};
+use crate::{CoreError, SourceConstraintId, VariableId, VariableKind, VariableValue};
 
 /// Priority class retained separately from nonlinear equation scaling.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -158,6 +158,21 @@ pub struct ResidualBlock {
     scales: Vec<f64>,
     audit_rows: Vec<ResidualRowAudit>,
     evaluator: Box<dyn ResidualEvaluator>,
+    exact_elimination: Option<ExactElimination>,
+}
+
+/// Trusted elimination meaning attached only by core-owned residual constructors.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum ExactElimination {
+    Fixed {
+        variable_id: VariableId,
+        value: VariableValue,
+    },
+    Alias {
+        alias: VariableId,
+        representative: VariableId,
+        kind: VariableKind,
+    },
 }
 
 impl ResidualBlock {
@@ -213,7 +228,68 @@ impl ResidualBlock {
             scales,
             audit_rows,
             evaluator: Box::new(evaluator),
+            exact_elimination: None,
         })
+    }
+
+    /// Creates a trusted exact residual fixing an entire variable block.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for inconsistent dimensions, invalid scales, non-finite
+    /// fixed data, or incomplete audit metadata.
+    pub fn fixed_variable(
+        source: SourceConstraintId,
+        variable_id: VariableId,
+        value: VariableValue,
+        scales: Vec<f64>,
+        audit_rows: Vec<ResidualRowAudit>,
+    ) -> Result<Self, CoreError> {
+        value.validate_finite()?;
+        let dimension = value.kind().tangent_dimension();
+        let mut residual = Self::new(
+            source,
+            ResidualCategory::Hard,
+            vec![variable_id],
+            dimension,
+            scales,
+            audit_rows,
+            FixedVariableEvaluator { value },
+        )?;
+        residual.exact_elimination = Some(ExactElimination::Fixed { variable_id, value });
+        Ok(residual)
+    }
+
+    /// Creates a trusted exact residual enforcing `alias == representative`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for inconsistent dimensions, invalid scales, or
+    /// incomplete audit metadata.
+    pub fn exact_alias(
+        source: SourceConstraintId,
+        alias: VariableId,
+        representative: VariableId,
+        kind: VariableKind,
+        scales: Vec<f64>,
+        audit_rows: Vec<ResidualRowAudit>,
+    ) -> Result<Self, CoreError> {
+        let dimension = kind.tangent_dimension();
+        let mut residual = Self::new(
+            source,
+            ResidualCategory::Hard,
+            vec![alias, representative],
+            dimension,
+            scales,
+            audit_rows,
+            ExactAliasEvaluator { kind },
+        )?;
+        residual.exact_elimination = Some(ExactElimination::Alias {
+            alias,
+            representative,
+            kind,
+        });
+        Ok(residual)
     }
 
     #[must_use]
@@ -249,6 +325,102 @@ impl ResidualBlock {
     pub(crate) fn evaluator(&self) -> &dyn ResidualEvaluator {
         self.evaluator.as_ref()
     }
+
+    pub(crate) const fn exact_elimination(&self) -> Option<ExactElimination> {
+        self.exact_elimination
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct FixedVariableEvaluator {
+    value: VariableValue,
+}
+
+impl ResidualEvaluator for FixedVariableEvaluator {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        let [value] = variables else {
+            return Err(EvaluationError::invalid_geometry(
+                "fixed residual expected one variable",
+            ));
+        };
+        if value.kind() != self.value.kind() {
+            return Err(EvaluationError::invalid_geometry(
+                "fixed residual variable kind changed",
+            ));
+        }
+        Ok(value
+            .ambient_values()
+            .iter()
+            .zip(self.value.ambient_values())
+            .map(|(actual, expected)| actual - expected)
+            .collect())
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        let [value] = variables else {
+            return Err(EvaluationError::invalid_geometry(
+                "fixed residual expected one variable",
+            ));
+        };
+        if value.kind() != self.value.kind() {
+            return Err(EvaluationError::invalid_geometry(
+                "fixed residual variable kind changed",
+            ));
+        }
+        Ok(vec![identity_jacobian(value.kind(), 1.0)])
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ExactAliasEvaluator {
+    kind: VariableKind,
+}
+
+impl ResidualEvaluator for ExactAliasEvaluator {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        let [alias, representative] = variables else {
+            return Err(EvaluationError::invalid_geometry(
+                "alias residual expected two variables",
+            ));
+        };
+        if alias.kind() != self.kind || representative.kind() != self.kind {
+            return Err(EvaluationError::invalid_geometry(
+                "alias residual variable kind changed",
+            ));
+        }
+        Ok(alias
+            .ambient_values()
+            .iter()
+            .zip(representative.ambient_values())
+            .map(|(alias, representative)| alias - representative)
+            .collect())
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        let [alias, representative] = variables else {
+            return Err(EvaluationError::invalid_geometry(
+                "alias residual expected two variables",
+            ));
+        };
+        if alias.kind() != self.kind || representative.kind() != self.kind {
+            return Err(EvaluationError::invalid_geometry(
+                "alias residual variable kind changed",
+            ));
+        }
+        Ok(vec![
+            identity_jacobian(self.kind, 1.0),
+            identity_jacobian(self.kind, -1.0),
+        ])
+    }
+}
+
+fn identity_jacobian(kind: VariableKind, sign: f64) -> LocalJacobian {
+    let dimension = kind.tangent_dimension();
+    let mut values = vec![0.0; dimension * dimension];
+    for coordinate in 0..dimension {
+        values[coordinate * dimension + coordinate] = sign;
+    }
+    LocalJacobian::new(dimension, dimension, values)
 }
 
 fn validate_audit_row(row: &ResidualRowAudit) -> Result<(), CoreError> {

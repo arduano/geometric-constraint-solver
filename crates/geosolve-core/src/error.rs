@@ -58,4 +58,22 @@ pub enum CoreError {
         field: &'static str,
         message: &'static str,
     },
+    #[error("residual {residual:?} is not a valid {declaration} elimination row: {message}")]
+    InvalidEliminationResidual {
+        residual: ResidualId,
+        declaration: &'static str,
+        message: &'static str,
+    },
+    #[error("variable {variable:?} has conflicting elimination declarations: {message}")]
+    ConflictingElimination {
+        variable: VariableId,
+        message: &'static str,
+    },
+    #[error("exact aliases {alias:?} and {representative:?} have different step scales")]
+    AliasScaleMismatch {
+        alias: VariableId,
+        representative: VariableId,
+    },
+    #[error("exact alias declaration for {variable:?} creates a cycle")]
+    AliasCycle { variable: VariableId },
 }

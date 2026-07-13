@@ -619,7 +619,7 @@ fn redundancy_uses_complete_nonzero_source_groups() {
 
 #[test]
 fn contradictory_rows_do_not_converge_or_commit_non_finite_state() {
-    let (mut problem, variable, _zero, _one) = contradictory_problem(1.0);
+    let (mut problem, variable, zero, one) = contradictory_problem(1.0);
 
     let report = problem.solve(SolverConfig::default()).unwrap();
     assert_ne!(report.termination, SolveTermination::Converged);
@@ -634,7 +634,7 @@ fn contradictory_rows_do_not_converge_or_commit_non_finite_state() {
             .all(|value| value.is_finite())
     );
     assert!(report.redundant_sources.is_empty());
-    assert!(report.conflicting_sources.is_empty());
+    assert_eq!(report.conflicting_sources, vec![zero, one]);
 }
 
 #[test]

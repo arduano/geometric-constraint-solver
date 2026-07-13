@@ -164,18 +164,20 @@ separately from all correctness tolerances.
 
 Goal: make large/disconnected systems tractable and diagnose synthetic redundancy/conflict before domain UX is involved.
 
+Status: complete as of 2026-07-14.
+
 Implement in core:
 
-1. Variable/residual bipartite incidence graph.
-2. Connected-component decomposition.
-3. Fixed-variable and exact-equality alias elimination where mathematically safe.
-4. Component-level structural pattern caching.
-5. Reuse of unaffected component solutions/traces.
-6. Structural count summary alongside numerical rank.
-7. Redundant-row/source candidates.
-8. Conflict source candidates using bounded deletion/re-solve for small components.
-9. Deterministic mapping from generated scalar rows back to one high-level source.
-10. Audit snapshot annotations for eliminated, redundant, conflicting and singular rows/sources.
+1. [x] Variable/residual bipartite incidence graph.
+2. [x] Connected-component decomposition.
+3. [x] Fixed-variable and exact-equality alias elimination where mathematically safe.
+4. [x] Component-level structural pattern caching.
+5. [x] Reuse of unaffected component solutions/traces.
+6. [x] Structural count summary alongside numerical rank.
+7. [x] Redundant-row/source candidates.
+8. [x] Conflict source candidates using bounded deletion/re-solve for small components.
+9. [x] Deterministic mapping from generated scalar rows back to one high-level source.
+10. [x] Audit snapshot annotations for eliminated, redundant, conflicting and singular rows/sources.
 
 Required synthetic fixtures:
 
@@ -196,6 +198,17 @@ Constraints:
 - conflict output is a deterministic candidate set, not a claim of globally minimal unsatisfiable core.
 
 Gate: diagnostics/decomposition section of `ACCEPTANCE.md` using synthetic systems.
+
+Completion notes: original incidence remains available for audit while solve
+components are rebuilt after trusted core fixed/alias elimination. Dense assembly,
+validation, traces, rank thresholds and diagnostics are component-scoped; cached
+states are independently revalidated at the requested tolerance before zero-step
+reuse. Conflict trials suppress both a source's rows and elimination semantics and
+are bounded independently per failed component. Reports aggregate component rank
+and DOF, distinguish fully redundant sources from sources containing dependent
+rows, validate all non-objective values/Jacobians at the returned state, and retain
+every audit row with explicit evaluation status. Audit annotations cover eliminated,
+redundant, conflicting and conservatively singular rows/sources.
 
 ### Human checkpoint A — after M4
 
