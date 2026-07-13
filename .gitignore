@@ -1,0 +1,6 @@
+/target/
+**/dist/
+**/.trunk/
+*.profraw
+*.svg.tmp
+.DS_Store

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GeoSolve primitive demo</title>
+    <link data-trunk rel="css" href="styles.css" />
+    <link data-trunk rel="rust" data-wasm-opt="z" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>GeoSolve primitive demo</h1>
+        <label>
+          Scenario
+          <select id="scenario">
+            <option value="triangle">Underconstrained triangle</option>
+            <option value="four-bar">Four-bar linkage</option>
+            <option value="slider-crank">Slider-crank</option>
+          </select>
+        </label>
+      </header>
+      <section class="panel">
+        <svg id="viewport" viewBox="0 0 640 420" role="img" aria-label="Constraint solver scenario"></svg>
+      </section>
+      <p class="status">
+        This is the visual scaffold. Milestones M3 and M5 replace the static
+        coordinates with solved sketch and linkage state.
+      </p>
+    </main>
+  </body>
+</html>

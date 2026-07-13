@@ -1,0 +1,15 @@
+[package]
+name = "geosolve-sketch"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[dependencies]
+geosolve-core = { path = "../geosolve-core" }
+geosolve-geometry = { path = "../geosolve-geometry" }
+slotmap.workspace = true
+
+[lints]
+workspace = true

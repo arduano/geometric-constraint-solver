@@ -1,0 +1,21 @@
+[package]
+name = "geosolve-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[dependencies]
+indexmap.workspace = true
+nalgebra.workspace = true
+petgraph.workspace = true
+slotmap.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+approx = "0.5"
+proptest = "1.11.0"
+
+[lints]
+workspace = true
