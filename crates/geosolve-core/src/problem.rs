@@ -468,7 +468,7 @@ impl Problem {
         })
     }
 
-    /// Flattens source and row audit metadata in residual insertion order.
+    /// Flattens source and row audit metadata in executable residual row order.
     ///
     /// # Errors
     ///
@@ -507,15 +507,24 @@ impl Problem {
     /// # Errors
     ///
     /// Returns an error if any source, evaluator output, scale, or evaluated
-    /// value is invalid. Rows are grouped by source in first-use order.
+    /// value is invalid. Rows are grouped in deterministic source-store order.
     pub fn audit_snapshot(&self) -> Result<AuditSnapshot, CoreError> {
         let state = self.variable_state();
         let mut snapshot = AuditSnapshot::default();
+        for (source_id, source) in self.sources.iter() {
+            if self
+                .residuals
+                .iter()
+                .any(|(_, residual)| residual.source() == source_id)
+            {
+                snapshot.sources.push(AuditSourceSnapshot {
+                    source_id,
+                    source_label: source.label().to_owned(),
+                    rows: Vec::new(),
+                });
+            }
+        }
         for (residual_id, residual) in self.residuals.iter() {
-            let source = self
-                .sources
-                .get(residual.source())
-                .ok_or(CoreError::UnknownSource(residual.source()))?;
             let variables = Self::incident_values_from_state(residual, &state)?;
             let raw_values = evaluate_values(residual_id, residual, &variables)?;
             let normalized_values = normalize_residuals(residual, &raw_values)?;
@@ -531,14 +540,7 @@ impl Problem {
                 .sources
                 .iter()
                 .position(|item| item.source_id == residual.source())
-                .unwrap_or_else(|| {
-                    snapshot.sources.push(AuditSourceSnapshot {
-                        source_id: residual.source(),
-                        source_label: source.label().to_owned(),
-                        rows: Vec::new(),
-                    });
-                    snapshot.sources.len() - 1
-                });
+                .ok_or(CoreError::UnknownSource(residual.source()))?;
             let source_snapshot = &mut snapshot.sources[source_index];
             for (row_in_block, audit) in residual.audit_rows().iter().enumerate() {
                 source_snapshot.rows.push(AuditRowSnapshot {
@@ -783,6 +785,10 @@ impl Problem {
                 .map(|(id, variable)| (id, variable.value()))
                 .collect(),
         }
+    }
+
+    pub(crate) fn source_order(&self) -> Vec<SourceConstraintId> {
+        self.sources.iter().map(|(id, _)| id).collect()
     }
 
     pub(crate) fn normalized_category_values(

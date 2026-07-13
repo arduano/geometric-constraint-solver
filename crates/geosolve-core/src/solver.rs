@@ -392,6 +392,7 @@ impl Problem {
                         redundant_sources = find_redundant_sources(
                             &hard,
                             &validated_rows,
+                            &self.source_order(),
                             rank_threshold,
                             config.normalized_residual_tolerance,
                         );
@@ -519,23 +520,50 @@ fn lm_step(
     let mut right_hand_side = DVector::zeros(rows + columns);
     right_hand_side.rows_mut(0, rows).copy_from(&(-residuals));
 
-    let qr = augmented.clone().qr();
-    let mut transformed = right_hand_side.clone();
-    qr.q_tr_mul(&mut transformed);
-    let triangular = qr.r();
-    let transformed_top = transformed.rows(0, columns).into_owned();
-    if let Some(step) = triangular.solve_upper_triangular(&transformed_top)
-        && step.iter().all(|value| value.is_finite())
-    {
-        return Some(step);
+    solve_dense_least_squares(&augmented, &right_hand_side).map(|(solution, _)| solution)
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LinearSolveMethod {
+    Qr,
+    Svd,
+}
+
+fn solve_dense_least_squares(
+    matrix: &DMatrix<f64>,
+    right_hand_side: &DVector<f64>,
+) -> Option<(DVector<f64>, LinearSolveMethod)> {
+    let rows = matrix.nrows();
+    let columns = matrix.ncols();
+    if right_hand_side.len() != rows {
+        return None;
+    }
+    if columns == 0 {
+        return Some((DVector::zeros(0), LinearSolveMethod::Qr));
     }
 
-    let svd = augmented.svd(true, true);
+    if rows >= columns {
+        let qr = matrix.clone().qr();
+        let mut transformed = right_hand_side.clone();
+        qr.q_tr_mul(&mut transformed);
+        let triangular = qr.r();
+        let transformed_top = transformed.rows(0, columns).into_owned();
+        if let Some(solution) = triangular.solve_upper_triangular(&transformed_top)
+            && solution.iter().all(|value| value.is_finite())
+        {
+            return Some((solution, LinearSolveMethod::Qr));
+        }
+    }
+
+    let svd = matrix.clone().svd(true, true);
     let largest = svd.singular_values.iter().copied().fold(0.0_f64, f64::max);
-    let dimension = u32::try_from((rows + columns).max(columns)).ok()?;
+    let dimension = u32::try_from(rows.max(columns)).ok()?;
     let epsilon = f64::EPSILON * f64::from(dimension) * largest;
-    let step = svd.solve(&right_hand_side, epsilon).ok()?;
-    step.iter().all(|value| value.is_finite()).then_some(step)
+    let solution = svd.solve(right_hand_side, epsilon).ok()?;
+    solution
+        .iter()
+        .all(|value| value.is_finite())
+        .then_some((solution, LinearSolveMethod::Svd))
 }
 
 fn limit_block_steps(step: &mut DVector<f64>, layout: &PackedLayout, limit: f64) -> Option<f64> {
@@ -666,21 +694,22 @@ fn rank_diagnostics(jacobian: &DMatrix<f64>, relative_tolerance: f64) -> Option<
 fn find_redundant_sources(
     hard: &HardSystem,
     validated_rows: &[(ResidualId, usize, SourceConstraintId, f64)],
+    source_order: &[SourceConstraintId],
     threshold: f64,
     residual_tolerance: f64,
 ) -> Vec<SourceConstraintId> {
     let mut candidates = Vec::new();
-    let mut groups: Vec<(SourceConstraintId, Vec<usize>)> = Vec::new();
-    for (row_index, row) in hard.rows.iter().enumerate() {
-        if let Some((_, indices)) = groups.iter_mut().find(|group| group.0 == row.2) {
-            indices.push(row_index);
-        } else {
-            groups.push((row.2, vec![row_index]));
-        }
-    }
-
     let mut prior_rows = Vec::new();
-    for (source, source_rows) in groups {
+    for &source in source_order {
+        let source_rows: Vec<_> = hard
+            .rows
+            .iter()
+            .enumerate()
+            .filter_map(|(row_index, row)| (row.2 == source).then_some(row_index))
+            .collect();
+        if source_rows.is_empty() {
+            continue;
+        }
         let prior_rank = selected_row_rank(&hard.jacobian, &prior_rows, threshold);
         let all_rows_nonzero = !source_rows.is_empty()
             && source_rows.iter().all(|&row| {
@@ -797,5 +826,18 @@ mod tests {
         assert!(config.normalized_residual_tolerance.is_finite());
         assert!(config.normalized_residual_tolerance > 0.0);
         assert!(config.max_iterations > 0);
+    }
+
+    #[test]
+    fn singular_dense_system_falls_back_from_qr_to_svd() {
+        let matrix = DMatrix::from_row_slice(2, 2, &[1.0, 0.0, 0.0, 0.0]);
+        let right_hand_side = DVector::from_vec(vec![2.0, 0.0]);
+
+        let (solution, method) = solve_dense_least_squares(&matrix, &right_hand_side).unwrap();
+
+        assert_eq!(method, LinearSolveMethod::Svd);
+        assert!((solution[0] - 2.0).abs() <= f64::EPSILON);
+        assert!(solution[1].abs() <= f64::EPSILON);
+        assert!((&matrix * solution - right_hand_side).norm() <= f64::EPSILON);
     }
 }

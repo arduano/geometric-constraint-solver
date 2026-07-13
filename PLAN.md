@@ -118,23 +118,25 @@ classification at characteristic scales `1e-6`, `1`, and `1e6`.
 
 Goal: make wrong solver implementations difficult to hide before any UI or domain complexity exists.
 
+Status: complete as of 2026-07-13.
+
 Implement tests/tools, not new product features:
 
-1. Property-based generation of small linear systems with known rank, nullity and exact solution.
-2. Construct-valid nonlinear systems, perturb their state, then verify recovery from documented local basins.
-3. Translation, rotation and uniform-scale metamorphic tests.
-4. Variable/residual insertion-order permutation tests proving deterministic results and source ordering.
-5. Jacobian checker coverage for every synthetic residual and variable block.
-6. Failure injection:
-   - non-finite residual;
-   - non-finite Jacobian;
-   - zero/negative characteristic scale;
-   - singular linear solve;
-   - rejected steps until stagnation;
-   - iteration limit.
-7. Independent validation oracle that re-evaluates hard residuals without reusing cached iteration vectors.
-8. Solve trace invariant checks: accepted cost does not increase beyond policy tolerance, rejected states are not committed, and last-valid finite state is retained.
-9. Benchmark harness for small dense systems, recorded but not used to weaken correctness gates.
+1. [x] Property-based generation of small linear systems with known rank, nullity and exact solution.
+2. [x] Construct-valid nonlinear systems, perturb their state, then verify recovery from documented local basins.
+3. [x] Translation, rotation and uniform-scale metamorphic tests.
+4. [x] Variable/residual insertion-order permutation tests proving deterministic results and source ordering.
+5. [x] Jacobian checker coverage for every synthetic residual and variable block.
+6. [x] Failure injection:
+   - [x] non-finite residual;
+   - [x] non-finite Jacobian;
+   - [x] zero/negative characteristic scale;
+   - [x] singular linear solve;
+   - [x] rejected steps until stagnation;
+   - [x] iteration limit.
+7. [x] Independent validation oracle that re-evaluates hard residuals without reusing cached iteration vectors.
+8. [x] Solve trace invariant checks: accepted cost does not increase beyond policy tolerance, rejected states are not committed, and last-valid finite state is retained.
+9. [x] Benchmark harness for small dense systems, recorded but not used to weaken correctness gates.
 
 Constraints:
 
@@ -144,6 +146,19 @@ Constraints:
 - no sketch, linkage, browser interaction or sparse backend work.
 
 Gate: M3 section of `ACCEPTANCE.md`. All randomized/property tests must be reproducible.
+
+Completion notes: rank-by-construction properties run 32 cases for each of
+exact, underdetermined and overdetermined shapes with fixed ChaCha base seed
+`4d33a7419c2e5b7088d4f1036ac952ef117b8d60c4aa39e275018bc6de42f90a`,
+shape-tagged final bytes, disabled failure persistence and 2,048 shrink steps.
+Cases deterministically permute constructed rows and columns; failures print
+the effective seed and minimized case for direct reproduction. Independent
+fixture math validates returned linear, branch-sensitive circle and trace
+states, including accepted-then-invalid trials. Flat audit descriptors retain
+executable dense row order while grouped snapshots and redundancy candidates
+follow source-store order. A direct singular least-squares test exercises the
+SVD fallback. Criterion benchmarks fixed 2x2, 4x4 and 8x8 dense workloads
+separately from all correctness tolerances.
 
 ## M4 — Core decomposition, elimination and source-level diagnostics
 
