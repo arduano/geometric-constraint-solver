@@ -172,6 +172,44 @@ pub struct AuditRowDescriptor {
     pub scale: f64,
 }
 
+/// One evaluated scalar row from a particular problem state.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AuditRowSnapshot {
+    pub residual_id: ResidualId,
+    pub category: ResidualCategory,
+    pub row_in_block: usize,
+    pub template: String,
+    /// Static feature/reference bindings copied from the row descriptor.
+    pub bindings: Vec<AuditBinding>,
+    /// Current values of incident variables in declared incidence order.
+    pub incident_variables: Vec<AuditVariableSnapshot>,
+    pub unit: String,
+    pub scale: f64,
+    pub raw_residual: f64,
+    pub normalized_residual: f64,
+}
+
+/// One incident variable evaluated at the audit snapshot state.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AuditVariableSnapshot {
+    pub variable_id: VariableId,
+    pub value: VariableValue,
+}
+
+/// Evaluated rows grouped under one high-level source constraint.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AuditSourceSnapshot {
+    pub source_id: SourceConstraintId,
+    pub source_label: String,
+    pub rows: Vec<AuditRowSnapshot>,
+}
+
+/// Deterministically ordered equation audit for a finite problem state.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct AuditSnapshot {
+    pub sources: Vec<AuditSourceSnapshot>,
+}
+
 /// Analytic-versus-central-difference errors for one incidence block.
 #[derive(Clone, Debug, PartialEq)]
 pub struct JacobianBlockReport {
@@ -226,6 +264,11 @@ pub struct Problem {
     variables: StableStore<VariableId, VariableBlock>,
     residuals: StableStore<ResidualId, ResidualBlock>,
     sources: StableStore<SourceConstraintId, SourceConstraint>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct VariableState {
+    pub(crate) values: Vec<(VariableId, VariableValue)>,
 }
 
 impl Default for Problem {
@@ -459,6 +502,62 @@ impl Problem {
         Ok(descriptors)
     }
 
+    /// Evaluates raw and normalized audit rows at the current state.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any source, evaluator output, scale, or evaluated
+    /// value is invalid. Rows are grouped by source in first-use order.
+    pub fn audit_snapshot(&self) -> Result<AuditSnapshot, CoreError> {
+        let state = self.variable_state();
+        let mut snapshot = AuditSnapshot::default();
+        for (residual_id, residual) in self.residuals.iter() {
+            let source = self
+                .sources
+                .get(residual.source())
+                .ok_or(CoreError::UnknownSource(residual.source()))?;
+            let variables = Self::incident_values_from_state(residual, &state)?;
+            let raw_values = evaluate_values(residual_id, residual, &variables)?;
+            let normalized_values = normalize_residuals(residual, &raw_values)?;
+            let incident_variables: Vec<_> = residual
+                .incident_variables()
+                .iter()
+                .copied()
+                .zip(variables.iter().copied())
+                .map(|(variable_id, value)| AuditVariableSnapshot { variable_id, value })
+                .collect();
+
+            let source_index = snapshot
+                .sources
+                .iter()
+                .position(|item| item.source_id == residual.source())
+                .unwrap_or_else(|| {
+                    snapshot.sources.push(AuditSourceSnapshot {
+                        source_id: residual.source(),
+                        source_label: source.label().to_owned(),
+                        rows: Vec::new(),
+                    });
+                    snapshot.sources.len() - 1
+                });
+            let source_snapshot = &mut snapshot.sources[source_index];
+            for (row_in_block, audit) in residual.audit_rows().iter().enumerate() {
+                source_snapshot.rows.push(AuditRowSnapshot {
+                    residual_id,
+                    category: residual.category(),
+                    row_in_block,
+                    template: audit.template.clone(),
+                    bindings: audit.bindings.clone(),
+                    incident_variables: incident_variables.clone(),
+                    unit: audit.unit.clone(),
+                    scale: residual.scales()[row_in_block],
+                    raw_residual: raw_values[row_in_block],
+                    normalized_residual: normalized_values[row_in_block],
+                });
+            }
+        }
+        Ok(snapshot)
+    }
+
     /// Evaluates and validates all blocks before constructing dense matrices.
     ///
     /// # Errors
@@ -466,12 +565,21 @@ impl Problem {
     /// Returns an error for invalid IDs, dimensions, geometry, scales, or any
     /// non-finite raw or normalized value.
     pub fn assemble_dense(&self) -> Result<DenseAssembly, CoreError> {
+        let state = self.variable_state();
+        self.assemble_dense_for_state(&state)
+    }
+
+    pub(crate) fn assemble_dense_for_state(
+        &self,
+        state: &VariableState,
+    ) -> Result<DenseAssembly, CoreError> {
+        self.validate_variable_state(state)?;
         let variable_layout = self.packed_layout()?;
         let mut evaluated_blocks = Vec::new();
         let mut total_rows = 0usize;
 
         for (residual_id, residual) in self.residuals.iter() {
-            let values = self.incident_values(residual)?;
+            let values = Self::incident_values_from_state(residual, state)?;
             let residual_values = evaluate_values(residual_id, residual, &values)?;
             let jacobians = evaluate_jacobians(residual_id, residual, &values, self)?;
             let normalized_values = normalize_residuals(residual, &residual_values)?;
@@ -648,6 +756,95 @@ impl Problem {
                     .ok_or(CoreError::UnknownVariable(variable_id))
             })
             .collect()
+    }
+
+    fn incident_values_from_state(
+        residual: &ResidualBlock,
+        state: &VariableState,
+    ) -> Result<Vec<VariableValue>, CoreError> {
+        residual
+            .incident_variables()
+            .iter()
+            .map(|&variable_id| {
+                state
+                    .values
+                    .iter()
+                    .find_map(|&(id, value)| (id == variable_id).then_some(value))
+                    .ok_or(CoreError::UnknownVariable(variable_id))
+            })
+            .collect()
+    }
+
+    pub(crate) fn variable_state(&self) -> VariableState {
+        VariableState {
+            values: self
+                .variables
+                .iter()
+                .map(|(id, variable)| (id, variable.value()))
+                .collect(),
+        }
+    }
+
+    pub(crate) fn normalized_category_values(
+        &self,
+        state: &VariableState,
+        category: ResidualCategory,
+    ) -> Result<Vec<(ResidualId, usize, SourceConstraintId, f64)>, CoreError> {
+        self.validate_variable_state(state)?;
+        let mut values = Vec::new();
+        for (residual_id, residual) in self.residuals.iter() {
+            if residual.category() != category {
+                continue;
+            }
+            let variables = Self::incident_values_from_state(residual, state)?;
+            let raw = evaluate_values(residual_id, residual, &variables)?;
+            for (row, normalized) in normalize_residuals(residual, &raw)?.into_iter().enumerate() {
+                values.push((residual_id, row, residual.source(), normalized));
+            }
+        }
+        Ok(values)
+    }
+
+    pub(crate) fn replace_variable_state(
+        &mut self,
+        state: &VariableState,
+    ) -> Result<(), CoreError> {
+        self.validate_variable_state(state)?;
+        for &(id, value) in &state.values {
+            self.variables
+                .get_mut(id)
+                .ok_or(CoreError::UnknownVariable(id))?
+                .set_value(value)?;
+        }
+        Ok(())
+    }
+
+    fn validate_variable_state(&self, state: &VariableState) -> Result<(), CoreError> {
+        let expected = self.variables.iter().count();
+        if state.values.len() != expected {
+            return Err(CoreError::DimensionMismatch {
+                context: "solver variable state",
+                expected,
+                actual: state.values.len(),
+            });
+        }
+        for ((expected_id, variable), &(actual_id, value)) in
+            self.variables.iter().zip(&state.values)
+        {
+            if actual_id != expected_id {
+                return Err(CoreError::UnknownVariable(actual_id));
+            }
+            let expected_kind = variable.kind();
+            let actual_kind = value.kind();
+            if actual_kind != expected_kind {
+                return Err(CoreError::VariableKindMismatch {
+                    expected: expected_kind,
+                    actual: actual_kind,
+                });
+            }
+            value.validate_finite()?;
+        }
+        Ok(())
     }
 }
 

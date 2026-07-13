@@ -76,32 +76,43 @@ IDs/dimensions/geometry, and finite-difference relative error `<= 1e-6`.
 
 Goal: robustly solve and classify small connected nonlinear systems.
 
+Status: complete as of 2026-07-13.
+
 Implement:
 
-1. Dimensionless residual and step scaling.
-2. Damped Gauss-Newton or Levenberg-Marquardt with:
+- [x] Dimensionless residual and step scaling.
+- [x] Damped Gauss-Newton or Levenberg-Marquardt with:
    - adaptive damping;
    - accepted/rejected steps;
    - actual versus predicted reduction;
    - block-local step limits;
    - iteration, stagnation and numerical-failure termination.
-3. Dense QR/SVD solve fallback; never rely exclusively on `J^T J`.
-4. Numerical rank and local nullity using a documented relative tolerance.
-5. Independent hard-residual re-evaluation after iteration.
-6. `SolveTermination` separate from underconstraint/redundancy/singularity diagnostics in `SolveReport`.
-7. Deterministic trace records.
-8. Accepted-state audit snapshots containing current bindings plus raw and normalized residual values.
+- [x] Dense QR/SVD solve fallback; never rely exclusively on `J^T J`.
+- [x] Numerical rank and local nullity using a documented relative tolerance.
+- [x] Independent hard-residual re-evaluation after iteration.
+- [x] `SolveTermination` separate from underconstraint/redundancy/singularity diagnostics in `SolveReport`.
+- [x] Deterministic trace records.
+- [x] Accepted-state audit snapshots containing current bindings plus raw and normalized residual values.
 
 Required fixtures:
 
-- exactly determined linear and nonlinear systems;
-- underdetermined circle point with one DOF;
-- duplicate residual rows;
-- contradictory equations;
-- configuration-dependent rank drop;
-- same problems at characteristic scales `1e-6`, `1`, and `1e6`.
+- [x] exactly determined linear and nonlinear systems;
+- [x] underdetermined circle point with one DOF;
+- [x] duplicate residual rows;
+- [x] contradictory equations;
+- [x] configuration-dependent rank drop;
+- [x] same problems at characteristic scales `1e-6`, `1`, and `1e6`.
 
 Gate: M2 section of `ACCEPTANCE.md`.
+
+Completion notes: LM solves an augmented dense least-squares system with QR
+and SVD fallback, commits only accepted finite states, and re-evaluates hard
+rows independently before reporting convergence. Hard rows alone define the
+M2 objective, rank and DOF; temporary and preference rows are validated and
+audited but intentionally excluded until a documented hierarchy exists. Tests
+cover accepted/rejected trace accounting, explicit accepted-state audit values,
+complete-source deterministic redundancy candidates and every required M2
+classification at characteristic scales `1e-6`, `1`, and `1e6`.
 
 ## M3 — Adversarial numerical verification harness
 

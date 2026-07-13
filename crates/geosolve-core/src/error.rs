@@ -53,4 +53,9 @@ pub enum CoreError {
     },
     #[error("finite-difference step must be positive and finite, got {0}")]
     InvalidFiniteDifferenceStep(f64),
+    #[error("invalid solver configuration field {field}: {message}")]
+    InvalidSolverConfig {
+        field: &'static str,
+        message: &'static str,
+    },
 }

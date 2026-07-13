@@ -41,7 +41,8 @@ impl SourceConstraint {
     }
 }
 
-/// One named value or feature reference used by a readable equation row.
+/// One static named feature/reference binding used by a readable equation row.
+/// Evaluated variable values are reported separately in audit snapshots.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AuditBinding {
     pub name: String,
