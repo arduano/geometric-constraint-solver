@@ -148,18 +148,19 @@ A large drag weight must never make a geometrically invalid state report `Conver
 
 ## 6. Diagnostics
 
-Required statuses:
+Nonlinear termination is separate from geometric diagnosis.
+
+Required termination reasons:
 
 - `Converged`;
-- `Underconstrained`;
-- `Redundant`;
-- `Conflicting`;
-- `Singular`;
 - `Stalled`;
 - `IterationLimit`;
-- `InvalidGeometry`.
+- `InvalidGeometry`;
+- `NumericalFailure`.
 
-The report must include iteration count, validated residual norms, rank, local DOF, and high-level source IDs for redundancy/conflict candidates.
+A converged solution may independently be underconstrained, redundant, or singular. Conflict candidates belong in the report when hard residual validation fails; these states must not be forced into one mutually exclusive status enum.
+
+The report must include iteration count, validated residual norms, rank, local DOF, singularity state, and high-level source IDs for redundancy/conflict candidates.
 
 Structural graph rank and numerical Jacobian rank answer different questions. Keep both. Singular positions can change numerical mobility without changing graph topology.
 
@@ -192,3 +193,31 @@ world = origin + u*x + v*y
 ```
 
 Same-plane constraints remain 2D. Mapping to 3D is used for rendering and future cross-plane/world constraints. A planar linkage pose is composed with the workplane frame rather than constrained by redundant world-space `z = 0` rows.
+
+## 9. Advanced parametric curves
+
+The solver core must remain curve-agnostic. `geosolve-geometry` should eventually provide an internal evaluation adapter for a planar parametric curve:
+
+```text
+position(t) -> C(t)
+tangent(t)  -> C'(t)
+second(t)   -> C''(t)   // optional until curvature constraints
+parameter domain and degeneracy information
+```
+
+`geosolve-sketch` owns the curve entity, branch/span identity, bounds and latent contact parameters. A contact parameter such as `t` is an ordinary scalar solver variable even though it is not normally shown as a user-visible sketch dimension.
+
+Generic residual patterns are:
+
+```text
+point on curve:       P - C(t) = 0
+line tangent:         cross(unit(line_dir), unit(C'(t))) = 0
+curve/curve contact:  C1(t1) - C2(t2) = 0
+curve/curve tangent:  cross(unit(C1'(t1)), unit(C2'(t2))) = 0
+```
+
+Endpoint tangency can fix `t` at an endpoint; interior tangency solves it. Bounded curves require an explicit domain policy: bounded reparameterization, active span state, or a validity/active-set layer. Do not silently let a segment/arc contact parameter escape onto its infinite supporting curve.
+
+Branch state must include the selected curve span/contact neighbourhood and tangent orientation where multiple roots exist. Warm-starting should preserve the previous contact point. Cusps, zero derivatives, discontinuous knots and ambiguous multiple contacts return explicit invalid/ambiguous diagnostics rather than normalizing a zero tangent.
+
+Implement line/circle/arc through this evaluation seam first, then prove it with quadratic/cubic Bézier curves before exposing a public generic trait. Production B-spline/NURBS editing can remain later scope without requiring a solver-core redesign.

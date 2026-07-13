@@ -194,10 +194,13 @@ Constraints/dimensions:
 
 Requirements:
 
-- every branch-sensitive constraint serializes explicit branch state;
+- route line/circle/arc contact and tangency through an internal curve-evaluation adapter returning position, first derivative, parameter domain and degeneracy state; reserve optional second derivatives for curvature constraints;
+- model interior contact locations as latent scalar parameter variables owned by the sketch compiler;
+- every branch-sensitive constraint serializes explicit branch/span/contact state;
 - every residual has analytic/local-AD versus finite-difference verification;
-- zero-length and zero-radius inputs return `InvalidGeometry`, never NaN;
-- add `S3 tangent circles` browser scene.
+- zero-length, zero-radius and zero-tangent inputs return `InvalidGeometry`, never NaN;
+- add `S3 tangent circles` browser scene;
+- add one quadratic or cubic Bézier point-on-curve plus line-tangency proof fixture before freezing the curve-contact API. A production Bézier/B-spline editor is not required in M6.
 
 Gate: complete sketch MVP matrix in `ACCEPTANCE.md`.
 
@@ -237,6 +240,6 @@ Out of scope until after M8:
 
 - collision/contact and inequalities;
 - dynamics and reaction forces;
-- splines/general conics;
+- production-grade spline/NURBS/general-conic editing (the internal parametric-curve evaluation seam is required earlier);
 - global enumeration of all roots;
 - general spatial joints and `SE(3)` solving.
