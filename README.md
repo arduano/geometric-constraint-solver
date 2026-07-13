@@ -10,9 +10,9 @@ This repository currently contains a buildable workspace scaffold and a concrete
 
 ## Start here
 
-1. `START_HERE.md` — concise OpenCode handoff and first assignment.
+1. `START_HERE.md` — autonomous overnight OpenCode handoff for M1–M4, with explicit stop conditions.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — ordered milestones and their required outputs.
+3. `PLAN.md` — ordered milestones M0–M9, gates, and human checkpoints.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.

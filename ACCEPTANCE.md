@@ -57,6 +57,20 @@ Required cases:
 7. Iteration-limit and stagnation paths retain the last finite state and return truthful termination.
 8. Scaling tests retain the same solution classification and normalized accuracy.
 
+## M3 — Adversarial verification harness
+
+- Property-generated linear systems report the independently known rank and nullity and recover a valid known solution when consistent.
+- Property failures print a deterministic seed/case that reproduces the failure.
+- Construct-valid nonlinear fixtures recover from documented local perturbation ranges without relaxing hard-residual validation.
+- Translation and rotation metamorphic transforms preserve normalized residuals, rank, DOF and diagnosis.
+- Uniform scale factors `1e-6`, `1`, and `1e6` preserve normalized accuracy and classification.
+- Permuting insertion order changes neither accepted geometry beyond tolerance nor deterministic source ordering.
+- Injected non-finite residual/Jacobian and invalid-scale cases terminate without committing a non-finite state.
+- Rejected iteration steps never become the returned accepted state.
+- Stagnation and iteration-limit outcomes retain the last finite independently validated state.
+- Solve-trace invariant tests verify accepted/rejected accounting and non-increasing accepted objective within documented numerical tolerance.
+- Benchmarks are recorded separately and do not alter correctness thresholds.
+
 ## Sketch MVP
 
 ### S1 underconstrained triangle
@@ -128,9 +142,9 @@ The separate `geosolve-demo-web` crate must:
 - show constraints grouped by high-level source with readable expanded residual rows, current named bindings, target/unit, scale, raw residual and normalized residual;
 - update the equation panel from the same accepted state as the geometry after every drag or driver step;
 - distinguish hard, temporary/driver and preference rows visually;
-- contain no handwritten duplicate equation implementation: audit rows must come from core/domain audit snapshots by M3/M5;
+- contain no handwritten duplicate equation implementation: audit rows must come from core/domain audit snapshots by M5/M6;
 - visibly preserve the previous valid geometry when a requested edit fails rather than drawing NaNs;
-- have at least one automated WASM/browser smoke test by M8;
+- have at least one automated WASM/browser smoke test by M9;
 - use plain text/Unicode or simple HTML successfully; MathML/LaTeX and full symbolic simplification are explicitly not required.
 
 ## Regression and oracle policy

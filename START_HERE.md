@@ -1,15 +1,10 @@
-# OpenCode handoff
+# OpenCode overnight handoff
 
 ## Objective
 
-Implement a robust pure-Rust geometric constraint solver following the staged plan in this repository. The first useful vertical slice must solve and display both:
+Implement the difficult but objectively testable solver core overnight, then stop before domain/API/interaction decisions require human review.
 
-1. an underconstrained 2D sketch triangle with interactive dragging;
-2. a driven planar four-bar linkage that preserves its assembly mode.
-
-Do not attempt every CAD constraint in one pass.
-
-## Required reading
+Read these first:
 
 - `ARCHITECTURE.md`
 - `PLAN.md`
@@ -18,44 +13,97 @@ Do not attempt every CAD constraint in one pass.
 - `docs/SCENARIOS.md`
 - `AGENTS.md`
 
-## First assignment
+## Overnight assignment
 
-Complete **M1 and M2** in `PLAN.md`, then stop for review.
+Complete **M1, M2, M3 and M4** in `PLAN.md`, in order, then stop at **Human checkpoint A**.
 
-The expected M1/M2 result is:
+### M1: problem representation
 
-- packed scalar/vector variable blocks with stable IDs;
-- residual blocks with declared variable incidence and source IDs;
-- structured human-readable audit descriptors for source constraints and scalar residual rows;
-- dimensionless residual scaling;
+Expected result:
+
+- packed scalar, `Vec2` and `Pose2` variable blocks with stable IDs;
+- residual blocks with declared incidence/source IDs;
+- hard/temporary/preference categories;
+- structured equation-audit descriptors;
+- dimensionless scaling;
 - dense residual/Jacobian assembly;
 - central finite-difference Jacobian verification;
-- manifold-aware `Pose2` local updates;
-- a damped Gauss-Newton or Levenberg-Marquardt loop;
-- rank/DOF calculation through dense QR/SVD;
-- strict independent residual validation;
-- explicit `SolveTermination`/`SolveReport` outcomes plus accepted-state equation audit snapshots;
-- unit tests covering exact, underdetermined, inconsistent, rank-deficient and badly scaled systems.
+- invalid/non-finite input rejection.
 
-## Boundaries for the first assignment
+### M2: dense solver
 
-Do not yet implement:
+Expected result:
 
-- sparse `faer` solving;
-- circles/arcs/tangency;
-- conflict set minimization;
-- pseudo-arclength continuation;
-- spatial `SE(3)` mechanisms;
-- a JavaScript framework.
+- damped Gauss-Newton or Levenberg-Marquardt iteration;
+- dense QR/SVD fallback and rank/DOF calculation;
+- strict independent hard-residual validation;
+- truthful `SolveTermination` and independent diagnostics;
+- deterministic traces and accepted-state equation audit snapshots;
+- exact, underdetermined, inconsistent, rank-deficient and badly scaled fixtures.
 
-It is acceptable for M1/M2 APIs to remain `pub(crate)` while they settle. The public contract is the behavior and reports, not a frozen generic abstraction.
+### M3: adversarial verification
 
-## Required verification before handoff
+Expected result:
+
+- property-generated systems with known solution/rank/nullity;
+- construct-valid → perturb → recover tests;
+- translation/rotation/scale metamorphic tests;
+- ordering/permutation determinism tests;
+- failure-injection and last-valid-state tests;
+- solve-trace invariant checks;
+- reproducible random seeds on failure.
+
+### M4: decomposition and diagnostics
+
+Expected result:
+
+- variable/residual incidence graph and connected components;
+- fixed/equality alias elimination;
+- unaffected-component reuse;
+- structural counts plus numerical rank;
+- deterministic redundant/conflict source candidates on synthetic systems;
+- audit annotations for eliminated/redundant/conflicting/singular rows.
+
+## Autonomous execution rules
+
+1. Complete and gate one milestone before beginning the next.
+2. Make one reviewable Git commit per completed milestone.
+3. If a gate fails, fix it before proceeding; never weaken a tolerance or delete a test merely to pass.
+4. Keep new APIs private or `pub(crate)` unless the milestone explicitly requires public exposure.
+5. Prefer small explicit implementations over generic frameworks.
+6. Record architectural uncertainty in `OVERNIGHT_REPORT.md`; do not invent broad abstractions to resolve it.
+7. Stop immediately if satisfying a milestone would require:
+   - a public sketch/linkage model decision;
+   - weighted objectives silently replacing hard constraints;
+   - native solver FFI or `unsafe`;
+   - sparse solving;
+   - browser UX work;
+   - circles/arcs/tangency;
+   - pseudo-arclength continuation;
+   - spatial `SE(3)` mechanisms.
+8. Do not begin M5 even if time remains.
+
+## Gate after every milestone
 
 ```bash
 cargo fmt --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features
+cargo check -p geosolve-demo-web --target wasm32-unknown-unknown
+(cd crates/geosolve-demo-web && trunk build --release)
 ```
 
-Include exact test output and call out any acceptance criterion not yet met.
+## Final overnight report
+
+Create `OVERNIGHT_REPORT.md` containing:
+
+1. milestone and commit list;
+2. files/APIs added;
+3. algorithms implemented and important numerical choices;
+4. exact verification commands and outcomes;
+5. acceptance criteria passed or still failing;
+6. deterministic reproduction commands/seeds for any failure;
+7. public API or behavior decisions deferred to Human checkpoint A;
+8. concise diff/stat and current Git status.
+
+Then stop and wait for review.
