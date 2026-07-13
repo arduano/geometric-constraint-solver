@@ -29,23 +29,25 @@ Gate:
 
 Goal: express small nonlinear equality systems without CAD/linkage semantics.
 
+Status: complete as of 2026-07-13.
+
 Implement in `geosolve-core`:
 
-1. Stable stores for variable blocks, residual blocks and source constraint IDs.
-2. Variable block kinds:
+- [x] Stable stores for variable blocks, residual blocks and source constraint IDs.
+- [x] Variable block kinds:
    - scalar;
    - `Vec2`;
    - `Pose2` with a three-dimensional local increment.
-3. Packed state layout mapping stable IDs to ambient/tangent ranges.
-4. Residual categories:
+- [x] Packed state layout mapping stable IDs to ambient/tangent ranges.
+- [x] Residual categories:
    - hard;
    - temporary interaction objective;
    - previous-state/minimum-motion preference.
-5. Residual-block API declaring incident variables, output dimension, characteristic scales, evaluation and local Jacobian blocks.
-6. Structured audit descriptors for each high-level source and generated residual row: readable template, named bindings, category, units and scale. Audit text is metadata, not executable input.
-7. Deterministic dense residual/Jacobian assembly.
-8. Central finite-difference Jacobian checker with per-block error reports.
-9. Invalid-geometry and non-finite-value rejection before linear algebra.
+- [x] Residual-block API declaring incident variables, output dimension, characteristic scales, evaluation and local Jacobian blocks.
+- [x] Structured audit descriptors for each high-level source and generated residual row: readable template, named bindings, category, units and scale. Audit text is metadata, not executable input.
+- [x] Deterministic dense residual/Jacobian assembly.
+- [x] Central finite-difference Jacobian checker with per-block error reports.
+- [x] Invalid-geometry and non-finite-value rejection before linear algebra.
 
 Implementation guidance:
 
@@ -56,14 +58,19 @@ Implementation guidance:
 
 Required fixtures:
 
-- scalar quadratic residual;
-- two-variable distance residual;
-- `Pose2` transformed-point residual;
-- mixed block dimensions and deterministic packing;
-- analytic versus central finite-difference Jacobians;
-- NaN/Inf and invalid scale rejection.
+- [x] scalar quadratic residual;
+- [x] two-variable distance residual;
+- [x] `Pose2` transformed-point residual;
+- [x] mixed block dimensions and deterministic packing;
+- [x] analytic versus central finite-difference Jacobians;
+- [x] NaN/Inf and invalid scale rejection.
 
 Gate: M1 section of `ACCEPTANCE.md`.
+
+Completion notes: dense rows are normalized by residual scale and columns by
+variable tangent step scale. Integration tests cover stable generational IDs,
+all required fixtures, heterogeneous matrix ranges, audit metadata, invalid
+IDs/dimensions/geometry, and finite-difference relative error `<= 1e-6`.
 
 ## M2 — Dense nonlinear solver, rank and strict validation
 

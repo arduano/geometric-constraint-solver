@@ -1,9 +1,22 @@
 //! Domain-independent nonlinear constraint-system infrastructure.
-//!
-//! The implementation is intentionally only a scaffold. See `PLAN.md` and
-//! `ACCEPTANCE.md` at the workspace root before extending it.
 
 use slotmap::new_key_type;
+
+mod error;
+mod problem;
+mod residual;
+mod variable;
+
+pub use error::CoreError;
+pub use problem::{
+    AuditRowDescriptor, BlockLayout, DenseAssembly, JacobianBlockReport, JacobianCheckReport,
+    PackedLayout, PackedState, Problem, ResidualLayout,
+};
+pub use residual::{
+    AuditBinding, EvaluationError, LocalJacobian, ResidualBlock, ResidualCategory,
+    ResidualEvaluator, ResidualRowAudit, SourceConstraint,
+};
+pub use variable::{VariableBlock, VariableKind, VariableValue};
 
 new_key_type! {
     pub struct VariableId;
