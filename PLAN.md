@@ -36,9 +36,10 @@ Implement in `geosolve-core`:
    - temporary interaction objective;
    - previous-state/minimum-motion preference.
 5. A residual-block API declaring incident variables, output dimension, characteristic scales, evaluation and local Jacobian blocks.
-6. Deterministic dense residual/Jacobian assembly.
-7. Central finite-difference Jacobian checker with per-block error reports.
-8. Invalid-geometry and non-finite-value rejection before linear algebra.
+6. Structured audit descriptors for each high-level source and generated residual row: readable template, named bindings, category, units and scale. The audit text is metadata, not executable input.
+7. Deterministic dense residual/Jacobian assembly.
+8. Central finite-difference Jacobian checker with per-block error reports.
+9. Invalid-geometry and non-finite-value rejection before linear algebra.
 
 Implementation guidance:
 
@@ -75,6 +76,7 @@ Implement:
 5. Independent hard-residual validation after iteration.
 6. `SolveTermination` plus independent diagnostics in `SolveReport`.
 7. Deterministic trace records usable by tests and the browser diagnostics panel.
+8. Accepted-state audit snapshots containing current bindings plus raw and normalized residual values for every row.
 
 M2 canonical systems:
 
@@ -112,7 +114,9 @@ Web work:
 - replace the static triangle with solved geometry;
 - implement SVG pointer drag for point C;
 - show termination, maximum hard residual, rank, DOF and iteration count;
-- visually distinguish fixed, free and actively dragged points.
+- show a live equation-audit panel grouped by source constraint, with expanded residual rows, named bindings, scales and evaluated values;
+- visually distinguish fixed, free and actively dragged points;
+- allow source-equation and geometry selection/highlighting if it can be added without delaying the vertical slice.
 
 Gate: sketch and web sections of `ACCEPTANCE.md` for S1.
 
@@ -167,6 +171,7 @@ Web work:
 - scenario selector uses domain constructors, not duplicate geometry;
 - driver slider updates the solved SVG linkage;
 - display branch label and singularity warning;
+- reuse the same equation-audit panel for joint closure and driver rows;
 - preserve the selected assembly mode throughout the documented safe sweep.
 
 Gate: linkage and web sections of `ACCEPTANCE.md`.

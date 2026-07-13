@@ -53,6 +53,70 @@ impl DemoScenario {
             }
         }
     }
+
+    fn audit_markup(self) -> &'static str {
+        match self {
+            Self::UnderconstrainedTriangle => {
+                r#"<article class="constraint hard">
+                    <header><span class="kind">hard</span><strong>fix A</strong></header>
+                    <code>r₀ = (A.x - 0) / L</code>
+                    <code>r₁ = (A.y - 0) / L</code>
+                </article>
+                <article class="constraint hard">
+                    <header><span class="kind">hard</span><strong>horizontal AB</strong></header>
+                    <code>r₂ = (B.y - A.y) / L</code>
+                </article>
+                <article class="constraint hard">
+                    <header><span class="kind">hard</span><strong>length AB = 4</strong></header>
+                    <code>r₃ = (‖B - A‖ - 4) / L</code>
+                </article>
+                <article class="constraint hard">
+                    <header><span class="kind">hard</span><strong>distance AC = 3</strong></header>
+                    <code>r₄ = (‖C - A‖ - 3) / L</code>
+                </article>
+                <p class="audit-note">Static audit template. M1–M3 replace this with runtime bindings, scales and residual values.</p>"#
+            }
+            Self::FourBar => {
+                r#"<article class="constraint hard">
+                    <header><span class="kind">hard</span><strong>revolute O₂/A</strong></header>
+                    <code>[r₀, r₁] = world(input.anchor) - O₂</code>
+                </article>
+                <article class="constraint hard">
+                    <header><span class="kind">hard</span><strong>revolute A/coupler</strong></header>
+                    <code>[r₂, r₃] = world(input.A) - world(coupler.A)</code>
+                </article>
+                <article class="constraint hard">
+                    <header><span class="kind">hard</span><strong>revolute B/rocker</strong></header>
+                    <code>[r₄, r₅] = world(coupler.B) - world(rocker.B)</code>
+                </article>
+                <article class="constraint driver">
+                    <header><span class="kind">driver</span><strong>input angle</strong></header>
+                    <code>r₆ = unwrap(θinput - θtarget)</code>
+                </article>
+                <p class="audit-note">Rigid link lengths are body-local geometry, not extra distance equations.</p>"#
+            }
+            Self::SliderCrank => {
+                r#"<article class="constraint hard">
+                    <header><span class="kind">hard</span><strong>crank/rod revolute</strong></header>
+                    <code>[r₀, r₁] = world(crank.pin) - world(rod.pin)</code>
+                </article>
+                <article class="constraint hard">
+                    <header><span class="kind">hard</span><strong>rod/slider revolute</strong></header>
+                    <code>[r₂, r₃] = world(rod.pin) - world(slider.pin)</code>
+                </article>
+                <article class="constraint hard">
+                    <header><span class="kind">hard</span><strong>slider guide</strong></header>
+                    <code>r₄ = dot(slider.origin - guide.origin, guide.normal)</code>
+                    <code>r₅ = cross(slider.axis, guide.axis)</code>
+                </article>
+                <article class="constraint driver">
+                    <header><span class="kind">driver</span><strong>crank angle</strong></header>
+                    <code>r₆ = unwrap(θcrank - θtarget)</code>
+                </article>
+                <p class="audit-note">Runtime view will show named variable bindings and evaluated normalized residuals.</p>"#
+            }
+        }
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -66,6 +130,11 @@ mod wasm {
             .get_element_by_id("viewport")
             .ok_or_else(|| JsValue::from_str("missing #viewport SVG element"))?;
         viewport.set_inner_html(scenario.svg_markup());
+
+        let equations = document
+            .get_element_by_id("equations")
+            .ok_or_else(|| JsValue::from_str("missing #equations audit element"))?;
+        equations.set_inner_html(scenario.audit_markup());
         Ok(())
     }
 
@@ -110,6 +179,7 @@ mod tests {
     fn all_required_initial_demo_scenarios_exist() {
         assert_eq!(scenario_count(), 3);
         assert!(DemoScenario::FourBar.svg_markup().contains("four-bar"));
+        assert!(DemoScenario::FourBar.audit_markup().contains("input angle"));
         assert_eq!(
             DemoScenario::from_value("slider-crank"),
             DemoScenario::SliderCrank

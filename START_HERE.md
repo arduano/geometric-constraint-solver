@@ -26,6 +26,7 @@ The expected M1/M2 result is:
 
 - packed scalar/vector variable blocks with stable IDs;
 - residual blocks with declared variable incidence and source IDs;
+- structured human-readable audit descriptors for source constraints and scalar residual rows;
 - dimensionless residual scaling;
 - dense residual/Jacobian assembly;
 - central finite-difference Jacobian verification;
@@ -33,7 +34,7 @@ The expected M1/M2 result is:
 - a damped Gauss-Newton or Levenberg-Marquardt loop;
 - rank/DOF calculation through dense QR/SVD;
 - strict independent residual validation;
-- explicit `SolveStatus`/`SolveReport` outcomes;
+- explicit `SolveTermination`/`SolveReport` outcomes plus accepted-state equation audit snapshots;
 - unit tests covering exact, underdetermined, inconsistent, rank-deficient and badly scaled systems.
 
 ## Boundaries for the first assignment

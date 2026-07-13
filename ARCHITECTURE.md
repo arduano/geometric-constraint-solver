@@ -32,6 +32,7 @@ Domain-independent solver infrastructure:
 - packed state and tangent vectors;
 - variable block kinds: scalar, `Vec2`, `Pose2`; later `Pose3`;
 - residual blocks with declared variable incidence;
+- structured human-readable equation audit metadata tied to the executable residual rows;
 - analytic or local-forward-AD Jacobian blocks;
 - block-to-dense and later block-to-sparse assembly;
 - hard constraints, temporary objectives and previous-state preferences as distinct categories;
@@ -76,7 +77,8 @@ A deliberately primitive browser harness:
 - no React/Yew/Leptos requirement;
 - hardcoded scenario constructors from the sketch/linkage crates;
 - selector, drag/driver controls, solved geometry rendering and diagnostic text;
-- no solver equations or duplicate domain model in the web crate.
+- a live equation-audit panel showing source constraints, expanded residual rows, variable bindings, scales and evaluated residuals;
+- no duplicated solver equations or domain model in the web crate.
 
 ## 3. Numerical representation
 
@@ -105,7 +107,10 @@ Each residual block declares:
 - residual dimension;
 - characteristic residual scales;
 - residual evaluation;
-- local Jacobian evaluation.
+- local Jacobian evaluation;
+- an audit descriptor containing a source label, readable row templates and named feature/variable bindings.
+
+The readable representation is not parsed to solve the system. It is generated alongside the executable residual so the web demo can show enough information to audit equation generation and scaling.
 
 The assembled residual vector is dimensionless. Scaling is part of the constraint definition, not an optional UI concern.
 
@@ -221,3 +226,19 @@ Endpoint tangency can fix `t` at an endpoint; interior tangency solves it. Bound
 Branch state must include the selected curve span/contact neighbourhood and tangent orientation where multiple roots exist. Warm-starting should preserve the previous contact point. Cusps, zero derivatives, discontinuous knots and ambiguous multiple contacts return explicit invalid/ambiguous diagnostics rather than normalizing a zero tangent.
 
 Implement line/circle/arc through this evaluation seam first, then prove it with quadratic/cubic Bézier curves before exposing a public generic trait. Production B-spline/NURBS editing can remain later scope without requiring a solver-core redesign.
+
+## 10. Equation auditability
+
+The solver must expose a structured audit snapshot for the accepted state. For each high-level source constraint, it groups the generated scalar residual rows and reports:
+
+- readable source name and stable source ID;
+- hard/temporary/preference category;
+- equation templates such as `(‖B - A‖ - target) / scale`;
+- current named variable/feature bindings;
+- physical target/unit and characteristic scale;
+- raw and normalized residual values;
+- suppression, redundancy, conflict and singularity annotations where applicable.
+
+This is intentionally a sanity-check view, not a full symbolic algebra system. Unicode/plain text is sufficient. A future developer toggle may show Jacobian blocks, but the MVP only needs equation rows and evaluated residuals.
+
+The web crate consumes audit snapshots from core/domain APIs. It must not maintain a second handwritten equation implementation. Selecting geometry should eventually highlight its source equations and selecting an equation should highlight the associated geometry.

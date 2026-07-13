@@ -41,6 +41,7 @@ A test may use a looser documented tolerance only when it explains the condition
 - A residual can touch multiple heterogeneous blocks and assemble into the correct matrix ranges.
 - Characteristic scales must be positive and finite; invalid scales are rejected.
 - Analytic Jacobian tests meet the finite-difference threshold.
+- Every residual row has an audit descriptor with source ID, readable template, named bindings, category and finite positive scale.
 - Invalid geometry, NaN and Inf are reported before factorization.
 
 ## M2 — Dense solver and diagnostics
@@ -124,8 +125,13 @@ The separate `geosolve-demo-web` crate must:
 - support pointer dragging in S1;
 - support a driver slider for L1 and L3;
 - show termination, validated maximum residual, rank, DOF, iterations, branch label and singularity/conflict/redundancy notices;
+- show constraints grouped by high-level source with readable expanded residual rows, current named bindings, target/unit, scale, raw residual and normalized residual;
+- update the equation panel from the same accepted state as the geometry after every drag or driver step;
+- distinguish hard, temporary/driver and preference rows visually;
+- contain no handwritten duplicate equation implementation: audit rows must come from core/domain audit snapshots by M3/M5;
 - visibly preserve the previous valid geometry when a requested edit fails rather than drawing NaNs;
-- have at least one automated WASM/browser smoke test by M8.
+- have at least one automated WASM/browser smoke test by M8;
+- use plain text/Unicode or simple HTML successfully; MathML/LaTeX and full symbolic simplification are explicitly not required.
 
 ## Regression and oracle policy
 

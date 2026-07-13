@@ -9,8 +9,11 @@
   </head>
   <body>
     <main>
-      <header>
-        <h1>GeoSolve primitive demo</h1>
+      <header class="page-header">
+        <div>
+          <h1>GeoSolve primitive demo</h1>
+          <p>Geometry and residual equations side by side.</p>
+        </div>
         <label>
           Scenario
           <select id="scenario">
@@ -20,12 +23,23 @@
           </select>
         </label>
       </header>
-      <section class="panel">
-        <svg id="viewport" viewBox="0 0 640 420" role="img" aria-label="Constraint solver scenario"></svg>
+      <section class="workspace">
+        <section class="panel geometry-panel">
+          <svg id="viewport" viewBox="0 0 640 420" role="img" aria-label="Constraint solver scenario"></svg>
+        </section>
+        <aside class="panel audit-panel" aria-label="Constraint equation audit">
+          <header class="audit-header">
+            <div>
+              <h2>Constraint audit</h2>
+              <p>Human-readable residual rows</p>
+            </div>
+            <span class="scaffold-badge">scaffold</span>
+          </header>
+          <div id="equations"></div>
+        </aside>
       </section>
       <p class="status">
-        This is the visual scaffold. Milestones M3 and M5 replace the static
-        coordinates with solved sketch and linkage state.
+        The current geometry and equations are static scaffolds. Milestones M1–M5 replace them with solved state, live variable bindings, scales and evaluated residual values.
       </p>
     </main>
   </body>

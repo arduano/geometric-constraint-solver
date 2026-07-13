@@ -6,7 +6,7 @@ A GPL-3.0-or-later, pure-Rust geometric constraint solver for:
 - planar rigid-body mechanisms embedded in arbitrary 3D workplanes;
 - a deliberate future path to spatial mechanisms.
 
-This repository currently contains a buildable workspace scaffold and a concrete implementation plan for delegation to an OpenCode agent. The browser crate already renders primitive hardcoded SVG scenes; it does **not** yet solve them.
+This repository currently contains a buildable workspace scaffold and a concrete implementation plan for delegation to an OpenCode agent. The browser crate already renders primitive hardcoded SVG scenes alongside human-readable residual-equation templates; it does **not** yet solve them or show evaluated residual values.
 
 ## Start here
 
@@ -23,7 +23,7 @@ This repository currently contains a buildable workspace scaffold and a concrete
 - `geosolve-core` — variables, residual blocks, Jacobians, nonlinear solve, rank analysis.
 - `geosolve-sketch` — sketch entities/constraints and compilation into core residuals.
 - `geosolve-linkage` — rigid bodies, joints, drivers, assembly modes and continuation.
-- `geosolve-demo-web` — separate WASM/SVG demonstration crate with hardcoded scenes.
+- `geosolve-demo-web` — separate WASM/SVG demonstration crate with hardcoded scenes and an equation-audit panel.
 
 The critical design rule is: **share numerical machinery and feature evaluation, not one undifferentiated sketch/mechanism entity model.**
 
