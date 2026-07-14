@@ -355,6 +355,7 @@ dependencies = [
  "geosolve-core",
  "geosolve-geometry",
  "slotmap",
+ "thiserror",
 ]
 
 [[package]]

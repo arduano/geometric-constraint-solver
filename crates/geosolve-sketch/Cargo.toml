@@ -10,6 +10,7 @@ authors.workspace = true
 geosolve-core = { path = "../geosolve-core" }
 geosolve-geometry = { path = "../geosolve-geometry" }
 slotmap.workspace = true
+thiserror.workspace = true
 
 [lints]
 workspace = true
