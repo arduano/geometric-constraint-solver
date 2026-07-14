@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GeoSolve live sketch fixtures</title>
+    <title>GeoSolve live constraint fixtures</title>
     <link data-trunk rel="css" href="styles.css" />
     <link data-trunk rel="rust" data-wasm-opt="z" />
   </head>
@@ -11,18 +11,20 @@
     <main>
       <header class="page-header">
         <div>
-          <span class="page-kicker">M5 / interactive verification</span>
-          <h1>GeoSolve live sketch</h1>
+          <span class="page-kicker">M6 / interactive verification</span>
+          <h1>GeoSolve live constraints</h1>
           <p>Accepted geometry and its evaluated residual audit, side by side.</p>
         </div>
         <label>
           Scenario
           <select id="scenario">
             <option value="triangle">S1 / Underconstrained triangle</option>
+            <option value="conflicting-rectangle">S2 / Conflicting rectangle</option>
             <option value="horizontal-rail">Fixture / Horizontal rail</option>
             <option value="coincident-pair">Fixture / Coincident pair</option>
-            <option value="four-bar">M6 placeholder / Four-bar</option>
-            <option value="slider-crank">M6 placeholder / Slider-crank</option>
+            <option value="four-bar-open">L1 / Four-bar open</option>
+            <option value="four-bar-crossed">L2 / Four-bar crossed</option>
+            <option value="slider-crank">L3 / Slider-crank</option>
           </select>
         </label>
       </header>
@@ -38,10 +40,28 @@
               aria-describedby="drag-instructions"
             ></svg>
           </div>
+          <section id="driver-controls" class="driver-controls" aria-label="Linkage driver" hidden>
+            <div class="driver-heading">
+              <label for="driver-angle">Driver angle</label>
+              <output id="driver-output" for="driver-angle">60 deg</output>
+            </div>
+            <input
+              id="driver-angle"
+              type="range"
+              min="25"
+              max="135"
+              step="1"
+              value="60"
+              disabled
+              aria-describedby="driver-help"
+            />
+            <p id="driver-help">Arrow keys adjust one degree; each request uses domain continuation steps no larger than two degrees.</p>
+          </section>
           <p id="drag-instructions" class="interaction-help">
             Loading live sketch interaction...
           </p>
-          <section id="solve-status" class="solve-status" aria-label="Live solve status" aria-live="polite"></section>
+          <p id="solve-announcement" class="visually-hidden" aria-live="polite" aria-atomic="true"></p>
+          <section id="solve-status" class="solve-status" aria-label="Detailed solve status"></section>
         </section>
         <aside class="panel audit-panel" aria-label="Constraint equation audit">
           <header class="audit-header">
@@ -55,7 +75,7 @@
         </aside>
       </section>
       <footer>
-        Every live fixture is constructed and solved through public <code>geosolve-sketch</code> APIs. Linkage previews remain static until M6.
+        Every live fixture is constructed and solved through public <code>geosolve-sketch</code> or <code>geosolve-linkage</code> APIs.
       </footer>
     </main>
   </body>
