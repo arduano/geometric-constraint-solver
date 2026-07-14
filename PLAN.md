@@ -269,10 +269,16 @@ metadata; its 20 M5 tests cover finite-difference Jacobians, recovery,
 metamorphic scaling/rotation/translation, invalid geometry, reference dimensions,
 explicit axis/length branch state and S1 drag/release behavior. The browser uses
 the public S1 constructor and retained-state audit snapshots, supports mouse/pen/
-touch pointer capture, and has 11 native rendering/interaction tests. The full
-workspace gate passes with 108 tests, warnings-denied Clippy, locked WASM check
+touch pointer capture, and has 16 native rendering/interaction tests. The full
+workspace gate passes with 113 tests, warnings-denied Clippy, locked WASM check
 and Trunk release build. A secondary residual spanning multiple reduced hard
 components remains an explicit `NumericalFailure`; S1 does not require this case.
+
+Follow-up verification fixtures add a one-DOF horizontal rail with an
+equation-free reference length and a two-DOF coincident pair. Both use the same
+public sketch solve/audit path and shared mouse/pen/touch interaction. Coverage
+includes projection, release continuity, off-viewport clamping and narrow-screen
+pointer sizing.
 
 ### Human checkpoint B
 

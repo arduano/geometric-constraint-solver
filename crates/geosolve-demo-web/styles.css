@@ -131,6 +131,7 @@ select:focus-visible {
 }
 
 .triangle-edge,
+.rail-edge,
 .linkage-placeholder > path,
 .linkage-placeholder > rect {
   fill: none;
@@ -153,6 +154,51 @@ select:focus-visible {
   stroke-width: 2;
   stroke-dasharray: 3 5;
   opacity: 0.75;
+}
+
+.rail-cue {
+  stroke-dasharray: 10 9;
+}
+
+.rail-motion {
+  stroke-dasharray: 3 7;
+}
+
+.rail-arrow,
+.reference-extension,
+.reference-dimension,
+.coincident-leader {
+  fill: none;
+  stroke: #f6c768;
+  stroke-width: 1.5;
+}
+
+.reference-extension {
+  stroke: #64777b;
+  stroke-dasharray: 3 4;
+}
+
+.reference-dimension {
+  stroke-width: 1;
+}
+
+.reference-label {
+  fill: #d9be77;
+  font-size: 11px;
+  text-anchor: middle;
+}
+
+.coincident-cue {
+  fill: rgb(119 217 232 / 3%);
+  stroke: #77d9e8;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 7;
+  opacity: 0.55;
+}
+
+.coincident-leader {
+  stroke: #718b90;
+  stroke-dasharray: 3 4;
 }
 
 .point {
@@ -182,6 +228,18 @@ select:focus-visible {
 .point.draggable.active,
 .drag-target:hover + .point.draggable {
   filter: drop-shadow(0 0 8px rgb(234 114 136 / 85%));
+}
+
+.point.coincident-point-a {
+  fill: #101417;
+  stroke: #77d9e8;
+  stroke-width: 4;
+}
+
+.point.coincident-point-b {
+  fill: #ea7288;
+  stroke: #ffd4dc;
+  stroke-width: 2;
 }
 
 .drag-target {
@@ -400,6 +458,10 @@ select:focus-visible {
   border-left-color: #8c83cf;
 }
 
+.constraint.reference-measurement {
+  border-left-color: #d9be77;
+}
+
 .source-header {
   align-items: flex-start;
 }
@@ -426,6 +488,11 @@ select:focus-visible {
 .kind.preference {
   border-color: #5d5688;
   color: #aaa0ec;
+}
+
+.kind.reference {
+  border-color: #675f47;
+  color: #d9be77;
 }
 
 .source-diagnostics {
@@ -535,6 +602,33 @@ select:focus-visible {
   color: #f29aae;
 }
 
+.reference-facts {
+  margin-bottom: 0;
+}
+
+.reference-status {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.65rem;
+  padding: 0.65rem;
+  border: 1px solid #514d3d;
+  border-radius: 0.45rem;
+  background: #151a19;
+}
+
+.reference-status span {
+  color: #8f866a;
+  font-size: 0.64rem;
+  text-transform: uppercase;
+}
+
+.reference-status strong {
+  color: #e4ca8c;
+  font-size: 0.79rem;
+}
+
 .placeholder-note {
   margin-top: 1rem;
   padding: 1rem;
@@ -624,6 +718,12 @@ footer code {
 
   .row-facts {
     grid-template-columns: minmax(6rem, 0.42fr) minmax(0, 1fr);
+  }
+
+  .reference-status {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.35rem;
   }
 }
 

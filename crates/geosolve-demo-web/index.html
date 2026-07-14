@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GeoSolve live S1 sketch</title>
+    <title>GeoSolve live sketch fixtures</title>
     <link data-trunk rel="css" href="styles.css" />
     <link data-trunk rel="rust" data-wasm-opt="z" />
   </head>
@@ -11,7 +11,7 @@
     <main>
       <header class="page-header">
         <div>
-          <span class="page-kicker">M5 / browser vertical slice</span>
+          <span class="page-kicker">M5 / interactive verification</span>
           <h1>GeoSolve live sketch</h1>
           <p>Accepted geometry and its evaluated residual audit, side by side.</p>
         </div>
@@ -19,6 +19,8 @@
           Scenario
           <select id="scenario">
             <option value="triangle">S1 / Underconstrained triangle</option>
+            <option value="horizontal-rail">Fixture / Horizontal rail</option>
+            <option value="coincident-pair">Fixture / Coincident pair</option>
             <option value="four-bar">M6 placeholder / Four-bar</option>
             <option value="slider-crank">M6 placeholder / Slider-crank</option>
           </select>
@@ -37,7 +39,7 @@
             ></svg>
           </div>
           <p id="drag-instructions" class="interaction-help">
-            Loading live S1 drag interaction...
+            Loading live sketch interaction...
           </p>
           <section id="solve-status" class="solve-status" aria-label="Live solve status" aria-live="polite"></section>
         </section>
@@ -47,13 +49,13 @@
               <h2>Constraint audit</h2>
               <p>Human-readable residual rows</p>
             </div>
-            <span id="audit-badge" class="live-badge">live S1</span>
+            <span id="audit-badge" class="live-badge">live sketch</span>
           </header>
           <div id="equations"></div>
         </aside>
       </section>
       <footer>
-        S1 is constructed by <code>geosolve_sketch::underconstrained_triangle()</code> and solved in-browser. Linkage previews remain static until M6.
+        Every live fixture is constructed and solved through public <code>geosolve-sketch</code> APIs. Linkage previews remain static until M6.
       </footer>
     </main>
   </body>
