@@ -24,8 +24,8 @@ pub use residual::{
     ResidualEvaluator, ResidualRowAudit, SourceConstraint,
 };
 pub use solver::{
-    ComponentSolveReport, RedundancyKind, RedundantRowCandidate, ResidualRowRef, SolveReport,
-    SolveTermination, SolveTrace, SolveTraceRecord, SolverConfig,
+    ComponentSolveReport, PrioritySolveReport, RedundancyKind, RedundantRowCandidate,
+    ResidualRowRef, SolveReport, SolveTermination, SolveTrace, SolveTraceRecord, SolverConfig,
 };
 pub use variable::{VariableBlock, VariableKind, VariableValue};
 

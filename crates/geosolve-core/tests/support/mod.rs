@@ -370,6 +370,17 @@ pub fn assert_report_finite(report: &SolveReport) {
         ];
         assert!(values.into_iter().all(f64::is_finite), "{record:#?}");
     }
+    for priority in &report.priority_solves {
+        assert!(
+            priority
+                .initial_cost
+                .into_iter()
+                .chain(priority.final_cost)
+                .chain(priority.attained_temporary_cost)
+                .all(f64::is_finite),
+            "{priority:#?}"
+        );
+    }
     for source in &report.audit.sources {
         for row in &source.rows {
             assert!(row.scale.is_finite() && row.scale > 0.0, "{row:#?}");
