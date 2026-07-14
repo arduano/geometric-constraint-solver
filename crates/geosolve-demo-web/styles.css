@@ -185,7 +185,10 @@ select:focus-visible {
 .line-domain-track,
 .radius-normal,
 .tangent-side-arrow,
-.tangent-arrow-head {
+.tangent-arrow-head,
+.auto-contact-guide,
+.auto-radius-dimension,
+.auto-radius-dimension-arrows {
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -222,6 +225,62 @@ select:focus-visible {
 .gliding-circle {
   fill: rgb(234 114 136 / 5%);
   stroke: #ea7288;
+}
+
+.auto-radius-active-field {
+  fill: rgb(143 134 216 / 4%);
+  stroke: #454163;
+  stroke-width: 1;
+  stroke-dasharray: 4 9;
+}
+
+.auto-radius-circle {
+  fill: rgb(234 114 136 / 7%);
+  stroke: #f08aa0;
+  stroke-width: 5;
+}
+
+.bounded-arc.auto-radius-arc {
+  stroke: #78d9c8;
+  stroke-width: 8;
+}
+
+.auto-contact-guide {
+  stroke-width: 2;
+  stroke-dasharray: 4 5;
+}
+
+.auto-contact-guide.arc-radial {
+  stroke: #78d9c8;
+}
+
+.auto-contact-guide.circle-radial {
+  stroke: #f6c768;
+}
+
+.auto-radius-dimension,
+.auto-radius-dimension-arrows {
+  stroke: #f6c768;
+  stroke-width: 2;
+}
+
+.auto-radius-dimension-label {
+  fill: #ffe09a;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-anchor: middle;
+}
+
+.shared-auto-contact {
+  fill: #fff2bd;
+  stroke: #f08aa0;
+  stroke-width: 3;
+}
+
+.auto-radius-kicker,
+.auto-radius-branch {
+  fill: #78d9c8;
 }
 
 .curve-center {
@@ -273,6 +332,10 @@ select:focus-visible {
 .side-label {
   fill: #f2d598;
   font-weight: 700;
+}
+
+.auto-contact-label {
+  text-anchor: end;
 }
 
 .bounded-arc {
@@ -785,6 +848,63 @@ select:focus-visible {
   border-color: #514d3d;
 }
 
+.auto-radius-hud {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 0.65rem;
+  overflow: hidden;
+  border: 1px solid #59604c;
+  border-radius: 0.45rem;
+  background: #37433f;
+}
+
+.auto-radius-hud > div {
+  display: grid;
+  align-content: start;
+  gap: 0.32rem;
+  min-height: 4rem;
+  padding: 0.7rem;
+  background: #111b1c;
+}
+
+.auto-radius-hud > .auto-radius-primary {
+  background: #172523;
+}
+
+.auto-radius-hud > .auto-radius-retention {
+  background: #1d1c1a;
+}
+
+.auto-radius-hud span {
+  color: #789a96;
+  font-size: 0.64rem;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.auto-radius-hud strong {
+  overflow-wrap: anywhere;
+  color: #dce7e8;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.auto-radius-hud .auto-radius-primary strong {
+  color: #ffe09a;
+  font-size: 0.94rem;
+}
+
+.auto-radius-hud p {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0.72rem;
+  background: #101718;
+  color: #a4bab7;
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
 .status-grid span {
   color: #728b8f;
   font-size: 0.64rem;
@@ -1114,6 +1234,10 @@ footer code {
 
   .status-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .auto-radius-hud {
+    grid-template-columns: 1fr;
   }
 
   .attempt-banner {

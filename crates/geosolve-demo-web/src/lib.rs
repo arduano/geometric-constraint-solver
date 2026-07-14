@@ -7,8 +7,8 @@ use std::fmt::Write as _;
 
 #[cfg(any(target_arch = "wasm32", test))]
 use geosolve_core::{
-    AuditAnnotations, AuditEvaluationStatus, AuditSnapshot, ResidualCategory, SolveTermination,
-    SolverConfig, SourceConstraintId, VariableValue,
+    AuditAnnotations, AuditEvaluationStatus, AuditSnapshot, ResidualCategory, SolveReport,
+    SolveTermination, SolverConfig, SourceConstraintId, VariableValue,
 };
 #[cfg(any(target_arch = "wasm32", test))]
 use geosolve_geometry::Point2;
@@ -21,11 +21,12 @@ use geosolve_linkage::{
 };
 #[cfg(any(target_arch = "wasm32", test))]
 use geosolve_sketch::{
-    ArcId, ArcSweep, CircleContainment, CircleId, CircleTangencyMode, ConflictingRectangleIds,
-    ContactState, DimensionKind, DimensionMode, LineParameterDomain, LineSide, PointId, SegmentId,
-    Sketch, SketchConstraintId, SketchConstraintKind, SketchDimensionId, SketchSolveRequest,
-    SketchSolveResult, SketchSource, SolveRejection, TangentCirclesIds,
-    UnderconstrainedTriangleIds, conflicting_rectangle, tangent_circles, underconstrained_triangle,
+    ArcCircleTangencySide, ArcId, ArcSweep, CircleContainment, CircleId, CircleTangencyMode,
+    ConflictingRectangleIds, ContactState, DimensionKind, DimensionMode, LineParameterDomain,
+    LineSide, PointId, SegmentId, Sketch, SketchConstraintId, SketchConstraintKind,
+    SketchDimensionId, SketchSolveRequest, SketchSolveResult, SketchSource, SolveRejection,
+    TangentCirclesIds, UnderconstrainedTriangleIds, conflicting_rectangle, tangent_circles,
+    underconstrained_triangle,
 };
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -79,6 +80,13 @@ const ARC_CONTACT_TRANSFORM: ModelSvgTransform = ModelSvgTransform {
 };
 
 #[cfg(any(target_arch = "wasm32", test))]
+const ARC_CIRCLE_AUTO_RADIUS_TRANSFORM: ModelSvgTransform = ModelSvgTransform {
+    origin_x: 290.0,
+    origin_y: 255.0,
+    pixels_per_unit: 58.0,
+};
+
+#[cfg(any(target_arch = "wasm32", test))]
 const TANGENT_GLIDE_TRANSFORM: ModelSvgTransform = ModelSvgTransform {
     origin_x: 320.0,
     origin_y: 285.0,
@@ -101,6 +109,7 @@ enum DemoScenario {
     ConflictingRectangle,
     TangentCircles,
     ArcContactDrag,
+    ArcCircleAutoRadius,
     LineCircleTangentGlide,
     HorizontalRail,
     CoincidentPair,
@@ -116,6 +125,7 @@ impl DemoScenario {
             "conflicting-rectangle" => Self::ConflictingRectangle,
             "tangent-circles" => Self::TangentCircles,
             "arc-contact-drag" => Self::ArcContactDrag,
+            "arc-circle-auto-radius" => Self::ArcCircleAutoRadius,
             "line-circle-tangent-glide" => Self::LineCircleTangentGlide,
             "horizontal-rail" => Self::HorizontalRail,
             "coincident-pair" => Self::CoincidentPair,
@@ -132,6 +142,7 @@ impl DemoScenario {
             Self::ConflictingRectangle => "conflicting-rectangle",
             Self::TangentCircles => "tangent-circles",
             Self::ArcContactDrag => "arc-contact-drag",
+            Self::ArcCircleAutoRadius => "arc-circle-auto-radius",
             Self::LineCircleTangentGlide => "line-circle-tangent-glide",
             Self::HorizontalRail => "horizontal-rail",
             Self::CoincidentPair => "coincident-pair",
@@ -146,6 +157,7 @@ impl DemoScenario {
             Self::UnderconstrainedTriangle => Some(LiveSceneKind::UnderconstrainedTriangle),
             Self::TangentCircles => Some(LiveSceneKind::TangentCircles),
             Self::ArcContactDrag => Some(LiveSceneKind::ArcContactDrag),
+            Self::ArcCircleAutoRadius => Some(LiveSceneKind::ArcCircleAutoRadius),
             Self::LineCircleTangentGlide => Some(LiveSceneKind::LineCircleTangentGlide),
             Self::HorizontalRail => Some(LiveSceneKind::HorizontalRail),
             Self::CoincidentPair => Some(LiveSceneKind::CoincidentPair),
@@ -165,6 +177,7 @@ impl DemoScenario {
             | Self::ConflictingRectangle
             | Self::TangentCircles
             | Self::ArcContactDrag
+            | Self::ArcCircleAutoRadius
             | Self::LineCircleTangentGlide
             | Self::HorizontalRail
             | Self::CoincidentPair => None,
@@ -237,6 +250,7 @@ enum LiveSceneKind {
     UnderconstrainedTriangle,
     TangentCircles,
     ArcContactDrag,
+    ArcCircleAutoRadius,
     LineCircleTangentGlide,
     HorizontalRail,
     CoincidentPair,
@@ -249,6 +263,7 @@ impl LiveSceneKind {
             Self::UnderconstrainedTriangle => DemoScenario::UnderconstrainedTriangle,
             Self::TangentCircles => DemoScenario::TangentCircles,
             Self::ArcContactDrag => DemoScenario::ArcContactDrag,
+            Self::ArcCircleAutoRadius => DemoScenario::ArcCircleAutoRadius,
             Self::LineCircleTangentGlide => DemoScenario::LineCircleTangentGlide,
             Self::HorizontalRail => DemoScenario::HorizontalRail,
             Self::CoincidentPair => DemoScenario::CoincidentPair,
@@ -260,6 +275,7 @@ impl LiveSceneKind {
             Self::UnderconstrainedTriangle => "live S1",
             Self::TangentCircles => "live S3",
             Self::ArcContactDrag => "live arc contact",
+            Self::ArcCircleAutoRadius => "live auto radius",
             Self::LineCircleTangentGlide => "live tangent glide",
             Self::HorizontalRail => "live rail",
             Self::CoincidentPair => "live coincident",
@@ -277,6 +293,9 @@ impl LiveSceneKind {
             Self::ArcContactDrag => {
                 "Drag the contact point along the bounded counterclockwise arc. Targets on the span project onto it; targets beyond the visible endpoints are rejected and retain the prior state."
             }
+            Self::ArcCircleAutoRadius => {
+                "Drag the circle center in x and y outside the bounded arc. Center mobility comes from the retained solve report; radius and contact variables are solved. Invalid requests retain the prior accepted state."
+            }
             Self::LineCircleTangentGlide => {
                 "Drag the circle center parallel to the bounded segment. Tangency stays on the explicit Left side; requests beyond either endpoint are rejected and retain the prior state."
             }
@@ -293,6 +312,7 @@ impl LiveSceneKind {
         match self {
             Self::TangentCircles => TANGENT_CIRCLES_TRANSFORM,
             Self::ArcContactDrag => ARC_CONTACT_TRANSFORM,
+            Self::ArcCircleAutoRadius => ARC_CIRCLE_AUTO_RADIUS_TRANSFORM,
             Self::LineCircleTangentGlide => TANGENT_GLIDE_TRANSFORM,
             Self::UnderconstrainedTriangle | Self::HorizontalRail | Self::CoincidentPair => {
                 MODEL_TRANSFORM
@@ -328,6 +348,16 @@ struct ArcContactIds {
 
 #[cfg(any(target_arch = "wasm32", test))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ArcCircleAutoRadiusIds {
+    arc_center: PointId,
+    circle_center: PointId,
+    arc: ArcId,
+    circle: CircleId,
+    tangency: SketchConstraintId,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct TangentGlideIds {
     line_start: PointId,
     line_end: PointId,
@@ -343,6 +373,7 @@ enum LiveScene {
     UnderconstrainedTriangle(UnderconstrainedTriangleIds),
     TangentCircles(TangentCirclesIds),
     ArcContactDrag(ArcContactIds),
+    ArcCircleAutoRadius(ArcCircleAutoRadiusIds),
     LineCircleTangentGlide(TangentGlideIds),
     HorizontalRail(HorizontalRailIds),
     CoincidentPair(CoincidentPairIds),
@@ -355,6 +386,7 @@ impl LiveScene {
             Self::UnderconstrainedTriangle(_) => LiveSceneKind::UnderconstrainedTriangle,
             Self::TangentCircles(_) => LiveSceneKind::TangentCircles,
             Self::ArcContactDrag(_) => LiveSceneKind::ArcContactDrag,
+            Self::ArcCircleAutoRadius(_) => LiveSceneKind::ArcCircleAutoRadius,
             Self::LineCircleTangentGlide(_) => LiveSceneKind::LineCircleTangentGlide,
             Self::HorizontalRail(_) => LiveSceneKind::HorizontalRail,
             Self::CoincidentPair(_) => LiveSceneKind::CoincidentPair,
@@ -365,6 +397,7 @@ impl LiveScene {
         match self {
             Self::UnderconstrainedTriangle(ids) => Some(ids.c),
             Self::ArcContactDrag(ids) => Some(ids.point),
+            Self::ArcCircleAutoRadius(ids) => Some(ids.circle_center),
             Self::LineCircleTangentGlide(ids) => Some(ids.center),
             Self::HorizontalRail(ids) => Some(ids.b),
             Self::CoincidentPair(ids) => Some(ids.b),
@@ -422,6 +455,47 @@ fn build_live_scene(kind: LiveSceneKind) -> Result<(Sketch, LiveScene), String> 
                     point,
                     arc,
                     contact,
+                }),
+            ))
+        }
+        LiveSceneKind::ArcCircleAutoRadius => {
+            let mut sketch = Sketch::new(2.2).map_err(|error| error.to_string())?;
+            let arc_center = sketch
+                .add_named_point("fixed arc center", Point2::new(0.0, 0.0))
+                .map_err(|error| error.to_string())?;
+            let circle_center = sketch
+                .add_named_point("free circle center", Point2::new(3.4, 0.0))
+                .map_err(|error| error.to_string())?;
+            let arc = sketch
+                .add_named_arc(
+                    "300 degree CCW arc",
+                    arc_center,
+                    2.2,
+                    -5.0 * PI / 6.0,
+                    5.0 * PI / 6.0,
+                    ArcSweep::CounterClockwise,
+                )
+                .map_err(|error| error.to_string())?;
+            let circle = sketch
+                .add_named_circle("auto-radius circle", circle_center, 1.2)
+                .map_err(|error| error.to_string())?;
+            sketch
+                .add_fixed_point(arc_center)
+                .map_err(|error| error.to_string())?;
+            sketch
+                .add_arc_radius(arc, 2.2, DimensionMode::Driving)
+                .map_err(|error| error.to_string())?;
+            let tangency = sketch
+                .add_circle_arc_tangency(circle, arc, ArcCircleTangencySide::OutsideArc, 0.5, PI)
+                .map_err(|error| error.to_string())?;
+            Ok((
+                sketch,
+                LiveScene::ArcCircleAutoRadius(ArcCircleAutoRadiusIds {
+                    arc_center,
+                    circle_center,
+                    arc,
+                    circle,
+                    tangency,
                 }),
             ))
         }
@@ -1147,6 +1221,7 @@ fn clamp_drag_svg_point(kind: LiveSceneKind, point: SvgPoint) -> SvgPoint {
         LiveSceneKind::UnderconstrainedTriangle
         | LiveSceneKind::TangentCircles
         | LiveSceneKind::ArcContactDrag
+        | LiveSceneKind::ArcCircleAutoRadius
         | LiveSceneKind::LineCircleTangentGlide => point,
         LiveSceneKind::HorizontalRail | LiveSceneKind::CoincidentPair => SvgPoint {
             x: point.x.clamp(
@@ -1525,6 +1600,9 @@ fn live_sketch_view(app: &InteractiveSketchState) -> Result<LiveSketchView, Stri
         LiveScene::TangentCircles(ids) => tangent_circles_geometry_markup(app, ids)?,
         LiveScene::ArcContactDrag(ids) => {
             arc_contact_geometry_markup(app, ids, app.active_pointer.is_some())?
+        }
+        LiveScene::ArcCircleAutoRadius(ids) => {
+            arc_circle_auto_radius_geometry_markup(app, ids, app.active_pointer.is_some())?
         }
         LiveScene::LineCircleTangentGlide(ids) => {
             tangent_glide_geometry_markup(app, ids, app.active_pointer.is_some())?
@@ -2335,6 +2413,201 @@ fn arc_contact_geometry_markup(
 
 #[cfg(any(target_arch = "wasm32", test))]
 #[allow(clippy::too_many_lines)]
+fn arc_circle_auto_radius_geometry_markup(
+    app: &InteractiveSketchState,
+    ids: ArcCircleAutoRadiusIds,
+    dragging: bool,
+) -> Result<String, String> {
+    let arc = *app
+        .display
+        .geometry
+        .arc(ids.arc)
+        .ok_or_else(|| "auto-radius result is missing its arc".to_owned())?;
+    let circle = *app
+        .display
+        .geometry
+        .circle(ids.circle)
+        .ok_or_else(|| "auto-radius result is missing its circle".to_owned())?;
+    let arc_center = sketch_geometry_point(
+        &app.display.geometry,
+        ids.arc_center,
+        "auto-radius arc center",
+    )?;
+    let circle_center = sketch_geometry_point(
+        &app.display.geometry,
+        ids.circle_center,
+        "auto-radius circle center",
+    )?;
+    let ContactState::CircleArcTangency {
+        arc_span_parameter,
+        circle_angle,
+    } = app
+        .sketch
+        .contact_state(ids.tangency)
+        .map_err(|error| error.to_string())?
+    else {
+        return Err("auto-radius source has the wrong latent state".to_owned());
+    };
+    let side = app
+        .sketch
+        .circle_arc_tangency_side(ids.tangency)
+        .map_err(|error| error.to_string())?;
+    let SketchConstraintKind::CircleArcTangency {
+        circle: source_circle,
+        arc: source_arc,
+        ..
+    } = app
+        .sketch
+        .constraint(ids.tangency)
+        .ok_or_else(|| "auto-radius tangency source is unavailable".to_owned())?
+        .kind()
+    else {
+        return Err("auto-radius source is not circle-arc tangency".to_owned());
+    };
+    if source_circle != ids.circle
+        || source_arc != ids.arc
+        || side != ArcCircleTangencySide::OutsideArc
+        || (arc.center - arc_center).norm() > 1.0e-9
+        || (circle.center - circle_center).norm() > 1.0e-9
+    {
+        return Err("auto-radius source identity or solved centers changed".to_owned());
+    }
+
+    let (arc_start, arc_end) = arc
+        .endpoints()
+        .ok_or_else(|| "auto-radius arc endpoints are invalid".to_owned())?;
+    let arc_contact = arc
+        .evaluate(arc_span_parameter)
+        .ok_or_else(|| "committed auto-radius arc contact is invalid".to_owned())?;
+    let circle_contact = circle
+        .evaluate(circle_angle)
+        .ok_or_else(|| "committed auto-radius circle contact is invalid".to_owned())?;
+    let radius_endpoint = circle
+        .evaluate(circle_angle + PI)
+        .ok_or_else(|| "auto-radius dimension evaluation failed".to_owned())?;
+    if !sketch_geometry_is_finite(&app.display.geometry)
+        || (arc_contact - circle_contact).norm() > 1.0e-7
+    {
+        return Err("auto-radius solved evaluators disagree at contact".to_owned());
+    }
+
+    let transform = LiveSceneKind::ArcCircleAutoRadius.transform();
+    let arc_center_svg = transform.model_to_svg(arc_center);
+    let circle_center_svg = transform.model_to_svg(circle_center);
+    let arc_start_svg = transform.model_to_svg(arc_start);
+    let arc_end_svg = transform.model_to_svg(arc_end);
+    let contact_svg = transform.model_to_svg(arc_contact);
+    let radius_endpoint_svg = transform.model_to_svg(radius_endpoint);
+    let cue_from = transform.model_to_svg(
+        arc.evaluate(0.06)
+            .ok_or_else(|| "auto-radius sweep cue is invalid".to_owned())?,
+    );
+    let cue_tip = transform.model_to_svg(
+        arc.evaluate(0.11)
+            .ok_or_else(|| "auto-radius sweep cue is invalid".to_owned())?,
+    );
+    let sweep_arrow = arrow_head(cue_from, cue_tip, 11.0)?;
+    let radius_arrow_end = arrow_head(circle_center_svg, radius_endpoint_svg, 10.0)?;
+    let radius_arrow_center = arrow_head(radius_endpoint_svg, circle_center_svg, 10.0)?;
+    let large_arc = u8::from(arc.signed_sweep.abs() > PI);
+    let svg_sweep = u8::from(arc.signed_sweep < 0.0);
+    let arc_radius = arc.radius * transform.pixels_per_unit;
+    let circle_radius = circle.radius * transform.pixels_per_unit;
+    let active_class = if dragging { " active" } else { "" };
+    let dimension_label_x = (circle_center_svg.x + radius_endpoint_svg.x) * 0.5;
+    let dimension_label_y = (circle_center_svg.y + radius_endpoint_svg.y) * 0.5 - 10.0;
+    let scene_title = auto_radius_scene_title(&app.display.core_report);
+    let mut svg = String::new();
+    write!(
+        svg,
+        r#"<g class="geometry arc-circle-auto-radius-geometry" data-sketch-scene="ArcCircleAutoRadius" data-arc-span-parameter="{arc_span_parameter:.6}" data-circle-angle="{circle_angle:.6}" data-auto-radius="{model_radius:.6}">
+            <path class="auto-radius-active-field" d="M {field_x:.3} {field_y:.3} h 292 v 208 h -292 Z" />
+            <line class="radius-guide endpoint-guide" x1="{arc_ox:.3}" y1="{arc_oy:.3}" x2="{arc_sx:.3}" y2="{arc_sy:.3}" />
+            <line class="radius-guide endpoint-guide" x1="{arc_ox:.3}" y1="{arc_oy:.3}" x2="{arc_ex:.3}" y2="{arc_ey:.3}" />
+            <line class="auto-contact-guide arc-radial" x1="{arc_ox:.3}" y1="{arc_oy:.3}" x2="{contact_x:.3}" y2="{contact_y:.3}" />
+            <line class="auto-contact-guide circle-radial" x1="{circle_x:.3}" y1="{circle_y:.3}" x2="{contact_x:.3}" y2="{contact_y:.3}" />
+            <path class="bounded-arc auto-radius-arc" d="M {arc_sx:.3} {arc_sy:.3} A {arc_radius:.3} {arc_radius:.3} 0 {large_arc} {svg_sweep} {arc_ex:.3} {arc_ey:.3}" />
+            <line class="arc-direction-cue" x1="{cue_from_x:.3}" y1="{cue_from_y:.3}" x2="{cue_tip_x:.3}" y2="{cue_tip_y:.3}" />
+            <path class="arc-arrow" d="M {sweep_lx:.3} {sweep_ly:.3} L {sweep_tx:.3} {sweep_ty:.3} L {sweep_rx:.3} {sweep_ry:.3}" />
+            <circle class="arc-endpoint start" cx="{arc_sx:.3}" cy="{arc_sy:.3}" r="7" />
+            <circle class="arc-endpoint end" cx="{arc_ex:.3}" cy="{arc_ey:.3}" r="7" />
+            <path class="fixed-center-mark" d="M {arc_center_left:.3} {arc_oy:.3} L {arc_center_right:.3} {arc_oy:.3} M {arc_ox:.3} {arc_center_top:.3} L {arc_ox:.3} {arc_center_bottom:.3}" />
+            <circle class="auto-radius-circle" cx="{circle_x:.3}" cy="{circle_y:.3}" r="{circle_radius:.3}" />
+            <line class="auto-radius-dimension" x1="{circle_x:.3}" y1="{circle_y:.3}" x2="{radius_x:.3}" y2="{radius_y:.3}" />
+            <path class="auto-radius-dimension-arrows" d="M {radius_end_lx:.3} {radius_end_ly:.3} L {radius_end_tx:.3} {radius_end_ty:.3} L {radius_end_rx:.3} {radius_end_ry:.3} M {radius_center_lx:.3} {radius_center_ly:.3} L {radius_center_tx:.3} {radius_center_ty:.3} L {radius_center_rx:.3} {radius_center_ry:.3}" />
+            <circle class="contact-marker shared-auto-contact" cx="{contact_x:.3}" cy="{contact_y:.3}" r="7" data-contact-x="{contact_model_x:.6}" data-contact-y="{contact_model_y:.6}" />
+            <circle id="drag-handle" class="drag-target{active_class}" cx="{circle_x:.3}" cy="{circle_y:.3}" r="{drag_radius:.0}" data-drag-point="auto-radius-circle-center" data-model-x="{center_model_x:.6}" data-model-y="{center_model_y:.6}" />
+            <circle class="point draggable auto-radius-center{active_class}" cx="{circle_x:.3}" cy="{circle_y:.3}" r="9" />
+            <text class="endpoint-label" x="{start_label_x:.3}" y="{start_label_y:.3}">start / -150 deg</text>
+            <text class="endpoint-label" x="{end_label_x:.3}" y="{end_label_y:.3}">end / +150 deg</text>
+            <text class="contact-label auto-contact-label" x="{contact_label_x:.3}" y="{contact_label_y:.3}">shared contact / t {arc_span_parameter:.3}</text>
+            <text class="auto-radius-dimension-label" x="{dimension_label_x:.3}" y="{dimension_label_y:.3}">AUTO r={model_radius:.3}</text>
+            <text x="28" y="42" class="scene-kicker auto-radius-kicker">LIVE M7 / SOLVED FREE RADIUS</text>
+            <text x="28" y="68" class="scene-title">{scene_title}</text>
+            <text x="28" y="92" class="branch-label auto-radius-branch">OutsideArc / center ({center_model_x:.3}, {center_model_y:.3}) / AUTO RADIUS r={model_radius:.3}</text>
+        </g>"#,
+        field_x = arc_center_svg.x - 18.0,
+        field_y = arc_center_svg.y - 104.0,
+        arc_ox = arc_center_svg.x,
+        arc_oy = arc_center_svg.y,
+        arc_sx = arc_start_svg.x,
+        arc_sy = arc_start_svg.y,
+        arc_ex = arc_end_svg.x,
+        arc_ey = arc_end_svg.y,
+        contact_x = contact_svg.x,
+        contact_y = contact_svg.y,
+        circle_x = circle_center_svg.x,
+        circle_y = circle_center_svg.y,
+        cue_from_x = cue_from.x,
+        cue_from_y = cue_from.y,
+        cue_tip_x = cue_tip.x,
+        cue_tip_y = cue_tip.y,
+        sweep_lx = sweep_arrow.left.x,
+        sweep_ly = sweep_arrow.left.y,
+        sweep_tx = sweep_arrow.tip.x,
+        sweep_ty = sweep_arrow.tip.y,
+        sweep_rx = sweep_arrow.right.x,
+        sweep_ry = sweep_arrow.right.y,
+        arc_center_left = arc_center_svg.x - 8.0,
+        arc_center_right = arc_center_svg.x + 8.0,
+        arc_center_top = arc_center_svg.y - 8.0,
+        arc_center_bottom = arc_center_svg.y + 8.0,
+        radius_x = radius_endpoint_svg.x,
+        radius_y = radius_endpoint_svg.y,
+        radius_end_lx = radius_arrow_end.left.x,
+        radius_end_ly = radius_arrow_end.left.y,
+        radius_end_tx = radius_arrow_end.tip.x,
+        radius_end_ty = radius_arrow_end.tip.y,
+        radius_end_rx = radius_arrow_end.right.x,
+        radius_end_ry = radius_arrow_end.right.y,
+        radius_center_lx = radius_arrow_center.left.x,
+        radius_center_ly = radius_arrow_center.left.y,
+        radius_center_tx = radius_arrow_center.tip.x,
+        radius_center_ty = radius_arrow_center.tip.y,
+        radius_center_rx = radius_arrow_center.right.x,
+        radius_center_ry = radius_arrow_center.right.y,
+        contact_model_x = arc_contact.x,
+        contact_model_y = arc_contact.y,
+        drag_radius = DRAG_HIT_RADIUS,
+        center_model_x = circle_center.x,
+        center_model_y = circle_center.y,
+        start_label_x = arc_start_svg.x - 99.0,
+        start_label_y = arc_start_svg.y + 20.0,
+        end_label_x = arc_end_svg.x - 96.0,
+        end_label_y = arc_end_svg.y - 12.0,
+        contact_label_x = contact_svg.x - 12.0,
+        contact_label_y = contact_svg.y - 14.0,
+        dimension_label_x = dimension_label_x,
+        dimension_label_y = dimension_label_y,
+        model_radius = circle.radius,
+        scene_title = escape_html(&scene_title),
+    )
+    .expect("writing auto-radius SVG markup to a String cannot fail");
+    Ok(svg)
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[allow(clippy::too_many_lines)]
 fn tangent_glide_geometry_markup(
     app: &InteractiveSketchState,
     ids: TangentGlideIds,
@@ -3049,10 +3322,17 @@ fn status_markup(
                 if is_singular { "yes" } else { "none" }
             },
         );
+    let curve_status = curve_status_markup(sketch, scene, display, attempt);
+    let (early_curve_status, late_curve_status) =
+        if matches!(scene, LiveScene::ArcCircleAutoRadius(_)) {
+            (curve_status.as_str(), "")
+        } else {
+            ("", curve_status.as_str())
+        };
     let mut html = String::new();
     write!(
         html,
-        r#"{}
+        r#"{}{}
             <div class="status-grid">
                 <div><span>retained termination</span><strong>{}</strong></div>
                 <div><span>retained validated max hard residual</span><strong>{}</strong></div>
@@ -3065,6 +3345,7 @@ fn status_markup(
                 <div><span>retained redundancy notices</span><strong>{}</strong></div>
             </div>{}{}"#,
         attempt_banner,
+        early_curve_status,
         termination_label(retained.termination),
         validated_residual,
         rank,
@@ -3076,7 +3357,7 @@ fn status_markup(
         conflicts,
         redundancies,
         reference_status_markup(scene, display),
-        curve_status_markup(sketch, scene, display, attempt),
+        late_curve_status,
     )
     .expect("writing solve status markup to a String cannot fail");
     html
@@ -3343,6 +3624,21 @@ fn scene_motion_state(sketch: &Sketch, scene: LiveScene) -> (&'static str, Strin
             };
             ("retained contact branch", state)
         }
+        LiveScene::ArcCircleAutoRadius(ids) => {
+            let state = match (
+                sketch.circle_arc_tangency_side(ids.tangency),
+                sketch.contact_state(ids.tangency),
+            ) {
+                (
+                    Ok(side),
+                    Ok(ContactState::CircleArcTangency {
+                        arc_span_parameter, ..
+                    }),
+                ) => format!("{side:?}; bounded arc t = {arc_span_parameter:.6}"),
+                _ => "circle-arc tangency state unavailable".to_owned(),
+            };
+            ("retained tangency branch", state)
+        }
         LiveScene::LineCircleTangentGlide(ids) => {
             let state = match sketch.contact_state(ids.tangency) {
                 Ok(ContactState::LineCircleTangency { line_parameter, .. }) => {
@@ -3431,6 +3727,52 @@ fn curve_status_markup(
                 audit_snapshot_status(&display.display_audit),
             )
         }
+        LiveScene::ArcCircleAutoRadius(ids) => {
+            let circle = display.geometry.circle(ids.circle);
+            let center = circle.map_or_else(
+                || "unavailable".to_owned(),
+                |circle| format!("({:.3}, {:.3})", circle.center.x, circle.center.y),
+            );
+            let radius = circle.map_or_else(
+                || "unavailable".to_owned(),
+                |circle| format!("AUTO RADIUS r={:.3}", circle.radius),
+            );
+            let side = sketch
+                .circle_arc_tangency_side(ids.tangency)
+                .map_or_else(|_| "unavailable".to_owned(), |side| format!("{side:?}"));
+            let (span, circle_angle) = match sketch.contact_state(ids.tangency) {
+                Ok(ContactState::CircleArcTangency {
+                    arc_span_parameter,
+                    circle_angle,
+                }) => (
+                    format!("committed arc span t={arc_span_parameter:.6}"),
+                    format!("{circle_angle:.6} rad"),
+                ),
+                _ => ("unavailable".to_owned(), "unavailable".to_owned()),
+            };
+            let dof = report_local_dof_label(&display.core_report);
+            format!(
+                r#"<div class="auto-radius-hud">
+                    <div class="auto-radius-primary"><span>local mobility</span><strong>{}</strong></div>
+                    <div class="auto-radius-primary"><span>solved circle</span><strong>{}</strong></div>
+                    <div><span>current center (x, y)</span><strong>{}</strong></div>
+                    <div><span>explicit tangency side</span><strong>{}</strong></div>
+                    <div><span>accepted contact state</span><strong>{}</strong></div>
+                    <div><span>circle contact angle</span><strong>{}</strong></div>
+                    <div class="auto-radius-retention"><span>latest request / retention</span><strong>{}</strong></div>
+                    <div><span>retained audit snapshot</span><strong>{}</strong></div>
+                    <p>Center has x/y freedom; radius and contact variables are solved.</p>
+                </div>"#,
+                escape_html(&dof),
+                escape_html(&radius),
+                escape_html(&center),
+                escape_html(&side),
+                escape_html(&span),
+                escape_html(&circle_angle),
+                auto_radius_attempt_status(attempt),
+                audit_snapshot_status(&display.display_audit),
+            )
+        }
         LiveScene::LineCircleTangentGlide(ids) => {
             let (parameter, angle) = match sketch.contact_state(ids.tangency) {
                 Ok(ContactState::LineCircleTangency {
@@ -3472,6 +3814,40 @@ fn curve_status_markup(
         | LiveScene::HorizontalRail(_)
         | LiveScene::CoincidentPair(_) => String::new(),
     }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn auto_radius_attempt_status(attempt: &AttemptSummary) -> String {
+    match attempt {
+        AttemptSummary::Accepted { .. } => {
+            "ACCEPTED / center, radius, contact, and audit committed".to_owned()
+        }
+        AttemptSummary::Rejected { rejection, .. } => format!(
+            "REJECTED / {}; prior center/radius/contact/audit retained",
+            escape_html(&sketch_rejection_summary(rejection))
+        ),
+        AttemptSummary::Error { message } => format!(
+            "REQUEST ERROR / {}; prior center/radius/contact/audit retained",
+            escape_html(message)
+        ),
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn report_local_dof_label(report: &SolveReport) -> String {
+    if report.rank_is_valid {
+        format!("{} local DOF", report.local_degrees_of_freedom)
+    } else {
+        "DOF unavailable".to_owned()
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn auto_radius_scene_title(report: &SolveReport) -> String {
+    format!(
+        "Arc-circle auto radius / {}",
+        report_local_dof_label(report)
+    )
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -4158,11 +4534,12 @@ mod wasm {
     }
 }
 
-const SCENARIO_NAMES: [&str; 10] = [
+const SCENARIO_NAMES: [&str; 11] = [
     "S1 underconstrained triangle",
     "S2 conflicting rectangle",
     "S3 tangent circles",
     "Arc contact drag",
+    "M7 / Arc-circle auto radius",
     "Line-circle tangent glide",
     "Horizontal rail",
     "Coincident pair",
@@ -4234,6 +4611,13 @@ mod tests {
         ids
     }
 
+    fn arc_circle_auto_radius_ids(app: &InteractiveSketchState) -> ArcCircleAutoRadiusIds {
+        let LiveScene::ArcCircleAutoRadius(ids) = app.scene else {
+            panic!("expected arc-circle auto-radius state");
+        };
+        ids
+    }
+
     fn tangent_glide_ids(app: &InteractiveSketchState) -> TangentGlideIds {
         let LiveScene::LineCircleTangentGlide(ids) = app.scene else {
             panic!("expected tangent glide state");
@@ -4272,6 +4656,15 @@ mod tests {
 
     fn audit_row_count(audit: &AuditSnapshot) -> usize {
         audit.sources.iter().map(|source| source.rows.len()).sum()
+    }
+
+    fn svg_scene_title(markup: &str) -> &str {
+        let prefix = r#"<text x="28" y="68" class="scene-title">"#;
+        markup
+            .split_once(prefix)
+            .and_then(|(_, remainder)| remainder.split_once("</text>"))
+            .map(|(title, _)| title)
+            .expect("rendered SVG must contain one scene title")
     }
 
     fn assert_drag_handle_inside_margin(app: &InteractiveSketchState) {
@@ -4332,8 +4725,8 @@ mod tests {
 
     #[test]
     #[allow(clippy::too_many_lines)]
-    fn all_ten_selectors_and_names_map_to_fresh_domain_scene_kinds() {
-        assert_eq!(scenario_count(), 10);
+    fn all_eleven_selectors_and_names_map_to_fresh_domain_scene_kinds() {
+        assert_eq!(scenario_count(), 11);
         assert_eq!(
             scenario_names(),
             [
@@ -4341,6 +4734,7 @@ mod tests {
                 "S2 conflicting rectangle",
                 "S3 tangent circles",
                 "Arc contact drag",
+                "M7 / Arc-circle auto radius",
                 "Line-circle tangent glide",
                 "Horizontal rail",
                 "Coincident pair",
@@ -4354,6 +4748,7 @@ mod tests {
             DemoScenario::ConflictingRectangle,
             DemoScenario::TangentCircles,
             DemoScenario::ArcContactDrag,
+            DemoScenario::ArcCircleAutoRadius,
             DemoScenario::LineCircleTangentGlide,
             DemoScenario::HorizontalRail,
             DemoScenario::CoincidentPair,
@@ -4391,6 +4786,10 @@ mod tests {
             DemoScenario::LineCircleTangentGlide
         );
         assert_eq!(
+            DemoScenario::from_value("arc-circle-auto-radius"),
+            DemoScenario::ArcCircleAutoRadius
+        );
+        assert_eq!(
             DemoScenario::HorizontalRail.sketch_scene_kind(),
             Some(LiveSceneKind::HorizontalRail)
         );
@@ -4416,11 +4815,19 @@ mod tests {
         assert!(page.contains("value=\"coincident-pair\""));
         assert!(page.contains("value=\"tangent-circles\""));
         assert!(page.contains("value=\"arc-contact-drag\""));
+        assert!(page.contains(
+            "<option value=\"arc-circle-auto-radius\">M7 / Arc-circle auto radius</option>"
+        ));
         assert!(page.contains("value=\"line-circle-tangent-glide\""));
         assert!(page.contains("value=\"four-bar-open\""));
         assert!(page.contains("value=\"four-bar-crossed\""));
         assert!(page.contains("value=\"slider-crank\""));
         assert_eq!(page.matches("<option value=").count(), scenario_count());
+        let arc_contact_index = page.find("value=\"arc-contact-drag\"").unwrap();
+        let auto_radius_index = page.find("value=\"arc-circle-auto-radius\"").unwrap();
+        let tangent_glide_index = page.find("value=\"line-circle-tangent-glide\"").unwrap();
+        assert!(arc_contact_index < auto_radius_index);
+        assert!(auto_radius_index < tangent_glide_index);
 
         let sketch_state = DemoState::Sketch(Box::new(
             InteractiveSketchState::new(LiveSceneKind::HorizontalRail).unwrap(),
@@ -4433,6 +4840,10 @@ mod tests {
         assert_eq!(sketch_state.selector_value(), "horizontal-rail");
         assert_eq!(conflict_state.selector_value(), "conflicting-rectangle");
         assert_eq!(linkage_state.selector_value(), "four-bar-crossed");
+        let auto_radius_state = DemoState::Sketch(Box::new(
+            InteractiveSketchState::new(LiveSceneKind::ArcCircleAutoRadius).unwrap(),
+        ));
+        assert_eq!(auto_radius_state.selector_value(), "arc-circle-auto-radius");
         let DemoState::ExpectedConflict(conflict) = conflict_state else {
             panic!("expected retained S2 state");
         };
@@ -4624,6 +5035,267 @@ mod tests {
     }
 
     #[test]
+    fn auto_radius_scene_starts_accepted_with_two_dof_and_no_circle_driver() {
+        let app = InteractiveSketchState::new(LiveSceneKind::ArcCircleAutoRadius).unwrap();
+        let ids = arc_circle_auto_radius_ids(&app);
+        assert_live_result(&app.display, 2);
+        assert_eq!(
+            app.display.geometry.point(ids.arc_center).unwrap(),
+            Point2::new(0.0, 0.0)
+        );
+        assert_point_within(
+            app.display.geometry.point(ids.circle_center).unwrap(),
+            Point2::new(3.4, 0.0),
+            5.0e-9,
+        );
+        assert!((app.display.geometry.circle(ids.circle).unwrap().radius - 1.2).abs() <= 5.0e-9);
+        assert_eq!(
+            app.sketch.circle_arc_tangency_side(ids.tangency).unwrap(),
+            ArcCircleTangencySide::OutsideArc
+        );
+        assert_eq!(app.sketch.dimensions().count(), 1);
+        assert!(app.sketch.dimensions().all(|(_, dimension)| {
+            !matches!(
+                dimension.kind(),
+                DimensionKind::CircleRadius { circle, .. }
+                    | DimensionKind::CircleDiameter { circle, .. }
+                    if circle == ids.circle
+            )
+        }));
+        assert!(matches!(
+            app.sketch.dimensions().next().unwrap().1.kind(),
+            DimensionKind::ArcRadius { arc, target }
+                if arc == ids.arc && (target - 2.2).abs() <= f64::EPSILON
+        ));
+        let ContactState::CircleArcTangency {
+            arc_span_parameter,
+            circle_angle,
+        } = app.sketch.contact_state(ids.tangency).unwrap()
+        else {
+            panic!("expected circle-arc contact state");
+        };
+        assert!((arc_span_parameter - 0.5).abs() <= 1.0e-9);
+        assert!((circle_angle - PI).abs() <= 1.0e-9);
+        let arc_contact = app
+            .display
+            .geometry
+            .arc(ids.arc)
+            .unwrap()
+            .evaluate(arc_span_parameter)
+            .unwrap();
+        let circle_contact = app
+            .display
+            .geometry
+            .circle(ids.circle)
+            .unwrap()
+            .evaluate(circle_angle)
+            .unwrap();
+        assert_point_within(arc_contact, circle_contact, 1.0e-9);
+
+        let view = live_sketch_view(&app).unwrap();
+        assert!(!view.geometry.is_empty());
+        assert!(!view.status.is_empty());
+        assert!(!view.audit.is_empty());
+        assert!(view.geometry.contains("arc-circle-auto-radius-geometry"));
+        assert!(view.geometry.contains("bounded-arc auto-radius-arc"));
+        assert!(view.geometry.contains("auto-radius-circle"));
+        assert!(view.geometry.contains("shared-auto-contact"));
+        assert!(view.geometry.contains("auto-radius-dimension"));
+        assert!(view.geometry.contains("id=\"drag-handle\""));
+        assert!(
+            view.geometry
+                .contains("data-drag-point=\"auto-radius-circle-center\"")
+        );
+        assert!(
+            view.geometry
+                .contains(&format!("r=\"{DRAG_HIT_RADIUS:.0}\""))
+        );
+        assert!(view.geometry.contains("2 local DOF"));
+        assert!(view.geometry.contains("AUTO RADIUS r=1.200"));
+        assert!(view.status.contains("2 local DOF"));
+        assert!(view.status.contains("AUTO RADIUS r=1.200"));
+        assert!(view.status.contains("OutsideArc"));
+        assert!(view.status.contains("committed arc span t=0.500000"));
+        assert!(
+            view.status
+                .contains("ACCEPTED / center, radius, contact, and audit committed")
+        );
+        assert_eq!(
+            svg_scene_title(&view.geometry),
+            "Arc-circle auto radius / 2 local DOF"
+        );
+        assert!(view.instructions.contains("retained solve report"));
+        assert!(!view.instructions.contains("2 DOF"));
+        assert!(
+            view.instructions
+                .contains("radius and contact variables are solved")
+        );
+        assert_eq!(
+            view.audit.matches("class=\"audit-row\"").count(),
+            display_audit_row_count(&app.display)
+        );
+        assert!(!view.audit.contains("circle.radius - target"));
+    }
+
+    #[test]
+    fn auto_radius_svg_title_uses_rank_valid_report_mobility() {
+        let mut app = InteractiveSketchState::new(LiveSceneKind::ArcCircleAutoRadius).unwrap();
+        assert_eq!(
+            auto_radius_scene_title(&app.display.core_report),
+            "Arc-circle auto radius / 2 local DOF"
+        );
+
+        app.display.core_report.local_degrees_of_freedom = 7;
+        let seven_dof = live_sketch_view(&app).unwrap();
+        assert_eq!(
+            svg_scene_title(&seven_dof.geometry),
+            "Arc-circle auto radius / 7 local DOF"
+        );
+        assert!(seven_dof.status.contains("7 local DOF"));
+
+        app.display.core_report.local_degrees_of_freedom = 2;
+        app.display.core_report.rank_is_valid = false;
+        let unavailable = live_sketch_view(&app).unwrap();
+        assert_eq!(
+            svg_scene_title(&unavailable.geometry),
+            "Arc-circle auto radius / DOF unavailable"
+        );
+        assert!(unavailable.status.contains("DOF unavailable"));
+    }
+
+    #[test]
+    fn auto_radius_two_dimensional_drags_solve_distinct_radii_contacts_and_release() {
+        let mut app = InteractiveSketchState::new(LiveSceneKind::ArcCircleAutoRadius).unwrap();
+        let ids = arc_circle_auto_radius_ids(&app);
+        let mut radii = Vec::new();
+        let mut contacts = Vec::new();
+        for (pointer, distance, angle) in [
+            (901, 3.7, 0.35_f64),
+            (902, 3.05, -0.55_f64),
+            (903, 4.0, 0.1_f64),
+        ] {
+            let target = Point2::new(distance * angle.cos(), distance * angle.sin());
+            app.active_pointer = Some(pointer);
+            app.solve_drag(target);
+            assert_live_result(&app.display, 2);
+            assert_point_within(
+                app.display.geometry.point(ids.circle_center).unwrap(),
+                target,
+                6.0e-9,
+            );
+            let solved_circle = *app.display.geometry.circle(ids.circle).unwrap();
+            assert!((solved_circle.radius - (distance - 2.2)).abs() <= 6.0e-9);
+            let state = app.sketch.contact_state(ids.tangency).unwrap();
+            let ContactState::CircleArcTangency {
+                arc_span_parameter,
+                circle_angle,
+            } = state
+            else {
+                panic!("expected circle-arc contact state");
+            };
+            let arc_contact = app
+                .display
+                .geometry
+                .arc(ids.arc)
+                .unwrap()
+                .evaluate(arc_span_parameter)
+                .unwrap();
+            let circle_contact = solved_circle.evaluate(circle_angle).unwrap();
+            assert_point_within(arc_contact, circle_contact, 1.0e-9);
+            radii.push(solved_circle.radius);
+            contacts.push(state);
+
+            let retained_geometry = app.display.geometry.clone();
+            let retained_contact = state;
+            app.finish_drag();
+            assert_eq!(app.active_pointer, None);
+            assert_live_result(&app.display, 2);
+            assert_eq!(app.display.geometry, retained_geometry);
+            assert_eq!(
+                app.sketch.contact_state(ids.tangency).unwrap(),
+                retained_contact
+            );
+        }
+        assert!(radii.windows(2).all(|pair| (pair[0] - pair[1]).abs() > 0.1));
+        assert!(contacts.windows(2).all(|pair| pair[0] != pair[1]));
+    }
+
+    #[test]
+    fn auto_radius_invalid_span_side_and_zero_radius_requests_retain_all_published_state() {
+        let mut app = InteractiveSketchState::new(LiveSceneKind::ArcCircleAutoRadius).unwrap();
+        let ids = arc_circle_auto_radius_ids(&app);
+        app.solve_drag(Point2::new(3.6, 0.7));
+        assert_live_result(&app.display, 2);
+        let retained_geometry = app.display.geometry.clone();
+        let retained_audit = app.display.display_audit.clone();
+        let retained_contact = app.sketch.contact_state(ids.tangency).unwrap();
+        let retained_diagnostics = app.retained_diagnostics.clone();
+        let missing_span_angle = 155.0_f64.to_radians();
+
+        for (target, expected_kind) in [
+            (
+                Point2::new(
+                    3.5 * missing_span_angle.cos(),
+                    3.5 * missing_span_angle.sin(),
+                ),
+                "span",
+            ),
+            (Point2::new(1.8, 0.0), "side"),
+            (Point2::new(2.2, 0.0), "zero"),
+        ] {
+            app.solve_drag(target);
+            let AttemptSummary::Rejected {
+                termination,
+                rejection,
+            } = &app.attempt
+            else {
+                panic!(
+                    "expected typed {expected_kind} rejection: {:#?}",
+                    app.attempt
+                );
+            };
+            assert_eq!(*termination, SolveTermination::Stalled, "{expected_kind}");
+            assert_eq!(
+                *rejection,
+                SolveRejection::CoreTermination(SolveTermination::Stalled),
+                "{expected_kind}"
+            );
+            assert_eq!(app.display.geometry, retained_geometry);
+            assert_eq!(app.display.display_audit, retained_audit);
+            assert_eq!(
+                app.sketch.contact_state(ids.tangency).unwrap(),
+                retained_contact
+            );
+            assert_eq!(app.retained_diagnostics, retained_diagnostics);
+        }
+
+        let rejected = live_sketch_view(&app).unwrap();
+        assert!(rejected.status.contains("REJECTED /"));
+        assert!(
+            rejected
+                .status
+                .contains("prior center/radius/contact/audit retained")
+        );
+        assert!(
+            rejected
+                .status
+                .contains(&sketch_rejection_summary(match &app.attempt {
+                    AttemptSummary::Rejected { rejection, .. } => rejection,
+                    _ => unreachable!(),
+                }))
+        );
+        assert!(!rejected.geometry.is_empty());
+        assert!(!rejected.audit.is_empty());
+        app.finish_drag();
+        assert_eq!(app.display.geometry, retained_geometry);
+        assert_eq!(app.display.display_audit, retained_audit);
+        assert_eq!(
+            app.sketch.contact_state(ids.tangency).unwrap(),
+            retained_contact
+        );
+    }
+
+    #[test]
     fn tangent_glide_updates_contacts_and_rejects_supporting_line_escape() {
         let mut app = InteractiveSketchState::new(LiveSceneKind::LineCircleTangentGlide).unwrap();
         let ids = tangent_glide_ids(&app);
@@ -4769,6 +5441,39 @@ mod tests {
     }
 
     #[test]
+    fn ambiguous_auto_radius_scale_has_truthful_typed_retention_ui() {
+        let mut app = InteractiveSketchState::new(LiveSceneKind::ArcCircleAutoRadius).unwrap();
+        let ids = arc_circle_auto_radius_ids(&app);
+        let retained_geometry = app.display.geometry.clone();
+        let retained_audit = app.display.display_audit.clone();
+        let rejection = SolveRejection::AmbiguousTangencyScale(ids.tangency);
+        assert_eq!(
+            sketch_rejection_summary(&rejection),
+            "tangency feature scales are numerically ambiguous"
+        );
+        app.attempt = AttemptSummary::Rejected {
+            termination: SolveTermination::Converged,
+            rejection,
+        };
+
+        let view = live_sketch_view(&app).unwrap();
+        assert!(
+            view.status
+                .contains("tangency feature scales are numerically ambiguous")
+        );
+        assert!(
+            view.status
+                .contains("prior center/radius/contact/audit retained")
+        );
+        assert!(
+            view.status
+                .contains("attempt rejected / retained state shown")
+        );
+        assert_eq!(app.display.geometry, retained_geometry);
+        assert_eq!(app.display.display_audit, retained_audit);
+    }
+
+    #[test]
     fn generic_scene_action_is_visible_only_for_s3_and_uses_a_native_button() {
         let mut s3 = DemoState::Sketch(Box::new(
             InteractiveSketchState::new(LiveSceneKind::TangentCircles).unwrap(),
@@ -4780,6 +5485,9 @@ mod tests {
         for state in [
             DemoState::Sketch(Box::new(
                 InteractiveSketchState::new(LiveSceneKind::ArcContactDrag).unwrap(),
+            )),
+            DemoState::Sketch(Box::new(
+                InteractiveSketchState::new(LiveSceneKind::ArcCircleAutoRadius).unwrap(),
             )),
             DemoState::Sketch(Box::new(
                 InteractiveSketchState::new(LiveSceneKind::LineCircleTangentGlide).unwrap(),
@@ -4850,6 +5558,55 @@ mod tests {
                 .unwrap(),
             ContactState::PointOnArc {
                 span_parameter: 0.38
+            }
+        );
+
+        let mut auto_radius =
+            InteractiveSketchState::new(LiveSceneKind::ArcCircleAutoRadius).unwrap();
+        let auto_ids = arc_circle_auto_radius_ids(&auto_radius);
+        auto_radius.solve_drag(Point2::new(3.8, 1.0));
+        assert_live_result(&auto_radius.display, 2);
+        assert!(
+            (auto_radius
+                .display
+                .geometry
+                .circle(auto_ids.circle)
+                .unwrap()
+                .radius
+                - 1.2)
+                .abs()
+                > 0.1
+        );
+        let reset_auto = InteractiveSketchState::new(LiveSceneKind::ArcCircleAutoRadius).unwrap();
+        let reset_auto_ids = arc_circle_auto_radius_ids(&reset_auto);
+        assert_point_within(
+            reset_auto
+                .display
+                .geometry
+                .point(reset_auto_ids.circle_center)
+                .unwrap(),
+            Point2::new(3.4, 0.0),
+            5.0e-9,
+        );
+        assert!(
+            (reset_auto
+                .display
+                .geometry
+                .circle(reset_auto_ids.circle)
+                .unwrap()
+                .radius
+                - 1.2)
+                .abs()
+                <= 5.0e-9
+        );
+        assert_eq!(
+            reset_auto
+                .sketch
+                .contact_state(reset_auto_ids.tangency)
+                .unwrap(),
+            ContactState::CircleArcTangency {
+                arc_span_parameter: 0.5,
+                circle_angle: PI,
             }
         );
     }
@@ -5153,6 +5910,7 @@ mod tests {
         };
         for (kind, model) in [
             (LiveSceneKind::ArcContactDrag, Point2::new(-1.25, 1.4)),
+            (LiveSceneKind::ArcCircleAutoRadius, Point2::new(3.45, 0.85)),
             (
                 LiveSceneKind::LineCircleTangentGlide,
                 Point2::new(2.35, 0.8),
@@ -5177,6 +5935,46 @@ mod tests {
     }
 
     #[test]
+    fn auto_radius_mobile_transform_and_center_hit_target_remain_usable() {
+        let kind = LiveSceneKind::ArcCircleAutoRadius;
+        let bounds = ClientRect {
+            left: 5.0,
+            top: 180.0,
+            width: 380.0,
+            height: 380.0 * SVG_VIEW_BOX.height / SVG_VIEW_BOX.width,
+        };
+        let model = Point2::new(3.3, -0.65);
+        let svg = kind.transform().model_to_svg(model);
+        let client = SvgPoint {
+            x: bounds.left + svg.x * bounds.width / SVG_VIEW_BOX.width,
+            y: bounds.top + svg.y * bounds.height / SVG_VIEW_BOX.height,
+        };
+        assert_point_within(
+            client_to_drag_target(kind, client, bounds).unwrap(),
+            model,
+            1.0e-12,
+        );
+        let hit_diameter_css = 2.0 * DRAG_HIT_RADIUS * bounds.width / SVG_VIEW_BOX.width;
+        assert!(hit_diameter_css >= 44.0, "got {hit_diameter_css}");
+
+        let app = InteractiveSketchState::new(kind).unwrap();
+        let view = live_sketch_view(&app).unwrap();
+        assert!(
+            view.geometry
+                .contains("data-drag-point=\"auto-radius-circle-center\"")
+        );
+        assert!(
+            view.geometry
+                .contains(&format!("r=\"{DRAG_HIT_RADIUS:.0}\""))
+        );
+        let styles = include_str!("../styles.css");
+        assert!(styles.contains(".drag-target"));
+        assert!(styles.contains("cursor: grab"));
+        assert!(styles.contains("#viewport[data-drag-active=\"true\"]"));
+        assert!(styles.contains(".auto-radius-hud"));
+    }
+
+    #[test]
     fn arc_ccw_240_svg_path_has_exact_large_arc_and_screen_sweep_flags() {
         let app = InteractiveSketchState::new(LiveSceneKind::ArcContactDrag).unwrap();
         let ids = arc_contact_ids(&app);
@@ -5192,9 +5990,23 @@ mod tests {
     }
 
     #[test]
+    fn auto_radius_ccw_300_svg_path_has_exact_large_arc_and_screen_sweep_flags() {
+        let app = InteractiveSketchState::new(LiveSceneKind::ArcCircleAutoRadius).unwrap();
+        let ids = arc_circle_auto_radius_ids(&app);
+        let arc = app.display.geometry.arc(ids.arc).unwrap();
+        assert_eq!(arc.sweep, ArcSweep::CounterClockwise);
+        assert!((arc.signed_sweep.to_degrees() - 300.0).abs() <= 1.0e-12);
+
+        let geometry = live_sketch_view(&app).unwrap().geometry;
+        let expected = r#"class="bounded-arc auto-radius-arc" d="M 179.495 318.800 A 127.600 127.600 0 1 0 179.495 191.200""#;
+        assert!(geometry.contains(expected), "{geometry}");
+        assert!(!geometry.contains("A 127.600 127.600 0 1 1"));
+    }
+
+    #[test]
     fn viewport_drag_state_and_tangent_endpoint_styles_are_explicit() {
         let mut state = DemoState::Sketch(Box::new(
-            InteractiveSketchState::new(LiveSceneKind::LineCircleTangentGlide).unwrap(),
+            InteractiveSketchState::new(LiveSceneKind::ArcCircleAutoRadius).unwrap(),
         ));
         assert!(!state.drag_active());
         let DemoState::Sketch(sketch) = &mut state else {
@@ -5209,7 +6021,7 @@ mod tests {
         assert!(!state.drag_active());
         assert!(
             !DemoState::Sketch(Box::new(
-                InteractiveSketchState::new(LiveSceneKind::LineCircleTangentGlide).unwrap(),
+                InteractiveSketchState::new(LiveSceneKind::ArcCircleAutoRadius).unwrap(),
             ))
             .drag_active()
         );
