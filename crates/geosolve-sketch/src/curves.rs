@@ -21,6 +21,26 @@ pub const CONTACT_PARAMETER_ROUNDOFF_TOLERANCE: f64 = 64.0 * f64::EPSILON;
 /// as orthogonal/ambiguous rather than as a selected positive branch.
 pub const CENTER_DIRECTION_COSINE_MARGIN: f64 = 1.0e-8;
 
+/// Maximum relative error accepted between a solved circle radius and the
+/// radius derived from a circle-arc tangency branch.
+///
+/// The direct center-distance branch relation is compared relative to the
+/// circle radius and derived radial gap only. Supporting-arc scale never
+/// widens this acceptance tolerance.
+pub const CIRCLE_ARC_TANGENCY_RADIUS_RELATIVE_TOLERANCE: f64 = 1.0e-8;
+
+/// Multiplier used to estimate floating uncertainty in subtracting the
+/// supporting arc radius from the center distance.
+///
+/// If this feature-scale uncertainty is larger than the allowed
+/// circle-relative error, accepted-state validation reports scale ambiguity
+/// instead of widening the tolerance.
+pub const CIRCLE_ARC_TANGENCY_SCALE_UNCERTAINTY_MULTIPLIER: f64 = 8.0;
+
+/// Maximum dimensionless cross error and cosine deficit for a selected
+/// circle-arc radial contact root.
+pub const CIRCLE_ARC_TANGENCY_DIRECTION_TOLERANCE: f64 = 1.0e-8;
+
 /// Direction used to traverse a circular arc from its start angle to its end angle.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ArcSweep {
@@ -94,6 +114,33 @@ pub enum CircleContainment {
 pub enum CircleTangencyMode {
     External,
     Internal { containment: CircleContainment },
+}
+
+/// Explicit radial side of a circle tangent to a bounded circular arc.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ArcCircleTangencySide {
+    /// The circle center is farther from the arc center than the arc radius.
+    OutsideArc,
+    /// The circle center is noncoincident with and inside the arc's supporting circle.
+    InsideArc,
+}
+
+impl ArcCircleTangencySide {
+    pub(crate) fn accepts(self, center_distance: f64, arc_radius: f64) -> bool {
+        center_distance.is_finite()
+            && arc_radius.is_finite()
+            && match self {
+                Self::OutsideArc => center_distance > arc_radius,
+                Self::InsideArc => center_distance > 0.0 && center_distance < arc_radius,
+            }
+    }
+
+    pub(crate) const fn circle_arc_radial_sign(self) -> f64 {
+        match self {
+            Self::OutsideArc => -1.0,
+            Self::InsideArc => 1.0,
+        }
+    }
 }
 
 /// Direction in which the second circle center must remain from the first.
@@ -184,6 +231,10 @@ pub enum ContactState {
     },
     LineCircleTangency {
         line_parameter: f64,
+        circle_angle: f64,
+    },
+    CircleArcTangency {
+        arc_span_parameter: f64,
         circle_angle: f64,
     },
 }
@@ -917,6 +968,58 @@ impl Sketch {
         )
     }
 
+    /// Adds native circle-to-bounded-arc tangency with explicit radial side and contacts.
+    ///
+    /// The contact values are accepted warm starts and need not exactly satisfy the
+    /// tangency equations. The current centers must already select the requested side.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for stale entities, ambiguous centers, invalid contact state,
+    /// or a current center position incompatible with `side`.
+    pub fn add_circle_arc_tangency(
+        &mut self,
+        circle: CircleId,
+        arc: ArcId,
+        side: ArcCircleTangencySide,
+        arc_span_parameter: f64,
+        circle_angle: f64,
+    ) -> Result<SketchConstraintId, SketchError> {
+        let circle_value = self.circle_value(circle)?;
+        let arc_value = self.arc_value(arc)?;
+        validate_radius(circle_value.radius())?;
+        validate_radius(arc_value.radius())?;
+        validate_bounded_parameter(arc_span_parameter, "bounded-arc span [0, 1]")?;
+        validate_finite(circle_angle, "circle contact angle")?;
+
+        if circle_value.center() == arc_value.center() {
+            return Err(SketchError::AmbiguousArcCircleTangencyCenters);
+        }
+        let circle_center = self.point_position(circle_value.center())?;
+        let arc_center = self.point_position(arc_value.center())?;
+        let center_distance = (circle_center - arc_center).norm();
+        if !center_distance.is_finite() || center_distance == 0.0 {
+            return Err(SketchError::AmbiguousArcCircleTangencyCenters);
+        }
+        let derived_radius = (center_distance - arc_value.radius()).abs();
+        if !derived_radius.is_finite() || derived_radius <= 0.0 {
+            return Err(SketchError::ZeroDerivedCircleRadius);
+        }
+        if !side.accepts(center_distance, arc_value.radius()) {
+            return Err(SketchError::ArcCircleTangencySideMismatch(side));
+        }
+
+        Ok(
+            self.insert_constraint(SketchConstraintKind::CircleArcTangency {
+                circle,
+                arc,
+                side,
+                arc_span_parameter,
+                circle_angle,
+            }),
+        )
+    }
+
     /// Returns accepted latent state for a point/contact constraint.
     ///
     /// # Errors
@@ -946,6 +1049,14 @@ impl Sketch {
                 ..
             } => Ok(ContactState::LineCircleTangency {
                 line_parameter,
+                circle_angle,
+            }),
+            SketchConstraintKind::CircleArcTangency {
+                arc_span_parameter,
+                circle_angle,
+                ..
+            } => Ok(ContactState::CircleArcTangency {
+                arc_span_parameter,
                 circle_angle,
             }),
             _ => Err(SketchError::NoContactState(constraint)),
@@ -1010,9 +1121,45 @@ impl Sketch {
                 *line_parameter = line_value;
                 *circle_angle = circle_value;
             }
+            (
+                SketchConstraintKind::CircleArcTangency {
+                    arc_span_parameter,
+                    circle_angle,
+                    ..
+                },
+                ContactState::CircleArcTangency {
+                    arc_span_parameter: arc_value,
+                    circle_angle: circle_value,
+                },
+            ) => {
+                validate_bounded_parameter(arc_value, "bounded-arc span [0, 1]")?;
+                validate_finite(circle_value, "circle contact angle")?;
+                *arc_span_parameter = arc_value;
+                *circle_angle = circle_value;
+            }
             _ => return Err(SketchError::NoContactState(constraint)),
         }
         Ok(())
+    }
+
+    /// Returns the explicit radial side of a circle-arc tangency source.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a stale source or a different constraint kind.
+    pub fn circle_arc_tangency_side(
+        &self,
+        constraint: SketchConstraintId,
+    ) -> Result<ArcCircleTangencySide, SketchError> {
+        match self
+            .constraints
+            .get(constraint)
+            .ok_or(SketchError::UnknownConstraint(constraint))?
+            .kind()
+        {
+            SketchConstraintKind::CircleArcTangency { side, .. } => Ok(side),
+            _ => Err(SketchError::NotCircleArcTangency(constraint)),
+        }
     }
 
     /// Changes circle-circle tangency mode as explicit source state.
@@ -1236,6 +1383,7 @@ impl Sketch {
                 constraint.kind(),
                 SketchConstraintKind::PointOnCircle { circle: id, .. }
                     | SketchConstraintKind::LineCircleTangency { circle: id, .. }
+                    | SketchConstraintKind::CircleArcTangency { circle: id, .. }
                     if id == circle
             ) || matches!(
                 constraint.kind(),
@@ -1259,7 +1407,12 @@ impl Sketch {
 
     fn constraint_references_arc(&self, arc: ArcId) -> bool {
         self.constraints.iter().any(|(_, constraint)| {
-            matches!(constraint.kind(), SketchConstraintKind::PointOnArc { arc: id, .. } if id == arc)
+            matches!(
+                constraint.kind(),
+                SketchConstraintKind::PointOnArc { arc: id, .. }
+                    | SketchConstraintKind::CircleArcTangency { arc: id, .. }
+                    if id == arc
+            )
         })
     }
 

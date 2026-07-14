@@ -4,7 +4,8 @@ use slotmap::{Key, SlotMap, new_key_type};
 use thiserror::Error;
 
 use crate::curves::{
-    AngleOrientation, CenterDirectionBranch, CircleTangencyMode, LineParameterDomain, LineSide,
+    AngleOrientation, ArcCircleTangencySide, CenterDirectionBranch, CircleTangencyMode,
+    LineParameterDomain, LineSide,
 };
 
 new_key_type! {
@@ -88,6 +89,14 @@ pub enum SketchError {
     NoContactState(SketchConstraintId),
     #[error("constraint {0:?} is not a circle-circle tangency")]
     NotCircleTangency(SketchConstraintId),
+    #[error("circle-arc tangency requires distinct, noncoincident centers")]
+    AmbiguousArcCircleTangencyCenters,
+    #[error("circle-arc tangency has zero radius derived from its center distance")]
+    ZeroDerivedCircleRadius,
+    #[error("current centers are incompatible with circle-arc tangency side {0:?}")]
+    ArcCircleTangencySideMismatch(ArcCircleTangencySide),
+    #[error("constraint {0:?} is not a circle-arc tangency")]
+    NotCircleArcTangency(SketchConstraintId),
     #[error(transparent)]
     Core(#[from] CoreError),
 }
@@ -302,6 +311,13 @@ pub enum SketchConstraintKind {
         second: CircleId,
         mode: CircleTangencyMode,
         center_direction: CenterDirectionBranch,
+    },
+    CircleArcTangency {
+        circle: CircleId,
+        arc: ArcId,
+        side: ArcCircleTangencySide,
+        arc_span_parameter: f64,
+        circle_angle: f64,
     },
 }
 
@@ -1091,6 +1107,16 @@ fn constraint_references_point(
                 || sketch
                     .circles
                     .get(circle)
+                    .is_some_and(|value| value.center() == point)
+        }
+        SketchConstraintKind::CircleArcTangency { circle, arc, .. } => {
+            sketch
+                .circles
+                .get(circle)
+                .is_some_and(|value| value.center() == point)
+                || sketch
+                    .arcs
+                    .get(arc)
                     .is_some_and(|value| value.center() == point)
         }
     }

@@ -13,9 +13,11 @@ pub use compiler::{
     SolveRejection, SolvedArc, SolvedCircle, SolvedPoint,
 };
 pub use curves::{
-    AngleOrientation, ArcSweep, CENTER_DIRECTION_COSINE_MARGIN,
-    CONTACT_PARAMETER_ROUNDOFF_TOLERANCE, CenterDirectionBranch, Circle, CircleContainment,
-    CircleTangencyMode, CircularArc, ContactState, LineParameterDomain, LineSide,
+    AngleOrientation, ArcCircleTangencySide, ArcSweep, CENTER_DIRECTION_COSINE_MARGIN,
+    CIRCLE_ARC_TANGENCY_DIRECTION_TOLERANCE, CIRCLE_ARC_TANGENCY_RADIUS_RELATIVE_TOLERANCE,
+    CIRCLE_ARC_TANGENCY_SCALE_UNCERTAINTY_MULTIPLIER, CONTACT_PARAMETER_ROUNDOFF_TOLERANCE,
+    CenterDirectionBranch, Circle, CircleContainment, CircleTangencyMode, CircularArc,
+    ContactState, LineParameterDomain, LineSide,
 };
 pub use model::{
     ArcId, CircleId, CoordinateAxis, DimensionKind, DimensionMode, LineSegment, PointId,

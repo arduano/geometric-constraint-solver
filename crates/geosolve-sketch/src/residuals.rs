@@ -629,6 +629,130 @@ pub(crate) struct CircleTangencyResidual {
     pub(crate) mode: CircleTangencyMode,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct CircleArcTangencyResidual {
+    pub(crate) circle_center: usize,
+    pub(crate) circle_radius: usize,
+    pub(crate) arc_center: usize,
+    pub(crate) arc_radius: usize,
+    pub(crate) circle_angle: usize,
+    pub(crate) arc_parameter: usize,
+    pub(crate) arc_start_angle: f64,
+    pub(crate) arc_signed_sweep: f64,
+}
+
+impl ResidualEvaluator for CircleArcTangencyResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        let values = self.values(variables)?;
+        require_regular(values.circle.degeneracy, "circle-arc tangency circle")?;
+        require_regular(values.arc.degeneracy, "circle-arc tangency arc")?;
+        let circle_tangent = canonical_unit(values.circle.first_derivative).ok_or_else(|| {
+            EvaluationError::invalid_geometry("circle-arc tangency circle has a zero derivative")
+        })?;
+        let arc_tangent = canonical_unit(values.arc.first_derivative).ok_or_else(|| {
+            EvaluationError::invalid_geometry("circle-arc tangency arc has a zero derivative")
+        })?;
+        Ok(vec![
+            values.circle.position[0] - values.arc.position[0],
+            values.circle.position[1] - values.arc.position[1],
+            cross(circle_tangent, arc_tangent),
+        ])
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        let values = self.values(variables)?;
+        require_regular(values.circle.degeneracy, "circle-arc tangency circle")?;
+        require_regular(values.arc.degeneracy, "circle-arc tangency arc")?;
+        unit(values.circle.first_derivative).ok_or_else(|| {
+            EvaluationError::invalid_geometry("circle-arc tangency circle has a zero derivative")
+        })?;
+        unit(values.arc.first_derivative).ok_or_else(|| {
+            EvaluationError::invalid_geometry("circle-arc tangency arc has a zero derivative")
+        })?;
+        let circle_angle = values.circle_angle;
+        let arc_angle = self.arc_start_angle + self.arc_signed_sweep * values.arc_parameter;
+        let angle_difference = arc_angle - circle_angle;
+        let circle_angle_derivative = -self.arc_signed_sweep.signum() * angle_difference.cos();
+        let arc_parameter_derivative = self.arc_signed_sweep.abs() * angle_difference.cos();
+        let (circle_cosine, circle_sine) = (circle_angle.cos(), circle_angle.sin());
+        let (arc_cosine, arc_sine) = (arc_angle.cos(), arc_angle.sin());
+
+        let mut blocks = zero_blocks(variables, 3)?;
+        add_point_rows(
+            &mut blocks,
+            self.circle_center,
+            [[1.0, 0.0], [0.0, 1.0], [0.0, 0.0]],
+        )?;
+        add_scalar_column(
+            &mut blocks,
+            self.circle_radius,
+            &[circle_cosine, circle_sine, 0.0],
+        )?;
+        add_point_rows(
+            &mut blocks,
+            self.arc_center,
+            [[-1.0, 0.0], [0.0, -1.0], [0.0, 0.0]],
+        )?;
+        add_scalar_column(&mut blocks, self.arc_radius, &[-arc_cosine, -arc_sine, 0.0])?;
+        add_scalar_column(
+            &mut blocks,
+            self.circle_angle,
+            &[
+                values.circle.first_derivative[0],
+                values.circle.first_derivative[1],
+                circle_angle_derivative,
+            ],
+        )?;
+        add_scalar_column(
+            &mut blocks,
+            self.arc_parameter,
+            &[
+                -values.arc.first_derivative[0],
+                -values.arc.first_derivative[1],
+                arc_parameter_derivative,
+            ],
+        )?;
+        Ok(finish_blocks(blocks, 3))
+    }
+}
+
+struct CircleArcTangencyValues {
+    circle: crate::curves::CurveEvaluation,
+    arc: crate::curves::CurveEvaluation,
+    circle_angle: f64,
+    arc_parameter: f64,
+}
+
+impl CircleArcTangencyResidual {
+    fn values(
+        self,
+        variables: &[VariableValue],
+    ) -> Result<CircleArcTangencyValues, EvaluationError> {
+        let circle_center = point_at(variables, self.circle_center, "circle-arc tangency")?;
+        let circle_radius = scalar_at(variables, self.circle_radius, "circle-arc tangency")?;
+        let arc_center = point_at(variables, self.arc_center, "circle-arc tangency")?;
+        let arc_radius = scalar_at(variables, self.arc_radius, "circle-arc tangency")?;
+        let circle_angle = scalar_at(variables, self.circle_angle, "circle-arc tangency")?;
+        let arc_parameter = scalar_at(variables, self.arc_parameter, "circle-arc tangency")?;
+        Ok(CircleArcTangencyValues {
+            circle: CurveRef::Circle {
+                center: circle_center,
+                radius: circle_radius,
+            }
+            .evaluate(circle_angle),
+            arc: CurveRef::Arc {
+                center: arc_center,
+                radius: arc_radius,
+                start_angle: self.arc_start_angle,
+                signed_sweep: self.arc_signed_sweep,
+            }
+            .evaluate(arc_parameter),
+            circle_angle,
+            arc_parameter,
+        })
+    }
+}
+
 impl ResidualEvaluator for CircleTangencyResidual {
     fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
         let values = self.values(variables)?;
@@ -832,6 +956,12 @@ fn norm(value: [f64; 2]) -> f64 {
 fn unit(value: [f64; 2]) -> Option<([f64; 2], f64)> {
     let length = norm(value);
     (length.is_finite() && length > 0.0).then_some(([value[0] / length, value[1] / length], length))
+}
+
+fn canonical_unit(value: [f64; 2]) -> Option<[f64; 2]> {
+    let (normalized, _) = unit(value)?;
+    let angle = normalized[1].atan2(normalized[0]);
+    Some([angle.cos(), angle.sin()])
 }
 
 fn left_normal(unit_direction: [f64; 2]) -> [f64; 2] {

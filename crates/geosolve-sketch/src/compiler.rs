@@ -6,8 +6,10 @@ use geosolve_core::{
 use geosolve_geometry::Point2;
 
 use crate::curves::{
-    CENTER_DIRECTION_COSINE_MARGIN, normalize_bounded_candidate, segment_points, tangency_distance,
-    unwrap_near, validate_bounded_parameter, validate_radius,
+    CENTER_DIRECTION_COSINE_MARGIN, CIRCLE_ARC_TANGENCY_DIRECTION_TOLERANCE,
+    CIRCLE_ARC_TANGENCY_RADIUS_RELATIVE_TOLERANCE,
+    CIRCLE_ARC_TANGENCY_SCALE_UNCERTAINTY_MULTIPLIER, normalize_bounded_candidate, segment_points,
+    tangency_distance, unwrap_near, validate_bounded_parameter, validate_radius,
 };
 use crate::model::{
     ArcId, CircleId, CoordinateAxis, DimensionKind, DimensionMode, PersistentSource, PointId,
@@ -15,11 +17,11 @@ use crate::model::{
     validate_model_scale, validate_point,
 };
 use crate::residuals::{
-    AxisDifferenceResidual, CircleTangencyResidual, CoincidentResidual, DistanceResidual,
-    FixedCoordinateResidual, LineCircleTangencyResidual, MidpointResidual, OrientedAngleResidual,
-    PointOnArcResidual, PointOnCircleResidual, PointOnLineResidual, PointTargetResidual,
-    ScalarEqualityResidual, ScalarTargetResidual, SegmentPairEquation, SegmentPairResidual,
-    SymmetryResidual,
+    AxisDifferenceResidual, CircleArcTangencyResidual, CircleTangencyResidual, CoincidentResidual,
+    DistanceResidual, FixedCoordinateResidual, LineCircleTangencyResidual, MidpointResidual,
+    OrientedAngleResidual, PointOnArcResidual, PointOnCircleResidual, PointOnLineResidual,
+    PointTargetResidual, ScalarEqualityResidual, ScalarTargetResidual, SegmentPairEquation,
+    SegmentPairResidual, SymmetryResidual,
 };
 
 /// Temporary point target supplied for one solve only.
@@ -357,7 +359,10 @@ pub struct ReferenceDimensionValue {
 #[derive(Clone, Debug, PartialEq)]
 pub enum SolveRejection {
     CoreTermination(SolveTermination),
-    HardResidual { maximum: f64, tolerance: f64 },
+    HardResidual {
+        maximum: f64,
+        tolerance: f64,
+    },
     IndependentValidationFailed(String),
     SegmentBranchFlipped(SegmentId),
     NonPositiveCircleRadius(CircleId),
@@ -365,7 +370,11 @@ pub enum SolveRejection {
     DegenerateSegment(SegmentId),
     ContactParameterOutOfDomain(SketchConstraintId),
     LineSideFlipped(SketchConstraintId),
+    /// The explicit tangency branch is invalid, including a branch-derived radius mismatch.
     InvalidTangencyMode(SketchConstraintId),
+    /// Circle and supporting-arc scales do not resolve the selected tangency gap reliably.
+    AmbiguousTangencyScale(SketchConstraintId),
+    /// The selected center/contact direction root was not retained.
     CenterDirectionFlipped(SketchConstraintId),
 }
 
@@ -488,6 +497,9 @@ impl Sketch {
         }
         if request.previous_state_preferences {
             for (point_id, point) in self.points.iter() {
+                if request.drag.is_some_and(|drag| drag.point == point_id) {
+                    continue;
+                }
                 source_mappings.push(compile_point_target(
                     self,
                     &mut problem,
@@ -812,6 +824,110 @@ impl Sketch {
                         return Err(SolveRejection::CenterDirectionFlipped(constraint_id));
                     }
                 }
+                SketchConstraintKind::CircleArcTangency {
+                    circle, arc, side, ..
+                } => {
+                    let arc_parameter = latent_value(
+                        &candidate.latents,
+                        constraint_id,
+                        LatentVariableRole::ArcSpanParameter,
+                    )?;
+                    let circle_angle = latent_value(
+                        &candidate.latents,
+                        constraint_id,
+                        LatentVariableRole::CircleAngle,
+                    )?;
+                    if validate_bounded_parameter(arc_parameter, "bounded-arc span [0, 1]").is_err()
+                        || !circle_angle.is_finite()
+                    {
+                        return Err(SolveRejection::ContactParameterOutOfDomain(constraint_id));
+                    }
+                    let solved_circle = candidate.geometry.circle(circle).ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "circle-arc tangency circle is missing".into(),
+                        )
+                    })?;
+                    let solved_arc = candidate.geometry.arc(arc).ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "circle-arc tangency arc is missing".into(),
+                        )
+                    })?;
+                    let center_offset = solved_circle.center - solved_arc.center;
+                    let center_distance = center_offset.norm();
+                    if !center_distance.is_finite() || center_distance == 0.0 {
+                        return Err(SolveRejection::InvalidTangencyMode(constraint_id));
+                    }
+                    if !side.accepts(center_distance, solved_arc.radius) {
+                        return Err(SolveRejection::InvalidTangencyMode(constraint_id));
+                    }
+                    let derived_radius = match side {
+                        crate::ArcCircleTangencySide::OutsideArc => {
+                            center_distance - solved_arc.radius
+                        }
+                        crate::ArcCircleTangencySide::InsideArc => {
+                            solved_arc.radius - center_distance
+                        }
+                    };
+                    if !derived_radius.is_finite() || derived_radius <= 0.0 {
+                        return Err(SolveRejection::InvalidTangencyMode(constraint_id));
+                    }
+                    match circle_arc_radius_validation(
+                        solved_circle.radius,
+                        derived_radius,
+                        center_distance,
+                        solved_arc.radius,
+                        side,
+                    ) {
+                        CircleArcRadiusValidation::Valid => {}
+                        CircleArcRadiusValidation::Mismatch => {
+                            return Err(SolveRejection::InvalidTangencyMode(constraint_id));
+                        }
+                        CircleArcRadiusValidation::AmbiguousScale => {
+                            return Err(SolveRejection::AmbiguousTangencyScale(constraint_id));
+                        }
+                    }
+                    let arc_contact = solved_arc.evaluate(arc_parameter).ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "circle-arc tangency arc contact is invalid".into(),
+                        )
+                    })?;
+                    let circle_contact = solved_circle.evaluate(circle_angle).ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "circle-arc tangency circle contact is invalid".into(),
+                        )
+                    })?;
+                    let center_direction = [
+                        center_offset.x / center_distance,
+                        center_offset.y / center_distance,
+                    ];
+                    let arc_radial = normalized_direction(
+                        arc_contact.x - solved_arc.center.x,
+                        arc_contact.y - solved_arc.center.y,
+                    )
+                    .ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "circle-arc tangency arc radial is degenerate".into(),
+                        )
+                    })?;
+                    let circle_radial = normalized_direction(
+                        circle_contact.x - solved_circle.center.x,
+                        circle_contact.y - solved_circle.center.y,
+                    )
+                    .ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "circle-arc tangency circle radial is degenerate".into(),
+                        )
+                    })?;
+                    let expected_circle_radial = [
+                        side.circle_arc_radial_sign() * arc_radial[0],
+                        side.circle_arc_radial_sign() * arc_radial[1],
+                    ];
+                    if !directions_match(arc_radial, center_direction)
+                        || !directions_match(circle_radial, expected_circle_radial)
+                    {
+                        return Err(SolveRejection::CenterDirectionFlipped(constraint_id));
+                    }
+                }
                 _ => {}
             }
         }
@@ -884,6 +1000,31 @@ impl Sketch {
                         latent.value = normalized;
                     }
                 }
+                SketchConstraintKind::CircleArcTangency {
+                    arc_span_parameter: _,
+                    circle_angle,
+                    ..
+                } => {
+                    if let Some(latent) = latent_mut(
+                        &mut candidate.latents,
+                        constraint_id,
+                        LatentVariableRole::CircleAngle,
+                    ) {
+                        let normalized = unwrap_near(latent.value, circle_angle);
+                        changed |= normalized.to_bits() != latent.value.to_bits();
+                        latent.value = normalized;
+                    }
+                    if let Some(latent) = latent_mut(
+                        &mut candidate.latents,
+                        constraint_id,
+                        LatentVariableRole::ArcSpanParameter,
+                    ) {
+                        let normalized =
+                            normalize_bounded_candidate(latent.value).unwrap_or(latent.value);
+                        changed |= normalized.to_bits() != latent.value.to_bits();
+                        latent.value = normalized;
+                    }
+                }
                 _ => {}
             }
         }
@@ -937,9 +1078,16 @@ impl Sketch {
                     LatentVariableRole::LineParameter,
                 ) => *line_parameter = latent.value,
                 (
-                    SketchConstraintKind::LineCircleTangency { circle_angle, .. },
+                    SketchConstraintKind::LineCircleTangency { circle_angle, .. }
+                    | SketchConstraintKind::CircleArcTangency { circle_angle, .. },
                     LatentVariableRole::CircleAngle,
                 ) => *circle_angle = latent.value,
+                (
+                    SketchConstraintKind::CircleArcTangency {
+                        arc_span_parameter, ..
+                    },
+                    LatentVariableRole::ArcSpanParameter,
+                ) => *arc_span_parameter = latent.value,
                 _ => return Err(SketchError::NoContactState(latent.constraint_id)),
             }
         }
@@ -1604,6 +1752,77 @@ fn compile_curve_constraint(
                 Box::new(evaluator),
             )
         }
+        SketchConstraintKind::CircleArcTangency {
+            circle,
+            arc,
+            side,
+            arc_span_parameter,
+            circle_angle,
+        } => {
+            let circle_value = sketch.circle_value(circle)?;
+            let arc_value = sketch.arc_value(arc)?;
+            let circle_variable = add_latent(
+                problem,
+                latent_variables,
+                constraint_id,
+                LatentVariableRole::CircleAngle,
+                circle_angle,
+            )?;
+            let arc_variable = add_latent(
+                problem,
+                latent_variables,
+                constraint_id,
+                LatentVariableRole::ArcSpanParameter,
+                arc_span_parameter,
+            )?;
+            let evaluator = CircleArcTangencyResidual {
+                circle_center: incidence
+                    .add(point_variable(point_variables, circle_value.center())?),
+                circle_radius: incidence
+                    .add(circle_radius_variable(circle_radius_variables, circle)?),
+                arc_center: incidence.add(point_variable(point_variables, arc_value.center())?),
+                arc_radius: incidence.add(arc_radius_variable(arc_radius_variables, arc)?),
+                circle_angle: incidence.add(circle_variable),
+                arc_parameter: incidence.add(arc_variable),
+                arc_start_angle: arc_value.start_angle(),
+                arc_signed_sweep: arc_value.signed_sweep(),
+            };
+            let bindings = vec![
+                AuditBinding::new("circle", circle_value.label()),
+                AuditBinding::new("arc", arc_value.label()),
+                AuditBinding::new("side", format!("{side:?}")),
+                AuditBinding::new("domain", "bounded-arc domain [0, 1]"),
+                AuditBinding::new("sweep", format!("{:?}", arc_value.sweep())),
+                AuditBinding::new("warm-start circle angle", circle_angle.to_string()),
+                AuditBinding::new("warm-start arc span", arc_span_parameter.to_string()),
+            ];
+            (
+                format!(
+                    "constraint {}: {} tangent to {} bounded span ({side:?})",
+                    constraint.ordinal(),
+                    circle_value.label(),
+                    arc_value.label()
+                ),
+                3,
+                vec![scale, scale, 1.0],
+                vec![
+                    audit_row(
+                        "(circle(angle).x - arc(u).x) / model_scale".into(),
+                        bindings.clone(),
+                    ),
+                    audit_row(
+                        "(circle(angle).y - arc(u).y) / model_scale".into(),
+                        bindings.clone(),
+                    ),
+                    audit_row_unit(
+                        "cross(unit_tangent(circle, angle), unit_tangent(arc, u))".into(),
+                        bindings,
+                        "dimensionless",
+                    ),
+                ],
+                Box::new(evaluator),
+            )
+        }
         _ => unreachable!("M5 constraint reached M7 compiler"),
     };
 
@@ -2056,6 +2275,67 @@ fn merge_conflicting_annotations(retained: &mut AuditSnapshot, attempted: &Audit
             }
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CircleArcRadiusValidation {
+    Valid,
+    Mismatch,
+    AmbiguousScale,
+}
+
+fn circle_arc_radius_validation(
+    actual_radius: f64,
+    derived_radius: f64,
+    center_distance: f64,
+    arc_radius: f64,
+    side: crate::ArcCircleTangencySide,
+) -> CircleArcRadiusValidation {
+    if !actual_radius.is_finite()
+        || !derived_radius.is_finite()
+        || actual_radius <= 0.0
+        || derived_radius <= 0.0
+    {
+        return CircleArcRadiusValidation::Mismatch;
+    }
+    let radius_scale = actual_radius.abs().max(derived_radius.abs());
+    let allowed_error = CIRCLE_ARC_TANGENCY_RADIUS_RELATIVE_TOLERANCE * radius_scale;
+    let supporting_scale = center_distance.abs().max(arc_radius.abs());
+    let floating_uncertainty =
+        CIRCLE_ARC_TANGENCY_SCALE_UNCERTAINTY_MULTIPLIER * f64::EPSILON * supporting_scale;
+    if !allowed_error.is_finite()
+        || !floating_uncertainty.is_finite()
+        || floating_uncertainty > allowed_error
+    {
+        return CircleArcRadiusValidation::AmbiguousScale;
+    }
+    let expected_distance = match side {
+        crate::ArcCircleTangencySide::OutsideArc => arc_radius + actual_radius,
+        crate::ArcCircleTangencySide::InsideArc => arc_radius - actual_radius,
+    };
+    if !expected_distance.is_finite() || expected_distance <= 0.0 {
+        return CircleArcRadiusValidation::Mismatch;
+    }
+    if (center_distance - expected_distance).abs() <= allowed_error {
+        CircleArcRadiusValidation::Valid
+    } else {
+        CircleArcRadiusValidation::Mismatch
+    }
+}
+
+fn normalized_direction(x: f64, y: f64) -> Option<[f64; 2]> {
+    let norm = x.hypot(y);
+    (x.is_finite() && y.is_finite() && norm.is_finite() && norm > 0.0)
+        .then_some([x / norm, y / norm])
+}
+
+fn directions_match(first: [f64; 2], second: [f64; 2]) -> bool {
+    let dot = first[0] * second[0] + first[1] * second[1];
+    let cross = first[0] * second[1] - first[1] * second[0];
+    dot.is_finite()
+        && cross.is_finite()
+        && dot >= 1.0 - CIRCLE_ARC_TANGENCY_DIRECTION_TOLERANCE
+        && cross.abs() <= CIRCLE_ARC_TANGENCY_DIRECTION_TOLERANCE
 }
 
 #[derive(Default)]

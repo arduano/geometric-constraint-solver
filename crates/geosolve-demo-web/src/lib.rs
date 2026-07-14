@@ -3531,6 +3531,9 @@ fn sketch_rejection_summary(rejection: &SolveRejection) -> String {
         SolveRejection::InvalidTangencyMode(_) => {
             "explicit tangency mode rejected the candidate".to_owned()
         }
+        SolveRejection::AmbiguousTangencyScale(_) => {
+            "tangency feature scales are numerically ambiguous".to_owned()
+        }
         SolveRejection::CenterDirectionFlipped(_) => {
             "explicit center-direction branch rejected the candidate".to_owned()
         }
