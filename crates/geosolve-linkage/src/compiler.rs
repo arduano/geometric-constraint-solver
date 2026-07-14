@@ -6,9 +6,9 @@ use geosolve_core::{
 use geosolve_geometry::{PlaneFrame, Point2, Point3, Pose2, Rotation2, Vector2, Vector3};
 
 use crate::model::{
-    AxisFeatureId, BodyId, BranchMonitor, BranchViolation, DriverId, DriverKind, JointId,
-    JointKind, Linkage, LinkageError, PointFeatureId, validate_finite, validate_model_scale,
-    validate_plane_frame, validate_point, validate_pose,
+    AxisFeatureId, BodyId, BranchMonitor, BranchMonitorId, BranchSign, BranchViolation, DriverId,
+    DriverKind, JointId, JointKind, Linkage, LinkageError, PointFeatureId, validate_finite,
+    validate_model_scale, validate_plane_frame, validate_point, validate_pose,
 };
 use crate::residuals::{
     AngularDriverResidual, LinearDriverResidual, PrismaticResidual, RevoluteResidual, WeldResidual,
@@ -161,6 +161,25 @@ pub struct LinkageGeometry {
     pub bodies: Vec<SolvedBody>,
     pub points: Vec<TransformedPointFeature>,
     pub axes: Vec<TransformedAxisFeature>,
+}
+
+/// The geometric operation used by an explicit branch monitor.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BranchMonitorKind {
+    Orientation,
+    DirectedDisplacement,
+}
+
+/// Typed evaluation of one branch monitor against supplied linkage geometry.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct BranchEvaluation {
+    pub monitor_id: BranchMonitorId,
+    pub kind: BranchMonitorKind,
+    pub expected_sign: BranchSign,
+    /// Raw signed cross product or guide-axis projection in model coordinates.
+    pub signed_metric: f64,
+    /// Whether the signed, scale-normalized metric clears the branch margin.
+    pub retained: bool,
 }
 
 impl LinkageGeometry {
@@ -599,8 +618,12 @@ impl Linkage {
                             tolerance: config.normalized_residual_tolerance,
                         })
                     } else {
-                        self.first_branch_violation(candidate)
-                            .map(SolveRejection::BranchViolation)
+                        match self.first_branch_violation(candidate) {
+                            Ok(violation) => violation.map(SolveRejection::BranchViolation),
+                            Err(error) => Some(SolveRejection::IndependentValidationFailed(
+                                error.to_string(),
+                            )),
+                        }
                     }
                 }
                 Err(error) => Some(SolveRejection::IndependentValidationFailed(
@@ -732,10 +755,82 @@ impl Linkage {
         Ok(maximum)
     }
 
+    /// Evaluates one explicit branch monitor without duplicating its geometry math.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a stale monitor, missing transformed features, or a
+    /// non-finite cross-product/projection metric.
+    pub fn evaluate_branch_monitor(
+        &self,
+        monitor_id: BranchMonitorId,
+        geometry: &LinkageGeometry,
+    ) -> Result<BranchEvaluation, LinkageError> {
+        let monitor = *self
+            .branch_monitors
+            .get(monitor_id)
+            .ok_or(LinkageError::UnknownBranchMonitor(monitor_id))?;
+        let (kind, expected_sign, signed_metric, normalized_metric) = match monitor {
+            BranchMonitor::Orientation {
+                line_start,
+                line_end,
+                observed,
+                sign,
+            } => {
+                let start = geometry_point(geometry, line_start)?;
+                let line = geometry_point(geometry, line_end)? - start;
+                let observed = geometry_point(geometry, observed)? - start;
+                let metric = cross2(line, observed);
+                (
+                    BranchMonitorKind::Orientation,
+                    sign,
+                    metric,
+                    metric / self.model_scale / self.model_scale,
+                )
+            }
+            BranchMonitor::DirectedDisplacement {
+                origin,
+                measured,
+                axis,
+                sign,
+            } => {
+                let displacement =
+                    geometry_point(geometry, measured)? - geometry_point(geometry, origin)?;
+                let metric = geometry_axis(geometry, axis)?.dot(&displacement);
+                (
+                    BranchMonitorKind::DirectedDisplacement,
+                    sign,
+                    metric,
+                    metric / self.model_scale,
+                )
+            }
+        };
+        if !signed_metric.is_finite() {
+            return Err(LinkageError::NonFiniteValue {
+                context: "branch monitor metric",
+                value: signed_metric,
+            });
+        }
+        if !normalized_metric.is_finite() {
+            return Err(LinkageError::NonFiniteValue {
+                context: "normalized branch monitor metric",
+                value: normalized_metric,
+            });
+        }
+        Ok(BranchEvaluation {
+            monitor_id,
+            kind,
+            expected_sign,
+            signed_metric,
+            retained: normalized_metric * expected_sign.multiplier()
+                > MINIMUM_NORMALIZED_BRANCH_MARGIN,
+        })
+    }
+
     pub(crate) fn first_branch_violation(
         &self,
         geometry: &LinkageGeometry,
-    ) -> Option<BranchViolation> {
+    ) -> Result<Option<BranchViolation>, LinkageError> {
         for (joint_id, joint) in self.joints.iter() {
             if let JointKind::Prismatic {
                 first_axis,
@@ -744,47 +839,26 @@ impl Linkage {
                 ..
             } = joint.kind()
             {
-                let first = geometry.axis(first_axis)?;
-                let second = geometry.axis(second_axis)?;
+                let first = geometry_axis(geometry, first_axis)?;
+                let second = geometry_axis(geometry, second_axis)?;
                 let branch_projection = first.dot(&second) * axis_branch.multiplier();
-                if !branch_projection.is_finite()
-                    || branch_projection <= MINIMUM_NORMALIZED_BRANCH_MARGIN
-                {
-                    return Some(BranchViolation::PrismaticAxis(joint_id));
+                if !branch_projection.is_finite() {
+                    return Err(LinkageError::NonFiniteValue {
+                        context: "prismatic axis branch metric",
+                        value: branch_projection,
+                    });
+                }
+                if branch_projection <= MINIMUM_NORMALIZED_BRANCH_MARGIN {
+                    return Ok(Some(BranchViolation::PrismaticAxis(joint_id)));
                 }
             }
         }
-        for (monitor_id, monitor) in self.branch_monitors.iter() {
-            let preserved = match *monitor {
-                BranchMonitor::Orientation {
-                    line_start,
-                    line_end,
-                    observed,
-                    sign,
-                } => {
-                    let start = geometry.point(line_start)?;
-                    let line = geometry.point(line_end)? - start;
-                    let observed = geometry.point(observed)? - start;
-                    cross2(line, observed) * sign.multiplier()
-                        / (self.model_scale * self.model_scale)
-                        > MINIMUM_NORMALIZED_BRANCH_MARGIN
-                }
-                BranchMonitor::DirectedDisplacement {
-                    origin,
-                    measured,
-                    axis,
-                    sign,
-                } => {
-                    let displacement = geometry.point(measured)? - geometry.point(origin)?;
-                    geometry.axis(axis)?.dot(&displacement) * sign.multiplier() / self.model_scale
-                        > MINIMUM_NORMALIZED_BRANCH_MARGIN
-                }
-            };
-            if !preserved {
-                return Some(BranchViolation::Monitor(monitor_id));
+        for (monitor_id, _) in self.branch_monitors.iter() {
+            if !self.evaluate_branch_monitor(monitor_id, geometry)?.retained {
+                return Ok(Some(BranchViolation::Monitor(monitor_id)));
             }
         }
-        None
+        Ok(None)
     }
 }
 
@@ -1220,7 +1294,10 @@ fn refresh_retained_audit(
         .domain_hard_residual_max(&solved_geometry, None)
         .ok()?;
     if audit_max.max(domain_max) > config.normalized_residual_tolerance
-        || linkage.first_branch_violation(&solved_geometry).is_some()
+        || linkage
+            .first_branch_violation(&solved_geometry)
+            .ok()?
+            .is_some()
     {
         return None;
     }

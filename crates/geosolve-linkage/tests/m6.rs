@@ -5,9 +5,9 @@ use std::f64::consts::PI;
 use geosolve_core::{ResidualCategory, SolveTermination, SolverConfig, VariableValue};
 use geosolve_geometry::{PlaneFrame, Point2, Point3, Pose2, Vector2, Vector3};
 use geosolve_linkage::{
-    AxisDirectionBranch, BranchSign, DriverKind, DriverUnit, FourBarAssemblyMode, Linkage,
-    LinkageError, LinkageGeometry, LinkageSolveResult, LinkageSource, SolveRejection,
-    four_bar_with_scale, slider_crank_with_scale, xy_plane_frame,
+    AxisDirectionBranch, BranchMonitorKind, BranchSign, DriverKind, DriverUnit,
+    FourBarAssemblyMode, Linkage, LinkageError, LinkageGeometry, LinkageSolveResult, LinkageSource,
+    SolveRejection, four_bar_with_scale, slider_crank_with_scale, xy_plane_frame,
 };
 
 const TOLERANCE: f64 = 1.0e-9;
@@ -317,6 +317,90 @@ fn compilation_uses_one_pose_per_body_ground_elimination_and_exact_source_mappin
             && row.scale.is_finite()
             && row.scale > 0.0
     }));
+}
+
+#[test]
+fn typed_branch_evaluations_expose_canonical_raw_metrics_and_expected_signs() {
+    let (open, open_ids) = four_bar_with_scale(FourBarAssemblyMode::Open, 1.0).unwrap();
+    let open_geometry = open.geometry().unwrap();
+    let open_evaluation = open
+        .evaluate_branch_monitor(open_ids.orientation_monitor, &open_geometry)
+        .unwrap();
+    assert_eq!(open_evaluation.monitor_id, open_ids.orientation_monitor);
+    assert_eq!(open_evaluation.kind, BranchMonitorKind::Orientation);
+    assert_eq!(open_evaluation.expected_sign, BranchSign::Positive);
+    assert!(open_evaluation.signed_metric.is_finite());
+    assert!(open_evaluation.signed_metric > 0.0);
+    assert!(open_evaluation.retained);
+
+    let (crossed, crossed_ids) = four_bar_with_scale(FourBarAssemblyMode::Crossed, 1.0).unwrap();
+    let crossed_evaluation = crossed
+        .evaluate_branch_monitor(
+            crossed_ids.orientation_monitor,
+            &crossed.geometry().unwrap(),
+        )
+        .unwrap();
+    assert_eq!(crossed_evaluation.kind, BranchMonitorKind::Orientation);
+    assert_eq!(crossed_evaluation.expected_sign, BranchSign::Negative);
+    assert!(crossed_evaluation.signed_metric.is_finite());
+    assert!(crossed_evaluation.signed_metric < 0.0);
+    assert!(crossed_evaluation.retained);
+    assert!(open_evaluation.signed_metric * crossed_evaluation.signed_metric < 0.0);
+
+    let (slider, slider_ids) = slider_crank_with_scale(1.0).unwrap();
+    let slider_geometry = slider.geometry().unwrap();
+    let slider_evaluation = slider
+        .evaluate_branch_monitor(slider_ids.positive_x_monitor, &slider_geometry)
+        .unwrap();
+    assert_eq!(
+        slider_evaluation.kind,
+        BranchMonitorKind::DirectedDisplacement
+    );
+    assert_eq!(slider_evaluation.expected_sign, BranchSign::Positive);
+    assert!(slider_evaluation.signed_metric.is_finite());
+    assert!(slider_evaluation.signed_metric > 0.0);
+    assert!(slider_evaluation.retained);
+    let expected_projection = slider_geometry
+        .axis(slider_ids.ground_guide_axis)
+        .unwrap()
+        .dot(
+            &(slider_geometry.point(slider_ids.slider_pin).unwrap()
+                - slider_geometry
+                    .point(slider_ids.ground_guide_origin)
+                    .unwrap()),
+        );
+    assert!((slider_evaluation.signed_metric - expected_projection).abs() <= f64::EPSILON);
+}
+
+#[test]
+fn branch_evaluation_rejects_missing_and_nonfinite_geometry() {
+    let (linkage, ids) = four_bar_with_scale(FourBarAssemblyMode::Open, 1.0).unwrap();
+    let geometry = linkage.geometry().unwrap();
+
+    let mut missing = geometry.clone();
+    missing
+        .points
+        .retain(|point| point.feature_id != ids.coupler_b);
+    assert!(matches!(
+        linkage.evaluate_branch_monitor(ids.orientation_monitor, &missing),
+        Err(LinkageError::UnknownPointFeature(id)) if id == ids.coupler_b
+    ));
+
+    let mut nonfinite = geometry;
+    nonfinite
+        .points
+        .iter_mut()
+        .find(|point| point.feature_id == ids.coupler_b)
+        .unwrap()
+        .planar
+        .y = f64::NAN;
+    assert!(matches!(
+        linkage.evaluate_branch_monitor(ids.orientation_monitor, &nonfinite),
+        Err(LinkageError::NonFiniteValue {
+            context: "branch monitor metric",
+            value
+        }) if value.is_nan()
+    ));
 }
 
 #[test]
@@ -1126,11 +1210,19 @@ fn converged_opposite_four_bar_root_is_rejected_by_explicit_monitor_without_muta
             open_ids.coupler_b
         ) < 0.0
     );
+    let evaluation = open
+        .evaluate_branch_monitor(open_ids.orientation_monitor, &retained)
+        .unwrap();
+    assert_eq!(evaluation.expected_sign, BranchSign::Positive);
+    assert!(evaluation.signed_metric < 0.0);
+    assert!(!evaluation.retained);
     let result = open.solve(SolverConfig::default()).unwrap();
     assert_eq!(result.core_report.termination, SolveTermination::Converged);
     assert!(matches!(
         result.rejection,
-        Some(SolveRejection::BranchViolation(_))
+        Some(SolveRejection::BranchViolation(
+            geosolve_linkage::BranchViolation::Monitor(id)
+        )) if id == open_ids.orientation_monitor
     ));
     assert_eq!(result.geometry, retained);
     assert_eq!(open.geometry().unwrap(), retained);

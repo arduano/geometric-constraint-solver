@@ -7,9 +7,10 @@ mod scenarios;
 mod velocity;
 
 pub use compiler::{
-    BodyVariableMapping, CompiledLinkage, DriveResult, DriveSample, LinkageGeometry,
-    LinkageSolveDiagnostics, LinkageSolveResult, LinkageSource, LinkageSourceMapping,
-    SolveRejection, SolvedBody, TransformedAxisFeature, TransformedPointFeature,
+    BodyVariableMapping, BranchEvaluation, BranchMonitorKind, CompiledLinkage, DriveResult,
+    DriveSample, LinkageGeometry, LinkageSolveDiagnostics, LinkageSolveResult, LinkageSource,
+    LinkageSourceMapping, SolveRejection, SolvedBody, TransformedAxisFeature,
+    TransformedPointFeature,
 };
 pub use model::{
     AxisDirectionBranch, AxisFeature, AxisFeatureId, BodyId, BranchMonitor, BranchMonitorId,

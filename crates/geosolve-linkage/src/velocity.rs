@@ -78,7 +78,7 @@ impl Linkage {
                 "domain hard residual {domain_max:e} exceeds {tolerance:e}"
             )));
         }
-        if let Some(violation) = self.first_branch_violation(&geometry) {
+        if let Some(violation) = self.first_branch_violation(&geometry)? {
             return Err(LinkageError::PositionNotAccepted(format!(
                 "explicit branch check failed: {violation:?}"
             )));
