@@ -81,7 +81,23 @@ Expected state:
 
 - B centre resolves to `(3, 0)` on the initial positive-x side;
 - switching to internal tangency is an explicit state change, not a solver branch accident;
+- internal tangency with A containing B resolves B centre to `(1, 0)` while preserving the positive-x centre-direction branch;
 - zero or negative effective radius is rejected as invalid geometry.
+
+Browser interaction:
+
+- switch explicitly between external and internal/A-contains-B modes;
+- render the selected containment, shared contact point, centre distance and retained branch state;
+- update geometry and the equation audit from the same accepted solve result.
+
+## M7 auxiliary curve verification fixtures
+
+These browser-only constructions exercise public sketch APIs but are not additional canonical scenarios:
+
+- bounded arc contact: drag a point over an explicit 240-degree counterclockwise arc; accepted targets project onto the active span and genuine endpoint escape retains the prior geometry/contact/audit;
+- bounded line-circle tangency: drag a fixed-radius circle along the left side of a finite line segment; the latent line/circle contacts move with it and requests beyond either endpoint retain the prior accepted state.
+
+Both fixtures render contact parameters and branch/domain state from the public sketch result. The web crate does not duplicate their constraint equations.
 
 ## L1 — Four-bar, open assembly
 

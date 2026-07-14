@@ -99,6 +99,16 @@ For each supported constraint:
 - reference dimensions add no equation and report the solved value;
 - toggling driving/reference produces deterministic source IDs and reports.
 
+### Curve and tangency behavior
+
+- S3 external tangency resolves the second circle center to `(3, 0)` on the explicit positive-x branch.
+- Switching S3 to internal tangency with A containing B resolves the second center to `(1, 0)` without an accidental branch flip.
+- Bounded segment and arc contacts accept interior and endpoint roots but reject genuine parameter escape while retaining the previous accepted state.
+- Line-circle tangency retains its explicit line side and contact neighborhood.
+- Zero radii, collapsed directions, zero curve derivatives and ambiguous center-direction branches never produce a success-like domain result.
+- Periodic contact parameters remain on the accepted local unwrapped branch.
+- Quadratic and cubic Bézier proof fixtures use the internal curve-evaluation seam without exposing a public generic curve trait.
+
 ## Diagnostics and decomposition
 
 - Two disconnected components solve independently.
@@ -138,6 +148,7 @@ The separate `geosolve-demo-web` crate must:
 - contain no duplicate constraint equations;
 - render solved geometry in SVG (Canvas may be added later but is not required);
 - support pointer dragging in S1;
+- support bounded pointer-projected contact dragging for the M7 arc and line-circle verification fixtures;
 - support a driver slider for L1 and L3;
 - show termination, validated maximum residual, rank, DOF, iterations, branch label and singularity/conflict/redundancy notices;
 - show constraints grouped by high-level source with readable expanded residual rows, current named bindings, target/unit, scale, raw residual and normalized residual;

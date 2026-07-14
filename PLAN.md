@@ -344,34 +344,53 @@ Approved by the supervising caller on 2026-07-14 after manual review of S1/S2 an
 
 Goal: cover the minimum credible CAD sketch curve/constraint set while preserving an advanced-curve path.
 
+Status: complete as of 2026-07-14.
+
 Entities:
 
-- circle;
-- circular arc with explicit sweep/orientation state.
+- [x] Circle.
+- [x] Circular arc with explicit sweep/orientation state.
 
 Constraints/dimensions:
 
-- point-on-line and point-on-circle;
-- radius and diameter;
-- parallel and perpendicular;
-- equal length and equal radius;
-- oriented angle;
-- midpoint and symmetry;
-- line-circle tangency;
-- circle-circle tangency with internal/external mode;
-- driving versus reference dimensions.
+- [x] Point-on-line and point-on-circle.
+- [x] Radius and diameter.
+- [x] Parallel and perpendicular.
+- [x] Equal length and equal radius.
+- [x] Oriented angle.
+- [x] Midpoint and symmetry.
+- [x] Line-circle tangency.
+- [x] Circle-circle tangency with internal/external mode.
+- [x] Driving versus reference dimensions.
 
 Requirements:
 
-- internal curve-evaluation adapter returning position, first derivative, parameter domain and degeneracy state;
-- latent scalar contact parameters for interior contacts;
-- explicit branch/span/contact state;
-- analytic/local-AD versus finite-difference verification;
-- invalid zero-length/radius/tangent handling;
-- `S3 tangent circles` browser scene;
-- quadratic or cubic Bézier point-on-curve and line-tangency proof fixture before freezing a public curve trait.
+- [x] Internal curve-evaluation adapter returning position, first derivative, parameter domain and degeneracy state.
+- [x] Latent scalar contact parameters for interior contacts.
+- [x] Explicit branch/span/contact state.
+- [x] Analytic/local-AD versus finite-difference verification.
+- [x] Invalid zero-length/radius/tangent handling.
+- [x] `S3 tangent circles` browser scene.
+- [x] Quadratic and cubic Bézier point-on-curve and line-tangency proof fixtures before freezing a public curve trait.
 
 Gate: complete sketch MVP matrix.
+
+Completion notes: circles and oriented circular arcs compile through a private
+curve-evaluation seam with ordinary scalar radius/contact variables, structured
+audits and independent accepted-state validation. Unit-direction equations avoid
+short-line false convergence; bounded segment/arc contacts use explicit domains,
+roundoff-only endpoint normalization and transactional rejection. Circle
+tangency stores external/internal containment and center-direction state, and S3
+switches deterministically between the positive-x external and internal roots.
+The literal per-constraint matrix covers exact, perturbed, finite-difference,
+transformed, scaled and invalid fixtures. Quadratic/cubic Béziers prove the same
+private seam without exposing a generic public curve trait. The browser adds S3
+mode switching, bounded-arc contact dragging and bounded line-circle tangent
+gliding, all from public sketch geometry/contact/audit APIs. Arc endpoint angles
+remain explicit fixed entity state in M7; only the radius and contact span solve.
+The gate passes with 50 sketch tests, 33 web tests and 180 workspace tests,
+warnings-denied workspace Clippy, locked native/WASM checks, WASM test
+compilation, desktop/mobile browser review and a Trunk release build.
 
 ## M8 — Sparse scaling and continuation hardening
 
