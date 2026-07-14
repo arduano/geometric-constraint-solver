@@ -232,30 +232,47 @@ The overnight agent must stop here and produce `OVERNIGHT_REPORT.md`. It must no
 
 Goal: solve a useful partially constrained sketch through the public sketch API.
 
+Status: complete as of 2026-07-14.
+
 Implement in `geosolve-sketch`:
 
-- point and line-segment entities;
-- fixed point/coordinate;
-- coincident;
-- horizontal and vertical;
-- point distance and segment length;
-- source constraint IDs producing one or more residual rows;
-- compilation to core variables/residuals;
-- reference dimensions that report values without adding equations;
-- temporary dragged-point target and previous-state preference.
+- [x] Point and line-segment entities.
+- [x] Fixed point/coordinate.
+- [x] Coincident.
+- [x] Horizontal and vertical.
+- [x] Point distance and segment length.
+- [x] Source constraint IDs producing one or more residual rows.
+- [x] Compilation to core variables/residuals.
+- [x] Reference dimensions that report values without adding equations.
+- [x] Temporary dragged-point target and previous-state preference.
 
-Canonical scene: `S1 underconstrained triangle` from `docs/SCENARIOS.md`.
+Canonical scene:
+
+- [x] `S1 underconstrained triangle` from `docs/SCENARIOS.md`.
 
 Web work:
 
-- replace static triangle with solved geometry;
-- implement SVG pointer drag for point C;
-- show termination, validated residual, rank, DOF and iteration count;
-- show live audit rows, named bindings, scales and evaluated values;
-- distinguish fixed, free and actively dragged points;
-- optionally add geometry↔equation highlighting if it does not delay the slice.
+- [x] Replace static triangle with solved geometry.
+- [x] Implement SVG pointer drag for point C.
+- [x] Show termination, validated residual, rank, DOF and iteration count.
+- [x] Show live audit rows, named bindings, scales and evaluated values.
+- [x] Distinguish fixed, free and actively dragged points.
+- [ ] Optionally add geometry↔equation highlighting if it does not delay the slice.
 
 Gate: sketch and web criteria for S1.
+
+Completion notes: hard, temporary and preference rows are optimized in strict
+lexicographic order. Secondary trials are reprojected onto the nonlinear hard
+manifold and independently validated before commit. The stable-ID sketch model
+compiles every supported constraint to analytic residuals with structured audit
+metadata; its 20 M5 tests cover finite-difference Jacobians, recovery,
+metamorphic scaling/rotation/translation, invalid geometry, reference dimensions,
+explicit axis/length branch state and S1 drag/release behavior. The browser uses
+the public S1 constructor and retained-state audit snapshots, supports mouse/pen/
+touch pointer capture, and has 11 native rendering/interaction tests. The full
+workspace gate passes with 108 tests, warnings-denied Clippy, locked WASM check
+and Trunk release build. A secondary residual spanning multiple reduced hard
+components remains an explicit `NumericalFailure`; S1 does not require this case.
 
 ### Human checkpoint B
 
