@@ -1,12 +1,14 @@
 #![allow(clippy::too_many_lines)]
 
 use geosolve_core::{
-    AuditRowSnapshot, CoreError, ResidualCategory, SolveTermination, SolverConfig, VariableValue,
+    AuditEvaluationStatus, AuditRowSnapshot, AuditSnapshot, AuditSourceSnapshot, CoreError,
+    ResidualCategory, SolveTermination, SolverConfig, SourceConstraintId, VariableValue,
 };
 use geosolve_geometry::Point2;
 use geosolve_sketch::{
-    CoordinateAxis, DimensionMode, Sketch, SketchError, SketchSolveRequest, SketchSource,
-    SolveRejection, UnderconstrainedTriangleIds, underconstrained_triangle,
+    ConflictingRectangleIds, CoordinateAxis, DimensionKind, DimensionMode, Sketch, SketchError,
+    SketchSolveRequest, SketchSource, SolveRejection, UnderconstrainedTriangleIds,
+    conflicting_rectangle, redundant_rectangle, underconstrained_triangle,
 };
 
 const TOLERANCE: f64 = 1.0e-9;
@@ -37,8 +39,11 @@ fn display_row<'a>(
     result: &'a geosolve_sketch::SketchSolveResult,
     source_label_fragment: &str,
 ) -> &'a AuditRowSnapshot {
-    &result
-        .display_audit
+    audit_row(&result.display_audit, source_label_fragment)
+}
+
+fn audit_row<'a>(audit: &'a AuditSnapshot, source_label_fragment: &str) -> &'a AuditRowSnapshot {
+    &audit
         .sources
         .iter()
         .find(|source| source.source_label.contains(source_label_fragment))
@@ -46,11 +51,50 @@ fn display_row<'a>(
         .rows[0]
 }
 
+fn display_source(
+    result: &geosolve_sketch::SketchSolveResult,
+    source: SketchSource,
+) -> &AuditSourceSnapshot {
+    let core_source_id = result
+        .source_mappings
+        .iter()
+        .find_map(|mapping| {
+            (mapping.source == source)
+                .then_some(mapping.core_source_id)
+                .flatten()
+        })
+        .unwrap_or_else(|| panic!("missing core source mapping for {source:?}"));
+    result
+        .display_audit
+        .sources
+        .iter()
+        .find(|item| item.source_id == core_source_id)
+        .unwrap_or_else(|| panic!("missing display audit source for {source:?}"))
+}
+
 fn incident_point(row: &AuditRowSnapshot, index: usize) -> Point2<f64> {
     let VariableValue::Vec2([x, y]) = row.incident_variables[index].value else {
         panic!("expected Vec2 incident variable: {row:#?}")
     };
     Point2::new(x, y)
+}
+
+fn mapped_sketch_sources(
+    result: &geosolve_sketch::SketchSolveResult,
+    core_sources: &[SourceConstraintId],
+) -> Vec<SketchSource> {
+    core_sources
+        .iter()
+        .map(|core_source| {
+            result
+                .source_mappings
+                .iter()
+                .find_map(|mapping| {
+                    (mapping.core_source_id == Some(*core_source)).then_some(mapping.source)
+                })
+                .unwrap_or_else(|| panic!("missing sketch mapping for {core_source:?}"))
+        })
+        .collect()
 }
 
 fn scaled_triangle(
@@ -78,6 +122,32 @@ fn scaled_triangle(
             distance_ac,
         },
     ))
+}
+
+fn scaled_rectangle(
+    scale: f64,
+    conflicting: bool,
+) -> Result<(Sketch, ConflictingRectangleIds), SketchError> {
+    let (mut sketch, ids) = if conflicting {
+        conflicting_rectangle()?
+    } else {
+        redundant_rectangle()?
+    };
+    sketch.set_model_scale(scale)?;
+    sketch.set_point_position(ids.a, Point2::new(0.0, 0.0))?;
+    sketch.set_point_position(ids.b, Point2::new(4.0 * scale, 0.0))?;
+    sketch.set_point_position(ids.c, Point2::new(4.0 * scale, 3.0 * scale))?;
+    sketch.set_point_position(ids.d, Point2::new(0.0, 3.0 * scale))?;
+    sketch.set_dimension_target(ids.width_4, 4.0 * scale)?;
+    sketch.set_dimension_target(
+        ids.width_5,
+        if conflicting {
+            5.0 * scale
+        } else {
+            4.0 * scale
+        },
+    )?;
+    Ok((sketch, ids))
 }
 
 #[test]
@@ -216,6 +286,203 @@ fn s1_is_scale_invariant_with_identical_classification_branch_and_source_order()
         } else {
             baseline_sources = Some(sources);
         }
+    }
+}
+
+#[test]
+fn s2_compiles_deterministically_and_maps_only_both_widths_as_conflicting() {
+    let (mut sketch, ids) = conflicting_rectangle().unwrap();
+    let (same_scene, same_ids) = conflicting_rectangle().unwrap();
+    assert_eq!(ids, same_ids);
+    for (point, expected) in [
+        (ids.a, Point2::new(0.0, 0.0)),
+        (ids.b, Point2::new(4.0, 0.0)),
+        (ids.c, Point2::new(4.0, 3.0)),
+        (ids.d, Point2::new(0.0, 3.0)),
+    ] {
+        assert_eq!(sketch.point(point).unwrap().position(), expected);
+    }
+    for (segment, expected) in [
+        (ids.ab, (ids.a, ids.b)),
+        (ids.bc, (ids.b, ids.c)),
+        (ids.cd, (ids.c, ids.d)),
+        (ids.da, (ids.d, ids.a)),
+    ] {
+        let segment = sketch.segment(segment).unwrap();
+        assert_eq!((segment.start(), segment.end()), expected);
+    }
+    assert!(matches!(
+        sketch.dimension(ids.width_4).unwrap().kind(),
+        DimensionKind::SegmentLength { segment, target }
+            if segment == ids.ab && (target - 4.0).abs() <= f64::EPSILON
+    ));
+    assert!(matches!(
+        sketch.dimension(ids.width_5).unwrap().kind(),
+        DimensionKind::SegmentLength { segment, target }
+            if segment == ids.ab && (target - 5.0).abs() <= f64::EPSILON
+    ));
+    assert_eq!(
+        sketch.dimension(ids.width_4).unwrap().mode(),
+        DimensionMode::Driving
+    );
+    assert_eq!(
+        sketch.dimension(ids.width_5).unwrap().mode(),
+        DimensionMode::Driving
+    );
+
+    let request = SketchSolveRequest::default().without_previous_state_preferences();
+    let first_compile = sketch.compile(request).unwrap();
+    let second_compile = sketch.compile(request).unwrap();
+    let same_scene_compile = same_scene.compile(request).unwrap();
+    assert_eq!(
+        first_compile.point_variables(),
+        second_compile.point_variables()
+    );
+    assert_eq!(
+        first_compile.source_mappings(),
+        second_compile.source_mappings()
+    );
+    assert_eq!(
+        first_compile.source_mappings(),
+        same_scene_compile.source_mappings()
+    );
+    assert_eq!(
+        first_compile.problem().audit_rows().unwrap(),
+        second_compile.problem().audit_rows().unwrap()
+    );
+
+    let retained = sketch.geometry();
+    let result = sketch.solve(request, SolverConfig::default()).unwrap();
+    assert!(!result.accepted());
+    assert_ne!(result.core_report.termination, SolveTermination::Converged);
+    assert_eq!(result.geometry, retained);
+    assert_eq!(sketch.geometry(), retained);
+    assert!(
+        result
+            .geometry
+            .points
+            .iter()
+            .all(|point| point.position.x.is_finite() && point.position.y.is_finite())
+    );
+    assert!(
+        result
+            .core_report
+            .accepted_state
+            .ambient()
+            .iter()
+            .all(|value| value.is_finite())
+    );
+    assert!(result.core_report.hard_residuals_validated);
+    assert!(result.core_report.hard_residual_max > TOLERANCE);
+    assert_eq!(
+        mapped_sketch_sources(&result, &result.core_report.conflicting_sources),
+        vec![
+            SketchSource::Dimension(ids.width_4),
+            SketchSource::Dimension(ids.width_5),
+        ]
+    );
+    for (dimension, expected_raw) in [(ids.width_4, 0.0), (ids.width_5, -1.0)] {
+        let source = display_source(&result, SketchSource::Dimension(dimension));
+        assert!(source.annotations.conflicting);
+        assert!(!source.annotations.redundant);
+        assert!(!source.annotations.singular);
+        assert_eq!(source.rows.len(), 1);
+        let row = &source.rows[0];
+        assert!(row.annotations.conflicting);
+        assert!(!row.annotations.redundant);
+        assert!(!row.annotations.singular);
+        assert_eq!(row.evaluation_status, AuditEvaluationStatus::Evaluated);
+        assert_eq!(row.evaluation_error, None);
+        assert!((row.raw_residual - expected_raw).abs() <= f64::EPSILON);
+        assert!((row.normalized_residual - expected_raw).abs() <= f64::EPSILON);
+        assert_point(
+            incident_point(row, 0),
+            result.geometry.point(ids.a).unwrap(),
+            1.0,
+            0.0,
+        );
+        assert_point(
+            incident_point(row, 1),
+            result.geometry.point(ids.b).unwrap(),
+            1.0,
+            0.0,
+        );
+    }
+    for constraint in [
+        ids.fixed_a,
+        ids.horizontal_ab,
+        ids.horizontal_cd,
+        ids.vertical_bc,
+        ids.vertical_da,
+    ] {
+        let source = display_source(&result, SketchSource::Constraint(constraint));
+        assert!(!source.annotations.conflicting);
+        assert!(source.rows.iter().all(|row| !row.annotations.conflicting));
+    }
+}
+
+#[test]
+fn s2_equal_width_variant_marks_only_the_second_width_redundant() {
+    let (mut sketch, ids) = redundant_rectangle().unwrap();
+    let result = sketch
+        .solve(
+            SketchSolveRequest::default().without_previous_state_preferences(),
+            SolverConfig::default(),
+        )
+        .unwrap();
+    assert_accepted(&result);
+    assert!(result.core_report.conflicting_sources.is_empty());
+    assert_eq!(
+        mapped_sketch_sources(&result, &result.core_report.redundant_sources),
+        vec![SketchSource::Dimension(ids.width_5)]
+    );
+    assert_eq!(
+        mapped_sketch_sources(
+            &result,
+            &result.core_report.sources_containing_redundant_rows,
+        ),
+        vec![SketchSource::Dimension(ids.width_5)]
+    );
+}
+
+#[test]
+fn s2_conflict_and_redundancy_diagnostics_are_scale_invariant() {
+    for scale in [1.0e-6, 1.0, 1.0e6] {
+        let (mut conflicting, conflict_ids) = scaled_rectangle(scale, true).unwrap();
+        let conflict = conflicting
+            .solve(
+                SketchSolveRequest::default().without_previous_state_preferences(),
+                SolverConfig::default(),
+            )
+            .unwrap();
+        assert!(!conflict.accepted());
+        assert_ne!(
+            conflict.core_report.termination,
+            SolveTermination::Converged
+        );
+        assert!(conflict.core_report.hard_residuals_validated);
+        assert!(conflict.core_report.hard_residual_max > TOLERANCE);
+        assert_eq!(
+            mapped_sketch_sources(&conflict, &conflict.core_report.conflicting_sources),
+            vec![
+                SketchSource::Dimension(conflict_ids.width_4),
+                SketchSource::Dimension(conflict_ids.width_5),
+            ]
+        );
+
+        let (mut redundant, redundant_ids) = scaled_rectangle(scale, false).unwrap();
+        let redundancy = redundant
+            .solve(
+                SketchSolveRequest::default().without_previous_state_preferences(),
+                SolverConfig::default(),
+            )
+            .unwrap();
+        assert_accepted(&redundancy);
+        assert!(redundancy.core_report.conflicting_sources.is_empty());
+        assert_eq!(
+            mapped_sketch_sources(&redundancy, &redundancy.core_report.redundant_sources),
+            vec![SketchSource::Dimension(redundant_ids.width_5)]
+        );
     }
 }
 
@@ -1012,6 +1279,17 @@ fn zero_length_distance_derivative_is_invalid_and_retains_geometry() {
     );
     assert!((row.raw_residual + 2.0).abs() <= f64::EPSILON);
     assert!((row.normalized_residual + 2.0).abs() <= f64::EPSILON);
+    assert_eq!(row.evaluation_status, AuditEvaluationStatus::Evaluated);
+    assert_eq!(row.evaluation_error, None);
+    let attempted_row = audit_row(&result.core_report.audit, "distance A-B");
+    assert_eq!(
+        row.annotations.conflicting,
+        attempted_row.annotations.conflicting
+    );
+    assert_eq!(
+        attempted_row.evaluation_status,
+        AuditEvaluationStatus::Failed
+    );
 }
 
 #[test]
@@ -1028,7 +1306,7 @@ fn explicit_segment_branch_rejects_a_converged_flipped_root_without_committing()
     assert!(sketch.segment_has_enforced_branch(segment).unwrap());
 
     sketch
-        .set_point_position(b, Point2::new(-4.0, 0.0))
+        .set_point_position(b, Point2::new(-3.0, 0.0))
         .unwrap();
     assert!(!sketch.segment_branch_is_preserved(segment).unwrap());
     let retained = sketch.geometry();
@@ -1055,8 +1333,19 @@ fn explicit_segment_branch_rejects_a_converged_flipped_root_without_committing()
         4.0,
         0.0,
     );
-    assert!(row.raw_residual.abs() <= f64::EPSILON);
-    assert!(row.normalized_residual.abs() <= f64::EPSILON);
+    assert!((row.raw_residual + 1.0).abs() <= f64::EPSILON);
+    assert!((row.normalized_residual + 0.25).abs() <= f64::EPSILON);
+    assert_eq!(row.evaluation_status, AuditEvaluationStatus::Evaluated);
+    assert_eq!(row.evaluation_error, None);
+    assert!(!row.annotations.conflicting);
+    let attempted_row = audit_row(&result.core_report.audit, "length AB");
+    assert!(attempted_row.raw_residual.abs() <= TOLERANCE);
+    assert_point(
+        incident_point(attempted_row, 1),
+        Point2::new(-4.0, 0.0),
+        4.0,
+        TOLERANCE,
+    );
 
     sketch.reselect_segment_branch(segment).unwrap();
     assert!(sketch.segment_branch_is_preserved(segment).unwrap());

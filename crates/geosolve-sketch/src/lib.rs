@@ -15,7 +15,10 @@ pub use model::{
     Sketch, SketchConstraint, SketchConstraintId, SketchConstraintKind, SketchDimension,
     SketchDimensionId, SketchError, SketchPoint,
 };
-pub use scenarios::{UnderconstrainedTriangleIds, underconstrained_triangle};
+pub use scenarios::{
+    ConflictingRectangleIds, UnderconstrainedTriangleIds, conflicting_rectangle,
+    redundant_rectangle, underconstrained_triangle,
+};
 
 /// The first end-to-end acceptance scenes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

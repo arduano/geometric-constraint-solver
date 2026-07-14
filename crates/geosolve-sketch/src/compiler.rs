@@ -309,7 +309,7 @@ impl Sketch {
         config: SolverConfig,
     ) -> Result<SketchSolveResult, SketchError> {
         let mut compiled = self.compile(request)?;
-        let retained_audit = compiled.problem.audit_snapshot()?;
+        let mut retained_audit = compiled.problem.audit_snapshot()?;
         let core_report = compiled.problem.solve(config)?;
         let candidate = compiled.solved_geometry()?;
         let mut acceptance_hard_residual_max = None;
@@ -351,6 +351,7 @@ impl Sketch {
         let display_audit = if rejection.is_none() {
             core_report.audit.clone()
         } else {
+            merge_conflicting_annotations(&mut retained_audit, &core_report.audit);
             retained_audit
         };
 
@@ -794,4 +795,26 @@ fn independent_hard_residual_max(problem: &Problem) -> Result<f64, geosolve_core
         maximum = maximum.max(row.normalized_residual.abs());
     }
     Ok(maximum)
+}
+
+fn merge_conflicting_annotations(retained: &mut AuditSnapshot, attempted: &AuditSnapshot) {
+    for retained_source in &mut retained.sources {
+        let Some(attempted_source) = attempted
+            .sources
+            .iter()
+            .find(|source| source.source_id == retained_source.source_id)
+        else {
+            continue;
+        };
+        retained_source.annotations.conflicting |= attempted_source.annotations.conflicting;
+        for retained_row in &mut retained_source.rows {
+            if attempted_source.rows.iter().any(|row| {
+                row.residual_id == retained_row.residual_id
+                    && row.row_in_block == retained_row.row_in_block
+                    && row.annotations.conflicting
+            }) {
+                retained_row.annotations.conflicting = true;
+            }
+        }
+    }
 }
