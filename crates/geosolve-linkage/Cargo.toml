@@ -9,7 +9,9 @@ authors.workspace = true
 [dependencies]
 geosolve-core = { path = "../geosolve-core" }
 geosolve-geometry = { path = "../geosolve-geometry" }
+nalgebra.workspace = true
 slotmap.workspace = true
+thiserror.workspace = true
 
 [lints]
 workspace = true

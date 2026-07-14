@@ -1,21 +1,29 @@
-//! Planar rigid-body linkage model built on the shared solver kernel.
+//! Planar rigid-body linkages compiled into the shared constraint solver.
 
-use geosolve_geometry::Pose2;
-use slotmap::new_key_type;
+mod compiler;
+mod model;
+mod residuals;
+mod scenarios;
+mod velocity;
 
-new_key_type! {
-    pub struct BodyId;
-    pub struct JointId;
-    pub struct DriverId;
-}
+pub use compiler::{
+    BodyVariableMapping, CompiledLinkage, DriveResult, DriveSample, LinkageGeometry,
+    LinkageSolveDiagnostics, LinkageSolveResult, LinkageSource, LinkageSourceMapping,
+    SolveRejection, SolvedBody, TransformedAxisFeature, TransformedPointFeature,
+};
+pub use model::{
+    AxisDirectionBranch, AxisFeature, AxisFeatureId, BodyId, BranchMonitor, BranchMonitorId,
+    BranchSign, BranchViolation, Driver, DriverId, DriverKind, DriverUnit, Joint, JointId,
+    JointKind, Linkage, LinkageError, PointFeature, PointFeatureId, RigidBody,
+};
+pub use scenarios::{
+    FourBarAssemblyMode, FourBarIds, SliderCrankAssemblyMode, SliderCrankIds, four_bar,
+    four_bar_crossed, four_bar_open, four_bar_with_scale, slider_crank, slider_crank_with_scale,
+    xy_plane_frame,
+};
+pub use velocity::{BodyVelocity, VelocityResult};
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct RigidBody2 {
-    pub pose: Pose2,
-    pub grounded: bool,
-}
-
-/// Hardcoded scenarios required by the browser demonstration.
+/// Hardcoded scenarios required by native tests and the browser demonstration.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LinkageScenario {
     FourBarOpen,
