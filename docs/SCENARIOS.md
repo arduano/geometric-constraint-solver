@@ -96,6 +96,7 @@ These browser-only constructions exercise public sketch APIs but are not additio
 
 - bounded arc contact: drag a point over an explicit 240-degree counterclockwise arc; accepted targets project onto the active span and genuine endpoint escape retains the prior geometry/contact/audit;
 - bounded line-circle tangency: drag a fixed-radius circle along the left side of a finite line segment; the latent line/circle contacts move with it and requests beyond either endpoint retain the prior accepted state.
+- free-radius circle-arc tangency: drag a circle center in two dimensions outside a fixed 300-degree arc; no circle radius dimension is present, so the radius and circle/arc contacts solve automatically while requests in the missing span retain the prior accepted state.
 
 Both fixtures render contact parameters and branch/domain state from the public sketch result. The web crate does not duplicate their constraint equations.
 

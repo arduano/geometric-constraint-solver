@@ -108,6 +108,8 @@ For each supported constraint:
 - Zero radii, collapsed directions, zero curve derivatives and ambiguous center-direction branches never produce a success-like domain result.
 - Periodic contact parameters remain on the accepted local unwrapped branch.
 - Quadratic and cubic Bézier proof fixtures use the internal curve-evaluation seam without exposing a public generic curve trait.
+- A circle tangent to a fixed bounded arc with no circle-radius dimension reports exactly two local DOF; moving its center solves the radius and both contact parameters.
+- Circle-arc tangency preserves explicit inside/outside radial state, rejects span escape transactionally and reports unresolved mixed-scale radius relationships as ambiguous rather than converged.
 
 ## Diagnostics and decomposition
 

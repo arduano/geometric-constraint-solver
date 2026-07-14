@@ -392,6 +392,17 @@ The gate passes with 50 sketch tests, 33 web tests and 180 workspace tests,
 warnings-denied workspace Clippy, locked native/WASM checks, WASM test
 compilation, desktop/mobile browser review and a Trunk release build.
 
+Follow-up verification adds bounded circle-arc tangency with explicit
+inside/outside radial state. With the arc fixed and no circle radius dimension,
+the circle center retains exactly two local DOF while its radius and two contact
+parameters solve automatically. Independent feature-relative checks reject
+wrong tiny radii and report mixed-scale tangencies as numerically ambiguous when
+floating-point resolution cannot prove the branch relation. The eleventh browser
+scene exposes two-dimensional center dragging, changing solved radii, bounded
+span rejection and retained-state audits through public sketch APIs.
+The expanded gate passes with 61 sketch tests, 40 web tests and 198 workspace
+tests plus warnings-denied Clippy, locked WASM checks and a Trunk release build.
+
 ## M8 — Sparse scaling and continuation hardening
 
 Goal: improve scale and singular-path behavior without changing results on the established corpus.
