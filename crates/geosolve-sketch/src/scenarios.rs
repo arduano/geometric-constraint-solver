@@ -1,7 +1,8 @@
 use geosolve_geometry::Point2;
 
 use crate::{
-    DimensionMode, PointId, SegmentId, Sketch, SketchConstraintId, SketchDimensionId, SketchError,
+    CenterDirectionBranch, CircleId, CircleTangencyMode, DimensionMode, PointId, SegmentId, Sketch,
+    SketchConstraintId, SketchDimensionId, SketchError,
 };
 
 /// Stable IDs needed to render and drag canonical scenario S1.
@@ -35,6 +36,21 @@ pub struct ConflictingRectangleIds {
     pub vertical_da: SketchConstraintId,
     pub width_4: SketchDimensionId,
     pub width_5: SketchDimensionId,
+}
+
+/// Stable IDs for canonical branch-sensitive scenario S3.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TangentCirclesIds {
+    pub center_a: PointId,
+    pub center_b: PointId,
+    pub centers: SegmentId,
+    pub circle_a: CircleId,
+    pub circle_b: CircleId,
+    pub fixed_center_a: SketchConstraintId,
+    pub horizontal_centers: SketchConstraintId,
+    pub radius_a: SketchDimensionId,
+    pub radius_b: SketchDimensionId,
+    pub tangency: SketchConstraintId,
 }
 
 /// Builds canonical S1 exactly as specified in `docs/SCENARIOS.md`.
@@ -83,6 +99,50 @@ pub fn conflicting_rectangle() -> Result<(Sketch, ConflictingRectangleIds), Sket
 /// Returns an error if the canonical finite geometry cannot be constructed.
 pub fn redundant_rectangle() -> Result<(Sketch, ConflictingRectangleIds), SketchError> {
     rectangle_with_second_width(4.0)
+}
+
+/// Builds canonical S3 exactly as specified in `docs/SCENARIOS.md`.
+///
+/// Circle radii are solver scalars fixed by driving dimensions. The tangency
+/// source starts in external mode and retains an explicit positive-x
+/// center-direction branch; callers can switch it to internal mode with
+/// [`Sketch::set_circle_tangency_mode`].
+///
+/// # Errors
+///
+/// Returns an error if the canonical finite geometry cannot be constructed.
+pub fn tangent_circles() -> Result<(Sketch, TangentCirclesIds), SketchError> {
+    let mut sketch = Sketch::new(1.0)?;
+    let center_a = sketch.add_named_point("A center", Point2::new(0.0, 0.0))?;
+    let center_b = sketch.add_named_point("B center", Point2::new(5.0, 0.5))?;
+    let centers = sketch.add_named_segment("A-B centers", center_a, center_b)?;
+    let circle_a = sketch.add_named_circle("circle A", center_a, 2.0)?;
+    let circle_b = sketch.add_named_circle("circle B", center_b, 1.0)?;
+    let fixed_center_a = sketch.add_fixed_point(center_a)?;
+    let horizontal_centers = sketch.add_horizontal(centers)?;
+    let radius_a = sketch.add_circle_radius(circle_a, 2.0, DimensionMode::Driving)?;
+    let radius_b = sketch.add_circle_radius(circle_b, 1.0, DimensionMode::Driving)?;
+    let tangency = sketch.add_circle_circle_tangency(
+        circle_a,
+        circle_b,
+        CircleTangencyMode::External,
+        CenterDirectionBranch::positive_x(),
+    )?;
+    Ok((
+        sketch,
+        TangentCirclesIds {
+            center_a,
+            center_b,
+            centers,
+            circle_a,
+            circle_b,
+            fixed_center_a,
+            horizontal_centers,
+            radius_a,
+            radius_b,
+            tangency,
+        },
+    ))
 }
 
 fn rectangle_with_second_width(

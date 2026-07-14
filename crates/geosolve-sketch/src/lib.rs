@@ -1,23 +1,30 @@
 //! A small, stable-ID CAD sketch model compiled into `geosolve-core`.
 
 mod compiler;
+mod curves;
 mod model;
 mod residuals;
 mod scenarios;
 
 pub use compiler::{
-    CompiledSketch, DragTarget, PointVariableMapping, ReferenceDimensionValue, SketchGeometry,
-    SketchSolveRequest, SketchSolveResult, SketchSource, SketchSourceMapping, SolveRejection,
-    SolvedPoint,
+    ArcRadiusVariableMapping, CircleRadiusVariableMapping, CompiledSketch, DragTarget,
+    LatentVariableMapping, LatentVariableRole, PointVariableMapping, ReferenceDimensionValue,
+    SketchGeometry, SketchSolveRequest, SketchSolveResult, SketchSource, SketchSourceMapping,
+    SolveRejection, SolvedArc, SolvedCircle, SolvedPoint,
+};
+pub use curves::{
+    AngleOrientation, ArcSweep, CENTER_DIRECTION_COSINE_MARGIN,
+    CONTACT_PARAMETER_ROUNDOFF_TOLERANCE, CenterDirectionBranch, Circle, CircleContainment,
+    CircleTangencyMode, CircularArc, ContactState, LineParameterDomain, LineSide,
 };
 pub use model::{
-    CoordinateAxis, DimensionKind, DimensionMode, LineSegment, PointId, SegmentBranch, SegmentId,
-    Sketch, SketchConstraint, SketchConstraintId, SketchConstraintKind, SketchDimension,
-    SketchDimensionId, SketchError, SketchPoint,
+    ArcId, CircleId, CoordinateAxis, DimensionKind, DimensionMode, LineSegment, PointId,
+    SegmentBranch, SegmentId, Sketch, SketchConstraint, SketchConstraintId, SketchConstraintKind,
+    SketchDimension, SketchDimensionId, SketchError, SketchPoint,
 };
 pub use scenarios::{
-    ConflictingRectangleIds, UnderconstrainedTriangleIds, conflicting_rectangle,
-    redundant_rectangle, underconstrained_triangle,
+    ConflictingRectangleIds, TangentCirclesIds, UnderconstrainedTriangleIds, conflicting_rectangle,
+    redundant_rectangle, tangent_circles, underconstrained_triangle,
 };
 
 /// The first end-to-end acceptance scenes.

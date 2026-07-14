@@ -3,11 +3,19 @@ use geosolve_geometry::Point2;
 use slotmap::{Key, SlotMap, new_key_type};
 use thiserror::Error;
 
+use crate::curves::{
+    AngleOrientation, CenterDirectionBranch, CircleTangencyMode, LineParameterDomain, LineSide,
+};
+
 new_key_type! {
     /// Stable identity of a sketch point.
     pub struct PointId;
     /// Stable identity of a line segment.
     pub struct SegmentId;
+    /// Stable identity of a circle.
+    pub struct CircleId;
+    /// Stable identity of a circular arc.
+    pub struct ArcId;
     /// Stable identity of a geometric sketch constraint.
     pub struct SketchConstraintId;
     /// Stable identity of a driving or reference dimension.
@@ -35,6 +43,10 @@ pub enum SketchError {
     UnknownPoint(PointId),
     #[error("unknown or stale segment ID {0:?}")]
     UnknownSegment(SegmentId),
+    #[error("unknown or stale circle ID {0:?}")]
+    UnknownCircle(CircleId),
+    #[error("unknown or stale arc ID {0:?}")]
+    UnknownArc(ArcId),
     #[error("unknown or stale sketch constraint ID {0:?}")]
     UnknownConstraint(SketchConstraintId),
     #[error("unknown or stale sketch dimension ID {0:?}")]
@@ -43,12 +55,39 @@ pub enum SketchError {
     PointInUse(PointId),
     #[error("segment {0:?} is still referenced by a constraint or dimension")]
     SegmentInUse(SegmentId),
+    #[error("circle {0:?} is still referenced by a constraint or dimension")]
+    CircleInUse(CircleId),
+    #[error("arc {0:?} is still referenced by a constraint or dimension")]
+    ArcInUse(ArcId),
     #[error("a line segment requires two different, noncoincident points")]
     DegenerateSegment,
+    #[error("retained segment {0:?} has zero-length or non-finite geometry")]
+    InvalidSegmentEntity(SegmentId),
     #[error("a point-pair constraint or dimension requires two different points")]
     RepeatedPoint,
     #[error("a driving distance dimension requires noncoincident point geometry")]
     DegenerateDistance,
+    #[error("radius must be positive and finite, got {0}")]
+    InvalidRadius(f64),
+    #[error("arc angles must be finite and select one nonzero sweep")]
+    InvalidArcSweep,
+    #[error("contact parameter {parameter} is outside {domain}")]
+    ParameterOutOfDomain {
+        parameter: f64,
+        domain: &'static str,
+    },
+    #[error("a direction branch requires a finite nonzero direction")]
+    InvalidDirectionBranch,
+    #[error("internal tangency requires a positive containing-radius difference")]
+    InvalidInternalTangency,
+    #[error("an oriented angle target must be positive and finite, got {0}")]
+    InvalidAngle(f64),
+    #[error("the requested entity combination repeats the same entity")]
+    RepeatedEntity,
+    #[error("constraint {0:?} has no editable contact state")]
+    NoContactState(SketchConstraintId),
+    #[error("constraint {0:?} is not a circle-circle tangency")]
+    NotCircleTangency(SketchConstraintId),
     #[error(transparent)]
     Core(#[from] CoreError),
 }
@@ -67,7 +106,7 @@ impl<K: Key, V> StableStore<K, V> {
         }
     }
 
-    fn insert(&mut self, value: V) -> K {
+    pub(crate) fn insert(&mut self, value: V) -> K {
         let id = self.values.insert(value);
         self.insertion_order.push(id);
         id
@@ -77,11 +116,11 @@ impl<K: Key, V> StableStore<K, V> {
         self.values.get(id)
     }
 
-    fn get_mut(&mut self, id: K) -> Option<&mut V> {
+    pub(crate) fn get_mut(&mut self, id: K) -> Option<&mut V> {
         self.values.get_mut(id)
     }
 
-    fn remove(&mut self, id: K) -> Option<V> {
+    pub(crate) fn remove(&mut self, id: K) -> Option<V> {
         self.values.remove(id)
     }
 
@@ -91,7 +130,7 @@ impl<K: Key, V> StableStore<K, V> {
             .filter_map(|&id| self.values.get(id).map(|value| (id, value)))
     }
 
-    fn next_ordinal(&self) -> usize {
+    pub(crate) fn next_ordinal(&self) -> usize {
         self.insertion_order.len() + 1
     }
 }
@@ -209,12 +248,67 @@ pub enum SketchConstraintKind {
     Vertical {
         segment: SegmentId,
     },
+    PointOnLine {
+        point: PointId,
+        segment: SegmentId,
+        domain: LineParameterDomain,
+        parameter: f64,
+    },
+    PointOnCircle {
+        point: PointId,
+        circle: CircleId,
+        angle: f64,
+    },
+    PointOnArc {
+        point: PointId,
+        arc: ArcId,
+        span_parameter: f64,
+    },
+    Parallel {
+        first: SegmentId,
+        second: SegmentId,
+    },
+    Perpendicular {
+        first: SegmentId,
+        second: SegmentId,
+    },
+    EqualSegmentLength {
+        first: SegmentId,
+        second: SegmentId,
+    },
+    EqualCircleRadius {
+        first: CircleId,
+        second: CircleId,
+    },
+    Midpoint {
+        point: PointId,
+        segment: SegmentId,
+    },
+    SymmetricAboutLine {
+        first: PointId,
+        second: PointId,
+        line: SegmentId,
+    },
+    LineCircleTangency {
+        line: SegmentId,
+        circle: CircleId,
+        domain: LineParameterDomain,
+        side: LineSide,
+        line_parameter: f64,
+        circle_angle: f64,
+    },
+    CircleCircleTangency {
+        first: CircleId,
+        second: CircleId,
+        mode: CircleTangencyMode,
+        center_direction: CenterDirectionBranch,
+    },
 }
 
 /// One stable high-level geometric constraint.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SketchConstraint {
-    kind: SketchConstraintKind,
+    pub(crate) kind: SketchConstraintKind,
     ordinal: usize,
 }
 
@@ -249,12 +343,34 @@ pub enum DimensionKind {
         segment: SegmentId,
         target: f64,
     },
+    CircleRadius {
+        circle: CircleId,
+        target: f64,
+    },
+    CircleDiameter {
+        circle: CircleId,
+        target: f64,
+    },
+    ArcRadius {
+        arc: ArcId,
+        target: f64,
+    },
+    ArcDiameter {
+        arc: ArcId,
+        target: f64,
+    },
+    OrientedAngle {
+        first: SegmentId,
+        second: SegmentId,
+        target: f64,
+        orientation: AngleOrientation,
+    },
 }
 
 /// One stable driving/reference dimension.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SketchDimension {
-    kind: DimensionKind,
+    pub(crate) kind: DimensionKind,
     mode: DimensionMode,
     ordinal: usize,
 }
@@ -288,6 +404,8 @@ pub struct Sketch {
     pub(crate) model_scale: f64,
     pub(crate) points: StableStore<PointId, SketchPoint>,
     pub(crate) segments: StableStore<SegmentId, LineSegment>,
+    pub(crate) circles: StableStore<CircleId, crate::curves::Circle>,
+    pub(crate) arcs: StableStore<ArcId, crate::curves::CircularArc>,
     pub(crate) constraints: StableStore<SketchConstraintId, SketchConstraint>,
     pub(crate) dimensions: StableStore<SketchDimensionId, SketchDimension>,
     pub(crate) source_order: Vec<PersistentSource>,
@@ -305,6 +423,8 @@ impl Sketch {
             model_scale,
             points: StableStore::new(),
             segments: StableStore::new(),
+            circles: StableStore::new(),
+            arcs: StableStore::new(),
             constraints: StableStore::new(),
             dimensions: StableStore::new(),
             source_order: Vec::new(),
@@ -389,6 +509,11 @@ impl Sketch {
             .segments
             .iter()
             .any(|(_, segment)| segment.start == point || segment.end == point)
+            || self
+                .circles
+                .iter()
+                .any(|(_, circle)| circle.center() == point)
+            || self.arcs.iter().any(|(_, arc)| arc.center() == point)
             || self
                 .constraints
                 .iter()
@@ -519,19 +644,15 @@ impl Sketch {
     ///
     /// Returns an error for a stale or referenced segment.
     pub fn remove_segment(&mut self, segment: SegmentId) -> Result<LineSegment, SketchError> {
-        if self.constraints.iter().any(|(_, constraint)| {
-            matches!(
-                constraint.kind,
-                SketchConstraintKind::Horizontal { segment: id }
-                    | SketchConstraintKind::Vertical { segment: id }
-                    if id == segment
-            )
-        }) || self.dimensions.iter().any(|(_, dimension)| {
-            matches!(
-                dimension.kind,
-                DimensionKind::SegmentLength { segment: id, .. } if id == segment
-            )
-        }) {
+        if self
+            .constraints
+            .iter()
+            .any(|(_, constraint)| constraint_references_segment(constraint.kind, segment))
+            || self
+                .dimensions
+                .iter()
+                .any(|(_, dimension)| dimension_references_segment(dimension.kind, segment))
+        {
             return Err(SketchError::SegmentInUse(segment));
         }
         self.segments
@@ -743,6 +864,21 @@ impl Sketch {
             }
             | DimensionKind::SegmentLength {
                 target: current, ..
+            }
+            | DimensionKind::CircleRadius {
+                target: current, ..
+            }
+            | DimensionKind::CircleDiameter {
+                target: current, ..
+            }
+            | DimensionKind::ArcRadius {
+                target: current, ..
+            }
+            | DimensionKind::ArcDiameter {
+                target: current, ..
+            }
+            | DimensionKind::OrientedAngle {
+                target: current, ..
             } => *current = target,
         }
         Ok(())
@@ -779,20 +915,64 @@ impl Sketch {
             .ok_or(SketchError::UnknownSegment(segment))
     }
 
-    fn validate_segment_geometry(&self, segment: SegmentId) -> Result<(), SketchError> {
+    pub(crate) fn validate_segment_geometry(&self, segment: SegmentId) -> Result<(), SketchError> {
         let (start, end) = self.segment_endpoints(segment)?;
         SegmentBranch::from_points(self.point_position(start)?, self.point_position(end)?)?;
         Ok(())
     }
 
+    pub(crate) fn preflight_segments(&self) -> Result<(), SketchError> {
+        for (segment_id, segment) in self.segments.iter() {
+            let start = self.point_position(segment.start)?;
+            let end = self.point_position(segment.end)?;
+            let length = (end - start).norm();
+            if !length.is_finite() || length == 0.0 {
+                return Err(SketchError::InvalidSegmentEntity(segment_id));
+            }
+        }
+        Ok(())
+    }
+
     pub(crate) fn dimension_value(&self, dimension: &SketchDimension) -> Result<f64, SketchError> {
-        let (first, second) = match dimension.kind {
-            DimensionKind::PointDistance { first, second, .. } => (first, second),
-            DimensionKind::SegmentLength { segment, .. } => self.segment_endpoints(segment)?,
+        let value = match dimension.kind {
+            DimensionKind::PointDistance { first, second, .. } => {
+                (self.point_position(second)? - self.point_position(first)?).norm()
+            }
+            DimensionKind::SegmentLength { segment, .. } => {
+                let (first, second) = self.segment_endpoints(segment)?;
+                (self.point_position(second)? - self.point_position(first)?).norm()
+            }
+            DimensionKind::CircleRadius { circle, .. } => self
+                .circles
+                .get(circle)
+                .ok_or(SketchError::UnknownCircle(circle))?
+                .radius(),
+            DimensionKind::CircleDiameter { circle, .. } => {
+                2.0 * self
+                    .circles
+                    .get(circle)
+                    .ok_or(SketchError::UnknownCircle(circle))?
+                    .radius()
+            }
+            DimensionKind::ArcRadius { arc, .. } => self
+                .arcs
+                .get(arc)
+                .ok_or(SketchError::UnknownArc(arc))?
+                .radius(),
+            DimensionKind::ArcDiameter { arc, .. } => {
+                2.0 * self
+                    .arcs
+                    .get(arc)
+                    .ok_or(SketchError::UnknownArc(arc))?
+                    .radius()
+            }
+            DimensionKind::OrientedAngle {
+                first,
+                second,
+                target,
+                orientation,
+            } => self.oriented_angle_value(first, second, orientation, target)?,
         };
-        let first = self.point_position(first)?;
-        let second = self.point_position(second)?;
-        let value = (second - first).norm();
         validate_finite(value, "reference dimension value")?;
         Ok(value)
     }
@@ -807,7 +987,7 @@ impl Sketch {
         }
     }
 
-    fn insert_constraint(&mut self, kind: SketchConstraintKind) -> SketchConstraintId {
+    pub(crate) fn insert_constraint(&mut self, kind: SketchConstraintKind) -> SketchConstraintId {
         let constraint = self.constraints.insert(SketchConstraint {
             kind,
             ordinal: self.constraints.next_ordinal(),
@@ -817,7 +997,11 @@ impl Sketch {
         constraint
     }
 
-    fn insert_dimension(&mut self, kind: DimensionKind, mode: DimensionMode) -> SketchDimensionId {
+    pub(crate) fn insert_dimension(
+        &mut self,
+        kind: DimensionKind,
+        mode: DimensionMode,
+    ) -> SketchDimensionId {
         let dimension = self.dimensions.insert(SketchDimension {
             kind,
             mode,
@@ -842,6 +1026,73 @@ fn constraint_references_point(
         | SketchConstraintKind::Vertical { segment } => sketch
             .segment_endpoints(segment)
             .is_ok_and(|(first, second)| first == point || second == point),
+        SketchConstraintKind::PointOnLine {
+            point: constrained,
+            segment,
+            ..
+        }
+        | SketchConstraintKind::Midpoint {
+            point: constrained,
+            segment,
+        } => {
+            constrained == point
+                || sketch
+                    .segment_endpoints(segment)
+                    .is_ok_and(|(first, second)| first == point || second == point)
+        }
+        SketchConstraintKind::PointOnCircle {
+            point: constrained,
+            circle,
+            ..
+        } => {
+            constrained == point
+                || sketch
+                    .circles
+                    .get(circle)
+                    .is_some_and(|value| value.center() == point)
+        }
+        SketchConstraintKind::PointOnArc {
+            point: constrained,
+            arc,
+            ..
+        } => {
+            constrained == point
+                || sketch
+                    .arcs
+                    .get(arc)
+                    .is_some_and(|value| value.center() == point)
+        }
+        SketchConstraintKind::Parallel { first, second }
+        | SketchConstraintKind::Perpendicular { first, second }
+        | SketchConstraintKind::EqualSegmentLength { first, second } => [first, second]
+            .into_iter()
+            .filter_map(|segment| sketch.segment_endpoints(segment).ok())
+            .any(|(start, end)| start == point || end == point),
+        SketchConstraintKind::EqualCircleRadius { first, second }
+        | SketchConstraintKind::CircleCircleTangency { first, second, .. } => [first, second]
+            .into_iter()
+            .filter_map(|circle| sketch.circles.get(circle))
+            .any(|circle| circle.center() == point),
+        SketchConstraintKind::SymmetricAboutLine {
+            first,
+            second,
+            line,
+        } => {
+            first == point
+                || second == point
+                || sketch
+                    .segment_endpoints(line)
+                    .is_ok_and(|(start, end)| start == point || end == point)
+        }
+        SketchConstraintKind::LineCircleTangency { line, circle, .. } => {
+            sketch
+                .segment_endpoints(line)
+                .is_ok_and(|(start, end)| start == point || end == point)
+                || sketch
+                    .circles
+                    .get(circle)
+                    .is_some_and(|value| value.center() == point)
+        }
     }
 }
 
@@ -851,6 +1102,44 @@ fn dimension_references_point(kind: DimensionKind, point: PointId, sketch: &Sket
         DimensionKind::SegmentLength { segment, .. } => sketch
             .segment_endpoints(segment)
             .is_ok_and(|(first, second)| first == point || second == point),
+        DimensionKind::CircleRadius { circle, .. }
+        | DimensionKind::CircleDiameter { circle, .. } => sketch
+            .circles
+            .get(circle)
+            .is_some_and(|circle| circle.center() == point),
+        DimensionKind::ArcRadius { arc, .. } | DimensionKind::ArcDiameter { arc, .. } => sketch
+            .arcs
+            .get(arc)
+            .is_some_and(|arc| arc.center() == point),
+        DimensionKind::OrientedAngle { first, second, .. } => [first, second]
+            .into_iter()
+            .filter_map(|segment| sketch.segment_endpoints(segment).ok())
+            .any(|(start, end)| start == point || end == point),
+    }
+}
+
+fn constraint_references_segment(kind: SketchConstraintKind, segment: SegmentId) -> bool {
+    match kind {
+        SketchConstraintKind::Horizontal { segment: id }
+        | SketchConstraintKind::Vertical { segment: id }
+        | SketchConstraintKind::PointOnLine { segment: id, .. }
+        | SketchConstraintKind::Midpoint { segment: id, .. } => id == segment,
+        SketchConstraintKind::Parallel { first, second }
+        | SketchConstraintKind::Perpendicular { first, second }
+        | SketchConstraintKind::EqualSegmentLength { first, second } => {
+            first == segment || second == segment
+        }
+        SketchConstraintKind::SymmetricAboutLine { line, .. }
+        | SketchConstraintKind::LineCircleTangency { line, .. } => line == segment,
+        _ => false,
+    }
+}
+
+fn dimension_references_segment(kind: DimensionKind, segment: SegmentId) -> bool {
+    match kind {
+        DimensionKind::SegmentLength { segment: id, .. } => id == segment,
+        DimensionKind::OrientedAngle { first, second, .. } => first == segment || second == segment,
+        _ => false,
     }
 }
 
@@ -882,7 +1171,7 @@ pub(crate) fn validate_finite(value: f64, context: &'static str) -> Result<(), S
     }
 }
 
-fn validate_dimension_value(value: f64) -> Result<(), SketchError> {
+pub(crate) fn validate_dimension_value(value: f64) -> Result<(), SketchError> {
     if value.is_finite() && value > 0.0 {
         Ok(())
     } else {
