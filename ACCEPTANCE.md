@@ -132,7 +132,8 @@ The separate `geosolve-demo-web` crate must:
 
 - build for `wasm32-unknown-unknown` with no backend service;
 - load from the Trunk-generated static output;
-- offer hardcoded selectors for S1, S2, S3, L1 and L3 by the end of M6;
+- offer hardcoded selectors for S1, S2, L1, L2 and L3 by the end of M6;
+- add the S3 selector with its curve/tangency implementation in M7;
 - construct scenarios through `geosolve-sketch`/`geosolve-linkage` public APIs;
 - contain no duplicate constraint equations;
 - render solved geometry in SVG (Canvas may be added later but is not required);

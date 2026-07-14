@@ -288,34 +288,51 @@ Review drag/minimum-motion behavior, equation presentation and public sketch mod
 
 Goal: solve rigid-body mechanisms using the same core.
 
+Status: complete as of 2026-07-14.
+
 Implement in `geosolve-linkage`:
 
-- `PlaneFrame` assignment;
-- rigid body with `Pose2` variable and body-local features;
-- grounded body/gauge removal;
-- revolute joint: transformed anchor coincidence, two rows;
-- prismatic joint: transverse coincidence plus relative-axis alignment;
-- weld/fixed joint;
-- angular and linear drivers;
-- warm-started bounded-step driver continuation;
-- explicit open/crossed assembly-mode state;
-- velocity solve `J_q q_dot + J_s s_dot = 0` after position convergence.
+- [x] `PlaneFrame` assignment.
+- [x] Rigid body with `Pose2` variable and body-local features.
+- [x] Grounded body/gauge removal.
+- [x] Revolute joint: transformed anchor coincidence, two rows.
+- [x] Prismatic joint: transverse coincidence plus relative-axis alignment.
+- [x] Weld/fixed joint.
+- [x] Angular and linear drivers.
+- [x] Warm-started bounded-step driver continuation.
+- [x] Explicit open/crossed assembly-mode state.
+- [x] Velocity solve `J_q q_dot + J_s s_dot = 0` after position convergence.
 
 Canonical scenes:
 
-- `L1 four-bar open`;
-- `L2 four-bar crossed`;
-- `L3 slider-crank`.
+- [x] `L1 four-bar open`.
+- [x] `L2 four-bar crossed`.
+- [x] `L3 slider-crank`.
 
 Web work:
 
-- use domain constructors, not duplicate geometry;
-- driver slider updates solved SVG linkage;
-- display branch label and singularity warning;
-- reuse equation-audit panel for joint closure and driver rows;
-- preserve selected assembly mode over the safe sweep.
+- [x] Use domain constructors, not duplicate geometry.
+- [x] Driver slider updates solved SVG linkage.
+- [x] Display branch label and singularity warning.
+- [x] Reuse equation-audit panel for joint closure and driver rows.
+- [x] Preserve selected assembly mode over the safe sweep.
 
 Gate: linkage and web criteria.
+
+Completion notes: the linkage model uses one unwrapped `Pose2` per rigid body,
+trusted elimination for grounded poses, body-local geometry, analytic joint and
+driver Jacobians, and typed branch monitors. Continuation is deterministic,
+warm-started and limited to two-degree canonical driver steps. L1/L2 retain
+opposite orientation signs through `25..135` degrees; L3 retains its positive-x
+slider branch through `15..165` degrees. Reduced velocity solves use the same
+rank cutoff they report and independently validate differentiated equations.
+The browser exposes live L1/L2/L3 sliders, typed branch/conditioning/velocity
+diagnostics and accepted-state audit rows, and also adds canonical S2 conflict
+diagnosis. The gate passes with 20 linkage tests, 23 sketch tests, 24 web tests,
+144 workspace tests, warnings-denied Clippy, locked native/WASM checks and a
+Trunk release build. Exact toggles reject or roll back to a finite near-toggle
+state with a conditioning warning. M6 intentionally remains dense and
+warm-start-only; predictor and pseudo-arclength continuation remain M8 work.
 
 ### Human checkpoint C
 
