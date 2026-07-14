@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GeoSolve primitive demo</title>
+    <title>GeoSolve live S1 sketch</title>
     <link data-trunk rel="css" href="styles.css" />
     <link data-trunk rel="rust" data-wasm-opt="z" />
   </head>
@@ -11,21 +11,35 @@
     <main>
       <header class="page-header">
         <div>
-          <h1>GeoSolve primitive demo</h1>
-          <p>Geometry and residual equations side by side.</p>
+          <span class="page-kicker">M5 / browser vertical slice</span>
+          <h1>GeoSolve live sketch</h1>
+          <p>Accepted geometry and its evaluated residual audit, side by side.</p>
         </div>
         <label>
           Scenario
           <select id="scenario">
-            <option value="triangle">Underconstrained triangle</option>
-            <option value="four-bar">Four-bar linkage</option>
-            <option value="slider-crank">Slider-crank</option>
+            <option value="triangle">S1 / Underconstrained triangle</option>
+            <option value="four-bar">M6 placeholder / Four-bar</option>
+            <option value="slider-crank">M6 placeholder / Slider-crank</option>
           </select>
         </label>
       </header>
       <section class="workspace">
         <section class="panel geometry-panel">
-          <svg id="viewport" viewBox="0 0 640 420" role="img" aria-label="Constraint solver scenario"></svg>
+          <div class="viewport-shell">
+            <svg
+              id="viewport"
+              viewBox="0 0 640 420"
+              preserveAspectRatio="xMidYMid meet"
+              role="img"
+              aria-label="Live solved constraint scenario"
+              aria-describedby="drag-instructions"
+            ></svg>
+          </div>
+          <p id="drag-instructions" class="interaction-help">
+            Loading live S1 drag interaction...
+          </p>
+          <section id="solve-status" class="solve-status" aria-label="Live solve status" aria-live="polite"></section>
         </section>
         <aside class="panel audit-panel" aria-label="Constraint equation audit">
           <header class="audit-header">
@@ -33,14 +47,14 @@
               <h2>Constraint audit</h2>
               <p>Human-readable residual rows</p>
             </div>
-            <span class="scaffold-badge">scaffold</span>
+            <span id="audit-badge" class="live-badge">live S1</span>
           </header>
           <div id="equations"></div>
         </aside>
       </section>
-      <p class="status">
-        The current geometry and equations are static scaffolds. Milestones M1–M5 replace them with solved state, live variable bindings, scales and evaluated residual values.
-      </p>
+      <footer>
+        S1 is constructed by <code>geosolve_sketch::underconstrained_triangle()</code> and solved in-browser. Linkage previews remain static until M6.
+      </footer>
     </main>
   </body>
 </html>

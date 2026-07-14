@@ -326,6 +326,7 @@ version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
  "geosolve-core",
+ "geosolve-geometry",
  "geosolve-linkage",
  "geosolve-sketch",
  "wasm-bindgen",

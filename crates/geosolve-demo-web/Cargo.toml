@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 geosolve-core = { path = "../geosolve-core" }
+geosolve-geometry = { path = "../geosolve-geometry" }
 geosolve-linkage = { path = "../geosolve-linkage" }
 geosolve-sketch = { path = "../geosolve-sketch" }
 
@@ -19,10 +20,13 @@ console_error_panic_hook = "0.1.7"
 wasm-bindgen = "=0.2.121"
 web-sys = { version = "=0.3.98", features = [
     "Document",
+    "DomRect",
     "Element",
     "Event",
     "EventTarget",
     "HtmlSelectElement",
+    "MouseEvent",
+    "PointerEvent",
     "Window",
 ] }
 
