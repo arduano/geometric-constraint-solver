@@ -338,6 +338,8 @@ warm-start-only; predictor and pseudo-arclength continuation remain M8 work.
 
 Review branch/assembly behavior and driver interaction before advanced continuation or spatial extension.
 
+Approved by the supervising caller on 2026-07-14 after manual review of S1/S2 and L1/L2/L3 interactions with no visual issues.
+
 ## M7 — CAD curves, tangency and branch semantics
 
 Goal: cover the minimum credible CAD sketch curve/constraint set while preserving an advanced-curve path.
