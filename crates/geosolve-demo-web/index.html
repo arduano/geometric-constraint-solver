@@ -11,7 +11,7 @@
     <main>
       <header class="page-header">
         <div>
-          <span class="page-kicker">M6 / interactive verification</span>
+          <span class="page-kicker">M7 / interactive curve verification</span>
           <h1>GeoSolve live constraints</h1>
           <p>Accepted geometry and its evaluated residual audit, side by side.</p>
         </div>
@@ -20,6 +20,9 @@
           <select id="scenario">
             <option value="triangle">S1 / Underconstrained triangle</option>
             <option value="conflicting-rectangle">S2 / Conflicting rectangle</option>
+            <option value="tangent-circles">S3 / Tangent circles</option>
+            <option value="arc-contact-drag">M7 / Arc contact drag</option>
+            <option value="line-circle-tangent-glide">M7 / Line-circle tangent glide</option>
             <option value="horizontal-rail">Fixture / Horizontal rail</option>
             <option value="coincident-pair">Fixture / Coincident pair</option>
             <option value="four-bar-open">L1 / Four-bar open</option>
@@ -40,6 +43,10 @@
               aria-describedby="drag-instructions"
             ></svg>
           </div>
+          <section id="scene-action-controls" class="scene-action-controls" aria-label="Scene action" hidden>
+            <button id="scene-action" type="button" aria-describedby="scene-action-help" disabled>Scene action unavailable</button>
+            <p id="scene-action-help"></p>
+          </section>
           <section id="driver-controls" class="driver-controls" aria-label="Linkage driver" hidden>
             <div class="driver-heading">
               <label for="driver-angle">Driver angle</label>

@@ -1,6 +1,8 @@
 //! WASM/SVG visual harness for live sketch and linkage verification fixtures.
 
 #[cfg(any(target_arch = "wasm32", test))]
+use std::f64::consts::{FRAC_PI_2, PI};
+#[cfg(any(target_arch = "wasm32", test))]
 use std::fmt::Write as _;
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -19,9 +21,11 @@ use geosolve_linkage::{
 };
 #[cfg(any(target_arch = "wasm32", test))]
 use geosolve_sketch::{
-    ConflictingRectangleIds, DimensionKind, DimensionMode, PointId, SegmentId, Sketch,
-    SketchDimensionId, SketchSolveRequest, SketchSolveResult, SketchSource,
-    UnderconstrainedTriangleIds, conflicting_rectangle, underconstrained_triangle,
+    ArcId, ArcSweep, CircleContainment, CircleId, CircleTangencyMode, ConflictingRectangleIds,
+    ContactState, DimensionKind, DimensionMode, LineParameterDomain, LineSide, PointId, SegmentId,
+    Sketch, SketchConstraintId, SketchConstraintKind, SketchDimensionId, SketchSolveRequest,
+    SketchSolveResult, SketchSource, SolveRejection, TangentCirclesIds,
+    UnderconstrainedTriangleIds, conflicting_rectangle, tangent_circles, underconstrained_triangle,
 };
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -61,6 +65,27 @@ const CONFLICTING_RECTANGLE_TRANSFORM: ModelSvgTransform = ModelSvgTransform {
 };
 
 #[cfg(any(target_arch = "wasm32", test))]
+const TANGENT_CIRCLES_TRANSFORM: ModelSvgTransform = ModelSvgTransform {
+    origin_x: 240.0,
+    origin_y: 245.0,
+    pixels_per_unit: 70.0,
+};
+
+#[cfg(any(target_arch = "wasm32", test))]
+const ARC_CONTACT_TRANSFORM: ModelSvgTransform = ModelSvgTransform {
+    origin_x: 320.0,
+    origin_y: 250.0,
+    pixels_per_unit: 72.0,
+};
+
+#[cfg(any(target_arch = "wasm32", test))]
+const TANGENT_GLIDE_TRANSFORM: ModelSvgTransform = ModelSvgTransform {
+    origin_x: 320.0,
+    origin_y: 285.0,
+    pixels_per_unit: 70.0,
+};
+
+#[cfg(any(target_arch = "wasm32", test))]
 const DRAG_HIT_RADIUS: f64 = 47.0;
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -74,6 +99,9 @@ const _: () = assert!(DRAG_CLAMP_MARGIN >= DRAG_HIT_RADIUS);
 enum DemoScenario {
     UnderconstrainedTriangle,
     ConflictingRectangle,
+    TangentCircles,
+    ArcContactDrag,
+    LineCircleTangentGlide,
     HorizontalRail,
     CoincidentPair,
     FourBarOpen,
@@ -86,6 +114,9 @@ impl DemoScenario {
     fn from_value(value: &str) -> Self {
         match value {
             "conflicting-rectangle" => Self::ConflictingRectangle,
+            "tangent-circles" => Self::TangentCircles,
+            "arc-contact-drag" => Self::ArcContactDrag,
+            "line-circle-tangent-glide" => Self::LineCircleTangentGlide,
             "horizontal-rail" => Self::HorizontalRail,
             "coincident-pair" => Self::CoincidentPair,
             "four-bar-open" => Self::FourBarOpen,
@@ -99,6 +130,9 @@ impl DemoScenario {
         match self {
             Self::UnderconstrainedTriangle => "triangle",
             Self::ConflictingRectangle => "conflicting-rectangle",
+            Self::TangentCircles => "tangent-circles",
+            Self::ArcContactDrag => "arc-contact-drag",
+            Self::LineCircleTangentGlide => "line-circle-tangent-glide",
             Self::HorizontalRail => "horizontal-rail",
             Self::CoincidentPair => "coincident-pair",
             Self::FourBarOpen => "four-bar-open",
@@ -110,6 +144,9 @@ impl DemoScenario {
     const fn sketch_scene_kind(self) -> Option<LiveSceneKind> {
         match self {
             Self::UnderconstrainedTriangle => Some(LiveSceneKind::UnderconstrainedTriangle),
+            Self::TangentCircles => Some(LiveSceneKind::TangentCircles),
+            Self::ArcContactDrag => Some(LiveSceneKind::ArcContactDrag),
+            Self::LineCircleTangentGlide => Some(LiveSceneKind::LineCircleTangentGlide),
             Self::HorizontalRail => Some(LiveSceneKind::HorizontalRail),
             Self::CoincidentPair => Some(LiveSceneKind::CoincidentPair),
             Self::ConflictingRectangle
@@ -126,6 +163,9 @@ impl DemoScenario {
             Self::SliderCrank => Some(LinkageSceneKind::SliderCrank),
             Self::UnderconstrainedTriangle
             | Self::ConflictingRectangle
+            | Self::TangentCircles
+            | Self::ArcContactDrag
+            | Self::LineCircleTangentGlide
             | Self::HorizontalRail
             | Self::CoincidentPair => None,
         }
@@ -195,6 +235,9 @@ impl LinkageSceneKind {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum LiveSceneKind {
     UnderconstrainedTriangle,
+    TangentCircles,
+    ArcContactDrag,
+    LineCircleTangentGlide,
     HorizontalRail,
     CoincidentPair,
 }
@@ -204,6 +247,9 @@ impl LiveSceneKind {
     const fn scenario(self) -> DemoScenario {
         match self {
             Self::UnderconstrainedTriangle => DemoScenario::UnderconstrainedTriangle,
+            Self::TangentCircles => DemoScenario::TangentCircles,
+            Self::ArcContactDrag => DemoScenario::ArcContactDrag,
+            Self::LineCircleTangentGlide => DemoScenario::LineCircleTangentGlide,
             Self::HorizontalRail => DemoScenario::HorizontalRail,
             Self::CoincidentPair => DemoScenario::CoincidentPair,
         }
@@ -212,6 +258,9 @@ impl LiveSceneKind {
     const fn badge(self) -> &'static str {
         match self {
             Self::UnderconstrainedTriangle => "live S1",
+            Self::TangentCircles => "live S3",
+            Self::ArcContactDrag => "live arc contact",
+            Self::LineCircleTangentGlide => "live tangent glide",
             Self::HorizontalRail => "live rail",
             Self::CoincidentPair => "live coincident",
         }
@@ -222,11 +271,31 @@ impl LiveSceneKind {
             Self::UnderconstrainedTriangle => {
                 "Drag point C with a mouse, pen, or touch. It is projected onto the distance hard manifold; release keeps the accepted nearby position. A is fixed and B is free."
             }
+            Self::TangentCircles => {
+                "Use the scene action to switch the explicit tangency mode. The positive-x center branch and retained audit stay synchronized with accepted geometry."
+            }
+            Self::ArcContactDrag => {
+                "Drag the contact point along the bounded counterclockwise arc. Targets on the span project onto it; targets beyond the visible endpoints are rejected and retain the prior state."
+            }
+            Self::LineCircleTangentGlide => {
+                "Drag the circle center parallel to the bounded segment. Tangency stays on the explicit Left side; requests beyond either endpoint are rejected and retain the prior state."
+            }
             Self::HorizontalRail => {
                 "Drag point B with a mouse, pen, or touch. The hard horizontal constraint projects it onto the rail; release keeps the accepted position. The displayed length is an equation-free reference measurement."
             }
             Self::CoincidentPair => {
                 "Drag the inner B mark with a mouse, pen, or touch. The hard coincidence relation moves A and B together to the target; release keeps their common position."
+            }
+        }
+    }
+
+    const fn transform(self) -> ModelSvgTransform {
+        match self {
+            Self::TangentCircles => TANGENT_CIRCLES_TRANSFORM,
+            Self::ArcContactDrag => ARC_CONTACT_TRANSFORM,
+            Self::LineCircleTangentGlide => TANGENT_GLIDE_TRANSFORM,
+            Self::UnderconstrainedTriangle | Self::HorizontalRail | Self::CoincidentPair => {
+                MODEL_TRANSFORM
             }
         }
     }
@@ -250,8 +319,31 @@ struct CoincidentPairIds {
 
 #[cfg(any(target_arch = "wasm32", test))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ArcContactIds {
+    center: PointId,
+    point: PointId,
+    arc: ArcId,
+    contact: SketchConstraintId,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct TangentGlideIds {
+    line_start: PointId,
+    line_end: PointId,
+    center: PointId,
+    line: SegmentId,
+    circle: CircleId,
+    tangency: SketchConstraintId,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum LiveScene {
     UnderconstrainedTriangle(UnderconstrainedTriangleIds),
+    TangentCircles(TangentCirclesIds),
+    ArcContactDrag(ArcContactIds),
+    LineCircleTangentGlide(TangentGlideIds),
     HorizontalRail(HorizontalRailIds),
     CoincidentPair(CoincidentPairIds),
 }
@@ -261,26 +353,125 @@ impl LiveScene {
     const fn kind(self) -> LiveSceneKind {
         match self {
             Self::UnderconstrainedTriangle(_) => LiveSceneKind::UnderconstrainedTriangle,
+            Self::TangentCircles(_) => LiveSceneKind::TangentCircles,
+            Self::ArcContactDrag(_) => LiveSceneKind::ArcContactDrag,
+            Self::LineCircleTangentGlide(_) => LiveSceneKind::LineCircleTangentGlide,
             Self::HorizontalRail(_) => LiveSceneKind::HorizontalRail,
             Self::CoincidentPair(_) => LiveSceneKind::CoincidentPair,
         }
     }
 
-    const fn draggable_point(self) -> PointId {
+    const fn draggable_point(self) -> Option<PointId> {
         match self {
-            Self::UnderconstrainedTriangle(ids) => ids.c,
-            Self::HorizontalRail(ids) => ids.b,
-            Self::CoincidentPair(ids) => ids.b,
+            Self::UnderconstrainedTriangle(ids) => Some(ids.c),
+            Self::ArcContactDrag(ids) => Some(ids.point),
+            Self::LineCircleTangentGlide(ids) => Some(ids.center),
+            Self::HorizontalRail(ids) => Some(ids.b),
+            Self::CoincidentPair(ids) => Some(ids.b),
+            Self::TangentCircles(_) => None,
         }
     }
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
+#[allow(clippy::too_many_lines)]
 fn build_live_scene(kind: LiveSceneKind) -> Result<(Sketch, LiveScene), String> {
     match kind {
         LiveSceneKind::UnderconstrainedTriangle => {
             let (sketch, ids) = underconstrained_triangle().map_err(|error| error.to_string())?;
             Ok((sketch, LiveScene::UnderconstrainedTriangle(ids)))
+        }
+        LiveSceneKind::TangentCircles => tangent_circles()
+            .map(|(sketch, ids)| (sketch, LiveScene::TangentCircles(ids)))
+            .map_err(|error| error.to_string()),
+        LiveSceneKind::ArcContactDrag => {
+            let mut sketch = Sketch::new(2.0).map_err(|error| error.to_string())?;
+            let center = sketch
+                .add_named_point("arc center", Point2::new(0.0, 0.0))
+                .map_err(|error| error.to_string())?;
+            let arc = sketch
+                .add_named_arc(
+                    "bounded CCW arc",
+                    center,
+                    2.0,
+                    -PI / 6.0,
+                    7.0 * PI / 6.0,
+                    ArcSweep::CounterClockwise,
+                )
+                .map_err(|error| error.to_string())?;
+            let initial_parameter = 0.38;
+            let initial_point = sketch
+                .evaluate_arc(arc, initial_parameter)
+                .map_err(|error| error.to_string())?;
+            let point = sketch
+                .add_named_point("arc contact", initial_point)
+                .map_err(|error| error.to_string())?;
+            sketch
+                .add_fixed_point(center)
+                .map_err(|error| error.to_string())?;
+            sketch
+                .add_arc_radius(arc, 2.0, DimensionMode::Driving)
+                .map_err(|error| error.to_string())?;
+            let contact = sketch
+                .add_point_on_arc(point, arc, initial_parameter)
+                .map_err(|error| error.to_string())?;
+            Ok((
+                sketch,
+                LiveScene::ArcContactDrag(ArcContactIds {
+                    center,
+                    point,
+                    arc,
+                    contact,
+                }),
+            ))
+        }
+        LiveSceneKind::LineCircleTangentGlide => {
+            let mut sketch = Sketch::new(2.0).map_err(|error| error.to_string())?;
+            let line_start = sketch
+                .add_named_point("line A", Point2::new(-3.0, 0.0))
+                .map_err(|error| error.to_string())?;
+            let line_end = sketch
+                .add_named_point("line B", Point2::new(3.0, 0.0))
+                .map_err(|error| error.to_string())?;
+            let center = sketch
+                .add_named_point("circle center", Point2::new(-1.2, 1.0))
+                .map_err(|error| error.to_string())?;
+            let line = sketch
+                .add_named_segment("bounded tangent segment", line_start, line_end)
+                .map_err(|error| error.to_string())?;
+            let circle = sketch
+                .add_named_circle("gliding circle", center, 1.0)
+                .map_err(|error| error.to_string())?;
+            sketch
+                .add_fixed_point(line_start)
+                .map_err(|error| error.to_string())?;
+            sketch
+                .add_fixed_point(line_end)
+                .map_err(|error| error.to_string())?;
+            sketch
+                .add_circle_radius(circle, 1.0, DimensionMode::Driving)
+                .map_err(|error| error.to_string())?;
+            let tangency = sketch
+                .add_line_circle_tangency(
+                    line,
+                    circle,
+                    LineParameterDomain::BoundedSegment,
+                    LineSide::Left,
+                    0.3,
+                    -FRAC_PI_2,
+                )
+                .map_err(|error| error.to_string())?;
+            Ok((
+                sketch,
+                LiveScene::LineCircleTangentGlide(TangentGlideIds {
+                    line_start,
+                    line_end,
+                    center,
+                    line,
+                    circle,
+                    tangency,
+                }),
+            ))
         }
         LiveSceneKind::HorizontalRail => {
             let mut sketch = Sketch::new(1.0).map_err(|error| error.to_string())?;
@@ -381,6 +572,21 @@ fn sketch_geometry_is_finite(geometry: &geosolve_sketch::SketchGeometry) -> bool
         .points
         .iter()
         .all(|point| point.position.x.is_finite() && point.position.y.is_finite())
+        && geometry.circles.iter().all(|circle| {
+            circle.center.x.is_finite()
+                && circle.center.y.is_finite()
+                && circle.radius.is_finite()
+                && circle.radius > 0.0
+        })
+        && geometry.arcs.iter().all(|arc| {
+            arc.center.x.is_finite()
+                && arc.center.y.is_finite()
+                && arc.radius.is_finite()
+                && arc.radius > 0.0
+                && arc.start_angle.is_finite()
+                && arc.end_angle.is_finite()
+                && arc.signed_sweep.is_finite()
+        })
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -938,7 +1144,10 @@ fn client_to_svg(client: SvgPoint, bounds: ClientRect, view_box: ViewBox) -> Opt
 #[cfg(any(target_arch = "wasm32", test))]
 fn clamp_drag_svg_point(kind: LiveSceneKind, point: SvgPoint) -> SvgPoint {
     match kind {
-        LiveSceneKind::UnderconstrainedTriangle => point,
+        LiveSceneKind::UnderconstrainedTriangle
+        | LiveSceneKind::TangentCircles
+        | LiveSceneKind::ArcContactDrag
+        | LiveSceneKind::LineCircleTangentGlide => point,
         LiveSceneKind::HorizontalRail | LiveSceneKind::CoincidentPair => SvgPoint {
             x: point.x.clamp(
                 SVG_VIEW_BOX.min_x + DRAG_CLAMP_MARGIN,
@@ -959,7 +1168,10 @@ fn client_to_drag_target(
     bounds: ClientRect,
 ) -> Option<Point2<f64>> {
     let svg = client_to_svg(client, bounds, SVG_VIEW_BOX)?;
-    Some(MODEL_TRANSFORM.svg_to_model(clamp_drag_svg_point(kind, svg)))
+    Some(
+        kind.transform()
+            .svg_to_model(clamp_drag_svg_point(kind, svg)),
+    )
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -1025,7 +1237,7 @@ enum AttemptSummary {
     },
     Rejected {
         termination: SolveTermination,
-        rejection: String,
+        rejection: SolveRejection,
     },
     Error {
         message: String,
@@ -1073,13 +1285,81 @@ impl InteractiveSketchState {
     }
 
     fn solve_drag(&mut self, target: Point2<f64>) {
-        let request = SketchSolveRequest::default().with_drag(self.scene.draggable_point(), target);
-        self.solve(request);
+        let Some(point) = self.scene.draggable_point() else {
+            return;
+        };
+        let request = SketchSolveRequest::default().with_drag(point, target);
+        self.solve_transactionally(request);
     }
 
     fn finish_drag(&mut self) {
         self.active_pointer = None;
-        self.solve(SketchSolveRequest::default());
+        if matches!(self.attempt, AttemptSummary::Accepted { .. }) {
+            self.solve(SketchSolveRequest::default());
+        }
+    }
+
+    fn action_label(&self) -> Result<Option<&'static str>, String> {
+        let LiveScene::TangentCircles(ids) = self.scene else {
+            return Ok(None);
+        };
+        let label = match self
+            .sketch
+            .circle_tangency_mode(ids.tangency)
+            .map_err(|error| error.to_string())?
+        {
+            CircleTangencyMode::External => "Switch to internal",
+            CircleTangencyMode::Internal { .. } => "Switch to external",
+        };
+        Ok(Some(label))
+    }
+
+    fn trigger_action(&mut self) {
+        let LiveScene::TangentCircles(ids) = self.scene else {
+            return;
+        };
+        let next_mode = match self.sketch.circle_tangency_mode(ids.tangency) {
+            Ok(CircleTangencyMode::External) => CircleTangencyMode::Internal {
+                containment: CircleContainment::FirstContainsSecond,
+            },
+            Ok(CircleTangencyMode::Internal { .. }) => CircleTangencyMode::External,
+            Err(error) => {
+                self.attempt = AttemptSummary::Error {
+                    message: error.to_string(),
+                };
+                return;
+            }
+        };
+        self.set_tangent_mode(next_mode);
+    }
+
+    fn set_tangent_mode(&mut self, mode: CircleTangencyMode) {
+        let LiveScene::TangentCircles(ids) = self.scene else {
+            return;
+        };
+        let retained_sketch = self.sketch.clone();
+        if let Err(error) = self.sketch.set_circle_tangency_mode(ids.tangency, mode) {
+            self.attempt = AttemptSummary::Error {
+                message: format!("tangency mode edit rejected: {error}"),
+            };
+            return;
+        }
+        match self
+            .sketch
+            .solve(SketchSolveRequest::default(), SolverConfig::default())
+        {
+            Ok(result) if result.accepted() => self.apply_result(result),
+            Ok(result) => {
+                self.sketch = retained_sketch;
+                self.record_rejection(&result);
+            }
+            Err(error) => {
+                self.sketch = retained_sketch;
+                self.attempt = AttemptSummary::Error {
+                    message: error.to_string(),
+                };
+            }
+        }
     }
 
     fn solve(&mut self, request: SketchSolveRequest) {
@@ -1093,6 +1373,30 @@ impl InteractiveSketchState {
         }
     }
 
+    fn solve_transactionally(&mut self, request: SketchSolveRequest) {
+        match self.sketch.solve(request, SolverConfig::default()) {
+            Ok(result) if result.accepted() => self.apply_result(result),
+            Ok(result) => self.record_rejection(&result),
+            Err(error) => {
+                self.attempt = AttemptSummary::Error {
+                    message: error.to_string(),
+                };
+            }
+        }
+    }
+
+    fn record_rejection(&mut self, result: &SketchSolveResult) {
+        self.attempt = result.rejection.clone().map_or_else(
+            || AttemptSummary::Error {
+                message: "solve result was not accepted but supplied no typed rejection".to_owned(),
+            },
+            |rejection| AttemptSummary::Rejected {
+                termination: result.core_report.termination,
+                rejection,
+            },
+        );
+    }
+
     fn apply_result(&mut self, result: SketchSolveResult) {
         if result.accepted() {
             if let Some(diagnostics) = RetainedDiagnostics::from_accepted(&result) {
@@ -1102,10 +1406,7 @@ impl InteractiveSketchState {
                 termination: result.core_report.termination,
             };
         } else {
-            self.attempt = AttemptSummary::Rejected {
-                termination: result.core_report.termination,
-                rejection: format!("{:?}", result.rejection),
-            };
+            self.record_rejection(&result);
         }
         self.display = result;
     }
@@ -1132,6 +1433,30 @@ impl DemoState {
     const fn selector_value(&self) -> &'static str {
         self.scenario().selector_value()
     }
+
+    fn has_action(&self) -> bool {
+        matches!(
+            self,
+            Self::Sketch(state) if matches!(state.scene, LiveScene::TangentCircles(_))
+        )
+    }
+
+    fn action_label(&self) -> Result<Option<&'static str>, String> {
+        match self {
+            Self::Sketch(state) => state.action_label(),
+            Self::ExpectedConflict(_) | Self::Linkage(_) => Ok(None),
+        }
+    }
+
+    fn trigger_action(&mut self) {
+        if let Self::Sketch(state) = self {
+            state.trigger_action();
+        }
+    }
+
+    fn drag_active(&self) -> bool {
+        matches!(self, Self::Sketch(state) if state.active_pointer.is_some())
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -1149,6 +1474,14 @@ struct LiveSketchView {
     announcement: String,
     instructions: &'static str,
     badge: &'static str,
+    action: Option<SceneActionView>,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct SceneActionView {
+    label: &'static str,
+    help: &'static str,
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -1189,6 +1522,13 @@ fn live_sketch_view(app: &InteractiveSketchState) -> Result<LiveSketchView, Stri
         LiveScene::UnderconstrainedTriangle(ids) => {
             triangle_geometry_markup(&app.sketch, &app.display, ids, app.active_pointer.is_some())?
         }
+        LiveScene::TangentCircles(ids) => tangent_circles_geometry_markup(app, ids)?,
+        LiveScene::ArcContactDrag(ids) => {
+            arc_contact_geometry_markup(app, ids, app.active_pointer.is_some())?
+        }
+        LiveScene::LineCircleTangentGlide(ids) => {
+            tangent_glide_geometry_markup(app, ids, app.active_pointer.is_some())?
+        }
         LiveScene::HorizontalRail(ids) => {
             horizontal_rail_geometry_markup(&app.display, ids, app.active_pointer.is_some())?
         }
@@ -1211,6 +1551,10 @@ fn live_sketch_view(app: &InteractiveSketchState) -> Result<LiveSketchView, Stri
         announcement: sketch_announcement(&app.attempt),
         instructions: app.scene.kind().instructions(),
         badge: app.scene.kind().badge(),
+        action: app.action_label()?.map(|label| SceneActionView {
+            label,
+            help: "Changes explicit sketch branch state, solves, and publishes only an accepted result.",
+        }),
     })
 }
 
@@ -1711,6 +2055,406 @@ fn metric_sign_label(metric: f64) -> &'static str {
     } else {
         "zero"
     }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct ArrowHead {
+    left: SvgPoint,
+    tip: SvgPoint,
+    right: SvgPoint,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn arrow_head(from: SvgPoint, tip: SvgPoint, size: f64) -> Result<ArrowHead, String> {
+    let direction_x = tip.x - from.x;
+    let direction_y = tip.y - from.y;
+    let length = direction_x.hypot(direction_y);
+    if !length.is_finite() || length <= f64::EPSILON || !size.is_finite() || size <= 0.0 {
+        return Err("arrow cue has invalid solved geometry".to_owned());
+    }
+    let unit_x = direction_x / length;
+    let unit_y = direction_y / length;
+    let base_x = tip.x - size * unit_x;
+    let base_y = tip.y - size * unit_y;
+    let half_width = size * 0.48;
+    Ok(ArrowHead {
+        left: SvgPoint {
+            x: base_x - half_width * unit_y,
+            y: base_y + half_width * unit_x,
+        },
+        tip,
+        right: SvgPoint {
+            x: base_x + half_width * unit_y,
+            y: base_y - half_width * unit_x,
+        },
+    })
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+const fn circle_tangency_mode_label(mode: CircleTangencyMode) -> &'static str {
+    match mode {
+        CircleTangencyMode::External => "External",
+        CircleTangencyMode::Internal {
+            containment: CircleContainment::FirstContainsSecond,
+        } => "Internal / A contains B",
+        CircleTangencyMode::Internal {
+            containment: CircleContainment::SecondContainsFirst,
+        } => "Internal / B contains A",
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[allow(clippy::too_many_lines)]
+fn tangent_circles_geometry_markup(
+    app: &InteractiveSketchState,
+    ids: TangentCirclesIds,
+) -> Result<String, String> {
+    let first = *app
+        .display
+        .geometry
+        .circle(ids.circle_a)
+        .ok_or_else(|| "S3 result is missing circle A".to_owned())?;
+    let second = *app
+        .display
+        .geometry
+        .circle(ids.circle_b)
+        .ok_or_else(|| "S3 result is missing circle B".to_owned())?;
+    let mode = app
+        .sketch
+        .circle_tangency_mode(ids.tangency)
+        .map_err(|error| error.to_string())?;
+    let SketchConstraintKind::CircleCircleTangency {
+        center_direction, ..
+    } = app
+        .sketch
+        .constraint(ids.tangency)
+        .ok_or_else(|| "S3 tangency source is unavailable".to_owned())?
+        .kind()
+    else {
+        return Err("S3 source is not circle-circle tangency".to_owned());
+    };
+    let displacement = second.center - first.center;
+    let center_distance = displacement.norm();
+    if !sketch_geometry_is_finite(&app.display.geometry)
+        || !center_distance.is_finite()
+        || center_distance <= 0.0
+    {
+        return Err("refusing to render invalid S3 geometry".to_owned());
+    }
+    let contact_angle = displacement.y.atan2(displacement.x);
+    let contact = first
+        .evaluate(contact_angle)
+        .ok_or_else(|| "S3 contact evaluation failed".to_owned())?;
+    let direction_cosine = center_direction
+        .direction_cosine(first.center, second.center)
+        .ok_or_else(|| "S3 center branch is undefined".to_owned())?;
+    let transform = LiveSceneKind::TangentCircles.transform();
+    let first_svg = transform.model_to_svg(first.center);
+    let second_svg = transform.model_to_svg(second.center);
+    let contact_svg = transform.model_to_svg(contact);
+    let branch_tip = SvgPoint {
+        x: first_svg.x + 0.62 * (second_svg.x - first_svg.x),
+        y: first_svg.y + 0.62 * (second_svg.y - first_svg.y),
+    };
+    let branch_from = SvgPoint {
+        x: first_svg.x + 0.38 * (second_svg.x - first_svg.x),
+        y: first_svg.y + 0.38 * (second_svg.y - first_svg.y),
+    };
+    let arrow = arrow_head(branch_from, branch_tip, 12.0)?;
+    let dimension_y = 406.0;
+    let mode_label = circle_tangency_mode_label(mode);
+    let first_radius = first.radius * transform.pixels_per_unit;
+    let second_radius = second.radius * transform.pixels_per_unit;
+    let mut svg = String::new();
+    write!(
+        svg,
+        r#"<g class="geometry tangent-circles-geometry" data-sketch-scene="S3" data-tangency-mode="{mode_label}">
+            <line class="center-rail" x1="78" y1="{rail_y:.3}" x2="570" y2="{rail_y:.3}" />
+            <line class="center-branch" x1="{ax:.3}" y1="{ay:.3}" x2="{bx:.3}" y2="{by:.3}" />
+            <path class="branch-arrow" d="M {arrow_lx:.3} {arrow_ly:.3} L {arrow_tx:.3} {arrow_ty:.3} L {arrow_rx:.3} {arrow_ry:.3}" />
+            <circle class="curve-circle circle-a" cx="{ax:.3}" cy="{ay:.3}" r="{ar:.3}" />
+            <circle class="curve-circle circle-b" cx="{bx:.3}" cy="{by:.3}" r="{br:.3}" />
+            <circle class="curve-center fixed-center" cx="{ax:.3}" cy="{ay:.3}" r="6" />
+            <circle class="curve-center" cx="{bx:.3}" cy="{by:.3}" r="6" />
+            <circle class="contact-marker" cx="{cx:.3}" cy="{cy:.3}" r="7" data-contact-x="{contact_x:.6}" data-contact-y="{contact_y:.6}" />
+            <line class="dimension-extension" x1="{ax:.3}" y1="{ay:.3}" x2="{ax:.3}" y2="{dimension_y:.3}" />
+            <line class="dimension-extension" x1="{bx:.3}" y1="{by:.3}" x2="{bx:.3}" y2="{dimension_y:.3}" />
+            <line class="center-dimension" x1="{ax:.3}" y1="{dimension_y:.3}" x2="{bx:.3}" y2="{dimension_y:.3}" />
+            <path class="dimension-arrows" d="M {ax:.3} {dimension_y:.3} l 10 -5 M {ax:.3} {dimension_y:.3} l 10 5 M {bx:.3} {dimension_y:.3} l -10 -5 M {bx:.3} {dimension_y:.3} l -10 5" />
+            <text class="dimension-label" x="{dimension_mid:.3}" y="397">center distance {center_distance:.3}</text>
+            <text class="curve-label" x="{a_label_x:.3}" y="{a_label_y:.3}">A / r 2</text>
+            <text class="curve-label" x="{b_label_x:.3}" y="{b_label_y:.3}">B / r 1</text>
+            <text class="contact-label" x="{contact_label_x:.3}" y="{contact_label_y:.3}">contact</text>
+            <text x="28" y="42" class="scene-kicker">LIVE S3 / EXPLICIT CURVE BRANCH</text>
+            <text x="28" y="68" class="scene-title">Tangent circles / {mode_label}</text>
+            <text x="28" y="92" class="branch-label">positive-x branch / cosine {direction_cosine:.6} / contact distance {center_distance:.3}</text>
+        </g>"#,
+        rail_y = first_svg.y,
+        ax = first_svg.x,
+        ay = first_svg.y,
+        bx = second_svg.x,
+        by = second_svg.y,
+        arrow_lx = arrow.left.x,
+        arrow_ly = arrow.left.y,
+        arrow_tx = arrow.tip.x,
+        arrow_ty = arrow.tip.y,
+        arrow_rx = arrow.right.x,
+        arrow_ry = arrow.right.y,
+        ar = first_radius,
+        br = second_radius,
+        cx = contact_svg.x,
+        cy = contact_svg.y,
+        contact_x = contact.x,
+        contact_y = contact.y,
+        dimension_mid = (first_svg.x + second_svg.x) * 0.5,
+        a_label_x = first_svg.x - first_radius + 8.0,
+        a_label_y = first_svg.y - 12.0,
+        b_label_x = second_svg.x - 24.0,
+        b_label_y = second_svg.y - second_radius - 12.0,
+        contact_label_x = contact_svg.x + 11.0,
+        contact_label_y = contact_svg.y - 10.0,
+    )
+    .expect("writing S3 SVG markup to a String cannot fail");
+    Ok(svg)
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[allow(clippy::too_many_lines)]
+fn arc_contact_geometry_markup(
+    app: &InteractiveSketchState,
+    ids: ArcContactIds,
+    dragging: bool,
+) -> Result<String, String> {
+    let arc = *app
+        .display
+        .geometry
+        .arc(ids.arc)
+        .ok_or_else(|| "arc contact result is missing its arc".to_owned())?;
+    let point = sketch_geometry_point(&app.display.geometry, ids.point, "arc contact point")?;
+    let center = sketch_geometry_point(&app.display.geometry, ids.center, "arc center")?;
+    let ContactState::PointOnArc { span_parameter } = app
+        .sketch
+        .contact_state(ids.contact)
+        .map_err(|error| error.to_string())?
+    else {
+        return Err("arc contact source has the wrong latent state".to_owned());
+    };
+    let (start, end) = arc
+        .endpoints()
+        .ok_or_else(|| "arc endpoints are invalid".to_owned())?;
+    let evaluated = arc
+        .evaluate(span_parameter)
+        .ok_or_else(|| "committed arc contact parameter is invalid".to_owned())?;
+    if (evaluated - point).norm() > 1.0e-7 || !sketch_geometry_is_finite(&app.display.geometry) {
+        return Err("arc display geometry and committed contact disagree".to_owned());
+    }
+    let transform = LiveSceneKind::ArcContactDrag.transform();
+    let center_svg = transform.model_to_svg(center);
+    let start_svg = transform.model_to_svg(start);
+    let end_svg = transform.model_to_svg(end);
+    let point_svg = transform.model_to_svg(point);
+    let cue_from = transform.model_to_svg(
+        arc.evaluate(0.1)
+            .ok_or_else(|| "arc orientation cue is invalid".to_owned())?,
+    );
+    let cue_tip = transform.model_to_svg(
+        arc.evaluate(0.17)
+            .ok_or_else(|| "arc orientation cue is invalid".to_owned())?,
+    );
+    let arrow = arrow_head(cue_from, cue_tip, 12.0)?;
+    let large_arc = u8::from(arc.signed_sweep.abs() > PI);
+    let svg_sweep = u8::from(arc.signed_sweep < 0.0);
+    let radius = arc.radius * transform.pixels_per_unit;
+    let active_class = if dragging { " active" } else { "" };
+    let indicator_start = 78.0;
+    let indicator_end = 270.0;
+    let indicator_x = indicator_start + span_parameter * (indicator_end - indicator_start);
+    let sweep_degrees = arc.signed_sweep.to_degrees();
+    let mut svg = String::new();
+    write!(
+        svg,
+        r#"<g class="geometry arc-contact-geometry" data-sketch-scene="ArcContact" data-span-parameter="{span_parameter:.6}">
+            <line class="radius-guide endpoint-guide" x1="{ox:.3}" y1="{oy:.3}" x2="{sx:.3}" y2="{sy:.3}" />
+            <line class="radius-guide endpoint-guide" x1="{ox:.3}" y1="{oy:.3}" x2="{ex:.3}" y2="{ey:.3}" />
+            <line class="radius-guide contact-guide" x1="{ox:.3}" y1="{oy:.3}" x2="{px:.3}" y2="{py:.3}" />
+            <path class="bounded-arc" d="M {sx:.3} {sy:.3} A {radius:.3} {radius:.3} 0 {large_arc} {svg_sweep} {ex:.3} {ey:.3}" />
+            <line class="arc-direction-cue" x1="{cue_from_x:.3}" y1="{cue_from_y:.3}" x2="{cue_tip_x:.3}" y2="{cue_tip_y:.3}" />
+            <path class="arc-arrow" d="M {arrow_lx:.3} {arrow_ly:.3} L {arrow_tx:.3} {arrow_ty:.3} L {arrow_rx:.3} {arrow_ry:.3}" />
+            <circle class="arc-endpoint start" cx="{sx:.3}" cy="{sy:.3}" r="7" />
+            <circle class="arc-endpoint end" cx="{ex:.3}" cy="{ey:.3}" r="7" />
+            <path class="fixed-center-mark" d="M {center_left:.3} {oy:.3} L {center_right:.3} {oy:.3} M {ox:.3} {center_top:.3} L {ox:.3} {center_bottom:.3}" />
+            <circle id="drag-handle" class="drag-target{active_class}" cx="{px:.3}" cy="{py:.3}" r="{drag_radius:.0}" data-drag-point="arc-contact" data-model-x="{model_x:.6}" data-model-y="{model_y:.6}" />
+            <circle class="point draggable arc-contact-point{active_class}" cx="{px:.3}" cy="{py:.3}" r="8" />
+            <line class="span-track" x1="{indicator_start:.3}" y1="390" x2="{indicator_end:.3}" y2="390" />
+            <circle class="span-indicator" cx="{indicator_x:.3}" cy="390" r="5" />
+            <text class="endpoint-label" x="{start_label_x:.3}" y="{start_label_y:.3}">start / t 0</text>
+            <text class="endpoint-label" x="{end_label_x:.3}" y="{end_label_y:.3}">end / t 1</text>
+            <text class="contact-label" x="{contact_label_x:.3}" y="{contact_label_y:.3}">contact / t {span_parameter:.3}</text>
+            <text class="span-label" x="{indicator_start:.3}" y="378">bounded span / {sweep_degrees:.0} deg CCW</text>
+            <text x="28" y="42" class="scene-kicker">LIVE M7 / BOUNDED CURVE CONTACT</text>
+            <text x="28" y="68" class="scene-title">Arc contact drag / actual CCW span only</text>
+            <text x="28" y="92" class="branch-label">committed span parameter {span_parameter:.6} / radius {arc_radius:.3}</text>
+        </g>"#,
+        ox = center_svg.x,
+        oy = center_svg.y,
+        sx = start_svg.x,
+        sy = start_svg.y,
+        ex = end_svg.x,
+        ey = end_svg.y,
+        px = point_svg.x,
+        py = point_svg.y,
+        cue_from_x = cue_from.x,
+        cue_from_y = cue_from.y,
+        cue_tip_x = cue_tip.x,
+        cue_tip_y = cue_tip.y,
+        arrow_lx = arrow.left.x,
+        arrow_ly = arrow.left.y,
+        arrow_tx = arrow.tip.x,
+        arrow_ty = arrow.tip.y,
+        arrow_rx = arrow.right.x,
+        arrow_ry = arrow.right.y,
+        center_left = center_svg.x - 8.0,
+        center_right = center_svg.x + 8.0,
+        center_top = center_svg.y - 8.0,
+        center_bottom = center_svg.y + 8.0,
+        drag_radius = DRAG_HIT_RADIUS,
+        model_x = point.x,
+        model_y = point.y,
+        start_label_x = start_svg.x + 10.0,
+        start_label_y = start_svg.y + 20.0,
+        end_label_x = end_svg.x - 82.0,
+        end_label_y = end_svg.y + 20.0,
+        contact_label_x = point_svg.x + 13.0,
+        contact_label_y = point_svg.y - 12.0,
+        arc_radius = arc.radius,
+    )
+    .expect("writing arc contact SVG markup to a String cannot fail");
+    Ok(svg)
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[allow(clippy::too_many_lines)]
+fn tangent_glide_geometry_markup(
+    app: &InteractiveSketchState,
+    ids: TangentGlideIds,
+    dragging: bool,
+) -> Result<String, String> {
+    let line_start =
+        sketch_geometry_point(&app.display.geometry, ids.line_start, "tangent line start")?;
+    let line_end = sketch_geometry_point(&app.display.geometry, ids.line_end, "tangent line end")?;
+    let circle = *app
+        .display
+        .geometry
+        .circle(ids.circle)
+        .ok_or_else(|| "tangent glide result is missing its circle".to_owned())?;
+    let ContactState::LineCircleTangency {
+        line_parameter,
+        circle_angle,
+    } = app
+        .sketch
+        .contact_state(ids.tangency)
+        .map_err(|error| error.to_string())?
+    else {
+        return Err("line-circle source has the wrong latent state".to_owned());
+    };
+    let SketchConstraintKind::LineCircleTangency {
+        line,
+        circle: source_circle,
+        domain,
+        side,
+        ..
+    } = app
+        .sketch
+        .constraint(ids.tangency)
+        .ok_or_else(|| "line-circle tangency source is unavailable".to_owned())?
+        .kind()
+    else {
+        return Err("source is not line-circle tangency".to_owned());
+    };
+    if line != ids.line || source_circle != ids.circle {
+        return Err("line-circle source identity changed".to_owned());
+    }
+    let contact = circle
+        .evaluate(circle_angle)
+        .ok_or_else(|| "committed circle contact evaluation failed".to_owned())?;
+    if !sketch_geometry_is_finite(&app.display.geometry) || !domain.contains(line_parameter) {
+        return Err("refusing to render invalid tangent glide geometry".to_owned());
+    }
+    let transform = LiveSceneKind::LineCircleTangentGlide.transform();
+    let start_svg = transform.model_to_svg(line_start);
+    let end_svg = transform.model_to_svg(line_end);
+    let center_svg = transform.model_to_svg(circle.center);
+    let contact_svg = transform.model_to_svg(contact);
+    let side_tip = SvgPoint {
+        x: contact_svg.x + 0.72 * (center_svg.x - contact_svg.x),
+        y: contact_svg.y + 0.72 * (center_svg.y - contact_svg.y),
+    };
+    let side_arrow = arrow_head(contact_svg, side_tip, 12.0)?;
+    let radius = circle.radius * transform.pixels_per_unit;
+    let active_class = if dragging { " active" } else { "" };
+    let indicator_x = start_svg.x + line_parameter * (end_svg.x - start_svg.x);
+    let side_label = match side {
+        LineSide::Left => "Left",
+        LineSide::Right => "Right",
+    };
+    let mut svg = String::new();
+    write!(
+        svg,
+        r#"<g class="geometry tangent-glide-geometry" data-sketch-scene="LineCircleTangentGlide" data-line-parameter="{line_parameter:.6}" data-circle-angle="{circle_angle:.6}">
+            <line class="bounded-tangent-line" x1="{sx:.3}" y1="{sy:.3}" x2="{ex:.3}" y2="{ey:.3}" />
+            <line class="line-domain-track" x1="{sx:.3}" y1="365" x2="{ex:.3}" y2="365" />
+            <circle class="line-parameter-indicator" cx="{indicator_x:.3}" cy="365" r="5" />
+            <circle class="line-endpoint start" cx="{sx:.3}" cy="{sy:.3}" r="8" />
+            <circle class="line-endpoint end" cx="{ex:.3}" cy="{ey:.3}" r="8" />
+            <circle class="gliding-circle" cx="{center_x:.3}" cy="{center_y:.3}" r="{radius:.3}" />
+            <line class="radius-normal" x1="{center_x:.3}" y1="{center_y:.3}" x2="{contact_x:.3}" y2="{contact_y:.3}" />
+            <line class="tangent-side-arrow" x1="{contact_x:.3}" y1="{contact_y:.3}" x2="{side_tip_x:.3}" y2="{side_tip_y:.3}" />
+            <path class="tangent-arrow-head" d="M {arrow_lx:.3} {arrow_ly:.3} L {arrow_tx:.3} {arrow_ty:.3} L {arrow_rx:.3} {arrow_ry:.3}" />
+            <circle class="contact-marker" cx="{contact_x:.3}" cy="{contact_y:.3}" r="7" data-contact-x="{contact_model_x:.6}" data-contact-y="{contact_model_y:.6}" />
+            <circle id="drag-handle" class="drag-target{active_class}" cx="{center_x:.3}" cy="{center_y:.3}" r="{drag_radius:.0}" data-drag-point="circle-center" data-model-x="{center_model_x:.6}" data-model-y="{center_model_y:.6}" />
+            <circle class="point draggable circle-center{active_class}" cx="{center_x:.3}" cy="{center_y:.3}" r="8" />
+            <text class="endpoint-label" x="{start_label_x:.3}" y="{start_label_y:.3}">A / t 0</text>
+            <text class="endpoint-label" x="{end_label_x:.3}" y="{end_label_y:.3}">B / t 1</text>
+            <text class="contact-label" x="{contact_label_x:.3}" y="{contact_label_y:.3}">contact / t {line_parameter:.3}</text>
+            <text class="side-label" x="{side_label_x:.3}" y="{side_label_y:.3}">{side_label} side</text>
+            <text class="span-label" x="{sx:.3}" y="385">bounded segment parameter / {line_parameter:.3}</text>
+            <text x="28" y="42" class="scene-kicker">LIVE M7 / BOUNDED TANGENCY</text>
+            <text x="28" y="68" class="scene-title">Line-circle tangent glide / explicit {side_label} side</text>
+            <text x="28" y="92" class="branch-label">committed line t {line_parameter:.6} / circle angle {circle_angle:.6}</text>
+        </g>"#,
+        sx = start_svg.x,
+        sy = start_svg.y,
+        ex = end_svg.x,
+        ey = end_svg.y,
+        center_x = center_svg.x,
+        center_y = center_svg.y,
+        contact_x = contact_svg.x,
+        contact_y = contact_svg.y,
+        side_tip_x = side_tip.x,
+        side_tip_y = side_tip.y,
+        arrow_lx = side_arrow.left.x,
+        arrow_ly = side_arrow.left.y,
+        arrow_tx = side_arrow.tip.x,
+        arrow_ty = side_arrow.tip.y,
+        arrow_rx = side_arrow.right.x,
+        arrow_ry = side_arrow.right.y,
+        contact_model_x = contact.x,
+        contact_model_y = contact.y,
+        drag_radius = DRAG_HIT_RADIUS,
+        center_model_x = circle.center.x,
+        center_model_y = circle.center.y,
+        start_label_x = start_svg.x - 8.0,
+        start_label_y = start_svg.y + 43.0,
+        end_label_x = end_svg.x - 42.0,
+        end_label_y = end_svg.y + 43.0,
+        contact_label_x = contact_svg.x + 12.0,
+        contact_label_y = contact_svg.y + 23.0,
+        side_label_x = side_tip.x + 10.0,
+        side_label_y = side_tip.y - 5.0,
+    )
+    .expect("writing tangent glide SVG markup to a String cannot fail");
+    Ok(svg)
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -2285,7 +3029,7 @@ fn status_markup(
     retained: &RetainedDiagnostics,
     attempt: &AttemptSummary,
 ) -> String {
-    let attempt = attempt_markup(attempt);
+    let attempt_banner = attempt_markup(attempt);
     let validated_residual = retained
         .validated_hard_residual_max
         .map_or_else(|| "unavailable".to_owned(), format_metric);
@@ -2319,8 +3063,8 @@ fn status_markup(
                 <div><span>retained singularity</span><strong>{}</strong></div>
                 <div><span>retained conflict candidates</span><strong>{}</strong></div>
                 <div><span>retained redundancy notices</span><strong>{}</strong></div>
-            </div>{}"#,
-        attempt,
+            </div>{}{}"#,
+        attempt_banner,
         termination_label(retained.termination),
         validated_residual,
         rank,
@@ -2332,6 +3076,7 @@ fn status_markup(
         conflicts,
         redundancies,
         reference_status_markup(scene, display),
+        curve_status_markup(sketch, scene, display, attempt),
     )
     .expect("writing solve status markup to a String cannot fail");
     html
@@ -2577,7 +3322,236 @@ fn scene_motion_state(sketch: &Sketch, scene: LiveScene) -> (&'static str, Strin
             "retained branch state",
             "no discrete branch; common point translates in 2D".to_owned(),
         ),
+        LiveScene::TangentCircles(ids) => {
+            let state = sketch.circle_tangency_mode(ids.tangency).map_or_else(
+                |_| "unavailable".to_owned(),
+                |mode| {
+                    format!(
+                        "{}; positive-x center direction",
+                        circle_tangency_mode_label(mode)
+                    )
+                },
+            );
+            ("retained tangency branch", state)
+        }
+        LiveScene::ArcContactDrag(ids) => {
+            let state = match sketch.contact_state(ids.contact) {
+                Ok(ContactState::PointOnArc { span_parameter }) => {
+                    format!("bounded CCW span; committed t = {span_parameter:.6}")
+                }
+                _ => "bounded arc contact unavailable".to_owned(),
+            };
+            ("retained contact branch", state)
+        }
+        LiveScene::LineCircleTangentGlide(ids) => {
+            let state = match sketch.contact_state(ids.tangency) {
+                Ok(ContactState::LineCircleTangency { line_parameter, .. }) => {
+                    format!("Left side; bounded segment t = {line_parameter:.6}")
+                }
+                _ => "bounded line-circle contact unavailable".to_owned(),
+            };
+            ("retained tangency branch", state)
+        }
     }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[allow(clippy::too_many_lines)]
+fn curve_status_markup(
+    sketch: &Sketch,
+    scene: LiveScene,
+    display: &SketchSolveResult,
+    attempt: &AttemptSummary,
+) -> String {
+    match scene {
+        LiveScene::TangentCircles(ids) => {
+            let mode = sketch
+                .circle_tangency_mode(ids.tangency)
+                .map_or("unavailable", circle_tangency_mode_label);
+            let first = display.geometry.circle(ids.circle_a);
+            let second = display.geometry.circle(ids.circle_b);
+            let center_distance = first.zip(second).map_or_else(
+                || "unavailable".to_owned(),
+                |(first, second)| format_metric((second.center - first.center).norm()),
+            );
+            let branch = sketch
+                .constraint(ids.tangency)
+                .and_then(|constraint| {
+                    let SketchConstraintKind::CircleCircleTangency {
+                        center_direction, ..
+                    } = constraint.kind()
+                    else {
+                        return None;
+                    };
+                    let (first, second) = first.zip(second)?;
+                    let cosine = center_direction.direction_cosine(first.center, second.center)?;
+                    Some(format!("positive-x / cosine {cosine:.6}"))
+                })
+                .unwrap_or_else(|| "unavailable".to_owned());
+            format!(
+                r#"<div class="status-grid curve-status-grid">
+                    <div><span>explicit circle tangency mode</span><strong>{}</strong></div>
+                    <div><span>retained center contact distance</span><strong>{}</strong></div>
+                    <div><span>retained center-direction branch</span><strong>{}</strong></div>
+                    <div><span>retained audit snapshot</span><strong>{}</strong></div>
+                </div>"#,
+                escape_html(mode),
+                center_distance,
+                escape_html(&branch),
+                audit_snapshot_status(&display.display_audit),
+            )
+        }
+        LiveScene::ArcContactDrag(ids) => {
+            let span = match sketch.contact_state(ids.contact) {
+                Ok(ContactState::PointOnArc { span_parameter }) => {
+                    format!("{span_parameter:.6} / [0, 1]")
+                }
+                _ => "unavailable".to_owned(),
+            };
+            let sweep = display.geometry.arc(ids.arc).map_or_else(
+                || "unavailable".to_owned(),
+                |arc| {
+                    format!(
+                        "{:.3} deg / {:?}",
+                        arc.signed_sweep.to_degrees().abs(),
+                        arc.sweep
+                    )
+                },
+            );
+            format!(
+                r#"<div class="status-grid curve-status-grid">
+                    <div><span>committed arc span parameter</span><strong>{}</strong></div>
+                    <div><span>explicit bounded sweep</span><strong>{}</strong></div>
+                    <div><span>bounded escape guard</span><strong>{}</strong></div>
+                    <div><span>retained audit snapshot</span><strong>{}</strong></div>
+                </div>"#,
+                escape_html(&span),
+                escape_html(&sweep),
+                bounded_attempt_status(attempt, "arc span"),
+                audit_snapshot_status(&display.display_audit),
+            )
+        }
+        LiveScene::LineCircleTangentGlide(ids) => {
+            let (parameter, angle) = match sketch.contact_state(ids.tangency) {
+                Ok(ContactState::LineCircleTangency {
+                    line_parameter,
+                    circle_angle,
+                }) => (
+                    format!("{line_parameter:.6} / [0, 1]"),
+                    format!("{circle_angle:.6} rad"),
+                ),
+                _ => ("unavailable".to_owned(), "unavailable".to_owned()),
+            };
+            let source_state = sketch
+                .constraint(ids.tangency)
+                .and_then(|constraint| {
+                    let SketchConstraintKind::LineCircleTangency { domain, side, .. } =
+                        constraint.kind()
+                    else {
+                        return None;
+                    };
+                    Some(format!("{side:?} / {}", domain.label()))
+                })
+                .unwrap_or_else(|| "unavailable".to_owned());
+            format!(
+                r#"<div class="status-grid curve-status-grid">
+                    <div><span>committed line contact parameter</span><strong>{}</strong></div>
+                    <div><span>committed circle contact angle</span><strong>{}</strong></div>
+                    <div><span>explicit side / domain</span><strong>{}</strong></div>
+                    <div><span>endpoint escape guard</span><strong>{}</strong></div>
+                    <div><span>retained audit snapshot</span><strong>{}</strong></div>
+                </div>"#,
+                escape_html(&parameter),
+                escape_html(&angle),
+                escape_html(&source_state),
+                bounded_attempt_status(attempt, "segment endpoint"),
+                audit_snapshot_status(&display.display_audit),
+            )
+        }
+        LiveScene::UnderconstrainedTriangle(_)
+        | LiveScene::HorizontalRail(_)
+        | LiveScene::CoincidentPair(_) => String::new(),
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn bounded_attempt_status(attempt: &AttemptSummary, boundary: &str) -> String {
+    match attempt {
+        AttemptSummary::Accepted { .. } => "accepted contact is inside bounds".to_owned(),
+        AttemptSummary::Rejected { rejection, .. } => {
+            if matches!(rejection, SolveRejection::ContactParameterOutOfDomain(_)) {
+                format!("{boundary} escape rejected; prior geometry/contact retained")
+            } else {
+                format!(
+                    "{}; prior geometry/contact retained",
+                    escape_html(&sketch_rejection_summary(rejection))
+                )
+            }
+        }
+        AttemptSummary::Error { message } => format!(
+            "request error; prior geometry/contact retained ({})",
+            escape_html(message)
+        ),
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn sketch_rejection_summary(rejection: &SolveRejection) -> String {
+    match rejection {
+        SolveRejection::CoreTermination(termination) => format!(
+            "core solve terminated as {}",
+            termination_label(*termination)
+        ),
+        SolveRejection::HardResidual { maximum, tolerance } => format!(
+            "hard residual validation rejected maximum {} above tolerance {}",
+            format_metric(*maximum),
+            format_metric(*tolerance)
+        ),
+        SolveRejection::IndependentValidationFailed(message) => {
+            format!("independent validation rejected the candidate: {message}")
+        }
+        SolveRejection::SegmentBranchFlipped(_) => {
+            "explicit segment branch rejected the candidate".to_owned()
+        }
+        SolveRejection::NonPositiveCircleRadius(_) => {
+            "nonpositive circle radius rejected the candidate".to_owned()
+        }
+        SolveRejection::NonPositiveArcRadius(_) => {
+            "nonpositive arc radius rejected the candidate".to_owned()
+        }
+        SolveRejection::DegenerateSegment(_) => {
+            "degenerate segment rejected the candidate".to_owned()
+        }
+        SolveRejection::ContactParameterOutOfDomain(_) => {
+            "contact parameter left its bounded domain".to_owned()
+        }
+        SolveRejection::LineSideFlipped(_) => {
+            "explicit line-side branch rejected the candidate".to_owned()
+        }
+        SolveRejection::InvalidTangencyMode(_) => {
+            "explicit tangency mode rejected the candidate".to_owned()
+        }
+        SolveRejection::CenterDirectionFlipped(_) => {
+            "explicit center-direction branch rejected the candidate".to_owned()
+        }
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn audit_snapshot_status(audit: &AuditSnapshot) -> String {
+    let rows: Vec<_> = audit
+        .sources
+        .iter()
+        .flat_map(|source| &source.rows)
+        .collect();
+    let evaluated = rows
+        .iter()
+        .filter(|row| row.evaluation_status == AuditEvaluationStatus::Evaluated)
+        .count();
+    format!(
+        "{evaluated}/{} retained domain/core rows evaluated",
+        rows.len()
+    )
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -2611,9 +3585,9 @@ fn attempt_markup(attempt: &AttemptSummary) -> String {
             "rejected",
             "attempt rejected / retained state shown",
             format!(
-                "attempt termination: {}; rejection: {}",
+                "attempt termination: {}; {}; prior geometry/audit remains displayed",
                 termination_label(*termination),
-                rejection
+                sketch_rejection_summary(rejection)
             ),
         ),
         AttemptSummary::Error { message } => (
@@ -2774,8 +3748,8 @@ mod wasm {
     use super::{
         ClientRect, ConflictingRectangleState, DemoApp, DemoScenario, DemoState,
         InteractiveLinkageState, InteractiveSketchState, LinkageAttemptSummary, LiveSceneKind,
-        SvgPoint, client_to_drag_target, expected_conflict_view, live_linkage_view,
-        live_sketch_view, pointer_start_allowed,
+        SceneActionView, SvgPoint, client_to_drag_target, expected_conflict_view,
+        live_linkage_view, live_sketch_view, pointer_start_allowed,
     };
     use geosolve_geometry::Point2;
     use wasm_bindgen::{JsCast, JsValue, closure::Closure, prelude::wasm_bindgen};
@@ -2798,9 +3772,25 @@ mod wasm {
         let badge = required_element(document, "audit-badge")?;
         let instructions = required_element(document, "drag-instructions")?;
         let controls = required_element(document, "driver-controls")?;
+        let action_controls = required_element(document, "scene-action-controls")?;
+        let action_button = required_element(document, "scene-action")?;
+        let action_help = required_element(document, "scene-action-help")?;
         let driver = required_element(document, "driver-angle")?.dyn_into::<HtmlInputElement>()?;
         let output =
             required_element(document, "driver-output")?.dyn_into::<HtmlOutputElement>()?;
+        let state_action = app
+            .state
+            .action_label()
+            .map_err(|error| JsValue::from_str(&error))?
+            .map(|label| SceneActionView {
+                label,
+                help: "Changes explicit sketch branch state, solves, and publishes only an accepted result.",
+            });
+        if app.state.drag_active() {
+            viewport.set_attribute("data-drag-active", "true")?;
+        } else {
+            viewport.remove_attribute("data-drag-active")?;
+        }
 
         match &app.state {
             DemoState::Sketch(state) => {
@@ -2814,6 +3804,7 @@ mod wasm {
                 instructions.set_text_content(Some(view.instructions));
                 controls.set_attribute("hidden", "")?;
                 driver.set_disabled(true);
+                render_scene_action(&action_controls, &action_button, &action_help, state_action)?;
             }
             DemoState::ExpectedConflict(state) => {
                 let view =
@@ -2827,6 +3818,7 @@ mod wasm {
                 instructions.set_text_content(Some(view.instructions));
                 controls.set_attribute("hidden", "")?;
                 driver.set_disabled(true);
+                render_scene_action(&action_controls, &action_button, &action_help, None)?;
             }
             DemoState::Linkage(state) => {
                 let view = live_linkage_view(state).map_err(|error| JsValue::from_str(&error))?;
@@ -2848,7 +3840,28 @@ mod wasm {
                     &format!("{:.0} degrees", view.driver_control.value),
                 )?;
                 output.set_value(&format!("{:.0} deg", view.driver_control.value));
+                render_scene_action(&action_controls, &action_button, &action_help, None)?;
             }
+        }
+        Ok(())
+    }
+
+    fn render_scene_action(
+        controls: &Element,
+        button: &Element,
+        help: &Element,
+        action: Option<SceneActionView>,
+    ) -> Result<(), JsValue> {
+        if let Some(action) = action {
+            controls.remove_attribute("hidden")?;
+            button.remove_attribute("disabled")?;
+            button.set_text_content(Some(action.label));
+            help.set_text_content(Some(action.help));
+        } else {
+            controls.set_attribute("hidden", "")?;
+            button.set_attribute("disabled", "")?;
+            button.set_text_content(Some("Scene action unavailable"));
+            help.set_text_content(None);
         }
         Ok(())
     }
@@ -2961,6 +3974,28 @@ mod wasm {
             render_shared(&callback_document, &callback_app);
         });
         driver.add_event_listener_with_callback("input", callback.as_ref().unchecked_ref())?;
+        callback.forget();
+        Ok(())
+    }
+
+    fn install_scene_action_listener(
+        document: &Document,
+        button: &Element,
+        app: &Rc<RefCell<DemoApp>>,
+    ) -> Result<(), JsValue> {
+        let callback_document = document.clone();
+        let callback_app = Rc::clone(app);
+        let callback = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
+            event.prevent_default();
+            let mut app = callback_app.borrow_mut();
+            if !app.state.has_action() {
+                return;
+            }
+            app.state.trigger_action();
+            drop(app);
+            render_shared(&callback_document, &callback_app);
+        });
+        button.add_event_listener_with_callback("click", callback.as_ref().unchecked_ref())?;
         callback.forget();
         Ok(())
     }
@@ -3103,6 +4138,7 @@ mod wasm {
         let select = required_element(&document, "scenario")?.dyn_into::<HtmlSelectElement>()?;
         let viewport = required_element(&document, "viewport")?;
         let driver = required_element(&document, "driver-angle")?.dyn_into::<HtmlInputElement>()?;
+        let action_button = required_element(&document, "scene-action")?;
         let app = Rc::new(RefCell::new(DemoApp {
             state: DemoState::Sketch(Box::new(
                 InteractiveSketchState::new(LiveSceneKind::UnderconstrainedTriangle)
@@ -3114,14 +4150,34 @@ mod wasm {
         install_scenario_listener(&document, &select, &viewport, &app)?;
         install_pointer_listeners(&document, &viewport, &app)?;
         install_driver_listener(&document, &driver, &app)?;
+        install_scene_action_listener(&document, &action_button, &app)?;
         Ok(())
     }
+}
+
+const SCENARIO_NAMES: [&str; 10] = [
+    "S1 underconstrained triangle",
+    "S2 conflicting rectangle",
+    "S3 tangent circles",
+    "Arc contact drag",
+    "Line-circle tangent glide",
+    "Horizontal rail",
+    "Coincident pair",
+    "L1 four-bar open",
+    "L2 four-bar crossed",
+    "L3 slider-crank",
+];
+
+/// Browser-facing names in selector order.
+#[must_use]
+pub const fn scenario_names() -> &'static [&'static str] {
+    &SCENARIO_NAMES
 }
 
 /// Number of scenarios selectable in the browser harness.
 #[must_use]
 pub const fn scenario_count() -> usize {
-    7
+    SCENARIO_NAMES.len()
 }
 
 #[cfg(test)]
@@ -3161,6 +4217,27 @@ mod tests {
         ids
     }
 
+    fn tangent_circle_ids(app: &InteractiveSketchState) -> TangentCirclesIds {
+        let LiveScene::TangentCircles(ids) = app.scene else {
+            panic!("expected S3 state");
+        };
+        ids
+    }
+
+    fn arc_contact_ids(app: &InteractiveSketchState) -> ArcContactIds {
+        let LiveScene::ArcContactDrag(ids) = app.scene else {
+            panic!("expected arc contact state");
+        };
+        ids
+    }
+
+    fn tangent_glide_ids(app: &InteractiveSketchState) -> TangentGlideIds {
+        let LiveScene::LineCircleTangentGlide(ids) = app.scene else {
+            panic!("expected tangent glide state");
+        };
+        ids
+    }
+
     fn assert_live_result(result: &SketchSolveResult, expected_dof: usize) {
         assert!(result.accepted(), "rejected: {:?}", result.rejection);
         assert_eq!(result.core_report.termination, SolveTermination::Converged);
@@ -3179,6 +4256,13 @@ mod tests {
         );
     }
 
+    fn assert_point_within(actual: Point2<f64>, expected: Point2<f64>, tolerance: f64) {
+        assert!(
+            (actual - expected).norm() <= tolerance,
+            "expected {expected:?} within {tolerance}, got {actual:?}"
+        );
+    }
+
     fn display_audit_row_count(result: &SketchSolveResult) -> usize {
         audit_row_count(&result.display_audit)
     }
@@ -3191,7 +4275,11 @@ mod tests {
         let point = app
             .display
             .geometry
-            .point(app.scene.draggable_point())
+            .point(
+                app.scene
+                    .draggable_point()
+                    .expect("live drag test scene must expose a point"),
+            )
             .unwrap();
         let svg = MODEL_TRANSFORM.model_to_svg(point);
         let tolerance = 1.0e-6;
@@ -3240,11 +4328,30 @@ mod tests {
     }
 
     #[test]
-    fn all_seven_selectors_map_to_fresh_domain_scene_kinds() {
-        assert_eq!(scenario_count(), 7);
+    #[allow(clippy::too_many_lines)]
+    fn all_ten_selectors_and_names_map_to_fresh_domain_scene_kinds() {
+        assert_eq!(scenario_count(), 10);
+        assert_eq!(
+            scenario_names(),
+            [
+                "S1 underconstrained triangle",
+                "S2 conflicting rectangle",
+                "S3 tangent circles",
+                "Arc contact drag",
+                "Line-circle tangent glide",
+                "Horizontal rail",
+                "Coincident pair",
+                "L1 four-bar open",
+                "L2 four-bar crossed",
+                "L3 slider-crank",
+            ]
+        );
         for scenario in [
             DemoScenario::UnderconstrainedTriangle,
             DemoScenario::ConflictingRectangle,
+            DemoScenario::TangentCircles,
+            DemoScenario::ArcContactDrag,
+            DemoScenario::LineCircleTangentGlide,
             DemoScenario::HorizontalRail,
             DemoScenario::CoincidentPair,
             DemoScenario::FourBarOpen,
@@ -3267,6 +4374,18 @@ mod tests {
         assert_eq!(
             DemoScenario::from_value("coincident-pair"),
             DemoScenario::CoincidentPair
+        );
+        assert_eq!(
+            DemoScenario::from_value("tangent-circles"),
+            DemoScenario::TangentCircles
+        );
+        assert_eq!(
+            DemoScenario::from_value("arc-contact-drag"),
+            DemoScenario::ArcContactDrag
+        );
+        assert_eq!(
+            DemoScenario::from_value("line-circle-tangent-glide"),
+            DemoScenario::LineCircleTangentGlide
         );
         assert_eq!(
             DemoScenario::HorizontalRail.sketch_scene_kind(),
@@ -3292,9 +4411,13 @@ mod tests {
         ));
         assert!(page.contains("value=\"horizontal-rail\""));
         assert!(page.contains("value=\"coincident-pair\""));
+        assert!(page.contains("value=\"tangent-circles\""));
+        assert!(page.contains("value=\"arc-contact-drag\""));
+        assert!(page.contains("value=\"line-circle-tangent-glide\""));
         assert!(page.contains("value=\"four-bar-open\""));
         assert!(page.contains("value=\"four-bar-crossed\""));
         assert!(page.contains("value=\"slider-crank\""));
+        assert_eq!(page.matches("<option value=").count(), scenario_count());
 
         let sketch_state = DemoState::Sketch(Box::new(
             InteractiveSketchState::new(LiveSceneKind::HorizontalRail).unwrap(),
@@ -3313,6 +4436,418 @@ mod tests {
         assert_eq!(
             conflict.conflicts[0].source,
             SketchSource::Dimension(conflict.ids.width_4)
+        );
+    }
+
+    #[test]
+    fn s3_action_switches_explicit_modes_on_the_positive_branch_transactionally() {
+        let mut app = InteractiveSketchState::new(LiveSceneKind::TangentCircles).unwrap();
+        let ids = tangent_circle_ids(&app);
+        assert_live_result(&app.display, 0);
+        assert_eq!(
+            app.sketch.circle_tangency_mode(ids.tangency).unwrap(),
+            CircleTangencyMode::External
+        );
+        assert_point_within(
+            app.display.geometry.point(ids.center_b).unwrap(),
+            Point2::new(3.0, 0.0),
+            3.0e-9,
+        );
+        assert_eq!(app.action_label().unwrap(), Some("Switch to internal"));
+
+        let external_view = live_sketch_view(&app).unwrap();
+        assert!(!external_view.geometry.is_empty());
+        assert!(!external_view.audit.is_empty());
+        assert!(external_view.geometry.contains("tangent-circles-geometry"));
+        assert!(external_view.geometry.contains("External"));
+        assert!(external_view.geometry.contains("center distance 3.000"));
+        assert!(external_view.geometry.contains("contact-marker"));
+        assert!(
+            external_view
+                .status
+                .contains("explicit circle tangency mode")
+        );
+        assert!(
+            external_view
+                .status
+                .contains("positive-x / cosine 1.000000")
+        );
+        assert!(external_view.status.contains("retained audit snapshot"));
+        assert_eq!(
+            external_view.action,
+            Some(SceneActionView {
+                label: "Switch to internal",
+                help: "Changes explicit sketch branch state, solves, and publishes only an accepted result.",
+            })
+        );
+
+        app.trigger_action();
+        assert_live_result(&app.display, 0);
+        assert_eq!(
+            app.sketch.circle_tangency_mode(ids.tangency).unwrap(),
+            CircleTangencyMode::Internal {
+                containment: CircleContainment::FirstContainsSecond
+            }
+        );
+        assert_point_within(
+            app.display.geometry.point(ids.center_b).unwrap(),
+            Point2::new(1.0, 0.0),
+            3.0e-9,
+        );
+        assert_eq!(app.action_label().unwrap(), Some("Switch to external"));
+        let internal_view = live_sketch_view(&app).unwrap();
+        assert!(internal_view.geometry.contains("Internal / A contains B"));
+        assert!(internal_view.geometry.contains("center distance 1.000"));
+        assert!(internal_view.status.contains("Internal / A contains B"));
+        let SketchConstraintKind::CircleCircleTangency {
+            center_direction, ..
+        } = app.sketch.constraint(ids.tangency).unwrap().kind()
+        else {
+            panic!("expected S3 tangency source");
+        };
+        let first = app.display.geometry.point(ids.center_a).unwrap();
+        let second = app.display.geometry.point(ids.center_b).unwrap();
+        assert!(center_direction.projection(first, second) > 0.0);
+
+        app.trigger_action();
+        assert_live_result(&app.display, 0);
+        assert_eq!(
+            app.sketch.circle_tangency_mode(ids.tangency).unwrap(),
+            CircleTangencyMode::External
+        );
+        assert_point_within(
+            app.display.geometry.point(ids.center_b).unwrap(),
+            Point2::new(3.0, 0.0),
+            3.0e-9,
+        );
+
+        let retained_geometry = app.display.geometry.clone();
+        let retained_audit = app.display.display_audit.clone();
+        app.set_tangent_mode(CircleTangencyMode::Internal {
+            containment: CircleContainment::SecondContainsFirst,
+        });
+        assert!(matches!(app.attempt, AttemptSummary::Error { .. }));
+        assert_eq!(app.display.geometry, retained_geometry);
+        assert_eq!(app.display.display_audit, retained_audit);
+        assert_eq!(
+            app.sketch.circle_tangency_mode(ids.tangency).unwrap(),
+            CircleTangencyMode::External
+        );
+        assert!(
+            live_sketch_view(&app)
+                .unwrap()
+                .status
+                .contains("attempt error / retained state shown")
+        );
+    }
+
+    #[test]
+    fn arc_drag_updates_committed_span_and_rejects_escape_without_republishing() {
+        let mut app = InteractiveSketchState::new(LiveSceneKind::ArcContactDrag).unwrap();
+        let ids = arc_contact_ids(&app);
+        assert_live_result(&app.display, 1);
+        let initial_point = app.display.geometry.point(ids.point).unwrap();
+        let accepted_target = app
+            .display
+            .geometry
+            .arc(ids.arc)
+            .unwrap()
+            .evaluate(0.72)
+            .unwrap();
+
+        app.active_pointer = Some(701);
+        app.solve_drag(accepted_target);
+        assert_live_result(&app.display, 1);
+        let ContactState::PointOnArc { span_parameter } =
+            app.sketch.contact_state(ids.contact).unwrap()
+        else {
+            panic!("expected committed arc span");
+        };
+        assert!((span_parameter - 0.72).abs() <= 2.0e-8);
+        assert!(
+            (app.display.geometry.point(ids.point).unwrap() - accepted_target).norm() <= 2.0e-8
+        );
+        assert!((app.display.geometry.point(ids.point).unwrap() - initial_point).norm() > 0.5);
+
+        let retained_geometry = app.display.geometry.clone();
+        let retained_audit = app.display.display_audit.clone();
+        let retained_contact = app.sketch.contact_state(ids.contact).unwrap();
+        let arc = *app.display.geometry.arc(ids.arc).unwrap();
+        let escape_parameter = 1.2;
+        let escape_angle = arc.start_angle + arc.signed_sweep * escape_parameter;
+        let escape_target = Point2::new(
+            arc.center.x + arc.radius * escape_angle.cos(),
+            arc.center.y + arc.radius * escape_angle.sin(),
+        );
+        app.solve_drag(escape_target);
+
+        let AttemptSummary::Rejected { rejection, .. } = &app.attempt else {
+            panic!("expected typed arc-domain rejection: {:#?}", app.attempt);
+        };
+        assert_eq!(
+            *rejection,
+            SolveRejection::ContactParameterOutOfDomain(ids.contact)
+        );
+        assert_eq!(app.display.geometry, retained_geometry);
+        assert_eq!(app.display.display_audit, retained_audit);
+        assert_eq!(
+            app.sketch.contact_state(ids.contact).unwrap(),
+            retained_contact
+        );
+        let rejected_view = live_sketch_view(&app).unwrap();
+        assert!(!rejected_view.geometry.is_empty());
+        assert!(!rejected_view.audit.is_empty());
+        assert!(rejected_view.geometry.contains("bounded-arc"));
+        assert!(rejected_view.geometry.contains("arc-direction-cue"));
+        assert!(!rejected_view.geometry.contains("hard-manifold"));
+        assert!(rejected_view.status.contains("arc span escape rejected"));
+        assert!(
+            rejected_view
+                .status
+                .contains("contact parameter left its bounded domain")
+        );
+        assert!(
+            rejected_view
+                .status
+                .contains("prior geometry/contact retained")
+        );
+        assert!(rejected_view.status.contains("retained audit snapshot"));
+
+        app.finish_drag();
+        assert_eq!(app.active_pointer, None);
+        assert!(matches!(app.attempt, AttemptSummary::Rejected { .. }));
+        assert_eq!(app.display.geometry, retained_geometry);
+        assert_eq!(app.display.display_audit, retained_audit);
+    }
+
+    #[test]
+    fn tangent_glide_updates_contacts_and_rejects_supporting_line_escape() {
+        let mut app = InteractiveSketchState::new(LiveSceneKind::LineCircleTangentGlide).unwrap();
+        let ids = tangent_glide_ids(&app);
+        assert_live_result(&app.display, 1);
+        let initial_center = app.display.geometry.point(ids.center).unwrap();
+
+        app.active_pointer = Some(811);
+        app.solve_drag(Point2::new(1.4, 2.4));
+        assert_live_result(&app.display, 1);
+        let solved_center = app.display.geometry.point(ids.center).unwrap();
+        assert!((solved_center.x - 1.4).abs() <= 2.0e-8);
+        assert!((solved_center.y - 1.0).abs() <= 2.0e-8);
+        assert!((solved_center - initial_center).norm() > 2.0);
+        let ContactState::LineCircleTangency {
+            line_parameter,
+            circle_angle,
+        } = app.sketch.contact_state(ids.tangency).unwrap()
+        else {
+            panic!("expected committed line-circle contact");
+        };
+        assert!((line_parameter - (1.4 + 3.0) / 6.0).abs() <= 2.0e-8);
+        assert!((circle_angle + FRAC_PI_2).abs() <= 2.0e-8);
+        let circle_contact = app
+            .display
+            .geometry
+            .circle(ids.circle)
+            .unwrap()
+            .evaluate(circle_angle)
+            .unwrap();
+        let line_start = app.display.geometry.point(ids.line_start).unwrap();
+        let line_end = app.display.geometry.point(ids.line_end).unwrap();
+        let line_contact = line_start + (line_end - line_start) * line_parameter;
+        assert!((circle_contact - line_contact).norm() <= 2.0e-8);
+
+        let retained_geometry = app.display.geometry.clone();
+        let retained_audit = app.display.display_audit.clone();
+        let retained_contact = app.sketch.contact_state(ids.tangency).unwrap();
+        app.solve_drag(Point2::new(4.2, 1.0));
+
+        let AttemptSummary::Rejected { rejection, .. } = &app.attempt else {
+            panic!("expected typed line-domain rejection: {:#?}", app.attempt);
+        };
+        assert_eq!(
+            *rejection,
+            SolveRejection::ContactParameterOutOfDomain(ids.tangency)
+        );
+        assert_eq!(app.display.geometry, retained_geometry);
+        assert_eq!(app.display.display_audit, retained_audit);
+        assert_eq!(
+            app.sketch.contact_state(ids.tangency).unwrap(),
+            retained_contact
+        );
+        let rejected_view = live_sketch_view(&app).unwrap();
+        assert!(!rejected_view.geometry.is_empty());
+        assert!(!rejected_view.audit.is_empty());
+        assert!(rejected_view.geometry.contains("bounded-tangent-line"));
+        assert!(rejected_view.geometry.contains("gliding-circle"));
+        assert!(rejected_view.geometry.contains("radius-normal"));
+        assert!(rejected_view.geometry.contains("tangent-side-arrow"));
+        assert!(
+            rejected_view
+                .status
+                .contains("segment endpoint escape rejected")
+        );
+        assert!(
+            rejected_view
+                .status
+                .contains("contact parameter left its bounded domain")
+        );
+        assert!(
+            rejected_view
+                .status
+                .contains("Left / bounded-segment domain")
+        );
+        assert!(rejected_view.status.contains("retained audit snapshot"));
+        assert!(
+            rejected_view
+                .geometry
+                .contains("class=\"line-endpoint start\"")
+        );
+        assert!(
+            rejected_view
+                .geometry
+                .contains("class=\"line-endpoint end\"")
+        );
+    }
+
+    #[test]
+    fn rejection_wording_uses_typed_classification_in_banner_and_curve_hud() {
+        let tangent = InteractiveSketchState::new(LiveSceneKind::LineCircleTangentGlide).unwrap();
+        let tangent_ids = tangent_glide_ids(&tangent);
+        let s3 = InteractiveSketchState::new(LiveSceneKind::TangentCircles).unwrap();
+        let s3_ids = tangent_circle_ids(&s3);
+        let cases = [
+            (
+                SolveRejection::HardResidual {
+                    maximum: 2.0e-4,
+                    tolerance: 1.0e-9,
+                },
+                "hard residual validation rejected",
+            ),
+            (
+                SolveRejection::CoreTermination(SolveTermination::Stalled),
+                "core solve terminated as stalled",
+            ),
+            (
+                SolveRejection::LineSideFlipped(tangent_ids.tangency),
+                "explicit line-side branch rejected",
+            ),
+            (
+                SolveRejection::CenterDirectionFlipped(s3_ids.tangency),
+                "explicit center-direction branch rejected",
+            ),
+            (
+                SolveRejection::SegmentBranchFlipped(tangent_ids.line),
+                "explicit segment branch rejected",
+            ),
+        ];
+        for (rejection, expected) in cases {
+            let attempt = AttemptSummary::Rejected {
+                termination: SolveTermination::Stalled,
+                rejection,
+            };
+            let hud = bounded_attempt_status(&attempt, "segment endpoint");
+            let banner = attempt_markup(&attempt);
+            assert!(hud.contains(expected), "{hud}");
+            assert!(banner.contains(expected), "{banner}");
+            assert!(!hud.contains("escape rejected"), "{hud}");
+            assert!(!banner.contains("escape rejected"), "{banner}");
+            assert!(hud.contains("prior geometry/contact retained"));
+            assert!(banner.contains("prior geometry/audit remains displayed"));
+        }
+
+        let bounded = AttemptSummary::Rejected {
+            termination: SolveTermination::Converged,
+            rejection: SolveRejection::ContactParameterOutOfDomain(tangent_ids.tangency),
+        };
+        let hud = bounded_attempt_status(&bounded, "segment endpoint");
+        let banner = attempt_markup(&bounded);
+        assert!(hud.contains("segment endpoint escape rejected"));
+        assert!(banner.contains("contact parameter left its bounded domain"));
+        assert!(!banner.contains("hard residual"));
+    }
+
+    #[test]
+    fn generic_scene_action_is_visible_only_for_s3_and_uses_a_native_button() {
+        let mut s3 = DemoState::Sketch(Box::new(
+            InteractiveSketchState::new(LiveSceneKind::TangentCircles).unwrap(),
+        ));
+        assert!(s3.has_action());
+        assert_eq!(s3.action_label().unwrap(), Some("Switch to internal"));
+        s3.trigger_action();
+        assert_eq!(s3.action_label().unwrap(), Some("Switch to external"));
+        for state in [
+            DemoState::Sketch(Box::new(
+                InteractiveSketchState::new(LiveSceneKind::ArcContactDrag).unwrap(),
+            )),
+            DemoState::Sketch(Box::new(
+                InteractiveSketchState::new(LiveSceneKind::LineCircleTangentGlide).unwrap(),
+            )),
+            DemoState::Linkage(Box::new(
+                InteractiveLinkageState::new(LinkageSceneKind::FourBarOpen).unwrap(),
+            )),
+        ] {
+            assert!(!state.has_action());
+            assert_eq!(state.action_label().unwrap(), None);
+        }
+
+        let page = include_str!("../index.html");
+        assert!(page.contains("id=\"scene-action-controls\""));
+        assert!(page.contains("aria-label=\"Scene action\""));
+        assert!(page.contains("<button id=\"scene-action\" type=\"button\""));
+        assert!(page.contains("aria-describedby=\"scene-action-help\""));
+        assert!(page.contains("disabled"));
+        assert!(page.contains("hidden"));
+        let styles = include_str!("../styles.css");
+        assert!(styles.contains(".scene-action-controls[hidden]"));
+        assert!(styles.contains("#scene-action:focus-visible"));
+    }
+
+    #[test]
+    fn rebuilding_an_m7_scene_resets_geometry_branch_and_contact_state() {
+        let mut s3 = InteractiveSketchState::new(LiveSceneKind::TangentCircles).unwrap();
+        let s3_ids = tangent_circle_ids(&s3);
+        s3.trigger_action();
+        assert!(matches!(
+            s3.sketch.circle_tangency_mode(s3_ids.tangency).unwrap(),
+            CircleTangencyMode::Internal { .. }
+        ));
+        let reset_s3 = InteractiveSketchState::new(LiveSceneKind::TangentCircles).unwrap();
+        let reset_s3_ids = tangent_circle_ids(&reset_s3);
+        assert_eq!(
+            reset_s3
+                .sketch
+                .circle_tangency_mode(reset_s3_ids.tangency)
+                .unwrap(),
+            CircleTangencyMode::External
+        );
+
+        let mut arc = InteractiveSketchState::new(LiveSceneKind::ArcContactDrag).unwrap();
+        let arc_ids = arc_contact_ids(&arc);
+        let target = arc
+            .display
+            .geometry
+            .arc(arc_ids.arc)
+            .unwrap()
+            .evaluate(0.7)
+            .unwrap();
+        arc.solve_drag(target);
+        let moved = arc.sketch.contact_state(arc_ids.contact).unwrap();
+        let reset_arc = InteractiveSketchState::new(LiveSceneKind::ArcContactDrag).unwrap();
+        let reset_arc_ids = arc_contact_ids(&reset_arc);
+        assert_ne!(
+            reset_arc
+                .sketch
+                .contact_state(reset_arc_ids.contact)
+                .unwrap(),
+            moved
+        );
+        assert_eq!(
+            reset_arc
+                .sketch
+                .contact_state(reset_arc_ids.contact)
+                .unwrap(),
+            ContactState::PointOnArc {
+                span_parameter: 0.38
+            }
         );
     }
 
@@ -3603,6 +5138,88 @@ mod tests {
         let svg = client_to_svg(client, bounds, SVG_VIEW_BOX).unwrap();
         assert!((svg.x - 320.0).abs() <= f64::EPSILON);
         assert!((svg.y - 210.0).abs() <= f64::EPSILON);
+    }
+
+    #[test]
+    fn m7_arc_and_tangent_client_model_transforms_follow_the_responsive_viewport() {
+        let bounds = ClientRect {
+            left: 17.0,
+            top: 31.0,
+            width: 960.0,
+            height: 630.0,
+        };
+        for (kind, model) in [
+            (LiveSceneKind::ArcContactDrag, Point2::new(-1.25, 1.4)),
+            (
+                LiveSceneKind::LineCircleTangentGlide,
+                Point2::new(2.35, 0.8),
+            ),
+        ] {
+            let transform = kind.transform();
+            let svg = transform.model_to_svg(model);
+            let client = SvgPoint {
+                x: bounds.left + svg.x * bounds.width / SVG_VIEW_BOX.width,
+                y: bounds.top + svg.y * bounds.height / SVG_VIEW_BOX.height,
+            };
+            let recovered = client_to_drag_target(kind, client, bounds).unwrap();
+            assert!((recovered - model).norm() <= 1.0e-12);
+            assert!((transform.svg_to_model(svg) - model).norm() <= 1.0e-12);
+
+            let outside = SvgPoint {
+                x: SVG_VIEW_BOX.width + 80.0,
+                y: -45.0,
+            };
+            assert_eq!(clamp_drag_svg_point(kind, outside), outside);
+        }
+    }
+
+    #[test]
+    fn arc_ccw_240_svg_path_has_exact_large_arc_and_screen_sweep_flags() {
+        let app = InteractiveSketchState::new(LiveSceneKind::ArcContactDrag).unwrap();
+        let ids = arc_contact_ids(&app);
+        let arc = app.display.geometry.arc(ids.arc).unwrap();
+        assert_eq!(arc.sweep, ArcSweep::CounterClockwise);
+        assert!((arc.signed_sweep.to_degrees() - 240.0).abs() <= 1.0e-12);
+
+        let geometry = live_sketch_view(&app).unwrap().geometry;
+        let expected =
+            r#"class="bounded-arc" d="M 444.708 322.000 A 144.000 144.000 0 1 0 195.292 322.000""#;
+        assert!(geometry.contains(expected), "{geometry}");
+        assert!(!geometry.contains("A 144.000 144.000 0 1 1"));
+    }
+
+    #[test]
+    fn viewport_drag_state_and_tangent_endpoint_styles_are_explicit() {
+        let mut state = DemoState::Sketch(Box::new(
+            InteractiveSketchState::new(LiveSceneKind::LineCircleTangentGlide).unwrap(),
+        ));
+        assert!(!state.drag_active());
+        let DemoState::Sketch(sketch) = &mut state else {
+            panic!("expected sketch state");
+        };
+        sketch.active_pointer = Some(91);
+        assert!(state.drag_active());
+        let DemoState::Sketch(sketch) = &mut state else {
+            panic!("expected sketch state");
+        };
+        sketch.finish_drag();
+        assert!(!state.drag_active());
+        assert!(
+            !DemoState::Sketch(Box::new(
+                InteractiveSketchState::new(LiveSceneKind::LineCircleTangentGlide).unwrap(),
+            ))
+            .drag_active()
+        );
+
+        let styles = include_str!("../styles.css");
+        assert!(styles.contains("#viewport[data-drag-active=\"true\"]"));
+        assert!(styles.contains(".line-endpoint.end"));
+        assert!(!styles.contains(".line-endpoint:last-of-type"));
+        let source = include_str!("lib.rs");
+        assert!(source.contains("viewport.set_attribute(\"data-drag-active\", \"true\")"));
+        assert!(source.contains("viewport.remove_attribute(\"data-drag-active\")"));
+        assert!(source.contains("install_pointer_end(document, viewport, app, \"pointerup\")"));
+        assert!(source.contains("install_pointer_end(document, viewport, app, \"pointercancel\")"));
     }
 
     #[test]

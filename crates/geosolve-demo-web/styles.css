@@ -137,6 +137,10 @@ select:focus-visible {
   touch-action: none;
 }
 
+#viewport[data-drag-active="true"] {
+  cursor: grabbing;
+}
+
 .geometry text {
   pointer-events: none;
   user-select: none;
@@ -165,6 +169,180 @@ select:focus-visible {
   stroke: #f6c768;
   stroke-width: 2;
   stroke-dasharray: 5 5;
+}
+
+.center-rail,
+.center-branch,
+.center-dimension,
+.dimension-extension,
+.dimension-arrows,
+.branch-arrow,
+.radius-guide,
+.arc-direction-cue,
+.arc-arrow,
+.span-track,
+.bounded-tangent-line,
+.line-domain-track,
+.radius-normal,
+.tangent-side-arrow,
+.tangent-arrow-head {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.center-rail {
+  stroke: #486067;
+  stroke-width: 1.5;
+  stroke-dasharray: 9 8;
+}
+
+.center-branch {
+  stroke: #f6c768;
+  stroke-width: 2;
+  stroke-dasharray: 4 5;
+}
+
+.branch-arrow,
+.dimension-arrows,
+.arc-arrow,
+.tangent-arrow-head {
+  stroke: #f6c768;
+  stroke-width: 2.5;
+}
+
+.curve-circle,
+.gliding-circle {
+  fill: rgb(119 217 232 / 4%);
+  stroke: #77d9e8;
+  stroke-width: 4;
+}
+
+.curve-circle.circle-b,
+.gliding-circle {
+  fill: rgb(234 114 136 / 5%);
+  stroke: #ea7288;
+}
+
+.curve-center {
+  fill: #101417;
+  stroke: #f6c768;
+  stroke-width: 3;
+}
+
+.curve-center.fixed-center {
+  fill: #f6c768;
+  stroke: #101417;
+  stroke-width: 2;
+}
+
+.contact-marker {
+  fill: #f6c768;
+  stroke: #fff0c8;
+  stroke-width: 2.5;
+  pointer-events: none;
+}
+
+.dimension-extension {
+  stroke: #51676c;
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+
+.center-dimension {
+  stroke: #d9be77;
+  stroke-width: 1.5;
+}
+
+.dimension-label,
+.curve-label,
+.contact-label,
+.endpoint-label,
+.span-label,
+.side-label {
+  fill: #b9cacc;
+  font-size: 11px;
+}
+
+.dimension-label {
+  fill: #d9be77;
+  text-anchor: middle;
+}
+
+.contact-label,
+.side-label {
+  fill: #f2d598;
+  font-weight: 700;
+}
+
+.bounded-arc {
+  fill: none;
+  stroke: #8f86d8;
+  stroke-width: 7;
+  stroke-linecap: round;
+}
+
+.radius-guide {
+  stroke: #587278;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 6;
+}
+
+.radius-guide.contact-guide {
+  stroke: #f6c768;
+  stroke-dasharray: 3 4;
+}
+
+.arc-direction-cue {
+  stroke: #f6c768;
+  stroke-width: 2.5;
+}
+
+.arc-endpoint,
+.line-endpoint {
+  fill: #101417;
+  stroke: #77d9e8;
+  stroke-width: 3;
+}
+
+.arc-endpoint.end,
+.line-endpoint.end {
+  stroke: #8f86d8;
+}
+
+.fixed-center-mark {
+  fill: none;
+  stroke: #f6c768;
+  stroke-width: 2;
+}
+
+.span-track,
+.line-domain-track {
+  stroke: #546b70;
+  stroke-width: 3;
+}
+
+.span-indicator,
+.line-parameter-indicator {
+  fill: #f6c768;
+  stroke: #fff0c8;
+  stroke-width: 1.5;
+}
+
+.bounded-tangent-line {
+  stroke: #77d9e8;
+  stroke-width: 6;
+}
+
+.radius-normal {
+  stroke: #f6c768;
+  stroke-width: 2;
+  stroke-dasharray: 4 4;
+}
+
+.tangent-side-arrow {
+  stroke: #f6c768;
+  stroke-width: 2.5;
 }
 
 .mechanism-link.coupler-link,
@@ -438,6 +616,49 @@ select:focus-visible {
   background: #11191c;
 }
 
+.scene-action-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid #293d42;
+  background: #11191c;
+}
+
+.scene-action-controls[hidden] {
+  display: none;
+}
+
+#scene-action {
+  flex: 0 0 auto;
+  padding: 0.62rem 0.85rem;
+  border: 1px solid #9b7945;
+  border-radius: 0.4rem;
+  background: #292116;
+  color: #f2d598;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+#scene-action:hover {
+  border-color: #f6c768;
+  background: #332819;
+}
+
+#scene-action:focus-visible {
+  outline: 3px solid rgb(119 217 232 / 30%);
+  outline-offset: 3px;
+}
+
+#scene-action-help {
+  margin: 0;
+  color: #718b90;
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
 .driver-controls[hidden] {
   display: none;
 }
@@ -557,6 +778,11 @@ select:focus-visible {
   min-height: 4rem;
   padding: 0.65rem;
   background: #11191c;
+}
+
+.curve-status-grid {
+  margin-top: 0.65rem;
+  border-color: #514d3d;
 }
 
 .status-grid span {
@@ -893,6 +1119,15 @@ footer code {
   .attempt-banner {
     align-items: flex-start;
     flex-wrap: wrap;
+  }
+
+  .scene-action-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  #scene-action {
+    width: 100%;
   }
 
   .attempt-banner span:last-child {
