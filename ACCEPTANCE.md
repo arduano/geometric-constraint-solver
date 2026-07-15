@@ -1,169 +1,289 @@
 # Acceptance criteria
 
-These are behavioral gates, not implementation suggestions. A milestone is incomplete if its applicable criteria do not pass.
+These are behavioral gates, not implementation suggestions. `PLAN.md` is the authoritative milestone order. A milestone is incomplete until its applicable criteria pass, and no performance result weakens a correctness threshold.
 
 ## Global quality gates
 
 ```bash
-cargo fmt --check
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test --workspace --all-features
-cargo check -p geosolve-demo-web --target wasm32-unknown-unknown
-(cd crates/geosolve-demo-web && trunk build --release)
+cargo fmt --all -- --check
+cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+cargo test --locked --workspace --all-features
+cargo check --locked -p geosolve-demo-web --target wasm32-unknown-unknown
 ```
 
-Additional requirements:
+Run `(cd crates/geosolve-demo-web && trunk build --release)` when a shared public API or the WASM consumer changes.
 
-- no non-finite values in accepted state, residuals, Jacobians or reports;
-- deterministic result and diagnostic ordering for identical input and initial state;
-- no `unsafe` code;
-- no native solver FFI;
-- all public crates carry `GPL-3.0-or-later` metadata;
-- every claimed success independently re-evaluates and validates hard constraints.
+Every milestone also requires:
 
-## Numerical tolerance policy
+- no non-finite value in an accepted state, residual, Jacobian, factorization input or report;
+- deterministic result, source, component and diagnostic ordering for identical input and accepted state;
+- no `unsafe` code and no native solver FFI;
+- `GPL-3.0-or-later` metadata on all public crates;
+- independent hard-residual and domain/branch validation before any success-like result or accepted-state commit;
+- transactional retention of the previous finite accepted state on rejection;
+- an analytic/local-AD versus central finite-difference test for every residual implementation;
+- a structured, finite and valid audit descriptor for every executable residual row.
 
-Unless a scenario explicitly overrides it:
+## Numerical policy and milestone ownership
 
-- residuals are dimensionless before convergence testing;
-- accepted maximum hard residual: `<= 1e-9`;
-- finite-difference Jacobian relative error away from singular/nondifferentiable points: `<= 1e-6`;
-- rank tolerance is relative to the largest singular/QR pivot and included in the report/config;
-- tests must cover model characteristic scales `1e-6`, `1`, and `1e6` without changing topology, DOF, branch label or source diagnostics.
+The following rules apply through the frozen M1-M8 baseline unless a scenario explicitly documents a stricter or conditioning-justified alternative:
 
-A test may use a looser documented tolerance only when it explains the conditioning reason and still independently validates geometry.
+- residuals and tangent columns are normalized before convergence and rank decisions;
+- accepted maximum normalized hard residual is `<= 1e-9`;
+- analytic/local-AD Jacobian relative error is `<= 1e-6` away from singular or nondifferentiable states;
+- model scales `1e-6`, `1` and `1e6` preserve topology, branch labels, rank/mobility classification and source diagnosis;
+- numerical rank uses the implemented component-local relative threshold, and right nullity is exposed as local DOF;
+- top-level `Converged` retains the baseline coupling described in `ARCHITECTURE.md`, while hard validation fields remain independently inspectable.
 
-## M1 — Problem representation
+Starting at M9, and not as a retroactive M8 gate:
 
-- Stable variable/residual/source IDs survive unrelated insertions and removals.
-- Packed ordering is deterministic.
-- Scalar, `Vec2`, and `Pose2` blocks apply local increments correctly.
-- A residual can touch multiple heterogeneous blocks and assemble into the correct matrix ranges.
-- Characteristic scales must be positive and finite; invalid scales are rejected.
-- Analytic Jacobian tests meet the finite-difference threshold.
-- Every residual row has an audit descriptor with source ID, readable template, named bindings, category and finite positive scale.
-- Invalid geometry, NaN and Inf are reported before factorization.
+- hard validity, hard nonlinear termination and every secondary optimization status are independent report fields;
+- each component uses the machine-floor numerical rank threshold in `ARCHITECTURE.md`;
+- numerical left and right nullity are both reported;
+- near-singular warnings use the documented band without silently changing rank or convergence.
+- the M9 rank contract governs core equality/position reports; linkage velocity remains on its compatibility policy until the shared M14 migration.
 
-## M2 — Dense solver and diagnostics
+Starting at M10, active-bound mobility and one-sided feasible motion are mandatory. Starting at M12, structural matching and deterministic under/well/over/mixed partitions are mandatory. A target rule does not make the frozen baseline fail before its assigned milestone.
 
-Required cases:
+## Product gates
 
-1. Exactly determined linear system converges to the known solution.
-2. Nonlinear distance/circle system converges from at least three documented nearby initial guesses.
-3. One-equation/two-variable system converges and reports local DOF `1`.
-4. Duplicate rows converge geometrically and report redundant source candidates.
-5. Contradictory equations do not report `Converged`; they report nonzero validated residual and conflict candidates once M4 exists.
-6. A configuration-dependent rank drop sets `is_singular` without conflating it with nonlinear termination.
-7. Iteration-limit and stagnation paths retain the last finite state and return truthful termination.
-8. Scaling tests retain the same solution classification and normalized accuracy.
+### Deliverable 1: 2D CAD sketches
 
-## M3 — Adversarial verification harness
+Completion at M20 requires independently editable points, lines/segments, circles/arcs, ellipses/conics, Bezier curves, B-splines and NURBS; generic contact and tangency; explicit orientation/span/winding/branch state; curvature, G2 and separately named parametric C2 behavior; driving/reference dimensions; truthful diagnostics; and versioned persistence.
 
-- Property-generated linear systems report the independently known rank and nullity and recover a valid known solution when consistent.
-- Property failures print a deterministic seed/case that reproduces the failure.
-- Construct-valid nonlinear fixtures recover from documented local perturbation ranges without relaxing hard-residual validation.
-- Translation and rotation metamorphic transforms preserve normalized residuals, rank, DOF and diagnosis.
-- Uniform scale factors `1e-6`, `1`, and `1e6` preserve normalized accuracy and classification.
-- Permuting insertion order changes neither accepted geometry beyond tolerance nor deterministic source ordering.
-- Injected non-finite residual/Jacobian and invalid-scale cases terminate without committing a non-finite state.
-- Rejected iteration steps never become the returned accepted state.
-- Stagnation and iteration-limit outcomes retain the last finite independently validated state.
-- Solve-trace invariant tests verify accepted/rejected accounting and non-increasing accepted objective within documented numerical tolerance.
-- Benchmarks are recorded separately and do not alter correctness thresholds.
+The complete matrix must include exact, perturbed, invalid-domain, derivative, transformation, scale, branch-retention, active-bound, persistence and large sparse fixtures. A zero-speed curve jet, invalid knot vector, rational pole, escaped domain or ambiguous branch cannot produce a success-like result.
 
-## Sketch MVP
+### Deliverable 2: 2D/3D rigid-body kinematics
 
-### S1 underconstrained triangle
+Completion at M21 requires planar and spatial rigid bodies/features, common joints/mates, explicit assembly modes, multiple drivers, robust continuation, velocity-level queries, gauge-separated mobility and versioned persistence.
 
-- Construction and initial state match `docs/SCENARIOS.md`.
-- Solve returns `Converged` termination with local DOF `1`.
-- All hard residuals validate to `<= 1e-9`.
-- Moving point C with a temporary target changes only its permitted one-dimensional motion after hard projection.
-- Drag target error is minimized without hard residual exceeding tolerance.
-- Removing the drag target does not cause a branch jump or large unrelated motion.
+The complete matrix must include exact, perturbed, invalid-feature, tangent-Jacobian, global-transform, scale, mixed-scale, singular, branch-retention, gauge-invariance, persistence and large sparse fixtures. No accepted result may imply mass, force, reaction, collision or dynamics behavior.
 
-### Constraint behavior
+## Frozen M1-M7 regression baseline
 
-For each supported constraint:
+All existing M1-M7 tests and the advanced free-radius circle/arc tangency follow-up remain mandatory through M22.
 
-- at least one exact valid fixture;
-- at least one perturbed recovery fixture;
-- analytic/local-AD Jacobian comparison;
-- translation and rotation metamorphic test;
-- uniform-scale metamorphic test where applicable;
-- explicit invalid-geometry behavior.
+### Core representation and solver
 
-### Driving/reference dimensions
+- Stable variable/residual/source IDs survive unrelated insertion and removal; packed order is deterministic.
+- Scalar, `Vec2` and baseline `Pose2` blocks apply local increments and scales correctly.
+- Residual incidence assembles heterogeneous blocks into correct normalized ranges.
+- Invalid dimensions, scales, geometry, NaN and Inf reject before factorization.
+- Exact, underdetermined, overdetermined, duplicate and contradictory systems report independently validated geometry and truthful rank/diagnostics.
+- One equation in two scalar variables reports right nullity/local DOF `1`.
+- Duplicate rows report deterministic redundancy candidates; contradictions never report `Converged`.
+- Configuration-dependent rank loss is independent from nonlinear termination.
+- Iteration-limit, stagnation and invalid-trial paths retain the last finite accepted state.
+- Hard, temporary and preference objectives retain strict lexicographic semantics rather than undocumented weighted least squares.
 
-- driving dimensions add equations and affect DOF;
-- reference dimensions add no equation and report the solved value;
-- toggling driving/reference produces deterministic source IDs and reports.
+### Adversarial verification
 
-### Curve and tangency behavior
+- Constructed-rank property systems recover known valid solutions and report known rank/nullity with reproducible seeds.
+- Construct-valid nonlinear fixtures recover from documented perturbations.
+- Translation, rotation, scale and insertion-order metamorphic tests preserve semantic results.
+- Trace invariants show accepted hard cost is non-increasing within documented roundoff and rejected states are never committed.
+- Benchmarks remain separate from correctness tests.
 
-- S3 external tangency resolves the second circle center to `(3, 0)` on the explicit positive-x branch.
-- Switching S3 to internal tangency with A containing B resolves the second center to `(1, 0)` without an accidental branch flip.
-- Bounded segment and arc contacts accept interior and endpoint roots but reject genuine parameter escape while retaining the previous accepted state.
-- Line-circle tangency retains its explicit line side and contact neighborhood.
-- Zero radii, collapsed directions, zero curve derivatives and ambiguous center-direction branches never produce a success-like domain result.
-- Periodic contact parameters remain on the accepted local unwrapped branch.
-- Quadratic and cubic Bézier proof fixtures use the internal curve-evaluation seam without exposing a public generic curve trait.
-- A circle tangent to a fixed bounded arc with no circle-radius dimension reports exactly two local DOF; moving its center solves the radius and both contact parameters.
-- Circle-arc tangency preserves explicit inside/outside radial state, rejects span escape transactionally and reports unresolved mixed-scale radius relationships as ambiguous rather than converged.
+### Decomposition and diagnostics
 
-## Diagnostics and decomposition
+- Disconnected components solve independently.
+- Editing one component leaves another unchanged within `1e-12` and reuses it with zero iterations.
+- Fixed and alias elimination retain independent validation of eliminated rows.
+- Source diagnostics name a high-level source once even when it emits several rows.
+- Underconstraint, redundancy and singularity may coexist and are not encoded only in one termination enum.
+- `S2 conflicting rectangle` fails hard validation and names the incompatible width dimensions within the baseline bounded candidate algorithm.
 
-- Two disconnected components solve independently.
-- Editing one component leaves the other component unchanged within `1e-12` and does not iterate it.
-- Exact duplicated source constraint is marked redundant rather than conflicting.
-- `S2 conflicting rectangle` fails validation and names the two incompatible high-level dimensions as conflict candidates.
-- If one source constraint emits multiple rows, diagnostics name the source once.
-- Underconstraint, redundancy and singularity may coexist in the report; none is represented only as a mutually exclusive termination enum.
+Baseline candidate vectors do not yet carry M8 completeness metadata. Until the M10 report transition, an empty conflict/redundancy vector must be described as “no candidates reported”, not as a complete proof that none exist.
 
-## Linkage MVP
+### Sketch scenarios
 
-### L1/L2 four-bar
+- S1 returns hard-valid geometry with local DOF `1`; temporary dragging moves only along permitted motion and release preserves nearby accepted geometry.
+- Driving dimensions add equations; reference dimensions add none and report solved measurements.
+- S3 external tangency reaches `(3, 0)` and explicit internal A-contains-B reaches `(1, 0)` on the retained positive-x branch.
+- Bounded segment/arc contacts accept valid interior or endpoint roots and reject true escape transactionally.
+- Line-circle and circle-arc tangency retain explicit side, radial, contact-neighborhood and periodic branch state.
+- Free-radius circle/arc tangency reports exactly two local DOF and solves radius plus both contact parameters.
+- Zero radii, collapsed directions, zero derivatives and unresolved mixed-scale ambiguity never become success-like domain results.
 
-- Closure residual at every accepted driver sample is `<= 1e-9` normalized.
-- The ground body remains unchanged.
-- A sweep uses the previous accepted pose as the next initial state.
-- The open scenario retains its documented orientation sign; the crossed scenario retains the opposite sign.
-- No step silently changes assembly mode.
-- A near-singular sample raises the singularity indicator or documented conditioning warning.
+### Linkage scenarios
 
-### L3 slider-crank
+- L1/L2 closure residuals are `<= 1e-9`, preserve opposite open/crossed orientation signs and never silently change assembly mode.
+- L3 revolute, guide and orientation equations validate at position and velocity level.
+- Driver sweeps warm-start from the prior accepted state and retain ground unchanged.
+- Near-toggle fixtures raise rank/singularity or conditioning diagnostics without committing a branch jump.
 
-- Revolute anchors coincide within tolerance.
-- Slider transverse displacement and relative orientation residuals validate within tolerance.
-- The slider remains on its guide throughout the sweep.
-- Position and velocity solves both validate their respective equations.
+### WASM smoke consumer
 
-## WASM/SVG demonstration crate
+- The separate crate builds for `wasm32-unknown-unknown` without a backend.
+- It constructs S1-S3 and L1-L3 through public domain APIs and contains no duplicate equations.
+- Geometry and audit values always come from the same accepted state.
+- It displays termination, hard residual, rank/DOF, branch and candidate diagnostics, plus grouped source audit rows.
+- It preserves prior valid geometry visibly after failed edits.
+- Automated WASM/browser smoke coverage remains through M22; UI design is not a product milestone.
 
-The separate `geosolve-demo-web` crate must:
+## M8 acceptance: contract rebaseline and representative baselines
 
-- build for `wasm32-unknown-unknown` with no backend service;
-- load from the Trunk-generated static output;
-- offer hardcoded selectors for S1, S2, L1, L2 and L3 by the end of M6;
-- add the S3 selector with its curve/tangency implementation in M7;
-- construct scenarios through `geosolve-sketch`/`geosolve-linkage` public APIs;
-- contain no duplicate constraint equations;
-- render solved geometry in SVG (Canvas may be added later but is not required);
-- support pointer dragging in S1;
-- support bounded pointer-projected contact dragging for the M7 arc and line-circle verification fixtures;
-- support a driver slider for L1 and L3;
-- show termination, validated maximum residual, rank, DOF, iterations, branch label and singularity/conflict/redundancy notices;
-- show constraints grouped by high-level source with readable expanded residual rows, current named bindings, target/unit, scale, raw residual and normalized residual;
-- update the equation panel from the same accepted state as the geometry after every drag or driver step;
-- distinguish hard, temporary/driver and preference rows visually;
-- contain no handwritten duplicate equation implementation: audit rows must come from core/domain audit snapshots by M5/M6;
-- visibly preserve the previous valid geometry when a requested edit fails rather than drawing NaNs;
-- have at least one automated WASM/browser smoke test by M9;
-- use plain text/Unicode or simple HTML successfully; MathML/LaTeX and full symbolic simplification are explicitly not required.
+M8 is ready for review only when every item below is objectively present. These checkboxes are acceptance criteria and do not mark `PLAN.md` complete.
+
+- [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
+- [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
+- [x] The rank contract defines normalized component-local thresholding, a machine floor, numerical left/right nullity, structural under/well/over/mixed classification, near-singular warnings, active-bound mobility and gauge/internal mobility separation.
+- [x] Every rank feature states whether it exists in the M1-M8 baseline or whether M9, M10 or M12 makes it mandatory.
+- [x] Bounded redundancy/conflict reporting requires `Complete`, `Truncated` or `Skipped`, configured and consumed budgets, a reason when incomplete, and no complete inference from an empty skipped/truncated candidate list.
+- [x] ADRs 0005-0009 are present with `Status: accepted` and make concrete decisions for component-local AD, pose manifolds, persistent sessions/bounds, the sketch design graph and grounding/gauge separation.
+- [x] All ADRs preserve pure Rust, `unsafe_code = "forbid"`, internal traits initially, explicit branch state outside AD and the no-physics boundary where applicable.
+- [x] Historical roadmap language in `README.md`, `START_HERE.md`, `REFERENCES.md`, `docs/SCENARIOS.md` and `OVERNIGHT_REPORT.md` is consistent with M1-M7 frozen baseline and M8 as the then-next milestone.
+
+### Required benchmark artifacts
+
+- [x] Existing `crates/geosolve-core/benches/small_dense.rs` remains registered and unchanged in scope.
+- [x] `crates/geosolve-core/benches/representative_sparse.rs` is a Criterion harness registered with `harness = false` in `crates/geosolve-core/Cargo.toml`.
+- [x] Benchmark support constructs deterministic finite residuals with analytic Jacobians and complete valid audit rows; a shared-code test checks central finite differences and accepted reports.
+- [x] CAD-like cases contain exactly 100, 1,000 and 10,000 normalized tangent variables as 50, 500 and 5,000 `Vec2` blocks. Components contain at most 10 blocks, giving exactly 5, 50 and 500 sparse-incidence chains.
+- [x] Linkage-like cases contain documented near sizes 99, 999 and 9,999 normalized tangent variables as 33, 333 and 3,333 `Pose2` blocks. Components contain at most 11 blocks, giving exactly 3, 31 and 303 local-incidence chains.
+- [x] All six cases expose equal hard-row and tangent-variable counts, bounded local incidence, deterministic perturbations and no random input.
+- [x] Criterion groups are exactly `representative_definition_compile`, `representative_linearization_assembly`, `representative_decomposition_solve_diagnostics` and `representative_component_edit_resolve`.
+- [x] Each group contains `cad_like/{100,1000,10000}` and `linkage_like/{99,999,9999}` benchmark IDs and reports throughput in normalized tangent variables.
+- [x] Linearization/assembly uses benchmark-local component shards because the M8 baseline public API otherwise allocates global dense columns; decomposition/solve/diagnostics and edit/re-solve use one global `Problem` and its public component cache.
+- [x] Sample sizes are explicit and decrease for larger cases, with Criterion's minimum sample count retained.
+- [x] Timed boundaries are exactly definition construction plus compile; assembly from precompiled shards; solve/report construction from a newly compiled problem; and edit plus re-solve from a pre-solved cached problem.
+- [x] Validation, setup excluded by those boundaries, and input/output destruction occur after or outside each accumulated timed interval as far as Criterion supports.
+- [x] One shared report validator checks every configured solve result for `Converged`, independent hard validation at `<= 1e-9`, expected rank/DOF and expected edit reuse.
+- [x] Criterion `--test` executes those assertions at all six exact configured scales; normal `cargo test` validates representative small cases without a 10,000-variable full solve.
+- [x] The normal M8 gate compiles but does not time the 10,000-variable dense baseline: `cargo bench --locked -p geosolve-core --no-run` must pass.
+
+### M8 review commands
+
+```bash
+cargo fmt --all -- --check
+git diff --check
+cargo test --locked -p geosolve-core --test m8_benchmarks
+cargo bench --locked -p geosolve-core --no-run
+cargo bench --locked -p geosolve-core --bench representative_sparse -- --test
+```
+
+M8 does not require timed performance thresholds. It freezes reproducible benchmark definitions and measurement boundaries for later comparisons.
+
+## M9 acceptance: canonical local linearization and AD
+
+- [x] Fused residual/Jacobian evaluation writes into caller-provided component-local storage without global-column allocation.
+- [x] Analytic and internal local-forward-AD paths agree with central finite differences to `<= 1e-6` on representative residuals.
+- [x] Structured evaluation errors distinguish invalid domain, degeneracy, nondifferentiability and ambiguity.
+- [x] Branch/span/winding/assembly state is not differentiated.
+- [x] Reports separate hard validity, hard termination and every secondary optimization outcome.
+- [x] Numerical rank uses the normalized component-local machine-floor threshold and reports left/right nullity plus a distinct near-singular warning.
+- [x] Frozen accepted geometry, source ordering and audit equations remain unchanged.
+- Public audit marks rows evaluated only after canonical Jacobian/fused validation while retaining fresh finite displayed values on structured derivative failure.
+- Internal same-workload shape regression is required, but M9 has no timed performance threshold and does not expose private IR solely for Criterion.
+
+## M10 acceptance: sessions, bounds and active sets
+
+- A persistent `SolveSession` automatically tracks topology/source/state revisions and dirty components.
+- Non-structural one-component edits cannot omit dirty IDs and do not rebuild or iterate unaffected components.
+- Accepted-state commits are atomic and rollback remains transactional.
+- Bounds participate in step computation rather than only post-solve rejection.
+- Reports distinguish equality nullity, bidirectional active-set DOF and one-sided feasible motion.
+- Redundancy/conflict sections expose completeness, budget, consumed work and reason under the M8 contract.
+- Endpoint contacts, positive radii and bounded drivers report active bounds truthfully.
+
+## M11 acceptance: manifold geometry and spatial state
+
+- `SE(2)`/`SE(3)` composition, inverse, exponential, logarithm, adjoint, retraction and local difference satisfy property tests under ADR 0006.
+- `Pose3` stores a validated quaternion ambient representation and has tangent dimension six.
+- Tangent-coordinate finite differences, global-transform equivariance and quaternion-sign invariance pass.
+- Fixed/alias elimination and accepted-state sensitivity APIs are manifold-aware.
+- Invalid frames and quaternions reject before success.
+
+## M12 acceptance: sparse structure, hierarchy and continuation
+
+- Structural matching reports structural rank, structural left/right nullity and deterministic under/well/over/mixed partitions separately from M9 numerical rank.
+- Block triplet assembly and pure-Rust sparse solve agree with dense results on geometry, rank, mobility, diagnostics and branch state.
+- Dense fallback remains available for small or diagnostically ambiguous components.
+- Symbolic ordering/factorization reuse and dense/sparse crossover are demonstrated by M8 benchmark descendants.
+- Cross-component secondary objectives retain strict priority semantics.
+- The documented planar toggle crosses only through explicit pseudo-arclength continuation.
+
+## M13 acceptance: sketch design graph
+
+- Persistent external IDs survive deterministic serialization/remapping independently of runtime generational keys.
+- Existing line/circle/arc entities use one closed `CurveDefinition`, semantic features and stable contact slots.
+- Generic dependency, compilation, validation, commit and audit mappings replace pair-specific lifecycle fan-out.
+- Driving/reference measurements and every discrete contact state round-trip in a versioned document.
+- S1-S3 and the full M5/M7 corpus remain semantically unchanged.
+
+## M14 acceptance: planar kinematic migration
+
+- Planar model topology, accepted state and compiled session are separate.
+- Persistent body, feature and source IDs survive deterministic serialization/remapping independently of runtime generational keys.
+- Body-local features are primary and velocity uses the shared accepted hard linearization.
+- Physical ground and numerical gauge produce identical relative geometry under alternative gauge choices.
+- A floating planar component reports three gauge DOF separately from internal mobility.
+- L1-L3 and compatibility APIs remain valid.
+
+## M15 acceptance: Bezier and generic contact
+
+- Editable quadratic/cubic Bezier controls and contact parameters all appear in derivative incidence.
+- Line/circle/arc/Bezier combinations use common contact/tangency residual templates.
+- Every control/contact derivative passes finite differences.
+- Endpoint orientation is explicit; cusp and zero-speed states reject.
+
+## M16 acceptance: spatial vertical slice
+
+- Spatial bodies and local point/frame features support physical ground and floating gauge policy.
+- Fixed-frame, ball and revolute joints report expected relative mobility.
+- Exact, perturbed, tangent-Jacobian, transformed/scaled, invalid-feature and rollback fixtures pass.
+- Every accepted configuration is independently validated.
+
+## M17 acceptance: conics
+
+- Ellipses, elliptical arcs, rational-quadratic conics and explicit parabola/hyperbola branches have validated jets and domains.
+- Affine/similarity, branch-retention and rational-pole tests pass.
+- Circle-limit geometry remains valid while unobservable orientation is reported truthfully.
+- Generic contact/tangency adds no geometry-pair equation implementation.
+
+## M18 acceptance: spatial joints and mates
+
+- Axis/plane features and prismatic, cylindrical, planar and universal joints implement expected mobility.
+- Distance, angle, alignment and frame-offset mates support multiple explicit drivers.
+- Axis parity, winding, side and signed-volume state prevent silent mode changes.
+- Each primitive passes exact, recovery, tangent-Jacobian, scale, mixed-scale and degeneracy fixtures.
+
+## M19 acceptance: B-splines
+
+- Degree, control identity and knot vectors validate before evaluation.
+- De Boor position and first-through-third jets pass Bezier equivalence, affine covariance and partition-of-unity oracles.
+- Clamped/periodic spans have stable identities and one-sided knot policy.
+- Residual incidence is limited to active local support; knot insertion preserves geometry.
+
+## M20 acceptance: NURBS and CAD completion
+
+- Positive weights, homogeneous jets, weight derivatives and explicit weight-gauge policy pass finite differences.
+- Unit weights reproduce B-splines and canonical quadratic NURBS reproduce conics.
+- Curvature, osculating radius, G2 and separately named parametric C2 constraints validate.
+- Rational denominator and mixed-scale ambiguities reject truthfully.
+- Complete sketch persistence, fuzz/property, differential-oracle and sparse performance suites pass.
+
+## M21 acceptance: kinematic completion
+
+- Adaptive and pseudo-arclength continuation preserve explicit planar/spatial modes with branch-boundary events and hysteresis.
+- Multiple-driver velocity requests distinguish determinate, underdetermined and inconsistent outcomes.
+- Body/feature velocities and optional motion/nullspace bases validate differentiated equations.
+- Planar mechanisms embedded in 3D agree with planar oracles.
+- Complete linkage persistence, fuzz/property, differential-oracle and sparse performance suites pass.
+
+## M22 acceptance: release hardening
+
+- Public APIs expose domain and audit behavior without accidental compiler/core internals.
+- Versioned serialization migrations, malformed-document tests and round trips pass.
+- Crate documentation and complete examples cover both deliverables.
+- SemVer, changelog, deprecation, licence and attribution policies are complete.
+- Supported scale/performance envelopes are recorded from reproducible benchmarks.
+- Fuzzing finds no panic, non-finite accepted state or false success.
+- Native, locked WASM smoke and all prior acceptance suites pass.
 
 ## Regression and oracle policy
 
-- Every solver bug gets a minimal regression test before or with the fix.
-- Differential tests compare geometric validity, DOF/status and branch continuity—not identical internal coordinates or iteration counts.
+- Every convergence, rank, scaling, branch or diagnostic bug gets a minimal regression scenario.
+- Differential tests compare geometric validity, rank/mobility/status and branch continuity, not identical internal coordinates or iteration counts.
 - SolveSpace and PlaneGCS are references/oracles, not dependencies.
-- A convergence flag from an external solver is never accepted without local residual validation.
+- An external convergence flag is never accepted without local independent validation.

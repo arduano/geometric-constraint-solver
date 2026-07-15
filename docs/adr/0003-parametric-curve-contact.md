@@ -19,13 +19,13 @@ curve/curve contact:  C1(t1) - C2(t2) = 0
 curve/curve tangent:  cross(unit(C1'(t1)), unit(C2'(t2))) = 0
 ```
 
-Curvature constraints may later request second derivatives.
+M15 curve jets provide derivatives through third order; M20 uses them for curvature, G2 and separately named parametric C2 constraints.
 
 ## Consequences
 
 - Curve tangency does not require a solver-core rewrite.
 - Contact parameters are hidden implementation variables, not ordinary dimensions.
-- Bounded segments/arcs/spans require explicit parameter-domain handling.
+- Bounded segments/arcs/spans use the M10 bounds/active-set contract and explicit parameter-domain validation.
 - Multiple contacts require serialized span/contact-neighbourhood and orientation state plus warm-start continuation.
 - Zero derivative, cusp, discontinuous-knot and escaped-domain cases produce explicit invalid/ambiguous diagnostics.
-- Line/circle/arc use the seam first; a quadratic/cubic Bézier fixture must validate it before a public trait is stabilized.
+- The M1-M7 baseline proves the seam with line/circle/arc behavior and quadratic/cubic Bezier fixtures. M13 migrates it to the closed sketch graph, and M15-M20 extend internal generic adapters across built-in curve families before any public trait is considered.

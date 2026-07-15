@@ -26,5 +26,6 @@ This gives developers and users enough visibility to sanity-check equation gener
 - A source constraint that expands to several scalar rows is shown once with expandable row details.
 - The displayed evaluated values must be obtained from the same accepted state used for independent residual validation.
 - Initial rendering may use plain Unicode/text and `<code>` elements; LaTeX/MathML is optional.
-- The UI should eventually allow geometry-to-equation and equation-to-geometry highlighting.
-- Jacobian rows/matrices are a later developer toggle, not an MVP requirement.
+- M10 diagnostic sections add completeness/budget links and active-bound annotations under the M8 contract.
+- M13 maps runtime source IDs to persistent sketch document IDs; M14/M16 apply the equivalent linkage mapping.
+- Jacobian matrix rendering is not an M8-M22 acceptance requirement.

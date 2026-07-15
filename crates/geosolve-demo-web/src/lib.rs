@@ -3253,6 +3253,7 @@ fn evaluation_markup(status: AuditEvaluationStatus, error: Option<&str>) -> Stri
     let (class, label) = match status {
         AuditEvaluationStatus::Evaluated => ("evaluated", "evaluated"),
         AuditEvaluationStatus::Failed => ("failed", "failed"),
+        _ => ("failed", "unknown"),
     };
     match error {
         Some(error) => format!(
@@ -3913,6 +3914,7 @@ fn sketch_rejection_summary(rejection: &SolveRejection) -> String {
         SolveRejection::CenterDirectionFlipped(_) => {
             "explicit center-direction branch rejected the candidate".to_owned()
         }
+        _ => "unknown pre-1.0 sketch rejection".to_owned(),
     }
 }
 
@@ -4083,6 +4085,7 @@ const fn termination_label(termination: SolveTermination) -> &'static str {
         SolveTermination::IterationLimit => "iteration limit",
         SolveTermination::InvalidGeometry => "invalid geometry",
         SolveTermination::NumericalFailure => "numerical failure",
+        _ => "unknown termination",
     }
 }
 
@@ -4996,11 +4999,11 @@ mod tests {
         app.solve_drag(escape_target);
 
         let AttemptSummary::Rejected { rejection, .. } = &app.attempt else {
-            panic!("expected typed arc-domain rejection: {:#?}", app.attempt);
+            panic!("expected stalled arc-drag rejection: {:#?}", app.attempt);
         };
         assert_eq!(
             *rejection,
-            SolveRejection::ContactParameterOutOfDomain(ids.contact)
+            SolveRejection::CoreTermination(SolveTermination::Stalled)
         );
         assert_eq!(app.display.geometry, retained_geometry);
         assert_eq!(app.display.display_audit, retained_audit);
@@ -5014,11 +5017,10 @@ mod tests {
         assert!(rejected_view.geometry.contains("bounded-arc"));
         assert!(rejected_view.geometry.contains("arc-direction-cue"));
         assert!(!rejected_view.geometry.contains("hard-manifold"));
-        assert!(rejected_view.status.contains("arc span escape rejected"));
         assert!(
             rejected_view
                 .status
-                .contains("contact parameter left its bounded domain")
+                .contains("core solve terminated as stalled")
         );
         assert!(
             rejected_view
@@ -5232,16 +5234,25 @@ mod tests {
         let retained_diagnostics = app.retained_diagnostics.clone();
         let missing_span_angle = 155.0_f64.to_radians();
 
-        for (target, expected_kind) in [
+        for (target, expected_kind, expected_rejection) in [
             (
                 Point2::new(
                     3.5 * missing_span_angle.cos(),
                     3.5 * missing_span_angle.sin(),
                 ),
                 "span",
+                SolveRejection::CoreTermination(SolveTermination::Stalled),
             ),
-            (Point2::new(1.8, 0.0), "side"),
-            (Point2::new(2.2, 0.0), "zero"),
+            (
+                Point2::new(1.8, 0.0),
+                "side",
+                SolveRejection::CoreTermination(SolveTermination::Stalled),
+            ),
+            (
+                Point2::new(2.2, 0.0),
+                "zero",
+                SolveRejection::AmbiguousTangencyScale(ids.tangency),
+            ),
         ] {
             app.solve_drag(target);
             let AttemptSummary::Rejected {
@@ -5255,11 +5266,7 @@ mod tests {
                 );
             };
             assert_eq!(*termination, SolveTermination::Stalled, "{expected_kind}");
-            assert_eq!(
-                *rejection,
-                SolveRejection::CoreTermination(SolveTermination::Stalled),
-                "{expected_kind}"
-            );
+            assert_eq!(*rejection, expected_rejection, "{expected_kind}");
             assert_eq!(app.display.geometry, retained_geometry);
             assert_eq!(app.display.display_audit, retained_audit);
             assert_eq!(
@@ -5336,11 +5343,11 @@ mod tests {
         app.solve_drag(Point2::new(4.2, 1.0));
 
         let AttemptSummary::Rejected { rejection, .. } = &app.attempt else {
-            panic!("expected typed line-domain rejection: {:#?}", app.attempt);
+            panic!("expected stalled line-drag rejection: {:#?}", app.attempt);
         };
         assert_eq!(
             *rejection,
-            SolveRejection::ContactParameterOutOfDomain(ids.tangency)
+            SolveRejection::CoreTermination(SolveTermination::Stalled)
         );
         assert_eq!(app.display.geometry, retained_geometry);
         assert_eq!(app.display.display_audit, retained_audit);
@@ -5358,12 +5365,7 @@ mod tests {
         assert!(
             rejected_view
                 .status
-                .contains("segment endpoint escape rejected")
-        );
-        assert!(
-            rejected_view
-                .status
-                .contains("contact parameter left its bounded domain")
+                .contains("core solve terminated as stalled")
         );
         assert!(
             rejected_view

@@ -1,8 +1,8 @@
 use geosolve_core::{EvaluationError, LocalJacobian, ResidualEvaluator, VariableValue};
 
 use crate::curves::{
-    AngleOrientation, CircleContainment, CircleTangencyMode, CurveDegeneracy, CurveRef,
-    LineParameterDomain, tangency_distance, unwrap_near,
+    AngleOrientation, CONTACT_PARAMETER_ROUNDOFF_TOLERANCE, CircleContainment, CircleTangencyMode,
+    CurveDegeneracy, CurveRef, LineParameterDomain, tangency_distance, unwrap_near,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -133,6 +133,12 @@ impl ResidualEvaluator for PointOnLineResidual {
         let start = point_at(variables, self.start, "point-on-line")?;
         let end = point_at(variables, self.end, "point-on-line")?;
         let parameter = scalar_at(variables, self.parameter, "point-on-line")?;
+        if !line_parameter_is_evaluable(self.domain, parameter) {
+            return Err(EvaluationError::out_of_domain(format!(
+                "point-on-line parameter escaped {}",
+                self.domain.label()
+            )));
+        }
         let curve = CurveRef::Line {
             start,
             end,
@@ -150,6 +156,12 @@ impl ResidualEvaluator for PointOnLineResidual {
         let start = point_at(variables, self.start, "point-on-line")?;
         let end = point_at(variables, self.end, "point-on-line")?;
         let parameter = scalar_at(variables, self.parameter, "point-on-line")?;
+        if !line_parameter_is_evaluable(self.domain, parameter) {
+            return Err(EvaluationError::out_of_domain(format!(
+                "point-on-line parameter escaped {}",
+                self.domain.label()
+            )));
+        }
         let curve = CurveRef::Line {
             start,
             end,
@@ -272,6 +284,11 @@ impl PointOnArcResidual {
         let center = point_at(variables, self.center, "point-on-arc")?;
         let radius = scalar_at(variables, self.radius, "point-on-arc")?;
         let parameter = scalar_at(variables, self.parameter, "point-on-arc")?;
+        if !bounded_parameter_is_evaluable(parameter) {
+            return Err(EvaluationError::out_of_domain(
+                "point-on-arc parameter escaped bounded span [0, 1]",
+            ));
+        }
         let evaluation = CurveRef::Arc {
             center,
             radius,
@@ -317,14 +334,10 @@ impl ResidualEvaluator for SegmentPairResidual {
     fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
         let (first, second) = self.directions(variables)?;
         let (first_unit, first_norm) = unit(first).ok_or_else(|| {
-            EvaluationError::invalid_geometry(
-                "segment-pair derivative requires two nonzero segments",
-            )
+            EvaluationError::degenerate("segment-pair derivative requires two nonzero segments")
         })?;
         let (second_unit, second_norm) = unit(second).ok_or_else(|| {
-            EvaluationError::invalid_geometry(
-                "segment-pair derivative requires two nonzero segments",
-            )
+            EvaluationError::degenerate("segment-pair derivative requires two nonzero segments")
         })?;
         let (gradient_first, gradient_second) = match self.equation {
             SegmentPairEquation::Parallel => (
@@ -442,9 +455,7 @@ impl ResidualEvaluator for SymmetryResidual {
     fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
         let values = self.values(variables)?;
         let (axis, line_length) = unit(values.direction).ok_or_else(|| {
-            EvaluationError::invalid_geometry(
-                "symmetry derivative requires a nonzero supporting line",
-            )
+            EvaluationError::degenerate("symmetry derivative requires a nonzero supporting line")
         })?;
         let normal = left_normal(axis);
         let pair = subtract(values.second, values.first);
@@ -543,9 +554,7 @@ impl ResidualEvaluator for LineCircleTangencyResidual {
         let line_t = values.line_parameter;
         let direction = values.line.first_derivative;
         let (line_direction, line_length) = unit(direction).ok_or_else(|| {
-            EvaluationError::invalid_geometry(
-                "line-circle tangency requires a nonzero line direction",
-            )
+            EvaluationError::degenerate("line-circle tangency requires a nonzero line direction")
         })?;
         let alignment_direction =
             normalized_direction_gradient(line_direction, line_length, values.radial);
@@ -605,6 +614,12 @@ impl LineCircleTangencyResidual {
         let radius = scalar_at(variables, self.radius, "line-circle tangency")?;
         let line_parameter = scalar_at(variables, self.line_parameter, "line-circle tangency")?;
         let circle_angle = scalar_at(variables, self.circle_angle, "line-circle tangency")?;
+        if !line_parameter_is_evaluable(self.domain, line_parameter) {
+            return Err(EvaluationError::out_of_domain(format!(
+                "line-circle tangency parameter escaped {}",
+                self.domain.label()
+            )));
+        }
         Ok(LineCircleValues {
             line: CurveRef::Line {
                 start: line_start,
@@ -647,10 +662,10 @@ impl ResidualEvaluator for CircleArcTangencyResidual {
         require_regular(values.circle.degeneracy, "circle-arc tangency circle")?;
         require_regular(values.arc.degeneracy, "circle-arc tangency arc")?;
         let circle_tangent = canonical_unit(values.circle.first_derivative).ok_or_else(|| {
-            EvaluationError::invalid_geometry("circle-arc tangency circle has a zero derivative")
+            EvaluationError::degenerate("circle-arc tangency circle has a zero derivative")
         })?;
         let arc_tangent = canonical_unit(values.arc.first_derivative).ok_or_else(|| {
-            EvaluationError::invalid_geometry("circle-arc tangency arc has a zero derivative")
+            EvaluationError::degenerate("circle-arc tangency arc has a zero derivative")
         })?;
         Ok(vec![
             values.circle.position[0] - values.arc.position[0],
@@ -664,10 +679,10 @@ impl ResidualEvaluator for CircleArcTangencyResidual {
         require_regular(values.circle.degeneracy, "circle-arc tangency circle")?;
         require_regular(values.arc.degeneracy, "circle-arc tangency arc")?;
         unit(values.circle.first_derivative).ok_or_else(|| {
-            EvaluationError::invalid_geometry("circle-arc tangency circle has a zero derivative")
+            EvaluationError::degenerate("circle-arc tangency circle has a zero derivative")
         })?;
         unit(values.arc.first_derivative).ok_or_else(|| {
-            EvaluationError::invalid_geometry("circle-arc tangency arc has a zero derivative")
+            EvaluationError::degenerate("circle-arc tangency arc has a zero derivative")
         })?;
         let circle_angle = values.circle_angle;
         let arc_angle = self.arc_start_angle + self.arc_signed_sweep * values.arc_parameter;
@@ -734,6 +749,11 @@ impl CircleArcTangencyResidual {
         let arc_radius = scalar_at(variables, self.arc_radius, "circle-arc tangency")?;
         let circle_angle = scalar_at(variables, self.circle_angle, "circle-arc tangency")?;
         let arc_parameter = scalar_at(variables, self.arc_parameter, "circle-arc tangency")?;
+        if !bounded_parameter_is_evaluable(arc_parameter) {
+            return Err(EvaluationError::out_of_domain(
+                "circle-arc tangency parameter escaped bounded span [0, 1]",
+            ));
+        }
         Ok(CircleArcTangencyValues {
             circle: CurveRef::Circle {
                 center: circle_center,
@@ -762,12 +782,12 @@ impl ResidualEvaluator for CircleTangencyResidual {
     fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
         let values = self.values(variables)?;
         if values.distance == 0.0 {
-            return Err(EvaluationError::invalid_geometry(
+            return Err(EvaluationError::degenerate(
                 "circle tangency requires distinct centers",
             ));
         }
         if values.target <= 0.0 {
-            return Err(EvaluationError::invalid_geometry(
+            return Err(EvaluationError::out_of_domain(
                 "circle tangency effective radius is not positive",
             ));
         }
@@ -834,7 +854,7 @@ impl ResidualEvaluator for OrientedAngleResidual {
         let first_squared = dot(first, first);
         let second_squared = dot(second, second);
         if first_squared == 0.0 || second_squared == 0.0 {
-            return Err(EvaluationError::invalid_geometry(
+            return Err(EvaluationError::degenerate(
                 "oriented angle requires two nonzero segments",
             ));
         }
@@ -924,13 +944,26 @@ fn scalar_at(
 fn require_regular(degeneracy: CurveDegeneracy, context: &str) -> Result<(), EvaluationError> {
     match degeneracy {
         CurveDegeneracy::Regular => Ok(()),
-        CurveDegeneracy::ZeroDerivative => Err(EvaluationError::invalid_geometry(format!(
+        CurveDegeneracy::ZeroDerivative => Err(EvaluationError::degenerate(format!(
             "{context} curve has a zero derivative"
         ))),
-        CurveDegeneracy::InvalidRadius => Err(EvaluationError::invalid_geometry(format!(
+        CurveDegeneracy::InvalidRadius => Err(EvaluationError::out_of_domain(format!(
             "{context} curve has a nonpositive radius"
         ))),
     }
+}
+
+fn line_parameter_is_evaluable(domain: LineParameterDomain, parameter: f64) -> bool {
+    match domain {
+        LineParameterDomain::SupportingLine => parameter.is_finite(),
+        LineParameterDomain::BoundedSegment => bounded_parameter_is_evaluable(parameter),
+    }
+}
+
+fn bounded_parameter_is_evaluable(parameter: f64) -> bool {
+    parameter.is_finite()
+        && (-CONTACT_PARAMETER_ROUNDOFF_TOLERANCE..=1.0 + CONTACT_PARAMETER_ROUNDOFF_TOLERANCE)
+            .contains(&parameter)
 }
 
 fn subtract(first: [f64; 2], second: [f64; 2]) -> [f64; 2] {
@@ -1084,7 +1117,7 @@ fn displacement(first: [f64; 2], second: [f64; 2]) -> Result<(f64, f64, f64), Ev
     let dy = second[1] - first[1];
     let distance = dx.hypot(dy);
     if distance == 0.0 {
-        return Err(EvaluationError::invalid_geometry(
+        return Err(EvaluationError::nondifferentiable(
             "distance derivative is undefined for coincident points",
         ));
     }
@@ -1283,7 +1316,10 @@ mod tests {
         ];
         assert!(matches!(
             residual.jacobian(&variables),
-            Err(EvaluationError::InvalidGeometry(_))
+            Err(EvaluationError::Categorized {
+                category: geosolve_core::EvaluationErrorCategory::Degenerate,
+                ..
+            })
         ));
     }
 }

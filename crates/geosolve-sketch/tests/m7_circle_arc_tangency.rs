@@ -2,7 +2,9 @@
 
 use std::f64::consts::{FRAC_PI_2, PI};
 
-use geosolve_core::{SolveTermination, SolverConfig};
+use geosolve_core::{
+    AuditEvaluationStatus, EvaluationErrorCategory, HardValidity, SolveTermination, SolverConfig,
+};
 use geosolve_geometry::Point2;
 use geosolve_sketch::{
     ArcCircleTangencySide, ArcId, ArcSweep, CircleId, ContactState, DimensionKind, DimensionMode,
@@ -1129,12 +1131,23 @@ fn tiny_radius_tangent_row_is_dimensionless_and_zero_arc_derivative_is_invalid()
     degenerate
         .add_circle_arc_tangency(circle, arc, ArcCircleTangencySide::OutsideArc, 0.5, PI)
         .unwrap();
-    assert!(matches!(
-        degenerate.solve(SketchSolveRequest::default(), SolverConfig::default()),
-        Err(SketchError::Core(
-            geosolve_core::CoreError::InvalidGeometry { .. }
-        ))
-    ));
+    let result = degenerate
+        .solve(SketchSolveRequest::default(), SolverConfig::default())
+        .unwrap();
+    assert!(!result.accepted());
+    assert_eq!(result.core_report.hard_validity, HardValidity::Invalid);
+    assert!(
+        result
+            .core_report
+            .audit
+            .sources
+            .iter()
+            .flat_map(|source| &source.rows)
+            .any(|row| {
+                row.evaluation_status == AuditEvaluationStatus::Failed
+                    && row.evaluation_error_category == Some(EvaluationErrorCategory::Degenerate)
+            })
+    );
     assert!(matches!(
         degenerate.set_arc_radius(arc, 0.0),
         Err(SketchError::InvalidRadius(0.0))

@@ -2,7 +2,9 @@
 
 use std::f64::consts::PI;
 
-use geosolve_core::{ResidualCategory, SolveTermination, SolverConfig, VariableValue};
+use geosolve_core::{
+    HardValidity, ResidualCategory, SolveTermination, SolverConfig, VariableValue,
+};
 use geosolve_geometry::{PlaneFrame, Point2, Point3, Pose2, Vector2, Vector3};
 use geosolve_linkage::{
     AxisDirectionBranch, BranchMonitorKind, BranchSign, DriverKind, DriverUnit,
@@ -1218,6 +1220,8 @@ fn converged_opposite_four_bar_root_is_rejected_by_explicit_monitor_without_muta
     assert!(!evaluation.retained);
     let result = open.solve(SolverConfig::default()).unwrap();
     assert_eq!(result.core_report.termination, SolveTermination::Converged);
+    assert_eq!(result.core_report.hard_validity, HardValidity::Invalid);
+    assert!(result.core_report.hard_residuals_validated);
     assert!(matches!(
         result.rejection,
         Some(SolveRejection::BranchViolation(
@@ -1256,6 +1260,36 @@ fn converged_opposite_four_bar_root_is_rejected_by_explicit_monitor_without_muta
     );
     assert!(!display_source.annotations.redundant);
     assert!(!display_source.annotations.singular);
+}
+
+#[test]
+fn unevaluable_domain_branch_monitor_marks_hard_validity_not_evaluated() {
+    let mut linkage = Linkage::new(1.0e-310, xy_plane_frame()).unwrap();
+    let ground = linkage.add_body("ground", Pose2::identity(), true).unwrap();
+    let start = linkage
+        .add_point_feature("start", ground, Point2::new(0.0, 0.0))
+        .unwrap();
+    let end = linkage
+        .add_point_feature("end", ground, Point2::new(1.0, 0.0))
+        .unwrap();
+    let observed = linkage
+        .add_point_feature("observed", ground, Point2::new(0.0, 1.0))
+        .unwrap();
+    linkage
+        .add_orientation_branch_monitor(start, end, observed, BranchSign::Positive)
+        .unwrap();
+    let retained = linkage.geometry().unwrap();
+
+    let result = linkage.solve(SolverConfig::default()).unwrap();
+
+    assert_eq!(result.core_report.hard_validity, HardValidity::NotEvaluated);
+    assert!(result.core_report.hard_residuals_validated);
+    assert!(matches!(
+        result.rejection,
+        Some(SolveRejection::IndependentValidationFailed(_))
+    ));
+    assert_eq!(result.geometry, retained);
+    assert_eq!(linkage.geometry().unwrap(), retained);
 }
 
 #[test]
@@ -1306,6 +1340,38 @@ fn known_near_toggle_warns_and_exact_toggle_rolls_back_on_branch_ambiguity() {
         "known near-toggle target had no conditioning warning: {:#?}",
         near_sample.solve.diagnostics
     );
+    assert_eq!(
+        near_sample.solve.core_report.near_singular,
+        near_sample
+            .solve
+            .core_report
+            .component_solves
+            .iter()
+            .any(|component| component.near_singular)
+    );
+    if near_sample.solve.core_report.near_singular {
+        assert!(
+            near_sample
+                .solve
+                .core_report
+                .component_solves
+                .iter()
+                .any(|component| {
+                    component.near_singular
+                        && component.near_singular_ratio.unwrap() <= component.near_singular_factor
+                })
+        );
+    } else {
+        // This frozen fixture can enter linkage's earlier 1e-3 conditioning band
+        // without entering core M9's much tighter factor-100 rank-threshold band.
+        assert!(
+            near_sample
+                .solve
+                .diagnostics
+                .singular_value_ratio
+                .is_some_and(|ratio| ratio <= 1.0e-3)
+        );
+    }
     let retained_geometry = linkage.geometry().unwrap();
     assert!(retained_geometry.bodies.iter().all(|body| {
         body.pose.translation.iter().all(|value| value.is_finite()) && body.pose.angle.is_finite()
@@ -1320,6 +1386,8 @@ fn known_near_toggle_warns_and_exact_toggle_rolls_back_on_branch_ambiguity() {
     assert_eq!(exact.samples.len(), 1);
     let failed = &exact.samples[0].solve;
     assert_eq!(failed.core_report.termination, SolveTermination::Converged);
+    assert_eq!(failed.core_report.hard_validity, HardValidity::Invalid);
+    assert!(failed.core_report.hard_residuals_validated);
     assert!(matches!(
         failed.rejection,
         Some(SolveRejection::BranchViolation(_))

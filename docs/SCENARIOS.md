@@ -90,7 +90,7 @@ Browser interaction:
 - render the selected containment, shared contact point, centre distance and retained branch state;
 - update geometry and the equation audit from the same accepted solve result.
 
-## M7 auxiliary curve verification fixtures
+## Frozen M7 auxiliary curve verification fixtures
 
 These browser-only constructions exercise public sketch APIs but are not additional canonical scenarios:
 
@@ -98,7 +98,35 @@ These browser-only constructions exercise public sketch APIs but are not additio
 - bounded line-circle tangency: drag a fixed-radius circle along the left side of a finite line segment; the latent line/circle contacts move with it and requests beyond either endpoint retain the prior accepted state.
 - free-radius circle-arc tangency: drag a circle center in two dimensions outside a fixed 300-degree arc; no circle radius dimension is present, so the radius and circle/arc contacts solve automatically while requests in the missing span retain the prior accepted state.
 
-Both fixtures render contact parameters and branch/domain state from the public sketch result. The web crate does not duplicate their constraint equations.
+These fixtures render contact parameters and branch/domain state from the public sketch result. The web crate does not duplicate their constraint equations.
+
+## M9 sketch dependent-gradient fixture
+
+Purpose: distinguish an accepted finite hard state from configuration-dependent numerical rank loss in a domain-compiled sketch.
+
+For each uniform model scale `s` in `1e-6`, `1` and `1e6`:
+
+- fixed first centre C0 = `(0, 0)`;
+- fixed second centre C1 = `(2s, 0)`;
+- free point P starts at `(s, 0)`;
+- driving distance source D0 imposes `distance(C0, P) = s`;
+- driving distance source D1 imposes `distance(C1, P) = s`;
+- previous-state preferences are disabled.
+
+The two circles are externally tangent at P. After fixed-centre elimination the normalized active hard Jacobian with columns `(P.x, P.y)` is exactly:
+
+```text
+[  1  0 ]
+[ -1  0 ]
+```
+
+Expected state and report:
+
+- P remains finite at `(s, 0)` and both normalized residuals are exactly zero;
+- `HardValidity::Valid`, numerical rank `1`, left nullity `1`, right nullity/local DOF `1`;
+- the active `2 x 2` component is singular but not in the distinct near-singular warning band;
+- `sigma_max = sqrt(2)`, with finite component-local machine and final rank thresholds identical across all three model scales;
+- each D0/D1 domain dimension maps to one hard core source and one evaluated audit row with the matching residual ID.
 
 ## L1 — Four-bar, open assembly
 
@@ -170,12 +198,25 @@ Expected state:
 - slider orientation remains aligned with the guide;
 - velocity solve satisfies differentiated constraints for a unit input angular velocity.
 
-## Near-singular fixtures
+M9 near-aligned acceptance fixture:
 
-Add only after ordinary scenes pass:
+- start from canonical L3 and continue the angular driver from `45 degrees` to `+1e-6 rad`, then exactly `0 rad`, then `-1e-6 rad`, using the existing maximum step of `2 degrees`;
+- at exact zero the crank pin is `(1.25, 0)`, the positive-x slider pin is `(4.75, 0)`, and the connecting rod is horizontal;
+- all three targets are accepted with finite geometry, `HardValidity::Valid`, active position rank `9`, and numerical left/right nullity `(0, 0)`;
+- the active normalized position component is `9 x 9`, has `sigma_max ~= 3.79714252615743`, smallest retained singular value `~= 0.445041867912`, and within-component ratio `~= 0.117204414858`;
+- the relative rank threshold is `~= 3.797142526e-10`, above the machine floor `~= 7.588215109e-15`; the smallest retained-to-threshold ratio is about `1.172e9`, so neither M9 `near_singular` nor the linkage conditioning warning is raised;
+- this is intentional: the crank-angle driver coordinate keeps the position equality system well-conditioned at geometric dead centre;
+- the compatibility unit-rate velocity query is likewise rank `9`, has zero local DOF, the same finite spectrum, and independently validates its differentiated residual;
+- after the finite forward crossing, adding a grounded blocker pin at `(100, 0)` and an incompatible revolute closure to the slider pin reaches the bounded solver iteration limit with `HardValidity::Invalid`; it must retain the accepted crank, rod and slider poses bitwise and keep all returned geometry finite.
+
+## Frozen near-singular fixtures
+
+The regression corpus includes:
 
 - four-bar toggle/dead-centre configuration;
 - slider-crank aligned near `0` or `180 degrees`;
 - sketch point where two constraint gradients become dependent.
 
-These fixtures must test truthful singularity/rank reporting and finite state retention. They must not demand arbitrary global branch selection.
+These fixtures test truthful singularity/rank reporting and finite state retention. They do not demand arbitrary global branch selection. M9 makes the machine-floor numerical rank contract and distinct near-singular warning band mandatory.
+
+The detailed L3 fixture above demonstrates that geometric alignment does not itself justify an M9 warning when the selected driver makes the reported position/velocity matrices full-rank and well-conditioned. The detailed sketch fixture demonstrates actual dependent gradients and therefore does report numerical singularity.

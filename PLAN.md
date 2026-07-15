@@ -1,444 +1,370 @@
-# Implementation plan
+# GeoSolve core roadmap
 
-Implement in order. Do not start a milestone until the preceding milestone's tests and acceptance gates pass.
+Implement milestones in order. Do not begin a milestone until the preceding milestone's tests and acceptance gate pass.
 
-The plan deliberately front-loads work that is difficult to implement but objectively verifiable. **M1–M4 form the autonomous overnight block.** The first human architecture/behavior review happens after M4, before domain models and interaction semantics are expanded.
+This plan supersedes the original M0-M9 bootstrap plan. Detailed completion history remains in Git and `OVERNIGHT_REPORT.md`; it is not active guidance.
 
-## M0 — Repository and contracts
+## Product deliverables
 
-Status: complete as of 2026-07-13. Native format/test/clippy, WASM check, and release Trunk build all pass.
+### Deliverable 1: production-capable 2D CAD sketches
 
-Deliverables:
+The library must support independently editable 2D sketch geometry, including:
 
-- Cargo workspace and GPL-3.0-or-later licence;
-- separate geometry, core, sketch, linkage and WASM demo crates;
-- architecture, scenarios, references and acceptance documents;
-- primitive Trunk/WASM/SVG page with static geometry and equation-audit templates;
-- NixOS-friendly development shell.
+- points, lines, segments, circles and circular arcs;
+- ellipses, elliptical arcs and parametric conics;
+- editable polynomial Bezier curves;
+- B-splines and NURBS;
+- generic point/curve and curve/curve contact;
+- line/curve and curve/curve tangency;
+- explicit tangent orientation, contact neighborhood, span, winding and branch state;
+- curvature, osculating radius, G2 continuity and separately named parametric C2 continuity;
+- driving and reference dimensions;
+- truthful rank, mobility, redundancy, conflict and invalid-geometry diagnostics;
+- versioned persistence of topology, geometry, constraints and discrete state.
 
-Gate:
+This deliverable does not include a solid B-rep kernel, meshing or 3D sketch curves.
 
-- root format, clippy and native tests pass;
-- demo crate checks for `wasm32-unknown-unknown` and `trunk build --release` succeeds.
+### Deliverable 2: 2D and 3D rigid-body kinematics
 
----
+The library must support planar and spatial CAD assemblies and linkage models, including:
 
-# Autonomous overnight block
+- rigid-body configuration and mobility/DOF analysis;
+- point, axis, plane and frame features;
+- planar and spatial mates/joints;
+- explicit assembly modes and branch-preserving driven motion;
+- multiple drivers and robust continuation;
+- velocity-level kinematic queries;
+- floating assemblies with numerical gauge removal distinct from physical grounding;
+- versioned persistence of bodies, features, mates, drivers and assembly state.
 
-## M1 — Problem representation, audit metadata and Jacobian verification
+Kinematics explicitly excludes mass, inertia, forces, reactions, forward dynamics, time integration, collision detection, unilateral contact, friction and impact.
 
-Goal: express small nonlinear equality systems without CAD/linkage semantics.
+## Architectural boundaries
 
-Status: complete as of 2026-07-13.
+- Keep `geosolve-sketch` and `geosolve-linkage` as separate domain models over `geosolve-core`.
+- Keep CAD entities, rigid bodies, joints and branch types out of `geosolve-core`.
+- Keep curve definitions closed and serializable while curve evaluation and residual construction become internally generic.
+- Do not expose a public generic curve or manifold trait before the built-in families prove the seam.
+- Keep branch, span, winding, active-bound and assembly-mode choices as explicit domain state outside differentiable formulas.
+- Use local forward automatic differentiation where it reduces fragile analytic code; retain central finite differences as an independent oracle for every residual.
+- Preserve pure Rust, GPL-3.0-or-later licensing and the workspace `unsafe_code = "forbid"` policy.
+- Keep `geosolve-demo-web` compiling as a compatibility smoke target, but do not let UI concerns shape core APIs or milestone scope.
 
-Implement in `geosolve-core`:
+## Frozen baseline: M0-M7
 
-- [x] Stable stores for variable blocks, residual blocks and source constraint IDs.
-- [x] Variable block kinds:
-   - scalar;
-   - `Vec2`;
-   - `Pose2` with a three-dimensional local increment.
-- [x] Packed state layout mapping stable IDs to ambient/tangent ranges.
-- [x] Residual categories:
-   - hard;
-   - temporary interaction objective;
-   - previous-state/minimum-motion preference.
-- [x] Residual-block API declaring incident variables, output dimension, characteristic scales, evaluation and local Jacobian blocks.
-- [x] Structured audit descriptors for each high-level source and generated residual row: readable template, named bindings, category, units and scale. Audit text is metadata, not executable input.
-- [x] Deterministic dense residual/Jacobian assembly.
-- [x] Central finite-difference Jacobian checker with per-block error reports.
-- [x] Invalid-geometry and non-finite-value rejection before linear algebra.
+Status: complete through commit `eb8dbbf` on 2026-07-14.
 
-Implementation guidance:
+The following behavior is the permanent regression baseline:
 
-- begin with hand-written analytic Jacobians for synthetic residuals;
-- keep APIs internal while possible;
-- retain block incidence/deterministic ordering but do not add sparse matrices;
-- do not add sketch/linkage entity variants to core.
+- stable variable, residual and source IDs;
+- scalar, `Vec2` and `Pose2` variable blocks;
+- normalized residual/Jacobian assembly and finite-difference verification;
+- dense LM/Gauss-Newton solving with QR/SVD fallback;
+- independent hard-residual validation before success;
+- deterministic traces and accepted-state audits;
+- incidence decomposition, fixed/alias elimination and component reuse;
+- numerical rank, DOF, redundancy and conflict diagnostics;
+- strict hard/temporary/preference priority semantics;
+- stable-ID 2D sketch model with points, segments, circles and oriented arcs;
+- the complete existing sketch constraint, dimension, contact and tangency corpus;
+- planar rigid bodies, revolute/prismatic/weld joints, drivers and explicit assembly branches;
+- bounded planar continuation and independently validated velocity queries;
+- transactional rollback on numerical, geometry, domain or branch failure.
 
-Required fixtures:
+All M1-M7 tests remain mandatory. Refactors may intentionally change internal IDs or implementation details, but not accepted geometry, validation semantics, source ordering, branch behavior or documented diagnostics without an explicit ADR and acceptance update.
 
-- [x] scalar quadratic residual;
-- [x] two-variable distance residual;
-- [x] `Pose2` transformed-point residual;
-- [x] mixed block dimensions and deterministic packing;
-- [x] analytic versus central finite-difference Jacobians;
-- [x] NaN/Inf and invalid scale rejection.
+## Common milestone gate
 
-Gate: M1 section of `ACCEPTANCE.md`.
+Every implementation milestone must:
 
-Completion notes: dense rows are normalized by residual scale and columns by
-variable tangent step scale. Integration tests cover stable generational IDs,
-all required fixtures, heterogeneous matrix ranges, audit metadata, invalid
-IDs/dimensions/geometry, and finite-difference relative error `<= 1e-6`.
+1. add exact, perturbed-recovery and invalid-state fixtures;
+2. add analytic/local-AD versus central finite-difference Jacobian tests with relative error `<= 1e-6`;
+3. add translation, rotation and scale metamorphic coverage where applicable;
+4. independently validate every success-like result to normalized hard residual `<= 1e-9`;
+5. preserve the previous accepted finite state on rejection;
+6. keep every discrete branch/domain choice explicit;
+7. run formatting, warnings-denied Clippy, workspace tests and relevant locked WASM build checks;
+8. update this file with checked items and concise completion notes.
 
-## M2 — Dense nonlinear solver, rank and strict validation
-
-Goal: robustly solve and classify small connected nonlinear systems.
-
-Status: complete as of 2026-07-13.
-
-Implement:
-
-- [x] Dimensionless residual and step scaling.
-- [x] Damped Gauss-Newton or Levenberg-Marquardt with:
-   - adaptive damping;
-   - accepted/rejected steps;
-   - actual versus predicted reduction;
-   - block-local step limits;
-   - iteration, stagnation and numerical-failure termination.
-- [x] Dense QR/SVD solve fallback; never rely exclusively on `J^T J`.
-- [x] Numerical rank and local nullity using a documented relative tolerance.
-- [x] Independent hard-residual re-evaluation after iteration.
-- [x] `SolveTermination` separate from underconstraint/redundancy/singularity diagnostics in `SolveReport`.
-- [x] Deterministic trace records.
-- [x] Accepted-state audit snapshots containing current bindings plus raw and normalized residual values.
-
-Required fixtures:
-
-- [x] exactly determined linear and nonlinear systems;
-- [x] underdetermined circle point with one DOF;
-- [x] duplicate residual rows;
-- [x] contradictory equations;
-- [x] configuration-dependent rank drop;
-- [x] same problems at characteristic scales `1e-6`, `1`, and `1e6`.
-
-Gate: M2 section of `ACCEPTANCE.md`.
-
-Completion notes: LM solves an augmented dense least-squares system with QR
-and SVD fallback, commits only accepted finite states, and re-evaluates hard
-rows independently before reporting convergence. Hard rows alone define the
-M2 objective, rank and DOF; temporary and preference rows are validated and
-audited but intentionally excluded until a documented hierarchy exists. Tests
-cover accepted/rejected trace accounting, explicit accepted-state audit values,
-complete-source deterministic redundancy candidates and every required M2
-classification at characteristic scales `1e-6`, `1`, and `1e6`.
-
-## M3 — Adversarial numerical verification harness
-
-Goal: make wrong solver implementations difficult to hide before any UI or domain complexity exists.
-
-Status: complete as of 2026-07-13.
-
-Implement tests/tools, not new product features:
-
-1. [x] Property-based generation of small linear systems with known rank, nullity and exact solution.
-2. [x] Construct-valid nonlinear systems, perturb their state, then verify recovery from documented local basins.
-3. [x] Translation, rotation and uniform-scale metamorphic tests.
-4. [x] Variable/residual insertion-order permutation tests proving deterministic results and source ordering.
-5. [x] Jacobian checker coverage for every synthetic residual and variable block.
-6. [x] Failure injection:
-   - [x] non-finite residual;
-   - [x] non-finite Jacobian;
-   - [x] zero/negative characteristic scale;
-   - [x] singular linear solve;
-   - [x] rejected steps until stagnation;
-   - [x] iteration limit.
-7. [x] Independent validation oracle that re-evaluates hard residuals without reusing cached iteration vectors.
-8. [x] Solve trace invariant checks: accepted cost does not increase beyond policy tolerance, rejected states are not committed, and last-valid finite state is retained.
-9. [x] Benchmark harness for small dense systems, recorded but not used to weaken correctness gates.
-
-Constraints:
-
-- prefer test-only helpers over expanding public APIs;
-- do not snapshot exact iteration counts unless mathematically required;
-- random/property tests use recorded deterministic seeds on failure;
-- no sketch, linkage, browser interaction or sparse backend work.
-
-Gate: M3 section of `ACCEPTANCE.md`. All randomized/property tests must be reproducible.
-
-Completion notes: rank-by-construction properties run 32 cases for each of
-exact, underdetermined and overdetermined shapes with fixed ChaCha base seed
-`4d33a7419c2e5b7088d4f1036ac952ef117b8d60c4aa39e275018bc6de42f90a`,
-shape-tagged final bytes, disabled failure persistence and 2,048 shrink steps.
-Cases deterministically permute constructed rows and columns; failures print
-the effective seed and minimized case for direct reproduction. Independent
-fixture math validates returned linear, branch-sensitive circle and trace
-states, including accepted-then-invalid trials. Flat audit descriptors retain
-executable dense row order while grouped snapshots and redundancy candidates
-follow source-store order. A direct singular least-squares test exercises the
-SVD fallback. Criterion benchmarks fixed 2x2, 4x4 and 8x8 dense workloads
-separately from all correctness tolerances.
-
-## M4 — Core decomposition, elimination and source-level diagnostics
-
-Goal: make large/disconnected systems tractable and diagnose synthetic redundancy/conflict before domain UX is involved.
-
-Status: complete as of 2026-07-14.
-
-Implement in core:
-
-1. [x] Variable/residual bipartite incidence graph.
-2. [x] Connected-component decomposition.
-3. [x] Fixed-variable and exact-equality alias elimination where mathematically safe.
-4. [x] Component-level structural pattern caching.
-5. [x] Reuse of unaffected component solutions/traces.
-6. [x] Structural count summary alongside numerical rank.
-7. [x] Redundant-row/source candidates.
-8. [x] Conflict source candidates using bounded deletion/re-solve for small components.
-9. [x] Deterministic mapping from generated scalar rows back to one high-level source.
-10. [x] Audit snapshot annotations for eliminated, redundant, conflicting and singular rows/sources.
-
-Required synthetic fixtures:
-
-- two disconnected solvable components;
-- one edited and one unaffected component;
-- exact variable alias chain;
-- duplicate row from the same source;
-- duplicate rows from separate sources;
-- contradictory scalar and vector sources;
-- underconstrained plus redundant system;
-- configuration-dependent singularity without structural graph change.
-
-Constraints:
-
-- do not implement Dulmage–Mendelsohn decomposition yet unless it falls out naturally and is separately tested;
-- do not introduce sparse numerical solving;
-- do not freeze public domain APIs;
-- conflict output is a deterministic candidate set, not a claim of globally minimal unsatisfiable core.
-
-Gate: diagnostics/decomposition section of `ACCEPTANCE.md` using synthetic systems.
-
-Completion notes: original incidence remains available for audit while solve
-components are rebuilt after trusted core fixed/alias elimination. Dense assembly,
-validation, traces, rank thresholds and diagnostics are component-scoped; cached
-states are independently revalidated at the requested tolerance before zero-step
-reuse. Conflict trials suppress both a source's rows and elimination semantics and
-are bounded independently per failed component. Reports aggregate component rank
-and DOF, distinguish fully redundant sources from sources containing dependent
-rows, validate all non-objective values/Jacobians at the returned state, and retain
-every audit row with explicit evaluation status. Audit annotations cover eliminated,
-redundant, conflicting and conservatively singular rows/sources.
-
-### Human checkpoint A — after M4
-
-Review before continuing:
-
-- packed variable/residual API and ownership;
-- hard/temporary/preference representation;
-- damping/trust policy and solve traces;
-- rank/DOF semantics;
-- equation-audit snapshot shape;
-- elimination/decomposition behavior;
-- redundancy/conflict wording and source attribution.
-
-The overnight agent must stop here and produce `OVERNIGHT_REPORT.md`. It must not begin M5 without explicit continuation.
+Performance measurements never weaken correctness thresholds.
 
 ---
 
-# Domain and interaction milestones
+# Shared numerical foundation
 
-## M5 — First sketch vertical slice and live browser drag
-
-Goal: solve a useful partially constrained sketch through the public sketch API.
+## M8: contract rebaseline and representative baselines
 
 Status: complete as of 2026-07-14.
 
-Implement in `geosolve-sketch`:
+Goal: freeze the semantics and measurements required by both product deliverables before changing numerical infrastructure.
 
-- [x] Point and line-segment entities.
-- [x] Fixed point/coordinate.
-- [x] Coincident.
-- [x] Horizontal and vertical.
-- [x] Point distance and segment length.
-- [x] Source constraint IDs producing one or more residual rows.
-- [x] Compilation to core variables/residuals.
-- [x] Reference dimensions that report values without adding equations.
-- [x] Temporary dragged-point target and previous-state preference.
+- [x] Update `ARCHITECTURE.md`, `ACCEPTANCE.md` and active ADRs to match this roadmap.
+- [x] Specify hard-valid versus secondary-optimum status independently.
+- [x] Specify rank thresholds, left/right nullity, near-singular warnings and active-bound mobility.
+- [x] Specify diagnostic budget/completeness reporting.
+- [x] Add CAD-like and linkage-like benchmark families at approximately 100, 1,000 and 10,000 variables.
+- [x] Measure definition construction+compile, linearization assembly, decomposition+solve+diagnostics, and one-component edit/re-solve as four separate Criterion groups.
+- [x] Add ADRs for local AD, manifold poses, persistent solve sessions, bounds/active sets, sketch design topology and physical grounding versus numerical gauge.
+- [x] Mark stale historical documents as historical and keep active documentation mutually consistent.
 
-Canonical scene:
+Gate: all M1-M7 behavior remains unchanged, benchmark inputs are deterministic, and every new architectural decision has an accepted ADR.
 
-- [x] `S1 underconstrained triangle` from `docs/SCENARIOS.md`.
+Completion notes: accepted ADRs 0005-0009 assign component-local linearization and
+local AD to M9, sessions/bounds to M10, manifold poses to M11, sparse structure to
+M12, persistent sketch topology to M13 and physical-ground/gauge separation to
+M14. Deterministic CAD-like workloads contain 100/1,000/10,000 tangent variables;
+linkage-like workloads contain 99/999/9,999. Criterion exercises 24 exact
+family/scale/measurement cases with teardown outside timed windows and validates
+every solve report. The gate passes with 79 core tests and 201 workspace tests,
+warnings-denied Clippy, locked WASM check, benchmark compilation and all 24
+Criterion test-mode cases.
 
-Web work:
-
-- [x] Replace static triangle with solved geometry.
-- [x] Implement SVG pointer drag for point C.
-- [x] Show termination, validated residual, rank, DOF and iteration count.
-- [x] Show live audit rows, named bindings, scales and evaluated values.
-- [x] Distinguish fixed, free and actively dragged points.
-- [ ] Optionally add geometry↔equation highlighting if it does not delay the slice.
-
-Gate: sketch and web criteria for S1.
-
-Completion notes: hard, temporary and preference rows are optimized in strict
-lexicographic order. Secondary trials are reprojected onto the nonlinear hard
-manifold and independently validated before commit. The stable-ID sketch model
-compiles every supported constraint to analytic residuals with structured audit
-metadata; its 20 M5 tests cover finite-difference Jacobians, recovery,
-metamorphic scaling/rotation/translation, invalid geometry, reference dimensions,
-explicit axis/length branch state and S1 drag/release behavior. The browser uses
-the public S1 constructor and retained-state audit snapshots, supports mouse/pen/
-touch pointer capture, and has 16 native rendering/interaction tests. The full
-workspace gate passes with 113 tests, warnings-denied Clippy, locked WASM check
-and Trunk release build. A secondary residual spanning multiple reduced hard
-components remains an explicit `NumericalFailure`; S1 does not require this case.
-
-Follow-up verification fixtures add a one-DOF horizontal rail with an
-equation-free reference length and a two-DOF coincident pair. Both use the same
-public sketch solve/audit path and shared mouse/pen/touch interaction. Coverage
-includes projection, release continuity, off-viewport clamping and narrow-screen
-pointer sizing.
-
-### Human checkpoint B
-
-Review drag/minimum-motion behavior, equation presentation and public sketch model before expanding the constraint library.
-
-## M6 — Planar linkage vertical slice and driver continuation
-
-Goal: solve rigid-body mechanisms using the same core.
+## M9: canonical component-local linearization and local AD
 
 Status: complete as of 2026-07-14.
 
-Implement in `geosolve-linkage`:
+Goal: create one allocation-conscious derivative path usable by dense, sparse, CAD-curve and spatial-pose residuals.
 
-- [x] `PlaneFrame` assignment.
-- [x] Rigid body with `Pose2` variable and body-local features.
-- [x] Grounded body/gauge removal.
-- [x] Revolute joint: transformed anchor coincidence, two rows.
-- [x] Prismatic joint: transverse coincidence plus relative-axis alignment.
-- [x] Weld/fixed joint.
-- [x] Angular and linear drivers.
-- [x] Warm-started bounded-step driver continuation.
-- [x] Explicit open/crossed assembly-mode state.
-- [x] Velocity solve `J_q q_dot + J_s s_dot = 0` after position convergence.
+- [x] Add fused residual/Jacobian linearization into caller-provided storage.
+- [x] Build a canonical component-local block linearization IR.
+- [x] Remove global-column dense allocation from component solves.
+- [x] Add object-safe local forward-AD residual adapters.
+- [x] Keep analytic residuals where they are clearer and cheaper.
+- [x] Retain central finite differences as the mandatory independent derivative oracle.
+- [x] Add structured evaluation errors for degenerate, out-of-domain, nondifferentiable and ambiguous states.
+- [x] Report hard validity independently from hard termination and each secondary optimization status.
+- [x] Apply the normalized component-local rank threshold with the specified machine floor.
+- [x] Report numerical left/right nullity and a distinct near-singular warning band.
 
-Canonical scenes:
+Gate: existing accepted geometry and source ordering remain unchanged; representative analytic and AD linearizations agree with finite differences and with each other; the M9 status and numerical-rank contracts pass their acceptance fixtures.
 
-- [x] `L1 four-bar open`.
-- [x] `L2 four-bar crossed`.
-- [x] `L3 slider-crank`.
+Completion notes: one canonical normalized block IR now backs public dense
+assembly and direct component-width hard, priority, rank, conflict and returned-row
+linearization. Fixed incidence is evaluated without materialized columns; alias
+blocks retain incidence order and accumulate deterministically. Legacy residuals
+remain supported while fused evaluators write caller-owned storage. The private
+`num-dual` adapter seeds normalized local tangent coordinates and avoids raw
+derivative overflow at extreme valid scales; analytic, AD and central-difference
+oracles agree through the required scale range. Reports now separate hard
+termination, domain-authoritative hard validity and each secondary outcome, and
+report machine-floor component rank, left/right nullity and near-singular state.
+Structured evaluation categories propagate through attempted audits, while public
+audits require Jacobian success before marking rows evaluated. The gate passes
+with 98 core tests and 228 workspace tests, warnings-denied Clippy and rustdoc,
+benchmark compilation, all 24 Criterion test-mode cases, locked WASM check/test
+compilation and a release Trunk build.
 
-Web work:
+## M10: persistent solve sessions and first-class bounds
 
-- [x] Use domain constructors, not duplicate geometry.
-- [x] Driver slider updates solved SVG linkage.
-- [x] Display branch label and singularity warning.
-- [x] Reuse equation-audit panel for joint closure and driver rows.
-- [x] Preserve selected assembly mode over the safe sweep.
+Goal: retain compiled structure across edits and represent bounded coordinates mathematically rather than only through post-solve rejection.
 
-Gate: linkage and web criteria.
+- [ ] Separate immutable problem topology from mutable accepted state and source parameters.
+- [ ] Add a persistent `SolveSession` with automatic revision and dirty-component tracking.
+- [ ] Preserve domain-to-core mappings across non-structural edits.
+- [ ] Cache component layouts, accepted states and structural patterns.
+- [ ] Add scalar/tangent-coordinate box bounds and an active-set or projected LM policy.
+- [ ] Include active bounds in rank, mobility and audit output.
+- [ ] Support endpoint-active curve contacts, positive radii and bounded drivers.
+- [ ] Make accepted-state commits atomic through a validated patch or clone-and-swap.
 
-Completion notes: the linkage model uses one unwrapped `Pose2` per rigid body,
-trusted elimination for grounded poses, body-local geometry, analytic joint and
-driver Jacobians, and typed branch monitors. Continuation is deterministic,
-warm-started and limited to two-degree canonical driver steps. L1/L2 retain
-opposite orientation signs through `25..135` degrees; L3 retains its positive-x
-slider branch through `15..165` degrees. Reduced velocity solves use the same
-rank cutoff they report and independently validate differentiated equations.
-The browser exposes live L1/L2/L3 sliders, typed branch/conditioning/velocity
-diagnostics and accepted-state audit rows, and also adds canonical S2 conflict
-diagnosis. The gate passes with 20 linkage tests, 23 sketch tests, 24 web tests,
-144 workspace tests, warnings-denied Clippy, locked native/WASM checks and a
-Trunk release build. Exact toggles reject or roll back to a finite near-toggle
-state with a conditioning warning. M6 intentionally remains dense and
-warm-start-only; predictor and pseudo-arclength continuation remain M8 work.
+Gate: edits solve only affected components, omitted dirty IDs cannot corrupt state, endpoint-active mobility is truthful, and all prior rollback behavior remains transactional.
 
-### Human checkpoint C
+## M11: manifold geometry and spatial state
 
-Review branch/assembly behavior and driver interaction before advanced continuation or spatial extension.
+Goal: add the mathematically correct state representation needed by 3D rigid-body kinematics.
 
-Approved by the supervising caller on 2026-07-14 after manual review of S1/S2 and L1/L2/L3 interactions with no visual issues.
+- [ ] Add validated `SE(2)` composition, inverse, exponential, logarithm, adjoint, retraction and local difference.
+- [ ] Add `Vec3` and quaternion-backed `Pose3`/`SE(3)` with ambient dimension 7 and tangent dimension 6.
+- [ ] Define one documented body/world transform and tangent convention.
+- [ ] Canonicalize quaternion sign without treating it as an assembly branch.
+- [ ] Make fixed and alias elimination manifold-aware.
+- [ ] Add validated frame and workplane construction plus point/vector transforms.
+- [ ] Expose an accepted-state reduced hard linearization and sensitivity solve API.
 
-## M7 — CAD curves, tangency and branch semantics
+Gate: manifold property tests, tangent-coordinate finite differences, global-transform equivariance and quaternion-sign invariance pass without core regressions.
 
-Goal: cover the minimum credible CAD sketch curve/constraint set while preserving an advanced-curve path.
+## M12: sparse structure, hierarchy and continuation
 
-Status: complete as of 2026-07-14.
+Goal: scale the shared kernel before production splines and large spatial assemblies expand the graph.
 
-Entities:
+- [ ] Add indexed block COO/triplet assembly from the canonical linearization.
+- [ ] Add structural matching and under/well/over-constrained partitions.
+- [ ] Convert to `faer` sparse storage and rank-revealing sparse least-squares.
+- [ ] Retain dense QR/SVD fallback for small or diagnostically ambiguous components.
+- [ ] Cache symbolic ordering/factorization structure.
+- [ ] Record and enforce a benchmark-derived dense/sparse crossover policy.
+- [ ] Replace large explicit dense nullspaces with sparse-compatible hierarchy operations.
+- [ ] Support secondary objectives spanning multiple hard components.
+- [ ] Add adaptive predictor-corrector and pseudo-arclength continuation.
 
-- [x] Circle.
-- [x] Circular arc with explicit sweep/orientation state.
+Gate: dense and sparse paths agree on independently validated geometry, rank, mobility, diagnostics and branch state; the documented planar toggle crosses only through the explicit pseudo-arclength path.
 
-Constraints/dimensions:
+---
 
-- [x] Point-on-line and point-on-circle.
-- [x] Radius and diameter.
-- [x] Parallel and perpendicular.
-- [x] Equal length and equal radius.
-- [x] Oriented angle.
-- [x] Midpoint and symmetry.
-- [x] Line-circle tangency.
-- [x] Circle-circle tangency with internal/external mode.
-- [x] Driving versus reference dimensions.
+# Domain architecture migration
 
-Requirements:
+## M13: generic sketch design graph
 
-- [x] Internal curve-evaluation adapter returning position, first derivative, parameter domain and degeneracy state.
-- [x] Latent scalar contact parameters for interior contacts.
-- [x] Explicit branch/span/contact state.
-- [x] Analytic/local-AD versus finite-difference verification.
-- [x] Invalid zero-length/radius/tangent handling.
-- [x] `S3 tangent circles` browser scene.
-- [x] Quadratic and cubic Bézier point-on-curve and line-tangency proof fixtures before freezing a public curve trait.
+Goal: remove the entity-pair compiler fan-out before adding more curve families.
 
-Gate: complete sketch MVP matrix.
+- [ ] Add persistent external IDs separate from runtime generational keys.
+- [ ] Add design points and typed design scalars with units and domains.
+- [ ] Add one stable `CurveId` store and closed `CurveDefinition` for existing segments, circles and arcs.
+- [ ] Add semantic `FeatureRef` values for endpoints, centers, axes, controls and fixed curve locations.
+- [ ] Add stable contact slots with numeric domains, periodic winding, active span and neighborhood state.
+- [ ] Add generic dependency/reference collection.
+- [ ] Add per-source compiled residuals, contact mappings, validators, commit mappings and audit metadata.
+- [ ] Replace the central M7 candidate validator and latent-role matches for migrated constraints.
+- [ ] Add generic measurements shared by driving and reference dimensions.
+- [ ] Add a versioned document envelope and deterministic runtime-ID remapping.
 
-Completion notes: circles and oriented circular arcs compile through a private
-curve-evaluation seam with ordinary scalar radius/contact variables, structured
-audits and independent accepted-state validation. Unit-direction equations avoid
-short-line false convergence; bounded segment/arc contacts use explicit domains,
-roundoff-only endpoint normalization and transactional rejection. Circle
-tangency stores external/internal containment and center-direction state, and S3
-switches deterministically between the positive-x external and internal roots.
-The literal per-constraint matrix covers exact, perturbed, finite-difference,
-transformed, scaled and invalid fixtures. Quadratic/cubic Béziers prove the same
-private seam without exposing a generic public curve trait. The browser adds S3
-mode switching, bounded-arc contact dragging and bounded line-circle tangent
-gliding, all from public sketch geometry/contact/audit APIs. Arc endpoint angles
-remain explicit fixed entity state in M7; only the radius and contact span solve.
-The gate passes with 50 sketch tests, 33 web tests and 180 workspace tests,
-warnings-denied workspace Clippy, locked native/WASM checks, WASM test
-compilation, desktop/mobile browser review and a Trunk release build.
+Gate: S1-S3 and the full M5/M7 corpus remain unchanged; existing line/circle/arc constraints use the new graph and no longer require geometry-pair-specific lifecycle plumbing.
 
-Follow-up verification adds bounded circle-arc tangency with explicit
-inside/outside radial state. With the arc fixed and no circle radius dimension,
-the circle center retains exactly two local DOF while its radius and two contact
-parameters solve automatically. Independent feature-relative checks reject
-wrong tiny radii and report mixed-scale tangencies as numerically ambiguous when
-floating-point resolution cannot prove the branch relation. The eleventh browser
-scene exposes two-dimensional center dragging, changing solved radii, bounded
-span rejection and retained-state audits through public sketch APIs.
-The expanded gate passes with 61 sketch tests, 40 web tests and 198 workspace
-tests plus warnings-denied Clippy, locked WASM checks and a Trunk release build.
+## M14: shared planar kinematic architecture
 
-## M8 — Sparse scaling and continuation hardening
+Goal: migrate the planar linkage baseline onto the architecture that spatial assemblies will share.
 
-Goal: improve scale and singular-path behavior without changing results on the established corpus.
+- [ ] Separate model topology, accepted state and compiled session.
+- [ ] Add persistent body, feature and source IDs separate from runtime generational keys.
+- [ ] Make local coordinate frames the primary body-feature representation.
+- [ ] Distinguish physical grounding from numerical gauge removal.
+- [ ] Add explicit gauge policies for floating components.
+- [ ] Move velocity solving onto the shared reduced-linearization/rank policy.
+- [ ] Preserve `geosolve-linkage` as the public crate and retain the existing planar API as a compatibility facade where practical.
 
-Implement only after profiling:
+Gate: L1-L3 remain unchanged; floating planar assemblies report three world-gauge DOF separately from internal mobility, and alternative gauges preserve all relative geometry and diagnostics.
 
-- block COO/triplet assembly and cached sparsity pattern;
-- `faer` CSC/CSR conversion;
-- sparse QR for least-squares/rank-sensitive components;
-- optional damped normal-equation Cholesky fast path;
-- recorded dense/sparse crossover policy;
-- structural matching/Dulmage–Mendelsohn-style classification if justified;
-- predictor-corrector continuation;
-- pseudo-arclength continuation around selected linkage dead centres.
+---
 
-Gate:
+# Parallel product expansion
 
-- dense and sparse paths agree within validation tolerance on the full corpus;
-- no diagnostic regression;
-- documented near-toggle scenario crosses without unintended root jump.
+## M15: editable Bezier curves and generic contact
 
-## M9 — Pre-1.0 hardening
+Goal: prove that editable design derivatives and contact equations are curve-generic before implementing splines.
 
-- stable serialization for entities, constraints and branch state;
-- public API review and crate documentation;
-- fuzz/property corpus for degenerate inputs;
-- differential/oracle fixtures based on SolveSpace and selected PlaneGCS cases;
-- benchmarks and performance baselines;
-- browser smoke automation;
-- licence/attribution audit;
-- changelog and versioning policy.
+- [ ] Move immutable curve-jet evaluation into `geosolve-geometry`.
+- [ ] Add position and first through third parameter derivatives with typed regularity/domain metadata.
+- [ ] Add editable quadratic and cubic Bezier entities whose controls are design variables.
+- [ ] Add generic point-on-curve, curve/curve contact and tangent residual templates.
+- [ ] Add endpoint tangency and explicit same/opposite tangent orientation.
+- [ ] Differentiate every incident control coordinate and contact parameter through local AD.
+- [ ] Keep span and branch selection outside AD.
 
-Out of scope until after M9:
+Gate: line/circle/arc/Bezier combinations use the same generic residual templates; every control and contact derivative passes finite differences; cusps and zero-speed contacts cannot report success.
 
-- collision/contact inequalities;
-- dynamics and reaction forces;
-- production-grade spline/NURBS/general-conic editing;
-- global enumeration of all roots;
-- general spatial joints and `SE(3)` solving.
+## M16: spatial kinematics vertical slice
+
+Goal: prove the spatial state, feature and gauge architecture with a minimal useful assembly set.
+
+- [ ] Add `SpatialAssembly` within `geosolve-linkage`.
+- [ ] Add spatial rigid bodies and body-local point/frame features.
+- [ ] Add physical ground and automatic floating-component gauge policies.
+- [ ] Add fixed-frame, ball and revolute joints/mates.
+- [ ] Add source mapping, accepted geometry, audit, rank/mobility and rollback APIs.
+- [ ] Add transformed/scaled exact and perturbed fixtures.
+
+Gate: every primitive reports expected relative DOF and passes tangent-space Jacobian, gauge, invalid-feature and independent-validation tests.
+
+## M17: ellipses and parametric conics
+
+Goal: cover the major analytic CAD curve family without introducing implicit coefficient gauges.
+
+- [ ] Add ellipses and elliptical arcs with explicit axis/orientation state.
+- [ ] Add rational-quadratic conic segments.
+- [ ] Add explicit parabola/hyperbola branches and trimmed parameter domains.
+- [ ] Add center, focus, axis and endpoint features.
+- [ ] Add ellipse/conic measurements justified by CAD use cases.
+- [ ] Preserve valid circle-limit geometry while reporting unobservable orientation truthfully.
+
+Gate: analytic jet oracles, affine/similarity transformations, branch retention and rational-pole rejection pass; generic contact/tangency adds no conic-pair equation code.
+
+## M18: spatial mate and joint catalog
+
+Goal: support the common CAD assembly and linkage relationships in three dimensions.
+
+- [ ] Add axis and plane features with stable local clocking.
+- [ ] Add prismatic, cylindrical, planar and universal joints.
+- [ ] Add distance, angle, axis-alignment and frame-offset mates.
+- [ ] Add hinge and translation coordinates with position drivers.
+- [ ] Add explicit axis parity, winding, side and signed-volume branch monitors.
+- [ ] Add multiple simultaneous drivers and explicit assembly-mode transactions.
+
+Gate: every joint/mate has exact, recovery, tangent-Jacobian, scale, mixed-scale, degeneracy and expected-mobility fixtures; representative shaft/bearing and block/base CAD assemblies pass.
+
+## M19: non-rational B-splines
+
+Goal: add locally supported production spline geometry over the generic curve/contact architecture.
+
+- [ ] Add validated degree, control identity and nondecreasing knot vectors.
+- [ ] Add de Boor evaluation and jets through third derivative.
+- [ ] Add clamped and periodic curves.
+- [ ] Add stable semantic span identities and one-sided knot evaluation.
+- [ ] Restrict residual incidence to the active span's local control support.
+- [ ] Add knot insertion with geometry invariance.
+- [ ] Add continuity diagnostics from knot multiplicity.
+
+Gate: Bezier equivalence, affine covariance, partition of unity, knot insertion, local support and span-transition tests pass; malformed knots and insufficient continuity reject before success.
+
+## M20: NURBS and advanced CAD constraints
+
+Goal: complete Deliverable 1.
+
+- [ ] Add positive rational weights and homogeneous de Boor jets.
+- [ ] Add weight derivatives and an explicit weight-gauge policy.
+- [ ] Add rational-denominator and mixed-scale ambiguity diagnostics.
+- [ ] Add signed/unsigned curvature and osculating-radius measurements.
+- [ ] Add equal-curvature and G2 continuity constraints.
+- [ ] Add separately named parametric C2 continuity.
+- [ ] Add generic normal/tangent and endpoint continuity constraints.
+- [ ] Complete persistence for every curve, feature, dimension, contact, span and branch state.
+- [ ] Add sketch fuzz/property, differential-oracle and large sparse performance corpora.
+
+Gate: unit-weight NURBS reproduce B-splines, quadratic NURBS reproduce canonical conics, local support remains bounded by degree, curvature derivatives validate, and the complete 2D CAD acceptance matrix passes.
+
+---
+
+# Kinematic completion
+
+## M21: 2D/3D assembly completion
+
+Goal: complete Deliverable 2 without adding physics.
+
+- [ ] Generalize adaptive and pseudo-arclength continuation to spatial assemblies.
+- [ ] Add branch-boundary events, hysteresis and explicit mode-change APIs.
+- [ ] Add multiple-driver velocity-level kinematic queries.
+- [ ] Distinguish determinate, underdetermined and inconsistent velocity requests.
+- [ ] Return body and feature velocities plus optional motion/nullspace bases.
+- [ ] Add planar mechanisms embedded in 3D and compare them against planar oracles.
+- [ ] Add spatial closed-chain, mixed-scale and large sparse assembly scenarios.
+- [ ] Complete persistence for bodies, features, joints, mates, gauges, drivers and assembly modes.
+- [ ] Add linkage fuzz/property, differential-oracle and performance corpora.
+
+Gate: planar and spatial assemblies preserve explicit modes, report truthful mobility, validate every accepted configuration and velocity equation, and retain the last accepted state on all failures.
+
+## M22: public API and release hardening
+
+Goal: make both deliverables ready for a stable library release.
+
+- [ ] Review public APIs and remove accidental exposure of compiler/core internals.
+- [ ] Finalize versioned serialization and migration policy.
+- [ ] Add crate-level documentation and complete examples for both deliverables.
+- [ ] Define semantic versioning, changelog and deprecation policy.
+- [ ] Complete GPL/licence and attribution audit.
+- [ ] Record supported scale/performance envelopes and benchmark baselines.
+- [ ] Run malformed-document and degenerate-geometry fuzzing without panic or false success.
+- [ ] Keep the WASM crate compiling as a non-authoritative smoke consumer of public APIs.
+
+Gate: all acceptance suites, serialization round trips/migrations, fuzz corpora, documentation tests, performance baselines, native checks and locked WASM smoke builds pass.
+
+## Explicit non-goals
+
+The following are not part of M8-M22:
+
+- solid modeling, B-rep booleans, meshing or rendering;
+- global enumeration of every geometric root;
+- arbitrary third-party curve or manifold plugins;
+- physical contact, collision detection, friction or impact;
+- mass properties, loads, reactions, statics, inverse dynamics or forward dynamics;
+- time integration.
+
+These require separate product decisions after both library deliverables are complete.

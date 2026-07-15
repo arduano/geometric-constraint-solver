@@ -82,17 +82,83 @@ impl ResidualRowAudit {
     }
 }
 
-/// A domain evaluator can explicitly reject a degenerate geometric state.
+/// Machine-readable classification for geometry evaluation failures.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum EvaluationErrorCategory {
+    /// A required geometric direction, radius, or local feature has collapsed.
+    Degenerate,
+    /// A finite state lies outside the evaluator's declared parameter domain.
+    OutOfDomain,
+    /// The residual value exists but its derivative is undefined at this state.
+    Nondifferentiable,
+    /// The evaluator cannot select one result without an explicit discrete choice.
+    Ambiguous,
+}
+
+/// A domain evaluator can explicitly reject an invalid geometric state.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
+#[non_exhaustive]
 pub enum EvaluationError {
+    /// Unclassified invalid geometry retained for legacy evaluators and programmer contracts.
     #[error("{0}")]
     InvalidGeometry(String),
+    /// A semantic geometry failure with a stable machine-readable category.
+    #[error("{category:?}: {message}")]
+    Categorized {
+        /// Machine-readable failure class.
+        category: EvaluationErrorCategory,
+        /// Human-readable evaluator context.
+        message: String,
+    },
 }
 
 impl EvaluationError {
     #[must_use]
     pub fn invalid_geometry(message: impl Into<String>) -> Self {
         Self::InvalidGeometry(message.into())
+    }
+
+    #[must_use]
+    pub fn degenerate(message: impl Into<String>) -> Self {
+        Self::categorized(EvaluationErrorCategory::Degenerate, message)
+    }
+
+    #[must_use]
+    pub fn out_of_domain(message: impl Into<String>) -> Self {
+        Self::categorized(EvaluationErrorCategory::OutOfDomain, message)
+    }
+
+    #[must_use]
+    pub fn nondifferentiable(message: impl Into<String>) -> Self {
+        Self::categorized(EvaluationErrorCategory::Nondifferentiable, message)
+    }
+
+    #[must_use]
+    pub fn ambiguous(message: impl Into<String>) -> Self {
+        Self::categorized(EvaluationErrorCategory::Ambiguous, message)
+    }
+
+    #[must_use]
+    pub const fn category(&self) -> Option<EvaluationErrorCategory> {
+        match self {
+            Self::Categorized { category, .. } => Some(*category),
+            Self::InvalidGeometry(_) => None,
+        }
+    }
+
+    #[must_use]
+    pub fn message(&self) -> &str {
+        match self {
+            Self::InvalidGeometry(message) | Self::Categorized { message, .. } => message,
+        }
+    }
+
+    fn categorized(category: EvaluationErrorCategory, message: impl Into<String>) -> Self {
+        Self::Categorized {
+            category,
+            message: message.into(),
+        }
     }
 }
 
@@ -130,6 +196,125 @@ impl LocalJacobian {
     }
 }
 
+/// Caller-owned row-major storage for one incident variable's raw Jacobian block.
+#[derive(Debug)]
+pub struct LocalJacobianStorage<'a> {
+    rows: usize,
+    columns: usize,
+    step_scales: &'a [f64],
+    values: &'a mut [f64],
+}
+
+impl<'a> LocalJacobianStorage<'a> {
+    pub(crate) fn new(
+        rows: usize,
+        columns: usize,
+        step_scales: &'a [f64],
+        values: &'a mut [f64],
+    ) -> Self {
+        Self {
+            rows,
+            columns,
+            step_scales,
+            values,
+        }
+    }
+
+    #[must_use]
+    /// Returns the scalar residual-row count.
+    pub const fn rows(&self) -> usize {
+        self.rows
+    }
+
+    #[must_use]
+    /// Returns the incident variable's local tangent-column count.
+    pub const fn columns(&self) -> usize {
+        self.columns
+    }
+
+    #[must_use]
+    /// Returns characteristic scales for converting normalized increments to raw tangents.
+    pub const fn step_scales(&self) -> &[f64] {
+        self.step_scales
+    }
+
+    #[must_use]
+    /// Returns the current row-major raw-tangent derivative slots.
+    pub fn values(&self) -> &[f64] {
+        self.values
+    }
+
+    /// Returns mutable row-major raw-tangent derivative slots.
+    pub fn values_mut(&mut self) -> &mut [f64] {
+        self.values
+    }
+}
+
+/// Caller-owned fused raw residual and local-Jacobian output storage.
+///
+/// Jacobian blocks are presented in declared residual incidence order.
+#[derive(Debug)]
+pub struct LinearizationStorage<'a, 'b> {
+    residuals: &'a mut [f64],
+    jacobian_blocks: &'b mut [LocalJacobianStorage<'a>],
+    jacobian_coordinates: JacobianCoordinates,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum JacobianCoordinates {
+    RawTangent,
+    NormalizedTangent,
+}
+
+impl<'a, 'b> LinearizationStorage<'a, 'b> {
+    pub(crate) fn new(
+        residuals: &'a mut [f64],
+        jacobian_blocks: &'b mut [LocalJacobianStorage<'a>],
+    ) -> Self {
+        Self {
+            residuals,
+            jacobian_blocks,
+            jacobian_coordinates: JacobianCoordinates::RawTangent,
+        }
+    }
+
+    #[must_use]
+    /// Returns the current raw residual-value slots.
+    pub fn residuals(&self) -> &[f64] {
+        self.residuals
+    }
+
+    /// Returns mutable raw residual-value slots.
+    pub fn residuals_mut(&mut self) -> &mut [f64] {
+        self.residuals
+    }
+
+    #[must_use]
+    /// Returns the number of declared incident Jacobian blocks.
+    pub fn jacobian_block_count(&self) -> usize {
+        self.jacobian_blocks.len()
+    }
+
+    #[must_use]
+    /// Returns one incident raw-tangent Jacobian block in declaration order.
+    pub fn jacobian_block(&self, index: usize) -> Option<&LocalJacobianStorage<'a>> {
+        self.jacobian_blocks.get(index)
+    }
+
+    /// Returns one mutable incident raw-tangent Jacobian block in declaration order.
+    pub fn jacobian_block_mut(&mut self, index: usize) -> Option<&mut LocalJacobianStorage<'a>> {
+        self.jacobian_blocks.get_mut(index)
+    }
+
+    pub(crate) const fn jacobian_coordinates(&self) -> JacobianCoordinates {
+        self.jacobian_coordinates
+    }
+
+    pub(crate) fn mark_normalized_tangent_jacobians(&mut self) {
+        self.jacobian_coordinates = JacobianCoordinates::NormalizedTangent;
+    }
+}
+
 /// Executable residual and local analytic derivatives.
 pub trait ResidualEvaluator: Debug + Send + Sync {
     /// Evaluates raw residual values in row order.
@@ -146,6 +331,26 @@ pub trait ResidualEvaluator: Debug + Send + Sync {
     /// Returns [`EvaluationError`] when a derivative is undefined for the
     /// supplied geometry.
     fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError>;
+
+    /// Writes raw residuals and one raw row-major Jacobian block per incident
+    /// variable into pre-sized caller storage.
+    ///
+    /// The default returns `None`, which asks core dispatch to use
+    /// [`Self::evaluate`] and [`Self::jacobian`]. Implementations return
+    /// `Some(Ok(()))` after overwriting every slot, or `Some(Err(_))` when the
+    /// supplied state cannot be linearized.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EvaluationError`] when the supplied state cannot be
+    /// linearized. Every output slot must be overwritten on success.
+    fn linearize(
+        &self,
+        _variables: &[VariableValue],
+        _storage: &mut LinearizationStorage<'_, '_>,
+    ) -> Option<Result<(), EvaluationError>> {
+        None
+    }
 }
 
 /// One residual block, including executable equations and audit metadata.

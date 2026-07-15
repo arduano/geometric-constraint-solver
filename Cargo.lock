@@ -314,6 +314,7 @@ dependencies = [
  "criterion",
  "indexmap",
  "nalgebra",
+ "num-dual",
  "petgraph",
  "proptest",
  "slotmap",
@@ -547,6 +548,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73f88a1307638156682bada9d7604135552957b7818057dcef22705b4d509495"
 dependencies = [
  "num-traits",
+]
+
+[[package]]
+name = "num-dual"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98e0cc666683839f75c986a1435fbf35f5fcf95621e209ef84ece9fbf2e63931"
+dependencies = [
+ "approx",
+ "nalgebra",
+ "num-traits",
+ "simba",
 ]
 
 [[package]]

@@ -1,8 +1,10 @@
 # Overnight report: Human checkpoint A
 
+> Historical record only. This report describes the completed M1-M4 bootstrap block and is not current project status. See `START_HERE.md` and `PLAN.md` for active guidance.
+
 Date: 2026-07-14
 
-The autonomous M1-M4 block is complete. M5 has not begun.
+At the time of this historical checkpoint, the autonomous M1-M4 block was complete and M5 had not begun.
 
 ## Milestones and commits
 
@@ -261,5 +263,6 @@ Diff from pre-M1 handoff commit `5758589` through M4 commit `67d87db`:
 16 files changed, 10598 insertions(+), 104 deletions(-)
 ```
 
-The branch was clean immediately after `67d87db`. Creating this required report adds
-only uncommitted `OVERNIGHT_REPORT.md`; no implementation changes are pending.
+At that historical checkpoint the branch was clean immediately after `67d87db`.
+Creating the report added only uncommitted `OVERNIGHT_REPORT.md`; no implementation
+changes were pending at that time.

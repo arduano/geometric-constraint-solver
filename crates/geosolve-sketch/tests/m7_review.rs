@@ -2,7 +2,7 @@
 
 use std::f64::consts::{FRAC_PI_2, PI};
 
-use geosolve_core::{SolveReport, SolveTermination, SolverConfig, VariableValue};
+use geosolve_core::{HardValidity, SolveReport, SolveTermination, SolverConfig, VariableValue};
 use geosolve_geometry::Point2;
 use geosolve_sketch::{
     AngleOrientation, ArcSweep, CENTER_DIRECTION_COSINE_MARGIN, CenterDirectionBranch,
@@ -1157,7 +1157,7 @@ fn circle_tangency_literal_matrix_covers_every_mode_and_similarity() {
     let second = invalid.add_circle(second_center, 1.0).unwrap();
     invalid.add_fixed_point(first_center).unwrap();
     invalid.add_fixed_point(second_center).unwrap();
-    invalid
+    let tangency = invalid
         .add_circle_circle_tangency(
             first,
             second,
@@ -1168,10 +1168,9 @@ fn circle_tangency_literal_matrix_covers_every_mode_and_similarity() {
     let result = solve(&mut invalid);
     assert_eq!(
         result.rejection,
-        Some(SolveRejection::CoreTermination(
-            SolveTermination::InvalidGeometry
-        ))
+        Some(SolveRejection::CenterDirectionFlipped(tangency))
     );
+    assert_eq!(result.core_report.hard_validity, HardValidity::Invalid);
 }
 
 #[test]

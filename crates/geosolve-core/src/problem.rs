@@ -4,10 +4,10 @@ use nalgebra::{DMatrix, DVector};
 use slotmap::{Key, SlotMap};
 
 use crate::{
-    AuditBinding, CoreError, EvaluationError, LocalJacobian, ResidualBlock, ResidualCategory,
-    ResidualId, SourceConstraint, SourceConstraintId, VariableBlock, VariableId, VariableKind,
-    VariableValue,
+    AuditBinding, CoreError, EvaluationErrorCategory, ResidualBlock, ResidualCategory, ResidualId,
+    SourceConstraint, SourceConstraintId, VariableBlock, VariableId, VariableKind, VariableValue,
     analysis::{AliasElimination, DecompositionCache, FixedElimination},
+    linearization::{evaluate_values, normalize_residuals},
 };
 
 #[derive(Debug)]
@@ -188,15 +188,22 @@ pub struct AuditRowSnapshot {
     pub scale: f64,
     pub raw_residual: f64,
     pub normalized_residual: f64,
+    /// Whether both value and canonical Jacobian/fused evaluation succeeded.
     pub evaluation_status: AuditEvaluationStatus,
+    /// Machine-readable semantic category retained from evaluator failure.
+    pub evaluation_error_category: Option<EvaluationErrorCategory>,
+    /// Human-readable evaluation failure, when the row was not evaluated completely.
     pub evaluation_error: Option<String>,
     pub annotations: AuditAnnotations,
 }
 
 /// Whether executable value/Jacobian evaluation succeeded for an audit row.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum AuditEvaluationStatus {
+    /// Fresh value and canonical Jacobian/fused evaluation both succeeded.
     Evaluated,
+    /// At least one required evaluation failed; any available fresh values are retained.
     Failed,
 }
 
@@ -544,6 +551,7 @@ impl Problem {
             let variables = Self::incident_values_from_state(residual, &state)?;
             let raw_values = evaluate_values(residual_id, residual, &variables)?;
             let normalized_values = normalize_residuals(residual, &raw_values)?;
+            self.validate_residual_linearization(&state, residual_id)?;
             append_audit_rows(
                 &mut snapshot,
                 residual_id,
@@ -556,7 +564,13 @@ impl Problem {
         Ok(snapshot)
     }
 
-    pub(crate) fn audit_snapshot_partial(&self) -> AuditSnapshot {
+    /// Builds a best-effort audit, retaining fresh finite values on derivative failure.
+    ///
+    /// Rows are marked [`AuditEvaluationStatus::Evaluated`] only when both the
+    /// fresh value evaluation and canonical Jacobian/fused linearization succeed.
+    /// Failed rows retain a structured evaluator category when one is available.
+    #[must_use]
+    pub fn audit_snapshot_partial(&self) -> AuditSnapshot {
         let state = self.variable_state();
         let mut snapshot = self.audit_source_shell();
         for (residual_id, residual) in self.residuals.iter() {
@@ -568,7 +582,9 @@ impl Problem {
                         residual_id,
                         residual,
                         &[],
+                        None,
                         &error.to_string(),
+                        core_error_category(&error),
                     );
                     continue;
                 }
@@ -581,7 +597,9 @@ impl Problem {
                         residual_id,
                         residual,
                         &variables,
+                        None,
                         &error.to_string(),
+                        core_error_category(&error),
                     );
                     continue;
                 }
@@ -594,11 +612,25 @@ impl Problem {
                         residual_id,
                         residual,
                         &variables,
+                        None,
                         &error.to_string(),
+                        core_error_category(&error),
                     );
                     continue;
                 }
             };
+            if let Err(error) = self.validate_residual_linearization(&state, residual_id) {
+                append_failed_audit_rows(
+                    &mut snapshot,
+                    residual_id,
+                    residual,
+                    &variables,
+                    Some((&raw_values, &normalized_values)),
+                    &error.to_string(),
+                    core_error_category(&error),
+                );
+                continue;
+            }
             let _ = append_audit_rows(
                 &mut snapshot,
                 residual_id,
@@ -649,71 +681,43 @@ impl Problem {
         self.assemble_dense_for_state_filtered(state, None)
     }
 
-    pub(crate) fn assemble_dense_for_residuals(
-        &self,
-        state: &VariableState,
-        residual_ids: &[ResidualId],
-    ) -> Result<DenseAssembly, CoreError> {
-        self.assemble_dense_for_state_filtered(state, Some(residual_ids))
-    }
-
     fn assemble_dense_for_state_filtered(
         &self,
         state: &VariableState,
         residual_filter: Option<&[ResidualId]>,
     ) -> Result<DenseAssembly, CoreError> {
-        self.validate_variable_state(state)?;
         let variable_layout = self.packed_layout()?;
-        let mut evaluated_blocks = Vec::new();
-        let mut total_rows = 0usize;
-
-        for (residual_id, residual) in self.residuals.iter() {
-            if residual_filter.is_some_and(|filter| !filter.contains(&residual_id)) {
-                continue;
-            }
-            let values = Self::incident_values_from_state(residual, state)?;
-            let residual_values = evaluate_values(residual_id, residual, &values)?;
-            let jacobians = evaluate_jacobians(residual_id, residual, &values, self)?;
-            let normalized_values = normalize_residuals(residual, &residual_values)?;
-            let normalized_jacobians = normalize_jacobians(residual, &jacobians, self)?;
-            total_rows = total_rows.checked_add(residual.output_dimension()).ok_or(
-                CoreError::DimensionOverflow {
-                    context: "packed residual",
-                },
-            )?;
-            evaluated_blocks.push(EvaluatedBlock {
-                residual_id,
-                incident_variables: residual.incident_variables().to_vec(),
-                normalized_values,
-                normalized_jacobians,
-            });
-        }
-
-        let mut residual_values = Vec::with_capacity(total_rows);
-        let mut jacobian = DMatrix::zeros(total_rows, variable_layout.tangent_dimension());
-        let mut residual_layout = Vec::with_capacity(evaluated_blocks.len());
+        let linearization = self.linearize_blocks_for_state(state, residual_filter)?;
+        linearization
+            .scalar_rows
+            .checked_mul(variable_layout.tangent_dimension())
+            .ok_or(CoreError::DimensionOverflow {
+                context: "dense Jacobian",
+            })?;
+        let mut residual_values = Vec::with_capacity(linearization.scalar_rows);
+        let mut jacobian = DMatrix::zeros(
+            linearization.scalar_rows,
+            variable_layout.tangent_dimension(),
+        );
+        let mut residual_layout = Vec::with_capacity(linearization.blocks.len());
         let mut row_start = 0usize;
-        for block in evaluated_blocks {
-            let row_end = row_start + block.normalized_values.len();
-            residual_values.extend_from_slice(&block.normalized_values);
+        for block in linearization.blocks {
+            let row_end = row_start + block.normalized_residuals.len();
+            residual_values.extend_from_slice(&block.normalized_residuals);
             residual_layout.push(ResidualLayout {
                 residual_id: block.residual_id,
                 row_range: row_start..row_end,
             });
-            for (&variable_id, local) in block
-                .incident_variables
-                .iter()
-                .zip(&block.normalized_jacobians)
-            {
+            for local in block.jacobian_blocks {
                 let layout = variable_layout
-                    .block(variable_id)
-                    .ok_or(CoreError::UnknownVariable(variable_id))?;
-                for local_row in 0..local.rows() {
-                    for local_column in 0..local.columns() {
+                    .block(local.variable_id)
+                    .ok_or(CoreError::UnknownVariable(local.variable_id))?;
+                for local_row in 0..local.rows {
+                    for local_column in 0..local.columns {
                         jacobian[(
                             row_start + local_row,
                             layout.tangent_range.start + local_column,
-                        )] = local.values()[local_row * local.columns() + local_column];
+                        )] = local.normalized_values[local_row * local.columns + local_column];
                     }
                 }
             }
@@ -746,15 +750,18 @@ impl Problem {
 
         for (residual_id, residual) in self.residuals.iter() {
             let base_values = self.incident_values(residual)?;
-            let base_residuals = evaluate_values(residual_id, residual, &base_values)?;
-            let _normalized_base = normalize_residuals(residual, &base_residuals)?;
-            let analytic = evaluate_jacobians(residual_id, residual, &base_values, self)?;
-            let normalized_analytic = normalize_jacobians(residual, &analytic, self)?;
+            let state = self.variable_state();
+            let linearization = self.linearize_blocks_for_state(&state, Some(&[residual_id]))?;
+            let normalized_analytic = &linearization
+                .blocks
+                .first()
+                .ok_or(CoreError::UnknownResidual(residual_id))?
+                .jacobian_blocks;
 
             for (incident_index, (&variable_id, analytic_block)) in residual
                 .incident_variables()
                 .iter()
-                .zip(&normalized_analytic)
+                .zip(normalized_analytic)
                 .enumerate()
             {
                 let variable = self
@@ -802,7 +809,8 @@ impl Problem {
                                 value: numeric,
                             });
                         }
-                        let analytic_value = analytic_block.values()[row * columns + column];
+                        let analytic_value =
+                            analytic_block.normalized_values[row * columns + column];
                         let absolute_error = (analytic_value - numeric).abs();
                         let magnitude = analytic_value.abs().max(numeric.abs());
                         let relative_error = if magnitude > 1.0e-12 {
@@ -888,6 +896,24 @@ impl Problem {
         residual_ids: &[ResidualId],
     ) -> Result<Vec<(ResidualId, usize, SourceConstraintId, f64)>, CoreError> {
         self.normalized_category_values_filtered(state, category, Some(residual_ids))
+    }
+
+    pub(crate) fn normalized_values_for_residuals(
+        &self,
+        state: &VariableState,
+        residual_ids: &[ResidualId],
+    ) -> Result<Vec<f64>, CoreError> {
+        self.validate_variable_state(state)?;
+        let mut values = Vec::new();
+        for (residual_id, residual) in self.residuals.iter() {
+            if !residual_ids.contains(&residual_id) {
+                continue;
+            }
+            let variables = Self::incident_values_from_state(residual, state)?;
+            let raw = evaluate_values(residual_id, residual, &variables)?;
+            values.extend(normalize_residuals(residual, &raw)?);
+        }
+        Ok(values)
     }
 
     fn normalized_category_values_filtered(
@@ -989,6 +1015,7 @@ fn append_audit_rows(
             raw_residual: raw_values[row_in_block],
             normalized_residual: normalized_values[row_in_block],
             evaluation_status: AuditEvaluationStatus::Evaluated,
+            evaluation_error_category: None,
             evaluation_error: None,
             annotations: AuditAnnotations::default(),
         });
@@ -1001,7 +1028,9 @@ fn append_failed_audit_rows(
     residual_id: ResidualId,
     residual: &ResidualBlock,
     variables: &[VariableValue],
+    evaluated_values: Option<(&[f64], &[f64])>,
     error: &str,
+    error_category: Option<EvaluationErrorCategory>,
 ) {
     let incident_variables: Vec<_> = residual
         .incident_variables()
@@ -1018,6 +1047,10 @@ fn append_failed_audit_rows(
         return;
     };
     for (row_in_block, audit) in residual.audit_rows().iter().enumerate() {
+        let (raw_residual, normalized_residual) =
+            evaluated_values.map_or((0.0, 0.0), |(raw_values, normalized_values)| {
+                (raw_values[row_in_block], normalized_values[row_in_block])
+            });
         source_snapshot.rows.push(AuditRowSnapshot {
             residual_id,
             category: residual.category(),
@@ -1027,174 +1060,19 @@ fn append_failed_audit_rows(
             incident_variables: incident_variables.clone(),
             unit: audit.unit.clone(),
             scale: residual.scales()[row_in_block],
-            raw_residual: 0.0,
-            normalized_residual: 0.0,
+            raw_residual,
+            normalized_residual,
             evaluation_status: AuditEvaluationStatus::Failed,
+            evaluation_error_category: error_category,
             evaluation_error: Some(error.to_owned()),
             annotations: AuditAnnotations::default(),
         });
     }
 }
 
-#[derive(Debug)]
-struct EvaluatedBlock {
-    residual_id: ResidualId,
-    incident_variables: Vec<VariableId>,
-    normalized_values: Vec<f64>,
-    normalized_jacobians: Vec<LocalJacobian>,
-}
-
-fn evaluate_values(
-    residual_id: ResidualId,
-    residual: &ResidualBlock,
-    variables: &[VariableValue],
-) -> Result<Vec<f64>, CoreError> {
-    let values = residual
-        .evaluator()
-        .evaluate(variables)
-        .map_err(|error| evaluator_error(residual_id, error))?;
-    if values.len() != residual.output_dimension() {
-        return Err(CoreError::DimensionMismatch {
-            context: "evaluator residual output",
-            expected: residual.output_dimension(),
-            actual: values.len(),
-        });
-    }
-    validate_finite(&values, "evaluator residual output")?;
-    Ok(values)
-}
-
-fn evaluate_jacobians(
-    residual_id: ResidualId,
-    residual: &ResidualBlock,
-    variables: &[VariableValue],
-    problem: &Problem,
-) -> Result<Vec<LocalJacobian>, CoreError> {
-    let jacobians = residual
-        .evaluator()
-        .jacobian(variables)
-        .map_err(|error| evaluator_error(residual_id, error))?;
-    if jacobians.len() != residual.incident_variables().len() {
-        return Err(CoreError::DimensionMismatch {
-            context: "evaluator Jacobian block count",
-            expected: residual.incident_variables().len(),
-            actual: jacobians.len(),
-        });
-    }
-    for (&variable_id, jacobian) in residual.incident_variables().iter().zip(&jacobians) {
-        let variable = problem
-            .variables
-            .get(variable_id)
-            .ok_or(CoreError::UnknownVariable(variable_id))?;
-        if jacobian.rows() != residual.output_dimension() {
-            return Err(CoreError::DimensionMismatch {
-                context: "local Jacobian rows",
-                expected: residual.output_dimension(),
-                actual: jacobian.rows(),
-            });
-        }
-        let columns = variable.kind().tangent_dimension();
-        if jacobian.columns() != columns {
-            return Err(CoreError::DimensionMismatch {
-                context: "local Jacobian columns",
-                expected: columns,
-                actual: jacobian.columns(),
-            });
-        }
-        let expected_values =
-            jacobian
-                .rows()
-                .checked_mul(columns)
-                .ok_or(CoreError::DimensionOverflow {
-                    context: "local Jacobian",
-                })?;
-        if jacobian.values().len() != expected_values {
-            return Err(CoreError::DimensionMismatch {
-                context: "local Jacobian values",
-                expected: expected_values,
-                actual: jacobian.values().len(),
-            });
-        }
-        validate_finite(jacobian.values(), "evaluator Jacobian")?;
-    }
-    Ok(jacobians)
-}
-
-fn normalize_residuals(residual: &ResidualBlock, values: &[f64]) -> Result<Vec<f64>, CoreError> {
-    values
-        .iter()
-        .zip(residual.scales())
-        .enumerate()
-        .map(|(index, (&value, &scale))| {
-            let normalized = value / scale;
-            if normalized.is_finite() {
-                Ok(normalized)
-            } else {
-                Err(CoreError::NonFiniteValue {
-                    context: "normalized residual",
-                    index,
-                    value: normalized,
-                })
-            }
-        })
-        .collect()
-}
-
-fn normalize_jacobians(
-    residual: &ResidualBlock,
-    jacobians: &[LocalJacobian],
-    problem: &Problem,
-) -> Result<Vec<LocalJacobian>, CoreError> {
-    residual
-        .incident_variables()
-        .iter()
-        .zip(jacobians)
-        .map(|(&variable_id, jacobian)| {
-            let variable = problem
-                .variables
-                .get(variable_id)
-                .ok_or(CoreError::UnknownVariable(variable_id))?;
-            let mut values = Vec::with_capacity(jacobian.values().len());
-            for row in 0..jacobian.rows() {
-                for column in 0..jacobian.columns() {
-                    let raw = jacobian.values()[row * jacobian.columns() + column];
-                    let normalized = raw * variable.step_scales()[column] / residual.scales()[row];
-                    if !normalized.is_finite() {
-                        return Err(CoreError::NonFiniteValue {
-                            context: "normalized Jacobian",
-                            index: row * jacobian.columns() + column,
-                            value: normalized,
-                        });
-                    }
-                    values.push(normalized);
-                }
-            }
-            Ok(LocalJacobian::new(
-                jacobian.rows(),
-                jacobian.columns(),
-                values,
-            ))
-        })
-        .collect()
-}
-
-fn validate_finite(values: &[f64], context: &'static str) -> Result<(), CoreError> {
-    for (index, &value) in values.iter().enumerate() {
-        if !value.is_finite() {
-            return Err(CoreError::NonFiniteValue {
-                context,
-                index,
-                value,
-            });
-        }
-    }
-    Ok(())
-}
-
-fn evaluator_error(residual: ResidualId, error: EvaluationError) -> CoreError {
+fn core_error_category(error: &CoreError) -> Option<EvaluationErrorCategory> {
     match error {
-        EvaluationError::InvalidGeometry(message) => {
-            CoreError::InvalidGeometry { residual, message }
-        }
+        CoreError::CategorizedEvaluation { category, .. } => Some(*category),
+        _ => None,
     }
 }

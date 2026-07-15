@@ -3,7 +3,10 @@
 use slotmap::new_key_type;
 
 mod analysis;
+#[allow(dead_code)]
+mod autodiff;
 mod error;
+mod linearization;
 mod problem;
 mod residual;
 mod solver;
@@ -20,12 +23,14 @@ pub use problem::{
     JacobianCheckReport, PackedLayout, PackedState, Problem, ResidualLayout,
 };
 pub use residual::{
-    AuditBinding, EvaluationError, LocalJacobian, ResidualBlock, ResidualCategory,
-    ResidualEvaluator, ResidualRowAudit, SourceConstraint,
+    AuditBinding, EvaluationError, EvaluationErrorCategory, LinearizationStorage, LocalJacobian,
+    LocalJacobianStorage, ResidualBlock, ResidualCategory, ResidualEvaluator, ResidualRowAudit,
+    SourceConstraint,
 };
 pub use solver::{
-    ComponentSolveReport, PrioritySolveReport, RedundancyKind, RedundantRowCandidate,
-    ResidualRowRef, SolveReport, SolveTermination, SolveTrace, SolveTraceRecord, SolverConfig,
+    ComponentSolveReport, HardValidity, PrioritySolveReport, RedundancyKind, RedundantRowCandidate,
+    ResidualRowRef, SecondaryStatus, SolveReport, SolveTermination, SolveTrace, SolveTraceRecord,
+    SolverConfig,
 };
 pub use variable::{VariableBlock, VariableKind, VariableValue};
 

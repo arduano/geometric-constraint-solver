@@ -1,7 +1,7 @@
 use geosolve_core::{
-    AuditBinding, AuditEvaluationStatus, AuditSnapshot, Problem, ResidualBlock, ResidualCategory,
-    ResidualId, ResidualRowAudit, SolveReport, SolveTermination, SolverConfig, SourceConstraint,
-    SourceConstraintId, VariableBlock, VariableId, VariableValue,
+    AuditBinding, AuditEvaluationStatus, AuditSnapshot, HardValidity, Problem, ResidualBlock,
+    ResidualCategory, ResidualId, ResidualRowAudit, SolveReport, SolveTermination, SolverConfig,
+    SourceConstraint, SourceConstraintId, VariableBlock, VariableId, VariableValue,
 };
 use geosolve_geometry::Point2;
 
@@ -357,6 +357,7 @@ pub struct ReferenceDimensionValue {
 
 /// Why a core-returned state was not committed to the sketch.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum SolveRejection {
     CoreTermination(SolveTermination),
     HardResidual {
@@ -386,7 +387,8 @@ pub struct SketchSolveResult {
     pub display_audit: AuditSnapshot,
     pub reference_values: Vec<ReferenceDimensionValue>,
     pub source_mappings: Vec<SketchSourceMapping>,
-    /// Report for the attempted solve, including its candidate-state audit on rejection.
+    /// Attempt report whose `hard_validity` includes sketch equation/domain/branch validation.
+    /// Its audit remains the candidate-state audit on rejection.
     pub core_report: SolveReport,
     pub rejection: Option<SolveRejection>,
     pub acceptance_hard_residual_max: Option<f64>,
@@ -546,7 +548,7 @@ impl Sketch {
         config: SolverConfig,
     ) -> Result<SketchSolveResult, SketchError> {
         let mut compiled = self.compile(request)?;
-        let mut retained_audit = compiled.problem.audit_snapshot()?;
+        let mut retained_audit = compiled.problem.audit_snapshot_partial();
         let mut core_report = compiled.problem.solve(config)?;
         let mut candidate = compiled.solved_state(self)?;
         let mut acceptance_hard_residual_max = None;
@@ -570,16 +572,12 @@ impl Sketch {
             }
         }
 
-        let rejection = if core_report.termination != SolveTermination::Converged {
-            Some(SolveRejection::CoreTermination(core_report.termination))
-        } else if !core_report.hard_residuals_validated
-            || core_report.hard_residual_max > config.normalized_residual_tolerance
-        {
-            Some(SolveRejection::HardResidual {
-                maximum: core_report.hard_residual_max,
-                tolerance: config.normalized_residual_tolerance,
-            })
-        } else {
+        let core_hard_validity = core_report.hard_validity;
+        let candidate_domain_rejection = self
+            .first_flipped_segment(&candidate.geometry)
+            .map(SolveRejection::SegmentBranchFlipped)
+            .or_else(|| self.validate_m7_candidate(&candidate).err());
+        let domain_rejection = if core_hard_validity == HardValidity::Valid {
             match independent_hard_residual_metrics(&compiled.problem) {
                 Ok((maximum, _, _)) => {
                     acceptance_hard_residual_max = Some(maximum);
@@ -589,15 +587,35 @@ impl Sketch {
                             tolerance: config.normalized_residual_tolerance,
                         })
                     } else {
-                        self.first_flipped_segment(&candidate.geometry)
-                            .map(SolveRejection::SegmentBranchFlipped)
-                            .or_else(|| self.validate_m7_candidate(&candidate).err())
+                        candidate_domain_rejection
                     }
                 }
-                Err(error) => Some(SolveRejection::IndependentValidationFailed(
-                    error.to_string(),
-                )),
+                Err(error) => candidate_domain_rejection.or_else(|| {
+                    Some(SolveRejection::IndependentValidationFailed(
+                        error.to_string(),
+                    ))
+                }),
             }
+        } else {
+            candidate_domain_rejection
+        };
+        core_report.hard_validity =
+            domain_hard_validity(core_hard_validity, domain_rejection.as_ref());
+
+        let rejection = if let Some(rejection) = domain_rejection {
+            Some(rejection)
+        } else if core_report.termination != SolveTermination::Converged {
+            Some(SolveRejection::CoreTermination(core_report.termination))
+        } else if core_hard_validity != HardValidity::Valid
+            || !core_report.hard_residuals_validated
+            || core_report.hard_residual_max > config.normalized_residual_tolerance
+        {
+            Some(SolveRejection::HardResidual {
+                maximum: core_report.hard_residual_max,
+                tolerance: config.normalized_residual_tolerance,
+            })
+        } else {
+            None
         };
 
         if rejection.is_none() {
@@ -606,7 +624,12 @@ impl Sketch {
         let display_audit = if rejection.is_none() {
             core_report.audit.clone()
         } else {
-            merge_conflicting_annotations(&mut retained_audit, &core_report.audit);
+            if !matches!(
+                rejection,
+                Some(SolveRejection::ContactParameterOutOfDomain(_))
+            ) {
+                merge_conflicting_annotations(&mut retained_audit, &core_report.audit);
+            }
             retained_audit
         };
 
@@ -715,7 +738,12 @@ impl Sketch {
         }
         for (constraint_id, constraint) in self.constraints.iter() {
             match constraint.kind() {
-                SketchConstraintKind::PointOnLine { domain, .. } => {
+                SketchConstraintKind::PointOnLine {
+                    point,
+                    segment,
+                    domain,
+                    ..
+                } => {
                     let parameter = latent_value(
                         &candidate.latents,
                         constraint_id,
@@ -723,6 +751,37 @@ impl Sketch {
                     )?;
                     if !domain.contains(parameter) {
                         return Err(SolveRejection::ContactParameterOutOfDomain(constraint_id));
+                    }
+                    if domain == crate::LineParameterDomain::BoundedSegment {
+                        let segment = self.segments.get(segment).ok_or(
+                            SolveRejection::IndependentValidationFailed(
+                                "point-on-line references a stale segment".into(),
+                            ),
+                        )?;
+                        let start = candidate.geometry.point(segment.start()).ok_or_else(|| {
+                            SolveRejection::IndependentValidationFailed(
+                                "point-on-line start point is missing".into(),
+                            )
+                        })?;
+                        let end = candidate.geometry.point(segment.end()).ok_or_else(|| {
+                            SolveRejection::IndependentValidationFailed(
+                                "point-on-line end point is missing".into(),
+                            )
+                        })?;
+                        let point = candidate.geometry.point(point).ok_or_else(|| {
+                            SolveRejection::IndependentValidationFailed(
+                                "point-on-line point is missing".into(),
+                            )
+                        })?;
+                        let implied =
+                            projected_line_parameter(start, end, point).ok_or_else(|| {
+                                SolveRejection::IndependentValidationFailed(
+                                    "point-on-line projection could not be evaluated".into(),
+                                )
+                            })?;
+                        if domain.normalize_candidate(implied).is_none() {
+                            return Err(SolveRejection::ContactParameterOutOfDomain(constraint_id));
+                        }
                     }
                 }
                 SketchConstraintKind::PointOnCircle { .. } => {
@@ -735,13 +794,31 @@ impl Sketch {
                         return Err(SolveRejection::ContactParameterOutOfDomain(constraint_id));
                     }
                 }
-                SketchConstraintKind::PointOnArc { .. } => {
+                SketchConstraintKind::PointOnArc { point, arc, .. } => {
                     let parameter = latent_value(
                         &candidate.latents,
                         constraint_id,
                         LatentVariableRole::ArcSpanParameter,
                     )?;
                     if validate_bounded_parameter(parameter, "bounded-arc span [0, 1]").is_err() {
+                        return Err(SolveRejection::ContactParameterOutOfDomain(constraint_id));
+                    }
+                    let solved_arc = candidate.geometry.arc(arc).ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "point-on-arc arc is missing".into(),
+                        )
+                    })?;
+                    let point = candidate.geometry.point(point).ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "point-on-arc point is missing".into(),
+                        )
+                    })?;
+                    let offset = point - solved_arc.center;
+                    let angle = offset.y.atan2(offset.x);
+                    let reference = solved_arc.start_angle + solved_arc.signed_sweep * parameter;
+                    let implied = (unwrap_near(angle, reference) - solved_arc.start_angle)
+                        / solved_arc.signed_sweep;
+                    if normalize_bounded_candidate(implied).is_none() {
                         return Err(SolveRejection::ContactParameterOutOfDomain(constraint_id));
                     }
                 }
@@ -789,6 +866,27 @@ impl Sketch {
                             )
                         })?
                         .center;
+                    if domain == crate::LineParameterDomain::BoundedSegment {
+                        let circle = candidate.geometry.circle(circle).ok_or_else(|| {
+                            SolveRejection::IndependentValidationFailed(
+                                "line tangency circle is missing".into(),
+                            )
+                        })?;
+                        let contact = circle.evaluate(angle).ok_or_else(|| {
+                            SolveRejection::IndependentValidationFailed(
+                                "line tangency circle contact is invalid".into(),
+                            )
+                        })?;
+                        let implied =
+                            projected_line_parameter(start, end, contact).ok_or_else(|| {
+                                SolveRejection::IndependentValidationFailed(
+                                    "line tangency projection could not be evaluated".into(),
+                                )
+                            })?;
+                        if domain.normalize_candidate(implied).is_none() {
+                            return Err(SolveRejection::ContactParameterOutOfDomain(constraint_id));
+                        }
+                    }
                     let direction = end - start;
                     let offset = center - start;
                     let signed_side = direction.x * offset.y - direction.y * offset.x;
@@ -852,6 +950,21 @@ impl Sketch {
                             "circle-arc tangency arc is missing".into(),
                         )
                     })?;
+                    let circle_contact = solved_circle.evaluate(circle_angle).ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "circle-arc tangency circle contact is invalid".into(),
+                        )
+                    })?;
+                    let arc_offset = circle_contact - solved_arc.center;
+                    let contact_angle = arc_offset.y.atan2(arc_offset.x);
+                    let reference =
+                        solved_arc.start_angle + solved_arc.signed_sweep * arc_parameter;
+                    let implied_arc_parameter = (unwrap_near(contact_angle, reference)
+                        - solved_arc.start_angle)
+                        / solved_arc.signed_sweep;
+                    if normalize_bounded_candidate(implied_arc_parameter).is_none() {
+                        return Err(SolveRejection::ContactParameterOutOfDomain(constraint_id));
+                    }
                     let center_offset = solved_circle.center - solved_arc.center;
                     let center_distance = center_offset.norm();
                     if !center_distance.is_finite() || center_distance == 0.0 {
@@ -889,11 +1002,6 @@ impl Sketch {
                     let arc_contact = solved_arc.evaluate(arc_parameter).ok_or_else(|| {
                         SolveRejection::IndependentValidationFailed(
                             "circle-arc tangency arc contact is invalid".into(),
-                        )
-                    })?;
-                    let circle_contact = solved_circle.evaluate(circle_angle).ok_or_else(|| {
-                        SolveRejection::IndependentValidationFailed(
-                            "circle-arc tangency circle contact is invalid".into(),
                         )
                     })?;
                     let center_direction = [
@@ -1125,8 +1233,28 @@ fn validate_request(sketch: &Sketch, request: SketchSolveRequest) -> Result<(), 
 
 fn core_report_is_successful(report: &SolveReport, config: SolverConfig) -> bool {
     report.termination == SolveTermination::Converged
+        && report.hard_validity == HardValidity::Valid
         && report.hard_residuals_validated
         && report.hard_residual_max <= config.normalized_residual_tolerance
+}
+
+fn rejection_hard_validity(rejection: &SolveRejection) -> HardValidity {
+    if matches!(rejection, SolveRejection::IndependentValidationFailed(_)) {
+        HardValidity::NotEvaluated
+    } else {
+        HardValidity::Invalid
+    }
+}
+
+fn domain_hard_validity(
+    core_hard_validity: HardValidity,
+    rejection: Option<&SolveRejection>,
+) -> HardValidity {
+    if core_hard_validity == HardValidity::Valid {
+        rejection.map_or(HardValidity::Valid, rejection_hard_validity)
+    } else {
+        core_hard_validity
+    }
 }
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
@@ -2329,6 +2457,18 @@ fn normalized_direction(x: f64, y: f64) -> Option<[f64; 2]> {
         .then_some([x / norm, y / norm])
 }
 
+fn projected_line_parameter(
+    start: Point2<f64>,
+    end: Point2<f64>,
+    point: Point2<f64>,
+) -> Option<f64> {
+    let direction = end - start;
+    let squared_length = direction.dot(&direction);
+    let parameter = direction.dot(&(point - start)) / squared_length;
+    (squared_length.is_finite() && squared_length > 0.0 && parameter.is_finite())
+        .then_some(parameter)
+}
+
 fn directions_match(first: [f64; 2], second: [f64; 2]) -> bool {
     let dot = first[0] * second[0] + first[1] * second[1];
     let cross = first[0] * second[1] - first[1] * second[0];
@@ -2534,5 +2674,37 @@ mod tests {
                 .abs()
                 <= f64::EPSILON
         );
+    }
+
+    #[test]
+    fn unavailable_domain_validation_maps_valid_core_rows_to_not_evaluated() {
+        let mut sketch = Sketch::new(1.0).unwrap();
+        let start = sketch.add_point(Point2::new(0.0, 0.0)).unwrap();
+        let end = sketch.add_point(Point2::new(1.0, 0.0)).unwrap();
+        let point = sketch.add_point(Point2::new(0.5, 0.0)).unwrap();
+        let line = sketch.add_segment(start, end).unwrap();
+        let constraint = sketch
+            .add_point_on_line(point, line, LineParameterDomain::BoundedSegment, 0.5)
+            .unwrap();
+        let mut compiled = sketch
+            .compile(SketchSolveRequest::default().without_previous_state_preferences())
+            .unwrap();
+        let mut report = compiled.problem.solve(SolverConfig::default()).unwrap();
+        assert_eq!(report.hard_validity, HardValidity::Valid);
+        assert!(report.hard_residuals_validated);
+        let mut candidate = compiled.solved_state(&sketch).unwrap();
+        candidate
+            .latents
+            .retain(|latent| latent.constraint_id != constraint);
+
+        let rejection = sketch.validate_m7_candidate(&candidate).unwrap_err();
+        assert!(matches!(
+            rejection,
+            SolveRejection::IndependentValidationFailed(_)
+        ));
+        report.hard_validity = domain_hard_validity(report.hard_validity, Some(&rejection));
+
+        assert_eq!(report.hard_validity, HardValidity::NotEvaluated);
+        assert!(report.hard_residuals_validated);
     }
 }

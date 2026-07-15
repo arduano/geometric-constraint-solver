@@ -1,9 +1,10 @@
 use thiserror::Error;
 
-use crate::{ResidualId, SourceConstraintId, VariableId, VariableKind};
+use crate::{EvaluationErrorCategory, ResidualId, SourceConstraintId, VariableId, VariableKind};
 
 /// Construction and evaluation failures detected before numerical solving.
 #[derive(Clone, Debug, Error, PartialEq)]
+#[non_exhaustive]
 pub enum CoreError {
     #[error("{context} dimension must be positive")]
     EmptyDimension { context: &'static str },
@@ -49,6 +50,16 @@ pub enum CoreError {
     #[error("residual {residual:?} reported invalid geometry: {message}")]
     InvalidGeometry {
         residual: ResidualId,
+        message: String,
+    },
+    #[error("residual {residual:?} reported {category:?}: {message}")]
+    /// A residual reported a machine-readable semantic geometry failure.
+    CategorizedEvaluation {
+        /// Residual block that rejected evaluation.
+        residual: ResidualId,
+        /// Stable semantic failure category.
+        category: EvaluationErrorCategory,
+        /// Human-readable evaluator context.
         message: String,
     },
     #[error("finite-difference step must be positive and finite, got {0}")]

@@ -342,6 +342,7 @@ pub fn assert_report_finite(report: &SolveReport) {
         report.hard_residual_max,
         report.hard_residual_l2,
         report.rank_relative_tolerance,
+        report.rank_machine_tolerance,
         report.rank_threshold,
     ];
     assert!(report_values.into_iter().all(f64::is_finite), "{report:#?}");
@@ -379,6 +380,25 @@ pub fn assert_report_finite(report: &SolveReport) {
                 .chain(priority.attained_temporary_cost)
                 .all(f64::is_finite),
             "{priority:#?}"
+        );
+    }
+    for component in &report.component_solves {
+        let values = [
+            component.hard_residual_max,
+            component.rank_relative_tolerance,
+            component.rank_machine_tolerance,
+            component.rank_threshold,
+            component.sigma_max,
+            component.near_singular_factor,
+        ];
+        assert!(values.into_iter().all(f64::is_finite), "{component:#?}");
+        assert!(
+            component
+                .smallest_retained_singular_value
+                .into_iter()
+                .chain(component.near_singular_ratio)
+                .all(f64::is_finite),
+            "{component:#?}"
         );
     }
     for source in &report.audit.sources {

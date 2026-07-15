@@ -1,109 +1,54 @@
-# OpenCode overnight handoff
+# GeoSolve active handoff
 
 ## Objective
 
-Implement the difficult but objectively testable solver core overnight, then stop before domain/API/interaction decisions require human review.
+Build two production library deliverables on the validated M1-M7 baseline:
 
-Read these first:
+1. generic 2D CAD sketch constraints, including advanced parametric curves and tangency/continuity;
+2. 2D and 3D rigid-body kinematics for linkages and CAD assemblies.
 
-- `ARCHITECTURE.md`
-- `PLAN.md`
-- `ACCEPTANCE.md`
-- `REFERENCES.md`
-- `docs/SCENARIOS.md`
-- `AGENTS.md`
+This is a kinematics project, not a physics engine. UI work is not on the active roadmap.
 
-## Overnight assignment
+## Read first
 
-Complete **M1, M2, M3 and M4** in `PLAN.md`, in order, then stop at **Human checkpoint A**.
+1. `AGENTS.md`
+2. `PLAN.md`
+3. `ARCHITECTURE.md`
+4. `ACCEPTANCE.md`
+5. `docs/SCENARIOS.md`
+6. `REFERENCES.md`
+7. `docs/adr/0001-*.md` through `docs/adr/0009-*.md`
 
-### M1: problem representation
+`PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical M1-M4 record, not current status.
 
-Expected result:
+## Current state
 
-- packed scalar, `Vec2` and `Pose2` variable blocks with stable IDs;
-- residual blocks with declared incidence/source IDs;
-- hard/temporary/preference categories;
-- structured equation-audit descriptors;
-- dimensionless scaling;
-- dense residual/Jacobian assembly;
-- central finite-difference Jacobian verification;
-- invalid/non-finite input rejection.
+M0-M9 and the advanced free-radius circle/arc tangency follow-up are complete. M0-M7 form the frozen domain baseline; M8-M9 establish the production contracts, representative benchmarks, component-local linearization, local AD, and numerical status/rank policy.
 
-### M2: dense solver
+The next milestone is **M10: persistent solve sessions and first-class bounds**.
 
-Expected result:
+Do not skip directly to splines, NURBS, sparse solving or spatial joints. M10-M12 complete the shared numerical foundation those features require.
 
-- damped Gauss-Newton or Levenberg-Marquardt iteration;
-- dense QR/SVD fallback and rank/DOF calculation;
-- strict independent hard-residual validation;
-- truthful `SolveTermination` and independent diagnostics;
-- deterministic traces and accepted-state equation audit snapshots;
-- exact, underdetermined, inconsistent, rank-deficient and badly scaled fixtures.
+M8 is a contract and benchmark-baseline milestone. It does not implement the M9 linearization, M10 session/bounds, M11 manifold or M12 sparse targets described in the accepted documents.
 
-### M3: adversarial verification
+## Work rules
 
-Expected result:
+1. Complete milestones in `PLAN.md` order.
+2. Keep `geosolve-sketch` and `geosolve-linkage` as separate domains over `geosolve-core`.
+3. Preserve explicit branch/span/winding/assembly state.
+4. Never report success without independent residual and domain validation.
+5. Never weaken a tolerance or remove a regression merely to pass a gate.
+6. Keep APIs private or crate-private until a milestone requires public exposure.
+7. Add a finite-difference Jacobian test and structured audit descriptor for every residual.
+8. Make commits only when the supervising caller permits them.
 
-- property-generated systems with known solution/rank/nullity;
-- construct-valid → perturb → recover tests;
-- translation/rotation/scale metamorphic tests;
-- ordering/permutation determinism tests;
-- failure-injection and last-valid-state tests;
-- solve-trace invariant checks;
-- reproducible random seeds on failure.
-
-### M4: decomposition and diagnostics
-
-Expected result:
-
-- variable/residual incidence graph and connected components;
-- fixed/equality alias elimination;
-- unaffected-component reuse;
-- structural counts plus numerical rank;
-- deterministic redundant/conflict source candidates on synthetic systems;
-- audit annotations for eliminated/redundant/conflicting/singular rows.
-
-## Autonomous execution rules
-
-1. Complete and gate one milestone before beginning the next.
-2. Make one reviewable Git commit per completed milestone.
-3. If a gate fails, fix it before proceeding; never weaken a tolerance or delete a test merely to pass.
-4. Keep new APIs private or `pub(crate)` unless the milestone explicitly requires public exposure.
-5. Prefer small explicit implementations over generic frameworks.
-6. Record architectural uncertainty in `OVERNIGHT_REPORT.md`; do not invent broad abstractions to resolve it.
-7. Stop immediately if satisfying a milestone would require:
-   - a public sketch/linkage model decision;
-   - weighted objectives silently replacing hard constraints;
-   - native solver FFI or `unsafe`;
-   - sparse solving;
-   - browser UX work;
-   - circles/arcs/tangency;
-   - pseudo-arclength continuation;
-   - spatial `SE(3)` mechanisms.
-8. Do not begin M5 even if time remains.
-
-## Gate after every milestone
+## Standard verification
 
 ```bash
-cargo fmt --check
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test --workspace --all-features
-cargo check -p geosolve-demo-web --target wasm32-unknown-unknown
-(cd crates/geosolve-demo-web && trunk build --release)
+cargo fmt --all -- --check
+cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+cargo test --locked --workspace --all-features
+cargo check --locked -p geosolve-demo-web --target wasm32-unknown-unknown
 ```
 
-## Final overnight report
-
-Create `OVERNIGHT_REPORT.md` containing:
-
-1. milestone and commit list;
-2. files/APIs added;
-3. algorithms implemented and important numerical choices;
-4. exact verification commands and outcomes;
-5. acceptance criteria passed or still failing;
-6. deterministic reproduction commands/seeds for any failure;
-7. public API or behavior decisions deferred to Human checkpoint A;
-8. concise diff/stat and current Git status.
-
-Then stop and wait for review.
+Run the relevant Trunk build when shared public APIs or the WASM consumer change. The browser remains a smoke consumer, not a product gate for new interaction design.

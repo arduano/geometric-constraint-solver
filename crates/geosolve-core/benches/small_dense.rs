@@ -3,9 +3,9 @@ use std::time::Duration;
 
 use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 use geosolve_core::{
-    AuditBinding, EvaluationError, LocalJacobian, Problem, ResidualBlock, ResidualCategory,
-    ResidualEvaluator, ResidualRowAudit, SolverConfig, SourceConstraint, VariableBlock,
-    VariableValue,
+    AuditBinding, EvaluationError, LinearizationStorage, LocalJacobian, Problem, ResidualBlock,
+    ResidualCategory, ResidualEvaluator, ResidualRowAudit, SolverConfig, SourceConstraint,
+    VariableBlock, VariableValue,
 };
 
 #[derive(Debug)]
@@ -53,6 +53,44 @@ impl ResidualEvaluator for DenseAffine {
                 )
             })
             .collect())
+    }
+
+    fn linearize(
+        &self,
+        variables: &[VariableValue],
+        storage: &mut LinearizationStorage<'_, '_>,
+    ) -> Option<Result<(), EvaluationError>> {
+        Some((|| {
+            if variables.len() != self.matrix.len()
+                || storage.residuals().len() != self.matrix.len()
+                || storage.jacobian_block_count() != variables.len()
+            {
+                return Err(EvaluationError::invalid_geometry(
+                    "dense benchmark dimensions do not match fused storage",
+                ));
+            }
+            for (row, (coefficients, target)) in self.matrix.iter().zip(&self.target).enumerate() {
+                let mut value = -target;
+                for (column, variable) in variables.iter().enumerate() {
+                    let VariableValue::Scalar(variable) = variable else {
+                        return Err(EvaluationError::invalid_geometry(
+                            "benchmark expected scalar variables",
+                        ));
+                    };
+                    value += coefficients[column] * variable;
+                }
+                storage.residuals_mut()[row] = value;
+            }
+            for column in 0..variables.len() {
+                let block = storage
+                    .jacobian_block_mut(column)
+                    .expect("dense incidence was checked");
+                for row in 0..self.matrix.len() {
+                    block.values_mut()[row] = self.matrix[row][column];
+                }
+            }
+            Ok(())
+        })())
     }
 }
 

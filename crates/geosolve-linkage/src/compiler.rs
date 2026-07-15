@@ -1,7 +1,7 @@
 use geosolve_core::{
-    AuditBinding, AuditEvaluationStatus, AuditSnapshot, Problem, ResidualBlock, ResidualCategory,
-    ResidualId, ResidualRowAudit, SolveReport, SolveTermination, SolverConfig, SourceConstraint,
-    SourceConstraintId, VariableBlock, VariableId, VariableValue,
+    AuditBinding, AuditEvaluationStatus, AuditSnapshot, HardValidity, Problem, ResidualBlock,
+    ResidualCategory, ResidualId, ResidualRowAudit, SolveReport, SolveTermination, SolverConfig,
+    SourceConstraint, SourceConstraintId, VariableBlock, VariableId, VariableValue,
 };
 use geosolve_geometry::{PlaneFrame, Point2, Point3, Pose2, Rotation2, Vector2, Vector3};
 
@@ -221,6 +221,7 @@ impl LinkageGeometry {
 
 /// Why a core-returned candidate was not committed to the linkage.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum SolveRejection {
     CoreTermination(SolveTermination),
     HardResidual { maximum: f64, tolerance: f64 },
@@ -237,6 +238,7 @@ pub struct LinkageSolveResult {
     pub source_mappings: Vec<LinkageSourceMapping>,
     /// Source identities and labels corresponding to the attempted `core_report`.
     pub attempt_source_mappings: Vec<LinkageSourceMapping>,
+    /// Attempt report whose `hard_validity` includes linkage equation/branch validation.
     pub core_report: SolveReport,
     pub diagnostics: LinkageSolveDiagnostics,
     pub rejection: Option<SolveRejection>,
@@ -253,9 +255,9 @@ impl LinkageSolveResult {
 /// Domain-level continuation diagnostics evaluated from the attempted report.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct LinkageSolveDiagnostics {
-    /// Smallest/largest positive singular-value ratio, when numerical rank data exists.
+    /// Minimum within-component positive singular-value ratio, when rank data exists.
     pub singular_value_ratio: Option<f64>,
-    /// True before core's strict rank threshold when a mechanism is visibly ill-conditioned.
+    /// Core singular/near-singular state or the frozen per-component linkage warning policy.
     pub has_rank_warning: bool,
 }
 
@@ -583,53 +585,67 @@ impl Linkage {
     ) -> Result<LinkageSolveResult, LinkageError> {
         let mut retained_compiled = self.compile()?;
         let retained_geometry = retained_compiled.solved_geometry()?;
-        let retained_audit = retained_compiled.problem.audit_snapshot()?;
+        let retained_audit = retained_compiled.problem.audit_snapshot_partial();
         let retained_source_mappings = retained_compiled.source_mappings.clone();
         let mut compiled = self.compile_with_driver_override(driver_override)?;
-        let core_report = compiled.problem.solve(config)?;
+        let mut core_report = compiled.problem.solve(config)?;
         let attempt_source_mappings = compiled.source_mappings.clone();
         let candidate = compiled.solved_geometry();
         let mut acceptance_hard_residual_max = None;
 
-        let rejection = if core_report.termination != SolveTermination::Converged {
+        let core_hard_validity = core_report.hard_validity;
+        let domain_rejection = if core_hard_validity == HardValidity::Valid {
+            if let Err(error) = &candidate {
+                Some(SolveRejection::IndependentValidationFailed(
+                    error.to_string(),
+                ))
+            } else {
+                let candidate = candidate.as_ref().expect("candidate checked above");
+                match fresh_hard_audit_max(&compiled.problem).and_then(|audit_max| {
+                    self.domain_hard_residual_max(candidate, driver_override)
+                        .map(|domain_max| audit_max.max(domain_max))
+                }) {
+                    Ok(maximum) => {
+                        acceptance_hard_residual_max = Some(maximum);
+                        if maximum > config.normalized_residual_tolerance {
+                            Some(SolveRejection::HardResidual {
+                                maximum,
+                                tolerance: config.normalized_residual_tolerance,
+                            })
+                        } else {
+                            match self.first_branch_violation(candidate) {
+                                Ok(violation) => violation.map(SolveRejection::BranchViolation),
+                                Err(error) => Some(SolveRejection::IndependentValidationFailed(
+                                    error.to_string(),
+                                )),
+                            }
+                        }
+                    }
+                    Err(error) => Some(SolveRejection::IndependentValidationFailed(
+                        error.to_string(),
+                    )),
+                }
+            }
+        } else {
+            None
+        };
+        core_report.hard_validity =
+            domain_hard_validity(core_hard_validity, domain_rejection.as_ref());
+
+        let rejection = if let Some(rejection) = domain_rejection {
+            Some(rejection)
+        } else if core_report.termination != SolveTermination::Converged {
             Some(SolveRejection::CoreTermination(core_report.termination))
-        } else if !core_report.hard_residuals_validated
+        } else if core_hard_validity != HardValidity::Valid
+            || !core_report.hard_residuals_validated
             || core_report.hard_residual_max > config.normalized_residual_tolerance
         {
             Some(SolveRejection::HardResidual {
                 maximum: core_report.hard_residual_max,
                 tolerance: config.normalized_residual_tolerance,
             })
-        } else if let Err(error) = &candidate {
-            Some(SolveRejection::IndependentValidationFailed(
-                error.to_string(),
-            ))
         } else {
-            let candidate = candidate.as_ref().expect("candidate checked above");
-            match fresh_hard_audit_max(&compiled.problem).and_then(|audit_max| {
-                self.domain_hard_residual_max(candidate, driver_override)
-                    .map(|domain_max| audit_max.max(domain_max))
-            }) {
-                Ok(maximum) => {
-                    acceptance_hard_residual_max = Some(maximum);
-                    if maximum > config.normalized_residual_tolerance {
-                        Some(SolveRejection::HardResidual {
-                            maximum,
-                            tolerance: config.normalized_residual_tolerance,
-                        })
-                    } else {
-                        match self.first_branch_violation(candidate) {
-                            Ok(violation) => violation.map(SolveRejection::BranchViolation),
-                            Err(error) => Some(SolveRejection::IndependentValidationFailed(
-                                error.to_string(),
-                            )),
-                        }
-                    }
-                }
-                Err(error) => Some(SolveRejection::IndependentValidationFailed(
-                    error.to_string(),
-                )),
-            }
+            None
         };
 
         if rejection.is_none() {
@@ -1233,6 +1249,25 @@ fn fresh_hard_audit_max(problem: &Problem) -> Result<f64, LinkageError> {
     Ok(maximum)
 }
 
+fn rejection_hard_validity(rejection: &SolveRejection) -> HardValidity {
+    if matches!(rejection, SolveRejection::IndependentValidationFailed(_)) {
+        HardValidity::NotEvaluated
+    } else {
+        HardValidity::Invalid
+    }
+}
+
+fn domain_hard_validity(
+    core_hard_validity: HardValidity,
+    rejection: Option<&SolveRejection>,
+) -> HardValidity {
+    if core_hard_validity == HardValidity::Valid {
+        rejection.map_or(HardValidity::Valid, rejection_hard_validity)
+    } else {
+        core_hard_validity
+    }
+}
+
 fn geometry_point(
     geometry: &LinkageGeometry,
     feature: PointFeatureId,
@@ -1280,6 +1315,7 @@ fn refresh_retained_audit(
 ) -> Option<AuditSnapshot> {
     let report = compiled.problem.solve(config).ok()?;
     if report.termination != SolveTermination::Converged
+        || report.hard_validity != HardValidity::Valid
         || !report.hard_residuals_validated
         || report.hard_residual_max > config.normalized_residual_tolerance
     {
@@ -1319,25 +1355,170 @@ fn same_body_poses(first: &LinkageGeometry, second: &LinkageGeometry) -> bool {
 }
 
 fn linkage_diagnostics(report: &SolveReport) -> LinkageSolveDiagnostics {
-    let largest = report
-        .singular_values
+    let singular_value_ratio = report
+        .component_solves
         .iter()
-        .copied()
-        .fold(0.0_f64, f64::max);
-    let smallest = report
-        .singular_values
-        .iter()
-        .copied()
-        .filter(|value| *value > 0.0)
-        .fold(f64::INFINITY, f64::min);
-    let singular_value_ratio = if largest > 0.0 && smallest.is_finite() {
-        Some(smallest / largest)
-    } else {
-        None
-    };
+        .filter(|component| component.rank_is_valid && component.sigma_max > 0.0)
+        .filter_map(|component| {
+            component
+                .singular_values
+                .iter()
+                .copied()
+                .filter(|value| *value > 0.0)
+                .min_by(f64::total_cmp)
+                .map(|smallest| smallest / component.sigma_max)
+                .filter(|ratio| ratio.is_finite())
+        })
+        .min_by(f64::total_cmp);
     LinkageSolveDiagnostics {
         singular_value_ratio,
-        has_rank_warning: report.is_singular
+        has_rank_warning: report
+            .component_solves
+            .iter()
+            .any(|component| component.is_singular || component.near_singular)
             || singular_value_ratio.is_some_and(|ratio| ratio <= RANK_WARNING_SINGULAR_VALUE_RATIO),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use geosolve_core::{EvaluationError, LocalJacobian, ResidualEvaluator, SecondaryStatus};
+
+    use super::*;
+
+    #[derive(Clone, Copy, Debug)]
+    struct StalledTemporary;
+
+    impl ResidualEvaluator for StalledTemporary {
+        fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+            let [VariableValue::Scalar(value)] = variables else {
+                return Err(EvaluationError::invalid_geometry("expected one scalar"));
+            };
+            if *value == 0.0 {
+                Ok(vec![-1.0])
+            } else {
+                Err(EvaluationError::out_of_domain(
+                    "temporary trial left its fixed branch",
+                ))
+            }
+        }
+
+        fn jacobian(
+            &self,
+            _variables: &[VariableValue],
+        ) -> Result<Vec<LocalJacobian>, EvaluationError> {
+            Ok(vec![LocalJacobian::new(1, 1, vec![1.0])])
+        }
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    struct ScalarCoefficient(f64);
+
+    impl ResidualEvaluator for ScalarCoefficient {
+        fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+            let [VariableValue::Scalar(value)] = variables else {
+                return Err(EvaluationError::invalid_geometry("expected one scalar"));
+            };
+            Ok(vec![self.0 * value])
+        }
+
+        fn jacobian(
+            &self,
+            _variables: &[VariableValue],
+        ) -> Result<Vec<LocalJacobian>, EvaluationError> {
+            Ok(vec![LocalJacobian::new(1, 1, vec![self.0])])
+        }
+    }
+
+    fn add_scalar_row(
+        problem: &mut Problem,
+        variable: VariableId,
+        label: &str,
+        evaluator: impl ResidualEvaluator + 'static,
+        category: ResidualCategory,
+    ) {
+        let source = problem.add_source(SourceConstraint::new(label).unwrap());
+        problem
+            .add_residual(
+                ResidualBlock::new(
+                    source,
+                    category,
+                    vec![variable],
+                    1,
+                    vec![1.0],
+                    vec![ResidualRowAudit::new(
+                        label,
+                        vec![AuditBinding::new("x", label)],
+                        "1",
+                    )],
+                    evaluator,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn valid_linkage_domain_does_not_turn_secondary_stall_into_hard_invalidity() {
+        let mut problem = Problem::new();
+        let variable = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());
+        add_scalar_row(
+            &mut problem,
+            variable,
+            "stalled temporary",
+            StalledTemporary,
+            ResidualCategory::Temporary,
+        );
+        let mut report = problem.solve(SolverConfig::default()).unwrap();
+        assert_eq!(report.temporary_status, SecondaryStatus::Stalled);
+        assert_eq!(report.hard_validity, HardValidity::Valid);
+
+        let linkage = Linkage::new(1.0, crate::xy_plane_frame()).unwrap();
+        let geometry = linkage.geometry().unwrap();
+        assert_eq!(
+            linkage
+                .domain_hard_residual_max(&geometry, None)
+                .unwrap()
+                .to_bits(),
+            0.0_f64.to_bits()
+        );
+        assert!(linkage.first_branch_violation(&geometry).unwrap().is_none());
+        report.hard_validity = domain_hard_validity(report.hard_validity, None);
+
+        assert_eq!(report.hard_validity, HardValidity::Valid);
+        assert!(report.hard_residuals_validated);
+    }
+
+    #[test]
+    fn linkage_conditioning_never_compares_extrema_across_components() {
+        let mut problem = Problem::new();
+        let ordinary = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());
+        let large = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());
+        add_scalar_row(
+            &mut problem,
+            ordinary,
+            "ordinary component",
+            ScalarCoefficient(1.0),
+            ResidualCategory::Hard,
+        );
+        add_scalar_row(
+            &mut problem,
+            large,
+            "large component",
+            ScalarCoefficient(1.0e12),
+            ResidualCategory::Hard,
+        );
+        let report = problem.solve(SolverConfig::default()).unwrap();
+
+        let diagnostics = linkage_diagnostics(&report);
+
+        assert_eq!(diagnostics.singular_value_ratio, Some(1.0));
+        assert!(!diagnostics.has_rank_warning);
+        assert!(
+            report
+                .component_solves
+                .iter()
+                .all(|component| !component.near_singular && !component.is_singular)
+        );
     }
 }

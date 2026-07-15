@@ -2,7 +2,8 @@
 
 use geosolve_core::{
     AuditEvaluationStatus, AuditRowSnapshot, AuditSnapshot, AuditSourceSnapshot, CoreError,
-    ResidualCategory, SolveTermination, SolverConfig, SourceConstraintId, VariableValue,
+    EvaluationErrorCategory, HardValidity, ResidualCategory, SolveTermination, SolverConfig,
+    SourceConstraintId, VariableValue,
 };
 use geosolve_geometry::Point2;
 use geosolve_sketch::{
@@ -1249,7 +1250,10 @@ fn zero_length_distance_derivative_is_invalid_and_retains_geometry() {
     let compiled = sketch.compile(SketchSolveRequest::default()).unwrap();
     assert!(matches!(
         compiled.problem().check_jacobians(1.0e-5),
-        Err(CoreError::InvalidGeometry { .. })
+        Err(CoreError::CategorizedEvaluation {
+            category: EvaluationErrorCategory::Nondifferentiable,
+            ..
+        })
     ));
 
     let result = sketch
@@ -1279,8 +1283,17 @@ fn zero_length_distance_derivative_is_invalid_and_retains_geometry() {
     );
     assert!((row.raw_residual + 2.0).abs() <= f64::EPSILON);
     assert!((row.normalized_residual + 2.0).abs() <= f64::EPSILON);
-    assert_eq!(row.evaluation_status, AuditEvaluationStatus::Evaluated);
-    assert_eq!(row.evaluation_error, None);
+    assert_eq!(row.evaluation_status, AuditEvaluationStatus::Failed);
+    assert_eq!(
+        row.evaluation_error_category,
+        Some(EvaluationErrorCategory::Nondifferentiable)
+    );
+    assert!(
+        row.evaluation_error
+            .as_deref()
+            .unwrap()
+            .contains("distance derivative")
+    );
     let attempted_row = audit_row(&result.core_report.audit, "distance A-B");
     assert_eq!(
         row.annotations.conflicting,
@@ -1314,6 +1327,8 @@ fn explicit_segment_branch_rejects_a_converged_flipped_root_without_committing()
         .solve(SketchSolveRequest::default(), SolverConfig::default())
         .unwrap();
     assert_eq!(result.core_report.termination, SolveTermination::Converged);
+    assert_eq!(result.core_report.hard_validity, HardValidity::Invalid);
+    assert!(result.core_report.hard_residuals_validated);
     assert_eq!(
         result.rejection,
         Some(SolveRejection::SegmentBranchFlipped(segment))

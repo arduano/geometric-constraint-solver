@@ -1,14 +1,15 @@
-use std::ops::Range;
-
 use nalgebra::{DMatrix, DVector};
 
 use crate::analysis::{
     CachedComponent, DecompositionCache, EliminationPlan, SolveComponent, set_state_value,
 };
+use crate::linearization::{
+    ComponentDenseSystem, ComponentTangentLayout, component_tangent_layout,
+};
 use crate::problem::VariableState;
 use crate::{
-    AuditEvaluationStatus, AuditSnapshot, CoreError, DenseAssembly, Problem, ResidualCategory,
-    ResidualId, SourceConstraintId, StructuralSummary, VariableId,
+    AuditEvaluationStatus, AuditSnapshot, CoreError, Problem, ResidualCategory, ResidualId,
+    SourceConstraintId, StructuralSummary, VariableId,
 };
 
 const MAX_CONFLICT_COMPONENT_SOURCES: usize = 12;
@@ -17,18 +18,55 @@ const MAX_PRIORITY_LINE_SEARCH_STEPS: usize = 20;
 const PRIORITY_REPROJECTION_TOLERANCE: f64 = 8.0 * f64::EPSILON;
 const PRIORITY_COST_RESOLUTION_FACTOR: f64 = 8.0;
 const PRIORITY_HESSIAN_NORMALIZED_STEP: f64 = 1.0e-3;
+const NEAR_SINGULAR_FACTOR: f64 = 100.0;
 // This is only the squared residual roundoff band for preserving an attained zero cost.
 const PRIORITY_ZERO_COST_ROUNDOFF: f64 =
     0.5 * PRIORITY_REPROJECTION_TOLERANCE * PRIORITY_REPROJECTION_TOLERANCE;
 
 /// Why nonlinear iteration stopped. Constraint-system diagnostics are separate.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum SolveTermination {
+    /// The requested iteration policy met its convergence criteria.
     Converged,
+    /// Finite iteration could not find an acceptable improving step.
     Stalled,
+    /// The configured iteration budget was exhausted.
     IterationLimit,
+    /// A residual rejected the returned or trial geometry.
     InvalidGeometry,
+    /// Non-finite arithmetic or another numerical operation failed.
     NumericalFailure,
+}
+
+/// Result of fresh independent hard-constraint validation at the returned state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum HardValidity {
+    /// Core hard rows and all caller-owned domain validators accepted the returned state.
+    Valid,
+    /// Complete validation ran and rejected at least one hard equation or domain invariant.
+    Invalid,
+    /// Complete independent validation could not be evaluated.
+    NotEvaluated,
+}
+
+/// Aggregate outcome for one requested secondary priority level.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum SecondaryStatus {
+    /// No residuals requested this priority level.
+    NotRequested,
+    /// The requested secondary objective met its optimum criteria.
+    Optimal,
+    /// The immutable hard state made the finite secondary result acceptable but not optimal.
+    Acceptable,
+    /// Finite secondary iteration could not find an acceptable improving step.
+    Stalled,
+    /// The secondary iteration budget was exhausted.
+    IterationLimit,
+    /// Evaluation failed without changing authoritative hard validity.
+    EvaluationFailure,
 }
 
 /// One deterministic attempted LM step.
@@ -82,19 +120,55 @@ pub struct RedundantRowCandidate {
 /// Numerical outcome for one reduced solve component.
 #[derive(Clone, Debug, PartialEq)]
 #[allow(clippy::struct_excessive_bools)]
+#[non_exhaustive]
 pub struct ComponentSolveReport {
+    /// Stable index into the report's reduced component ordering.
     pub component_index: usize,
+    /// Deterministic reduced-incidence pattern signature.
     pub pattern_signature: u64,
+    /// Whether the existing decomposed cache supplied this component result.
     pub reused: bool,
+    /// Hard and secondary outer iterations attributed to this component.
     pub iterations: usize,
+    /// Compatibility aggregate termination including secondary optimization.
     pub termination: SolveTermination,
+    /// Termination of hard nonlinear iteration alone.
+    pub hard_termination: SolveTermination,
+    /// Fresh independent core-row validity for this component.
+    pub hard_validity: HardValidity,
+    /// Whether every active hard core row was freshly evaluated and finite.
     pub hard_residuals_validated: bool,
+    /// Maximum absolute normalized hard residual at the returned state.
     pub hard_residual_max: f64,
+    /// Whether all numerical-rank inputs and decomposition outputs were finite.
     pub rank_is_valid: bool,
+    /// Count of singular values strictly greater than `rank_threshold`.
     pub rank: usize,
+    /// Component hard-row count minus numerical rank.
+    pub left_nullity: usize,
+    /// Component active tangent dimension minus numerical rank.
+    pub right_nullity: usize,
+    /// Compatibility alias for `right_nullity` before active bounds exist.
     pub local_degrees_of_freedom: usize,
+    /// Whether rank is below the smaller component matrix dimension.
     pub is_singular: bool,
+    /// Configured relative factor used by the numerical-rank policy.
+    pub rank_relative_tolerance: f64,
+    /// Machine-floor threshold before taking the maximum with the relative threshold.
+    pub rank_machine_tolerance: f64,
+    /// Authoritative component threshold used with a strict greater-than comparison.
     pub rank_threshold: f64,
+    /// Largest component singular value, or zero for an empty/all-zero spectrum.
+    pub sigma_max: f64,
+    /// Smallest singular value retained in numerical rank, when one exists.
+    pub smallest_retained_singular_value: Option<f64>,
+    /// Inclusive warning-band multiplier applied to `rank_threshold`.
+    pub near_singular_factor: f64,
+    /// Smallest retained singular value divided by `rank_threshold`.
+    pub near_singular_ratio: Option<f64>,
+    /// Whether the retained spectrum lies inside the warning band without changing rank.
+    pub near_singular: bool,
+    /// Finite component singular values in decomposition order.
     pub singular_values: Vec<f64>,
     /// Component-local costs. Reused components always have an empty trace.
     pub trace: SolveTrace,
@@ -105,9 +179,12 @@ pub struct ComponentSolveReport {
 /// `component_index` is `None` for fixed-only rows and unsupported
 /// cross-component incidence. Costs are absent when initial evaluation failed.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub struct PrioritySolveReport {
     pub component_index: Option<usize>,
+    /// Priority category represented by this pass.
     pub category: ResidualCategory,
+    /// Iterations consumed by this category-level pass.
     pub iterations: usize,
     /// Initial dimensionless `0.5 * ||r||^2`, absent when evaluation failed.
     pub initial_cost: Option<f64>,
@@ -115,41 +192,78 @@ pub struct PrioritySolveReport {
     pub final_cost: Option<f64>,
     /// Temporary cost attained before this Preference pass, when applicable.
     pub attained_temporary_cost: Option<f64>,
+    /// Compatibility termination for this priority pass.
     pub termination: SolveTermination,
+    /// Orthogonal secondary optimization outcome.
+    pub status: SecondaryStatus,
 }
 
 /// Numerical and structural facts evaluated at the returned state.
 #[derive(Clone, Debug, PartialEq)]
+#[allow(clippy::struct_excessive_bools)]
+#[non_exhaustive]
 pub struct SolveReport {
+    /// Compatibility aggregate termination including secondary optimization.
     pub termination: SolveTermination,
+    /// Aggregate hard-only nonlinear termination.
+    pub hard_termination: SolveTermination,
+    /// Authoritative fresh hard validity; domain wrappers extend this before returning results.
+    pub hard_validity: HardValidity,
+    /// Aggregate temporary-objective outcome.
+    pub temporary_status: SecondaryStatus,
+    /// Aggregate preference-objective outcome.
+    pub preference_status: SecondaryStatus,
     /// Hard trace records plus category-level priority outer iterations.
     pub iterations: usize,
+    /// Finite problem state returned by core, whether accepted or rolled back.
     pub accepted_state: crate::PackedState,
+    /// Whether every active hard core row was freshly evaluated and finite.
     pub hard_residuals_validated: bool,
+    /// Maximum absolute normalized hard core residual.
     pub hard_residual_max: f64,
+    /// Stable Euclidean norm of normalized hard core residuals.
     pub hard_residual_l2: f64,
+    /// Whether every component numerical-rank result is valid.
     pub rank_is_valid: bool,
+    /// Sum of component-local numerical ranks.
     pub rank: usize,
+    /// Sum of component-local numerical left nullities.
+    pub left_nullity: usize,
+    /// Sum of component-local numerical right nullities.
+    pub right_nullity: usize,
+    /// Compatibility alias for aggregate `right_nullity` before active bounds exist.
     pub local_degrees_of_freedom: usize,
+    /// Whether any component is numerically singular.
     pub is_singular: bool,
+    /// Whether any component lies in the distinct near-singular warning band.
+    pub near_singular: bool,
+    /// Configured component-local relative rank tolerance.
     pub rank_relative_tolerance: f64,
+    /// Maximum component-local machine floor; component reports are authoritative.
+    pub rank_machine_tolerance: f64,
     /// Maximum component-local rank threshold; component reports retain each threshold.
     pub rank_threshold: f64,
     /// Component singular values concatenated in reduced component order.
     pub singular_values: Vec<f64>,
+    /// Sources identified by the bounded core conflict analysis.
     pub conflicting_sources: Vec<SourceConstraintId>,
     /// Sources whose complete active row group is redundant to prior sources.
     pub redundant_sources: Vec<SourceConstraintId>,
     /// Sources containing at least one redundant row, including partial groups.
     pub sources_containing_redundant_rows: Vec<SourceConstraintId>,
+    /// Individual nonzero satisfied rows identified as numerically dependent.
     pub redundant_rows: Vec<RedundantRowCandidate>,
+    /// Hard rows associated with a numerical singularity diagnostic.
     pub singular_rows: Vec<ResidualRowRef>,
+    /// Separate graph/count structural summary; this is not numerical rank.
     pub structural: StructuralSummary,
+    /// Authoritative component-local solve and rank reports.
     pub component_solves: Vec<ComponentSolveReport>,
     /// Lexicographic secondary outcomes, kept separate from hard-cost traces.
     pub priority_solves: Vec<PrioritySolveReport>,
     /// Hard-only records carry component identity; priority costs are reported separately.
     pub trace: SolveTrace,
+    /// Returned-state equation audit, including failed evaluation rows.
     pub audit: AuditSnapshot,
 }
 
@@ -396,29 +510,48 @@ impl Problem {
                     &numerical.hard,
                     &validation.rows,
                     &self.source_order(),
-                    numerical.rank_threshold,
+                    numerical.diagnostics.threshold,
                     config.normalized_residual_tolerance,
                 );
                 all_redundancy.extend(redundancy.rows);
             }
             singular_rows.extend(numerical.singular_rows.iter().copied());
             let summary = &plan.structural.component_summaries[component.index];
+            let left_nullity = numerical
+                .hard
+                .jacobian
+                .nrows()
+                .saturating_sub(numerical.diagnostics.rank);
+            let right_nullity = numerical
+                .hard
+                .jacobian
+                .ncols()
+                .saturating_sub(numerical.diagnostics.rank);
             component_solves.push(ComponentSolveReport {
                 component_index: component.index,
                 pattern_signature: summary.pattern_signature,
                 reused: execution.reused,
                 iterations: execution.trace.records.len(),
                 termination,
+                hard_termination: execution.termination,
+                hard_validity: validation.hard_validity,
                 hard_residuals_validated: validation.evaluated,
                 hard_residual_max: validation.maximum,
                 rank_is_valid: numerical.rank_is_valid,
-                rank: numerical.rank,
-                local_degrees_of_freedom: summary
-                    .active_tangent_dimensions
-                    .saturating_sub(numerical.rank),
+                rank: numerical.diagnostics.rank,
+                left_nullity,
+                right_nullity,
+                local_degrees_of_freedom: right_nullity,
                 is_singular: numerical.is_singular,
-                rank_threshold: numerical.rank_threshold,
-                singular_values: numerical.singular_values,
+                rank_relative_tolerance: numerical.diagnostics.relative_tolerance,
+                rank_machine_tolerance: numerical.diagnostics.machine_tolerance,
+                rank_threshold: numerical.diagnostics.threshold,
+                sigma_max: numerical.diagnostics.sigma_max,
+                smallest_retained_singular_value: numerical.diagnostics.smallest_retained,
+                near_singular_factor: numerical.diagnostics.near_singular_factor,
+                near_singular_ratio: numerical.diagnostics.near_singular_ratio,
+                near_singular: numerical.diagnostics.near_singular,
+                singular_values: numerical.diagnostics.singular_values,
                 trace: execution.trace.clone(),
             });
         }
@@ -449,13 +582,25 @@ impl Problem {
             .iter()
             .map(|component| component.rank)
             .sum();
-        let local_degrees_of_freedom = component_solves
+        let left_nullity = component_solves
             .iter()
-            .map(|component| component.local_degrees_of_freedom)
+            .map(|component| component.left_nullity)
             .sum();
+        let right_nullity = component_solves
+            .iter()
+            .map(|component| component.right_nullity)
+            .sum();
+        let local_degrees_of_freedom = right_nullity;
         let is_singular = component_solves
             .iter()
             .any(|component| component.is_singular);
+        let near_singular = component_solves
+            .iter()
+            .any(|component| component.near_singular);
+        let rank_machine_tolerance = component_solves
+            .iter()
+            .map(|component| component.rank_machine_tolerance)
+            .fold(0.0, f64::max);
         let rank_threshold = component_solves
             .iter()
             .map(|component| component.rank_threshold)
@@ -465,6 +610,23 @@ impl Problem {
             .flat_map(|component| component.singular_values.iter().copied())
             .collect();
         let returned_evaluation = validate_returned_rows(self, &state);
+        let hard_termination = component_solves
+            .iter()
+            .map(|component| component.hard_termination)
+            .fold(SolveTermination::Converged, worse_termination);
+        let hard_validity = if hard_l2_is_valid {
+            aggregate_hard_validity(&component_solves)
+        } else {
+            HardValidity::NotEvaluated
+        };
+        let temporary_status =
+            aggregate_secondary_status(self, ResidualCategory::Temporary, priority_solves, None);
+        let preference_status = aggregate_secondary_status(
+            self,
+            ResidualCategory::Preference,
+            priority_solves,
+            Some(temporary_status),
+        );
         let mut termination = component_solves
             .iter()
             .map(|component| component.termination)
@@ -514,6 +676,10 @@ impl Problem {
             .sum::<usize>();
         Ok(SolveReport {
             termination,
+            hard_termination,
+            hard_validity,
+            temporary_status,
+            preference_status,
             iterations: trace.records.len().saturating_add(priority_iterations),
             accepted_state,
             hard_residuals_validated,
@@ -521,9 +687,13 @@ impl Problem {
             hard_residual_l2,
             rank_is_valid,
             rank,
+            left_nullity,
+            right_nullity,
             local_degrees_of_freedom,
             is_singular,
+            near_singular,
             rank_relative_tolerance: config.rank_relative_tolerance,
+            rank_machine_tolerance,
             rank_threshold,
             singular_values,
             conflicting_sources,
@@ -641,25 +811,15 @@ fn iterate_component(
             trace,
         };
     }
-    let assembly =
-        match problem.assemble_dense_for_residuals(&state, &component.active_residual_ids) {
-            Ok(assembly) => assembly,
-            Err(error) => {
-                return IterationOutcome {
-                    termination: error_termination(&error),
-                    state,
-                    trace,
-                };
-            }
-        };
-    let Ok(mut current_hard) =
-        extract_active_hard_system(problem, plan, &assembly, component.index)
-    else {
-        return IterationOutcome {
-            termination: SolveTermination::NumericalFailure,
-            state,
-            trace,
-        };
+    let mut current_hard = match linearized_hard_system(problem, plan, component, &state) {
+        Ok(system) => system,
+        Err(error) => {
+            return IterationOutcome {
+                termination: error_termination(&error),
+                state,
+                trace,
+            };
+        }
     };
     let Some(mut cost) = residual_cost(&current_hard.residuals) else {
         return IterationOutcome {
@@ -721,10 +881,8 @@ fn iterate_component(
                 }
                 continue;
             }
-            let trial_assembly = match problem
-                .assemble_dense_for_residuals(&trial_state, &component.active_residual_ids)
-            {
-                Ok(assembly) => assembly,
+            let trial_hard = match linearized_hard_system(problem, plan, component, &trial_state) {
+                Ok(system) => system,
                 Err(error) if recoverable_trial_error(&error) => {
                     trace.records.push(rejected_record(
                         iteration,
@@ -744,12 +902,6 @@ fn iterate_component(
                     termination = SolveTermination::NumericalFailure;
                     break;
                 }
-            };
-            let Ok(trial_hard) =
-                extract_active_hard_system(problem, plan, &trial_assembly, component.index)
-            else {
-                termination = SolveTermination::NumericalFailure;
-                break;
             };
             let Some(trial_cost) = residual_cost(&trial_hard.residuals) else {
                 trace.records.push(rejected_record(
@@ -1502,6 +1654,7 @@ fn priority_component_report(
             final_cost,
             attained_temporary_cost,
             termination,
+            status: secondary_status(termination, false),
         },
     }
 }
@@ -1527,6 +1680,16 @@ fn evaluate_nonmoving_priority(
             final_cost: cost,
             attained_temporary_cost: None,
             termination: worse_termination(required_termination, evaluation_termination),
+            status: if required_termination == SolveTermination::Converged
+                && evaluation_termination == SolveTermination::Converged
+            {
+                SecondaryStatus::Acceptable
+            } else {
+                secondary_status(
+                    worse_termination(required_termination, evaluation_termination),
+                    false,
+                )
+            },
         },
         residual_ids: residual_ids.to_vec(),
     }
@@ -1544,6 +1707,7 @@ fn refresh_priority_final_costs(
                 record.report.final_cost = None;
                 record.report.termination =
                     worse_termination(record.report.termination, error_termination(&error));
+                record.report.status = SecondaryStatus::EvaluationFailure;
             }
         }
     }
@@ -1554,8 +1718,9 @@ fn priority_cost_for_residuals(
     state: &VariableState,
     residual_ids: &[ResidualId],
 ) -> Result<f64, CoreError> {
-    let assembly = problem.assemble_dense_for_residuals(state, residual_ids)?;
-    residual_cost(assembly.residuals()).ok_or(CoreError::NonFiniteValue {
+    let residuals =
+        DVector::from_vec(problem.normalized_values_for_residuals(state, residual_ids)?);
+    residual_cost(&residuals).ok_or(CoreError::NonFiniteValue {
         context: "priority residual cost",
         index: 0,
         value: f64::INFINITY,
@@ -1918,8 +2083,11 @@ fn linearized_hard_system(
     component: &SolveComponent,
     state: &VariableState,
 ) -> Result<HardSystem, CoreError> {
-    let assembly = problem.assemble_dense_for_residuals(state, &component.active_residual_ids)?;
-    extract_active_hard_system(problem, plan, &assembly, component.index)
+    let linearization =
+        problem.linearize_component(plan, component, state, &component.active_residual_ids)?;
+    Ok(component_dense_system(
+        linearization.project_dense(plan, ResidualCategory::Hard)?,
+    ))
 }
 
 fn linearized_category_system(
@@ -1930,8 +2098,18 @@ fn linearized_category_system(
     category: ResidualCategory,
     residual_ids: &[ResidualId],
 ) -> Result<HardSystem, CoreError> {
-    let assembly = problem.assemble_dense_for_residuals(state, residual_ids)?;
-    extract_active_system(problem, plan, &assembly, component_index, category)
+    let component = plan
+        .components
+        .get(component_index)
+        .ok_or(CoreError::DimensionMismatch {
+            context: "priority component index",
+            expected: plan.components.len(),
+            actual: component_index,
+        })?;
+    let linearization = problem.linearize_component(plan, component, state, residual_ids)?;
+    Ok(component_dense_system(
+        linearization.project_dense(plan, category)?,
+    ))
 }
 
 fn stack_matrices(first: &DMatrix<f64>, second: &DMatrix<f64>) -> Option<DMatrix<f64>> {
@@ -1970,12 +2148,12 @@ fn numerical_nullspace(matrix: &DMatrix<f64>, relative_tolerance: f64) -> Option
         .iter()
         .copied()
         .fold(0.0_f64, f64::max);
-    let threshold = largest * relative_tolerance;
-    if !threshold.is_finite()
-        || decomposition
-            .singular_values
-            .iter()
-            .any(|value| !value.is_finite())
+    let (_, threshold) =
+        rank_thresholds(matrix.nrows(), matrix.ncols(), largest, relative_tolerance)?;
+    if decomposition
+        .singular_values
+        .iter()
+        .any(|value| !value.is_finite())
     {
         return None;
     }
@@ -1994,37 +2172,10 @@ fn numerical_nullspace(matrix: &DMatrix<f64>, relative_tolerance: f64) -> Option
         .then_some(nullspace)
 }
 
-#[derive(Clone, Debug)]
-struct ActiveLayoutBlock {
-    root: VariableId,
-    members: Vec<VariableId>,
-    tangent_range: Range<usize>,
-    step_scales: Vec<f64>,
-}
-
-#[derive(Clone, Debug, Default)]
-struct ActiveLayout {
-    blocks: Vec<ActiveLayoutBlock>,
-    tangent_dimension: usize,
-}
+type ActiveLayout = ComponentTangentLayout;
 
 fn active_layout(plan: &EliminationPlan, component_index: usize) -> ActiveLayout {
-    let mut layout = ActiveLayout::default();
-    for group in &plan.active_groups {
-        if group.component_index != component_index {
-            continue;
-        }
-        let start = layout.tangent_dimension;
-        let end = start + group.kind.tangent_dimension();
-        layout.blocks.push(ActiveLayoutBlock {
-            root: group.root,
-            members: group.members.clone(),
-            tangent_range: start..end,
-            step_scales: group.step_scales.clone(),
-        });
-        layout.tangent_dimension = end;
-    }
-    layout
+    component_tangent_layout(plan, component_index)
 }
 
 #[derive(Debug)]
@@ -2034,74 +2185,20 @@ struct HardSystem {
     rows: Vec<ResidualRowRef>,
 }
 
-fn extract_active_hard_system(
-    problem: &Problem,
-    plan: &EliminationPlan,
-    assembly: &DenseAssembly,
-    component_index: usize,
-) -> Result<HardSystem, CoreError> {
-    extract_active_system(
-        problem,
-        plan,
-        assembly,
-        component_index,
-        ResidualCategory::Hard,
-    )
-}
-
-fn extract_active_system(
-    problem: &Problem,
-    plan: &EliminationPlan,
-    assembly: &DenseAssembly,
-    component_index: usize,
-    category: ResidualCategory,
-) -> Result<HardSystem, CoreError> {
-    let layout = active_layout(plan, component_index);
-    let mut selected_rows = Vec::new();
-    for residual_layout in assembly.residual_layout() {
-        let residual = problem
-            .residual(residual_layout.residual_id)
-            .ok_or(CoreError::UnknownResidual(residual_layout.residual_id))?;
-        if residual.category() != category
-            || (category == ResidualCategory::Hard
-                && (plan.is_eliminated(residual_layout.residual_id)
-                    || plan.source_is_suppressed(residual.source())))
-        {
-            continue;
-        }
-        for (row_in_block, dense_row) in residual_layout.row_range.clone().enumerate() {
-            selected_rows.push((
-                dense_row,
-                ResidualRowRef {
-                    residual_id: residual_layout.residual_id,
-                    row_in_block,
-                    source_id: residual.source(),
-                },
-            ));
-        }
+fn component_dense_system(system: ComponentDenseSystem) -> HardSystem {
+    HardSystem {
+        residuals: system.residuals,
+        jacobian: system.jacobian,
+        rows: system
+            .rows
+            .into_iter()
+            .map(|row| ResidualRowRef {
+                residual_id: row.residual_id,
+                row_in_block: row.row_in_block,
+                source_id: row.source_id,
+            })
+            .collect(),
     }
-    let mut residuals = DVector::zeros(selected_rows.len());
-    let mut jacobian = DMatrix::zeros(selected_rows.len(), layout.tangent_dimension);
-    for (target_row, (dense_row, _)) in selected_rows.iter().enumerate() {
-        residuals[target_row] = assembly.residuals()[*dense_row];
-        for block in &layout.blocks {
-            for &member in &block.members {
-                let full_block = assembly
-                    .variable_layout()
-                    .block(member)
-                    .ok_or(CoreError::UnknownVariable(member))?;
-                for local_column in 0..block.tangent_range.len() {
-                    jacobian[(target_row, block.tangent_range.start + local_column)] += assembly
-                        .jacobian()[(*dense_row, full_block.tangent_range.start + local_column)];
-                }
-            }
-        }
-    }
-    Ok(HardSystem {
-        residuals,
-        jacobian,
-        rows: selected_rows.into_iter().map(|(_, row)| row).collect(),
-    })
 }
 
 fn apply_normalized_step(
@@ -2131,6 +2228,7 @@ fn apply_normalized_step(
 struct ComponentValidation {
     evaluated: bool,
     valid: bool,
+    hard_validity: HardValidity,
     maximum: f64,
     l2: f64,
     termination: SolveTermination,
@@ -2154,6 +2252,11 @@ fn validate_component(
                 ComponentValidation {
                     evaluated: true,
                     valid: maximum <= config.normalized_residual_tolerance,
+                    hard_validity: if maximum <= config.normalized_residual_tolerance {
+                        HardValidity::Valid
+                    } else {
+                        HardValidity::Invalid
+                    },
                     maximum,
                     l2,
                     termination: SolveTermination::Converged,
@@ -2163,6 +2266,7 @@ fn validate_component(
                 ComponentValidation {
                     evaluated: false,
                     valid: false,
+                    hard_validity: HardValidity::NotEvaluated,
                     maximum,
                     l2: 0.0,
                     termination: SolveTermination::NumericalFailure,
@@ -2170,24 +2274,33 @@ fn validate_component(
                 }
             }
         }
-        Err(error) => ComponentValidation {
-            evaluated: false,
-            valid: false,
-            maximum: 0.0,
-            l2: 0.0,
-            termination: error_termination(&error),
-            rows: Vec::new(),
-        },
+        Err(error) => {
+            let hard_validity = if matches!(
+                error,
+                CoreError::InvalidGeometry { .. } | CoreError::CategorizedEvaluation { .. }
+            ) {
+                HardValidity::Invalid
+            } else {
+                HardValidity::NotEvaluated
+            };
+            ComponentValidation {
+                evaluated: false,
+                valid: false,
+                hard_validity,
+                maximum: 0.0,
+                l2: 0.0,
+                termination: error_termination(&error),
+                rows: Vec::new(),
+            }
+        }
     }
 }
 
 struct ComponentNumerics {
     termination: SolveTermination,
     rank_is_valid: bool,
-    rank: usize,
     is_singular: bool,
-    rank_threshold: f64,
-    singular_values: Vec<f64>,
+    diagnostics: RankDiagnostics,
     singular_rows: Vec<ResidualRowRef>,
     hard: HardSystem,
 }
@@ -2199,50 +2312,39 @@ fn component_numerics(
     state: &VariableState,
     config: SolverConfig,
 ) -> ComponentNumerics {
+    let summary = &plan.structural.component_summaries[component.index];
     let empty = || HardSystem {
         residuals: DVector::zeros(0),
-        jacobian: DMatrix::zeros(
-            0,
-            plan.structural.component_summaries[component.index].active_tangent_dimensions,
-        ),
+        jacobian: DMatrix::zeros(0, summary.active_tangent_dimensions),
         rows: Vec::new(),
     };
-    let assembly = match problem.assemble_dense_for_residuals(state, &component.active_residual_ids)
-    {
-        Ok(assembly) => assembly,
+    let hard = match linearized_hard_system(problem, plan, component, state) {
+        Ok(hard) => hard,
         Err(error) => {
             return ComponentNumerics {
                 termination: error_termination(&error),
                 rank_is_valid: false,
-                rank: 0,
                 is_singular: false,
-                rank_threshold: 0.0,
-                singular_values: Vec::new(),
+                diagnostics: empty_rank_diagnostics(
+                    summary.active_hard_rows,
+                    summary.active_tangent_dimensions,
+                    config.rank_relative_tolerance,
+                ),
                 singular_rows: Vec::new(),
                 hard: empty(),
             };
         }
     };
-    let Ok(hard) = extract_active_hard_system(problem, plan, &assembly, component.index) else {
-        return ComponentNumerics {
-            termination: SolveTermination::NumericalFailure,
-            rank_is_valid: false,
-            rank: 0,
-            is_singular: false,
-            rank_threshold: 0.0,
-            singular_values: Vec::new(),
-            singular_rows: Vec::new(),
-            hard: empty(),
-        };
-    };
     let Some(rank) = rank_diagnostics(&hard.jacobian, config.rank_relative_tolerance) else {
         return ComponentNumerics {
             termination: SolveTermination::NumericalFailure,
             rank_is_valid: false,
-            rank: 0,
             is_singular: false,
-            rank_threshold: 0.0,
-            singular_values: Vec::new(),
+            diagnostics: empty_rank_diagnostics(
+                hard.jacobian.nrows(),
+                hard.jacobian.ncols(),
+                config.rank_relative_tolerance,
+            ),
             singular_rows: Vec::new(),
             hard,
         };
@@ -2252,10 +2354,8 @@ fn component_numerics(
     ComponentNumerics {
         termination: SolveTermination::Converged,
         rank_is_valid: true,
-        rank: rank.rank,
         is_singular,
-        rank_threshold: rank.threshold,
-        singular_values: rank.singular_values,
+        diagnostics: rank,
         singular_rows,
         hard,
     }
@@ -2539,6 +2639,7 @@ fn globally_fully_redundant_sources(
 
 struct RowEvaluationFailure {
     residual_id: ResidualId,
+    category: Option<crate::EvaluationErrorCategory>,
     error: String,
 }
 
@@ -2551,10 +2652,14 @@ fn validate_returned_rows(problem: &Problem, state: &VariableState) -> ReturnedE
     let mut termination = SolveTermination::Converged;
     let mut failures = Vec::new();
     for (residual_id, _) in problem.residuals.iter() {
-        if let Err(error) = problem.assemble_dense_for_residuals(state, &[residual_id]) {
+        if let Err(error) = problem.validate_residual_linearization(state, residual_id) {
             termination = worse_termination(termination, error_termination(&error));
             failures.push(RowEvaluationFailure {
                 residual_id,
+                category: match &error {
+                    CoreError::CategorizedEvaluation { category, .. } => Some(*category),
+                    _ => None,
+                },
                 error: error.to_string(),
             });
         }
@@ -2573,6 +2678,7 @@ fn annotate_evaluation_failures(audit: &mut AuditSnapshot, failures: &[RowEvalua
                 .find(|failure| failure.residual_id == row.residual_id)
             {
                 row.evaluation_status = AuditEvaluationStatus::Failed;
+                row.evaluation_error_category = failure.category;
                 row.evaluation_error = Some(failure.error.clone());
             }
         }
@@ -2809,41 +2915,101 @@ fn stable_norm(values: impl Iterator<Item = f64>) -> Option<f64> {
 
 struct RankDiagnostics {
     rank: usize,
+    relative_tolerance: f64,
+    machine_tolerance: f64,
     threshold: f64,
+    sigma_max: f64,
+    smallest_retained: Option<f64>,
+    near_singular_factor: f64,
+    near_singular_ratio: Option<f64>,
+    near_singular: bool,
     singular_values: Vec<f64>,
 }
 
 fn rank_diagnostics(jacobian: &DMatrix<f64>, relative_tolerance: f64) -> Option<RankDiagnostics> {
-    if jacobian.nrows() == 0 || jacobian.ncols() == 0 {
-        return Some(RankDiagnostics {
-            rank: 0,
-            threshold: 0.0,
-            singular_values: Vec::new(),
-        });
+    if jacobian.iter().any(|value| !value.is_finite()) {
+        return None;
     }
-    let singular_values: Vec<_> = jacobian
-        .clone()
-        .svd(false, false)
-        .singular_values
-        .iter()
-        .copied()
-        .collect();
+    let singular_values: Vec<_> = if jacobian.nrows() == 0 || jacobian.ncols() == 0 {
+        Vec::new()
+    } else {
+        jacobian
+            .clone()
+            .svd(false, false)
+            .singular_values
+            .iter()
+            .copied()
+            .collect()
+    };
     if singular_values.iter().any(|value| !value.is_finite()) {
         return None;
     }
-    let largest = singular_values.iter().copied().fold(0.0, f64::max);
-    let threshold = largest * relative_tolerance;
-    if !threshold.is_finite() {
+    let sigma_max = singular_values.iter().copied().fold(0.0, f64::max);
+    let (machine_tolerance, threshold) = rank_thresholds(
+        jacobian.nrows(),
+        jacobian.ncols(),
+        sigma_max,
+        relative_tolerance,
+    )?;
+    let rank = singular_values
+        .iter()
+        .filter(|&&value| value > threshold)
+        .count();
+    let smallest_retained = singular_values
+        .iter()
+        .copied()
+        .filter(|&value| value > threshold)
+        .min_by(f64::total_cmp);
+    let near_singular_ratio = smallest_retained.map(|value| value / threshold);
+    if near_singular_ratio.is_some_and(|value| !value.is_finite()) {
         return None;
     }
     Some(RankDiagnostics {
-        rank: singular_values
-            .iter()
-            .filter(|&&value| value > threshold)
-            .count(),
+        rank,
+        relative_tolerance,
+        machine_tolerance,
         threshold,
+        sigma_max,
+        smallest_retained,
+        near_singular_factor: NEAR_SINGULAR_FACTOR,
+        near_singular_ratio,
+        near_singular: near_singular_ratio.is_some_and(|ratio| ratio <= NEAR_SINGULAR_FACTOR),
         singular_values,
     })
+}
+
+fn empty_rank_diagnostics(rows: usize, columns: usize, relative_tolerance: f64) -> RankDiagnostics {
+    let (machine_tolerance, threshold) =
+        rank_thresholds(rows, columns, 0.0, relative_tolerance).unwrap_or((f64::MAX, f64::MAX));
+    RankDiagnostics {
+        rank: 0,
+        relative_tolerance,
+        machine_tolerance,
+        threshold,
+        sigma_max: 0.0,
+        smallest_retained: None,
+        near_singular_factor: NEAR_SINGULAR_FACTOR,
+        near_singular_ratio: None,
+        near_singular: false,
+        singular_values: Vec::new(),
+    }
+}
+
+fn rank_thresholds(
+    rows: usize,
+    columns: usize,
+    sigma_max: f64,
+    relative_tolerance: f64,
+) -> Option<(f64, f64)> {
+    if !sigma_max.is_finite() || !relative_tolerance.is_finite() {
+        return None;
+    }
+    let dimension = u32::try_from(rows.max(columns).max(1)).ok()?;
+    let machine_tolerance = f64::EPSILON * f64::from(dimension) * sigma_max.max(1.0);
+    let relative_threshold = relative_tolerance * sigma_max;
+    let threshold = relative_threshold.max(machine_tolerance);
+    (machine_tolerance.is_finite() && threshold.is_finite())
+        .then_some((machine_tolerance, threshold))
 }
 
 fn rejected_record(
@@ -2903,15 +3069,88 @@ fn update_accepted_damping(damping: &mut f64, ratio: f64, config: &SolverConfig)
 fn recoverable_trial_error(error: &CoreError) -> bool {
     matches!(
         error,
-        CoreError::InvalidGeometry { .. } | CoreError::NonFiniteValue { .. }
+        CoreError::InvalidGeometry { .. }
+            | CoreError::CategorizedEvaluation { .. }
+            | CoreError::NonFiniteValue { .. }
     )
 }
 
 fn error_termination(error: &CoreError) -> SolveTermination {
-    if matches!(error, CoreError::InvalidGeometry { .. }) {
+    if matches!(
+        error,
+        CoreError::InvalidGeometry { .. } | CoreError::CategorizedEvaluation { .. }
+    ) {
         SolveTermination::InvalidGeometry
     } else {
         SolveTermination::NumericalFailure
+    }
+}
+
+const fn secondary_status(termination: SolveTermination, fixed_only: bool) -> SecondaryStatus {
+    match termination {
+        SolveTermination::Converged if fixed_only => SecondaryStatus::Acceptable,
+        SolveTermination::Converged => SecondaryStatus::Optimal,
+        SolveTermination::Stalled => SecondaryStatus::Stalled,
+        SolveTermination::IterationLimit => SecondaryStatus::IterationLimit,
+        SolveTermination::InvalidGeometry | SolveTermination::NumericalFailure => {
+            SecondaryStatus::EvaluationFailure
+        }
+    }
+}
+
+fn aggregate_hard_validity(components: &[ComponentSolveReport]) -> HardValidity {
+    if components
+        .iter()
+        .any(|component| component.hard_validity == HardValidity::NotEvaluated)
+    {
+        HardValidity::NotEvaluated
+    } else if components
+        .iter()
+        .any(|component| component.hard_validity == HardValidity::Invalid)
+    {
+        HardValidity::Invalid
+    } else {
+        HardValidity::Valid
+    }
+}
+
+fn aggregate_secondary_status(
+    problem: &Problem,
+    category: ResidualCategory,
+    reports: &[PrioritySolveReport],
+    prerequisite: Option<SecondaryStatus>,
+) -> SecondaryStatus {
+    let requested = problem
+        .residuals
+        .iter()
+        .any(|(_, residual)| residual.category() == category);
+    if !requested {
+        return SecondaryStatus::NotRequested;
+    }
+    if prerequisite.is_some_and(|status| {
+        !matches!(
+            status,
+            SecondaryStatus::NotRequested | SecondaryStatus::Optimal | SecondaryStatus::Acceptable
+        )
+    }) {
+        return SecondaryStatus::EvaluationFailure;
+    }
+    reports
+        .iter()
+        .filter(|report| report.category == category)
+        .map(|report| report.status)
+        .max_by_key(|status| secondary_status_severity(*status))
+        .unwrap_or(SecondaryStatus::EvaluationFailure)
+}
+
+const fn secondary_status_severity(status: SecondaryStatus) -> u8 {
+    match status {
+        SecondaryStatus::NotRequested => 0,
+        SecondaryStatus::Optimal => 1,
+        SecondaryStatus::Acceptable => 2,
+        SecondaryStatus::Stalled => 3,
+        SecondaryStatus::IterationLimit => 4,
+        SecondaryStatus::EvaluationFailure => 5,
     }
 }
 
