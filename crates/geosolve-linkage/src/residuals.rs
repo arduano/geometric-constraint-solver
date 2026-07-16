@@ -19,6 +19,10 @@ impl ResidualEvaluator for RevoluteResidual {
 
     fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
         let (first, second) = two_poses(variables, "revolute")?;
+        let first_translation_x = rotated(first[2], [1.0, 0.0]);
+        let first_translation_y = rotated(first[2], [0.0, 1.0]);
+        let second_translation_x = rotated(second[2], [1.0, 0.0]);
+        let second_translation_y = rotated(second[2], [0.0, 1.0]);
         let first_rotated = rotated(first[2], self.first_local);
         let second_rotated = rotated(second[2], self.second_local);
         let first_angle = perpendicular(first_rotated);
@@ -27,12 +31,26 @@ impl ResidualEvaluator for RevoluteResidual {
             LocalJacobian::new(
                 2,
                 3,
-                vec![-1.0, 0.0, -first_angle[0], 0.0, -1.0, -first_angle[1]],
+                vec![
+                    -first_translation_x[0],
+                    -first_translation_y[0],
+                    -first_angle[0],
+                    -first_translation_x[1],
+                    -first_translation_y[1],
+                    -first_angle[1],
+                ],
             ),
             LocalJacobian::new(
                 2,
                 3,
-                vec![1.0, 0.0, second_angle[0], 0.0, 1.0, second_angle[1]],
+                vec![
+                    second_translation_x[0],
+                    second_translation_y[0],
+                    second_angle[0],
+                    second_translation_x[1],
+                    second_translation_y[1],
+                    second_angle[1],
+                ],
             ),
         ])
     }
@@ -72,6 +90,10 @@ impl ResidualEvaluator for PrismaticResidual {
         let first_axis = rotated(first[2], self.first_axis);
         let second_axis = scale(rotated(second[2], self.second_axis), self.branch_multiplier);
         let normal = perpendicular(first_axis);
+        let first_translation_x = rotated(first[2], [1.0, 0.0]);
+        let first_translation_y = rotated(first[2], [0.0, 1.0]);
+        let second_translation_x = rotated(second[2], [1.0, 0.0]);
+        let second_translation_y = rotated(second[2], [0.0, 1.0]);
         let first_point_angle = perpendicular(first_rotated_point);
         let second_point_angle = perpendicular(second_rotated_point);
         let first_transverse_angle =
@@ -85,8 +107,8 @@ impl ResidualEvaluator for PrismaticResidual {
                 2,
                 3,
                 vec![
-                    -normal[0],
-                    -normal[1],
+                    -dot(normal, first_translation_x),
+                    -dot(normal, first_translation_y),
                     first_transverse_angle,
                     0.0,
                     0.0,
@@ -97,8 +119,8 @@ impl ResidualEvaluator for PrismaticResidual {
                 2,
                 3,
                 vec![
-                    normal[0],
-                    normal[1],
+                    dot(normal, second_translation_x),
+                    dot(normal, second_translation_y),
                     second_transverse_angle,
                     0.0,
                     0.0,
@@ -130,6 +152,10 @@ impl ResidualEvaluator for WeldResidual {
 
     fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
         let (first, second) = two_poses(variables, "weld")?;
+        let first_translation_x = rotated(first[2], [1.0, 0.0]);
+        let first_translation_y = rotated(first[2], [0.0, 1.0]);
+        let second_translation_x = rotated(second[2], [1.0, 0.0]);
+        let second_translation_y = rotated(second[2], [0.0, 1.0]);
         let first_angle = perpendicular(rotated(first[2], self.first_local));
         let second_angle = perpendicular(rotated(second[2], self.second_local));
         Ok(vec![
@@ -137,11 +163,11 @@ impl ResidualEvaluator for WeldResidual {
                 3,
                 3,
                 vec![
-                    -1.0,
-                    0.0,
+                    -first_translation_x[0],
+                    -first_translation_y[0],
                     -first_angle[0],
-                    0.0,
-                    -1.0,
+                    -first_translation_x[1],
+                    -first_translation_y[1],
                     -first_angle[1],
                     0.0,
                     0.0,
@@ -152,11 +178,11 @@ impl ResidualEvaluator for WeldResidual {
                 3,
                 3,
                 vec![
-                    1.0,
-                    0.0,
+                    second_translation_x[0],
+                    second_translation_y[0],
                     second_angle[0],
-                    0.0,
-                    1.0,
+                    second_translation_x[1],
+                    second_translation_y[1],
                     second_angle[1],
                     0.0,
                     0.0,
@@ -212,12 +238,32 @@ impl ResidualEvaluator for LinearDriverResidual {
         let measured_point = add_translation(measured, measured_rotated);
         let displacement = subtract(measured_point, origin);
         let guide = rotated(reference[2], self.guide_axis);
+        let reference_translation_x = rotated(reference[2], [1.0, 0.0]);
+        let reference_translation_y = rotated(reference[2], [0.0, 1.0]);
+        let measured_translation_x = rotated(measured[2], [1.0, 0.0]);
+        let measured_translation_y = rotated(measured[2], [0.0, 1.0]);
         let reference_angle =
             dot(perpendicular(guide), displacement) - dot(guide, perpendicular(origin_rotated));
         let measured_angle = dot(guide, perpendicular(measured_rotated));
         Ok(vec![
-            LocalJacobian::new(1, 3, vec![-guide[0], -guide[1], reference_angle]),
-            LocalJacobian::new(1, 3, vec![guide[0], guide[1], measured_angle]),
+            LocalJacobian::new(
+                1,
+                3,
+                vec![
+                    -dot(guide, reference_translation_x),
+                    -dot(guide, reference_translation_y),
+                    reference_angle,
+                ],
+            ),
+            LocalJacobian::new(
+                1,
+                3,
+                vec![
+                    dot(guide, measured_translation_x),
+                    dot(guide, measured_translation_y),
+                    measured_angle,
+                ],
+            ),
         ])
     }
 }

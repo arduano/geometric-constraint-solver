@@ -203,7 +203,7 @@ impl Problem {
         value: VariableValue,
         residual_id: ResidualId,
     ) -> Result<(), CoreError> {
-        value.validate_finite()?;
+        let value = value.canonicalized()?;
         self.fixed_eliminations.push(FixedElimination {
             variable_id,
             value,
@@ -1113,6 +1113,8 @@ const fn kind_code(kind: VariableKind) -> u8 {
         VariableKind::Scalar => 0,
         VariableKind::Vec2 => 1,
         VariableKind::Pose2 => 2,
+        VariableKind::Vec3 => 3,
+        VariableKind::Pose3 => 4,
     }
 }
 

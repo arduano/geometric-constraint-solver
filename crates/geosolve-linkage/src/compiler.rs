@@ -3,7 +3,7 @@ use geosolve_core::{
     ResidualCategory, ResidualId, ResidualRowAudit, SolveReport, SolveTermination, SolverConfig,
     SourceConstraint, SourceConstraintId, VariableBlock, VariableId, VariableValue,
 };
-use geosolve_geometry::{PlaneFrame, Point2, Point3, Pose2, Rotation2, Vector2, Vector3};
+use geosolve_geometry::{PlaneFrame, Point2, Point3, Pose2, Vector2, Vector3};
 
 use crate::model::{
     AxisFeatureId, BodyId, BranchMonitor, BranchMonitorId, BranchSign, BranchViolation, DriverId,
@@ -110,10 +110,10 @@ impl CompiledLinkage {
                 }
                 .into());
             };
-            let pose = Pose2 {
-                translation: Vector2::new(x, y),
-                angle,
-            };
+            let pose =
+                Pose2::from_ambient([x, y, angle]).map_err(|_| LinkageError::NonFinitePose {
+                    context: "solved body",
+                })?;
             validate_pose(pose, "solved body")?;
             bodies.push(SolvedBody {
                 body_id: mapping.body_id,
@@ -321,11 +321,7 @@ impl Linkage {
         for (body_id, body) in self.bodies.iter() {
             validate_pose(body.pose(), "rigid body")?;
             let variable_id = problem.add_variable(VariableBlock::pose2(
-                [
-                    body.pose().translation.x,
-                    body.pose().translation.y,
-                    body.pose().angle,
-                ],
+                body.pose().ambient(),
                 [self.model_scale, self.model_scale, 1.0],
             )?);
             body_variables.push(BodyVariableMapping {
@@ -339,11 +335,7 @@ impl Linkage {
             let label = format!("grounded body {}", body.label());
             let source_id = problem.add_source(SourceConstraint::new(&label)?);
             let variable_id = body_variable(&body_variables, body_id)?;
-            let fixed = VariableValue::Pose2([
-                body.pose().translation.x,
-                body.pose().translation.y,
-                body.pose().angle,
-            ]);
+            let fixed = VariableValue::Pose2(body.pose().ambient());
             let residual_id = problem.add_residual(ResidualBlock::fixed_variable(
                 source_id,
                 variable_id,
@@ -351,17 +343,26 @@ impl Linkage {
                 vec![self.model_scale, self.model_scale, 1.0],
                 vec![
                     audit_row(
-                        format!("({}.pose.x - accepted.x) / model_scale", body.label()),
+                        format!(
+                            "local_difference(accepted_pose, {}.pose).v_x / model_scale",
+                            body.label()
+                        ),
                         vec![AuditBinding::new("body", body.label())],
                         "model-unit",
                     ),
                     audit_row(
-                        format!("({}.pose.y - accepted.y) / model_scale", body.label()),
+                        format!(
+                            "local_difference(accepted_pose, {}.pose).v_y / model_scale",
+                            body.label()
+                        ),
                         vec![AuditBinding::new("body", body.label())],
                         "model-unit",
                     ),
                     audit_row(
-                        format!("({}.pose.angle - accepted.angle) / 1 rad", body.label()),
+                        format!(
+                            "local_difference(accepted_pose, {}.pose).omega / 1 rad",
+                            body.label()
+                        ),
                         vec![AuditBinding::new("body", body.label())],
                         "rad",
                     ),
@@ -403,10 +404,8 @@ impl Linkage {
         // warm start; solve-time synchronization remains trusted in core.
         for mapping in &body_variables {
             let pose = self.require_body(mapping.body_id)?.pose();
-            problem.set_variable_value(
-                mapping.variable_id,
-                VariableValue::Pose2([pose.translation.x, pose.translation.y, pose.angle]),
-            )?;
+            problem
+                .set_variable_value(mapping.variable_id, VariableValue::Pose2(pose.ambient()))?;
         }
 
         Ok(CompiledLinkage {
@@ -688,15 +687,15 @@ impl Linkage {
             let solved = geometry
                 .body_pose(body_id)
                 .ok_or(LinkageError::UnknownBody(body_id))?;
-            update_max(
-                &mut maximum,
-                (solved.translation.x - body.pose().translation.x) / self.model_scale,
-            )?;
-            update_max(
-                &mut maximum,
-                (solved.translation.y - body.pose().translation.y) / self.model_scale,
-            )?;
-            update_max(&mut maximum, solved.angle - body.pose().angle)?;
+            let difference =
+                body.pose()
+                    .local_difference(&solved)
+                    .map_err(|_| LinkageError::NonFinitePose {
+                        context: "ground local difference",
+                    })?;
+            update_max(&mut maximum, difference[0] / self.model_scale)?;
+            update_max(&mut maximum, difference[1] / self.model_scale)?;
+            update_max(&mut maximum, difference[2])?;
         }
         for (_, joint) in self.joints.iter() {
             match joint.kind() {
@@ -1134,12 +1133,12 @@ fn geometry_from_parts(
             .ok_or(LinkageError::UnknownBody(feature.body))?;
         let planar = pose.transform_point(feature.local);
         validate_point(planar, "transformed point feature")?;
-        let world = plane_frame.map_point(planar);
-        if !world.coords.iter().all(|value| value.is_finite()) {
-            return Err(LinkageError::NonFinitePoint {
-                context: "world point feature",
-            });
-        }
+        let world =
+            plane_frame
+                .try_map_point(planar)
+                .map_err(|_| LinkageError::NonFinitePoint {
+                    context: "world point feature",
+                })?;
         points.push(TransformedPointFeature {
             feature_id: feature.id,
             body_id: feature.body,
@@ -1153,18 +1152,17 @@ fn geometry_from_parts(
             .iter()
             .find_map(|body| (body.body_id == feature.body).then_some(body.pose))
             .ok_or(LinkageError::UnknownBody(feature.body))?;
-        let planar = Rotation2::new(pose.angle) * feature.local;
+        let planar = pose.transform_vector(feature.local);
         if !planar.iter().all(|value| value.is_finite()) {
             return Err(LinkageError::InvalidAxis {
                 context: "transformed axis feature",
             });
         }
-        let world = plane_frame.u * planar.x + plane_frame.v * planar.y;
-        if !world.iter().all(|value| value.is_finite()) {
-            return Err(LinkageError::InvalidAxis {
+        let world = plane_frame
+            .try_map_vector(planar)
+            .map_err(|_| LinkageError::InvalidAxis {
                 context: "world axis feature",
-            });
-        }
+            })?;
         axes.push(TransformedAxisFeature {
             feature_id: feature.id,
             body_id: feature.body,
@@ -1487,6 +1485,32 @@ mod tests {
 
         assert_eq!(report.hard_validity, HardValidity::Valid);
         assert!(report.hard_residuals_validated);
+    }
+
+    #[test]
+    fn ground_domain_validation_uses_pose_local_difference() {
+        let mut linkage = Linkage::new(2.0, crate::xy_plane_frame()).unwrap();
+        let ground = linkage
+            .add_body(
+                "transformed ground",
+                Pose2::try_new(Vector2::new(3.0, -4.0), 0.7).unwrap(),
+                true,
+            )
+            .unwrap();
+        let mut equivalent_geometry = linkage.geometry().unwrap();
+        equivalent_geometry
+            .bodies
+            .iter_mut()
+            .find(|body| body.body_id == ground)
+            .unwrap()
+            .pose
+            .angle += std::f64::consts::TAU;
+
+        let maximum = linkage
+            .domain_hard_residual_max(&equivalent_geometry, None)
+            .unwrap();
+
+        assert!(maximum <= 1.0e-12, "manifold ground residual {maximum:e}");
     }
 
     #[test]

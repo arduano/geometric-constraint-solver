@@ -53,10 +53,11 @@ impl MixedLegacy {
                 "mixed fixture expected Scalar, Vec2, and Pose2",
             ));
         };
+        let (sine, cosine) = pose[2].sin_cos();
         Ok([
             vec![1.0, vector[1]],
             vec![1.0, 0.0, 0.0, *scalar],
-            vec![1.0, 0.0, 0.0, 0.0, 0.0, pose[2].cos()],
+            vec![cosine, -sine, 0.0, 0.0, 0.0, cosine],
         ])
     }
 }

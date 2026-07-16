@@ -1,7 +1,11 @@
 use std::fmt::Debug;
 
+use geosolve_geometry::{Pose2 as GeometryPose2, Pose3 as GeometryPose3};
 use thiserror::Error;
 
+use crate::autodiff::{
+    alias_pose_local_difference_jacobians, fixed_pose_local_difference_jacobian,
+};
 use crate::variable::validate_scales;
 use crate::{CoreError, SourceConstraintId, VariableId, VariableKind, VariableValue};
 
@@ -481,7 +485,7 @@ impl ResidualBlock {
         scales: Vec<f64>,
         audit_rows: Vec<ResidualRowAudit>,
     ) -> Result<Self, CoreError> {
-        value.validate_finite()?;
+        let value = value.canonicalized()?;
         let dimension = value.kind().tangent_dimension();
         let mut residual = Self::new(
             source,
@@ -681,12 +685,7 @@ impl ResidualEvaluator for FixedVariableEvaluator {
                 "fixed residual variable kind changed",
             ));
         }
-        Ok(value
-            .ambient_values()
-            .iter()
-            .zip(self.value.ambient_values())
-            .map(|(actual, expected)| actual - expected)
-            .collect())
+        local_difference(self.value, *value)
     }
 
     fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
@@ -700,7 +699,13 @@ impl ResidualEvaluator for FixedVariableEvaluator {
                 "fixed residual variable kind changed",
             ));
         }
-        Ok(vec![identity_jacobian(value.kind(), 1.0)])
+        if matches!(value, VariableValue::Pose2(_) | VariableValue::Pose3(_)) {
+            Ok(vec![fixed_pose_local_difference_jacobian(
+                self.value, *value,
+            )?])
+        } else {
+            Ok(vec![identity_jacobian(value.kind(), 1.0)])
+        }
     }
 }
 
@@ -721,12 +726,7 @@ impl ResidualEvaluator for ExactAliasEvaluator {
                 "alias residual variable kind changed",
             ));
         }
-        Ok(alias
-            .ambient_values()
-            .iter()
-            .zip(representative.ambient_values())
-            .map(|(alias, representative)| alias - representative)
-            .collect())
+        local_difference(*representative, *alias)
     }
 
     fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
@@ -740,11 +740,66 @@ impl ResidualEvaluator for ExactAliasEvaluator {
                 "alias residual variable kind changed",
             ));
         }
-        Ok(vec![
-            identity_jacobian(self.kind, 1.0),
-            identity_jacobian(self.kind, -1.0),
-        ])
+        if matches!(alias, VariableValue::Pose2(_) | VariableValue::Pose3(_)) {
+            alias_pose_local_difference_jacobians(*alias, *representative)
+        } else {
+            Ok(vec![
+                identity_jacobian(self.kind, 1.0),
+                identity_jacobian(self.kind, -1.0),
+            ])
+        }
     }
+}
+
+fn local_difference(
+    reference: VariableValue,
+    value: VariableValue,
+) -> Result<Vec<f64>, EvaluationError> {
+    match (reference, value) {
+        (VariableValue::Scalar(reference), VariableValue::Scalar(value)) => {
+            Ok(vec![value - reference])
+        }
+        (VariableValue::Vec2(reference), VariableValue::Vec2(value)) => Ok(value
+            .into_iter()
+            .zip(reference)
+            .map(|(value, reference)| value - reference)
+            .collect()),
+        (VariableValue::Vec3(reference), VariableValue::Vec3(value)) => Ok(value
+            .into_iter()
+            .zip(reference)
+            .map(|(value, reference)| value - reference)
+            .collect()),
+        (VariableValue::Pose2(reference), VariableValue::Pose2(value)) => {
+            let reference = GeometryPose2::from_ambient(reference)
+                .map_err(|error| manifold_evaluation_error("Pose2 reference", error))?;
+            let value = GeometryPose2::from_ambient(value)
+                .map_err(|error| manifold_evaluation_error("Pose2 value", error))?;
+            reference
+                .local_difference(&value)
+                .map(|difference| difference.to_vec())
+                .map_err(|error| manifold_evaluation_error("Pose2 local difference", error))
+        }
+        (VariableValue::Pose3(reference), VariableValue::Pose3(value)) => {
+            let reference = GeometryPose3::from_ambient(reference)
+                .map_err(|error| manifold_evaluation_error("Pose3 reference", error))?;
+            let value = GeometryPose3::from_ambient(value)
+                .map_err(|error| manifold_evaluation_error("Pose3 value", error))?;
+            reference
+                .local_difference(&value)
+                .map(|difference| difference.to_vec())
+                .map_err(|error| manifold_evaluation_error("Pose3 local difference", error))
+        }
+        _ => Err(EvaluationError::invalid_geometry(
+            "local-difference variable kinds do not match",
+        )),
+    }
+}
+
+fn manifold_evaluation_error(
+    context: &str,
+    error: geosolve_geometry::GeometryError,
+) -> EvaluationError {
+    EvaluationError::invalid_geometry(format!("{context}: {error}"))
 }
 
 fn identity_jacobian(kind: VariableKind, sign: f64) -> LocalJacobian {

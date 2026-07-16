@@ -15,9 +15,9 @@ This is not a solid modeller, B-rep kernel, mesher, renderer, collision engine, 
 
 ## 2. Status of this document
 
-M0-M7 are the frozen domain baseline. M8 accepted the target contracts, M9 implemented component-local linearization, local AD, status and numerical-rank contracts, M10 implemented persistent sessions, bounds and the first sketch consumer, M11 implemented the persistent sketch document, commands/history and JSON/remapping layer, M12 implemented immutable curve jets, editable Beziers and generic curve contact/tangency plumbing, M13 implemented the disposable browser playground over those public APIs, and M14 hardened its exact scenarios, failure recovery and performance gates. Statements are therefore marked as:
+M0-M7 are the frozen domain baseline. M8 accepted the target contracts, M9 implemented component-local linearization, local AD, status and numerical-rank contracts, M10 implemented persistent sessions, bounds and the first sketch consumer, M11 implemented the persistent sketch document, commands/history and JSON/remapping layer, M12 implemented immutable curve jets, editable Beziers and generic curve contact/tangency plumbing, M13 implemented the disposable browser playground over those public APIs, M14 hardened its exact scenarios, failure recovery and performance gates, and M15 implemented shared planar/spatial manifold state plus accepted hard sensitivity. Statements are therefore marked as:
 
-- **Baseline:** implemented behavior through M14, with M1-M7 domain behavior protected as the frozen regression baseline.
+- **Baseline:** implemented behavior through M15, with M1-M7 domain behavior protected as the frozen regression baseline.
 - **Target:** behavior required by the named M10-M24 milestone.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
@@ -108,9 +108,9 @@ J_normalized[row, col] = d(r_normalized[row]) / d(delta_normalized[col])
 delta_local[col] = step_scale[col] * delta_normalized[col]
 ```
 
-Baseline variable blocks are scalar, `Vec2` and additive-coordinate `Pose2`. Baseline assembly can materialize global dense columns, while reduced components are solved independently.
+Implemented variable blocks are scalar, `Vec2`, `Vec3`, manifold `Pose2` and quaternion-backed `Pose3`. `Pose3` has seven ambient coordinates and six right/body-local tangent coordinates. Baseline assembly can materialize global dense columns, while reduced components are solved independently.
 
-The M9 implementation provides one canonical component-local linearization under ADR 0005. It evaluates only incident blocks, writes into caller-provided storage, never allocates global columns for a component, and feeds the dense component solve. The additive caller-storage method is public and unstable before 1.0 because it extends the existing public residual evaluator trait; the local AD formula trait/adapter and normalized-coordinate storage marker remain private. M16 adds indexed block coordinates and materializes triplet/COO and sparse storage from that IR. Analytic Jacobians remain valid and central finite differences remain an independent oracle. Branch, span, winding, active-bound and assembly-mode state are fixed discrete inputs outside AD.
+The M9 implementation provides one canonical component-local linearization under ADR 0005. It evaluates only incident blocks, writes into caller-provided storage, never allocates global columns for a component, and feeds the dense component solve. The caller-storage method is public and unstable before 1.0 because it extends the existing public residual evaluator trait; the local AD formula trait/adapter and normalized-coordinate storage marker remain private. M15 makes local AD, fixed/alias residuals and finite differences use the same manifold retraction. M16 adds indexed block coordinates and materializes triplet/COO and sparse storage from that IR. Analytic Jacobians remain valid and central finite differences remain an independent oracle. Branch, span, winding, active-bound and assembly-mode state are fixed discrete inputs outside AD.
 
 Public and best-effort audit evaluate fresh raw/normalized values at one state and independently require successful canonical Jacobian/fused validation before marking a row `Evaluated`. A structured derivative failure marks the row `Failed` while retaining any fresh finite displayed values and its category/message. Successful numeric IR blocks are `Evaluated`; any failure aborts before partial IR consumption.
 
@@ -242,7 +242,9 @@ Bounds participate through the M10 active-set policy. Secondary objectives spann
 
 ## 10. Manifold and frame conventions
 
-ADR 0006 defines body-to-world transforms, right/body-local retraction, tangent ordering, local difference, quaternion ordering and sign canonicalization. Baseline `Pose2` stores `[x, y, unwrapped_angle]` and applies additive increments. M15 performs the tested transition to manifold `Pose2` and quaternion-backed `Pose3`; finite differences then perturb tangent coordinates through the same retraction.
+ADR 0006 defines body-to-world transforms, right/body-local retraction, tangent ordering, local difference, quaternion ordering and sign canonicalization. M15 completed the tested transition from additive `Pose2` increments to manifold `Pose2` and quaternion-backed `Pose3`; finite differences perturb tangent coordinates through the same retraction. Exact quaternion half turns have one deterministic representation, while explicit winding and assembly choices remain separate domain state.
+
+M15 also exposes revision-stamped accepted hard linearizations and independently validated sensitivity solves. The API returns reduced hard-equality results in body-local tangent coordinates and distinguishes unique, underdetermined minimum-norm and inconsistent rates. Active-bound tangent cones, secondary-objective sensitivity and world/spatial velocity conversion are not implied by this core API.
 
 Planar geometry is evaluated in local 2D coordinates. A workplane maps it into world coordinates as:
 
@@ -314,7 +316,8 @@ Persistence stores domain topology, continuous accepted state and every discrete
 - M11: persistent `SketchDocument`, generic sketch graph, commands, history and JSON.
 - M12: editable quadratic/cubic Bezier and generic point/contact/tangency curve plumbing.
 - M13-M14: disposable browser playground, E2E/import/error/performance hardening and the alpha gate.
-- M15-M16: manifold `Pose2`/`Pose3`, sensitivity, sparse structure, matching, hierarchy and robust continuation.
+- M15: completed manifold `Pose2`/`Pose3`, validated frames and accepted hard-equality sensitivity.
+- M16: sparse structure, matching, hierarchy and robust continuation.
 - M17-M18 and M20/M23: migrate and complete planar/spatial kinematic product behavior.
 - M19, M21 and M22: add conics, B-splines, NURBS and complete the production 2D CAD sketch product.
 - M24: stabilize public APIs, persistence, documentation and release gates for both deliverables.

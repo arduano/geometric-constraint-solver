@@ -627,14 +627,17 @@ impl ResidualEvaluator for Pose2Anchor {
         ])
     }
 
-    fn jacobian(
-        &self,
-        _variables: &[VariableValue],
-    ) -> Result<Vec<LocalJacobian>, EvaluationError> {
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        let [VariableValue::Pose2(pose)] = variables else {
+            return Err(EvaluationError::invalid_geometry(
+                "linkage anchor expected one Pose2",
+            ));
+        };
+        let (sine, cosine) = pose[2].sin_cos();
         Ok(vec![LocalJacobian::new(
             3,
             3,
-            vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+            vec![cosine, -sine, 0.0, sine, cosine, 0.0, 0.0, 0.0, 1.0],
         )])
     }
 
@@ -649,6 +652,7 @@ impl ResidualEvaluator for Pose2Anchor {
                     "linkage anchor expected one Pose2",
                 ));
             };
+            let (sine, cosine) = pose[2].sin_cos();
             storage.residuals_mut().copy_from_slice(&[
                 pose[0] - self.target[0],
                 pose[1] - self.target[1],
@@ -658,7 +662,7 @@ impl ResidualEvaluator for Pose2Anchor {
                 .jacobian_block_mut(0)
                 .expect("anchor incidence")
                 .values_mut()
-                .copy_from_slice(&[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]);
+                .copy_from_slice(&[cosine, -sine, 0.0, sine, cosine, 0.0, 0.0, 0.0, 1.0]);
             Ok(())
         })())
     }
@@ -684,19 +688,44 @@ impl ResidualEvaluator for Pose2Weld {
     }
 
     fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
-        let [VariableValue::Pose2(first), VariableValue::Pose2(_)] = variables else {
+        let [VariableValue::Pose2(first), VariableValue::Pose2(second)] = variables else {
             return Err(EvaluationError::invalid_geometry(
                 "linkage weld expected two Pose2 values",
             ));
         };
-        let (sine, cosine) = first[2].sin_cos();
+        let (first_sine, first_cosine) = first[2].sin_cos();
+        let (second_sine, second_cosine) = second[2].sin_cos();
         Ok(vec![
             LocalJacobian::new(
                 3,
                 3,
-                vec![1.0, 0.0, -sine, 0.0, 1.0, cosine, 0.0, 0.0, -1.0],
+                vec![
+                    first_cosine,
+                    -first_sine,
+                    -first_sine,
+                    first_sine,
+                    first_cosine,
+                    first_cosine,
+                    0.0,
+                    0.0,
+                    -1.0,
+                ],
             ),
-            LocalJacobian::new(3, 3, vec![-1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 1.0]),
+            LocalJacobian::new(
+                3,
+                3,
+                vec![
+                    -second_cosine,
+                    second_sine,
+                    0.0,
+                    -second_sine,
+                    -second_cosine,
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                ],
+            ),
         ])
     }
 
@@ -711,22 +740,43 @@ impl ResidualEvaluator for Pose2Weld {
                     "linkage weld expected two Pose2 values",
                 ));
             };
-            let (sine, cosine) = first[2].sin_cos();
+            let (first_sine, first_cosine) = first[2].sin_cos();
+            let (second_sine, second_cosine) = second[2].sin_cos();
             storage.residuals_mut().copy_from_slice(&[
-                first[0] + cosine - second[0],
-                first[1] + sine - second[1],
+                first[0] + first_cosine - second[0],
+                first[1] + first_sine - second[1],
                 second[2] - first[2] - self.angle_delta,
             ]);
             storage
                 .jacobian_block_mut(0)
                 .expect("first pose incidence")
                 .values_mut()
-                .copy_from_slice(&[1.0, 0.0, -sine, 0.0, 1.0, cosine, 0.0, 0.0, -1.0]);
+                .copy_from_slice(&[
+                    first_cosine,
+                    -first_sine,
+                    -first_sine,
+                    first_sine,
+                    first_cosine,
+                    first_cosine,
+                    0.0,
+                    0.0,
+                    -1.0,
+                ]);
             storage
                 .jacobian_block_mut(1)
                 .expect("second pose incidence")
                 .values_mut()
-                .copy_from_slice(&[-1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 1.0]);
+                .copy_from_slice(&[
+                    -second_cosine,
+                    second_sine,
+                    0.0,
+                    -second_sine,
+                    -second_cosine,
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                ]);
             Ok(())
         })())
     }

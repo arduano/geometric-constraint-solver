@@ -1,6 +1,6 @@
-use crate::{BoundId, CoreError, Problem, VariableId, VariableValue};
+use crate::{BoundId, CoreError, Problem, VariableId, VariableKind, VariableValue};
 
-/// A finite optional lower/upper box bound on one additive tangent coordinate.
+/// A finite optional lower/upper box bound on one additive scalar/vector coordinate.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CoordinateBound {
     variable_id: VariableId,
@@ -92,6 +92,12 @@ impl CoordinateBound {
         let variable = problem
             .variable(self.variable_id)
             .ok_or(CoreError::UnknownVariable(self.variable_id))?;
+        if matches!(variable.kind(), VariableKind::Pose2 | VariableKind::Pose3) {
+            return Err(CoreError::UnsupportedBoundVariableKind {
+                variable: self.variable_id,
+                kind: variable.kind(),
+            });
+        }
         let dimension = variable.kind().tangent_dimension();
         if self.coordinate >= dimension {
             return Err(CoreError::InvalidBoundCoordinate {

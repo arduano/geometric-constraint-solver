@@ -245,11 +245,19 @@ M8 does not require timed performance thresholds. It freezes reproducible benchm
 
 ## M15 acceptance: manifold geometry and spatial state
 
-- `SE(2)`/`SE(3)` composition, inverse, exponential, logarithm, adjoint, retraction and local difference satisfy property tests under ADR 0006.
-- `Pose3` stores a validated quaternion ambient representation and has tangent dimension six.
-- Tangent-coordinate finite differences, global-transform equivariance and quaternion-sign invariance pass.
-- Fixed/alias elimination and accepted-state sensitivity APIs are manifold-aware.
-- Invalid frames and quaternions reject before success.
+- [x] `SE(2)`/`SE(3)` composition, inverse, exponential, logarithm, adjoint, retraction and local difference satisfy property tests under ADR 0006.
+- [x] `Pose3` stores a validated quaternion ambient representation and has tangent dimension six.
+- [x] Tangent-coordinate finite differences, global-transform equivariance and quaternion-sign invariance pass.
+- [x] Fixed/alias elimination and accepted-state sensitivity APIs are manifold-aware.
+- [x] Invalid frames and quaternions reject before success.
+
+Completion record (2026-07-16): exact and near-half-turn quaternion cases,
+right-tangent finite differences, frame/workplane validation, transformed planar
+linkage branches and body-velocity equivariance all pass. Accepted sensitivity
+reuses the accepted rank threshold and independently validates the solved equation
+before publishing a success-like status. Its M15 scope is reduced hard equalities
+and body-local raw tangents; active bounds, secondary objectives and world-frame
+conversion are not part of this acceptance claim.
 
 ## M16 acceptance: sparse structure, hierarchy and continuation
 

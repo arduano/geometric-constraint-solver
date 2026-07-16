@@ -5,10 +5,361 @@ use nalgebra::{DMatrix, DVector};
 use crate::analysis::{EliminationPlan, SolveComponent};
 use crate::problem::VariableState;
 use crate::residual::{JacobianCoordinates, LinearizationStorage, LocalJacobianStorage};
+use crate::solver::{RankDiagnostics, rank_diagnostics};
 use crate::{
-    CoreError, EvaluationError, LocalJacobian, Problem, ResidualBlock, ResidualCategory,
-    ResidualId, SourceConstraintId, VariableId, VariableValue,
+    ComponentSolveReport, CoreError, EvaluationError, HardValidity, LocalJacobian, PackedState,
+    Problem, ResidualBlock, ResidualCategory, ResidualId, ResidualRowRef, SensitivityError,
+    SessionRevisions, SolveReport, SolverConfig, SourceConstraintId, VariableId, VariableKind,
+    VariableValue,
 };
+
+/// One active reduced tangent block in deterministic component-column order.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ReducedTangentBlock {
+    pub root: VariableId,
+    /// Exact aliases sharing the root tangent. The root itself is not repeated.
+    pub alias_members: Vec<VariableId>,
+    pub kind: VariableKind,
+    pub tangent_range: Range<usize>,
+    pub step_scales: Vec<f64>,
+}
+
+/// One active hard scalar row in deterministic component-row order.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ReducedHardRow {
+    pub row: ResidualRowRef,
+    pub residual_scale: f64,
+}
+
+/// One raw right/body-local tangent block returned by a sensitivity solve.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RawTangentBlock {
+    pub root: VariableId,
+    pub alias_members: Vec<VariableId>,
+    pub kind: VariableKind,
+    /// Raw local tangent values after applying the block's characteristic step scales.
+    pub values: DVector<f64>,
+}
+
+/// Classification of `J * delta + normalized_residual_rate = 0`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum SensitivityStatus {
+    Unique,
+    UnderdeterminedMinimumNorm,
+    Inconsistent,
+}
+
+impl SensitivityStatus {
+    /// Whether the independently checked differentiated equation is satisfied.
+    #[must_use]
+    pub const fn is_success_like(self) -> bool {
+        matches!(self, Self::Unique | Self::UnderdeterminedMinimumNorm)
+    }
+}
+
+/// Accepted-threshold SVD sensitivity result in normalized and raw local coordinates.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SensitivitySolution {
+    /// Accepted session revisions inherited from the detached component snapshot.
+    pub revisions: SessionRevisions,
+    pub status: SensitivityStatus,
+    pub normalized_tangent: DVector<f64>,
+    pub raw_tangent_blocks: Vec<RawTangentBlock>,
+    pub equation_residual_max: f64,
+    pub equation_residual_l2: f64,
+}
+
+/// Immutable accepted-state reduced hard linearization for one component.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AcceptedHardComponentLinearization {
+    revisions: SessionRevisions,
+    component_index: usize,
+    pattern_signature: u64,
+    tangent_blocks: Vec<ReducedTangentBlock>,
+    hard_rows: Vec<ReducedHardRow>,
+    normalized_residual: DVector<f64>,
+    normalized_jacobian: DMatrix<f64>,
+    rank: usize,
+    left_nullity: usize,
+    right_nullity: usize,
+    rank_threshold: f64,
+    singular_values: Vec<f64>,
+    normalized_residual_tolerance: f64,
+}
+
+impl AcceptedHardComponentLinearization {
+    #[must_use]
+    pub const fn revisions(&self) -> SessionRevisions {
+        self.revisions
+    }
+
+    #[must_use]
+    pub const fn component_index(&self) -> usize {
+        self.component_index
+    }
+
+    #[must_use]
+    pub const fn pattern_signature(&self) -> u64 {
+        self.pattern_signature
+    }
+
+    #[must_use]
+    pub fn tangent_blocks(&self) -> &[ReducedTangentBlock] {
+        &self.tangent_blocks
+    }
+
+    #[must_use]
+    pub fn hard_rows(&self) -> &[ReducedHardRow] {
+        &self.hard_rows
+    }
+
+    #[must_use]
+    pub const fn normalized_residual(&self) -> &DVector<f64> {
+        &self.normalized_residual
+    }
+
+    #[must_use]
+    pub const fn normalized_jacobian(&self) -> &DMatrix<f64> {
+        &self.normalized_jacobian
+    }
+
+    #[must_use]
+    pub const fn rank(&self) -> usize {
+        self.rank
+    }
+
+    #[must_use]
+    pub const fn left_nullity(&self) -> usize {
+        self.left_nullity
+    }
+
+    #[must_use]
+    pub const fn right_nullity(&self) -> usize {
+        self.right_nullity
+    }
+
+    #[must_use]
+    pub const fn rank_threshold(&self) -> f64 {
+        self.rank_threshold
+    }
+
+    #[must_use]
+    pub fn singular_values(&self) -> &[f64] {
+        &self.singular_values
+    }
+
+    /// Solves `J * delta + normalized_residual_rate = 0` with the accepted
+    /// component rank threshold. Rank-deficient consistent systems return the
+    /// SVD minimum-norm tangent; inconsistent least squares is never success-like.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a wrong-sized or non-finite rate, any non-finite SVD output, or
+    /// normalized-to-raw scaling that cannot round-trip without material loss.
+    pub fn solve_sensitivity(
+        &self,
+        normalized_residual_rate: &DVector<f64>,
+    ) -> Result<SensitivitySolution, SensitivityError> {
+        if normalized_residual_rate.len() != self.normalized_jacobian.nrows() {
+            return Err(SensitivityError::DimensionMismatch {
+                expected: self.normalized_jacobian.nrows(),
+                actual: normalized_residual_rate.len(),
+            });
+        }
+        for (index, &value) in normalized_residual_rate.iter().enumerate() {
+            if !value.is_finite() {
+                return Err(SensitivityError::NonFiniteRightHandSide { index, value });
+            }
+        }
+
+        let rows = self.normalized_jacobian.nrows();
+        let columns = self.normalized_jacobian.ncols();
+        let normalized_tangent = if rows == 0 || columns == 0 {
+            DVector::zeros(columns)
+        } else {
+            let decomposition = self.normalized_jacobian.clone().svd(true, true);
+            if decomposition
+                .singular_values
+                .iter()
+                .any(|value| !value.is_finite())
+                || decomposition
+                    .singular_values
+                    .iter()
+                    .filter(|&&value| value > self.rank_threshold)
+                    .count()
+                    != self.rank
+            {
+                return Err(SensitivityError::NumericalFailure {
+                    context: "SVD rank does not match the accepted component rank",
+                });
+            }
+            decomposition
+                .solve(&(-normalized_residual_rate), self.rank_threshold)
+                .map_err(|_| SensitivityError::NumericalFailure {
+                    context: "SVD minimum-norm solve",
+                })?
+        };
+        if normalized_tangent.len() != columns
+            || normalized_tangent.iter().any(|value| !value.is_finite())
+        {
+            return Err(SensitivityError::NumericalFailure {
+                context: "non-finite normalized tangent",
+            });
+        }
+
+        let mathematical_residual =
+            &self.normalized_jacobian * &normalized_tangent + normalized_residual_rate;
+        let (mathematical_residual_max, _) = finite_norms(mathematical_residual.iter().copied())
+            .ok_or(SensitivityError::NumericalFailure {
+                context: "non-finite mathematical differentiated-equation residual",
+            })?;
+        let mathematically_consistent =
+            mathematical_residual_max <= self.normalized_residual_tolerance;
+
+        let raw_tangent_blocks = self.raw_tangent_blocks(&normalized_tangent)?;
+        let recovered_tangent = self.recover_normalized_tangent(&raw_tangent_blocks)?;
+        let equation_residual =
+            &self.normalized_jacobian * recovered_tangent + normalized_residual_rate;
+        let (equation_residual_max, equation_residual_l2) = finite_norms(
+            equation_residual.iter().copied(),
+        )
+        .ok_or(SensitivityError::NumericalFailure {
+            context: "non-finite recoverable differentiated-equation residual",
+        })?;
+        if mathematically_consistent && equation_residual_max > self.normalized_residual_tolerance {
+            return Err(SensitivityError::NumericalFailure {
+                context: "recoverable raw tangent violates differentiated equations",
+            });
+        }
+        let status = if !mathematically_consistent {
+            SensitivityStatus::Inconsistent
+        } else if self.rank == columns {
+            SensitivityStatus::Unique
+        } else {
+            SensitivityStatus::UnderdeterminedMinimumNorm
+        };
+
+        debug_assert!(
+            !status.is_success_like()
+                || equation_residual_max <= self.normalized_residual_tolerance
+        );
+        Ok(SensitivitySolution {
+            revisions: self.revisions,
+            status,
+            normalized_tangent,
+            raw_tangent_blocks,
+            equation_residual_max,
+            equation_residual_l2,
+        })
+    }
+
+    fn recover_normalized_tangent(
+        &self,
+        raw_tangent_blocks: &[RawTangentBlock],
+    ) -> Result<DVector<f64>, SensitivityError> {
+        if raw_tangent_blocks.len() != self.tangent_blocks.len() {
+            return Err(SensitivityError::NumericalFailure {
+                context: "raw tangent block count changed during recovery",
+            });
+        }
+        let mut recovered = DVector::zeros(self.normalized_jacobian.ncols());
+        for (mapping, raw) in self.tangent_blocks.iter().zip(raw_tangent_blocks) {
+            if raw.root != mapping.root
+                || raw.alias_members != mapping.alias_members
+                || raw.kind != mapping.kind
+                || raw.values.len() != mapping.step_scales.len()
+            {
+                return Err(SensitivityError::NumericalFailure {
+                    context: "raw tangent block mapping changed during recovery",
+                });
+            }
+            for (coordinate, (&raw_value, &scale)) in
+                raw.values.iter().zip(&mapping.step_scales).enumerate()
+            {
+                let value = raw_value / scale;
+                if !value.is_finite() {
+                    return Err(SensitivityError::NumericalFailure {
+                        context: "raw tangent recovery produced a non-finite coordinate",
+                    });
+                }
+                recovered[mapping.tangent_range.start + coordinate] = value;
+            }
+        }
+        if recovered.iter().any(|value| !value.is_finite()) {
+            return Err(SensitivityError::NumericalFailure {
+                context: "raw tangent recovery produced a non-finite vector",
+            });
+        }
+        Ok(recovered)
+    }
+
+    fn raw_tangent_blocks(
+        &self,
+        normalized_tangent: &DVector<f64>,
+    ) -> Result<Vec<RawTangentBlock>, SensitivityError> {
+        self.tangent_blocks
+            .iter()
+            .map(|block| {
+                let mut values = DVector::zeros(block.tangent_range.len());
+                for (coordinate, &scale) in block.step_scales.iter().enumerate() {
+                    let normalized = normalized_tangent[block.tangent_range.start + coordinate];
+                    let raw = normalized * scale;
+                    let recovered = raw / scale;
+                    let round_trip_error = (recovered - normalized).abs();
+                    let round_trip_tolerance = 64.0 * f64::EPSILON * normalized.abs();
+                    if !raw.is_finite()
+                        || !recovered.is_finite()
+                        || round_trip_error > round_trip_tolerance
+                    {
+                        return Err(SensitivityError::NumericalFailure {
+                            context: "raw tangent scaling loses material precision",
+                        });
+                    }
+                    values[coordinate] = raw;
+                }
+                Ok(RawTangentBlock {
+                    root: block.root,
+                    alias_members: block.alias_members.clone(),
+                    kind: block.kind,
+                    values,
+                })
+            })
+            .collect()
+    }
+}
+
+/// Revision-stamped immutable snapshot of one session's accepted hard system.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AcceptedHardLinearization {
+    revisions: SessionRevisions,
+    accepted_state: PackedState,
+    components: Vec<AcceptedHardComponentLinearization>,
+}
+
+impl AcceptedHardLinearization {
+    #[must_use]
+    pub const fn revisions(&self) -> SessionRevisions {
+        self.revisions
+    }
+
+    #[must_use]
+    pub const fn accepted_state(&self) -> &PackedState {
+        &self.accepted_state
+    }
+
+    #[must_use]
+    pub fn components(&self) -> &[AcceptedHardComponentLinearization] {
+        &self.components
+    }
+
+    #[must_use]
+    pub fn component(&self, component_index: usize) -> Option<&AcceptedHardComponentLinearization> {
+        self.components
+            .iter()
+            .find(|component| component.component_index == component_index)
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum EvaluationStatus {
@@ -226,6 +577,343 @@ impl ComponentLinearization {
             rows,
         })
     }
+}
+
+#[allow(clippy::too_many_lines)]
+pub(crate) fn build_accepted_hard_linearization(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    report: &SolveReport,
+    revisions: SessionRevisions,
+    config: SolverConfig,
+) -> Result<AcceptedHardLinearization, CoreError> {
+    config.validate()?;
+    if report.hard_validity != HardValidity::Valid
+        || !report.hard_residuals_validated
+        || !report.rank_is_valid
+        || !report.hard_residual_max.is_finite()
+        || report.hard_residual_max > config.normalized_residual_tolerance
+    {
+        return invalid_accepted("retained report is not finite, hard-valid, and rank-valid");
+    }
+    let accepted_state = problem.packed_state()?;
+    if accepted_state != report.accepted_state {
+        return invalid_accepted("retained problem state does not match the accepted report state");
+    }
+    if report.structural != plan.structural {
+        return invalid_accepted("retained elimination plan does not match the accepted report");
+    }
+    if plan.components.len() != plan.component_layouts.len()
+        || plan.components.len() != plan.structural.component_summaries.len()
+        || plan.components.len() != report.component_solves.len()
+    {
+        return invalid_accepted("component counts do not match retained session data");
+    }
+
+    let state = problem.variable_state();
+    let mut components = Vec::with_capacity(plan.components.len());
+    let mut aggregate_rank = 0usize;
+    let mut aggregate_left_nullity = 0usize;
+    let mut aggregate_right_nullity = 0usize;
+    let mut aggregate_machine_tolerance = 0.0_f64;
+    let mut aggregate_rank_threshold = 0.0_f64;
+    let mut aggregate_is_singular = false;
+    let mut aggregate_near_singular = false;
+    let mut aggregate_singular_values = Vec::new();
+    let mut fresh_hard_max = 0.0_f64;
+    let mut fresh_hard_l2 = 0.0_f64;
+    for component in &plan.components {
+        let summary = &plan.structural.component_summaries[component.index];
+        let component_report = &report.component_solves[component.index];
+        if summary.component_index != component.index
+            || component_report.component_index != component.index
+            || component_report.pattern_signature != summary.pattern_signature
+            || component_report.hard_validity != HardValidity::Valid
+            || !component_report.hard_residuals_validated
+            || !component_report.rank_is_valid
+            || !component_report.hard_residual_max.is_finite()
+            || !component_report.hard_residual_l2.is_finite()
+            || component_report.hard_residual_max > config.normalized_residual_tolerance
+        {
+            return invalid_accepted("component report identity or accepted validity is invalid");
+        }
+
+        // Include eliminated hard blocks in fresh canonical evaluation, then
+        // project only active rows into the public reduced matrix.
+        let linearization =
+            problem.linearize_component(plan, component, &state, &component.residual_ids)?;
+        if linearization.numeric.blocks.len() != component.residual_ids.len()
+            || linearization
+                .numeric
+                .blocks
+                .iter()
+                .zip(&component.residual_ids)
+                .any(|(block, residual_id)| {
+                    block.residual_id != *residual_id
+                        || block.category != ResidualCategory::Hard
+                        || plan.source_is_suppressed(block.source_id)
+                })
+        {
+            return invalid_accepted("canonical component hard-block identity is invalid");
+        }
+        let (component_hard_max, component_hard_l2) = finite_norms(
+            linearization
+                .numeric
+                .blocks
+                .iter()
+                .flat_map(|block| block.normalized_residuals.iter().copied()),
+        )
+        .ok_or(CoreError::InvalidAcceptedLinearization {
+            context: "canonical component hard residual is non-finite",
+        })?;
+        if component_hard_max > config.normalized_residual_tolerance {
+            return invalid_accepted("fresh accepted hard residual exceeds configured tolerance");
+        }
+        fresh_hard_max = fresh_hard_max.max(component_hard_max);
+        fresh_hard_l2 = fresh_hard_l2.hypot(component_hard_l2);
+        if !fresh_hard_l2.is_finite() {
+            return invalid_accepted("aggregate fresh accepted hard residual is non-finite");
+        }
+
+        let tangent_blocks = reduced_tangent_blocks(problem, plan, &linearization.layout)?;
+        let dense = linearization.project_dense(plan, ResidualCategory::Hard)?;
+        if dense.residuals.len() != dense.jacobian.nrows()
+            || dense.rows.len() != dense.jacobian.nrows()
+            || dense.jacobian.nrows() != summary.active_hard_rows
+            || dense.jacobian.ncols() != summary.active_tangent_dimensions
+            || tangent_blocks
+                .last()
+                .map_or(0, |block| block.tangent_range.end)
+                != dense.jacobian.ncols()
+        {
+            return invalid_accepted("reduced component row or column dimensions are invalid");
+        }
+        let hard_rows = reduced_hard_rows(problem, plan, component, &dense.rows)?;
+        let fresh_rank = rank_diagnostics(&dense.jacobian, config.rank_relative_tolerance).ok_or(
+            CoreError::InvalidAcceptedLinearization {
+                context: "fresh component rank policy evaluation failed",
+            },
+        )?;
+        validate_accepted_rank(component_report, &dense.jacobian, &fresh_rank, config)?;
+
+        aggregate_rank = aggregate_rank.saturating_add(component_report.rank);
+        aggregate_left_nullity =
+            aggregate_left_nullity.saturating_add(component_report.left_nullity);
+        aggregate_right_nullity =
+            aggregate_right_nullity.saturating_add(component_report.right_nullity);
+        aggregate_machine_tolerance = aggregate_machine_tolerance.max(fresh_rank.machine_tolerance);
+        aggregate_rank_threshold = aggregate_rank_threshold.max(fresh_rank.threshold);
+        aggregate_is_singular |=
+            fresh_rank.rank < dense.jacobian.nrows().min(dense.jacobian.ncols());
+        aggregate_near_singular |= fresh_rank.near_singular;
+        aggregate_singular_values.extend(fresh_rank.singular_values.iter().copied());
+        components.push(AcceptedHardComponentLinearization {
+            revisions,
+            component_index: component.index,
+            pattern_signature: summary.pattern_signature,
+            tangent_blocks,
+            hard_rows,
+            normalized_residual: dense.residuals,
+            normalized_jacobian: dense.jacobian,
+            rank: component_report.rank,
+            left_nullity: component_report.left_nullity,
+            right_nullity: component_report.right_nullity,
+            rank_threshold: component_report.rank_threshold,
+            singular_values: component_report.singular_values.clone(),
+            normalized_residual_tolerance: config.normalized_residual_tolerance,
+        });
+    }
+    if !fresh_hard_max.is_finite()
+        || fresh_hard_max > config.normalized_residual_tolerance
+        || aggregate_rank != report.rank
+        || aggregate_left_nullity != report.left_nullity
+        || aggregate_right_nullity != report.right_nullity
+        || report.local_degrees_of_freedom != aggregate_right_nullity
+        || report.is_singular != aggregate_is_singular
+        || report.near_singular != aggregate_near_singular
+        || !same_finite_value(
+            report.rank_relative_tolerance,
+            config.rank_relative_tolerance,
+        )
+        || !same_finite_value(report.rank_machine_tolerance, aggregate_machine_tolerance)
+        || !same_finite_value(report.rank_threshold, aggregate_rank_threshold)
+        || report.singular_values.len() != aggregate_singular_values.len()
+        || report
+            .singular_values
+            .iter()
+            .zip(&aggregate_singular_values)
+            .any(|(&accepted, &fresh)| !same_finite_value(accepted, fresh))
+    {
+        return invalid_accepted("aggregate component numerics do not match the accepted report");
+    }
+
+    Ok(AcceptedHardLinearization {
+        revisions,
+        accepted_state,
+        components,
+    })
+}
+
+fn reduced_tangent_blocks(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    layout: &ComponentTangentLayout,
+) -> Result<Vec<ReducedTangentBlock>, CoreError> {
+    let mut expected_start = 0usize;
+    layout
+        .blocks
+        .iter()
+        .map(|block| {
+            let root = problem
+                .variable(block.root)
+                .ok_or(CoreError::UnknownVariable(block.root))?;
+            let kind = root.kind();
+            if block.tangent_range.start != expected_start
+                || block.tangent_range.len() != kind.tangent_dimension()
+                || block.step_scales != root.step_scales()
+                || block
+                    .members
+                    .iter()
+                    .filter(|&&member| member == block.root)
+                    .count()
+                    != 1
+            {
+                return invalid_accepted("reduced tangent block layout is invalid");
+            }
+            for &member in &block.members {
+                let variable = problem
+                    .variable(member)
+                    .ok_or(CoreError::UnknownVariable(member))?;
+                if plan.root(member) != Some(block.root)
+                    || variable.kind() != kind
+                    || variable.step_scales() != block.step_scales
+                {
+                    return invalid_accepted("reduced alias tangent mapping is invalid");
+                }
+            }
+            expected_start = block.tangent_range.end;
+            Ok(ReducedTangentBlock {
+                root: block.root,
+                alias_members: block
+                    .members
+                    .iter()
+                    .copied()
+                    .filter(|&member| member != block.root)
+                    .collect(),
+                kind,
+                tangent_range: block.tangent_range.clone(),
+                step_scales: block.step_scales.clone(),
+            })
+        })
+        .collect()
+}
+
+fn reduced_hard_rows(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    component: &SolveComponent,
+    rows: &[RowIdentity],
+) -> Result<Vec<ReducedHardRow>, CoreError> {
+    rows.iter()
+        .map(|row| {
+            let residual = problem
+                .residual(row.residual_id)
+                .ok_or(CoreError::UnknownResidual(row.residual_id))?;
+            if residual.category() != ResidualCategory::Hard
+                || !component.active_residual_ids.contains(&row.residual_id)
+                || plan.is_eliminated(row.residual_id)
+                || plan.source_is_suppressed(row.source_id)
+                || residual.source() != row.source_id
+                || row.row_in_block >= residual.output_dimension()
+            {
+                return invalid_accepted("public reduced hard-row mapping is invalid");
+            }
+            let residual_scale = residual.scales()[row.row_in_block];
+            if !residual_scale.is_finite() || residual_scale <= 0.0 {
+                return invalid_accepted("public reduced hard-row scale is invalid");
+            }
+            Ok(ReducedHardRow {
+                row: ResidualRowRef {
+                    residual_id: row.residual_id,
+                    row_in_block: row.row_in_block,
+                    source_id: row.source_id,
+                },
+                residual_scale,
+            })
+        })
+        .collect()
+}
+
+fn validate_accepted_rank(
+    report: &ComponentSolveReport,
+    jacobian: &DMatrix<f64>,
+    fresh: &RankDiagnostics,
+    config: SolverConfig,
+) -> Result<(), CoreError> {
+    let is_singular = fresh.rank < jacobian.nrows().min(jacobian.ncols());
+    if !fresh.relative_threshold.is_finite()
+        || !same_finite_value(fresh.relative_tolerance, config.rank_relative_tolerance)
+        || !same_finite_value(report.rank_relative_tolerance, fresh.relative_tolerance)
+        || !same_finite_value(report.rank_machine_tolerance, fresh.machine_tolerance)
+        || !same_finite_value(report.rank_threshold, fresh.threshold)
+        || !same_finite_value(report.sigma_max, fresh.sigma_max)
+        || !same_optional_finite_value(
+            report.smallest_retained_singular_value,
+            fresh.smallest_retained,
+        )
+        || !same_finite_value(report.near_singular_factor, fresh.near_singular_factor)
+        || !same_optional_finite_value(report.near_singular_ratio, fresh.near_singular_ratio)
+        || report.near_singular != fresh.near_singular
+        || report.is_singular != is_singular
+        || report.singular_values.len() != fresh.singular_values.len()
+        || report
+            .singular_values
+            .iter()
+            .zip(&fresh.singular_values)
+            .any(|(&accepted, &fresh)| !same_finite_value(accepted, fresh))
+        || report.rank != fresh.rank
+        || report.rank > jacobian.nrows().min(jacobian.ncols())
+        || report.left_nullity != jacobian.nrows() - report.rank
+        || report.right_nullity != jacobian.ncols() - report.rank
+        || report.local_degrees_of_freedom != report.right_nullity
+    {
+        return invalid_accepted("fresh component SVD does not match accepted rank data");
+    }
+    Ok(())
+}
+
+fn same_optional_finite_value(first: Option<f64>, second: Option<f64>) -> bool {
+    match (first, second) {
+        (Some(first), Some(second)) => same_finite_value(first, second),
+        (None, None) => true,
+        _ => false,
+    }
+}
+
+fn same_finite_value(first: f64, second: f64) -> bool {
+    first.is_finite()
+        && second.is_finite()
+        && (first - second).abs() <= 1024.0 * f64::EPSILON * first.abs().max(second.abs()).max(1.0)
+}
+
+fn finite_norms(values: impl Iterator<Item = f64>) -> Option<(f64, f64)> {
+    let mut maximum = 0.0_f64;
+    let mut l2 = 0.0_f64;
+    for value in values {
+        if !value.is_finite() {
+            return None;
+        }
+        maximum = maximum.max(value.abs());
+        l2 = l2.hypot(value);
+        if !l2.is_finite() {
+            return None;
+        }
+    }
+    Some((maximum, l2))
+}
+
+fn invalid_accepted<T>(context: &'static str) -> Result<T, CoreError> {
+    Err(CoreError::InvalidAcceptedLinearization { context })
 }
 
 pub(crate) fn component_tangent_layout(

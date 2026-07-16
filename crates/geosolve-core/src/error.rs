@@ -4,6 +4,18 @@ use crate::{
     BoundId, EvaluationErrorCategory, ResidualId, SourceConstraintId, VariableId, VariableKind,
 };
 
+/// Typed input or numerical failures from an accepted-state sensitivity solve.
+#[derive(Clone, Debug, Error, PartialEq)]
+#[non_exhaustive]
+pub enum SensitivityError {
+    #[error("normalized residual rate has dimension {actual}, expected {expected}")]
+    DimensionMismatch { expected: usize, actual: usize },
+    #[error("normalized residual rate {index} must be finite, got {value}")]
+    NonFiniteRightHandSide { index: usize, value: f64 },
+    #[error("accepted-state sensitivity solve failed: {context}")]
+    NumericalFailure { context: &'static str },
+}
+
 /// Construction and evaluation failures detected before numerical solving.
 #[derive(Clone, Debug, Error, PartialEq)]
 #[non_exhaustive]
@@ -80,6 +92,13 @@ pub enum CoreError {
         expected: VariableKind,
         actual: VariableKind,
     },
+    #[error("invalid {kind:?} variable value: {message}")]
+    InvalidVariableValue { kind: VariableKind, message: String },
+    #[error("coordinate bounds do not support {kind:?} variable {variable:?}")]
+    UnsupportedBoundVariableKind {
+        variable: VariableId,
+        kind: VariableKind,
+    },
     #[error("audit metadata field {field} must not be empty")]
     EmptyAuditMetadata { field: &'static str },
     #[error("residual {residual:?} reported invalid geometry: {message}")]
@@ -127,4 +146,8 @@ pub enum CoreError {
         residual: ResidualId,
         field: &'static str,
     },
+    #[error("accepted hard linearization validation failed: {context}")]
+    InvalidAcceptedLinearization { context: &'static str },
+    #[error("compatible session replacement changed reduced component ordering: {context}")]
+    IncompatibleSessionPlan { context: &'static str },
 }

@@ -3268,6 +3268,22 @@ fn variable_value_text(value: VariableValue) -> String {
             format_value(y),
             format_value(angle)
         ),
+        VariableValue::Vec3([x, y, z]) => format!(
+            "[{}, {}, {}]",
+            format_value(x),
+            format_value(y),
+            format_value(z)
+        ),
+        VariableValue::Pose3([x, y, z, qw, qx, qy, qz]) => format!(
+            "[{}, {}, {}, {}, {}, {}, {}]",
+            format_value(x),
+            format_value(y),
+            format_value(z),
+            format_value(qw),
+            format_value(qx),
+            format_value(qy),
+            format_value(qz)
+        ),
     }
 }
 

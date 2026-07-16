@@ -260,6 +260,34 @@ Expected behavior:
 
 These examples are loadable interaction/audit stress labs, not additional canonical A1-A10 gates. They compose existing public document constraints and add no browser equations or new curve family.
 
+## M15 manifold and accepted-sensitivity fixtures
+
+The manifold regression corpus applies ADR 0006 directly rather than relying on
+one end-to-end assembly:
+
+- `Pose2` and `Pose3` identity, composition, inverse, exponential, logarithm,
+  adjoint, right retraction and local difference round-trip at ordinary, tiny and
+  near-half-turn increments;
+- exact `+pi` and `-pi` rotations canonicalize to identical quaternion bits, while
+  values immediately on either side of the tie band retain the principal log;
+- checked point/vector transforms reject non-finite input and finite overflow;
+  validated `Frame3`/`PlaneFrame` round-trip and reject invalid axes or off-plane
+  inverse requests;
+- scalar, `Vec2`, `Vec3`, `Pose2` and `Pose3` packing preserves distinct ambient
+  and tangent dimensions, and pose fixed/alias Jacobians match tangent-coordinate
+  finite differences away from the principal-log cut;
+- accepted hard linearization preserves deterministic component, row and reduced
+  root/member ordering with session revisions; sensitivity matches a central target
+  perturbation oracle and distinguishes unique, underdetermined minimum-norm,
+  inconsistent and numerical-failure outcomes;
+- L1/L2 geometry, explicit branch signs, rank and source order are invariant under
+  a common left `SE(2)` transform; L3 published world-frame body-origin velocity
+  transforms equivariantly and matches continued position solves.
+
+These fixtures do not claim pose-coordinate box bounds, active-bound sensitivity,
+secondary-objective sensitivity, world-frame sensitivity conversion or spatial
+joints. Those contracts remain assigned to later milestones.
+
 ## M9 sketch dependent-gradient fixture
 
 Purpose: distinguish an accepted finite hard state from configuration-dependent numerical rank loss in a domain-compiled sketch.

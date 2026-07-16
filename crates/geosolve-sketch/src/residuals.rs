@@ -250,9 +250,9 @@ fn evaluate_sketch_ad(
                     ad_seed(value[0], width, offset, seeded),
                     ad_seed(value[1], width, offset + 1, seeded),
                 ]),
-                VariableValue::Pose2(_) => {
+                VariableValue::Vec3(_) | VariableValue::Pose2(_) | VariableValue::Pose3(_) => {
                     return Err(EvaluationError::invalid_geometry(
-                        "generic sketch curve residual does not accept Pose2 incidence",
+                        "generic sketch curve residual accepts only Scalar and Vec2 incidence",
                     ));
                 }
             };
@@ -1532,9 +1532,9 @@ fn zero_blocks(
             let columns = match variable {
                 VariableValue::Scalar(_) => 1,
                 VariableValue::Vec2(_) => 2,
-                VariableValue::Pose2(_) => {
+                VariableValue::Vec3(_) | VariableValue::Pose2(_) | VariableValue::Pose3(_) => {
                     return Err(EvaluationError::invalid_geometry(
-                        "sketch residual does not accept Pose2 incidence",
+                        "sketch residual accepts only Scalar and Vec2 incidence",
                     ));
                 }
             };

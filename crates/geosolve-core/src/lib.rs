@@ -19,7 +19,11 @@ pub use analysis::{
     StructuralSummary,
 };
 pub use bounds::{BoundReport, BoundStatus, CoordinateBound, OneSidedMobility};
-pub use error::CoreError;
+pub use error::{CoreError, SensitivityError};
+pub use linearization::{
+    AcceptedHardComponentLinearization, AcceptedHardLinearization, RawTangentBlock, ReducedHardRow,
+    ReducedTangentBlock, SensitivitySolution, SensitivityStatus,
+};
 pub use problem::{
     AuditAnnotations, AuditBoundAnnotation, AuditEvaluationStatus, AuditRowDescriptor,
     AuditRowSnapshot, AuditSnapshot, AuditSourceSnapshot, AuditVariableSnapshot, BlockLayout,

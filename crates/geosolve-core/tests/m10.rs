@@ -98,7 +98,7 @@ impl ResidualEvaluator for DomainCheckedTarget {
 }
 
 #[derive(Clone, Debug)]
-struct DensePoseRows {
+struct DenseVec3Rows {
     coefficients: Vec<[f64; 3]>,
     targets: Vec<f64>,
 }
@@ -262,10 +262,10 @@ impl ResidualEvaluator for Vec2LinearRow {
     }
 }
 
-impl ResidualEvaluator for DensePoseRows {
+impl ResidualEvaluator for DenseVec3Rows {
     fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
-        let [VariableValue::Pose2(value)] = variables else {
-            return Err(EvaluationError::invalid_geometry("expected Pose2"));
+        let [VariableValue::Vec3(value)] = variables else {
+            return Err(EvaluationError::invalid_geometry("expected Vec3"));
         };
         Ok(self
             .coefficients
@@ -409,7 +409,7 @@ fn add_scalar_target(
     (source_id, residual)
 }
 
-fn add_pose_rows(
+fn add_vec3_rows(
     problem: &mut Problem,
     variable: VariableId,
     category: ResidualCategory,
@@ -432,7 +432,7 @@ fn add_pose_rows(
                 targets.len(),
                 vec![1.0; targets.len()],
                 rows,
-                DensePoseRows {
+                DenseVec3Rows {
                     coefficients,
                     targets,
                 },
@@ -845,6 +845,14 @@ fn successful_source_parameter_replacement_dirties_only_its_owner_component() {
     );
     let mut session = SolveSession::new(problem, SolverConfig::default()).unwrap();
     let before = session.revisions();
+    let before_signature = session
+        .report()
+        .structural
+        .component_summaries
+        .iter()
+        .find(|component| component.variable_ids.contains(&x))
+        .unwrap()
+        .pattern_signature;
     let retained_y = scalar(session.problem(), y);
     let replacement = ResidualBlock::new(
         x_source,
@@ -882,6 +890,20 @@ fn successful_source_parameter_replacement_dirties_only_its_owner_component() {
     assert_eq!(scalar(session.problem(), y).to_bits(), retained_y.to_bits());
     assert_eq!(result.revisions.source, before.source + 1);
     assert_eq!(result.revisions.state, before.state + 1);
+    assert_ne!(
+        result.report.component_solves[x_component].pattern_signature,
+        before_signature
+    );
+    let accepted = session.accepted_hard_linearization().unwrap();
+    let accepted_x = accepted.component(x_component).unwrap();
+    assert_eq!(
+        accepted_x.pattern_signature(),
+        result.report.component_solves[x_component].pattern_signature
+    );
+    assert_eq!(
+        accepted_x.hard_rows()[0].residual_scale.to_bits(),
+        2.0_f64.to_bits()
+    );
 }
 
 #[test]
@@ -1085,8 +1107,8 @@ fn invalid_bounds_reject_without_entering_a_problem() {
 fn hard_bvls_releases_corner_coordinates_when_an_interior_witness_exists() {
     let mut problem = Problem::new();
     let variable =
-        problem.add_variable(VariableBlock::pose2([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]).unwrap());
-    add_pose_rows(
+        problem.add_variable(VariableBlock::vec3([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]).unwrap());
+    add_vec3_rows(
         &mut problem,
         variable,
         ResidualCategory::Hard,
@@ -1108,8 +1130,8 @@ fn hard_bvls_releases_corner_coordinates_when_an_interior_witness_exists() {
     let report = problem.solve(SolverConfig::default()).unwrap();
     assert_eq!(report.hard_validity, HardValidity::Valid, "{report:#?}");
     assert!(report.hard_residual_max <= 1.0e-9, "{report:#?}");
-    let VariableValue::Pose2(value) = problem.variable(variable).unwrap().value() else {
-        panic!("expected Pose2")
+    let VariableValue::Vec3(value) = problem.variable(variable).unwrap().value() else {
+        panic!("expected Vec3")
     };
     assert!((value[0] - 1.0).abs() <= 1.0e-8, "{value:?}");
     assert!((value[1] - 5.0).abs() <= 1.0e-8, "{value:?}");
@@ -1120,8 +1142,8 @@ fn hard_bvls_releases_corner_coordinates_when_an_interior_witness_exists() {
 fn secondary_working_set_reaches_feasible_zero_cost_in_three_variables() {
     let mut problem = Problem::new();
     let variable =
-        problem.add_variable(VariableBlock::pose2([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]).unwrap());
-    add_pose_rows(
+        problem.add_variable(VariableBlock::vec3([0.0, 0.0, 0.0], [1.0, 1.0, 1.0]).unwrap());
+    add_vec3_rows(
         &mut problem,
         variable,
         ResidualCategory::Temporary,
@@ -1145,8 +1167,8 @@ fn secondary_working_set_reaches_feasible_zero_cost_in_three_variables() {
         report.priority_solves[0].final_cost.unwrap() <= 1.0e-18,
         "{report:#?}"
     );
-    let VariableValue::Pose2(value) = problem.variable(variable).unwrap().value() else {
-        panic!("expected Pose2")
+    let VariableValue::Vec3(value) = problem.variable(variable).unwrap().value() else {
+        panic!("expected Vec3")
     };
     assert!(value[0] >= 0.0 && value[2] <= 0.0, "{value:?}");
 }

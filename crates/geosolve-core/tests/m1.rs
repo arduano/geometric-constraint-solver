@@ -6,6 +6,7 @@ use geosolve_core::{
     ResidualCategory, ResidualEvaluator, ResidualRowAudit, SourceConstraint, SourceConstraintId,
     VariableBlock, VariableId, VariableKind, VariableValue,
 };
+use geosolve_geometry::Pose2 as GeometryPose2;
 
 const FD_STEP: f64 = 1.0e-5;
 const FD_TOLERANCE: f64 = 1.0e-6;
@@ -119,7 +120,14 @@ impl ResidualEvaluator for TransformedPoint {
         Ok(vec![LocalJacobian::new(
             2,
             3,
-            vec![1.0, 0.0, angle_derivative[0], 0.0, 1.0, angle_derivative[1]],
+            vec![
+                cos,
+                -sin,
+                angle_derivative[0],
+                sin,
+                cos,
+                angle_derivative[1],
+            ],
         )])
     }
 }
@@ -145,14 +153,22 @@ impl ResidualEvaluator for Heterogeneous {
         ])
     }
 
-    fn jacobian(
-        &self,
-        _variables: &[VariableValue],
-    ) -> Result<Vec<LocalJacobian>, EvaluationError> {
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        let [
+            VariableValue::Scalar(_),
+            VariableValue::Vec2(_),
+            VariableValue::Pose2(pose),
+        ] = variables
+        else {
+            return Err(EvaluationError::invalid_geometry(
+                "expected Scalar, Vec2, and Pose2",
+            ));
+        };
+        let (sine, cosine) = pose[2].sin_cos();
         Ok(vec![
             LocalJacobian::new(2, 1, vec![1.0, 2.0]),
             LocalJacobian::new(2, 2, vec![1.0, 0.0, 0.0, 1.0]),
-            LocalJacobian::new(2, 3, vec![1.0, 0.0, 0.0, 0.0, 0.0, 1.0]),
+            LocalJacobian::new(2, 3, vec![cosine, -sine, 0.0, 0.0, 0.0, 1.0]),
         ])
     }
 }
@@ -278,7 +294,7 @@ fn two_variable_distance_uses_ordered_incidence_and_matches_finite_difference() 
 }
 
 #[test]
-fn pose2_transformed_point_uses_unwrapped_local_increment_and_matches_fd() {
+fn pose2_transformed_point_uses_right_local_increment_and_matches_fd() {
     let mut problem = Problem::new();
     let pose =
         problem.add_variable(VariableBlock::pose2([1.0, -2.0, 0.3], [0.5, 0.25, 0.2]).unwrap());
@@ -310,13 +326,19 @@ fn pose2_transformed_point_uses_unwrapped_local_increment_and_matches_fd() {
     assert_eq!(report.blocks[0].columns, 3);
     assert!(report.all_within(FD_TOLERANCE), "{report:#?}");
 
-    problem
-        .apply_local_increment(pose, &[1.0, 2.0, 4.0 * PI])
-        .unwrap();
-    assert_eq!(
-        problem.variable(pose).unwrap().value(),
-        VariableValue::Pose2([2.0, 0.0, 0.3 + 4.0 * PI])
-    );
+    let delta = [1.0, 2.0, 4.0 * PI];
+    let expected = GeometryPose2::from_ambient([1.0, -2.0, 0.3])
+        .unwrap()
+        .retract(delta)
+        .unwrap()
+        .ambient();
+    problem.apply_local_increment(pose, &delta).unwrap();
+    let VariableValue::Pose2(actual) = problem.variable(pose).unwrap().value() else {
+        panic!("expected Pose2")
+    };
+    for (actual, expected) in actual.into_iter().zip(expected) {
+        assert_relative_eq!(actual, expected, epsilon = 1.0e-14);
+    }
 }
 
 #[test]
@@ -345,10 +367,23 @@ fn mixed_blocks_pack_deterministically_and_apply_local_plus() {
     problem
         .apply_local_increment(pose, &[3.0, 4.0, 5.0])
         .unwrap();
-    assert_eq!(
-        problem.packed_state().unwrap().ambient().as_slice(),
-        &[2.5, 4.0, 2.0, 8.0, 10.0, 12.0]
-    );
+    let expected_pose = GeometryPose2::from_ambient([5.0, 6.0, 7.0])
+        .unwrap()
+        .retract([3.0, 4.0, 5.0])
+        .unwrap()
+        .ambient();
+    let packed = problem.packed_state().unwrap();
+    let expected = [
+        2.5,
+        4.0,
+        2.0,
+        expected_pose[0],
+        expected_pose[1],
+        expected_pose[2],
+    ];
+    for (actual, expected) in packed.ambient().iter().zip(expected) {
+        assert_relative_eq!(*actual, expected, epsilon = 1.0e-14);
+    }
 }
 
 #[test]
@@ -406,8 +441,9 @@ fn heterogeneous_block_assembles_into_correct_scaled_matrix_ranges() {
     assert_eq!(assembly.jacobian().shape(), (2, 6));
     assert_relative_eq!(assembly.residuals()[0], 1.2, epsilon = 1.0e-14);
     assert_relative_eq!(assembly.residuals()[1], 1.1, epsilon = 1.0e-14);
+    let (sine, cosine) = 13.0_f64.sin_cos();
     let expected = [
-        [0.2, 0.3, 0.0, 0.5, 0.0, 0.0],
+        [0.2, 0.3, 0.0, 0.5 * cosine, -0.6 * sine, 0.0],
         [0.2, 0.0, 0.2, 0.0, 0.0, 0.35],
     ];
     for row in 0..2 {

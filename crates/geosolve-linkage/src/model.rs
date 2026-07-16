@@ -1060,31 +1060,33 @@ pub(crate) fn validate_model_scale(model_scale: f64) -> Result<(), LinkageError>
 }
 
 pub(crate) fn validate_plane_frame(frame: PlaneFrame) -> Result<(), LinkageError> {
-    if !frame.origin.coords.iter().all(|value| value.is_finite())
-        || !frame.u.iter().all(|value| value.is_finite())
-        || !frame.v.iter().all(|value| value.is_finite())
+    let origin = frame.origin();
+    let u = frame.u();
+    let v = frame.v();
+    if !origin.coords.iter().all(|value| value.is_finite())
+        || !u.iter().all(|value| value.is_finite())
+        || !v.iter().all(|value| value.is_finite())
     {
         return Err(LinkageError::InvalidPlaneFrame(
             "origin and axes must be finite",
         ));
     }
-    let u_norm = frame.u.x.hypot(frame.u.y).hypot(frame.u.z);
-    let v_norm = frame.v.x.hypot(frame.v.y).hypot(frame.v.z);
+    let u_norm = u.x.hypot(u.y).hypot(u.z);
+    let v_norm = v.x.hypot(v.y).hypot(v.z);
     if (u_norm - 1.0).abs() > FRAME_TOLERANCE || (v_norm - 1.0).abs() > FRAME_TOLERANCE {
         return Err(LinkageError::InvalidPlaneFrame("axes must be unit length"));
     }
-    if frame.u.dot(&frame.v).abs() > FRAME_TOLERANCE {
+    if u.dot(&v).abs() > FRAME_TOLERANCE {
         return Err(LinkageError::InvalidPlaneFrame("axes must be orthogonal"));
     }
-    Ok(())
+    frame.validate().map_err(|_| {
+        LinkageError::InvalidPlaneFrame("workplane must be finite with orthonormal axes")
+    })
 }
 
 pub(crate) fn validate_pose(pose: Pose2, context: &'static str) -> Result<(), LinkageError> {
-    if pose.translation.x.is_finite() && pose.translation.y.is_finite() && pose.angle.is_finite() {
-        Ok(())
-    } else {
-        Err(LinkageError::NonFinitePose { context })
-    }
+    pose.validate()
+        .map_err(|_| LinkageError::NonFinitePose { context })
 }
 
 pub(crate) fn validate_point(

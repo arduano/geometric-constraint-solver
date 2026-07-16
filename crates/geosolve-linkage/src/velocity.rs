@@ -8,10 +8,16 @@ use crate::model::{
 };
 
 /// Physical planar velocity of one body in deterministic body insertion order.
+///
+/// `linear` is the body origin's velocity in planar world coordinates, not the
+/// body-local/right-trivialized translation rate used by the solver. `angular`
+/// is the scalar world/body angular rate, which is identical in 2D.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BodyVelocity {
     pub body_id: BodyId,
+    /// Body-origin linear velocity in planar world coordinates.
     pub linear: Vector2<f64>,
+    /// Angular velocity in radians per unit time.
     pub angular: f64,
 }
 
@@ -52,7 +58,9 @@ impl Linkage {
     /// Solves `J_q q_dot + J_s s_dot = 0` at the current accepted position.
     ///
     /// Dense columns are normalized by core variable step scales; the returned
-    /// body rates are converted back to physical `[vx, vy, omega]` units.
+    /// body-local rates are converted back to physical units and rotated before
+    /// publication so [`BodyVelocity::linear`] remains a world-frame origin
+    /// velocity.
     ///
     /// # Errors
     ///
@@ -233,12 +241,16 @@ impl Linkage {
                     .ok_or(LinkageError::VelocityFailure(
                         "free body is absent from the reduced velocity layout",
                     ))?;
+                let local_linear = Vector2::new(
+                    normalized_rates[layout.reduced_start] * layout.step_scales[0],
+                    normalized_rates[layout.reduced_start + 1] * layout.step_scales[1],
+                );
+                let pose = geometry
+                    .body_pose(mapping.body_id)
+                    .ok_or(LinkageError::UnknownBody(mapping.body_id))?;
                 BodyVelocity {
                     body_id: mapping.body_id,
-                    linear: Vector2::new(
-                        normalized_rates[layout.reduced_start] * layout.step_scales[0],
-                        normalized_rates[layout.reduced_start + 1] * layout.step_scales[1],
-                    ),
+                    linear: pose.transform_vector(local_linear),
                     angular: normalized_rates[layout.reduced_start + 2] * layout.step_scales[2],
                 }
             };

@@ -2736,7 +2736,7 @@ fn numerical_nullspace(matrix: &DMatrix<f64>, relative_tolerance: f64) -> Option
         .iter()
         .copied()
         .fold(0.0_f64, f64::max);
-    let (_, threshold) =
+    let (_, _, threshold) =
         rank_thresholds(matrix.nrows(), matrix.ncols(), largest, relative_tolerance)?;
     if decomposition
         .singular_values
@@ -4877,20 +4877,24 @@ fn stable_norm(values: impl Iterator<Item = f64>) -> Option<f64> {
     Some(norm)
 }
 
-struct RankDiagnostics {
-    rank: usize,
-    relative_tolerance: f64,
-    machine_tolerance: f64,
-    threshold: f64,
-    sigma_max: f64,
-    smallest_retained: Option<f64>,
-    near_singular_factor: f64,
-    near_singular_ratio: Option<f64>,
-    near_singular: bool,
-    singular_values: Vec<f64>,
+pub(crate) struct RankDiagnostics {
+    pub(crate) rank: usize,
+    pub(crate) relative_tolerance: f64,
+    pub(crate) relative_threshold: f64,
+    pub(crate) machine_tolerance: f64,
+    pub(crate) threshold: f64,
+    pub(crate) sigma_max: f64,
+    pub(crate) smallest_retained: Option<f64>,
+    pub(crate) near_singular_factor: f64,
+    pub(crate) near_singular_ratio: Option<f64>,
+    pub(crate) near_singular: bool,
+    pub(crate) singular_values: Vec<f64>,
 }
 
-fn rank_diagnostics(jacobian: &DMatrix<f64>, relative_tolerance: f64) -> Option<RankDiagnostics> {
+pub(crate) fn rank_diagnostics(
+    jacobian: &DMatrix<f64>,
+    relative_tolerance: f64,
+) -> Option<RankDiagnostics> {
     if jacobian.iter().any(|value| !value.is_finite()) {
         return None;
     }
@@ -4909,7 +4913,7 @@ fn rank_diagnostics(jacobian: &DMatrix<f64>, relative_tolerance: f64) -> Option<
         return None;
     }
     let sigma_max = singular_values.iter().copied().fold(0.0, f64::max);
-    let (machine_tolerance, threshold) = rank_thresholds(
+    let (relative_threshold, machine_tolerance, threshold) = rank_thresholds(
         jacobian.nrows(),
         jacobian.ncols(),
         sigma_max,
@@ -4931,6 +4935,7 @@ fn rank_diagnostics(jacobian: &DMatrix<f64>, relative_tolerance: f64) -> Option<
     Some(RankDiagnostics {
         rank,
         relative_tolerance,
+        relative_threshold,
         machine_tolerance,
         threshold,
         sigma_max,
@@ -4943,11 +4948,16 @@ fn rank_diagnostics(jacobian: &DMatrix<f64>, relative_tolerance: f64) -> Option<
 }
 
 fn empty_rank_diagnostics(rows: usize, columns: usize, relative_tolerance: f64) -> RankDiagnostics {
-    let (machine_tolerance, threshold) =
-        rank_thresholds(rows, columns, 0.0, relative_tolerance).unwrap_or((f64::MAX, f64::MAX));
+    let (relative_threshold, machine_tolerance, threshold) =
+        rank_thresholds(rows, columns, 0.0, relative_tolerance).unwrap_or((
+            f64::MAX,
+            f64::MAX,
+            f64::MAX,
+        ));
     RankDiagnostics {
         rank: 0,
         relative_tolerance,
+        relative_threshold,
         machine_tolerance,
         threshold,
         sigma_max: 0.0,
@@ -4964,7 +4974,7 @@ fn rank_thresholds(
     columns: usize,
     sigma_max: f64,
     relative_tolerance: f64,
-) -> Option<(f64, f64)> {
+) -> Option<(f64, f64, f64)> {
     if !sigma_max.is_finite() || !relative_tolerance.is_finite() {
         return None;
     }
@@ -4972,8 +4982,8 @@ fn rank_thresholds(
     let machine_tolerance = f64::EPSILON * f64::from(dimension) * sigma_max.max(1.0);
     let relative_threshold = relative_tolerance * sigma_max;
     let threshold = relative_threshold.max(machine_tolerance);
-    (machine_tolerance.is_finite() && threshold.is_finite())
-        .then_some((machine_tolerance, threshold))
+    (relative_threshold.is_finite() && machine_tolerance.is_finite() && threshold.is_finite())
+        .then_some((relative_threshold, machine_tolerance, threshold))
 }
 
 fn rejected_record(

@@ -23,13 +23,13 @@ The completed M10-M14 cut is a 2D Sketch Playground Alpha built over reusable Ru
 
 ## Current state
 
-M0-M14 and the advanced free-radius circle/arc tangency follow-up are complete. M0-M7 form the frozen domain baseline; M8-M14 establish the production contracts, representative benchmarks, component-local linearization, local AD, numerical status/rank policy, persistent sessions, first-class bounds, the persistent sketch document/command/history layer, immutable curve jets, editable Beziers, geometry-generic curve constraints and the hardened document-backed 2D Sketch Playground Alpha.
+M0-M15 and the advanced free-radius circle/arc tangency follow-up are complete. M0-M7 form the frozen domain baseline; M8-M15 establish the production contracts, representative benchmarks, component-local linearization, local AD, numerical status/rank policy, persistent sessions, first-class bounds, the persistent sketch document/command/history layer, immutable curve jets, editable Beziers, geometry-generic curve constraints, the hardened document-backed 2D Sketch Playground Alpha, and shared planar/spatial manifold state.
 
-The next milestone is **M15: manifold geometry and spatial state**.
+The active milestone is **M16: sparse structure, hierarchy and continuation**.
 
-M10 proves the persistent lifecycle through `SketchSession`. M11 adds the implemented `SketchDocument` generic graph, commands/history and versioned JSON. M12 adds immutable curve jets, editable quadratic/cubic Bezier and generic curve contact/tangency. M13 delivers the disposable browser playground; M14 hardens its exact alpha scenarios, recovery behavior, files and interaction budgets.
+M10 proves the persistent lifecycle through `SketchSession`. M11 adds the implemented `SketchDocument` generic graph, commands/history and versioned JSON. M12 adds immutable curve jets, editable quadratic/cubic Bezier and generic curve contact/tangency. M13 delivers the disposable browser playground; M14 hardens its exact alpha scenarios, recovery behavior, files and interaction budgets. M15 adds validated `SE(2)`/`SE(3)`, right/body-local retraction, quaternion-backed `Pose3`, frames/workplanes, manifold fixed/alias behavior and revision-stamped accepted hard linearization/sensitivity APIs.
 
-Continue in `PLAN.md` order with M15 manifold `Pose2`/`Pose3`, followed by M16 sparse solving and continuation before spatial joints, conics, B-splines or NURBS. M14 completes only the 2D Sketch Playground Alpha, not Deliverable 1; final 2D/3D completion remains ordered through M24.
+Continue in `PLAN.md` order with M16 sparse solving, hierarchy and continuation before spatial joints, conics, B-splines or NURBS. M15 sensitivity covers reduced accepted hard equalities in body-local tangent coordinates; bound cones, secondary objectives and world-frame conversion remain later domain/sparse work. M14 completes only the 2D Sketch Playground Alpha, not Deliverable 1; final 2D/3D completion remains ordered through M24.
 
 M8 is a contract and benchmark-baseline milestone. Its preserved completion notes and pre-rebaseline M10+ labels in older ADRs and `REFERENCES.md` record the allocation accepted at that time; `PLAN.md` is authoritative for the current M10-M24 numbering.
 

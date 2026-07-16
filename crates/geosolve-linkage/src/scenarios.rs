@@ -71,13 +71,14 @@ pub struct SliderCrankIds {
 }
 
 /// Canonical orthonormal world XY plane.
+///
+/// # Panics
+///
+/// Panics only if the geometry crate rejects canonical finite unit axes.
 #[must_use]
 pub fn xy_plane_frame() -> PlaneFrame {
-    PlaneFrame {
-        origin: Point3::origin(),
-        u: Vector3::x(),
-        v: Vector3::y(),
-    }
+    PlaneFrame::try_new(Point3::origin(), Vector3::x(), Vector3::y())
+        .expect("canonical XY workplane is valid")
 }
 
 /// Builds canonical L1 or L2 at model scale one.

@@ -669,27 +669,12 @@ fn invalid_scale_frame_features_ids_targets_rates_and_step_policies_are_rejected
             Err(LinkageError::InvalidModelScale(_))
         ));
     }
-    for frame in [
-        PlaneFrame {
-            origin: Point3::new(f64::NAN, 0.0, 0.0),
-            u: Vector3::x(),
-            v: Vector3::y(),
-        },
-        PlaneFrame {
-            origin: Point3::origin(),
-            u: Vector3::new(2.0, 0.0, 0.0),
-            v: Vector3::y(),
-        },
-        PlaneFrame {
-            origin: Point3::origin(),
-            u: Vector3::x(),
-            v: Vector3::x(),
-        },
+    for invalid_frame in [
+        PlaneFrame::try_new(Point3::new(f64::NAN, 0.0, 0.0), Vector3::x(), Vector3::y()),
+        PlaneFrame::try_new(Point3::origin(), Vector3::new(2.0, 0.0, 0.0), Vector3::y()),
+        PlaneFrame::try_new(Point3::origin(), Vector3::x(), Vector3::x()),
     ] {
-        assert!(matches!(
-            Linkage::new(1.0, frame),
-            Err(LinkageError::InvalidPlaneFrame(_))
-        ));
+        assert!(invalid_frame.is_err());
     }
     let mut linkage = Linkage::new(1.0, xy_plane_frame()).unwrap();
     let ground = linkage.add_body("ground", Pose2::identity(), true).unwrap();
@@ -1402,11 +1387,8 @@ fn known_near_toggle_warns_and_exact_toggle_rolls_back_on_branch_ambiguity() {
 
 #[test]
 fn geometry_maps_features_through_the_validated_plane_frame() {
-    let frame = PlaneFrame {
-        origin: Point3::new(10.0, 20.0, 30.0),
-        u: Vector3::y(),
-        v: Vector3::z(),
-    };
+    let frame =
+        PlaneFrame::try_new(Point3::new(10.0, 20.0, 30.0), Vector3::y(), Vector3::z()).unwrap();
     let mut linkage = Linkage::new(1.0, frame).unwrap();
     let body = linkage
         .add_body(

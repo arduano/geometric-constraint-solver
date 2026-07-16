@@ -1,10 +1,11 @@
 use thiserror::Error;
 
 use crate::analysis::EliminationPlan;
+use crate::linearization::build_accepted_hard_linearization;
 use crate::{
-    BoundId, BoundStatus, CoordinateBound, CoreError, HardValidity, Problem, ResidualBlock,
-    ResidualId, ResidualRowAudit, SecondaryStatus, SolveReport, SolverConfig, SourceConstraint,
-    SourceConstraintId, VariableId, VariableValue,
+    AcceptedHardLinearization, BoundId, BoundStatus, CoordinateBound, CoreError, HardValidity,
+    Problem, ResidualBlock, ResidualId, ResidualRowAudit, SecondaryStatus, SolveReport,
+    SolverConfig, SourceConstraint, SourceConstraintId, VariableId, VariableValue,
 };
 
 /// Independent revision counters for one accepted persistent session state.
@@ -290,6 +291,27 @@ impl SolveSession {
         &self.component_stamps
     }
 
+    /// Freshly re-evaluates and snapshots the accepted reduced hard system.
+    ///
+    /// The snapshot is stamped with the retained session revisions and exposes
+    /// only active, unsuppressed, non-eliminated hard rows. Fixed and alias
+    /// declarations are still evaluated before the snapshot is returned.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if canonical evaluation fails or any accepted-state,
+    /// component, dimension, finiteness, residual, or rank invariant no longer
+    /// matches the retained report.
+    pub fn accepted_hard_linearization(&self) -> Result<AcceptedHardLinearization, CoreError> {
+        build_accepted_hard_linearization(
+            &self.problem,
+            &self.plan,
+            &self.report,
+            self.revisions,
+            self.config,
+        )
+    }
+
     /// Applies a core-only transaction.
     ///
     /// # Errors
@@ -361,8 +383,8 @@ impl SolveSession {
         }
         let mut candidate = self.problem.clone();
         let mut dirty_components = Vec::new();
-        let source_changed =
-            !patch.source_replacements.is_empty() || !patch.residual_replacements.is_empty();
+        let residual_changed = !patch.residual_replacements.is_empty();
+        let source_changed = !patch.source_replacements.is_empty() || residual_changed;
         let bound_changed = !patch.bound_replacements.is_empty();
 
         for (variable_id, value) in patch.variable_values {
@@ -404,8 +426,15 @@ impl SolveSession {
         dirty_components.sort_unstable();
         dirty_components.dedup();
 
+        let candidate_plan = if residual_changed {
+            let candidate_plan = EliminationPlan::new(&candidate)?;
+            validate_unchanged_component_ordering(plan, &candidate_plan)?;
+            candidate_plan
+        } else {
+            plan.clone()
+        };
         let mut report =
-            candidate.solve_session_components(self.config, &dirty_components, &self.plan)?;
+            candidate.solve_session_components(self.config, &dirty_components, &candidate_plan)?;
         let mut output = None;
         let rejection = if let Some(rejection) = core_rejection_before_domain(&report, self.config)
         {
@@ -469,6 +498,7 @@ impl SolveSession {
         self.report = report.clone();
         self.revisions = revisions;
         self.component_stamps = stamps;
+        self.plan = candidate_plan;
         Ok((
             SessionTransaction {
                 report,
@@ -609,6 +639,60 @@ impl SolveSession {
         *self = rebuilt;
         Ok(&self.report)
     }
+}
+
+fn validate_unchanged_component_ordering(
+    accepted: &EliminationPlan,
+    candidate: &EliminationPlan,
+) -> Result<(), CoreError> {
+    if accepted.components.len() != candidate.components.len()
+        || accepted.component_layouts.len() != candidate.component_layouts.len()
+        || accepted.roots != candidate.roots
+        || accepted.eliminated_residuals != candidate.eliminated_residuals
+    {
+        return Err(CoreError::IncompatibleSessionPlan {
+            context: "component, root, or eliminated-row count/order differs",
+        });
+    }
+    for (accepted_component, candidate_component) in
+        accepted.components.iter().zip(&candidate.components)
+    {
+        if accepted_component.index != candidate_component.index
+            || accepted_component.active_group_indices != candidate_component.active_group_indices
+            || accepted_component.variable_ids != candidate_component.variable_ids
+            || accepted_component.residual_ids != candidate_component.residual_ids
+            || accepted_component.active_residual_ids != candidate_component.active_residual_ids
+            || accepted_component.referenced_variables != candidate_component.referenced_variables
+        {
+            return Err(CoreError::IncompatibleSessionPlan {
+                context: "component membership or deterministic ordering differs",
+            });
+        }
+    }
+    for (accepted_layout, candidate_layout) in accepted
+        .component_layouts
+        .iter()
+        .zip(&candidate.component_layouts)
+    {
+        if accepted_layout.tangent_dimension != candidate_layout.tangent_dimension
+            || accepted_layout.blocks.len() != candidate_layout.blocks.len()
+            || accepted_layout
+                .blocks
+                .iter()
+                .zip(&candidate_layout.blocks)
+                .any(|(accepted_block, candidate_block)| {
+                    accepted_block.root != candidate_block.root
+                        || accepted_block.members != candidate_block.members
+                        || accepted_block.tangent_range != candidate_block.tangent_range
+                        || accepted_block.step_scales != candidate_block.step_scales
+                })
+        {
+            return Err(CoreError::IncompatibleSessionPlan {
+                context: "component tangent-block ordering differs",
+            });
+        }
+    }
+    Ok(())
 }
 
 fn merge_refreshed_audit(retained: &mut crate::AuditSnapshot, fresh: crate::AuditSnapshot) {

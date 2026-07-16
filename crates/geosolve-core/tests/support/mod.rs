@@ -302,14 +302,11 @@ impl ResidualEvaluator for MixedKinds {
                 "mixed fixture expected Scalar, Vec2, and Pose2",
             ));
         };
+        let (sine, cosine) = pose[2].sin_cos();
         Ok(vec![
             LocalJacobian::new(2, 1, vec![1.0, 0.0]),
             LocalJacobian::new(2, 2, vec![1.0, 0.0, 0.0, 1.0]),
-            LocalJacobian::new(
-                2,
-                3,
-                vec![1.0, 0.0, -pose[2].sin(), 0.0, 1.0, pose[2].cos()],
-            ),
+            LocalJacobian::new(2, 3, vec![cosine, -sine, -sine, sine, cosine, cosine]),
         ])
     }
 }

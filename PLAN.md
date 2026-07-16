@@ -368,17 +368,35 @@ from public document APIs with explicit tangent orientation and periodic contact
 
 ## M15: manifold geometry and spatial state
 
+Status: complete as of 2026-07-16.
+
 Goal: add the mathematically correct state representation needed by 3D rigid-body kinematics.
 
-- [ ] Add validated `SE(2)` composition, inverse, exponential, logarithm, adjoint, retraction and local difference.
-- [ ] Add `Vec3` and quaternion-backed `Pose3`/`SE(3)` with ambient dimension 7 and tangent dimension 6.
-- [ ] Define one documented body/world transform and tangent convention.
-- [ ] Canonicalize quaternion sign without treating it as an assembly branch.
-- [ ] Make fixed and alias elimination manifold-aware.
-- [ ] Add validated frame and workplane construction plus point/vector transforms.
-- [ ] Expose an accepted-state reduced hard linearization and sensitivity solve API.
+- [x] Add validated `SE(2)` composition, inverse, exponential, logarithm, adjoint, retraction and local difference.
+- [x] Add `Vec3` and quaternion-backed `Pose3`/`SE(3)` with ambient dimension 7 and tangent dimension 6.
+- [x] Define one documented body/world transform and tangent convention.
+- [x] Canonicalize quaternion sign without treating it as an assembly branch.
+- [x] Make fixed and alias elimination manifold-aware.
+- [x] Add validated frame and workplane construction plus point/vector transforms.
+- [x] Expose an accepted-state reduced hard linearization and sensitivity solve API.
 
 Gate: manifold property tests, tangent-coordinate finite differences, global-transform equivariance and quaternion-sign invariance pass without core regressions.
+
+Completion notes: `geosolve-geometry` now provides validated `Vec3`, `Pose2`/`Pose3`,
+`Frame3` and `PlaneFrame` operations under ADR 0006. Core variable packing,
+right-retraction local AD, fixed/alias elimination and planar linkage Jacobians use
+the same body-local tangent convention. `SolveSession::accepted_hard_linearization`
+returns deterministic revision-stamped reduced hard components, and sensitivity
+solves distinguish unique, underdetermined minimum-norm and inconsistent rates
+before independently validating both normalized and published raw tangents.
+
+Property, exact/near-half-turn, finite-difference, global-transform, quaternion-sign,
+planar branch and velocity-equivariance regressions pass. The locked workspace,
+warnings-denied Clippy/rustdoc, WASM check, benchmark compilation, all 24 Criterion
+test-mode cases, native M14 performance budgets, release Trunk build, desktop/mobile
+Chromium suite, format and diff gates pass. Sensitivity is intentionally limited to
+accepted reduced hard equalities in body-local coordinates; bound cones, secondary
+objectives and world-frame conversions remain future work.
 
 ## M16: sparse structure, hierarchy and continuation
 
