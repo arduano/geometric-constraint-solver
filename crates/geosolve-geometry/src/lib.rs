@@ -1,5 +1,12 @@
 //! Pure geometric value types shared by sketches and mechanisms.
 
+mod curves;
+
+pub use curves::{
+    CurveEvaluationError, CurveJet2, CurveParameterDomain, CurveParameterError,
+    CurveRegularityError, circle_jet, circular_arc_jet, cubic_bezier_jet, line_jet,
+    quadratic_bezier_jet,
+};
 pub use nalgebra::{Point2, Point3, Rotation2, Vector2, Vector3};
 
 /// A two-dimensional rigid transform.

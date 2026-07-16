@@ -856,7 +856,7 @@ enum NonFiniteFailure {
     Jacobian,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct NonFiniteEvaluator(NonFiniteFailure);
 
 impl ResidualEvaluator for NonFiniteEvaluator {
@@ -900,7 +900,7 @@ fn nonfinite_problem(mode: NonFiniteFailure) -> (Problem, VariableId) {
     (problem, variable)
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct RejectEveryTrial;
 
 impl ResidualEvaluator for RejectEveryTrial {
@@ -931,7 +931,7 @@ enum PostAcceptFailureMode {
     NonFiniteResidual,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct AcceptOneThenFail(PostAcceptFailureMode);
 
 impl ResidualEvaluator for AcceptOneThenFail {

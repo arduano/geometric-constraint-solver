@@ -504,7 +504,7 @@ fn finite(values: Vec<f64>) -> Result<Vec<f64>, EvaluationError> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Vec2Anchor {
     target: [f64; 2],
 }
@@ -550,7 +550,7 @@ impl ResidualEvaluator for Vec2Anchor {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Vec2Edge {
     delta: [f64; 2],
 }
@@ -608,7 +608,7 @@ impl ResidualEvaluator for Vec2Edge {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Pose2Anchor {
     target: [f64; 3],
 }
@@ -664,7 +664,7 @@ impl ResidualEvaluator for Pose2Anchor {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Pose2Weld {
     angle_delta: f64,
 }

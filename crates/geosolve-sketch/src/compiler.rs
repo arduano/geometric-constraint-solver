@@ -1,7 +1,8 @@
 use geosolve_core::{
-    AuditBinding, AuditEvaluationStatus, AuditSnapshot, HardValidity, Problem, ResidualBlock,
-    ResidualCategory, ResidualId, ResidualRowAudit, SolveReport, SolveTermination, SolverConfig,
-    SourceConstraint, SourceConstraintId, VariableBlock, VariableId, VariableValue,
+    AuditBinding, AuditEvaluationStatus, AuditSnapshot, BoundId, CoordinateBound, HardValidity,
+    Problem, ResidualBlock, ResidualCategory, ResidualId, ResidualRowAudit, SolveReport,
+    SolveTermination, SolverConfig, SourceConstraint, SourceConstraintId, VariableBlock,
+    VariableId, VariableValue,
 };
 use geosolve_geometry::Point2;
 
@@ -12,16 +13,19 @@ use crate::curves::{
     tangency_distance, unwrap_near, validate_bounded_parameter, validate_radius,
 };
 use crate::model::{
-    ArcId, CircleId, CoordinateAxis, DimensionKind, DimensionMode, PersistentSource, PointId,
-    SegmentId, Sketch, SketchConstraintId, SketchConstraintKind, SketchDimensionId, SketchError,
-    validate_model_scale, validate_point,
+    ArcId, CircleId, CoordinateAxis, CurveContactNeighborhood, DimensionKind, DimensionMode,
+    PersistentSource, PointId, SegmentId, Sketch, SketchConstraintId, SketchConstraintKind,
+    SketchCurve, SketchCurveContact, SketchDimensionId, SketchError, validate_model_scale,
+    validate_point,
 };
 use crate::residuals::{
-    AxisDifferenceResidual, CircleArcTangencyResidual, CircleTangencyResidual, CoincidentResidual,
-    DistanceResidual, FixedCoordinateResidual, LineCircleTangencyResidual, MidpointResidual,
-    OrientedAngleResidual, PointOnArcResidual, PointOnCircleResidual, PointOnLineResidual,
-    PointTargetResidual, ScalarEqualityResidual, ScalarTargetResidual, SegmentPairEquation,
-    SegmentPairResidual, SymmetryResidual,
+    AxisDifferenceResidual, BezierIncidence, CircleArcTangencyResidual, CircleTangencyResidual,
+    CoincidentResidual, CurveParameterIncidence, DistanceResidual, FixedCoordinateResidual,
+    GenericCurveIncidence, GenericCurvePairResidual, GenericPointOnCurveResidual,
+    LineBezierTangencyResidual, LineCircleTangencyResidual, MidpointResidual,
+    OrientedAngleResidual, PointOnArcResidual, PointOnBezierResidual, PointOnCircleResidual,
+    PointOnLineResidual, PointTargetResidual, ScalarEqualityResidual, ScalarTargetResidual,
+    SegmentPairEquation, SegmentPairResidual, SymmetryResidual,
 };
 
 /// Temporary point target supplied for one solve only.
@@ -35,6 +39,7 @@ pub struct DragTarget {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SketchSolveRequest {
     pub drag: Option<DragTarget>,
+    pub stability_target: Option<DragTarget>,
     pub previous_state_preferences: bool,
 }
 
@@ -43,6 +48,7 @@ impl SketchSolveRequest {
     pub const fn new() -> Self {
         Self {
             drag: None,
+            stability_target: None,
             previous_state_preferences: true,
         }
     }
@@ -56,6 +62,13 @@ impl SketchSolveRequest {
     #[must_use]
     pub const fn with_drag(mut self, point: PointId, target: Point2<f64>) -> Self {
         self.drag = Some(DragTarget { point, target });
+        self
+    }
+
+    /// Adds a second compatible temporary target that keeps an unrelated point stable.
+    #[must_use]
+    pub const fn with_stability_target(mut self, point: PointId, target: Point2<f64>) -> Self {
+        self.stability_target = Some(DragTarget { point, target });
         self
     }
 }
@@ -112,6 +125,10 @@ pub enum LatentVariableRole {
     LineParameter,
     CircleAngle,
     ArcSpanParameter,
+    BezierParameter,
+    CurveParameter,
+    FirstCurveParameter,
+    SecondCurveParameter,
 }
 
 /// Deterministic mapping for one accepted latent source parameter.
@@ -122,15 +139,47 @@ pub struct LatentVariableMapping {
     pub variable_id: VariableId,
 }
 
+/// Domain role of one generated core coordinate bound.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SketchBound {
+    CircleRadius(CircleId),
+    ArcRadius(ArcId),
+    Contact {
+        constraint_id: SketchConstraintId,
+        role: LatentVariableRole,
+    },
+}
+
+/// Stable domain-to-core bound mapping in deterministic compile order.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SketchBoundMapping {
+    pub bound: SketchBound,
+    pub bound_id: BoundId,
+}
+
+/// The positive-radius policy preserves every finite `radius > 0` accepted by
+/// the baseline model, including subnormal fixtures.
+pub const MIN_REPRESENTABLE_RADIUS: f64 = f64::from_bits(1);
+
 /// Read-only compilation seam for audit, incidence, and Jacobian verification.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct CompiledSketch {
     problem: Problem,
     point_variables: Vec<PointVariableMapping>,
     circle_radius_variables: Vec<CircleRadiusVariableMapping>,
     arc_radius_variables: Vec<ArcRadiusVariableMapping>,
     latent_variables: Vec<LatentVariableMapping>,
+    bound_mappings: Vec<SketchBoundMapping>,
     source_mappings: Vec<SketchSourceMapping>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct CompiledSourcePatch {
+    pub(crate) source_id: SourceConstraintId,
+    pub(crate) source: SourceConstraint,
+    pub(crate) residuals: Vec<(ResidualId, ResidualBlock)>,
+    pub(crate) variable_values: Vec<(VariableId, VariableValue)>,
+    pub(crate) bounds: Vec<(BoundId, CoordinateBound)>,
 }
 
 impl CompiledSketch {
@@ -160,6 +209,11 @@ impl CompiledSketch {
     }
 
     #[must_use]
+    pub fn bound_mappings(&self) -> &[SketchBoundMapping] {
+        &self.bound_mappings
+    }
+
+    #[must_use]
     pub fn source_mappings(&self) -> &[SketchSourceMapping] {
         &self.source_mappings
     }
@@ -186,9 +240,17 @@ impl CompiledSketch {
     }
 
     fn solved_state(&self, sketch: &Sketch) -> Result<SolvedSketchState, SketchError> {
+        self.solved_state_for_problem(&self.problem, sketch)
+    }
+
+    pub(crate) fn solved_state_for_problem(
+        &self,
+        problem: &Problem,
+        sketch: &Sketch,
+    ) -> Result<SolvedSketchState, SketchError> {
         let mut points = Vec::with_capacity(self.point_variables.len());
         for mapping in &self.point_variables {
-            let variable = self.problem.variable(mapping.variable_id).ok_or(
+            let variable = problem.variable(mapping.variable_id).ok_or(
                 geosolve_core::CoreError::UnknownVariable(mapping.variable_id),
             )?;
             let VariableValue::Vec2([x, y]) = variable.value() else {
@@ -208,7 +270,7 @@ impl CompiledSketch {
         let mut circles = Vec::with_capacity(self.circle_radius_variables.len());
         for mapping in &self.circle_radius_variables {
             let circle = sketch.circle_value(mapping.circle_id)?;
-            let radius = scalar_variable(&self.problem, mapping.variable_id)?;
+            let radius = scalar_variable(problem, mapping.variable_id)?;
             circles.push(SolvedCircle {
                 circle_id: mapping.circle_id,
                 center: solved_point(&points, circle.center())?,
@@ -218,7 +280,7 @@ impl CompiledSketch {
         let mut arcs = Vec::with_capacity(self.arc_radius_variables.len());
         for mapping in &self.arc_radius_variables {
             let arc = sketch.arc_value(mapping.arc_id)?;
-            let radius = scalar_variable(&self.problem, mapping.variable_id)?;
+            let radius = scalar_variable(problem, mapping.variable_id)?;
             arcs.push(SolvedArc {
                 arc_id: mapping.arc_id,
                 center: solved_point(&points, arc.center())?,
@@ -234,7 +296,7 @@ impl CompiledSketch {
             latents.push(SolvedLatent {
                 constraint_id: mapping.constraint_id,
                 role: mapping.role,
-                value: scalar_variable(&self.problem, mapping.variable_id)?,
+                value: scalar_variable(problem, mapping.variable_id)?,
             });
         }
         Ok(SolvedSketchState {
@@ -245,6 +307,244 @@ impl CompiledSketch {
             },
             latents,
         })
+    }
+
+    pub(crate) fn replace_problem(&mut self, problem: Problem) {
+        self.problem = problem;
+    }
+
+    pub(crate) fn replace_source_label(
+        &mut self,
+        source: SketchSource,
+        label: String,
+    ) -> Result<(), SketchError> {
+        let mapping = self
+            .source_mappings
+            .iter_mut()
+            .find(|mapping| mapping.source == source)
+            .ok_or(geosolve_core::CoreError::InvalidSolverConfig {
+                field: "sketch source label",
+                message: "source is not present in retained compilation",
+            })?;
+        mapping.source_label = label;
+        Ok(())
+    }
+
+    /// Rebuilds one source payload against retained runtime mappings.
+    #[allow(clippy::too_many_lines)]
+    pub(crate) fn source_patch(
+        &self,
+        sketch: &Sketch,
+        request: SketchSolveRequest,
+        source: SketchSource,
+    ) -> Result<Option<CompiledSourcePatch>, SketchError> {
+        let retained = self
+            .source_mappings
+            .iter()
+            .find(|mapping| mapping.source == source)
+            .ok_or(geosolve_core::CoreError::InvalidSolverConfig {
+                field: "sketch source patch",
+                message: "source is not present in retained compilation",
+            })?;
+        let Some(retained_source_id) = retained.core_source_id else {
+            return Ok(None);
+        };
+
+        let mut scratch = self.problem.clone();
+        let mut generated_latents = Vec::new();
+        let mut generated_bounds = Vec::new();
+        let generated = match source {
+            SketchSource::Constraint(constraint_id) => {
+                let constraint = sketch
+                    .constraints
+                    .get(constraint_id)
+                    .ok_or(SketchError::UnknownConstraint(constraint_id))?;
+                compile_constraint(
+                    sketch,
+                    &mut scratch,
+                    &self.point_variables,
+                    &self.circle_radius_variables,
+                    &self.arc_radius_variables,
+                    &mut generated_latents,
+                    &mut generated_bounds,
+                    constraint_id,
+                    constraint,
+                )?
+            }
+            SketchSource::Dimension(dimension_id) => {
+                let dimension = sketch
+                    .dimensions
+                    .get(dimension_id)
+                    .ok_or(SketchError::UnknownDimension(dimension_id))?;
+                compile_dimension(
+                    sketch,
+                    &mut scratch,
+                    &self.point_variables,
+                    &self.circle_radius_variables,
+                    &self.arc_radius_variables,
+                    dimension_id,
+                    dimension,
+                )?
+            }
+            SketchSource::DragTarget(point) => {
+                let drag = request.drag.filter(|drag| drag.point == point).ok_or(
+                    geosolve_core::CoreError::InvalidSolverConfig {
+                        field: "sketch drag source patch",
+                        message: "retained drag source has no matching request",
+                    },
+                )?;
+                compile_point_target(
+                    sketch,
+                    &mut scratch,
+                    &self.point_variables,
+                    source,
+                    point,
+                    drag.target,
+                    ResidualCategory::Temporary,
+                    format!("temporary drag target for {}", sketch.point_name(point)?),
+                )?
+            }
+            SketchSource::PreviousState(point) => {
+                let target = sketch.point_position(point)?;
+                compile_point_target(
+                    sketch,
+                    &mut scratch,
+                    &self.point_variables,
+                    source,
+                    point,
+                    target,
+                    ResidualCategory::Preference,
+                    format!(
+                        "previous-state preference for {}",
+                        sketch
+                            .point(point)
+                            .ok_or(SketchError::UnknownPoint(point))?
+                            .label()
+                    ),
+                )?
+            }
+        };
+        let generated_source_id =
+            generated
+                .core_source_id
+                .ok_or(geosolve_core::CoreError::InvalidSolverConfig {
+                    field: "sketch source patch",
+                    message: "equation source unexpectedly compiled without a core source",
+                })?;
+        if generated.residual_ids.len() != retained.residual_ids.len() {
+            return Err(geosolve_core::CoreError::DimensionMismatch {
+                context: "source-local residual replacement",
+                expected: retained.residual_ids.len(),
+                actual: generated.residual_ids.len(),
+            }
+            .into());
+        }
+
+        let mut variable_remaps = Vec::new();
+        let mut variable_values = Vec::new();
+        for generated_latent in generated_latents {
+            let retained_variable = self
+                .latent_variables
+                .iter()
+                .find(|mapping| {
+                    mapping.constraint_id == generated_latent.constraint_id
+                        && mapping.role == generated_latent.role
+                })
+                .ok_or(geosolve_core::CoreError::InvalidSolverConfig {
+                    field: "source-local latent mapping",
+                    message: "generated latent has no retained runtime identity",
+                })?
+                .variable_id;
+            let value = scratch
+                .variable(generated_latent.variable_id)
+                .ok_or(geosolve_core::CoreError::UnknownVariable(
+                    generated_latent.variable_id,
+                ))?
+                .value();
+            variable_remaps.push((generated_latent.variable_id, retained_variable));
+            variable_values.push((retained_variable, value));
+        }
+
+        let mut residuals = Vec::with_capacity(retained.residual_ids.len());
+        for (&retained_residual_id, &generated_residual_id) in
+            retained.residual_ids.iter().zip(&generated.residual_ids)
+        {
+            let residual = scratch
+                .residual(generated_residual_id)
+                .ok_or(geosolve_core::CoreError::UnknownResidual(
+                    generated_residual_id,
+                ))?
+                .clone()
+                .remap_for_compatible_replacement(retained_source_id, &variable_remaps)?;
+            residuals.push((retained_residual_id, residual));
+        }
+        let retained_bounds = self
+            .bound_mappings
+            .iter()
+            .filter(|mapping| {
+                matches!(
+                    mapping.bound,
+                    SketchBound::Contact {
+                        constraint_id: id,
+                        ..
+                    } if id == match source {
+                        SketchSource::Constraint(id) => id,
+                        _ => return false,
+                    }
+                )
+            })
+            .collect::<Vec<_>>();
+        if retained_bounds.len() != generated_bounds.len() {
+            return Err(geosolve_core::CoreError::DimensionMismatch {
+                context: "source-local bound replacement",
+                expected: retained_bounds.len(),
+                actual: generated_bounds.len(),
+            }
+            .into());
+        }
+        let mut bounds = Vec::with_capacity(generated_bounds.len());
+        for generated_mapping in generated_bounds {
+            let retained_mapping = retained_bounds
+                .iter()
+                .find(|mapping| mapping.bound == generated_mapping.bound)
+                .ok_or(geosolve_core::CoreError::InvalidSolverConfig {
+                    field: "source-local bound mapping",
+                    message: "generated bound has no retained semantic identity",
+                })?;
+            let generated_bound = scratch.bound(generated_mapping.bound_id).ok_or(
+                geosolve_core::CoreError::UnknownBound(generated_mapping.bound_id),
+            )?;
+            let retained_variable = variable_remaps
+                .iter()
+                .find_map(|(generated, retained)| {
+                    (*generated == generated_bound.variable_id()).then_some(*retained)
+                })
+                .ok_or(geosolve_core::CoreError::InvalidSolverConfig {
+                    field: "source-local bound variable",
+                    message: "generated bound variable has no retained mapping",
+                })?;
+            let replacement = CoordinateBound::new(
+                retained_variable,
+                generated_bound.coordinate(),
+                generated_bound.lower(),
+                generated_bound.upper(),
+                generated_bound.label(),
+            )?;
+            if self.problem.bound(retained_mapping.bound_id) != Some(&replacement) {
+                bounds.push((retained_mapping.bound_id, replacement));
+            }
+        }
+        let source = scratch
+            .source(generated_source_id)
+            .ok_or(geosolve_core::CoreError::UnknownSource(generated_source_id))?
+            .clone();
+        Ok(Some(CompiledSourcePatch {
+            source_id: retained_source_id,
+            source,
+            residuals,
+            variable_values,
+            bounds,
+        }))
     }
 }
 
@@ -336,16 +636,16 @@ impl SketchGeometry {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct SolvedLatent {
-    constraint_id: SketchConstraintId,
-    role: LatentVariableRole,
-    value: f64,
+pub(crate) struct SolvedLatent {
+    pub(crate) constraint_id: SketchConstraintId,
+    pub(crate) role: LatentVariableRole,
+    pub(crate) value: f64,
 }
 
 #[derive(Clone, Debug)]
-struct SolvedSketchState {
-    geometry: SketchGeometry,
-    latents: Vec<SolvedLatent>,
+pub(crate) struct SolvedSketchState {
+    pub(crate) geometry: SketchGeometry,
+    pub(crate) latents: Vec<SolvedLatent>,
 }
 
 /// Value of one equation-free reference dimension after the solve attempt.
@@ -369,7 +669,9 @@ pub enum SolveRejection {
     NonPositiveCircleRadius(CircleId),
     NonPositiveArcRadius(ArcId),
     DegenerateSegment(SegmentId),
+    DegenerateCurve(SketchConstraintId),
     ContactParameterOutOfDomain(SketchConstraintId),
+    AmbiguousContactNeighborhood(SketchConstraintId),
     LineSideFlipped(SketchConstraintId),
     /// The explicit tangency branch is invalid, including a branch-derived radius mismatch.
     InvalidTangencyMode(SketchConstraintId),
@@ -377,16 +679,20 @@ pub enum SolveRejection {
     AmbiguousTangencyScale(SketchConstraintId),
     /// The selected center/contact direction root was not retained.
     CenterDirectionFlipped(SketchConstraintId),
+    /// Core accepted-state bound validation failed for this stable bound.
+    BoundViolation(BoundId),
 }
 
 /// Domain solve outcome. `geometry` is always the geometry retained by the sketch.
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SketchSolveResult {
     pub geometry: SketchGeometry,
     /// Audit evaluated at exactly `geometry`, suitable for display.
     pub display_audit: AuditSnapshot,
     pub reference_values: Vec<ReferenceDimensionValue>,
     pub source_mappings: Vec<SketchSourceMapping>,
+    /// Stable domain identities for every bound in `core_report.bounds`.
+    pub bound_mappings: Vec<SketchBoundMapping>,
     /// Attempt report whose `hard_validity` includes sketch equation/domain/branch validation.
     /// Its audit remains the candidate-state audit on rejection.
     pub core_report: SolveReport,
@@ -429,6 +735,7 @@ impl Sketch {
         }
 
         let mut circle_radius_variables = Vec::new();
+        let mut bound_mappings = Vec::new();
         for (circle_id, circle) in self.circles.iter() {
             validate_radius(circle.radius())?;
             let variable_id =
@@ -436,6 +743,17 @@ impl Sketch {
             circle_radius_variables.push(CircleRadiusVariableMapping {
                 circle_id,
                 variable_id,
+            });
+            let bound_id = problem.add_bound(CoordinateBound::new(
+                variable_id,
+                0,
+                Some(MIN_REPRESENTABLE_RADIUS),
+                None,
+                format!("positive radius for {}", circle.label()),
+            )?)?;
+            bound_mappings.push(SketchBoundMapping {
+                bound: SketchBound::CircleRadius(circle_id),
+                bound_id,
             });
         }
         let mut arc_radius_variables = Vec::new();
@@ -446,6 +764,17 @@ impl Sketch {
             arc_radius_variables.push(ArcRadiusVariableMapping {
                 arc_id,
                 variable_id,
+            });
+            let bound_id = problem.add_bound(CoordinateBound::new(
+                variable_id,
+                0,
+                Some(MIN_REPRESENTABLE_RADIUS),
+                None,
+                format!("positive radius for {}", arc.label()),
+            )?)?;
+            bound_mappings.push(SketchBoundMapping {
+                bound: SketchBound::ArcRadius(arc_id),
+                bound_id,
             });
         }
 
@@ -464,6 +793,7 @@ impl Sketch {
                         &circle_radius_variables,
                         &arc_radius_variables,
                         &mut latent_variables,
+                        &mut bound_mappings,
                         constraint_id,
                         constraint,
                     )?);
@@ -497,9 +827,28 @@ impl Sketch {
                 format!("temporary drag target for {}", self.point_name(drag.point)?),
             )?);
         }
+        if let Some(stability) = request.stability_target {
+            source_mappings.push(compile_point_target(
+                self,
+                &mut problem,
+                &point_variables,
+                SketchSource::DragTarget(stability.point),
+                stability.point,
+                stability.target,
+                ResidualCategory::Temporary,
+                format!(
+                    "temporary stability target for {}",
+                    self.point_name(stability.point)?
+                ),
+            )?);
+        }
         if request.previous_state_preferences {
             for (point_id, point) in self.points.iter() {
-                if request.drag.is_some_and(|drag| drag.point == point_id) {
+                if request.drag.is_some_and(|drag| drag.point == point_id)
+                    || request
+                        .stability_target
+                        .is_some_and(|stability| stability.point == point_id)
+                {
                     continue;
                 }
                 source_mappings.push(compile_point_target(
@@ -532,6 +881,7 @@ impl Sketch {
             circle_radius_variables,
             arc_radius_variables,
             latent_variables,
+            bound_mappings,
             source_mappings,
         })
     }
@@ -542,6 +892,7 @@ impl Sketch {
     ///
     /// Returns an error when compilation or the core solve cannot be started.
     /// Numerical and geometric solve failures are returned as rejected results.
+    #[allow(clippy::too_many_lines)]
     pub fn solve(
         &mut self,
         request: SketchSolveRequest,
@@ -559,7 +910,8 @@ impl Sketch {
                 if self.candidate_has_invalid_primitive(&candidate) {
                     break;
                 }
-                if !self.normalize_candidate_latents(&mut candidate) {
+                let normalized = self.normalize_candidate_latents(&mut candidate);
+                if !normalized && !analysis_sketch.candidate_latents_differ(&candidate.latents) {
                     break;
                 }
                 analysis_sketch.commit_solved_state(&candidate)?;
@@ -602,7 +954,7 @@ impl Sketch {
         core_report.hard_validity =
             domain_hard_validity(core_hard_validity, domain_rejection.as_ref());
 
-        let rejection = if let Some(rejection) = domain_rejection {
+        let mut rejection = if let Some(rejection) = domain_rejection {
             Some(rejection)
         } else if core_report.termination != SolveTermination::Converged {
             Some(SolveRejection::CoreTermination(core_report.termination))
@@ -617,6 +969,20 @@ impl Sketch {
         } else {
             None
         };
+        if let Some(constraint) = self.drag_requests_zero_circle_arc_radius(request) {
+            core_report.termination = SolveTermination::Stalled;
+            rejection = Some(SolveRejection::AmbiguousTangencyScale(constraint));
+        } else if self
+            .validate_drag_selected_span(request, &candidate)
+            .is_err()
+        {
+            core_report.termination = SolveTermination::Stalled;
+            rejection = Some(SolveRejection::CoreTermination(SolveTermination::Stalled));
+        } else if request.drag.is_some()
+            && matches!(rejection, Some(SolveRejection::AmbiguousTangencyScale(_)))
+        {
+            core_report.termination = SolveTermination::Stalled;
+        }
 
         if rejection.is_none() {
             self.commit_solved_state(&candidate)?;
@@ -638,6 +1004,7 @@ impl Sketch {
             display_audit,
             reference_values: self.reference_values()?,
             source_mappings: compiled.source_mappings,
+            bound_mappings: compiled.bound_mappings,
             core_report,
             rejection,
             acceptance_hard_residual_max,
@@ -684,7 +1051,7 @@ impl Sketch {
         }
     }
 
-    fn reference_values(&self) -> Result<Vec<ReferenceDimensionValue>, SketchError> {
+    pub(crate) fn reference_values(&self) -> Result<Vec<ReferenceDimensionValue>, SketchError> {
         self.dimensions
             .iter()
             .filter(|(_, dimension)| dimension.mode() == DimensionMode::Reference)
@@ -697,7 +1064,7 @@ impl Sketch {
             .collect()
     }
 
-    fn first_flipped_segment(&self, geometry: &SketchGeometry) -> Option<SegmentId> {
+    pub(crate) fn first_flipped_segment(&self, geometry: &SketchGeometry) -> Option<SegmentId> {
         self.segments.iter().find_map(|(segment_id, segment)| {
             if !self.segment_branch_is_enforced(segment_id) {
                 return None;
@@ -709,7 +1076,10 @@ impl Sketch {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn validate_m7_candidate(&self, candidate: &SolvedSketchState) -> Result<(), SolveRejection> {
+    pub(crate) fn validate_m7_candidate(
+        &self,
+        candidate: &SolvedSketchState,
+    ) -> Result<(), SolveRejection> {
         for (segment_id, segment) in self.segments.iter() {
             let start = candidate.geometry.point(segment.start()).ok_or_else(|| {
                 SolveRejection::IndependentValidationFailed(
@@ -821,6 +1191,18 @@ impl Sketch {
                     if normalize_bounded_candidate(implied).is_none() {
                         return Err(SolveRejection::ContactParameterOutOfDomain(constraint_id));
                     }
+                }
+                SketchConstraintKind::PointOnBezier { bezier, .. } => {
+                    let parameter = latent_value(
+                        &candidate.latents,
+                        constraint_id,
+                        LatentVariableRole::BezierParameter,
+                    )?;
+                    if normalize_bounded_candidate(parameter).is_none() {
+                        return Err(SolveRejection::ContactParameterOutOfDomain(constraint_id));
+                    }
+                    candidate_bezier_jet(self, candidate, bezier, parameter)
+                        .map_err(|_| SolveRejection::DegenerateCurve(constraint_id))?;
                 }
                 SketchConstraintKind::LineCircleTangency {
                     line,
@@ -1036,13 +1418,155 @@ impl Sketch {
                         return Err(SolveRejection::CenterDirectionFlipped(constraint_id));
                     }
                 }
+                SketchConstraintKind::LineBezierTangency {
+                    line,
+                    bezier,
+                    orientation,
+                    ..
+                } => {
+                    let parameter = latent_value(
+                        &candidate.latents,
+                        constraint_id,
+                        LatentVariableRole::BezierParameter,
+                    )?;
+                    if normalize_bounded_candidate(parameter).is_none() {
+                        return Err(SolveRejection::ContactParameterOutOfDomain(constraint_id));
+                    }
+                    let jet = candidate_bezier_jet(self, candidate, bezier, parameter)
+                        .map_err(|_| SolveRejection::DegenerateCurve(constraint_id))?;
+                    let segment = self.segments.get(line).ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "line-Bezier tangency references a stale line".into(),
+                        )
+                    })?;
+                    let start = candidate.geometry.point(segment.start()).ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "line-Bezier tangency start is missing".into(),
+                        )
+                    })?;
+                    let end = candidate.geometry.point(segment.end()).ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "line-Bezier tangency end is missing".into(),
+                        )
+                    })?;
+                    let line_direction = end - start;
+                    let line_norm = line_direction.norm();
+                    let curve_norm = jet.first_derivative.norm();
+                    if !line_norm.is_finite()
+                        || !curve_norm.is_finite()
+                        || line_norm == 0.0
+                        || curve_norm == 0.0
+                    {
+                        return Err(SolveRejection::DegenerateCurve(constraint_id));
+                    }
+                    let cosine =
+                        line_direction.dot(&jet.first_derivative) / (line_norm * curve_norm);
+                    let valid = match orientation {
+                        crate::CurveTangentOrientation::Aligned => cosine > 0.0,
+                        crate::CurveTangentOrientation::Opposed => cosine < 0.0,
+                    };
+                    if !valid {
+                        return Err(SolveRejection::CenterDirectionFlipped(constraint_id));
+                    }
+                }
+                SketchConstraintKind::PointOnCurve { contact, .. } => {
+                    let parameter = latent_value(
+                        &candidate.latents,
+                        constraint_id,
+                        LatentVariableRole::CurveParameter,
+                    )?;
+                    validate_generic_contact_candidate(
+                        self,
+                        candidate,
+                        constraint_id,
+                        contact,
+                        parameter,
+                    )?;
+                }
+                SketchConstraintKind::LineCurveTangency {
+                    line,
+                    contact,
+                    orientation,
+                    ..
+                } => {
+                    let parameter = latent_value(
+                        &candidate.latents,
+                        constraint_id,
+                        LatentVariableRole::CurveParameter,
+                    )?;
+                    let curve_jet = validate_generic_contact_candidate(
+                        self,
+                        candidate,
+                        constraint_id,
+                        contact,
+                        parameter,
+                    )?;
+                    let line_jet = candidate_curve_jet(
+                        self,
+                        candidate,
+                        SketchCurve::Line {
+                            segment: line,
+                            domain: crate::LineParameterDomain::BoundedSegment,
+                        },
+                        0.0,
+                    )
+                    .map_err(|()| SolveRejection::DegenerateCurve(constraint_id))?;
+                    validate_generic_orientation(
+                        constraint_id,
+                        line_jet.first_derivative,
+                        curve_jet.first_derivative,
+                        orientation,
+                    )?;
+                }
+                SketchConstraintKind::CurveCurveContact { first, second }
+                | SketchConstraintKind::CurveCurveTangency {
+                    first,
+                    second,
+                    orientation: _,
+                } => {
+                    let first_parameter = latent_value(
+                        &candidate.latents,
+                        constraint_id,
+                        LatentVariableRole::FirstCurveParameter,
+                    )?;
+                    let second_parameter = latent_value(
+                        &candidate.latents,
+                        constraint_id,
+                        LatentVariableRole::SecondCurveParameter,
+                    )?;
+                    let first_jet = validate_generic_contact_candidate(
+                        self,
+                        candidate,
+                        constraint_id,
+                        first,
+                        first_parameter,
+                    )?;
+                    let second_jet = validate_generic_contact_candidate(
+                        self,
+                        candidate,
+                        constraint_id,
+                        second,
+                        second_parameter,
+                    )?;
+                    if let SketchConstraintKind::CurveCurveTangency { orientation, .. } =
+                        constraint.kind()
+                    {
+                        validate_generic_orientation(
+                            constraint_id,
+                            first_jet.first_derivative,
+                            second_jet.first_derivative,
+                            orientation,
+                        )?;
+                    }
+                }
                 _ => {}
             }
         }
         Ok(())
     }
 
-    fn normalize_candidate_latents(&self, candidate: &mut SolvedSketchState) -> bool {
+    #[allow(clippy::too_many_lines)]
+    pub(crate) fn normalize_candidate_latents(&self, candidate: &mut SolvedSketchState) -> bool {
         let mut changed = false;
         for (constraint_id, constraint) in self.constraints.iter() {
             match constraint.kind() {
@@ -1081,6 +1605,46 @@ impl Sketch {
                         changed |= normalized.to_bits() != latent.value.to_bits();
                         latent.value = normalized;
                     }
+                }
+                SketchConstraintKind::PointOnBezier { .. }
+                | SketchConstraintKind::LineBezierTangency { .. } => {
+                    if let Some(latent) = latent_mut(
+                        &mut candidate.latents,
+                        constraint_id,
+                        LatentVariableRole::BezierParameter,
+                    ) {
+                        let normalized =
+                            normalize_bounded_candidate(latent.value).unwrap_or(latent.value);
+                        changed |= normalized.to_bits() != latent.value.to_bits();
+                        latent.value = normalized;
+                    }
+                }
+                SketchConstraintKind::PointOnCurve { contact, .. }
+                | SketchConstraintKind::LineCurveTangency { contact, .. } => {
+                    normalize_generic_latent(
+                        &mut candidate.latents,
+                        constraint_id,
+                        LatentVariableRole::CurveParameter,
+                        contact,
+                        &mut changed,
+                    );
+                }
+                SketchConstraintKind::CurveCurveContact { first, second }
+                | SketchConstraintKind::CurveCurveTangency { first, second, .. } => {
+                    normalize_generic_latent(
+                        &mut candidate.latents,
+                        constraint_id,
+                        LatentVariableRole::FirstCurveParameter,
+                        first,
+                        &mut changed,
+                    );
+                    normalize_generic_latent(
+                        &mut candidate.latents,
+                        constraint_id,
+                        LatentVariableRole::SecondCurveParameter,
+                        second,
+                        &mut changed,
+                    );
                 }
                 SketchConstraintKind::LineCircleTangency {
                     domain,
@@ -1139,6 +1703,121 @@ impl Sketch {
         changed
     }
 
+    #[allow(clippy::too_many_lines)]
+    fn candidate_latents_differ(&self, latents: &[SolvedLatent]) -> bool {
+        latents.iter().any(|latent| {
+            let is_bounded =
+                self.constraint(latent.constraint_id)
+                    .is_some_and(|constraint| match (constraint.kind(), latent.role) {
+                        (
+                            SketchConstraintKind::PointOnLine {
+                                domain: crate::LineParameterDomain::BoundedSegment,
+                                ..
+                            }
+                            | SketchConstraintKind::LineCircleTangency {
+                                domain: crate::LineParameterDomain::BoundedSegment,
+                                ..
+                            },
+                            LatentVariableRole::LineParameter,
+                        )
+                        | (
+                            SketchConstraintKind::PointOnArc { .. }
+                            | SketchConstraintKind::CircleArcTangency { .. },
+                            LatentVariableRole::ArcSpanParameter,
+                        )
+                        | (
+                            SketchConstraintKind::PointOnBezier { .. }
+                            | SketchConstraintKind::LineBezierTangency { .. },
+                            LatentVariableRole::BezierParameter,
+                        ) => true,
+                        (
+                            SketchConstraintKind::PointOnCurve { contact, .. }
+                            | SketchConstraintKind::LineCurveTangency { contact, .. },
+                            LatentVariableRole::CurveParameter,
+                        )
+                        | (
+                            SketchConstraintKind::CurveCurveContact { first: contact, .. }
+                            | SketchConstraintKind::CurveCurveTangency { first: contact, .. },
+                            LatentVariableRole::FirstCurveParameter,
+                        )
+                        | (
+                            SketchConstraintKind::CurveCurveContact {
+                                second: contact, ..
+                            }
+                            | SketchConstraintKind::CurveCurveTangency {
+                                second: contact, ..
+                            },
+                            LatentVariableRole::SecondCurveParameter,
+                        ) => generic_curve_is_bounded(contact.curve),
+                        _ => false,
+                    });
+            if !is_bounded {
+                return false;
+            }
+            self.contact_state(latent.constraint_id)
+                .ok()
+                .and_then(|state| match (state, latent.role) {
+                    (
+                        crate::ContactState::PointOnLine { parameter },
+                        LatentVariableRole::LineParameter,
+                    )
+                    | (
+                        crate::ContactState::PointOnBezier { parameter }
+                        | crate::ContactState::LineBezierTangency { parameter },
+                        LatentVariableRole::BezierParameter,
+                    )
+                    | (
+                        crate::ContactState::PointOnCurve { parameter }
+                        | crate::ContactState::LineCurveTangency { parameter },
+                        LatentVariableRole::CurveParameter,
+                    ) => Some(parameter),
+                    (
+                        crate::ContactState::PointOnCircle { angle },
+                        LatentVariableRole::CircleAngle,
+                    ) => Some(angle),
+                    (
+                        crate::ContactState::PointOnArc { span_parameter },
+                        LatentVariableRole::ArcSpanParameter,
+                    ) => Some(span_parameter),
+                    (
+                        crate::ContactState::LineCircleTangency { line_parameter, .. },
+                        LatentVariableRole::LineParameter,
+                    ) => Some(line_parameter),
+                    (
+                        crate::ContactState::LineCircleTangency { circle_angle, .. }
+                        | crate::ContactState::CircleArcTangency { circle_angle, .. },
+                        LatentVariableRole::CircleAngle,
+                    ) => Some(circle_angle),
+                    (
+                        crate::ContactState::CircleArcTangency {
+                            arc_span_parameter, ..
+                        },
+                        LatentVariableRole::ArcSpanParameter,
+                    ) => Some(arc_span_parameter),
+                    (
+                        crate::ContactState::CurveCurveContact {
+                            first_parameter, ..
+                        }
+                        | crate::ContactState::CurveCurveTangency {
+                            first_parameter, ..
+                        },
+                        LatentVariableRole::FirstCurveParameter,
+                    ) => Some(first_parameter),
+                    (
+                        crate::ContactState::CurveCurveContact {
+                            second_parameter, ..
+                        }
+                        | crate::ContactState::CurveCurveTangency {
+                            second_parameter, ..
+                        },
+                        LatentVariableRole::SecondCurveParameter,
+                    ) => Some(second_parameter),
+                    _ => None,
+                })
+                .is_none_or(|accepted| accepted.to_bits() != latent.value.to_bits())
+        })
+    }
+
     fn candidate_has_invalid_primitive(&self, candidate: &SolvedSketchState) -> bool {
         self.segments.iter().any(|(_, segment)| {
             let Some(start) = candidate.geometry.point(segment.start()) else {
@@ -1172,6 +1851,10 @@ impl Sketch {
                 (
                     SketchConstraintKind::PointOnLine { parameter, .. },
                     LatentVariableRole::LineParameter,
+                )
+                | (
+                    SketchConstraintKind::PointOnBezier { parameter, .. },
+                    LatentVariableRole::BezierParameter,
                 ) => *parameter = latent.value,
                 (
                     SketchConstraintKind::PointOnCircle { angle, .. },
@@ -1196,13 +1879,37 @@ impl Sketch {
                     },
                     LatentVariableRole::ArcSpanParameter,
                 ) => *arc_span_parameter = latent.value,
+                (
+                    SketchConstraintKind::LineBezierTangency {
+                        bezier_parameter, ..
+                    },
+                    LatentVariableRole::BezierParameter,
+                ) => *bezier_parameter = latent.value,
+                (
+                    SketchConstraintKind::PointOnCurve { contact, .. }
+                    | SketchConstraintKind::LineCurveTangency { contact, .. },
+                    LatentVariableRole::CurveParameter,
+                ) => contact.parameter = latent.value,
+                (
+                    SketchConstraintKind::CurveCurveContact { first, .. }
+                    | SketchConstraintKind::CurveCurveTangency { first, .. },
+                    LatentVariableRole::FirstCurveParameter,
+                ) => first.parameter = latent.value,
+                (
+                    SketchConstraintKind::CurveCurveContact { second, .. }
+                    | SketchConstraintKind::CurveCurveTangency { second, .. },
+                    LatentVariableRole::SecondCurveParameter,
+                ) => second.parameter = latent.value,
                 _ => return Err(SketchError::NoContactState(latent.constraint_id)),
             }
         }
         Ok(())
     }
 
-    fn commit_solved_state(&mut self, candidate: &SolvedSketchState) -> Result<(), SketchError> {
+    pub(crate) fn commit_solved_state(
+        &mut self,
+        candidate: &SolvedSketchState,
+    ) -> Result<(), SketchError> {
         for point in &candidate.geometry.points {
             self.set_point_position(point.point_id, point.position)?;
         }
@@ -1223,7 +1930,164 @@ impl Sketch {
     }
 }
 
-fn validate_request(sketch: &Sketch, request: SketchSolveRequest) -> Result<(), SketchError> {
+impl Sketch {
+    fn drag_requests_zero_circle_arc_radius(
+        &self,
+        request: SketchSolveRequest,
+    ) -> Option<SketchConstraintId> {
+        let drag = request.drag?;
+        self.constraints
+            .iter()
+            .find_map(|(constraint_id, constraint)| {
+                let SketchConstraintKind::CircleArcTangency { circle, arc, .. } = constraint.kind()
+                else {
+                    return None;
+                };
+                let circle = self.circle_value(circle).ok()?;
+                if circle.center() != drag.point {
+                    return None;
+                }
+                let arc = self.arc_value(arc).ok()?;
+                let center = self.point_position(arc.center()).ok()?;
+                let distance = (drag.target - center).norm();
+                let tolerance = CIRCLE_ARC_TANGENCY_RADIUS_RELATIVE_TOLERANCE
+                    * distance.abs().max(arc.radius().abs());
+                ((distance - arc.radius()).abs() <= tolerance).then_some(constraint_id)
+            })
+    }
+
+    #[allow(clippy::too_many_lines)]
+    pub(crate) fn validate_drag_selected_span(
+        &self,
+        request: SketchSolveRequest,
+        candidate: &SolvedSketchState,
+    ) -> Result<(), SolveRejection> {
+        let Some(drag) = request.drag else {
+            return Ok(());
+        };
+        for (constraint_id, constraint) in self.constraints.iter() {
+            let escaped = match constraint.kind() {
+                SketchConstraintKind::PointOnLine {
+                    point,
+                    segment,
+                    domain: crate::LineParameterDomain::BoundedSegment,
+                    ..
+                } if point == drag.point => {
+                    let segment = self.segments.get(segment).ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "drag contact references a stale segment".into(),
+                        )
+                    })?;
+                    let start = candidate.geometry.point(segment.start()).ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "drag contact start point is missing".into(),
+                        )
+                    })?;
+                    let end = candidate.geometry.point(segment.end()).ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "drag contact end point is missing".into(),
+                        )
+                    })?;
+                    projected_line_parameter(start, end, drag.target)
+                        .and_then(normalize_bounded_candidate)
+                        .is_none()
+                }
+                SketchConstraintKind::PointOnArc { point, arc, .. } if point == drag.point => {
+                    let arc = candidate.geometry.arc(arc).ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "drag contact arc is missing".into(),
+                        )
+                    })?;
+                    target_arc_parameter(*arc, drag.target, constraint_id, &candidate.latents)?
+                        .and_then(normalize_bounded_candidate)
+                        .is_none()
+                }
+                SketchConstraintKind::LineCircleTangency {
+                    line,
+                    circle,
+                    domain: crate::LineParameterDomain::BoundedSegment,
+                    ..
+                } if self
+                    .circle_value(circle)
+                    .is_ok_and(|circle| circle.center() == drag.point) =>
+                {
+                    let line = self.segments.get(line).ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "drag tangency references a stale segment".into(),
+                        )
+                    })?;
+                    let start = candidate.geometry.point(line.start()).ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "drag tangency start point is missing".into(),
+                        )
+                    })?;
+                    let end = candidate.geometry.point(line.end()).ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "drag tangency end point is missing".into(),
+                        )
+                    })?;
+                    projected_line_parameter(start, end, drag.target)
+                        .and_then(normalize_bounded_candidate)
+                        .is_none()
+                }
+                SketchConstraintKind::CircleArcTangency {
+                    circle, arc, side, ..
+                } if self
+                    .circle_value(circle)
+                    .is_ok_and(|circle| circle.center() == drag.point) =>
+                {
+                    let arc = candidate.geometry.arc(arc).ok_or_else(|| {
+                        SolveRejection::IndependentValidationFailed(
+                            "drag tangency arc is missing".into(),
+                        )
+                    })?;
+                    let center_distance = (drag.target - arc.center).norm();
+                    let side_gap = center_distance - arc.radius;
+                    let side_tolerance = 64.0
+                        * f64::EPSILON
+                        * center_distance
+                            .abs()
+                            .max(arc.radius.abs())
+                            .max(f64::MIN_POSITIVE);
+                    if side_gap.abs() > side_tolerance && !side.accepts(center_distance, arc.radius)
+                    {
+                        return Err(SolveRejection::InvalidTangencyMode(constraint_id));
+                    }
+                    target_arc_parameter(*arc, drag.target, constraint_id, &candidate.latents)?
+                        .and_then(normalize_bounded_candidate)
+                        .is_none()
+                }
+                _ => false,
+            };
+            if escaped {
+                return Err(SolveRejection::ContactParameterOutOfDomain(constraint_id));
+            }
+        }
+        Ok(())
+    }
+}
+
+fn target_arc_parameter(
+    arc: SolvedArc,
+    target: Point2<f64>,
+    constraint: SketchConstraintId,
+    latents: &[SolvedLatent],
+) -> Result<Option<f64>, SolveRejection> {
+    let offset = target - arc.center;
+    if !offset.x.is_finite() || !offset.y.is_finite() || offset.norm() == 0.0 {
+        return Ok(None);
+    }
+    let retained = latent_value(latents, constraint, LatentVariableRole::ArcSpanParameter)?;
+    let angle = offset.y.atan2(offset.x);
+    let reference = arc.start_angle + arc.signed_sweep * retained;
+    let parameter = (unwrap_near(angle, reference) - arc.start_angle) / arc.signed_sweep;
+    Ok(parameter.is_finite().then_some(parameter))
+}
+
+pub(crate) fn validate_request(
+    sketch: &Sketch,
+    request: SketchSolveRequest,
+) -> Result<(), SketchError> {
     if let Some(drag) = request.drag {
         sketch.point_position(drag.point)?;
         validate_point(drag.target, "drag target")?;
@@ -1238,7 +2102,7 @@ fn core_report_is_successful(report: &SolveReport, config: SolverConfig) -> bool
         && report.hard_residual_max <= config.normalized_residual_tolerance
 }
 
-fn rejection_hard_validity(rejection: &SolveRejection) -> HardValidity {
+pub(crate) fn rejection_hard_validity(rejection: &SolveRejection) -> HardValidity {
     if matches!(rejection, SolveRejection::IndependentValidationFailed(_)) {
         HardValidity::NotEvaluated
     } else {
@@ -1246,7 +2110,7 @@ fn rejection_hard_validity(rejection: &SolveRejection) -> HardValidity {
     }
 }
 
-fn domain_hard_validity(
+pub(crate) fn domain_hard_validity(
     core_hard_validity: HardValidity,
     rejection: Option<&SolveRejection>,
 ) -> HardValidity {
@@ -1265,6 +2129,7 @@ fn compile_constraint(
     circle_radius_variables: &[CircleRadiusVariableMapping],
     arc_radius_variables: &[ArcRadiusVariableMapping],
     latent_variables: &mut Vec<LatentVariableMapping>,
+    bound_mappings: &mut Vec<SketchBoundMapping>,
     constraint_id: SketchConstraintId,
     constraint: &crate::SketchConstraint,
 ) -> Result<SketchSourceMapping, SketchError> {
@@ -1405,6 +2270,7 @@ fn compile_constraint(
                 circle_radius_variables,
                 arc_radius_variables,
                 latent_variables,
+                bound_mappings,
                 constraint_id,
                 constraint,
                 kind,
@@ -1476,6 +2342,7 @@ fn compile_curve_constraint(
     circle_radius_variables: &[CircleRadiusVariableMapping],
     arc_radius_variables: &[ArcRadiusVariableMapping],
     latent_variables: &mut Vec<LatentVariableMapping>,
+    bound_mappings: &mut Vec<SketchBoundMapping>,
     constraint_id: SketchConstraintId,
     constraint: &crate::SketchConstraint,
     kind: SketchConstraintKind,
@@ -1503,6 +2370,8 @@ fn compile_curve_constraint(
                 constraint_id,
                 LatentVariableRole::LineParameter,
                 parameter,
+                (domain == crate::LineParameterDomain::BoundedSegment).then_some((0.0, 1.0)),
+                bound_mappings,
             )?;
             let evaluator = PointOnLineResidual {
                 point: incidence.add(point_variable(point_variables, point)?),
@@ -1546,6 +2415,8 @@ fn compile_curve_constraint(
                 constraint_id,
                 LatentVariableRole::CircleAngle,
                 angle,
+                None,
+                bound_mappings,
             )?;
             let evaluator = PointOnCircleResidual {
                 point: incidence.add(point_variable(point_variables, point)?),
@@ -1589,6 +2460,8 @@ fn compile_curve_constraint(
                 constraint_id,
                 LatentVariableRole::ArcSpanParameter,
                 span_parameter,
+                Some((0.0, 1.0)),
+                bound_mappings,
             )?;
             let evaluator = PointOnArcResidual {
                 point: incidence.add(point_variable(point_variables, point)?),
@@ -1615,6 +2488,97 @@ fn compile_curve_constraint(
                 vec![
                     audit_row("(P.x - arc(u).x) / model_scale".into(), bindings.clone()),
                     audit_row("(P.y - arc(u).y) / model_scale".into(), bindings),
+                ],
+                Box::new(evaluator),
+            )
+        }
+        SketchConstraintKind::PointOnBezier {
+            point,
+            bezier,
+            parameter,
+        } => {
+            let curve = sketch
+                .bezier(bezier)
+                .ok_or(SketchError::UnknownBezier(bezier))?;
+            let point_name = sketch.point_name(point)?;
+            let parameter_variable = add_latent(
+                problem,
+                latent_variables,
+                constraint_id,
+                LatentVariableRole::BezierParameter,
+                parameter,
+                Some((0.0, 1.0)),
+                bound_mappings,
+            )?;
+            let evaluator = PointOnBezierResidual {
+                point: incidence.add(point_variable(point_variables, point)?),
+                controls: bezier_incidence(curve, point_variables, &mut incidence)?,
+                parameter: incidence.add(parameter_variable),
+            };
+            let bindings = vec![
+                AuditBinding::new("point", point_name),
+                AuditBinding::new("Bezier", curve.label()),
+                AuditBinding::new("domain", "bounded span [0, 1]"),
+                AuditBinding::new("warm-start parameter", parameter.to_string()),
+            ];
+            (
+                format!(
+                    "constraint {}: {point_name} on {} bounded span",
+                    constraint.ordinal(),
+                    curve.label()
+                ),
+                2,
+                vec![scale, scale],
+                vec![
+                    audit_row("(P.x - Bezier(t).x) / model_scale".into(), bindings.clone()),
+                    audit_row("(P.y - Bezier(t).y) / model_scale".into(), bindings),
+                ],
+                Box::new(evaluator),
+            )
+        }
+        SketchConstraintKind::PointOnCurve { point, contact } => {
+            let point_name = sketch.point_name(point)?;
+            let curve_label = generic_curve_label(sketch, contact.curve)?;
+            let parameter_variable = add_curve_contact_latent(
+                problem,
+                latent_variables,
+                bound_mappings,
+                constraint_id,
+                LatentVariableRole::CurveParameter,
+                contact,
+            )?;
+            let evaluator = GenericPointOnCurveResidual {
+                point: incidence.add(point_variable(point_variables, point)?),
+                curve: {
+                    let parameter =
+                        CurveParameterIncidence::Variable(incidence.add(parameter_variable));
+                    generic_curve_incidence(
+                        sketch,
+                        point_variables,
+                        circle_radius_variables,
+                        arc_radius_variables,
+                        &mut incidence,
+                        contact.curve,
+                        parameter,
+                    )?
+                },
+            };
+            let bindings = vec![
+                AuditBinding::new("point", point_name),
+                AuditBinding::new("curve", curve_label),
+                AuditBinding::new("warm-start parameter", contact.parameter.to_string()),
+                AuditBinding::new("neighborhood", format!("{:?}", contact.neighborhood)),
+            ];
+            (
+                format!(
+                    "constraint {}: {point_name} on {curve_label}",
+                    constraint.ordinal()
+                ),
+                2,
+                vec![scale, scale],
+                vec![
+                    audit_row("(P.x - curve(t).x) / model_scale".into(), bindings.clone()),
+                    audit_row("(P.y - curve(t).y) / model_scale".into(), bindings),
                 ],
                 Box::new(evaluator),
             )
@@ -1785,6 +2749,8 @@ fn compile_curve_constraint(
                 constraint_id,
                 LatentVariableRole::LineParameter,
                 line_parameter,
+                (domain == crate::LineParameterDomain::BoundedSegment).then_some((0.0, 1.0)),
+                bound_mappings,
             )?;
             let circle_variable = add_latent(
                 problem,
@@ -1792,6 +2758,8 @@ fn compile_curve_constraint(
                 constraint_id,
                 LatentVariableRole::CircleAngle,
                 circle_angle,
+                None,
+                bound_mappings,
             )?;
             let evaluator = LineCircleTangencyResidual {
                 line_start: incidence.add(point_variable(point_variables, line_start)?),
@@ -1835,6 +2803,217 @@ fn compile_curve_constraint(
                         "dimensionless",
                     ),
                 ],
+                Box::new(evaluator),
+            )
+        }
+        SketchConstraintKind::LineBezierTangency {
+            line,
+            endpoint,
+            bezier,
+            bezier_parameter,
+            orientation,
+        } => {
+            let (start, end, line_value) = segment_points(sketch, line)?;
+            let curve = sketch
+                .bezier(bezier)
+                .ok_or(SketchError::UnknownBezier(bezier))?;
+            let parameter_variable = add_latent(
+                problem,
+                latent_variables,
+                constraint_id,
+                LatentVariableRole::BezierParameter,
+                bezier_parameter,
+                Some((bezier_parameter, bezier_parameter)),
+                bound_mappings,
+            )?;
+            let evaluator = LineBezierTangencyResidual {
+                line: [
+                    incidence.add(point_variable(point_variables, start)?),
+                    incidence.add(point_variable(point_variables, end)?),
+                ],
+                endpoint,
+                controls: bezier_incidence(curve, point_variables, &mut incidence)?,
+                parameter: incidence.add(parameter_variable),
+                orientation,
+            };
+            let bindings = vec![
+                AuditBinding::new("line", line_value.label()),
+                AuditBinding::new("line endpoint", format!("{endpoint:?}")),
+                AuditBinding::new("Bezier", curve.label()),
+                AuditBinding::new("warm-start parameter", bezier_parameter.to_string()),
+                AuditBinding::new("tangent orientation", format!("{orientation:?}")),
+            ];
+            (
+                format!(
+                    "constraint {}: {} endpoint tangent to {}",
+                    constraint.ordinal(),
+                    line_value.label(),
+                    curve.label()
+                ),
+                3,
+                vec![scale, scale, 1.0],
+                vec![
+                    audit_row(
+                        "(line_endpoint.x - Bezier(t).x) / model_scale".into(),
+                        bindings.clone(),
+                    ),
+                    audit_row(
+                        "(line_endpoint.y - Bezier(t).y) / model_scale".into(),
+                        bindings.clone(),
+                    ),
+                    audit_row_unit(
+                        "cross(unit(line tangent), unit(Bezier tangent))".into(),
+                        bindings,
+                        "dimensionless",
+                    ),
+                ],
+                Box::new(evaluator),
+            )
+        }
+        SketchConstraintKind::LineCurveTangency {
+            line,
+            endpoint,
+            contact,
+            orientation,
+        } => {
+            let (start, end, line_value) = segment_points(sketch, line)?;
+            let curve_label = generic_curve_label(sketch, contact.curve)?;
+            let parameter_variable = add_curve_contact_latent(
+                problem,
+                latent_variables,
+                bound_mappings,
+                constraint_id,
+                LatentVariableRole::CurveParameter,
+                contact,
+            )?;
+            let line_curve = GenericCurveIncidence::Line {
+                points: [
+                    incidence.add(point_variable(point_variables, start)?),
+                    incidence.add(point_variable(point_variables, end)?),
+                ],
+                parameter: CurveParameterIncidence::Fixed(match endpoint {
+                    crate::SegmentEndpoint::Start => 0.0,
+                    crate::SegmentEndpoint::End => 1.0,
+                }),
+                bounded: true,
+            };
+            let parameter = CurveParameterIncidence::Variable(incidence.add(parameter_variable));
+            let contact_curve = generic_curve_incidence(
+                sketch,
+                point_variables,
+                circle_radius_variables,
+                arc_radius_variables,
+                &mut incidence,
+                contact.curve,
+                parameter,
+            )?;
+            let evaluator = GenericCurvePairResidual {
+                first: line_curve,
+                second: contact_curve,
+                orientation: Some(orientation),
+            };
+            let bindings = vec![
+                AuditBinding::new("line", line_value.label()),
+                AuditBinding::new("line endpoint", format!("{endpoint:?}")),
+                AuditBinding::new("curve", curve_label),
+                AuditBinding::new("warm-start parameter", contact.parameter.to_string()),
+                AuditBinding::new("neighborhood", format!("{:?}", contact.neighborhood)),
+                AuditBinding::new("tangent orientation", format!("{orientation:?}")),
+            ];
+            (
+                format!(
+                    "constraint {}: {} endpoint tangent to {curve_label}",
+                    constraint.ordinal(),
+                    line_value.label()
+                ),
+                3,
+                vec![scale, scale, 1.0],
+                generic_curve_pair_audit_rows(bindings, true),
+                Box::new(evaluator),
+            )
+        }
+        SketchConstraintKind::CurveCurveContact { first, second }
+        | SketchConstraintKind::CurveCurveTangency {
+            first,
+            second,
+            orientation: _,
+        } => {
+            let orientation = match kind {
+                SketchConstraintKind::CurveCurveTangency { orientation, .. } => Some(orientation),
+                SketchConstraintKind::CurveCurveContact { .. } => None,
+                _ => unreachable!(),
+            };
+            let first_label = generic_curve_label(sketch, first.curve)?;
+            let second_label = generic_curve_label(sketch, second.curve)?;
+            let first_parameter = add_curve_contact_latent(
+                problem,
+                latent_variables,
+                bound_mappings,
+                constraint_id,
+                LatentVariableRole::FirstCurveParameter,
+                first,
+            )?;
+            let second_parameter = add_curve_contact_latent(
+                problem,
+                latent_variables,
+                bound_mappings,
+                constraint_id,
+                LatentVariableRole::SecondCurveParameter,
+                second,
+            )?;
+            let first_parameter = CurveParameterIncidence::Variable(incidence.add(first_parameter));
+            let first_curve = generic_curve_incidence(
+                sketch,
+                point_variables,
+                circle_radius_variables,
+                arc_radius_variables,
+                &mut incidence,
+                first.curve,
+                first_parameter,
+            )?;
+            let second_parameter =
+                CurveParameterIncidence::Variable(incidence.add(second_parameter));
+            let second_curve = generic_curve_incidence(
+                sketch,
+                point_variables,
+                circle_radius_variables,
+                arc_radius_variables,
+                &mut incidence,
+                second.curve,
+                second_parameter,
+            )?;
+            let tangency = orientation.is_some();
+            let evaluator = GenericCurvePairResidual {
+                first: first_curve,
+                second: second_curve,
+                orientation,
+            };
+            let bindings = vec![
+                AuditBinding::new("first curve", first_label),
+                AuditBinding::new("second curve", second_label),
+                AuditBinding::new("first warm-start parameter", first.parameter.to_string()),
+                AuditBinding::new("second warm-start parameter", second.parameter.to_string()),
+                AuditBinding::new("first neighborhood", format!("{:?}", first.neighborhood)),
+                AuditBinding::new("second neighborhood", format!("{:?}", second.neighborhood)),
+                AuditBinding::new("tangent orientation", format!("{orientation:?}")),
+            ];
+            (
+                format!(
+                    "constraint {}: {first_label} and {second_label} {}",
+                    constraint.ordinal(),
+                    if tangency {
+                        "tangent contact"
+                    } else {
+                        "contact"
+                    }
+                ),
+                if tangency { 3 } else { 2 },
+                if tangency {
+                    vec![scale, scale, 1.0]
+                } else {
+                    vec![scale, scale]
+                },
+                generic_curve_pair_audit_rows(bindings, tangency),
                 Box::new(evaluator),
             )
         }
@@ -1895,6 +3074,8 @@ fn compile_curve_constraint(
                 constraint_id,
                 LatentVariableRole::CircleAngle,
                 circle_angle,
+                None,
+                bound_mappings,
             )?;
             let arc_variable = add_latent(
                 problem,
@@ -1902,6 +3083,8 @@ fn compile_curve_constraint(
                 constraint_id,
                 LatentVariableRole::ArcSpanParameter,
                 arc_span_parameter,
+                Some((0.0, 1.0)),
+                bound_mappings,
             )?;
             let evaluator = CircleArcTangencyResidual {
                 circle_center: incidence
@@ -1972,7 +3155,7 @@ fn compile_curve_constraint(
     ))
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct BoxedEvaluator(Box<dyn geosolve_core::ResidualEvaluator>);
 
 impl geosolve_core::ResidualEvaluator for BoxedEvaluator {
@@ -2512,12 +3695,171 @@ fn segment_incidence(
     ])
 }
 
+fn bezier_incidence(
+    curve: &crate::BezierCurve,
+    point_variables: &[PointVariableMapping],
+    incidence: &mut IncidenceBuilder,
+) -> Result<BezierIncidence, SketchError> {
+    Ok(match curve.kind() {
+        crate::BezierKind::Quadratic {
+            controls: [first, second, third],
+        } => BezierIncidence::Quadratic([
+            incidence.add(point_variable(point_variables, first)?),
+            incidence.add(point_variable(point_variables, second)?),
+            incidence.add(point_variable(point_variables, third)?),
+        ]),
+        crate::BezierKind::Cubic {
+            controls: [first, second, third, fourth],
+        } => BezierIncidence::Cubic([
+            incidence.add(point_variable(point_variables, first)?),
+            incidence.add(point_variable(point_variables, second)?),
+            incidence.add(point_variable(point_variables, third)?),
+            incidence.add(point_variable(point_variables, fourth)?),
+        ]),
+    })
+}
+
+fn generic_curve_incidence(
+    sketch: &Sketch,
+    point_variables: &[PointVariableMapping],
+    circle_radius_variables: &[CircleRadiusVariableMapping],
+    arc_radius_variables: &[ArcRadiusVariableMapping],
+    incidence: &mut IncidenceBuilder,
+    curve: SketchCurve,
+    parameter: CurveParameterIncidence,
+) -> Result<GenericCurveIncidence, SketchError> {
+    match curve {
+        SketchCurve::Line { segment, domain } => {
+            let (start, end, _) = segment_points(sketch, segment)?;
+            Ok(GenericCurveIncidence::Line {
+                points: [
+                    incidence.add(point_variable(point_variables, start)?),
+                    incidence.add(point_variable(point_variables, end)?),
+                ],
+                parameter,
+                bounded: domain == crate::LineParameterDomain::BoundedSegment,
+            })
+        }
+        SketchCurve::Circle(circle) => {
+            let value = sketch.circle_value(circle)?;
+            Ok(GenericCurveIncidence::Circle {
+                center: incidence.add(point_variable(point_variables, value.center())?),
+                radius: incidence.add(circle_radius_variable(circle_radius_variables, circle)?),
+                parameter,
+            })
+        }
+        SketchCurve::Arc(arc) => {
+            let value = sketch.arc_value(arc)?;
+            Ok(GenericCurveIncidence::Arc {
+                center: incidence.add(point_variable(point_variables, value.center())?),
+                radius: incidence.add(arc_radius_variable(arc_radius_variables, arc)?),
+                start_angle: value.start_angle(),
+                signed_sweep: value.signed_sweep(),
+                parameter,
+            })
+        }
+        SketchCurve::Bezier(bezier) => {
+            let value = sketch
+                .bezier(bezier)
+                .ok_or(SketchError::UnknownBezier(bezier))?;
+            Ok(match bezier_incidence(value, point_variables, incidence)? {
+                BezierIncidence::Quadratic(controls) => GenericCurveIncidence::QuadraticBezier {
+                    controls,
+                    parameter,
+                },
+                BezierIncidence::Cubic(controls) => GenericCurveIncidence::CubicBezier {
+                    controls,
+                    parameter,
+                },
+            })
+        }
+    }
+}
+
+fn add_curve_contact_latent(
+    problem: &mut Problem,
+    mappings: &mut Vec<LatentVariableMapping>,
+    bound_mappings: &mut Vec<SketchBoundMapping>,
+    constraint_id: SketchConstraintId,
+    role: LatentVariableRole,
+    contact: SketchCurveContact,
+) -> Result<VariableId, SketchError> {
+    let bounded = matches!(
+        contact.curve,
+        SketchCurve::Line {
+            domain: crate::LineParameterDomain::BoundedSegment,
+            ..
+        } | SketchCurve::Arc(_)
+            | SketchCurve::Bezier(_)
+    );
+    let bounds = if bounded {
+        Some(match contact.neighborhood {
+            CurveContactNeighborhood::Start => (0.0, 0.0),
+            CurveContactNeighborhood::End => (1.0, 1.0),
+            CurveContactNeighborhood::Interior => (0.0, 1.0),
+            CurveContactNeighborhood::Local { lower, upper } => (lower, upper),
+        })
+    } else {
+        None
+    };
+    add_latent(
+        problem,
+        mappings,
+        constraint_id,
+        role,
+        contact.parameter,
+        bounds,
+        bound_mappings,
+    )
+}
+
+fn generic_curve_label(sketch: &Sketch, curve: SketchCurve) -> Result<&str, SketchError> {
+    match curve {
+        SketchCurve::Line { segment, .. } => sketch
+            .segment(segment)
+            .map(crate::LineSegment::label)
+            .ok_or(SketchError::UnknownSegment(segment)),
+        SketchCurve::Circle(circle) => sketch.circle_value(circle).map(crate::Circle::label),
+        SketchCurve::Arc(arc) => sketch.arc_value(arc).map(crate::CircularArc::label),
+        SketchCurve::Bezier(bezier) => sketch
+            .bezier(bezier)
+            .map(crate::BezierCurve::label)
+            .ok_or(SketchError::UnknownBezier(bezier)),
+    }
+}
+
+fn generic_curve_pair_audit_rows(
+    bindings: Vec<AuditBinding>,
+    tangency: bool,
+) -> Vec<ResidualRowAudit> {
+    let mut rows = vec![
+        audit_row(
+            "(first_curve(t1).x - second_curve(t2).x) / model_scale".into(),
+            bindings.clone(),
+        ),
+        audit_row(
+            "(first_curve(t1).y - second_curve(t2).y) / model_scale".into(),
+            bindings.clone(),
+        ),
+    ];
+    if tangency {
+        rows.push(audit_row_unit(
+            "cross(unit(first_curve'(t1)), unit(second_curve'(t2)))".into(),
+            bindings,
+            "dimensionless",
+        ));
+    }
+    rows
+}
+
 fn add_latent(
     problem: &mut Problem,
     mappings: &mut Vec<LatentVariableMapping>,
     constraint_id: SketchConstraintId,
     role: LatentVariableRole,
     value: f64,
+    bounds: Option<(f64, f64)>,
+    bound_mappings: &mut Vec<SketchBoundMapping>,
 ) -> Result<VariableId, SketchError> {
     validate_point(Point2::new(value, 0.0), "latent parameter")?;
     let variable_id = problem.add_variable(VariableBlock::scalar(value, 1.0)?);
@@ -2526,6 +3868,22 @@ fn add_latent(
         role,
         variable_id,
     });
+    if let Some((lower, upper)) = bounds {
+        let bound_id = problem.add_bound(CoordinateBound::new(
+            variable_id,
+            0,
+            Some(lower),
+            Some(upper),
+            format!("bounded {role:?} for constraint {constraint_id:?}"),
+        )?)?;
+        bound_mappings.push(SketchBoundMapping {
+            bound: SketchBound::Contact {
+                constraint_id,
+                role,
+            },
+            bound_id,
+        });
+    }
     Ok(variable_id)
 }
 
@@ -2575,6 +3933,179 @@ fn solved_point(points: &[SolvedPoint], point: PointId) -> Result<Point2<f64>, S
         .iter()
         .find_map(|candidate| (candidate.point_id == point).then_some(candidate.position))
         .ok_or(SketchError::UnknownPoint(point))
+}
+
+fn generic_curve_is_bounded(curve: SketchCurve) -> bool {
+    matches!(
+        curve,
+        SketchCurve::Line {
+            domain: crate::LineParameterDomain::BoundedSegment,
+            ..
+        } | SketchCurve::Arc(_)
+            | SketchCurve::Bezier(_)
+    )
+}
+
+fn normalize_generic_latent(
+    latents: &mut [SolvedLatent],
+    constraint: SketchConstraintId,
+    role: LatentVariableRole,
+    contact: SketchCurveContact,
+    changed: &mut bool,
+) {
+    let Some(latent) = latent_mut(latents, constraint, role) else {
+        return;
+    };
+    let normalized = match contact.curve {
+        SketchCurve::Circle(_) => unwrap_near(latent.value, contact.parameter),
+        curve if generic_curve_is_bounded(curve) => {
+            normalize_bounded_candidate(latent.value).unwrap_or(latent.value)
+        }
+        SketchCurve::Line { .. } => latent.value,
+        SketchCurve::Arc(_) | SketchCurve::Bezier(_) => unreachable!(),
+    };
+    *changed |= normalized.to_bits() != latent.value.to_bits();
+    latent.value = normalized;
+}
+
+fn validate_generic_contact_candidate(
+    sketch: &Sketch,
+    candidate: &SolvedSketchState,
+    constraint: SketchConstraintId,
+    contact: SketchCurveContact,
+    parameter: f64,
+) -> Result<geosolve_geometry::CurveJet2, SolveRejection> {
+    if !parameter.is_finite() {
+        return Err(SolveRejection::ContactParameterOutOfDomain(constraint));
+    }
+    if generic_curve_is_bounded(contact.curve) {
+        let Some(normalized) = normalize_bounded_candidate(parameter) else {
+            return Err(SolveRejection::ContactParameterOutOfDomain(constraint));
+        };
+        let neighborhood_valid = match contact.neighborhood {
+            CurveContactNeighborhood::Start => normalized.to_bits() == 0.0f64.to_bits(),
+            CurveContactNeighborhood::End => normalized.to_bits() == 1.0f64.to_bits(),
+            CurveContactNeighborhood::Interior => normalized > 0.0 && normalized < 1.0,
+            CurveContactNeighborhood::Local { lower, upper } => {
+                normalized > lower && normalized < upper
+            }
+        };
+        if !neighborhood_valid {
+            return Err(SolveRejection::AmbiguousContactNeighborhood(constraint));
+        }
+    } else if contact.neighborhood != CurveContactNeighborhood::Interior {
+        return Err(SolveRejection::AmbiguousContactNeighborhood(constraint));
+    }
+    candidate_curve_jet(sketch, candidate, contact.curve, parameter)
+        .map_err(|()| SolveRejection::DegenerateCurve(constraint))
+}
+
+fn validate_generic_orientation(
+    constraint: SketchConstraintId,
+    first: geosolve_geometry::Vector2<f64>,
+    second: geosolve_geometry::Vector2<f64>,
+    orientation: crate::CurveTangentOrientation,
+) -> Result<(), SolveRejection> {
+    let first_norm = first.norm();
+    let second_norm = second.norm();
+    if !first_norm.is_finite()
+        || !second_norm.is_finite()
+        || first_norm == 0.0
+        || second_norm == 0.0
+    {
+        return Err(SolveRejection::DegenerateCurve(constraint));
+    }
+    let cosine = first.dot(&second) / (first_norm * second_norm);
+    let valid = match orientation {
+        crate::CurveTangentOrientation::Aligned => cosine > 0.0,
+        crate::CurveTangentOrientation::Opposed => cosine < 0.0,
+    };
+    if valid {
+        Ok(())
+    } else {
+        Err(SolveRejection::CenterDirectionFlipped(constraint))
+    }
+}
+
+fn candidate_curve_jet(
+    sketch: &Sketch,
+    candidate: &SolvedSketchState,
+    curve: SketchCurve,
+    parameter: f64,
+) -> Result<geosolve_geometry::CurveJet2, ()> {
+    match curve {
+        SketchCurve::Line { segment, domain } => {
+            let segment = sketch.segments.get(segment).ok_or(())?;
+            let start = candidate.geometry.point(segment.start()).ok_or(())?;
+            let end = candidate.geometry.point(segment.end()).ok_or(())?;
+            geosolve_geometry::line_jet(
+                start,
+                end,
+                match domain {
+                    crate::LineParameterDomain::SupportingLine => {
+                        geosolve_geometry::CurveParameterDomain::SupportingLine
+                    }
+                    crate::LineParameterDomain::BoundedSegment => {
+                        geosolve_geometry::CurveParameterDomain::Bounded {
+                            lower: 0.0,
+                            upper: 1.0,
+                        }
+                    }
+                },
+                parameter,
+            )
+            .map_err(|_| ())
+        }
+        SketchCurve::Circle(circle) => {
+            let circle = candidate.geometry.circle(circle).ok_or(())?;
+            geosolve_geometry::circle_jet(circle.center, circle.radius, parameter).map_err(|_| ())
+        }
+        SketchCurve::Arc(arc) => {
+            let arc = candidate.geometry.arc(arc).ok_or(())?;
+            geosolve_geometry::circular_arc_jet(
+                arc.center,
+                arc.radius,
+                arc.start_angle,
+                arc.signed_sweep,
+                parameter,
+            )
+            .map_err(|_| ())
+        }
+        SketchCurve::Bezier(bezier) => {
+            candidate_bezier_jet(sketch, candidate, bezier, parameter).map_err(|_| ())
+        }
+    }
+}
+
+fn candidate_bezier_jet(
+    sketch: &Sketch,
+    candidate: &SolvedSketchState,
+    bezier: crate::BezierId,
+    parameter: f64,
+) -> Result<geosolve_geometry::CurveJet2, geosolve_geometry::CurveEvaluationError> {
+    let curve = sketch
+        .bezier(bezier)
+        .expect("validated Bezier constraint reference");
+    let point = |id| {
+        candidate
+            .geometry
+            .point(id)
+            .expect("compiled Bezier control point")
+    };
+    match curve.kind() {
+        crate::BezierKind::Quadratic {
+            controls: [first, second, third],
+        } => geosolve_geometry::quadratic_bezier_jet(
+            [point(first), point(second), point(third)],
+            parameter,
+        ),
+        crate::BezierKind::Cubic {
+            controls: [first, second, third, fourth],
+        } => geosolve_geometry::cubic_bezier_jet(
+            [point(first), point(second), point(third), point(fourth)],
+            parameter,
+        ),
+    }
 }
 
 fn latent_value(

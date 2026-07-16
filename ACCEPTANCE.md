@@ -41,27 +41,35 @@ Starting at M9, and not as a retroactive M8 gate:
 - each component uses the machine-floor numerical rank threshold in `ARCHITECTURE.md`;
 - numerical left and right nullity are both reported;
 - near-singular warnings use the documented band without silently changing rank or convergence.
-- the M9 rank contract governs core equality/position reports; linkage velocity remains on its compatibility policy until the shared M14 migration.
+- the M9 rank contract governs core equality/position reports; linkage velocity remains on its compatibility policy until the shared M17 migration.
 
-Starting at M10, active-bound mobility and one-sided feasible motion are mandatory. Starting at M12, structural matching and deterministic under/well/over/mixed partitions are mandatory. A target rule does not make the frozen baseline fail before its assigned milestone.
+Starting at M10, active-bound mobility and one-sided feasible motion are mandatory. Starting at M16, structural matching and deterministic under/well/over/mixed partitions are mandatory. A target rule does not make the frozen baseline fail before its assigned milestone.
 
 ## Product gates
 
 ### Deliverable 1: 2D CAD sketches
 
-Completion at M20 requires independently editable points, lines/segments, circles/arcs, ellipses/conics, Bezier curves, B-splines and NURBS; generic contact and tangency; explicit orientation/span/winding/branch state; curvature, G2 and separately named parametric C2 behavior; driving/reference dimensions; truthful diagnostics; and versioned persistence.
+Completion at M22 requires independently editable points, lines/segments, circles/arcs, ellipses/conics, Bezier curves, B-splines and NURBS; generic contact and tangency; explicit orientation/span/winding/branch state; curvature, G2 and separately named parametric C2 behavior; driving/reference dimensions; truthful diagnostics; and versioned persistence.
 
 The complete matrix must include exact, perturbed, invalid-domain, derivative, transformation, scale, branch-retention, active-bound, persistence and large sparse fixtures. A zero-speed curve jet, invalid knot vector, rational pole, escaped domain or ambiguous branch cannot produce a success-like result.
 
 ### Deliverable 2: 2D/3D rigid-body kinematics
 
-Completion at M21 requires planar and spatial rigid bodies/features, common joints/mates, explicit assembly modes, multiple drivers, robust continuation, velocity-level queries, gauge-separated mobility and versioned persistence.
+Completion at M23 requires planar and spatial rigid bodies/features, common joints/mates, explicit assembly modes, multiple drivers, robust continuation, velocity-level queries, gauge-separated mobility and versioned persistence.
 
 The complete matrix must include exact, perturbed, invalid-feature, tangent-Jacobian, global-transform, scale, mixed-scale, singular, branch-retention, gauge-invariance, persistence and large sparse fixtures. No accepted result may imply mass, force, reaction, collision or dynamics behavior.
 
+### 2D Sketch Playground Alpha
+
+M14 completes an alpha cut toward Deliverable 1, not Deliverable 1 itself. Its library scope is point, line/polyline, rectangle macro, circle, circular arc, editable quadratic/cubic Bezier; fixed/coincident/horizontal/vertical/point-on-curve/parallel/perpendicular/equal-length/equal-radius/midpoint/symmetry constraints; distance/length/radius/diameter/oriented-angle driving and reference dimensions; generic line-curve and curve-curve contact/tangency; and explicit branch state.
+
+`SketchDocument`, `SketchSession`, commands, history, versioned serialization, curve evaluation and constraints must be reusable Rust APIs. Selection, hit testing, tool state, rendering and `localStorage` must remain web-only, and the web crate must contain no equations. Desktop and mobile must support select/box-select, compatible multi-select constraints, draw, solver-projected drag, dimension edit, delete/suppress, pan/zoom, undo/redo, JSON import/export/local autosave, confirmed prospective coincident/horizontal/vertical inference, diagnostics/conflict/DOF and retained geometry on failure.
+
+The preceding desktop/mobile requirement records the completed M13-M14 gate. Post-alpha, the playground is a desktop-first diagnostic instrument rather than a production UI: it must remain effective for inspecting accepted geometry, audit, rank, branch and failure claims, while mobile compatibility is best-effort and non-gating.
+
 ## Frozen M1-M7 regression baseline
 
-All existing M1-M7 tests and the advanced free-radius circle/arc tangency follow-up remain mandatory through M22.
+All existing M1-M7 tests and the advanced free-radius circle/arc tangency follow-up remain mandatory through M24.
 
 ### Core representation and solver
 
@@ -119,11 +127,13 @@ Baseline candidate vectors do not yet carry M8 completeness metadata. Until the 
 - Geometry and audit values always come from the same accepted state.
 - It displays termination, hard residual, rank/DOF, branch and candidate diagnostics, plus grouped source audit rows.
 - It preserves prior valid geometry visibly after failed edits.
-- Automated WASM/browser smoke coverage remains through M22; UI design is not a product milestone.
+- Automated WASM and desktop browser diagnostic coverage remains through M24. M13-M14 added the disposable playground, including its historical mobile checks, as an alpha acceptance consumer without making it authoritative.
 
 ## M8 acceptance: contract rebaseline and representative baselines
 
 M8 is ready for review only when every item below is objectively present. These checkboxes are acceptance criteria and do not mark `PLAN.md` complete.
+
+The checked wording below is the preserved M8 completion record. Its then-current M8-M22 allocations are historical; the user-approved M10+ execution numbering is now M10-M24.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -179,14 +189,61 @@ M8 does not require timed performance thresholds. It freezes reproducible benchm
 ## M10 acceptance: sessions, bounds and active sets
 
 - A persistent `SolveSession` automatically tracks topology/source/state revisions and dirty components.
+- `SketchSession` is the first domain consumer and keeps all sketch types out of `geosolve-core`.
 - Non-structural one-component edits cannot omit dirty IDs and do not rebuild or iterate unaffected components.
 - Accepted-state commits are atomic and rollback remains transactional.
 - Bounds participate in step computation rather than only post-solve rejection.
 - Reports distinguish equality nullity, bidirectional active-set DOF and one-sided feasible motion.
 - Redundancy/conflict sections expose completeness, budget, consumed work and reason under the M8 contract.
-- Endpoint contacts, positive radii and bounded drivers report active bounds truthfully.
+- Endpoint contacts and positive radii report active bounds truthfully through the sketch consumer.
 
-## M11 acceptance: manifold geometry and spatial state
+## M11 acceptance: persistent SketchDocument, commands and history
+
+- Persistent external IDs survive deterministic JSON serialization/remapping independently of runtime generational keys.
+- `SketchDocument` represents point/line/polyline/circle/arc topology, semantic features, dimensions, contact slots and every explicit branch field through a closed versioned graph.
+- The rectangle macro expands to ordinary document geometry and constraints.
+- Typed create/edit/delete/suppress and driving/reference-dimension commands update the session transactionally.
+- Undo/redo records only accepted commands and reproduces accepted geometry and explicit state deterministically.
+- Duplicate IDs, dangling references, unknown variants, invalid domains and non-finite JSON reject atomically.
+- S1-S3 and the complete M5/M7 corpus remain semantically unchanged.
+
+## M12 acceptance: Bezier and generic curve constraints
+
+- Editable quadratic/cubic Bezier controls and contact parameters all appear in derivative incidence.
+- Public immutable curve evaluation returns finite position and first-through-third derivatives or a typed domain/regularity failure.
+- Line/polyline segment/circle/arc/Bezier combinations use common point-on-curve, contact and tangency plumbing.
+- Every control/contact derivative passes central finite differences to `<= 1e-6` away from singular/nondifferentiable states.
+- Endpoint orientation and all branch/span/winding/neighborhood state are explicit; cusp and zero-speed states reject.
+- Every alpha document/session/command/history/serialization/curve/constraint workflow is usable without the web crate.
+- The alpha library scenarios pass at uniform scales `1e-6`, `1` and `1e6` without changed IDs, branches, rank or diagnosis.
+
+## M13 acceptance: disposable browser playground
+
+- The browser uses only public sketch/document/session/command/history/serialization/audit APIs and contains no equation implementation.
+- Select, box-select, compatible multi-select constraints, every draw tool, projected drag, dimension edit, delete/suppress and pan/zoom are functional.
+- Prospective coincident/horizontal/vertical inference is visibly provisional and changes no document until explicit confirmation.
+- Undo/redo, JSON import/export and local autosave operate through library commands and serialization.
+- Solve status, conflict, rank/DOF and audit output correspond to the same accepted geometry; failure leaves that geometry visible.
+- Pointer and touch paths are functional at representative desktop and mobile viewports.
+- Selection, hit testing, tool state, rendering and `localStorage` remain web-only.
+
+## M14 acceptance: playground hardening and alpha gate
+
+- Browser E2E covers alpha scenarios A1-A10 from `docs/SCENARIOS.md` on desktop and mobile viewports.
+- A1 constrained rectangle retains horizontal/vertical/coincident topology and solves edited width/height dimensions.
+- A2 underconstrained drag follows solver-permitted motion without weakening hard constraints.
+- A3 line-circle tangency and A4 free-radius circle-arc tangency retain explicit contacts, orientation/neighborhood and accepted branches.
+- A5 Bezier tangent line differentiates all incident controls/contact parameters and rejects zero-speed tangency.
+- A6 conflicting dimensions names both incompatible sources and retains prior geometry.
+- A7 undo/redo reproduces create/edit/delete/suppress state and accepted geometry.
+- A8 JSON round trip preserves every persistent ID and branch/span/winding/orientation/neighborhood field.
+- A9 invalid edit/import retains the accepted document, history position, diagnostics and visible geometry.
+- A10 executes the alpha corpus at uniform scales `1e-6`, `1` and `1e6` with invariant topology, branches, rank/mobility and source diagnosis.
+- Malformed/unknown-version/duplicate-ID/dangling-reference/non-finite/over-limit imports fail atomically with actionable errors.
+- Deterministic small/medium import, first-solve, edit/solve and render timings have documented and enforced reference-environment budgets.
+- Passing M14 means 2D Sketch Playground Alpha complete; it does not claim Deliverable 1 complete.
+
+## M15 acceptance: manifold geometry and spatial state
 
 - `SE(2)`/`SE(3)` composition, inverse, exponential, logarithm, adjoint, retraction and local difference satisfy property tests under ADR 0006.
 - `Pose3` stores a validated quaternion ambient representation and has tangent dimension six.
@@ -194,7 +251,7 @@ M8 does not require timed performance thresholds. It freezes reproducible benchm
 - Fixed/alias elimination and accepted-state sensitivity APIs are manifold-aware.
 - Invalid frames and quaternions reject before success.
 
-## M12 acceptance: sparse structure, hierarchy and continuation
+## M16 acceptance: sparse structure, hierarchy and continuation
 
 - Structural matching reports structural rank, structural left/right nullity and deterministic under/well/over/mixed partitions separately from M9 numerical rank.
 - Block triplet assembly and pure-Rust sparse solve agree with dense results on geometry, rank, mobility, diagnostics and branch state.
@@ -203,15 +260,7 @@ M8 does not require timed performance thresholds. It freezes reproducible benchm
 - Cross-component secondary objectives retain strict priority semantics.
 - The documented planar toggle crosses only through explicit pseudo-arclength continuation.
 
-## M13 acceptance: sketch design graph
-
-- Persistent external IDs survive deterministic serialization/remapping independently of runtime generational keys.
-- Existing line/circle/arc entities use one closed `CurveDefinition`, semantic features and stable contact slots.
-- Generic dependency, compilation, validation, commit and audit mappings replace pair-specific lifecycle fan-out.
-- Driving/reference measurements and every discrete contact state round-trip in a versioned document.
-- S1-S3 and the full M5/M7 corpus remain semantically unchanged.
-
-## M14 acceptance: planar kinematic migration
+## M17 acceptance: planar kinematic migration
 
 - Planar model topology, accepted state and compiled session are separate.
 - Persistent body, feature and source IDs survive deterministic serialization/remapping independently of runtime generational keys.
@@ -220,42 +269,35 @@ M8 does not require timed performance thresholds. It freezes reproducible benchm
 - A floating planar component reports three gauge DOF separately from internal mobility.
 - L1-L3 and compatibility APIs remain valid.
 
-## M15 acceptance: Bezier and generic contact
-
-- Editable quadratic/cubic Bezier controls and contact parameters all appear in derivative incidence.
-- Line/circle/arc/Bezier combinations use common contact/tangency residual templates.
-- Every control/contact derivative passes finite differences.
-- Endpoint orientation is explicit; cusp and zero-speed states reject.
-
-## M16 acceptance: spatial vertical slice
+## M18 acceptance: spatial vertical slice
 
 - Spatial bodies and local point/frame features support physical ground and floating gauge policy.
 - Fixed-frame, ball and revolute joints report expected relative mobility.
 - Exact, perturbed, tangent-Jacobian, transformed/scaled, invalid-feature and rollback fixtures pass.
 - Every accepted configuration is independently validated.
 
-## M17 acceptance: conics
+## M19 acceptance: conics
 
 - Ellipses, elliptical arcs, rational-quadratic conics and explicit parabola/hyperbola branches have validated jets and domains.
 - Affine/similarity, branch-retention and rational-pole tests pass.
 - Circle-limit geometry remains valid while unobservable orientation is reported truthfully.
 - Generic contact/tangency adds no geometry-pair equation implementation.
 
-## M18 acceptance: spatial joints and mates
+## M20 acceptance: spatial joints and mates
 
 - Axis/plane features and prismatic, cylindrical, planar and universal joints implement expected mobility.
 - Distance, angle, alignment and frame-offset mates support multiple explicit drivers.
 - Axis parity, winding, side and signed-volume state prevent silent mode changes.
 - Each primitive passes exact, recovery, tangent-Jacobian, scale, mixed-scale and degeneracy fixtures.
 
-## M19 acceptance: B-splines
+## M21 acceptance: B-splines
 
 - Degree, control identity and knot vectors validate before evaluation.
 - De Boor position and first-through-third jets pass Bezier equivalence, affine covariance and partition-of-unity oracles.
 - Clamped/periodic spans have stable identities and one-sided knot policy.
 - Residual incidence is limited to active local support; knot insertion preserves geometry.
 
-## M20 acceptance: NURBS and CAD completion
+## M22 acceptance: NURBS and CAD completion
 
 - Positive weights, homogeneous jets, weight derivatives and explicit weight-gauge policy pass finite differences.
 - Unit weights reproduce B-splines and canonical quadratic NURBS reproduce conics.
@@ -263,7 +305,7 @@ M8 does not require timed performance thresholds. It freezes reproducible benchm
 - Rational denominator and mixed-scale ambiguities reject truthfully.
 - Complete sketch persistence, fuzz/property, differential-oracle and sparse performance suites pass.
 
-## M21 acceptance: kinematic completion
+## M23 acceptance: kinematic completion
 
 - Adaptive and pseudo-arclength continuation preserve explicit planar/spatial modes with branch-boundary events and hysteresis.
 - Multiple-driver velocity requests distinguish determinate, underdetermined and inconsistent outcomes.
@@ -271,7 +313,7 @@ M8 does not require timed performance thresholds. It freezes reproducible benchm
 - Planar mechanisms embedded in 3D agree with planar oracles.
 - Complete linkage persistence, fuzz/property, differential-oracle and sparse performance suites pass.
 
-## M22 acceptance: release hardening
+## M24 acceptance: release hardening
 
 - Public APIs expose domain and audit behavior without accidental compiler/core internals.
 - Versioned serialization migrations, malformed-document tests and round trips pass.

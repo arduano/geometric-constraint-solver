@@ -229,6 +229,12 @@ pub enum ContactState {
     PointOnArc {
         span_parameter: f64,
     },
+    PointOnBezier {
+        parameter: f64,
+    },
+    PointOnCurve {
+        parameter: f64,
+    },
     LineCircleTangency {
         line_parameter: f64,
         circle_angle: f64,
@@ -236,6 +242,20 @@ pub enum ContactState {
     CircleArcTangency {
         arc_span_parameter: f64,
         circle_angle: f64,
+    },
+    LineBezierTangency {
+        parameter: f64,
+    },
+    LineCurveTangency {
+        parameter: f64,
+    },
+    CurveCurveContact {
+        first_parameter: f64,
+        second_parameter: f64,
+    },
+    CurveCurveTangency {
+        first_parameter: f64,
+        second_parameter: f64,
     },
 }
 
@@ -1043,6 +1063,12 @@ impl Sketch {
             SketchConstraintKind::PointOnArc { span_parameter, .. } => {
                 Ok(ContactState::PointOnArc { span_parameter })
             }
+            SketchConstraintKind::PointOnBezier { parameter, .. } => {
+                Ok(ContactState::PointOnBezier { parameter })
+            }
+            SketchConstraintKind::PointOnCurve { contact, .. } => Ok(ContactState::PointOnCurve {
+                parameter: contact.parameter,
+            }),
             SketchConstraintKind::LineCircleTangency {
                 line_parameter,
                 circle_angle,
@@ -1059,6 +1085,28 @@ impl Sketch {
                 arc_span_parameter,
                 circle_angle,
             }),
+            SketchConstraintKind::LineBezierTangency {
+                bezier_parameter, ..
+            } => Ok(ContactState::LineBezierTangency {
+                parameter: bezier_parameter,
+            }),
+            SketchConstraintKind::LineCurveTangency { contact, .. } => {
+                Ok(ContactState::LineCurveTangency {
+                    parameter: contact.parameter,
+                })
+            }
+            SketchConstraintKind::CurveCurveContact { first, second } => {
+                Ok(ContactState::CurveCurveContact {
+                    first_parameter: first.parameter,
+                    second_parameter: second.parameter,
+                })
+            }
+            SketchConstraintKind::CurveCurveTangency { first, second, .. } => {
+                Ok(ContactState::CurveCurveTangency {
+                    first_parameter: first.parameter,
+                    second_parameter: second.parameter,
+                })
+            }
             _ => Err(SketchError::NoContactState(constraint)),
         }
     }
@@ -1068,11 +1116,57 @@ impl Sketch {
     /// # Errors
     ///
     /// Returns an error for a stale/mismatched source or invalid parameter.
+    #[allow(clippy::too_many_lines)]
     pub fn set_contact_state(
         &mut self,
         constraint: SketchConstraintId,
         state: ContactState,
     ) -> Result<(), SketchError> {
+        let current = self
+            .constraints
+            .get(constraint)
+            .ok_or(SketchError::UnknownConstraint(constraint))?
+            .kind();
+        match (current, state) {
+            (
+                SketchConstraintKind::PointOnCurve { mut contact, .. },
+                ContactState::PointOnCurve { parameter },
+            )
+            | (
+                SketchConstraintKind::LineCurveTangency { mut contact, .. },
+                ContactState::LineCurveTangency { parameter },
+            ) => {
+                contact.parameter = parameter;
+                self.validate_curve_contact(contact)?;
+            }
+            (
+                SketchConstraintKind::CurveCurveContact {
+                    mut first,
+                    mut second,
+                },
+                ContactState::CurveCurveContact {
+                    first_parameter,
+                    second_parameter,
+                },
+            )
+            | (
+                SketchConstraintKind::CurveCurveTangency {
+                    mut first,
+                    mut second,
+                    ..
+                },
+                ContactState::CurveCurveTangency {
+                    first_parameter,
+                    second_parameter,
+                },
+            ) => {
+                first.parameter = first_parameter;
+                second.parameter = second_parameter;
+                self.validate_curve_contact(first)?;
+                self.validate_curve_contact(second)?;
+            }
+            _ => {}
+        }
         let kind = &mut self
             .constraints
             .get_mut(constraint)
@@ -1103,6 +1197,13 @@ impl Sketch {
             ) => {
                 validate_bounded_parameter(value, "bounded-arc span [0, 1]")?;
                 *span_parameter = value;
+            }
+            (
+                SketchConstraintKind::PointOnBezier { parameter, .. },
+                ContactState::PointOnBezier { parameter: value },
+            ) => {
+                validate_bounded_parameter(value, "bounded Bezier span [0, 1]")?;
+                *parameter = value;
             }
             (
                 SketchConstraintKind::LineCircleTangency {
@@ -1136,6 +1237,48 @@ impl Sketch {
                 validate_finite(circle_value, "circle contact angle")?;
                 *arc_span_parameter = arc_value;
                 *circle_angle = circle_value;
+            }
+            (
+                SketchConstraintKind::LineBezierTangency {
+                    bezier_parameter, ..
+                },
+                ContactState::LineBezierTangency { parameter: value },
+            ) => {
+                validate_bounded_parameter(value, "bounded Bezier span [0, 1]")?;
+                *bezier_parameter = value;
+            }
+            (
+                SketchConstraintKind::PointOnCurve { contact, .. },
+                ContactState::PointOnCurve { parameter },
+            )
+            | (
+                SketchConstraintKind::LineCurveTangency { contact, .. },
+                ContactState::LineCurveTangency { parameter },
+            ) => {
+                let mut updated = *contact;
+                updated.parameter = parameter;
+                *contact = updated;
+            }
+            (
+                SketchConstraintKind::CurveCurveContact { first, second },
+                ContactState::CurveCurveContact {
+                    first_parameter,
+                    second_parameter,
+                },
+            )
+            | (
+                SketchConstraintKind::CurveCurveTangency { first, second, .. },
+                ContactState::CurveCurveTangency {
+                    first_parameter,
+                    second_parameter,
+                },
+            ) => {
+                let mut updated_first = *first;
+                updated_first.parameter = first_parameter;
+                let mut updated_second = *second;
+                updated_second.parameter = second_parameter;
+                *first = updated_first;
+                *second = updated_second;
             }
             _ => return Err(SketchError::NoContactState(constraint)),
         }
@@ -1390,7 +1533,9 @@ impl Sketch {
                 SketchConstraintKind::EqualCircleRadius { first, second }
                     | SketchConstraintKind::CircleCircleTangency { first, second, .. }
                     if first == circle || second == circle
-            )
+            ) || generic_constraint_curves(constraint.kind())
+                .iter()
+                .any(|curve| matches!(curve, crate::SketchCurve::Circle(id) if *id == circle))
         })
     }
 
@@ -1412,7 +1557,9 @@ impl Sketch {
                 SketchConstraintKind::PointOnArc { arc: id, .. }
                     | SketchConstraintKind::CircleArcTangency { arc: id, .. }
                     if id == arc
-            )
+            ) || generic_constraint_curves(constraint.kind())
+                .iter()
+                .any(|curve| matches!(curve, crate::SketchCurve::Arc(id) if *id == arc))
         })
     }
 
@@ -1425,6 +1572,18 @@ impl Sketch {
                     if id == arc
             )
         })
+    }
+}
+
+fn generic_constraint_curves(kind: SketchConstraintKind) -> Vec<crate::SketchCurve> {
+    match kind {
+        SketchConstraintKind::PointOnCurve { contact, .. }
+        | SketchConstraintKind::LineCurveTangency { contact, .. } => vec![contact.curve],
+        SketchConstraintKind::CurveCurveContact { first, second }
+        | SketchConstraintKind::CurveCurveTangency { first, second, .. } => {
+            vec![first.curve, second.curve]
+        }
+        _ => Vec::new(),
     }
 }
 

@@ -17,6 +17,8 @@ new_key_type! {
     pub struct CircleId;
     /// Stable identity of a circular arc.
     pub struct ArcId;
+    /// Stable identity of a quadratic or cubic Bezier curve.
+    pub struct BezierId;
     /// Stable identity of a geometric sketch constraint.
     pub struct SketchConstraintId;
     /// Stable identity of a driving or reference dimension.
@@ -48,6 +50,8 @@ pub enum SketchError {
     UnknownCircle(CircleId),
     #[error("unknown or stale arc ID {0:?}")]
     UnknownArc(ArcId),
+    #[error("unknown or stale Bezier ID {0:?}")]
+    UnknownBezier(BezierId),
     #[error("unknown or stale sketch constraint ID {0:?}")]
     UnknownConstraint(SketchConstraintId),
     #[error("unknown or stale sketch dimension ID {0:?}")]
@@ -60,6 +64,8 @@ pub enum SketchError {
     CircleInUse(CircleId),
     #[error("arc {0:?} is still referenced by a constraint or dimension")]
     ArcInUse(ArcId),
+    #[error("Bezier {0:?} is still referenced by a constraint")]
+    BezierInUse(BezierId),
     #[error("a line segment requires two different, noncoincident points")]
     DegenerateSegment,
     #[error("retained segment {0:?} has zero-length or non-finite geometry")]
@@ -77,6 +83,8 @@ pub enum SketchError {
         parameter: f64,
         domain: &'static str,
     },
+    #[error("curve contact is invalid or degenerate: {0}")]
+    InvalidCurveContact(&'static str),
     #[error("a direction branch requires a finite nonzero direction")]
     InvalidDirectionBranch,
     #[error("internal tangency requires a positive containing-radius difference")]
@@ -170,15 +178,24 @@ pub struct SegmentBranch {
 }
 
 impl SegmentBranch {
-    pub(crate) fn from_points(start: Point2<f64>, end: Point2<f64>) -> Result<Self, SketchError> {
-        let direction = end - start;
-        let norm = direction.x.hypot(direction.y);
+    /// Creates an explicit directed branch from a finite nonzero direction.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SketchError::InvalidDirectionBranch`] for a zero or non-finite direction.
+    pub fn new(reference_direction: [f64; 2]) -> Result<Self, SketchError> {
+        let norm = reference_direction[0].hypot(reference_direction[1]);
         if !norm.is_finite() || norm == 0.0 {
-            return Err(SketchError::DegenerateSegment);
+            return Err(SketchError::InvalidDirectionBranch);
         }
         Ok(Self {
-            reference_direction: [direction.x / norm, direction.y / norm],
+            reference_direction: [reference_direction[0] / norm, reference_direction[1] / norm],
         })
+    }
+
+    pub(crate) fn from_points(start: Point2<f64>, end: Point2<f64>) -> Result<Self, SketchError> {
+        let direction = end - start;
+        Self::new([direction.x, direction.y]).map_err(|_| SketchError::DegenerateSegment)
     }
 
     /// Unit direction selected when this branch was explicitly established.
@@ -235,6 +252,49 @@ pub enum CoordinateAxis {
     Y,
 }
 
+/// Endpoint selected on a directed segment.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SegmentEndpoint {
+    Start,
+    End,
+}
+
+/// Relative tangent direction selected by a generic curve tangency.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CurveTangentOrientation {
+    Aligned,
+    Opposed,
+}
+
+/// Closed runtime curve reference used by geometry-generic contact constraints.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SketchCurve {
+    Line {
+        segment: SegmentId,
+        domain: LineParameterDomain,
+    },
+    Circle(CircleId),
+    Arc(ArcId),
+    Bezier(BezierId),
+}
+
+/// Explicit selected neighborhood for a runtime curve contact.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CurveContactNeighborhood {
+    Interior,
+    Local { lower: f64, upper: f64 },
+    Start,
+    End,
+}
+
+/// One parameterized runtime curve location with explicit bounded neighborhood state.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SketchCurveContact {
+    pub curve: SketchCurve,
+    pub parameter: f64,
+    pub neighborhood: CurveContactNeighborhood,
+}
+
 /// Supported first-slice geometric constraints.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SketchConstraintKind {
@@ -272,6 +332,15 @@ pub enum SketchConstraintKind {
         point: PointId,
         arc: ArcId,
         span_parameter: f64,
+    },
+    PointOnBezier {
+        point: PointId,
+        bezier: BezierId,
+        parameter: f64,
+    },
+    PointOnCurve {
+        point: PointId,
+        contact: SketchCurveContact,
     },
     Parallel {
         first: SegmentId,
@@ -318,6 +387,28 @@ pub enum SketchConstraintKind {
         side: ArcCircleTangencySide,
         arc_span_parameter: f64,
         circle_angle: f64,
+    },
+    LineBezierTangency {
+        line: SegmentId,
+        endpoint: SegmentEndpoint,
+        bezier: BezierId,
+        bezier_parameter: f64,
+        orientation: CurveTangentOrientation,
+    },
+    LineCurveTangency {
+        line: SegmentId,
+        endpoint: SegmentEndpoint,
+        contact: SketchCurveContact,
+        orientation: CurveTangentOrientation,
+    },
+    CurveCurveContact {
+        first: SketchCurveContact,
+        second: SketchCurveContact,
+    },
+    CurveCurveTangency {
+        first: SketchCurveContact,
+        second: SketchCurveContact,
+        orientation: CurveTangentOrientation,
     },
 }
 
@@ -422,6 +513,7 @@ pub struct Sketch {
     pub(crate) segments: StableStore<SegmentId, LineSegment>,
     pub(crate) circles: StableStore<CircleId, crate::curves::Circle>,
     pub(crate) arcs: StableStore<ArcId, crate::curves::CircularArc>,
+    pub(crate) beziers: StableStore<BezierId, crate::beziers::BezierCurve>,
     pub(crate) constraints: StableStore<SketchConstraintId, SketchConstraint>,
     pub(crate) dimensions: StableStore<SketchDimensionId, SketchDimension>,
     pub(crate) source_order: Vec<PersistentSource>,
@@ -441,6 +533,7 @@ impl Sketch {
             segments: StableStore::new(),
             circles: StableStore::new(),
             arcs: StableStore::new(),
+            beziers: StableStore::new(),
             constraints: StableStore::new(),
             dimensions: StableStore::new(),
             source_order: Vec::new(),
@@ -531,6 +624,10 @@ impl Sketch {
                 .any(|(_, circle)| circle.center() == point)
             || self.arcs.iter().any(|(_, arc)| arc.center() == point)
             || self
+                .beziers
+                .iter()
+                .any(|(_, curve)| curve.controls().contains(&point))
+            || self
                 .constraints
                 .iter()
                 .any(|(_, constraint)| constraint_references_point(constraint.kind, point, self))
@@ -573,6 +670,37 @@ impl Sketch {
         let start_position = self.point_position(start)?;
         let end_position = self.point_position(end)?;
         let branch = SegmentBranch::from_points(start_position, end_position)?;
+        let label = nonempty_label(label, "segment")?;
+        Ok(self.segments.insert(LineSegment {
+            start,
+            end,
+            branch,
+            label,
+        }))
+    }
+
+    /// Adds a named directed segment while restoring an explicit saved branch.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for invalid endpoint geometry, an invalid branch, or
+    /// current geometry on the opposite side of that branch.
+    pub fn add_named_segment_with_branch(
+        &mut self,
+        label: impl Into<String>,
+        start: PointId,
+        end: PointId,
+        branch: SegmentBranch,
+    ) -> Result<SegmentId, SketchError> {
+        if start == end {
+            return Err(SketchError::DegenerateSegment);
+        }
+        let start_position = self.point_position(start)?;
+        let end_position = self.point_position(end)?;
+        SegmentBranch::from_points(start_position, end_position)?;
+        if !branch.is_preserved(start_position, end_position) {
+            return Err(SketchError::InvalidDirectionBranch);
+        }
         let label = nonempty_label(label, "segment")?;
         Ok(self.segments.insert(LineSegment {
             start,
@@ -1029,6 +1157,7 @@ impl Sketch {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn constraint_references_point(
     kind: SketchConstraintKind,
     point: PointId,
@@ -1078,6 +1207,21 @@ fn constraint_references_point(
                     .get(arc)
                     .is_some_and(|value| value.center() == point)
         }
+        SketchConstraintKind::PointOnBezier {
+            point: constrained,
+            bezier,
+            ..
+        } => {
+            constrained == point
+                || sketch
+                    .beziers
+                    .get(bezier)
+                    .is_some_and(|curve| curve.controls().contains(&point))
+        }
+        SketchConstraintKind::PointOnCurve {
+            point: constrained,
+            contact,
+        } => constrained == point || contact.curve.references_point(sketch, point),
         SketchConstraintKind::Parallel { first, second }
         | SketchConstraintKind::Perpendicular { first, second }
         | SketchConstraintKind::EqualSegmentLength { first, second } => [first, second]
@@ -1119,6 +1263,26 @@ fn constraint_references_point(
                     .get(arc)
                     .is_some_and(|value| value.center() == point)
         }
+        SketchConstraintKind::LineBezierTangency { line, bezier, .. } => {
+            sketch
+                .segment_endpoints(line)
+                .is_ok_and(|(start, end)| start == point || end == point)
+                || sketch
+                    .beziers
+                    .get(bezier)
+                    .is_some_and(|curve| curve.controls().contains(&point))
+        }
+        SketchConstraintKind::LineCurveTangency { line, contact, .. } => {
+            sketch
+                .segment_endpoints(line)
+                .is_ok_and(|(start, end)| start == point || end == point)
+                || contact.curve.references_point(sketch, point)
+        }
+        SketchConstraintKind::CurveCurveContact { first, second }
+        | SketchConstraintKind::CurveCurveTangency { first, second, .. } => {
+            first.curve.references_point(sketch, point)
+                || second.curve.references_point(sketch, point)
+        }
     }
 }
 
@@ -1156,8 +1320,45 @@ fn constraint_references_segment(kind: SketchConstraintKind, segment: SegmentId)
             first == segment || second == segment
         }
         SketchConstraintKind::SymmetricAboutLine { line, .. }
-        | SketchConstraintKind::LineCircleTangency { line, .. } => line == segment,
+        | SketchConstraintKind::LineCircleTangency { line, .. }
+        | SketchConstraintKind::LineBezierTangency { line, .. } => line == segment,
+        SketchConstraintKind::PointOnCurve { contact, .. } => {
+            contact.curve.references_segment(segment)
+        }
+        SketchConstraintKind::LineCurveTangency { line, contact, .. } => {
+            line == segment || contact.curve.references_segment(segment)
+        }
+        SketchConstraintKind::CurveCurveContact { first, second }
+        | SketchConstraintKind::CurveCurveTangency { first, second, .. } => {
+            first.curve.references_segment(segment) || second.curve.references_segment(segment)
+        }
         _ => false,
+    }
+}
+
+impl SketchCurve {
+    fn references_point(self, sketch: &Sketch, point: PointId) -> bool {
+        match self {
+            Self::Line { segment, .. } => sketch
+                .segment_endpoints(segment)
+                .is_ok_and(|(start, end)| start == point || end == point),
+            Self::Circle(circle) => sketch
+                .circles
+                .get(circle)
+                .is_some_and(|value| value.center() == point),
+            Self::Arc(arc) => sketch
+                .arcs
+                .get(arc)
+                .is_some_and(|value| value.center() == point),
+            Self::Bezier(bezier) => sketch
+                .beziers
+                .get(bezier)
+                .is_some_and(|value| value.controls().contains(&point)),
+        }
+    }
+
+    fn references_segment(self, segment: SegmentId) -> bool {
+        matches!(self, Self::Line { segment: id, .. } if id == segment)
     }
 }
 

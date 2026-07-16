@@ -8,6 +8,7 @@ authors.workspace = true
 
 [dependencies]
 nalgebra.workspace = true
+thiserror.workspace = true
 
 [lints]
 workspace = true

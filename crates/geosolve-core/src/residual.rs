@@ -315,8 +315,39 @@ impl<'a, 'b> LinearizationStorage<'a, 'b> {
     }
 }
 
+/// Object-safe cloning support for [`ResidualEvaluator`].
+///
+/// This is public only because it is a supertrait of the pre-1.0 evaluator
+/// seam. Implementors receive it automatically when they implement `Clone`.
+#[doc(hidden)]
+pub trait ResidualEvaluatorClone {
+    fn clone_box(&self) -> Box<dyn ResidualEvaluator>;
+}
+
+impl<T> ResidualEvaluatorClone for T
+where
+    T: ResidualEvaluator + Clone + 'static,
+{
+    fn clone_box(&self) -> Box<dyn ResidualEvaluator> {
+        Box::new(self.clone())
+    }
+}
+
+impl Clone for Box<dyn ResidualEvaluator> {
+    fn clone(&self) -> Self {
+        self.clone_box()
+    }
+}
+
 /// Executable residual and local analytic derivatives.
-pub trait ResidualEvaluator: Debug + Send + Sync {
+///
+/// This trait is an unstable pre-1.0 extension seam. Implementations must be
+/// behavior-pure: calls with the same variables must not depend on or mutate
+/// shared behavior-affecting state. Interior mutability may be used only for
+/// telemetry that cannot change later evaluation results. `Clone` creates a
+/// distinct trait object, but Rust cannot infer whether fields such as
+/// `Arc<Mutex<_>>` are deep snapshots, so they must not control equations.
+pub trait ResidualEvaluator: ResidualEvaluatorClone + Debug + Send + Sync {
     /// Evaluates raw residual values in row order.
     ///
     /// # Errors
@@ -354,7 +385,7 @@ pub trait ResidualEvaluator: Debug + Send + Sync {
 }
 
 /// One residual block, including executable equations and audit metadata.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ResidualBlock {
     source: SourceConstraintId,
     category: ResidualCategory,
@@ -527,12 +558,109 @@ impl ResidualBlock {
         &self.audit_rows
     }
 
+    pub(crate) fn replace_audit_rows(
+        &mut self,
+        audit_rows: Vec<ResidualRowAudit>,
+    ) -> Result<(), CoreError> {
+        if audit_rows.len() != self.output_dimension {
+            return Err(CoreError::DimensionMismatch {
+                context: "residual audit rows",
+                expected: self.output_dimension,
+                actual: audit_rows.len(),
+            });
+        }
+        for row in &audit_rows {
+            validate_audit_row(row)?;
+        }
+        self.audit_rows = audit_rows;
+        Ok(())
+    }
+
     pub(crate) fn evaluator(&self) -> &dyn ResidualEvaluator {
         self.evaluator.as_ref()
     }
 
+    /// Remaps IDs on a freshly constructed block for a stable-identity
+    /// compatible replacement. Domain compilers use this to rebuild one source
+    /// without rebuilding the containing problem topology.
+    #[doc(hidden)]
+    pub fn remap_for_compatible_replacement(
+        mut self,
+        source: SourceConstraintId,
+        variables: &[(VariableId, VariableId)],
+    ) -> Result<Self, CoreError> {
+        self.source = source;
+        for variable in &mut self.incident_variables {
+            if let Some((_, replacement)) =
+                variables.iter().find(|(current, _)| current == variable)
+            {
+                *variable = *replacement;
+            }
+        }
+        for (index, variable) in self.incident_variables.iter().enumerate() {
+            if self.incident_variables[..index].contains(variable) {
+                return Err(CoreError::DuplicateIncidentVariable(*variable));
+            }
+        }
+        Ok(self)
+    }
+
     pub(crate) const fn exact_elimination(&self) -> Option<ExactElimination> {
         self.exact_elimination
+    }
+
+    pub(crate) fn structurally_compatible_with(&self, replacement: &Self) -> Option<&'static str> {
+        if self.source != replacement.source {
+            return Some("source");
+        }
+        if self.category != replacement.category {
+            return Some("category");
+        }
+        if self.incident_variables != replacement.incident_variables {
+            return Some("incidence");
+        }
+        if self.output_dimension != replacement.output_dimension {
+            return Some("output dimension");
+        }
+        if !same_elimination_shape(self.exact_elimination, replacement.exact_elimination) {
+            return Some("elimination shape");
+        }
+        None
+    }
+}
+
+fn same_elimination_shape(
+    first: Option<ExactElimination>,
+    second: Option<ExactElimination>,
+) -> bool {
+    match (first, second) {
+        (None, None) => true,
+        (
+            Some(ExactElimination::Fixed {
+                variable_id: first, ..
+            }),
+            Some(ExactElimination::Fixed {
+                variable_id: second,
+                ..
+            }),
+        ) => first == second,
+        (
+            Some(ExactElimination::Alias {
+                alias: first_alias,
+                representative: first_representative,
+                kind: first_kind,
+            }),
+            Some(ExactElimination::Alias {
+                alias: second_alias,
+                representative: second_representative,
+                kind: second_kind,
+            }),
+        ) => {
+            first_alias == second_alias
+                && first_representative == second_representative
+                && first_kind == second_kind
+        }
+        _ => false,
     }
 }
 

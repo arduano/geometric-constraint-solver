@@ -40,7 +40,7 @@ fn assert_jacobians(problem: &Problem) {
     assert!(report.all_within(FD_TOLERANCE), "{report:#?}");
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Affine2 {
     matrix: [[f64; 2]; 2],
     target: [f64; 2],
@@ -74,7 +74,7 @@ impl ResidualEvaluator for Affine2 {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct LinearRow {
     coefficients: [f64; 2],
     target: f64,
@@ -98,7 +98,7 @@ impl ResidualEvaluator for LinearRow {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct CircleDistance {
     center: [f64; 2],
     radius: f64,
@@ -133,7 +133,7 @@ impl ResidualEvaluator for CircleDistance {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct CircleIntersection {
     first_center: [f64; 2],
     first_radius: f64,
@@ -187,7 +187,7 @@ impl ResidualEvaluator for CircleIntersection {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct ScalarTarget(f64);
 
 impl ResidualEvaluator for ScalarTarget {
@@ -206,7 +206,7 @@ impl ResidualEvaluator for ScalarTarget {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Product;
 
 impl ResidualEvaluator for Product {
@@ -225,7 +225,7 @@ impl ResidualEvaluator for Product {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct ConstantResidual(f64);
 
 impl ResidualEvaluator for ConstantResidual {
@@ -244,7 +244,7 @@ impl ResidualEvaluator for ConstantResidual {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Quadratic(f64);
 
 impl ResidualEvaluator for Quadratic {
@@ -269,7 +269,7 @@ enum SolveFailure {
     NonFiniteJacobian,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct FailingEvaluator(SolveFailure);
 
 impl ResidualEvaluator for FailingEvaluator {
@@ -881,7 +881,16 @@ fn trace_bookkeeping_and_audit_match_the_returned_accepted_state() {
         report.accepted_state.ambient().as_slice(),
         problem.packed_state().unwrap().ambient().as_slice()
     );
-    assert_eq!(report.audit, problem.audit_snapshot().unwrap());
+    let mut unannotated_report_audit = report.audit.clone();
+    for source in &mut unannotated_report_audit.sources {
+        source.annotations = geosolve_core::AuditAnnotations::default();
+        source.active_bounds.clear();
+        for row in &mut source.rows {
+            row.annotations = geosolve_core::AuditAnnotations::default();
+            row.active_bounds.clear();
+        }
+    }
+    assert_eq!(unannotated_report_audit, problem.audit_snapshot().unwrap());
     assert_eq!(report.audit.sources.len(), 2);
     for source in &report.audit.sources {
         for row in &source.rows {

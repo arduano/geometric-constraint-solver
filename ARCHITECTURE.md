@@ -9,16 +9,20 @@ GeoSolve is a pure-Rust library for two products built over one numerical kernel
 
 The products share numerical machinery, not a domain object model. `geosolve-sketch` and `geosolve-linkage` remain separate frontends over `geosolve-core`.
 
-This is not a solid modeller, B-rep kernel, mesher, renderer, collision engine, statics solver, dynamics engine or global polynomial-root enumerator. Mass, inertia, force, reaction, friction, impact and time integration are outside M8-M22.
+M10-M14 are the completed 2D Sketch Playground Alpha cut toward the first product. They establish reusable sketch editing APIs and exercise them through a disposable browser consumer. Alpha completion is not completion of the production 2D CAD deliverable.
+
+This is not a solid modeller, B-rep kernel, mesher, renderer, collision engine, statics solver, dynamics engine or global polynomial-root enumerator. Mass, inertia, force, reaction, friction, impact and time integration are outside M8-M24.
 
 ## 2. Status of this document
 
-M1-M7 are the frozen implemented baseline. M8 accepts the target contracts in this document without changing production solver behavior. Statements are therefore marked as:
+M0-M7 are the frozen domain baseline. M8 accepted the target contracts, M9 implemented component-local linearization, local AD, status and numerical-rank contracts, M10 implemented persistent sessions, bounds and the first sketch consumer, M11 implemented the persistent sketch document, commands/history and JSON/remapping layer, M12 implemented immutable curve jets, editable Beziers and generic curve contact/tangency plumbing, M13 implemented the disposable browser playground over those public APIs, and M14 hardened its exact scenarios, failure recovery and performance gates. Statements are therefore marked as:
 
-- **Baseline:** behavior implemented before M8 and protected by regression tests.
-- **Target:** behavior required by the named M9-M22 milestone.
+- **Baseline:** implemented behavior through M14, with M1-M7 domain behavior protected as the frozen regression baseline.
+- **Target:** behavior required by the named M10-M24 milestone.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
+
+`PLAN.md` owns current execution numbering. Milestone labels in the preserved M8 completion record and in ADRs accepted before the playground rebaseline describe the allocation at acceptance time; their architectural decisions remain accepted, but current ownership is M10-M24 as listed in section 15.
 
 ## 3. Crate responsibilities
 
@@ -27,7 +31,7 @@ A target statement must not be exposed as an implemented capability before its m
 Owns pure immutable numerical geometry:
 
 - 2D and 3D points, vectors and validated frames;
-- planar curve evaluation and regularity/domain metadata;
+- planar curve evaluation and regularity/domain metadata, exposed for embeddable sketch consumers starting at M12;
 - `Pose2`, `Pose3`, `SE(2)` and `SE(3)` operations under ADR 0006;
 - angle wrapping/unwrapping, normalization and degeneracy-safe helpers.
 
@@ -53,14 +57,19 @@ It does not contain CAD entities, curve-definition variants, rigid bodies, joint
 
 Owns the 2D design graph:
 
+- public `SketchDocument` and `SketchSession` workflows;
 - persistent design points and typed design scalars;
 - closed, versioned built-in curve definitions;
 - semantic features, dimensions, contacts and constraints;
 - explicit branch, span, winding, tangent-orientation and contact-neighborhood state;
+- typed commands and accepted-command undo/redo history;
+- versioned JSON serialization, strict import and deterministic runtime remapping;
 - compilation into core residuals, validators and commit mappings;
 - source-level audit and persistence mappings.
 
-The frozen baseline includes points, segments, circles, oriented arcs and the M5/M7 constraint corpus. M13 migrates those entities to the generic design graph; M15-M20 add the remaining product curve and continuity families.
+The frozen baseline includes points, segments, circles, oriented arcs and the M5/M7 constraint corpus. M10 adds the session consumer; M11 now migrates baseline entities and editing into the persistent generic design graph with opaque document IDs, strict JSON, deterministic lowering, accepted-state projection and accepted-only command history; M12 adds editable quadratic/cubic Bezier curves and generic point/contact/tangency plumbing. The M10-M14 alpha geometry surface is point, line/polyline, rectangle command macro, circle, circular arc and quadratic/cubic Bezier. Its reusable constraint surface is fixed, coincident, horizontal, vertical, point-on-curve, parallel, perpendicular, equal length/radius, midpoint, symmetry, distance, length, radius, diameter, oriented angle, and generic line-curve/curve-curve contact and tangency, with driving/reference dimensions and explicit discrete branch state.
+
+Ellipse/conic, B-spline/NURBS and curvature/G2/parametric-C2 production work remains explicitly deferred to M19, M21 and M22. A rectangle is command expansion into ordinary geometry and constraints, not a new core residual primitive.
 
 ### `geosolve-linkage`
 
@@ -71,16 +80,21 @@ Owns planar and spatial kinematic domain models:
 - branch-preserving continuation and velocity-level queries;
 - domain validation, source mapping and persistence.
 
-The frozen baseline is planar `Pose2` linkage kinematics. M14 migrates it to the shared session/gauge architecture; M16, M18 and M21 add and complete spatial kinematics. No linkage API implies physics.
+The frozen baseline is planar `Pose2` linkage kinematics. M17 migrates it to the shared session/gauge architecture; M18, M20 and M23 add and complete spatial kinematics. No linkage API implies physics.
 
 ### `geosolve-demo-web`
 
-Is a separate WASM compatibility and audit consumer:
+Is a separate, disposable WASM playground and compatibility/audit consumer whose primary purpose is interactive sanity checking:
 
-- it uses public sketch, linkage and audit APIs;
-- it contains no duplicate residual equations or domain model;
-- it retains automated build/browser smoke coverage;
-- UI feature work is not an M8-M22 product deliverable.
+- it uses public sketch document, session, command, history, serialization and audit APIs;
+- selection, hit testing, tool state, rendering and browser `localStorage` exist only here;
+- it contains no residual, curve, measurement, inference-commit or document-validation equations;
+- prospective coincident/horizontal/vertical inference remains an uncommitted UI proposal until explicit user confirmation submits a library command;
+- it retains automated build/browser coverage and always renders accepted geometry and audit data from the same result;
+- it is desktop-first so dense diagnostic controls and experiments are not constrained by responsive product-UI requirements; mobile compatibility is best-effort and non-gating;
+- it remains non-authoritative and replaceable.
+
+M13 implements alpha interactions: select/box-select, compatible multi-select constraints, draw, solver-projected drag, dimension edit, delete/suppress, pan/zoom, undo/redo, JSON import/export/local autosave, prospective inference, diagnostics/conflict/DOF and retained geometry on failure. M14 hardens E2E, import/error recovery and performance. None of this moves equations or authoritative state into the web crate.
 
 ## 4. Numerical representation and linearization
 
@@ -96,7 +110,7 @@ delta_local[col] = step_scale[col] * delta_normalized[col]
 
 Baseline variable blocks are scalar, `Vec2` and additive-coordinate `Pose2`. Baseline assembly can materialize global dense columns, while reduced components are solved independently.
 
-The M9 target is one canonical component-local linearization under ADR 0005. It evaluates only incident blocks, writes into caller-provided storage, never allocates global columns for a component, and feeds the dense component solve. The additive caller-storage method is public and unstable before 1.0 because it extends the existing public residual evaluator trait; the local AD formula trait/adapter and normalized-coordinate storage marker remain private. M12 adds indexed block coordinates and materializes triplet/COO and sparse storage from that IR. Analytic Jacobians remain valid and central finite differences remain an independent oracle. Branch, span, winding, active-bound and assembly-mode state are fixed discrete inputs outside AD.
+The M9 implementation provides one canonical component-local linearization under ADR 0005. It evaluates only incident blocks, writes into caller-provided storage, never allocates global columns for a component, and feeds the dense component solve. The additive caller-storage method is public and unstable before 1.0 because it extends the existing public residual evaluator trait; the local AD formula trait/adapter and normalized-coordinate storage marker remain private. M16 adds indexed block coordinates and materializes triplet/COO and sparse storage from that IR. Analytic Jacobians remain valid and central finite differences remain an independent oracle. Branch, span, winding, active-bound and assembly-mode state are fixed discrete inputs outside AD.
 
 Public and best-effort audit evaluate fresh raw/normalized values at one state and independently require successful canonical Jacobian/fused validation before marking a row `Evaluated`. A structured derivative failure marks the row `Failed` while retaining any fresh finite displayed values and its category/message. Successful numeric IR blocks are `Evaluated`; any failure aborts before partial IR consumption.
 
@@ -116,7 +130,7 @@ The logical target pipeline is:
 10. atomically commit only a finite, independently valid accepted patch;
 11. retain prior accepted state and discrete state on rejection.
 
-Baseline `Problem::solve_decomposed` has component caching but relies on caller-supplied edited variable IDs. M10 replaces that hint-based lifecycle with the persistent `SolveSession` and revision/dirty tracking in ADR 0007. M12 adds sparse storage, structural matching and symbolic cache reuse. No benchmark or performance policy may bypass independent validation.
+Baseline `Problem::solve_decomposed` has component caching but relies on caller-supplied edited variable IDs. M10 replaces that hint-based lifecycle with the persistent `SolveSession` and revision/dirty tracking in ADR 0007, with `SketchSession` as the first domain consumer. M11 layers `SketchDocumentSession` over that validated boundary: document commands lower persistent semantic IDs deterministically to fresh runtime IDs, solve through existing sketch equations, project only independently accepted continuous/contact state back to persistent IDs, and clone-and-swap the document/history atomically. Rejected full-document attempts expose retained accepted geometry/mappings separately from attempted diagnostic mappings. Clean components may reuse zero nonlinear iterations, but their hard rows, Jacobians/rank and bounded diagnostics are freshly evaluated at every returned state. Residual evaluators are behavior-pure; interior mutable telemetry cannot affect equations. M16 adds sparse storage, structural matching and symbolic cache reuse. No benchmark or performance policy may bypass independent validation.
 
 ## 6. Hard validity and secondary optimum status
 
@@ -160,7 +174,7 @@ left_nullity  = m_c - r_c   // dependent hard-row space
 
 Whole-problem rank and nullities are sums of component-local values. A global largest singular value never sets another component's threshold.
 
-This M9 contract governs core equality/position reports and every sketch/linkage position solve built from them. The compatibility linkage velocity solver retains its existing dense reduced policy until M14 moves velocity solving onto the shared accepted hard linearization and rank policy. Linkage position conditioning summaries use within-component spectra and M9 `near_singular`; they never compare concatenated extrema from disconnected components.
+This M9 contract governs core equality/position reports and every sketch/linkage position solve built from them. The compatibility linkage velocity solver retains its existing dense reduced policy until M17 moves velocity solving onto the shared accepted hard linearization and rank policy. Linkage position conditioning summaries use within-component spectra and M9 `near_singular`; they never compare concatenated extrema from disconnected components.
 
 A component is numerically singular when `r_c < min(m_c, n_c)`. A distinct near-singular warning is raised without changing rank when the smallest retained singular value is at most `near_singular_factor * tau_c`; the configured factor and ratio are reported. The initial target factor is `100`. A warning is not convergence and a rank drop is not nonlinear failure.
 
@@ -168,7 +182,7 @@ Baseline transition: M1-M8 use normalized component-local Jacobians and default 
 
 ### 7.2 Structural classification
 
-Numerical rank and graph structure answer different questions. The M12 target computes maximum structural matching on the reduced hard incidence graph before numerical values are considered. For structural rank `s_c`:
+Numerical rank and graph structure answer different questions. The M16 target computes maximum structural matching on the reduced hard incidence graph before numerical values are considered. For structural rank `s_c`:
 
 ```text
 structural_right_nullity = n_c - s_c
@@ -182,7 +196,7 @@ Classification is:
 - `Over`: left nullity is positive and right nullity is zero;
 - `Mixed`: both are positive; the report includes Dulmage-Mendelsohn under, well and over partitions rather than hiding them in one label.
 
-Baseline structural summaries report reduced counts and deterministic signatures only. Count comparisons may be displayed as count heuristics, never as structural matching or numerical rank. M12 implements matching and partitions.
+Baseline structural summaries report reduced counts and deterministic signatures only. Count comparisons may be displayed as count heuristics, never as structural matching or numerical rank. M16 implements matching and partitions.
 
 ### 7.3 Active bounds
 
@@ -197,7 +211,7 @@ An active lower bound permits inward positive motion and an active upper bound p
 
 ### 7.4 Gauge versus internal mobility
 
-A domain-certified free world action contributes gauge DOF: three for a floating planar component and six for a floating spatial component. Reports split numerical right nullity into `gauge_dof` and `internal_mobility`; they do not blindly subtract three or six unless the domain certifies the corresponding invariant action. Physical grounding removes physical gauge freedom. A numerical gauge only chooses coordinates and must not remove reported physical mobility. ADR 0009 governs this split; M14 applies it to planar linkage and M16 to spatial linkage.
+A domain-certified free world action contributes gauge DOF: three for a floating planar component and six for a floating spatial component. Reports split numerical right nullity into `gauge_dof` and `internal_mobility`; they do not blindly subtract three or six unless the domain certifies the corresponding invariant action. Physical grounding removes physical gauge freedom. A numerical gauge only chooses coordinates and must not remove reported physical mobility. ADR 0009 governs this split; M17 applies it to planar linkage and M18 to spatial linkage.
 
 ## 8. Diagnostic completeness and budgets
 
@@ -213,7 +227,7 @@ Redundancy and conflict candidates are bounded explanatory diagnostics, not proo
 
 An empty candidate list is meaningful only together with its status. In particular, an empty list with `Skipped` or `Truncated` must never be presented as “no conflict” or “no redundancy”. A `Complete` result still claims completeness only for the documented bounded deletion/rank algorithm, not global minimality.
 
-Baseline transition: conflict deletion currently has fixed limits of 12 candidate sources and 24 active tangent dimensions and silently omits over-budget components; redundancy runs only after valid hard evaluation/rank. The baseline report has no completeness or budget fields, so empty baseline candidate vectors are ambiguous. M10 makes budgets configurable/reportable in the session report; M12 extends the same contract to structural and sparse diagnostics.
+Baseline transition: conflict deletion currently has fixed limits of 12 candidate sources and 24 active tangent dimensions and silently omits over-budget components; redundancy runs only after valid hard evaluation/rank. The baseline report has no completeness or budget fields, so empty baseline candidate vectors are ambiguous. M10 makes budgets configurable/reportable in the session report; M16 extends the same contract to structural and sparse diagnostics.
 
 ## 9. Priority semantics
 
@@ -224,11 +238,11 @@ Hard, temporary and preference rows are different categories, not weights in one
 3. optimize previous-state preferences without worsening the attained temporary level beyond documented numerical resolution;
 4. independently validate hard rows and report each secondary outcome.
 
-Bounds participate through the M10 active-set policy. Secondary objectives spanning hard components are implemented in M12 without merging hard components or weakening hard tolerance.
+Bounds participate through the M10 active-set policy. Secondary objectives spanning hard components are implemented in M16 without merging hard components or weakening hard tolerance.
 
 ## 10. Manifold and frame conventions
 
-ADR 0006 defines body-to-world transforms, right/body-local retraction, tangent ordering, local difference, quaternion ordering and sign canonicalization. Baseline `Pose2` stores `[x, y, unwrapped_angle]` and applies additive increments. M11 performs the tested transition to manifold `Pose2` and quaternion-backed `Pose3`; finite differences then perturb tangent coordinates through the same retraction.
+ADR 0006 defines body-to-world transforms, right/body-local retraction, tangent ordering, local difference, quaternion ordering and sign canonicalization. Baseline `Pose2` stores `[x, y, unwrapped_angle]` and applies additive increments. M15 performs the tested transition to manifold `Pose2` and quaternion-backed `Pose3`; finite differences then perturb tangent coordinates through the same retraction.
 
 Planar geometry is evaluated in local 2D coordinates. A workplane maps it into world coordinates as:
 
@@ -240,7 +254,16 @@ Same-plane constraints remain 2D. A planar body pose composes with the workplane
 
 ## 11. Sketch design and curve architecture
 
-ADR 0008 defines persistent external IDs, runtime generational keys and a closed versioned `CurveDefinition`. “Closed” means an exhaustive built-in serializable enum, not that every represented curve is periodic. Evaluation uses internal traits/adapters until built-in line, circle, arc, Bezier, conic, B-spline and NURBS families prove the seam.
+ADR 0008 defines persistent external IDs, runtime generational keys, command history and a closed versioned `CurveDefinition`. “Closed” means an exhaustive built-in serializable enum, not that every represented curve is periodic. Evaluation uses internal traits/adapters until built-in line, circle, arc, Bezier, conic, B-spline and NURBS families prove the seam.
+
+The M11 implementation stores document-local entity/source/contact/scalar identities
+as fixed lowercase hexadecimal 128-bit values under a separate document identity.
+Runtime slot-map keys are never serialized. Import normalizes store order and validates
+version, resource limits, uniqueness, references, typed scalar ownership/domains,
+finite geometry and every discrete branch/contact field before lowering. Coupled
+contact transitions update parameter, winding, neighborhood and both tangency
+orientations atomically; undo/redo preserves the allocation high-water mark so an
+accepted or undone identity is never reused.
 
 Generic curve constraints use latent contact coordinates and explicit discrete state:
 
@@ -252,13 +275,13 @@ tangent alignment:    cross(unit(C1'(t1)), unit(C2'(t2))) = 0
 
 Design controls, weights and contact parameters that are active variables must all appear in residual incidence and derivatives. Parameter domains, spans, winding, contact neighborhoods and tangent orientation remain outside AD. Bounded endpoints use M10 bounds/active sets. Cusps, zero-speed jets, invalid knots, rational poles and ambiguous neighborhoods are explicit evaluation/domain outcomes and cannot converge through normalization.
 
-M13 migrates baseline entities and persistence topology. M15 proves generic editable-curve differentiation with Bezier curves. M17 adds conics, M19 B-splines and M20 NURBS plus curvature/G2 and separately named parametric C2 continuity.
+M11 migrates baseline entities, commands and persistence topology. M12 proves generic editable-curve differentiation with Bezier curves. M19 adds conics, M21 B-splines and M22 NURBS plus curvature/G2 and separately named parametric C2 continuity.
 
 ## 12. Kinematic architecture
 
 Rigid bodies own local features; joints and mates relate features rather than reconstructing rigidity with sketch distance webs. Branch/assembly state is persistent domain state. Physical ground and numerical gauge are distinct under ADR 0009. Position and velocity queries use the same accepted-state reduced hard linearization and rank policy.
 
-M14 migrates planar linkage to shared sessions and gauges. M16 adds a spatial vertical slice. M18 completes common spatial joints/mates. M21 completes continuation, multi-driver velocity queries and planar/spatial consistency. These milestones do not add forces, reactions or dynamics.
+M17 migrates planar linkage to shared sessions and gauges. M18 adds a spatial vertical slice. M20 completes common spatial joints/mates. M23 completes continuation, multi-driver velocity queries and planar/spatial consistency. These milestones do not add forces, reactions or dynamics.
 
 ## 13. Equation audit and persistence
 
@@ -272,13 +295,13 @@ Every executable residual row has structured audit metadata generated with the e
 - elimination, active-bound, redundancy, conflict and singularity annotations;
 - diagnostic completeness links where candidate analysis is bounded.
 
-Persistence stores domain topology, continuous accepted state and every discrete branch/span/winding/gauge/assembly choice in a versioned envelope. Runtime slot-map keys are remapped deterministically and are never serialized as persistent identity. M13 completes sketch foundations; M20 and M21 complete each product schema; M22 finalizes migration and public compatibility policy.
+Persistence stores domain topology, continuous accepted state and every discrete branch/span/winding/gauge/assembly choice in a versioned envelope. Runtime slot-map keys are remapped deterministically and are never serialized as persistent identity. M11 establishes the alpha sketch document; M22 and M23 complete each product schema; M24 finalizes migration and public compatibility policy.
 
 ## 14. Linear algebra policy
 
 - Dense QR/SVD remains the correctness and diagnostic path for small components.
 - Successful Cholesky never proves rank.
-- M12 introduces pure-Rust `faer` sparse storage and rank-revealing least squares after canonical component-local assembly exists.
+- M16 introduces pure-Rust `faer` sparse storage and rank-revealing least squares after canonical component-local assembly exists.
 - Dense and sparse paths must agree on independently validated geometry, rank/nullity, mobility, diagnostics and branch state.
 - Sparse crossover values are benchmark-derived and reported; they never alter correctness tolerances.
 - The workspace remains `unsafe_code = "forbid"`; native solver FFI is not permitted.
@@ -287,10 +310,11 @@ Persistence stores domain topology, continuous accepted state and every discrete
 
 - M8: accept contracts, ADRs and deterministic representative baselines.
 - M9: canonical component-local linearization, internal local AD, orthogonal solve status and the complete numerical-rank contract.
-- M10: persistent sessions, bounds, active sets and diagnostic budgets.
-- M11: manifold `Pose2`/`Pose3` and sensitivity APIs.
-- M12: sparse structure, matching, hierarchy and robust continuation.
-- M13-M14: add persistent domain identity and migrate sketch and planar linkage architectures.
-- M15-M20: complete the 2D CAD sketch product.
-- M16, M18 and M21: complete planar/spatial kinematic product behavior.
-- M22: stabilize public APIs, persistence, documentation and release gates.
+- M10: persistent sessions, bounds and `SketchSession` as the first consumer.
+- M11: persistent `SketchDocument`, generic sketch graph, commands, history and JSON.
+- M12: editable quadratic/cubic Bezier and generic point/contact/tangency curve plumbing.
+- M13-M14: disposable browser playground, E2E/import/error/performance hardening and the alpha gate.
+- M15-M16: manifold `Pose2`/`Pose3`, sensitivity, sparse structure, matching, hierarchy and robust continuation.
+- M17-M18 and M20/M23: migrate and complete planar/spatial kinematic product behavior.
+- M19, M21 and M22: add conics, B-splines, NURBS and complete the production 2D CAD sketch product.
+- M24: stabilize public APIs, persistence, documentation and release gates for both deliverables.

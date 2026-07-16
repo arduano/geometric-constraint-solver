@@ -330,6 +330,7 @@ dependencies = [
  "geosolve-geometry",
  "geosolve-linkage",
  "geosolve-sketch",
+ "js-sys",
  "wasm-bindgen",
  "web-sys",
 ]
@@ -339,6 +340,7 @@ name = "geosolve-geometry"
 version = "0.1.0"
 dependencies = [
  "nalgebra",
+ "thiserror",
 ]
 
 [[package]]
@@ -358,6 +360,10 @@ version = "0.1.0"
 dependencies = [
  "geosolve-core",
  "geosolve-geometry",
+ "js-sys",
+ "num-dual",
+ "serde",
+ "serde_json",
  "slotmap",
  "thiserror",
 ]

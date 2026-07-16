@@ -8,7 +8,7 @@ use geosolve_core::{
     VariableBlock, VariableValue,
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct DenseAffine {
     matrix: Vec<Vec<f64>>,
     target: Vec<f64>,

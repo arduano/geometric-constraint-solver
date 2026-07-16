@@ -1,3 +1,4 @@
+use crate::linearization::{ComponentTangentLayout, component_tangent_layout};
 use crate::problem::VariableState;
 use crate::residual::ExactElimination;
 use crate::{
@@ -90,6 +91,7 @@ pub(crate) struct CachedComponent {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct DecompositionCache {
     pub(crate) components: Vec<CachedComponent>,
+    pub(crate) report: Option<Box<crate::SolveReport>>,
 }
 
 #[derive(Clone, Debug)]
@@ -117,6 +119,7 @@ pub(crate) struct EliminationPlan {
     pub(crate) active_groups: Vec<ActiveGroup>,
     pub(crate) eliminated_residuals: Vec<ResidualId>,
     pub(crate) components: Vec<SolveComponent>,
+    pub(crate) component_layouts: Vec<ComponentTangentLayout>,
     pub(crate) structural: StructuralSummary,
     suppressed_sources: Vec<SourceConstraintId>,
 }
@@ -302,14 +305,21 @@ impl EliminationPlan {
             &components,
             &eliminated_residuals,
         )?;
-        Ok(Self {
+        let mut plan = Self {
             roots,
             active_groups,
             eliminated_residuals,
             components,
+            component_layouts: Vec::new(),
             structural,
             suppressed_sources: suppressed_sources.to_vec(),
-        })
+        };
+        plan.component_layouts = plan
+            .components
+            .iter()
+            .map(|component| component_tangent_layout(&plan, component.index))
+            .collect();
+        Ok(plan)
     }
 
     pub(crate) fn root(&self, variable_id: VariableId) -> Option<VariableId> {

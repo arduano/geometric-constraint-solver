@@ -107,8 +107,15 @@ impl Problem {
         state: &VariableState,
         residual_filter: &[ResidualId],
     ) -> Result<ComponentLinearization, CoreError> {
+        let layout = plan.component_layouts.get(component.index).cloned().ok_or(
+            CoreError::DimensionMismatch {
+                context: "cached component tangent layout",
+                expected: plan.components.len(),
+                actual: component.index,
+            },
+        )?;
         Ok(ComponentLinearization {
-            layout: component_tangent_layout(plan, component.index),
+            layout,
             numeric: self.linearize_blocks_for_state(state, Some(residual_filter))?,
         })
     }

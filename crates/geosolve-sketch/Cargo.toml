@@ -9,8 +9,14 @@ authors.workspace = true
 [dependencies]
 geosolve-core = { path = "../geosolve-core" }
 geosolve-geometry = { path = "../geosolve-geometry" }
+num-dual.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 slotmap.workspace = true
 thiserror.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "=0.3.98"
 
 [lints]
 workspace = true

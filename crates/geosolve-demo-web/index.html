@@ -3,88 +3,190 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GeoSolve live constraint fixtures</title>
+    <title>GeoSolve Sketch Playground</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%230d1215' d='M0 0h32v32H0z'/%3E%3Cpath fill='none' stroke='%236fd7e5' stroke-width='3' d='M6 24 16 6l10 18Z'/%3E%3C/svg%3E" />
     <link data-trunk rel="css" href="styles.css" />
     <link data-trunk rel="rust" data-wasm-opt="z" />
   </head>
   <body>
-    <main>
-      <header class="page-header">
+    <main class="playground" id="playground-root">
+      <header class="playground-header">
         <div>
-          <span class="page-kicker">M7 / interactive curve verification</span>
-          <h1>GeoSolve live constraints</h1>
-          <p>Accepted geometry and its evaluated residual audit, side by side.</p>
+          <span class="page-kicker">2D sketch playground / alpha</span>
+          <h1>Draw the constraint, not the answer.</h1>
+          <p>Persistent geometry, projected edits, explicit branches, and the accepted audit in one workspace.</p>
         </div>
-        <label>
-          Scenario
-          <select id="scenario">
-            <option value="triangle">S1 / Underconstrained triangle</option>
-            <option value="conflicting-rectangle">S2 / Conflicting rectangle</option>
-            <option value="tangent-circles">S3 / Tangent circles</option>
-            <option value="arc-contact-drag">M7 / Arc contact drag</option>
-            <option value="arc-circle-auto-radius">M7 / Arc-circle auto radius</option>
-            <option value="line-circle-tangent-glide">M7 / Line-circle tangent glide</option>
-            <option value="horizontal-rail">Fixture / Horizontal rail</option>
-            <option value="coincident-pair">Fixture / Coincident pair</option>
-            <option value="four-bar-open">L1 / Four-bar open</option>
-            <option value="four-bar-crossed">L2 / Four-bar crossed</option>
-            <option value="slider-crank">L3 / Slider-crank</option>
-          </select>
-        </label>
+        <div class="history-actions" aria-label="Document history">
+          <button type="button" data-action="undo" id="undo">Undo</button>
+          <button type="button" data-action="redo" id="redo">Redo</button>
+          <button type="button" data-action="new">New</button>
+        </div>
       </header>
-      <section class="workspace">
-        <section class="panel geometry-panel">
-          <div class="viewport-shell">
-            <svg
-              id="viewport"
-              viewBox="0 0 640 420"
-              preserveAspectRatio="xMidYMid meet"
-              role="img"
-              aria-label="Live solved constraint scenario"
-              aria-describedby="drag-instructions"
-            ></svg>
+
+      <section class="example-bar" aria-label="Examples and constraint stress labs">
+        <label for="alpha-example">Example</label>
+        <select id="alpha-example">
+          <option value="a1">A1 / constrained rectangle</option>
+          <option value="a2">A2 / projected drag</option>
+          <option value="a3">A3 / line-circle tangency</option>
+          <option value="a4">A4 / free-radius circle-arc</option>
+          <option value="a5">A5 / Bezier tangent line</option>
+          <option value="a8">A8 / combined persistence</option>
+          <option value="corpus">A10 / complete alpha corpus</option>
+          <option value="stress-compass">Stress / symmetric drafting compass</option>
+          <option value="stress-bridge">Stress / cubic C1 bridge</option>
+          <option value="motion-cam">Motion / twin Bezier-cam rollers</option>
+          <option value="motion-orbit">Motion / branch-preserving tangent orbit</option>
+          <option value="medium">M14 / medium performance document</option>
+        </select>
+        <label for="alpha-scale">Scale</label>
+        <select id="alpha-scale"><option value="0.000001">1e-6</option><option value="1" selected>1</option><option value="1000000">1e6</option></select>
+        <button type="button" data-action="load-example">Load accepted example</button>
+      </section>
+
+      <nav class="tool-rail" aria-label="Sketch tools">
+        <button type="button" class="active" data-tool="select">Select</button>
+        <button type="button" data-tool="pan">Pan</button>
+        <span class="tool-divider" aria-hidden="true"></span>
+        <button type="button" data-tool="point">Point</button>
+        <button type="button" data-tool="line">Line</button>
+        <button type="button" data-tool="polyline">Polyline</button>
+        <button type="button" data-tool="rectangle">Rectangle</button>
+        <button type="button" data-tool="circle">Circle</button>
+        <button type="button" data-tool="arc">Arc</button>
+        <button type="button" data-tool="quadratic">Quadratic Bézier</button>
+        <button type="button" data-tool="cubic">Cubic Bézier</button>
+      </nav>
+
+      <section class="draft-bar" aria-label="Drawing progress">
+        <div><span class="draft-kicker">Active drawing</span><strong id="draft-status">Choose a draw tool to begin.</strong></div>
+        <div class="draft-actions">
+          <button type="button" data-action="undo-draft" id="undo-draft">Undo point</button>
+          <button type="button" data-action="cancel-draft" id="cancel-draft">Cancel</button>
+          <button type="button" data-action="finish-draft" id="finish-draft">Finish polyline</button>
+        </div>
+      </section>
+
+      <section class="playground-grid">
+        <section class="canvas-panel" aria-label="Sketch canvas">
+          <div class="canvas-heading">
+            <div><strong id="tool-status">Select</strong><span id="document-status">Empty document</span></div>
+            <div class="zoom-actions" aria-label="Viewport zoom">
+              <button type="button" data-action="zoom-out" aria-label="Zoom out">−</button>
+              <button type="button" data-action="zoom-fit">Fit</button>
+              <button type="button" data-action="zoom-in" aria-label="Zoom in">+</button>
+            </div>
           </div>
-          <section id="scene-action-controls" class="scene-action-controls" aria-label="Scene action" hidden>
-            <button id="scene-action" type="button" aria-describedby="scene-action-help" disabled>Scene action unavailable</button>
-            <p id="scene-action-help"></p>
-          </section>
-          <section id="driver-controls" class="driver-controls" aria-label="Linkage driver" hidden>
-            <div class="driver-heading">
-              <label for="driver-angle">Driver angle</label>
-              <output id="driver-output" for="driver-angle">60 deg</output>
-            </div>
-            <input
-              id="driver-angle"
-              type="range"
-              min="25"
-              max="135"
-              step="1"
-              value="60"
-              disabled
-              aria-describedby="driver-help"
-            />
-            <p id="driver-help">Arrow keys adjust one degree; each request uses domain continuation steps no larger than two degrees.</p>
-          </section>
-          <p id="drag-instructions" class="interaction-help">
-            Loading live sketch interaction...
-          </p>
-          <p id="solve-announcement" class="visually-hidden" aria-live="polite" aria-atomic="true"></p>
-          <section id="solve-status" class="solve-status" aria-label="Detailed solve status"></section>
+          <svg id="sketch-viewport" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet" role="application" aria-label="Editable geometric sketch" aria-describedby="interaction-help"></svg>
+          <p id="interaction-help" class="interaction-help">Select geometry or choose a draw tool. Shift-click extends selection.</p>
+          <p id="playground-announcement" class="visually-hidden" aria-live="polite" aria-atomic="true"></p>
         </section>
-        <aside class="panel audit-panel" aria-label="Constraint equation audit">
-          <header class="audit-header">
-            <div>
-              <h2>Constraint audit</h2>
-              <p>Human-readable residual rows</p>
-            </div>
-            <span id="audit-badge" class="live-badge">live sketch</span>
-          </header>
-          <div id="equations"></div>
+
+        <aside class="inspector-panel" aria-label="Sketch inspector">
+          <section class="inspector-section selection-section">
+            <div class="section-heading"><span>Selection</span><button type="button" data-action="clear-selection">Clear</button></div>
+            <div id="selection-summary" class="selection-summary">Nothing selected</div>
+            <div class="selection-actions"><button type="button" data-action="delete">Delete</button><button type="button" data-action="toggle-suppressed">Suppress / restore</button></div>
+          </section>
+
+          <section class="inspector-section">
+            <div class="section-heading"><span>Constraint</span></div>
+            <label class="field-label" for="constraint-kind">Compatible operation</label>
+            <select id="constraint-kind">
+              <option>Fixed</option><option>Coincident</option><option>Horizontal</option><option>Vertical</option>
+              <option>Parallel</option><option>Perpendicular</option><option>Equal length</option><option>Equal radius</option>
+              <option>Midpoint</option><option>Symmetry</option><option>Point on curve</option><option>Curve contact</option><option>Curve tangency</option>
+            </select>
+            <button type="button" class="primary-action" data-action="apply-constraint">Apply constraint</button>
+          </section>
+
+          <section class="inspector-section">
+            <div class="section-heading"><span>Dimension</span></div>
+            <div class="field-row"><select id="dimension-kind"><option>Distance</option><option>Length</option><option>Radius</option><option>Diameter</option><option>Angle</option></select><select id="dimension-mode"><option>Driving</option><option>Reference</option></select></div>
+            <label class="field-label" for="angle-orientation">Angle orientation</label>
+            <select id="angle-orientation"><option>Counterclockwise</option><option>Clockwise</option></select>
+            <label class="field-label" for="dimension-value">Target</label>
+            <input id="dimension-value" type="number" value="1" step="any" inputmode="decimal" />
+            <label class="field-label" for="dimension-label">New dimension label</label>
+            <input id="dimension-label" type="text" value="dimension" />
+            <button type="button" class="primary-action" data-action="apply-dimension">Create / update dimension</button>
+          </section>
+
+          <section class="inspector-section">
+            <div class="section-heading"><span>Explicit branch state</span></div>
+            <label class="field-label" for="arc-sweep">Arc sweep</label>
+            <select id="arc-sweep"><option>Counterclockwise</option><option>Clockwise</option></select>
+            <label class="field-label" for="contact-neighborhood">First / point neighborhood</label>
+            <select id="contact-neighborhood"><option>Picked local / endpoint</option><option>Interior</option><option>Start</option><option>End</option></select>
+            <label class="field-label" for="contact-parameter">First contact parameter (blank retains)</label>
+            <input id="contact-parameter" type="number" step="any" inputmode="decimal" />
+            <label class="field-label" for="tangent-orientation">First tangent orientation</label>
+            <select id="tangent-orientation"><option>Aligned</option><option>Opposed</option></select>
+            <label class="field-label" for="contact-winding">First periodic winding</label>
+            <input id="contact-winding" type="number" value="0" step="1" inputmode="numeric" />
+            <label class="field-label" for="second-contact-neighborhood">Second neighborhood</label>
+            <select id="second-contact-neighborhood"><option>Picked local / endpoint</option><option>Interior</option><option>Start</option><option>End</option></select>
+            <label class="field-label" for="second-contact-parameter">Second contact parameter (blank retains)</label>
+            <input id="second-contact-parameter" type="number" step="any" inputmode="decimal" />
+            <label class="field-label" for="second-tangent-orientation">Second tangent orientation</label>
+            <select id="second-tangent-orientation"><option>Aligned</option><option>Opposed</option></select>
+            <label class="field-label" for="second-contact-winding">Second periodic winding</label>
+            <input id="second-contact-winding" type="number" value="0" step="1" inputmode="numeric" />
+            <button type="button" class="primary-action" data-action="apply-branch-state">Apply to selected arcs / contacts</button>
+          </section>
+
+          <section id="inference-panel" class="inspector-section inference-panel" hidden>
+            <div class="section-heading"><span>Proposed inference</span></div>
+            <p id="inference-summary"></p>
+            <div class="field-row"><button type="button" data-action="confirm-inference">Confirm</button><button type="button" data-action="cancel-inference">Dismiss</button></div>
+          </section>
+
+          <section class="inspector-section">
+            <div class="section-heading"><span>Objects</span></div>
+            <div id="object-list" class="object-list"></div>
+          </section>
+        </aside>
+
+        <aside class="diagnostics-panel" aria-label="Accepted solver diagnostics">
+          <section class="inspector-section">
+            <div class="section-heading"><span id="solve-view-label">Accepted solve</span><span id="solve-badge" class="live-badge">valid</span></div>
+            <div id="playground-solve-status" class="solve-status"></div>
+            <div id="last-attempt" class="attempt-notice"></div>
+          </section>
+          <section class="inspector-section audit-section">
+            <div class="section-heading"><span>Residual audit</span></div>
+            <div id="playground-audit"></div>
+          </section>
+          <details class="inspector-section persistence-section">
+            <summary>JSON and autosave</summary>
+            <textarea id="document-json" spellcheck="false" aria-label="Sketch document JSON"></textarea>
+            <div class="field-row"><button type="button" data-action="export-json">Export to text</button><button type="button" data-action="import-json">Import text</button></div>
+            <div class="field-row"><button type="button" data-action="download-json">Download JSON</button><label class="file-action" for="document-file">Upload JSON<input id="document-file" type="file" accept="application/json,.json" /></label></div>
+            <p id="storage-status">Accepted revisions autosave locally.</p>
+          </details>
         </aside>
       </section>
-      <footer>
-        Every live fixture is constructed and solved through public <code>geosolve-sketch</code> or <code>geosolve-linkage</code> APIs.
-      </footer>
     </main>
+
+    <section hidden aria-hidden="true">
+      <select id="scenario">
+        <option value="triangle">S1 / Underconstrained triangle</option>
+        <option value="conflicting-rectangle">S2 / Conflicting rectangle</option>
+        <option value="tangent-circles">S3 / Tangent circles</option>
+        <option value="arc-contact-drag">M7 / Arc contact drag</option>
+        <option value="arc-circle-auto-radius">M7 / Arc-circle auto radius</option>
+        <option value="line-circle-tangent-glide">M7 / Line-circle tangent glide</option>
+        <option value="horizontal-rail">Fixture / Horizontal rail</option>
+        <option value="coincident-pair">Fixture / Coincident pair</option>
+        <option value="four-bar-open">L1 / Four-bar open</option>
+        <option value="four-bar-crossed">L2 / Four-bar crossed</option>
+        <option value="slider-crank">L3 / Slider-crank</option>
+      </select>
+      <svg id="viewport"></svg>
+      <section id="scene-action-controls" class="scene-action-controls" aria-label="Scene action" hidden><button id="scene-action" type="button" aria-describedby="scene-action-help" disabled>Scene action unavailable</button><p id="scene-action-help"></p></section>
+      <section id="driver-controls" class="driver-controls" aria-label="Linkage driver" hidden><label for="driver-angle">Driver angle</label><output id="driver-output" for="driver-angle">60 deg</output><input id="driver-angle" type="range" step="1" disabled /></section>
+      <p id="drag-instructions"></p><p id="solve-announcement" class="visually-hidden" aria-live="polite" aria-atomic="true"></p>
+      <section id="solve-status" aria-label="Detailed solve status"></section><span id="audit-badge"></span><div id="equations"></div>
+    </section>
   </body>
 </html>

@@ -3,17 +3,14 @@ use nalgebra::{DMatrix, DVector};
 use crate::analysis::{
     CachedComponent, DecompositionCache, EliminationPlan, SolveComponent, set_state_value,
 };
-use crate::linearization::{
-    ComponentDenseSystem, ComponentTangentLayout, component_tangent_layout,
-};
+use crate::linearization::{ComponentDenseSystem, ComponentTangentLayout};
 use crate::problem::VariableState;
 use crate::{
-    AuditEvaluationStatus, AuditSnapshot, CoreError, Problem, ResidualCategory, ResidualId,
+    AuditBoundAnnotation, AuditEvaluationStatus, AuditSnapshot, BoundId, BoundReport, BoundStatus,
+    CoordinateBound, CoreError, OneSidedMobility, Problem, ResidualCategory, ResidualId,
     SourceConstraintId, StructuralSummary, VariableId,
 };
 
-const MAX_CONFLICT_COMPONENT_SOURCES: usize = 12;
-const MAX_CONFLICT_COMPONENT_DIMENSION: usize = 24;
 const MAX_PRIORITY_LINE_SEARCH_STEPS: usize = 20;
 const PRIORITY_REPROJECTION_TOLERANCE: f64 = 8.0 * f64::EPSILON;
 const PRIORITY_COST_RESOLUTION_FACTOR: f64 = 8.0;
@@ -117,6 +114,72 @@ pub struct RedundantRowCandidate {
     pub kind: RedundancyKind,
 }
 
+/// Bounded deterministic work policy for one explanatory diagnostic section.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DiagnosticBudget {
+    pub enabled: bool,
+    pub max_component_tangent_dimension: usize,
+    pub max_component_scalar_rows: usize,
+    pub max_candidate_sources: usize,
+    pub max_trials: usize,
+}
+
+impl DiagnosticBudget {
+    #[must_use]
+    pub const fn unlimited() -> Self {
+        Self {
+            enabled: true,
+            max_component_tangent_dimension: usize::MAX,
+            max_component_scalar_rows: usize::MAX,
+            max_candidate_sources: usize::MAX,
+            max_trials: usize::MAX,
+        }
+    }
+}
+
+/// Actual deterministic work consumed by one diagnostic section.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct DiagnosticWork {
+    pub components: usize,
+    pub tangent_dimensions: usize,
+    pub scalar_rows: usize,
+    pub candidate_sources: usize,
+    pub trials: usize,
+}
+
+/// Completeness of the documented bounded candidate algorithm.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum DiagnosticStatus {
+    Complete,
+    Truncated,
+    Skipped,
+}
+
+/// Machine-readable reason why candidate analysis was incomplete.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum DiagnosticIncompleteReason {
+    Disabled,
+    HardConstraintsValid,
+    HardInvalid,
+    InvalidEvaluation,
+    InvalidRank,
+    ComponentTangentBudget,
+    ComponentRowBudget,
+    CandidateSourceBudget,
+    TrialBudget,
+}
+
+/// Reported budget, consumed work, and completeness for one diagnostic section.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DiagnosticCompleteness {
+    pub status: DiagnosticStatus,
+    pub budget: DiagnosticBudget,
+    pub consumed: DiagnosticWork,
+    pub reason: Option<DiagnosticIncompleteReason>,
+}
+
 /// Numerical outcome for one reduced solve component.
 #[derive(Clone, Debug, PartialEq)]
 #[allow(clippy::struct_excessive_bools)]
@@ -140,6 +203,8 @@ pub struct ComponentSolveReport {
     pub hard_residuals_validated: bool,
     /// Maximum absolute normalized hard residual at the returned state.
     pub hard_residual_max: f64,
+    /// Stable Euclidean norm of normalized hard rows in this component.
+    pub hard_residual_l2: f64,
     /// Whether all numerical-rank inputs and decomposition outputs were finite.
     pub rank_is_valid: bool,
     /// Count of singular values strictly greater than `rank_threshold`.
@@ -150,6 +215,12 @@ pub struct ComponentSolveReport {
     pub right_nullity: usize,
     /// Compatibility alias for `right_nullity` before active bounds exist.
     pub local_degrees_of_freedom: usize,
+    /// Lineality dimension after independent active-bound normals are appended.
+    pub bidirectional_degrees_of_freedom: usize,
+    /// Existence of a nonzero direction in the active feasible tangent cone.
+    pub one_sided_mobility: OneSidedMobility,
+    /// Active/fixed bounds affecting this component, in global bound order.
+    pub active_bounds: Vec<BoundId>,
     /// Whether rank is below the smaller component matrix dimension.
     pub is_singular: bool,
     /// Configured relative factor used by the numerical-rank policy.
@@ -233,6 +304,10 @@ pub struct SolveReport {
     pub right_nullity: usize,
     /// Compatibility alias for aggregate `right_nullity` before active bounds exist.
     pub local_degrees_of_freedom: usize,
+    /// Aggregate lineality dimension after independent active-bound normals.
+    pub bidirectional_degrees_of_freedom: usize,
+    /// Whole-problem one-sided feasible-motion result.
+    pub one_sided_mobility: OneSidedMobility,
     /// Whether any component is numerically singular.
     pub is_singular: bool,
     /// Whether any component lies in the distinct near-singular warning band.
@@ -253,6 +328,10 @@ pub struct SolveReport {
     pub sources_containing_redundant_rows: Vec<SourceConstraintId>,
     /// Individual nonzero satisfied rows identified as numerically dependent.
     pub redundant_rows: Vec<RedundantRowCandidate>,
+    /// Completeness and consumed work for redundancy candidates.
+    pub redundancy_diagnostics: DiagnosticCompleteness,
+    /// Completeness and consumed work for conflict candidates.
+    pub conflict_diagnostics: DiagnosticCompleteness,
     /// Hard rows associated with a numerical singularity diagnostic.
     pub singular_rows: Vec<ResidualRowRef>,
     /// Separate graph/count structural summary; this is not numerical rank.
@@ -265,6 +344,8 @@ pub struct SolveReport {
     pub trace: SolveTrace,
     /// Returned-state equation audit, including failed evaluation rows.
     pub audit: AuditSnapshot,
+    /// Separate bound audit; bounds do not add or reinterpret equation rows.
+    pub bounds: Vec<BoundReport>,
 }
 
 /// Centralized normalized tolerances, damping policy, and iteration limits.
@@ -281,6 +362,8 @@ pub struct SolverConfig {
     pub damping_decrease_factor: f64,
     pub step_acceptance_ratio: f64,
     pub max_block_normalized_step: f64,
+    pub redundancy_diagnostic_budget: DiagnosticBudget,
+    pub conflict_diagnostic_budget: DiagnosticBudget,
 }
 
 impl SolverConfig {
@@ -353,6 +436,14 @@ impl Default for SolverConfig {
             damping_decrease_factor: 0.25,
             step_acceptance_ratio: 1.0e-4,
             max_block_normalized_step: 1.0,
+            redundancy_diagnostic_budget: DiagnosticBudget::unlimited(),
+            conflict_diagnostic_budget: DiagnosticBudget {
+                enabled: true,
+                max_component_tangent_dimension: 24,
+                max_component_scalar_rows: usize::MAX,
+                max_candidate_sources: 12,
+                max_trials: usize::MAX,
+            },
         }
     }
 }
@@ -365,7 +456,7 @@ impl Problem {
     /// Returns an error for invalid configuration or stale/invalid static
     /// declarations. Evaluator and numerical failures remain report outcomes.
     pub fn solve(&mut self, config: SolverConfig) -> Result<SolveReport, CoreError> {
-        self.solve_reduced(config, None)
+        self.solve_reduced(config, DirtyRequest::All, None)
     }
 
     /// Solves edited/cache-invalid components and reuses independently validated cache entries.
@@ -379,40 +470,77 @@ impl Problem {
         config: SolverConfig,
         edited_variables: &[VariableId],
     ) -> Result<SolveReport, CoreError> {
-        self.solve_reduced(config, Some(edited_variables))
+        self.solve_reduced(config, DirtyRequest::Variables(edited_variables), None)
+    }
+
+    pub(crate) fn solve_session_components(
+        &mut self,
+        config: SolverConfig,
+        dirty_components: &[usize],
+        cached_plan: &EliminationPlan,
+    ) -> Result<SolveReport, CoreError> {
+        self.solve_reduced(
+            config,
+            DirtyRequest::Components(dirty_components),
+            Some(cached_plan),
+        )
     }
 
     fn solve_reduced(
         &mut self,
         config: SolverConfig,
-        edited_variables: Option<&[VariableId]>,
+        dirty_request: DirtyRequest<'_>,
+        cached_plan: Option<&EliminationPlan>,
     ) -> Result<SolveReport, CoreError> {
         config.validate()?;
-        let plan = EliminationPlan::new(self)?;
+        let plan = if let Some(plan) = cached_plan {
+            plan.clone()
+        } else {
+            EliminationPlan::new(self)?
+        };
         let mut edited_components = Vec::new();
-        if let Some(edited_variables) = edited_variables {
+        if let DirtyRequest::Variables(edited_variables) = dirty_request {
             for &variable_id in edited_variables {
                 let component = plan
                     .component_for_variable(variable_id)
                     .ok_or(CoreError::UnknownVariable(variable_id))?;
                 push_unique(&mut edited_components, component);
             }
+        } else if let DirtyRequest::Components(components) = dirty_request {
+            for &component in components {
+                if component >= plan.components.len() {
+                    return Err(CoreError::DimensionMismatch {
+                        context: "dirty solve component",
+                        expected: plan.components.len(),
+                        actual: component,
+                    });
+                }
+                push_unique(&mut edited_components, component);
+            }
         }
 
         let prior_cache = self.decomposition_cache.clone().unwrap_or_default();
+        let prior_report = (!matches!(dirty_request, DirtyRequest::All))
+            .then_some(prior_cache.report.as_deref())
+            .flatten();
         let mut state = self.variable_state();
         plan.synchronize_state(self, &mut state)?;
+        project_initial_state_into_bounds(self, &plan, &mut state)?;
         let mut executions = Vec::with_capacity(plan.components.len());
         for component in &plan.components {
-            let may_reuse =
-                edited_variables.is_some() && !edited_components.contains(&component.index);
+            let may_reuse = !matches!(dirty_request, DirtyRequest::All)
+                && !edited_components.contains(&component.index);
             let cached = prior_cache
                 .components
                 .iter()
                 .find(|cached| cache_matches(cached, &plan, component));
             if may_reuse
                 && let Some(cached_state) = cached.and_then(|cached| {
-                    validated_cached_state(self, &plan, component, &state, cached, config)
+                    if matches!(dirty_request, DirtyRequest::Components(_)) {
+                        trusted_cached_state(self, &plan, component, &state, cached)
+                    } else {
+                        validated_cached_state(self, &plan, component, &state, cached, config)
+                    }
                 })
             {
                 state = cached_state;
@@ -439,7 +567,7 @@ impl Problem {
         let PriorityPassOutcome {
             state: priority_state,
             reports: priority_records,
-        } = optimize_priorities(self, &plan, state, config);
+        } = optimize_priorities(self, &plan, state, config, &executions, prior_report);
         state = priority_state;
         let priority_reports: Vec<_> = priority_records
             .into_iter()
@@ -447,7 +575,8 @@ impl Problem {
             .collect();
 
         self.replace_variable_state(&state)?;
-        let report = self.build_report(config, &plan, &executions, &priority_reports)?;
+        let report =
+            self.build_report(config, &plan, &executions, &priority_reports, prior_report)?;
         self.update_decomposition_cache(&plan, &report)?;
         Ok(report)
     }
@@ -459,6 +588,7 @@ impl Problem {
         plan: &EliminationPlan,
         executions: &[ComponentExecution],
         priority_solves: &[PrioritySolveReport],
+        prior_report: Option<&SolveReport>,
     ) -> Result<SolveReport, CoreError> {
         let state = self.variable_state();
         let accepted_state = self.packed_state()?;
@@ -467,6 +597,11 @@ impl Problem {
         let mut singular_rows = Vec::new();
         let mut hard_residual_l2 = 0.0_f64;
         let mut hard_l2_is_valid = true;
+        let bounds = bound_reports(self, &state)?;
+        let mut redundancy_work = DiagnosticWork::default();
+        let mut redundancy_reason = (!config.redundancy_diagnostic_budget.enabled)
+            .then_some(DiagnosticIncompleteReason::Disabled);
+        let mut redundancy_analyzed = false;
 
         for component in &plan.components {
             let execution = executions
@@ -477,6 +612,10 @@ impl Problem {
                     expected: plan.components.len(),
                     actual: executions.len(),
                 })?;
+            // Reuse skips nonlinear iteration only. Acceptance values,
+            // Jacobians/rank, mobility, and bounded diagnostics are rebuilt at
+            // every returned state so a cache can never stand in for fresh
+            // independent validation.
             let validation = validate_component(self, component, &state, config);
             if validation.evaluated {
                 let combined = hard_residual_l2.hypot(validation.l2);
@@ -506,14 +645,52 @@ impl Problem {
             }
 
             if validation.valid && numerical.rank_is_valid {
-                let redundancy = find_redundancy(
-                    &numerical.hard,
-                    &validation.rows,
-                    &self.source_order(),
-                    numerical.diagnostics.threshold,
-                    config.normalized_residual_tolerance,
-                );
-                all_redundancy.extend(redundancy.rows);
+                let candidate_count = candidate_sources(self, component).len();
+                if let Some(reason) = diagnostic_component_budget_reason(
+                    &plan.structural.component_summaries[component.index],
+                    candidate_count,
+                    redundancy_work.trials,
+                    config.redundancy_diagnostic_budget,
+                ) {
+                    redundancy_reason.get_or_insert(reason);
+                } else {
+                    let source_order = self.source_order();
+                    let trials = source_order
+                        .iter()
+                        .filter(|&&source| source_affects_component(self, source, component))
+                        .count();
+                    if redundancy_work.trials.saturating_add(trials)
+                        > config.redundancy_diagnostic_budget.max_trials
+                    {
+                        redundancy_reason.get_or_insert(DiagnosticIncompleteReason::TrialBudget);
+                    } else {
+                        let summary = &plan.structural.component_summaries[component.index];
+                        redundancy_work.components += 1;
+                        redundancy_work.tangent_dimensions = redundancy_work
+                            .tangent_dimensions
+                            .saturating_add(summary.active_tangent_dimensions);
+                        redundancy_work.scalar_rows = redundancy_work
+                            .scalar_rows
+                            .saturating_add(summary.active_hard_rows);
+                        redundancy_work.candidate_sources += candidate_count;
+                        redundancy_work.trials += trials;
+                        redundancy_analyzed = true;
+                        let redundancy = find_redundancy(
+                            &numerical.hard,
+                            &validation.rows,
+                            &source_order,
+                            numerical.diagnostics.threshold,
+                            config.normalized_residual_tolerance,
+                        );
+                        all_redundancy.extend(redundancy.rows);
+                    }
+                }
+            } else if validation.evaluated && !validation.valid {
+                redundancy_reason.get_or_insert(DiagnosticIncompleteReason::HardInvalid);
+            } else if !validation.valid {
+                redundancy_reason.get_or_insert(DiagnosticIncompleteReason::InvalidEvaluation);
+            } else {
+                redundancy_reason.get_or_insert(DiagnosticIncompleteReason::InvalidRank);
             }
             singular_rows.extend(numerical.singular_rows.iter().copied());
             let summary = &plan.structural.component_summaries[component.index];
@@ -527,6 +704,15 @@ impl Problem {
                 .jacobian
                 .ncols()
                 .saturating_sub(numerical.diagnostics.rank);
+            let bound_mobility = component_bound_mobility(
+                plan,
+                component,
+                &numerical.hard.jacobian,
+                numerical.rank_is_valid,
+                numerical.diagnostics.rank,
+                config.rank_relative_tolerance,
+                &bounds,
+            );
             component_solves.push(ComponentSolveReport {
                 component_index: component.index,
                 pattern_signature: summary.pattern_signature,
@@ -537,11 +723,15 @@ impl Problem {
                 hard_validity: validation.hard_validity,
                 hard_residuals_validated: validation.evaluated,
                 hard_residual_max: validation.maximum,
+                hard_residual_l2: validation.l2,
                 rank_is_valid: numerical.rank_is_valid,
                 rank: numerical.diagnostics.rank,
                 left_nullity,
                 right_nullity,
                 local_degrees_of_freedom: right_nullity,
+                bidirectional_degrees_of_freedom: bound_mobility.bidirectional_dof,
+                one_sided_mobility: bound_mobility.one_sided,
+                active_bounds: bound_mobility.active_bounds,
                 is_singular: numerical.is_singular,
                 rank_relative_tolerance: numerical.diagnostics.relative_tolerance,
                 rank_machine_tolerance: numerical.diagnostics.machine_tolerance,
@@ -564,8 +754,14 @@ impl Problem {
                 .iter()
                 .any(|candidate| candidate.row.source_id == source)
         });
-        let conflicting_sources =
+        let (conflicting_sources, conflict_diagnostics) =
             find_conflicting_sources(self, plan, &state, config, &component_solves);
+        let redundancy_diagnostics = diagnostic_completeness(
+            config.redundancy_diagnostic_budget,
+            redundancy_work,
+            redundancy_reason,
+            redundancy_analyzed,
+        );
 
         let hard_residuals_validated = hard_l2_is_valid
             && component_solves
@@ -591,6 +787,11 @@ impl Problem {
             .map(|component| component.right_nullity)
             .sum();
         let local_degrees_of_freedom = right_nullity;
+        let bidirectional_degrees_of_freedom = component_solves
+            .iter()
+            .map(|component| component.bidirectional_degrees_of_freedom)
+            .sum();
+        let one_sided_mobility = aggregate_one_sided_mobility(&component_solves);
         let is_singular = component_solves
             .iter()
             .any(|component| component.is_singular);
@@ -609,7 +810,38 @@ impl Problem {
             .iter()
             .flat_map(|component| component.singular_values.iter().copied())
             .collect();
-        let returned_evaluation = validate_returned_rows(self, &state);
+        let mut evaluated_residuals = self
+            .residuals
+            .iter()
+            .filter_map(|(residual_id, residual)| {
+                (residual.category() == ResidualCategory::Hard).then_some(residual_id)
+            })
+            .collect::<Vec<_>>();
+        let priority_assignments = classify_priority_residuals(self, plan);
+        for execution in executions.iter().filter(|execution| !execution.reused) {
+            for category in [ResidualCategory::Temporary, ResidualCategory::Preference] {
+                for &residual_id in
+                    priority_assignments.component(category, execution.component_index)
+                {
+                    push_unique(&mut evaluated_residuals, residual_id);
+                }
+            }
+        }
+        for category in [ResidualCategory::Temporary, ResidualCategory::Preference] {
+            for &residual_id in priority_assignments.fixed(category) {
+                push_unique(&mut evaluated_residuals, residual_id);
+            }
+            for &residual_id in priority_assignments.unsupported(category) {
+                push_unique(&mut evaluated_residuals, residual_id);
+            }
+        }
+        let returned_evaluation = validate_returned_rows(
+            self,
+            &state,
+            prior_report
+                .is_some()
+                .then_some(evaluated_residuals.as_slice()),
+        );
         let hard_termination = component_solves
             .iter()
             .map(|component| component.hard_termination)
@@ -654,15 +886,24 @@ impl Problem {
             termination = SolveTermination::NumericalFailure;
         }
 
-        let mut audit = self
-            .audit_snapshot()
-            .unwrap_or_else(|_| self.audit_snapshot_partial());
+        let mut audit = if let Some(prior) = prior_report {
+            merge_reused_audit(
+                prior.audit.clone(),
+                self.audit_snapshot_partial_for_residuals(&evaluated_residuals),
+            )
+        } else {
+            self.audit_snapshot()
+                .unwrap_or_else(|_| self.audit_snapshot_partial())
+        };
         annotate_audit(
             &mut audit,
             plan,
             &all_redundancy,
             &conflicting_sources,
             &singular_rows,
+            &bounds,
+            redundancy_diagnostics,
+            conflict_diagnostics,
         );
         annotate_evaluation_failures(&mut audit, &returned_evaluation.failures);
         let mut trace = SolveTrace::default();
@@ -690,6 +931,8 @@ impl Problem {
             left_nullity,
             right_nullity,
             local_degrees_of_freedom,
+            bidirectional_degrees_of_freedom,
+            one_sided_mobility,
             is_singular,
             near_singular,
             rank_relative_tolerance: config.rank_relative_tolerance,
@@ -700,12 +943,15 @@ impl Problem {
             redundant_sources,
             sources_containing_redundant_rows,
             redundant_rows: all_redundancy,
+            redundancy_diagnostics,
+            conflict_diagnostics,
             singular_rows,
             structural: plan.structural.clone(),
             component_solves,
             priority_solves: priority_solves.to_vec(),
             trace,
             audit,
+            bounds,
         })
     }
 
@@ -743,9 +989,19 @@ impl Problem {
                 components.push(cached.clone());
             }
         }
-        self.decomposition_cache = Some(DecompositionCache { components });
+        self.decomposition_cache = Some(DecompositionCache {
+            components,
+            report: Some(Box::new(report.clone())),
+        });
         Ok(())
     }
+}
+
+#[derive(Clone, Copy)]
+enum DirtyRequest<'a> {
+    All,
+    Variables(&'a [VariableId]),
+    Components(&'a [usize]),
 }
 
 #[derive(Clone, Debug)]
@@ -788,9 +1044,26 @@ fn validated_cached_state(
         set_state_value(&mut candidate, variable_id, value).ok()?;
     }
     plan.synchronize_state(problem, &mut candidate).ok()?;
+    enforce_state_bounds(problem, plan, &mut candidate).ok()?;
     validate_component(problem, component, &candidate, config)
         .valid
         .then_some(candidate)
+}
+
+fn trusted_cached_state(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    component: &SolveComponent,
+    current_state: &VariableState,
+    cached: &CachedComponent,
+) -> Option<VariableState> {
+    let mut candidate = current_state.clone();
+    for (&variable_id, &value) in component.variable_ids.iter().zip(&cached.values) {
+        set_state_value(&mut candidate, variable_id, value).ok()?;
+    }
+    plan.synchronize_state(problem, &mut candidate).ok()?;
+    enforce_state_bounds(problem, plan, &mut candidate).ok()?;
+    Some(candidate)
 }
 
 #[allow(clippy::too_many_lines)]
@@ -804,7 +1077,9 @@ fn iterate_component(
     let mut trace = SolveTrace::default();
     let mut damping = config.initial_damping;
     let layout = active_layout(plan, component.index);
-    if plan.synchronize_state(problem, &mut state).is_err() {
+    if plan.synchronize_state(problem, &mut state).is_err()
+        || enforce_state_bounds(problem, plan, &mut state).is_err()
+    {
         return IterationOutcome {
             termination: SolveTermination::NumericalFailure,
             state,
@@ -837,14 +1112,25 @@ fn iterate_component(
 
     if termination != SolveTermination::Converged {
         for iteration in 1..=config.max_iterations {
-            let Some(mut step) = lm_step(&current_hard.jacobian, &current_hard.residuals, damping)
-            else {
+            let Some(mut step) = bounded_lm_step(
+                problem,
+                &state,
+                &layout,
+                &current_hard.jacobian,
+                &current_hard.residuals,
+                damping,
+                config.normalized_step_tolerance,
+            ) else {
                 termination = SolveTermination::NumericalFailure;
                 break;
             };
-            let Some(normalized_step_max) =
-                limit_block_steps(&mut step, &layout, config.max_block_normalized_step)
-            else {
+            if limit_block_steps(&mut step, &layout, config.max_block_normalized_step).is_none()
+                || limit_step_to_bound_events(problem, &state, &layout, &mut step).is_none()
+            {
+                termination = SolveTermination::NumericalFailure;
+                break;
+            }
+            let Some(normalized_step_max) = maximum_block_step(&step, &layout) else {
                 termination = SolveTermination::NumericalFailure;
                 break;
             };
@@ -977,6 +1263,7 @@ struct PriorityPassOutcome {
 struct PriorityReportRecord {
     report: PrioritySolveReport,
     residual_ids: Vec<ResidualId>,
+    reused: bool,
 }
 
 #[derive(Debug)]
@@ -1032,6 +1319,8 @@ fn optimize_priorities(
     plan: &EliminationPlan,
     mut state: VariableState,
     config: SolverConfig,
+    executions: &[ComponentExecution],
+    prior_report: Option<&SolveReport>,
 ) -> PriorityPassOutcome {
     let assignments = classify_priority_residuals(problem, plan);
     let hard_state = state.clone();
@@ -1042,6 +1331,22 @@ fn optimize_priorities(
     for component in &plan.components {
         let residual_ids = assignments.component(ResidualCategory::Temporary, component.index);
         if residual_ids.is_empty() {
+            continue;
+        }
+        if executions[component.index].reused {
+            let report =
+                cached_priority_report(prior_report, component.index, ResidualCategory::Temporary);
+            let succeeded =
+                report.termination == SolveTermination::Converged && report.final_cost.is_some();
+            temporary_succeeded[component.index] = succeeded;
+            if succeeded {
+                attained_temporary_costs[component.index] = report.final_cost;
+            }
+            reports.push(PriorityReportRecord {
+                report,
+                residual_ids: residual_ids.to_vec(),
+                reused: true,
+            });
             continue;
         }
         let outcome = optimize_component_priority(
@@ -1065,6 +1370,7 @@ fn optimize_priorities(
         reports.push(PriorityReportRecord {
             report: outcome.report,
             residual_ids: residual_ids.to_vec(),
+            reused: false,
         });
     }
 
@@ -1095,6 +1401,18 @@ fn optimize_priorities(
         if residual_ids.is_empty() || !temporary_succeeded[component.index] {
             continue;
         }
+        if executions[component.index].reused {
+            reports.push(PriorityReportRecord {
+                report: cached_priority_report(
+                    prior_report,
+                    component.index,
+                    ResidualCategory::Preference,
+                ),
+                residual_ids: residual_ids.to_vec(),
+                reused: true,
+            });
+            continue;
+        }
         let protected_temporary_ids =
             assignments.component(ResidualCategory::Temporary, component.index);
         let outcome = optimize_component_priority(
@@ -1112,6 +1430,7 @@ fn optimize_priorities(
         reports.push(PriorityReportRecord {
             report: outcome.report,
             residual_ids: residual_ids.to_vec(),
+            reused: false,
         });
     }
 
@@ -1138,6 +1457,34 @@ fn optimize_priorities(
 
     refresh_priority_final_costs(problem, &state, &mut reports);
     PriorityPassOutcome { state, reports }
+}
+
+fn cached_priority_report(
+    prior_report: Option<&SolveReport>,
+    component_index: usize,
+    category: ResidualCategory,
+) -> PrioritySolveReport {
+    prior_report
+        .and_then(|report| {
+            report.priority_solves.iter().find(|priority| {
+                priority.component_index == Some(component_index) && priority.category == category
+            })
+        })
+        .cloned()
+        .map(|mut report| {
+            report.iterations = 0;
+            report
+        })
+        .unwrap_or(PrioritySolveReport {
+            component_index: Some(component_index),
+            category,
+            iterations: 0,
+            initial_cost: None,
+            final_cost: None,
+            attained_temporary_cost: None,
+            termination: SolveTermination::NumericalFailure,
+            status: SecondaryStatus::EvaluationFailure,
+        })
 }
 
 fn classify_priority_residuals(problem: &Problem, plan: &EliminationPlan) -> PriorityAssignments {
@@ -1446,28 +1793,17 @@ fn optimize_component_priority(
         }
 
         let reduced_jacobian = &current.jacobian * &nullspace;
-        let reduced_gradient = reduced_jacobian.transpose() * &current.residuals;
-        let Some(gradient_is_stationary) = projected_gradient_is_stationary(
+        let layout = active_layout(plan, component.index);
+        let Some(constrained_step) = constrained_nullspace_step(
+            problem,
+            &state,
+            &layout,
+            &nullspace,
             &reduced_jacobian,
             &current.residuals,
-            &reduced_gradient,
+            config.rank_relative_tolerance,
             config.normalized_step_tolerance,
         ) else {
-            return priority_component_report(
-                state,
-                component.index,
-                category,
-                iteration,
-                Some(initial_cost),
-                Some(cost),
-                attained_temporary_cost,
-                SolveTermination::NumericalFailure,
-            );
-        };
-        let right_hand_side = -&current.residuals;
-        let Some((reduced_step, _)) =
-            solve_dense_least_squares(&reduced_jacobian, &right_hand_side)
-        else {
             return priority_component_report(
                 state,
                 component.index,
@@ -1479,11 +1815,22 @@ fn optimize_component_priority(
                 SolveTermination::NumericalFailure,
             );
         };
-        let mut step = &nullspace * reduced_step;
-        let layout = active_layout(plan, component.index);
-        let Some(normalized_step_max) =
-            limit_block_steps(&mut step, &layout, config.max_block_normalized_step)
-        else {
+        let mut step = constrained_step.step;
+        if limit_block_steps(&mut step, &layout, config.max_block_normalized_step).is_none()
+            || limit_step_to_bound_events(problem, &state, &layout, &mut step).is_none()
+        {
+            return priority_component_report(
+                state,
+                component.index,
+                category,
+                iteration - 1,
+                Some(initial_cost),
+                Some(cost),
+                attained_temporary_cost,
+                SolveTermination::NumericalFailure,
+            );
+        }
+        let Some(normalized_step_max) = maximum_block_step(&step, &layout) else {
             return priority_component_report(
                 state,
                 component.index,
@@ -1511,7 +1858,7 @@ fn optimize_component_priority(
         let step_is_stationary = normalized_step_max <= config.normalized_step_tolerance;
         let model_is_stationary = !objective_decreases(cost, model_cost);
         let mut accepted = None;
-        if !step_is_stationary && !model_is_stationary && !gradient_is_stationary {
+        if !step_is_stationary && !model_is_stationary && !constrained_step.stationary {
             let mut alpha = 1.0;
             for _ in 0..MAX_PRIORITY_LINE_SEARCH_STEPS {
                 let trial_step = &step * alpha;
@@ -1552,8 +1899,36 @@ fn optimize_component_priority(
             cost = accepted_cost;
             continue;
         }
+        let stationary_cost_tolerance = 0.5
+            * config.normalized_step_tolerance
+            * config.normalized_step_tolerance
+            * f64::from(u32::try_from(current.residuals.len().max(1)).unwrap_or(u32::MAX));
+        if constrained_step.stationary && cost <= stationary_cost_tolerance {
+            return priority_component_report(
+                state,
+                component.index,
+                category,
+                iteration,
+                Some(initial_cost),
+                Some(cost),
+                attained_temporary_cost,
+                SolveTermination::Converged,
+            );
+        }
 
-        match search_negative_curvature(
+        let Some(critical_cone) = constrained_step.critical_cone else {
+            return priority_component_report(
+                state,
+                component.index,
+                category,
+                iteration,
+                Some(initial_cost),
+                Some(cost),
+                attained_temporary_cost,
+                SolveTermination::Stalled,
+            );
+        };
+        match search_critical_cone_curvature(
             problem,
             plan,
             component,
@@ -1563,6 +1938,7 @@ fn optimize_component_priority(
             protected_priority_ids,
             attained_temporary_cost,
             &nullspace,
+            &critical_cone,
             &layout,
             cost,
             config,
@@ -1584,7 +1960,7 @@ fn optimize_component_priority(
                     SolveTermination::Converged,
                 );
             }
-            CurvatureSearch::Failed => {
+            CurvatureSearch::Incomplete | CurvatureSearch::Failed => {
                 return priority_component_report(
                     state,
                     component.index,
@@ -1692,6 +2068,7 @@ fn evaluate_nonmoving_priority(
             },
         },
         residual_ids: residual_ids.to_vec(),
+        reused: false,
     }
 }
 
@@ -1701,6 +2078,9 @@ fn refresh_priority_final_costs(
     reports: &mut [PriorityReportRecord],
 ) {
     for record in reports {
+        if record.reused {
+            continue;
+        }
         match priority_cost_for_residuals(problem, state, &record.residual_ids) {
             Ok(cost) => record.report.final_cost = Some(cost),
             Err(error) => {
@@ -1735,22 +2115,6 @@ fn scalar_objective_gradient_row(system: &HardSystem) -> Option<DMatrix<f64>> {
     Some(DMatrix::from_fn(1, gradient.len(), |_, column| {
         gradient[column]
     }))
-}
-
-fn projected_gradient_is_stationary(
-    reduced_jacobian: &DMatrix<f64>,
-    residuals: &DVector<f64>,
-    gradient: &DVector<f64>,
-    normalized_step_tolerance: f64,
-) -> Option<bool> {
-    let jacobian_norm = stable_norm(reduced_jacobian.iter().copied())?;
-    let residual_norm = stable_norm(residuals.iter().copied())?;
-    let gradient_norm = stable_norm(gradient.iter().copied())?;
-    let roundoff_tolerance =
-        (PRIORITY_COST_RESOLUTION_FACTOR * f64::EPSILON).sqrt() * jacobian_norm * residual_norm;
-    let step_tolerance = normalized_step_tolerance * jacobian_norm * jacobian_norm;
-    let tolerance = roundoff_tolerance.max(step_tolerance);
-    tolerance.is_finite().then_some(gradient_norm <= tolerance)
 }
 
 /// Roundoff allowance relative only to the compared objective magnitudes.
@@ -1844,7 +2208,226 @@ fn evaluate_priority_trial(
 enum CurvatureSearch {
     Improved(VariableState, f64),
     NoNegativeCurvature,
+    Incomplete,
     Failed,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn search_critical_cone_curvature(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    component: &SolveComponent,
+    state: &VariableState,
+    category: ResidualCategory,
+    residual_ids: &[ResidualId],
+    protected_temporary_ids: &[ResidualId],
+    attained_temporary_cost: Option<f64>,
+    protected_nullspace: &DMatrix<f64>,
+    critical_cone: &ReducedCriticalCone,
+    layout: &ActiveLayout,
+    current_cost: f64,
+    config: SolverConfig,
+    reprojection_config: SolverConfig,
+) -> CurvatureSearch {
+    let full_span = protected_nullspace * &critical_cone.span;
+    if full_span.iter().any(|value| !value.is_finite()) {
+        return CurvatureSearch::Failed;
+    }
+    if critical_cone.inequalities.nrows() == 0 {
+        return search_negative_curvature(
+            problem,
+            plan,
+            component,
+            state,
+            category,
+            residual_ids,
+            protected_temporary_ids,
+            attained_temporary_cost,
+            &full_span,
+            layout,
+            current_cost,
+            config,
+            reprojection_config,
+        );
+    }
+    if full_span.ncols() == 0 {
+        return CurvatureSearch::NoNegativeCurvature;
+    }
+    if full_span.ncols() != 1 || critical_cone.inequalities.ncols() != 1 {
+        // A complete multidimensional cone search needs mixed one-sided
+        // curvature reconstruction. Never claim optimality from lineality alone.
+        return CurvatureSearch::Incomplete;
+    }
+    search_one_sided_curvature(
+        problem,
+        plan,
+        component,
+        state,
+        category,
+        residual_ids,
+        protected_temporary_ids,
+        attained_temporary_cost,
+        &full_span,
+        &critical_cone.inequalities,
+        layout,
+        current_cost,
+        config,
+        reprojection_config,
+    )
+}
+
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+fn search_one_sided_curvature(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    component: &SolveComponent,
+    state: &VariableState,
+    category: ResidualCategory,
+    residual_ids: &[ResidualId],
+    protected_temporary_ids: &[ResidualId],
+    attained_temporary_cost: Option<f64>,
+    span: &DMatrix<f64>,
+    inequalities: &DMatrix<f64>,
+    layout: &ActiveLayout,
+    current_cost: f64,
+    config: SolverConfig,
+    reprojection_config: SolverConfig,
+) -> CurvatureSearch {
+    let hessian_step = PRIORITY_HESSIAN_NORMALIZED_STEP.min(config.max_block_normalized_step / 2.0);
+    if !hessian_step.is_finite() || hessian_step <= 0.0 {
+        return CurvatureSearch::Failed;
+    }
+    let inequality_scale = inequalities
+        .iter()
+        .map(|value| value.abs())
+        .fold(0.0_f64, f64::max);
+    let feasibility_tolerance = 64.0 * f64::EPSILON * inequality_scale.max(1.0);
+    let feasible_signs = [1.0, -1.0]
+        .into_iter()
+        .filter(|sign| {
+            inequalities
+                .column(0)
+                .iter()
+                .all(|value| sign * value >= -feasibility_tolerance)
+        })
+        .collect::<Vec<_>>();
+    if feasible_signs.is_empty() {
+        return CurvatureSearch::NoNegativeCurvature;
+    }
+
+    let mut most_negative: Option<(f64, f64)> = None;
+    for sign in feasible_signs {
+        let first_delta = DVector::from_element(1, sign * hessian_step);
+        let Some(first_cost) = sample_reduced_priority_cost(
+            problem,
+            plan,
+            component,
+            state,
+            category,
+            residual_ids,
+            protected_temporary_ids,
+            attained_temporary_cost,
+            span,
+            layout,
+            &first_delta,
+            config,
+            reprojection_config,
+        ) else {
+            return CurvatureSearch::Failed;
+        };
+        let second_delta = DVector::from_element(1, sign * 2.0 * hessian_step);
+        let Some(second_cost) = sample_reduced_priority_cost(
+            problem,
+            plan,
+            component,
+            state,
+            category,
+            residual_ids,
+            protected_temporary_ids,
+            attained_temporary_cost,
+            span,
+            layout,
+            &second_delta,
+            config,
+            reprojection_config,
+        ) else {
+            return CurvatureSearch::Failed;
+        };
+        let curvature =
+            (second_cost - 2.0 * first_cost + current_cost) / (hessian_step * hessian_step);
+        let sample_magnitude = current_cost
+            .abs()
+            .max(first_cost.abs())
+            .max(second_cost.abs());
+        let relative_tolerance = config
+            .rank_relative_tolerance
+            .max((PRIORITY_COST_RESOLUTION_FACTOR * f64::EPSILON).sqrt());
+        let stencil_roundoff =
+            4.0 * PRIORITY_COST_RESOLUTION_FACTOR * f64::EPSILON * sample_magnitude
+                / (hessian_step * hessian_step);
+        let curvature_tolerance = (curvature.abs() * relative_tolerance).max(stencil_roundoff);
+        if !curvature.is_finite() || !curvature_tolerance.is_finite() {
+            return CurvatureSearch::Failed;
+        }
+        if curvature < -curvature_tolerance
+            && most_negative
+                .as_ref()
+                .is_none_or(|(current, _)| curvature < *current)
+        {
+            most_negative = Some((curvature, sign));
+        }
+    }
+    let Some((_, sign)) = most_negative else {
+        // A finite one-sided stencil can find descent but cannot certify local
+        // nonnegative curvature for an arbitrary evaluator.
+        return CurvatureSearch::Incomplete;
+    };
+
+    let mut direction = span.column(0).into_owned() * sign;
+    if limit_block_steps(&mut direction, layout, config.max_block_normalized_step).is_none() {
+        return CurvatureSearch::Failed;
+    }
+    let mut best: Option<(VariableState, f64)> = None;
+    let mut alpha = 1.0;
+    for _ in 0..MAX_PRIORITY_LINE_SEARCH_STEPS {
+        let mut step = &direction * alpha;
+        if limit_step_to_bound_events(problem, state, layout, &mut step).is_none() {
+            alpha *= 0.5;
+            continue;
+        }
+        let mut trial_state = state.clone();
+        if apply_normalized_step(problem, plan, &mut trial_state, layout, &step).is_err() {
+            alpha *= 0.5;
+            continue;
+        }
+        let Some((accepted_state, trial_cost)) = evaluate_priority_trial(
+            problem,
+            plan,
+            component,
+            trial_state,
+            category,
+            residual_ids,
+            protected_temporary_ids,
+            attained_temporary_cost,
+            config,
+            reprojection_config,
+        ) else {
+            alpha *= 0.5;
+            continue;
+        };
+        if objective_decreases(current_cost, trial_cost)
+            && best
+                .as_ref()
+                .is_none_or(|(_, best_cost)| trial_cost < *best_cost)
+        {
+            best = Some((accepted_state, trial_cost));
+        }
+        alpha *= 0.5;
+    }
+    best.map_or(
+        CurvatureSearch::Failed,
+        |(improved_state, improved_cost)| CurvatureSearch::Improved(improved_state, improved_cost),
+    )
 }
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
@@ -2002,7 +2585,11 @@ fn search_negative_curvature(
     for sign in [1.0, -1.0] {
         let mut alpha = 1.0;
         for _ in 0..MAX_PRIORITY_LINE_SEARCH_STEPS {
-            let step = &direction * (sign * alpha);
+            let mut step = &direction * (sign * alpha);
+            if limit_step_to_bound_events(problem, state, layout, &mut step).is_none() {
+                alpha *= 0.5;
+                continue;
+            }
             let mut trial_state = state.clone();
             if apply_normalized_step(problem, plan, &mut trial_state, layout, &step).is_err() {
                 alpha *= 0.5;
@@ -2060,6 +2647,7 @@ fn sample_reduced_priority_cost(
     }
     let mut step = nullspace * reduced_delta;
     limit_block_steps(&mut step, layout, config.max_block_normalized_step)?;
+    step_is_within_bounds(problem, state, layout, &mut step)?;
     let mut trial_state = state.clone();
     apply_normalized_step(problem, plan, &mut trial_state, layout, &step).ok()?;
     evaluate_priority_trial(
@@ -2172,10 +2760,321 @@ fn numerical_nullspace(matrix: &DMatrix<f64>, relative_tolerance: f64) -> Option
         .then_some(nullspace)
 }
 
+fn numerical_nullspace_for_rank(matrix: &DMatrix<f64>, rank: usize) -> Option<DMatrix<f64>> {
+    let columns = matrix.ncols();
+    if rank > columns || matrix.iter().any(|value| !value.is_finite()) {
+        return None;
+    }
+    if columns == 0 {
+        return Some(DMatrix::zeros(0, 0));
+    }
+    if matrix.nrows() == 0 {
+        return (rank == 0).then(|| DMatrix::identity(columns, columns));
+    }
+    let rows = matrix.nrows().max(columns);
+    let mut padded = DMatrix::zeros(rows, columns);
+    padded.view_mut((0, 0), matrix.shape()).copy_from(matrix);
+    let decomposition = padded.svd(false, true);
+    if decomposition
+        .singular_values
+        .iter()
+        .any(|value| !value.is_finite())
+    {
+        return None;
+    }
+    let right_vectors = decomposition.v_t?;
+    let nullspace = DMatrix::from_fn(columns, columns - rank, |row, column| {
+        right_vectors[(rank + column, row)]
+    });
+    nullspace
+        .iter()
+        .all(|value| value.is_finite())
+        .then_some(nullspace)
+}
+
+#[derive(Debug)]
+struct ComponentBoundMobility {
+    bidirectional_dof: usize,
+    one_sided: OneSidedMobility,
+    active_bounds: Vec<BoundId>,
+}
+
+fn bound_reports(problem: &Problem, state: &VariableState) -> Result<Vec<BoundReport>, CoreError> {
+    problem
+        .bounds
+        .iter()
+        .map(|(bound_id, bound)| {
+            let value = crate::analysis::state_value(state, bound.variable_id())
+                .ok_or(CoreError::UnknownVariable(bound.variable_id()))?;
+            let value = crate::bounds::coordinate_value(value, bound.coordinate());
+            if !bound.contains(value) {
+                return Err(CoreError::ValueOutsideBound {
+                    variable: bound.variable_id(),
+                    coordinate: bound.coordinate(),
+                    value,
+                    lower: bound.lower(),
+                    upper: bound.upper(),
+                });
+            }
+            Ok(BoundReport {
+                bound_id,
+                variable_id: bound.variable_id(),
+                coordinate: bound.coordinate(),
+                label: bound.label().to_owned(),
+                lower: bound.lower(),
+                upper: bound.upper(),
+                value,
+                status: bound_status(bound, value),
+            })
+        })
+        .collect()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn component_bound_mobility(
+    plan: &EliminationPlan,
+    component: &SolveComponent,
+    equality: &DMatrix<f64>,
+    rank_is_valid: bool,
+    equality_rank: usize,
+    relative_tolerance: f64,
+    reports: &[BoundReport],
+) -> ComponentBoundMobility {
+    let layout = active_layout(plan, component.index);
+    let active_reports: Vec<_> = reports
+        .iter()
+        .filter(|report| {
+            report.status != BoundStatus::Inactive
+                && (component.variable_ids.contains(&report.variable_id)
+                    || layout
+                        .blocks
+                        .iter()
+                        .any(|block| block.members.contains(&report.variable_id)))
+        })
+        .collect();
+    let active_bounds = active_reports
+        .iter()
+        .map(|report| report.bound_id)
+        .collect();
+    if !rank_is_valid || equality.ncols() != layout.tangent_dimension {
+        return ComponentBoundMobility {
+            bidirectional_dof: 0,
+            one_sided: OneSidedMobility::NotEvaluated,
+            active_bounds,
+        };
+    }
+
+    let active_normals = deduplicated_bound_columns(
+        active_reports
+            .iter()
+            .filter_map(|report| bound_column(&layout, report.variable_id, report.coordinate)),
+    );
+    let Some(equality_nullspace) = numerical_nullspace_for_rank(equality, equality_rank) else {
+        return ComponentBoundMobility {
+            bidirectional_dof: 0,
+            one_sided: OneSidedMobility::NotEvaluated,
+            active_bounds,
+        };
+    };
+    let projected_active = projected_coordinate_normals(&equality_nullspace, &active_normals);
+    let Some(active_rank) = rank_diagnostics(&projected_active, relative_tolerance) else {
+        return ComponentBoundMobility {
+            bidirectional_dof: 0,
+            one_sided: OneSidedMobility::NotEvaluated,
+            active_bounds,
+        };
+    };
+    let bidirectional_dof = equality_nullspace.ncols().saturating_sub(active_rank.rank);
+
+    let fixed_normals = deduplicated_bound_columns(
+        active_reports
+            .iter()
+            .filter(|report| report.status == BoundStatus::Fixed)
+            .filter_map(|report| bound_column(&layout, report.variable_id, report.coordinate)),
+    );
+    let unilateral: Vec<_> = active_reports
+        .iter()
+        .filter_map(|report| {
+            let column = bound_column(&layout, report.variable_id, report.coordinate)?;
+            match report.status {
+                BoundStatus::ActiveLower => Some((column, 1.0)),
+                BoundStatus::ActiveUpper => Some((column, -1.0)),
+                BoundStatus::Inactive | BoundStatus::Fixed => None,
+            }
+        })
+        .collect();
+    let projected_fixed = projected_coordinate_normals(&equality_nullspace, &fixed_normals);
+    let Some(fixed_nullspace) = numerical_nullspace(&projected_fixed, relative_tolerance) else {
+        return ComponentBoundMobility {
+            bidirectional_dof,
+            one_sided: OneSidedMobility::NotEvaluated,
+            active_bounds,
+        };
+    };
+    let reduced_inequalities =
+        DMatrix::from_fn(unilateral.len(), fixed_nullspace.ncols(), |row, column| {
+            let (coordinate, sign) = unilateral[row];
+            let projected = equality_nullspace.row(coordinate) * &fixed_nullspace;
+            sign * projected[column]
+        });
+    let one_sided =
+        feasible_inequality_cone_has_nonzero_direction(&reduced_inequalities, relative_tolerance);
+    ComponentBoundMobility {
+        bidirectional_dof,
+        one_sided,
+        active_bounds,
+    }
+}
+
+fn deduplicated_bound_columns(columns: impl Iterator<Item = usize>) -> Vec<usize> {
+    let mut deduplicated = Vec::new();
+    for column in columns {
+        if !deduplicated.contains(&column) {
+            deduplicated.push(column);
+        }
+    }
+    deduplicated
+}
+
+fn projected_coordinate_normals(nullspace: &DMatrix<f64>, columns: &[usize]) -> DMatrix<f64> {
+    DMatrix::from_fn(columns.len(), nullspace.ncols(), |row, column| {
+        nullspace[(columns[row], column)]
+    })
+}
+
+fn feasible_inequality_cone_has_nonzero_direction(
+    inequalities: &DMatrix<f64>,
+    relative_tolerance: f64,
+) -> OneSidedMobility {
+    let reduced_dimension = inequalities.ncols();
+    if reduced_dimension == 0 {
+        return OneSidedMobility::None;
+    }
+    if inequalities.nrows() == 0 {
+        return OneSidedMobility::Exists;
+    }
+    let Some(inequality_rank) = rank_diagnostics(inequalities, relative_tolerance) else {
+        return OneSidedMobility::NotEvaluated;
+    };
+    if inequality_rank.rank < reduced_dimension {
+        return OneSidedMobility::Exists;
+    }
+
+    let subset_size = reduced_dimension.saturating_sub(1);
+    if subset_size == 0 {
+        return if direction_satisfies_inequalities(inequalities, &DVector::from_element(1, 1.0))
+            || direction_satisfies_inequalities(inequalities, &DVector::from_element(1, -1.0))
+        {
+            OneSidedMobility::Exists
+        } else {
+            OneSidedMobility::None
+        };
+    }
+    let mut combination: Vec<_> = (0..subset_size).collect();
+    loop {
+        let face = DMatrix::from_fn(subset_size, reduced_dimension, |row, column| {
+            inequalities[(combination[row], column)]
+        });
+        let Some(face_nullspace) = numerical_nullspace(&face, relative_tolerance) else {
+            return OneSidedMobility::NotEvaluated;
+        };
+        if face_nullspace.ncols() == 1 {
+            let direction = face_nullspace.column(0).into_owned();
+            if direction_satisfies_inequalities(inequalities, &direction)
+                || direction_satisfies_inequalities(inequalities, &(-direction))
+            {
+                return OneSidedMobility::Exists;
+            }
+        }
+        if !next_combination(&mut combination, inequalities.nrows()) {
+            break;
+        }
+    }
+    OneSidedMobility::None
+}
+
+fn direction_satisfies_inequalities(inequalities: &DMatrix<f64>, direction: &DVector<f64>) -> bool {
+    let Some(norm) = stable_norm(direction.iter().copied()) else {
+        return false;
+    };
+    norm > 64.0 * f64::EPSILON
+        && (inequalities * direction)
+            .iter()
+            .all(|value| *value >= -64.0 * f64::EPSILON * norm)
+}
+
+fn next_combination(indices: &mut [usize], population: usize) -> bool {
+    for position in (0..indices.len()).rev() {
+        let maximum = population - (indices.len() - position);
+        if indices[position] < maximum {
+            indices[position] += 1;
+            for next in (position + 1)..indices.len() {
+                indices[next] = indices[next - 1] + 1;
+            }
+            return true;
+        }
+    }
+    false
+}
+
+fn bound_status(bound: &CoordinateBound, value: f64) -> BoundStatus {
+    if bound.lower().is_some() && bound.lower() == bound.upper() {
+        BoundStatus::Fixed
+    } else if bound
+        .lower()
+        .is_some_and(|lower| at_bound_endpoint(value, lower))
+    {
+        BoundStatus::ActiveLower
+    } else if bound
+        .upper()
+        .is_some_and(|upper| at_bound_endpoint(value, upper))
+    {
+        BoundStatus::ActiveUpper
+    } else {
+        BoundStatus::Inactive
+    }
+}
+
+fn at_bound_endpoint(value: f64, endpoint: f64) -> bool {
+    value.partial_cmp(&endpoint) == Some(std::cmp::Ordering::Equal)
+}
+
+fn bound_column(
+    layout: &ActiveLayout,
+    variable_id: VariableId,
+    coordinate: usize,
+) -> Option<usize> {
+    layout.blocks.iter().find_map(|block| {
+        block.members.contains(&variable_id).then_some(
+            block
+                .tangent_range
+                .start
+                .checked_add(coordinate)
+                .filter(|column| *column < block.tangent_range.end),
+        )?
+    })
+}
+
+fn aggregate_one_sided_mobility(components: &[ComponentSolveReport]) -> OneSidedMobility {
+    if components
+        .iter()
+        .any(|component| component.one_sided_mobility == OneSidedMobility::NotEvaluated)
+    {
+        OneSidedMobility::NotEvaluated
+    } else if components
+        .iter()
+        .any(|component| component.one_sided_mobility == OneSidedMobility::Exists)
+    {
+        OneSidedMobility::Exists
+    } else {
+        OneSidedMobility::None
+    }
+}
+
 type ActiveLayout = ComponentTangentLayout;
 
 fn active_layout(plan: &EliminationPlan, component_index: usize) -> ActiveLayout {
-    component_tangent_layout(plan, component_index)
+    plan.component_layouts[component_index].clone()
 }
 
 #[derive(Debug)]
@@ -2222,7 +3121,8 @@ fn apply_normalized_step(
             .collect();
         value.plus(&raw_delta)?;
     }
-    plan.synchronize_state(problem, state)
+    plan.synchronize_state(problem, state)?;
+    enforce_state_bounds(problem, plan, state)
 }
 
 struct ComponentValidation {
@@ -2367,33 +3267,138 @@ fn find_conflicting_sources(
     returned_state: &VariableState,
     config: SolverConfig,
     component_reports: &[ComponentSolveReport],
-) -> Vec<SourceConstraintId> {
-    let eligible_components: Vec<_> = plan
+) -> (Vec<SourceConstraintId>, DiagnosticCompleteness) {
+    let budget = config.conflict_diagnostic_budget;
+    if !budget.enabled {
+        return (
+            Vec::new(),
+            diagnostic_completeness(
+                budget,
+                DiagnosticWork::default(),
+                Some(DiagnosticIncompleteReason::Disabled),
+                false,
+            ),
+        );
+    }
+    let failed_components: Vec<_> = plan
         .components
         .iter()
         .filter(|component| {
             let report = &component_reports[component.index];
-            (!report.hard_residuals_validated
-                || report.hard_residual_max > config.normalized_residual_tolerance)
-                && plan.structural.component_summaries[component.index].active_tangent_dimensions
-                    <= MAX_CONFLICT_COMPONENT_DIMENSION
-                && candidate_sources(problem, component).len() <= MAX_CONFLICT_COMPONENT_SOURCES
+            !report.hard_residuals_validated
+                || report.hard_residual_max > config.normalized_residual_tolerance
         })
         .collect();
+    if failed_components.is_empty() {
+        return (
+            Vec::new(),
+            diagnostic_completeness(
+                budget,
+                DiagnosticWork::default(),
+                Some(DiagnosticIncompleteReason::HardConstraintsValid),
+                false,
+            ),
+        );
+    }
+    let mut work = DiagnosticWork::default();
+    let mut reason = None;
+    let mut eligible_components = Vec::new();
+    for component in failed_components {
+        let report = &component_reports[component.index];
+        if !report.hard_residuals_validated {
+            reason.get_or_insert(DiagnosticIncompleteReason::InvalidEvaluation);
+            continue;
+        }
+        if !report.rank_is_valid {
+            reason.get_or_insert(DiagnosticIncompleteReason::InvalidRank);
+            continue;
+        }
+        let candidate_count = candidate_sources(problem, component).len();
+        if let Some(component_reason) = diagnostic_component_budget_reason(
+            &plan.structural.component_summaries[component.index],
+            candidate_count,
+            work.trials,
+            budget,
+        ) {
+            reason.get_or_insert(component_reason);
+            continue;
+        }
+        work.components += 1;
+        let summary = &plan.structural.component_summaries[component.index];
+        work.tangent_dimensions = work
+            .tangent_dimensions
+            .saturating_add(summary.active_tangent_dimensions);
+        work.scalar_rows = work.scalar_rows.saturating_add(summary.active_hard_rows);
+        work.candidate_sources += candidate_count;
+        eligible_components.push(component);
+    }
     let mut candidates = Vec::new();
+    let mut stopped = false;
     for source in problem.source_order() {
         for component in &eligible_components {
             if !source_affects_component(problem, source, component) {
                 continue;
             }
+            if work.trials >= budget.max_trials {
+                reason.get_or_insert(DiagnosticIncompleteReason::TrialBudget);
+                stopped = true;
+                break;
+            }
+            work.trials += 1;
             if deletion_restores_component(problem, plan, component, source, returned_state, config)
             {
                 candidates.push(source);
                 break;
             }
         }
+        if stopped {
+            break;
+        }
     }
-    candidates
+    let analyzed = !eligible_components.is_empty();
+    (
+        candidates,
+        diagnostic_completeness(budget, work, reason, analyzed),
+    )
+}
+
+fn diagnostic_component_budget_reason(
+    summary: &crate::ComponentStructuralSummary,
+    candidate_sources: usize,
+    consumed_trials: usize,
+    budget: DiagnosticBudget,
+) -> Option<DiagnosticIncompleteReason> {
+    if !budget.enabled {
+        Some(DiagnosticIncompleteReason::Disabled)
+    } else if summary.active_tangent_dimensions > budget.max_component_tangent_dimension {
+        Some(DiagnosticIncompleteReason::ComponentTangentBudget)
+    } else if summary.active_hard_rows > budget.max_component_scalar_rows {
+        Some(DiagnosticIncompleteReason::ComponentRowBudget)
+    } else if candidate_sources > budget.max_candidate_sources {
+        Some(DiagnosticIncompleteReason::CandidateSourceBudget)
+    } else if consumed_trials >= budget.max_trials {
+        Some(DiagnosticIncompleteReason::TrialBudget)
+    } else {
+        None
+    }
+}
+
+fn diagnostic_completeness(
+    budget: DiagnosticBudget,
+    consumed: DiagnosticWork,
+    reason: Option<DiagnosticIncompleteReason>,
+    analyzed: bool,
+) -> DiagnosticCompleteness {
+    DiagnosticCompleteness {
+        status: match (reason, analyzed) {
+            (None, _) => DiagnosticStatus::Complete,
+            (Some(_), true) => DiagnosticStatus::Truncated,
+            (Some(_), false) => DiagnosticStatus::Skipped,
+        },
+        budget,
+        consumed,
+        reason,
+    }
 }
 
 fn candidate_sources(problem: &Problem, component: &SolveComponent) -> Vec<SourceConstraintId> {
@@ -2648,10 +3653,17 @@ struct ReturnedEvaluation {
     failures: Vec<RowEvaluationFailure>,
 }
 
-fn validate_returned_rows(problem: &Problem, state: &VariableState) -> ReturnedEvaluation {
+fn validate_returned_rows(
+    problem: &Problem,
+    state: &VariableState,
+    residual_filter: Option<&[ResidualId]>,
+) -> ReturnedEvaluation {
     let mut termination = SolveTermination::Converged;
     let mut failures = Vec::new();
     for (residual_id, _) in problem.residuals.iter() {
+        if residual_filter.is_some_and(|filter| !filter.contains(&residual_id)) {
+            continue;
+        }
         if let Err(error) = problem.validate_residual_linearization(state, residual_id) {
             termination = worse_termination(termination, error_termination(&error));
             failures.push(RowEvaluationFailure {
@@ -2670,6 +3682,27 @@ fn validate_returned_rows(problem: &Problem, state: &VariableState) -> ReturnedE
     }
 }
 
+fn merge_reused_audit(mut retained: AuditSnapshot, fresh: AuditSnapshot) -> AuditSnapshot {
+    for fresh_source in fresh.sources {
+        if let Some(retained_source) = retained
+            .sources
+            .iter_mut()
+            .find(|source| source.source_id == fresh_source.source_id)
+        {
+            retained_source.source_label = fresh_source.source_label;
+            for fresh_row in fresh_source.rows {
+                if let Some(retained_row) = retained_source.rows.iter_mut().find(|row| {
+                    row.residual_id == fresh_row.residual_id
+                        && row.row_in_block == fresh_row.row_in_block
+                }) {
+                    *retained_row = fresh_row;
+                }
+            }
+        }
+    }
+    retained
+}
+
 fn annotate_evaluation_failures(audit: &mut AuditSnapshot, failures: &[RowEvaluationFailure]) {
     for source in &mut audit.sources {
         for row in &mut source.rows {
@@ -2685,12 +3718,16 @@ fn annotate_evaluation_failures(audit: &mut AuditSnapshot, failures: &[RowEvalua
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn annotate_audit(
     audit: &mut AuditSnapshot,
     plan: &EliminationPlan,
     redundant_rows: &[RedundantRowCandidate],
     conflicting_sources: &[SourceConstraintId],
     singular_rows: &[ResidualRowRef],
+    bounds: &[BoundReport],
+    redundancy_diagnostics: DiagnosticCompleteness,
+    conflict_diagnostics: DiagnosticCompleteness,
 ) {
     for source in &mut audit.sources {
         for row in &mut source.rows {
@@ -2704,6 +3741,25 @@ fn annotate_audit(
             row.annotations.redundant = redundant_rows.iter().any(|item| item.row == row_ref);
             row.annotations.conflicting = conflicting_sources.contains(&source.source_id);
             row.annotations.singular = singular_rows.contains(&row_ref);
+            row.active_bounds = bounds
+                .iter()
+                .filter(|bound| {
+                    bound.status != BoundStatus::Inactive
+                        && row
+                            .incident_variables
+                            .iter()
+                            .any(|variable| variable.variable_id == bound.variable_id)
+                })
+                .map(|bound| AuditBoundAnnotation {
+                    bound_id: bound.bound_id,
+                    variable_id: bound.variable_id,
+                    coordinate: bound.coordinate,
+                    status: bound.status,
+                })
+                .collect();
+            row.annotations.active_bound = !row.active_bounds.is_empty();
+            row.annotations.redundancy_diagnostics = Some(redundancy_diagnostics);
+            row.annotations.conflict_diagnostics = Some(conflict_diagnostics);
         }
         source.annotations.eliminated = source.rows.iter().any(|row| row.annotations.eliminated);
         source.annotations.suppressed = source.rows.iter().any(|row| row.annotations.suppressed);
@@ -2711,6 +3767,24 @@ fn annotate_audit(
         source.annotations.conflicting = conflicting_sources.contains(&source.source_id)
             || source.rows.iter().any(|row| row.annotations.conflicting);
         source.annotations.singular = source.rows.iter().any(|row| row.annotations.singular);
+        source.annotations.active_bound =
+            source.rows.iter().any(|row| row.annotations.active_bound);
+        source.annotations.redundancy_diagnostics = Some(redundancy_diagnostics);
+        source.annotations.conflict_diagnostics = Some(conflict_diagnostics);
+        source.active_bounds.clear();
+        for bound in source
+            .rows
+            .iter()
+            .flat_map(|row| row.active_bounds.iter().copied())
+        {
+            if !source
+                .active_bounds
+                .iter()
+                .any(|current| current.bound_id == bound.bound_id)
+            {
+                source.active_bounds.push(bound);
+            }
+        }
     }
 }
 
@@ -2808,6 +3882,846 @@ fn lm_step(
     solve_dense_least_squares(&augmented, &right_hand_side).map(|(solution, _)| solution)
 }
 
+fn bounded_lm_step(
+    problem: &Problem,
+    state: &VariableState,
+    layout: &ActiveLayout,
+    jacobian: &DMatrix<f64>,
+    residuals: &DVector<f64>,
+    damping: f64,
+    normalized_step_tolerance: f64,
+) -> Option<DVector<f64>> {
+    let bounds = normalized_step_bounds(problem, state, layout, jacobian.ncols())?;
+    let mut step = DVector::zeros(jacobian.ncols());
+    let mut working = bounds
+        .iter()
+        .map(|bound| {
+            if bound.lower <= bound.upper && bound.upper <= bound.lower {
+                WorkingBound::Fixed
+            } else if bound.lower == 0.0 {
+                WorkingBound::Lower
+            } else if bound.upper == 0.0 {
+                WorkingBound::Upper
+            } else {
+                WorkingBound::Free
+            }
+        })
+        .collect::<Vec<_>>();
+    for (column, status) in working.iter().enumerate() {
+        step[column] = match status {
+            WorkingBound::Lower | WorkingBound::Fixed => bounds[column].lower,
+            WorkingBound::Upper => bounds[column].upper,
+            WorkingBound::Free => 0.0,
+        };
+    }
+
+    let maximum_iterations = 8usize.saturating_mul(jacobian.ncols().saturating_add(1));
+    for _ in 0..maximum_iterations {
+        let free = working
+            .iter()
+            .enumerate()
+            .filter_map(|(column, status)| (*status == WorkingBound::Free).then_some(column))
+            .collect::<Vec<_>>();
+        let mut candidate = step.clone();
+        if !free.is_empty() {
+            let reduced = DMatrix::from_fn(jacobian.nrows(), free.len(), |row, column| {
+                jacobian[(row, free[column])]
+            });
+            let active_model = jacobian * &step + residuals;
+            let free_contribution = &reduced
+                * DVector::from_iterator(free.len(), free.iter().map(|&column| step[column]));
+            let effective_residual = active_model - free_contribution;
+            let reduced_step = lm_step(&reduced, &effective_residual, damping)?;
+            for (reduced_column, &column) in free.iter().enumerate() {
+                candidate[column] = reduced_step[reduced_column];
+            }
+        }
+
+        if let Some((alpha, column, side)) =
+            first_step_bound_event(&step, &candidate, &bounds, &free)
+        {
+            step += (candidate - &step) * alpha;
+            match side {
+                WorkingBound::Lower => {
+                    step[column] = bounds[column].lower;
+                    working[column] = WorkingBound::Lower;
+                }
+                WorkingBound::Upper => {
+                    step[column] = bounds[column].upper;
+                    working[column] = WorkingBound::Upper;
+                }
+                WorkingBound::Free | WorkingBound::Fixed => return None,
+            }
+            continue;
+        }
+        step = candidate;
+
+        let model_residuals = jacobian * &step + residuals;
+        let gradient = jacobian.transpose() * model_residuals + &step * damping;
+        if gradient.iter().any(|value| !value.is_finite()) {
+            return None;
+        }
+        let tolerance = kkt_gradient_tolerance(
+            jacobian,
+            residuals,
+            &step,
+            damping,
+            normalized_step_tolerance,
+        )?;
+        let mut release: Option<(usize, f64)> = None;
+        for (column, status) in working.iter().copied().enumerate() {
+            let violation = match status {
+                WorkingBound::Lower if gradient[column] < -tolerance => -gradient[column],
+                WorkingBound::Upper if gradient[column] > tolerance => gradient[column],
+                WorkingBound::Free if gradient[column].abs() > tolerance => return None,
+                WorkingBound::Free
+                | WorkingBound::Lower
+                | WorkingBound::Upper
+                | WorkingBound::Fixed => 0.0,
+            };
+            if violation > 0.0
+                && release
+                    .as_ref()
+                    .is_none_or(|(_, current)| violation > *current)
+            {
+                release = Some((column, violation));
+            }
+        }
+        if let Some((column, _)) = release {
+            working[column] = WorkingBound::Free;
+            continue;
+        }
+        return step.iter().all(|value| value.is_finite()).then_some(step);
+    }
+    None
+}
+
+#[derive(Clone, Copy, Debug)]
+struct NormalizedStepBound {
+    lower: f64,
+    upper: f64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum WorkingBound {
+    Free,
+    Lower,
+    Upper,
+    Fixed,
+}
+
+fn normalized_step_bounds(
+    problem: &Problem,
+    state: &VariableState,
+    layout: &ActiveLayout,
+    dimension: usize,
+) -> Option<Vec<NormalizedStepBound>> {
+    let mut intervals = vec![
+        NormalizedStepBound {
+            lower: f64::NEG_INFINITY,
+            upper: f64::INFINITY,
+        };
+        dimension
+    ];
+    for (_, bound) in problem.bounds.iter() {
+        let Some(column) = bound_column(layout, bound.variable_id(), bound.coordinate()) else {
+            continue;
+        };
+        let block = layout
+            .blocks
+            .iter()
+            .find(|block| block.tangent_range.contains(&column))?;
+        let local = column - block.tangent_range.start;
+        let scale = block.step_scales[local];
+        let value = crate::bounds::coordinate_value(
+            crate::analysis::state_value(state, bound.variable_id())?,
+            bound.coordinate(),
+        );
+        if let Some(lower) = bound.lower() {
+            intervals[column].lower = intervals[column].lower.max((lower - value) / scale);
+        }
+        if let Some(upper) = bound.upper() {
+            intervals[column].upper = intervals[column].upper.min((upper - value) / scale);
+        }
+    }
+    intervals
+        .iter()
+        .all(|bound| {
+            !bound.lower.is_nan()
+                && !bound.upper.is_nan()
+                && bound.lower <= 0.0
+                && bound.upper >= 0.0
+                && bound.lower <= bound.upper
+        })
+        .then_some(intervals)
+}
+
+fn first_step_bound_event(
+    current: &DVector<f64>,
+    candidate: &DVector<f64>,
+    bounds: &[NormalizedStepBound],
+    free: &[usize],
+) -> Option<(f64, usize, WorkingBound)> {
+    let mut event: Option<(f64, usize, WorkingBound)> = None;
+    for &column in free {
+        let direction = candidate[column] - current[column];
+        let candidate_event = if candidate[column] < bounds[column].lower && direction < 0.0 {
+            Some((
+                (bounds[column].lower - current[column]) / direction,
+                WorkingBound::Lower,
+            ))
+        } else if candidate[column] > bounds[column].upper && direction > 0.0 {
+            Some((
+                (bounds[column].upper - current[column]) / direction,
+                WorkingBound::Upper,
+            ))
+        } else {
+            None
+        };
+        let Some((alpha, side)) = candidate_event else {
+            continue;
+        };
+        if !alpha.is_finite() || !(0.0..=1.0).contains(&alpha) {
+            return None;
+        }
+        if event
+            .as_ref()
+            .is_none_or(|(current_alpha, current_column, _)| {
+                alpha < *current_alpha
+                    || alpha.total_cmp(current_alpha).is_eq() && column < *current_column
+            })
+        {
+            event = Some((alpha, column, side));
+        }
+    }
+    event
+}
+
+fn kkt_gradient_tolerance(
+    jacobian: &DMatrix<f64>,
+    residuals: &DVector<f64>,
+    step: &DVector<f64>,
+    damping: f64,
+    normalized_step_tolerance: f64,
+) -> Option<f64> {
+    let jacobian_norm = stable_norm(jacobian.iter().copied())?;
+    let residual_norm = stable_norm(residuals.iter().copied())?;
+    let step_norm = stable_norm(step.iter().copied())?;
+    let scale = jacobian_norm * residual_norm + damping * step_norm;
+    let roundoff = 64.0 * f64::EPSILON * scale;
+    let step_resolution = normalized_step_tolerance * (jacobian_norm * jacobian_norm + damping);
+    let tolerance = roundoff.max(step_resolution);
+    tolerance.is_finite().then_some(tolerance)
+}
+
+#[derive(Clone, Debug)]
+struct ReducedStepBound {
+    normal: DVector<f64>,
+    lower: f64,
+    upper: f64,
+}
+
+struct ConstrainedNullspaceStep {
+    step: DVector<f64>,
+    stationary: bool,
+    critical_cone: Option<ReducedCriticalCone>,
+}
+
+struct ReducedCriticalCone {
+    /// Basis in the protected-nullspace coordinates.
+    span: DMatrix<f64>,
+    /// Signed inward weak-active normals in `span` coordinates.
+    inequalities: DMatrix<f64>,
+}
+
+struct WorkingSetKkt {
+    release: Option<usize>,
+    multipliers: Vec<f64>,
+}
+
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+fn constrained_nullspace_step(
+    problem: &Problem,
+    state: &VariableState,
+    layout: &ActiveLayout,
+    nullspace: &DMatrix<f64>,
+    reduced_jacobian: &DMatrix<f64>,
+    residuals: &DVector<f64>,
+    relative_tolerance: f64,
+    normalized_step_tolerance: f64,
+) -> Option<ConstrainedNullspaceStep> {
+    let full_bounds = normalized_step_bounds(problem, state, layout, nullspace.nrows())?;
+    let mut constraints = Vec::new();
+    for (column, bound) in full_bounds.iter().enumerate() {
+        if !bound.lower.is_finite() && !bound.upper.is_finite() {
+            continue;
+        }
+        let normal = nullspace.row(column).transpose().into_owned();
+        let norm = stable_norm(normal.iter().copied())?;
+        if norm == 0.0 {
+            continue;
+        }
+        constraints.push(ReducedStepBound {
+            normal,
+            lower: bound.lower,
+            upper: bound.upper,
+        });
+    }
+    let mut reduced_step = DVector::zeros(nullspace.ncols());
+    let desired_working = constraints
+        .iter()
+        .map(|constraint| {
+            if constraint.lower <= constraint.upper && constraint.upper <= constraint.lower {
+                WorkingBound::Fixed
+            } else if constraint.lower == 0.0 {
+                WorkingBound::Lower
+            } else if constraint.upper == 0.0 {
+                WorkingBound::Upper
+            } else {
+                WorkingBound::Free
+            }
+        })
+        .collect::<Vec<_>>();
+    let mut working =
+        independent_initial_working_set(&constraints, &desired_working, relative_tolerance)?;
+    let maximum_iterations = 8usize.saturating_mul(constraints.len().saturating_add(1));
+    for _ in 0..maximum_iterations {
+        let candidate = solve_active_reduced_least_squares(
+            reduced_jacobian,
+            residuals,
+            &constraints,
+            &working,
+            relative_tolerance,
+        )?;
+        if let Some((alpha, constraint, side)) =
+            first_linear_bound_event(&reduced_step, &candidate, &constraints, &working)
+        {
+            reduced_step += (candidate - &reduced_step) * alpha;
+            if working_constraint_is_independent(
+                &constraints,
+                &working,
+                constraint,
+                relative_tolerance,
+            )? {
+                working[constraint] = side;
+            } else if !constraint_satisfied(&constraints[constraint], &reduced_step) {
+                return None;
+            }
+            continue;
+        }
+        reduced_step = candidate;
+
+        let model_residuals = reduced_jacobian * &reduced_step + residuals;
+        let gradient = reduced_jacobian.transpose() * &model_residuals;
+        if gradient.iter().any(|value| !value.is_finite()) {
+            return None;
+        }
+        let tolerance = kkt_gradient_tolerance(
+            reduced_jacobian,
+            residuals,
+            &reduced_step,
+            0.0,
+            normalized_step_tolerance,
+        )?;
+        let kkt = working_set_kkt(&gradient, &constraints, &working, tolerance).ok()?;
+        if let Some(constraint) = kkt.release {
+            working[constraint] = WorkingBound::Free;
+            continue;
+        }
+        let mut step = nullspace * &reduced_step;
+        snap_constrained_roundoff(&mut step, &full_bounds)?;
+        let current_cost = residual_cost(residuals)?;
+        let model_cost = residual_cost(&model_residuals)?;
+        let stationary = stable_norm(step.iter().copied())? <= normalized_step_tolerance
+            || !objective_decreases(current_cost, model_cost);
+        let has_active_bound = constraints
+            .iter()
+            .any(|constraint| constraint.lower == 0.0 || constraint.upper == 0.0);
+        let critical_cone = if stationary || !has_active_bound {
+            Some(reduced_critical_cone(
+                nullspace.ncols(),
+                &constraints,
+                &working,
+                &kkt.multipliers,
+                relative_tolerance,
+                tolerance,
+            )?)
+        } else {
+            None
+        };
+        return step
+            .iter()
+            .all(|value| value.is_finite())
+            .then_some(ConstrainedNullspaceStep {
+                step,
+                stationary,
+                critical_cone,
+            });
+    }
+    None
+}
+
+fn snap_constrained_roundoff(
+    step: &mut DVector<f64>,
+    bounds: &[NormalizedStepBound],
+) -> Option<()> {
+    let norm = stable_norm(step.iter().copied())?;
+    let tolerance = 64.0 * f64::EPSILON * norm;
+    for (value, bound) in step.iter_mut().zip(bounds) {
+        if bound.lower == 0.0 && *value < 0.0 && value.abs() <= tolerance {
+            *value = 0.0;
+        }
+        if bound.upper == 0.0 && *value > 0.0 && value.abs() <= tolerance {
+            *value = 0.0;
+        }
+    }
+    Some(())
+}
+
+fn solve_active_reduced_least_squares(
+    jacobian: &DMatrix<f64>,
+    residuals: &DVector<f64>,
+    constraints: &[ReducedStepBound],
+    working: &[WorkingBound],
+    relative_tolerance: f64,
+) -> Option<DVector<f64>> {
+    let active = working
+        .iter()
+        .enumerate()
+        .filter_map(|(index, status)| (*status != WorkingBound::Free).then_some(index))
+        .collect::<Vec<_>>();
+    let dimension = jacobian.ncols();
+    let (particular, tangent) = if active.is_empty() {
+        (
+            DVector::zeros(dimension),
+            DMatrix::identity(dimension, dimension),
+        )
+    } else {
+        let matrix = DMatrix::from_fn(active.len(), dimension, |row, column| {
+            constraints[active[row]].normal[column]
+        });
+        let right_hand_side = DVector::from_iterator(
+            active.len(),
+            active.iter().map(|&index| match working[index] {
+                WorkingBound::Lower | WorkingBound::Fixed => constraints[index].lower,
+                WorkingBound::Upper => constraints[index].upper,
+                WorkingBound::Free => 0.0,
+            }),
+        );
+        let particular = solve_dense_least_squares(&matrix, &right_hand_side)?.0;
+        let tangent = numerical_nullspace(&matrix, relative_tolerance)?;
+        (particular, tangent)
+    };
+    if tangent.ncols() == 0 {
+        return Some(particular);
+    }
+    let reduced = jacobian * &tangent;
+    let effective = residuals + jacobian * &particular;
+    let correction = solve_dense_least_squares(&reduced, &(-effective))?.0;
+    let candidate = particular + tangent * correction;
+    candidate
+        .iter()
+        .all(|value| value.is_finite())
+        .then_some(candidate)
+}
+
+fn first_linear_bound_event(
+    current: &DVector<f64>,
+    candidate: &DVector<f64>,
+    constraints: &[ReducedStepBound],
+    working: &[WorkingBound],
+) -> Option<(f64, usize, WorkingBound)> {
+    let mut event: Option<(f64, usize, WorkingBound)> = None;
+    for (index, constraint) in constraints.iter().enumerate() {
+        if working[index] != WorkingBound::Free {
+            continue;
+        }
+        let current_value = constraint.normal.dot(current);
+        let candidate_value = constraint.normal.dot(candidate);
+        let direction = candidate_value - current_value;
+        let fixed = constraint.lower <= constraint.upper && constraint.upper <= constraint.lower;
+        let candidate_event = if candidate_value < constraint.lower && direction < 0.0 {
+            Some((
+                (constraint.lower - current_value) / direction,
+                if fixed {
+                    WorkingBound::Fixed
+                } else {
+                    WorkingBound::Lower
+                },
+            ))
+        } else if candidate_value > constraint.upper && direction > 0.0 {
+            Some((
+                (constraint.upper - current_value) / direction,
+                if fixed {
+                    WorkingBound::Fixed
+                } else {
+                    WorkingBound::Upper
+                },
+            ))
+        } else {
+            None
+        };
+        let Some((alpha, side)) = candidate_event else {
+            continue;
+        };
+        if !alpha.is_finite() || !(0.0..=1.0).contains(&alpha) {
+            return None;
+        }
+        if event
+            .as_ref()
+            .is_none_or(|(current_alpha, current_index, _)| {
+                alpha < *current_alpha
+                    || alpha.total_cmp(current_alpha).is_eq() && index < *current_index
+            })
+        {
+            event = Some((alpha, index, side));
+        }
+    }
+    event
+}
+
+fn independent_initial_working_set(
+    constraints: &[ReducedStepBound],
+    desired: &[WorkingBound],
+    relative_tolerance: f64,
+) -> Option<Vec<WorkingBound>> {
+    let mut working = vec![WorkingBound::Free; constraints.len()];
+    for fixed_only in [true, false] {
+        for (index, status) in desired.iter().copied().enumerate() {
+            if status == WorkingBound::Free || (status == WorkingBound::Fixed) != fixed_only {
+                continue;
+            }
+            if working_constraint_is_independent(constraints, &working, index, relative_tolerance)?
+            {
+                working[index] = status;
+            }
+        }
+    }
+    Some(working)
+}
+
+fn working_constraint_is_independent(
+    constraints: &[ReducedStepBound],
+    working: &[WorkingBound],
+    candidate: usize,
+    relative_tolerance: f64,
+) -> Option<bool> {
+    if working.get(candidate)? != &WorkingBound::Free {
+        return Some(false);
+    }
+    let active = working
+        .iter()
+        .enumerate()
+        .filter_map(|(index, status)| (*status != WorkingBound::Free).then_some(index))
+        .collect::<Vec<_>>();
+    let dimension = constraints.get(candidate)?.normal.len();
+    let current = DMatrix::from_fn(active.len(), dimension, |row, column| {
+        constraints[active[row]].normal[column]
+    });
+    let next = DMatrix::from_fn(active.len() + 1, dimension, |row, column| {
+        if row < active.len() {
+            constraints[active[row]].normal[column]
+        } else {
+            constraints[candidate].normal[column]
+        }
+    });
+    let current_nullity = numerical_nullspace(&current, relative_tolerance)?.ncols();
+    let next_nullity = numerical_nullspace(&next, relative_tolerance)?.ncols();
+    Some(next_nullity < current_nullity)
+}
+
+fn constraint_satisfied(constraint: &ReducedStepBound, step: &DVector<f64>) -> bool {
+    let value = constraint.normal.dot(step);
+    let tolerance = 64.0
+        * f64::EPSILON
+        * stable_norm(step.iter().copied()).unwrap_or(f64::INFINITY)
+        * stable_norm(constraint.normal.iter().copied()).unwrap_or(f64::INFINITY);
+    value >= constraint.lower - tolerance && value <= constraint.upper + tolerance
+}
+
+fn working_set_kkt(
+    gradient: &DVector<f64>,
+    constraints: &[ReducedStepBound],
+    working: &[WorkingBound],
+    tolerance: f64,
+) -> Result<WorkingSetKkt, ()> {
+    let active = working
+        .iter()
+        .enumerate()
+        .filter_map(|(index, status)| (*status != WorkingBound::Free).then_some(index))
+        .collect::<Vec<_>>();
+    let mut multipliers = vec![0.0; constraints.len()];
+    if active.is_empty() {
+        let norm = stable_norm(gradient.iter().copied()).ok_or(())?;
+        let roundoff = 64.0 * f64::EPSILON * norm;
+        return (norm <= tolerance.max(roundoff))
+            .then_some(WorkingSetKkt {
+                release: None,
+                multipliers,
+            })
+            .ok_or(());
+    }
+
+    let matrix = DMatrix::from_fn(active.len(), gradient.len(), |row, column| {
+        constraints[active[row]].normal[column]
+    });
+    let multiplier_values = solve_dense_least_squares(&matrix.transpose(), &(-gradient))
+        .ok_or(())?
+        .0;
+    let stationarity = gradient + matrix.transpose() * &multiplier_values;
+    let stationarity_norm = stable_norm(stationarity.iter().copied()).ok_or(())?;
+    let gradient_norm = stable_norm(gradient.iter().copied()).ok_or(())?;
+    let stationarity_tolerance = tolerance.max(64.0 * f64::EPSILON * gradient_norm);
+    if stationarity_norm > stationarity_tolerance {
+        return Err(());
+    }
+    for (position, &index) in active.iter().enumerate() {
+        multipliers[index] = multiplier_values[position];
+    }
+
+    let mut release: Option<(usize, f64)> = None;
+    for &index in &active {
+        let violation = match working[index] {
+            WorkingBound::Lower if multipliers[index] > tolerance => multipliers[index],
+            WorkingBound::Upper if multipliers[index] < -tolerance => -multipliers[index],
+            WorkingBound::Free
+            | WorkingBound::Lower
+            | WorkingBound::Upper
+            | WorkingBound::Fixed => 0.0,
+        };
+        if violation > 0.0
+            && release
+                .as_ref()
+                .is_none_or(|(_, current)| violation > *current)
+        {
+            release = Some((index, violation));
+        }
+    }
+    Ok(WorkingSetKkt {
+        release: release.map(|(index, _)| index),
+        multipliers,
+    })
+}
+
+fn reduced_critical_cone(
+    dimension: usize,
+    constraints: &[ReducedStepBound],
+    working: &[WorkingBound],
+    multipliers: &[f64],
+    relative_tolerance: f64,
+    multiplier_tolerance: f64,
+) -> Option<ReducedCriticalCone> {
+    let mut equalities = Vec::new();
+    let mut weak_inequalities = Vec::new();
+    for (index, constraint) in constraints.iter().enumerate() {
+        let fixed = constraint.lower == 0.0 && constraint.upper == 0.0;
+        if fixed {
+            equalities.push(constraint.normal.clone());
+            continue;
+        }
+        let active_lower = constraint.lower == 0.0;
+        let active_upper = constraint.upper == 0.0;
+        if !active_lower && !active_upper {
+            continue;
+        }
+        let strong = match working[index] {
+            WorkingBound::Lower => -multipliers[index] > multiplier_tolerance,
+            WorkingBound::Upper => multipliers[index] > multiplier_tolerance,
+            WorkingBound::Free | WorkingBound::Fixed => false,
+        };
+        let sign = if active_lower { 1.0 } else { -1.0 };
+        if strong {
+            equalities.push(constraint.normal.clone());
+        } else {
+            weak_inequalities.push(&constraint.normal * sign);
+        }
+    }
+
+    let equality_matrix = DMatrix::from_fn(equalities.len(), dimension, |row, column| {
+        equalities[row][column]
+    });
+    let span = numerical_nullspace(&equality_matrix, relative_tolerance)?;
+    let mut projected_inequalities = Vec::new();
+    for inequality in weak_inequalities {
+        let projected = span.transpose() * inequality;
+        let norm = stable_norm(projected.iter().copied())?;
+        if norm > 64.0 * f64::EPSILON {
+            projected_inequalities.push(projected);
+        }
+    }
+    let inequalities =
+        DMatrix::from_fn(projected_inequalities.len(), span.ncols(), |row, column| {
+            projected_inequalities[row][column]
+        });
+    Some(ReducedCriticalCone { span, inequalities })
+}
+
+fn step_is_within_bounds(
+    problem: &Problem,
+    state: &VariableState,
+    layout: &ActiveLayout,
+    step: &mut DVector<f64>,
+) -> Option<()> {
+    let bounds = normalized_step_bounds(problem, state, layout, step.len())?;
+    snap_constrained_roundoff(step, &bounds)?;
+    step.iter()
+        .zip(&bounds)
+        .all(|(value, bound)| *value >= bound.lower && *value <= bound.upper)
+        .then_some(())
+}
+
+fn limit_step_to_bound_events(
+    problem: &Problem,
+    state: &VariableState,
+    layout: &ActiveLayout,
+    step: &mut DVector<f64>,
+) -> Option<f64> {
+    let bounds = normalized_step_bounds(problem, state, layout, step.len())?;
+    snap_constrained_roundoff(step, &bounds)?;
+    let mut alpha = 1.0_f64;
+    for (_, bound) in problem.bounds.iter() {
+        let Some(column) = bound_column(layout, bound.variable_id(), bound.coordinate()) else {
+            continue;
+        };
+        let block = layout
+            .blocks
+            .iter()
+            .find(|block| block.tangent_range.contains(&column))?;
+        let local = column - block.tangent_range.start;
+        let raw_direction = step[column] * block.step_scales[local];
+        let value = crate::bounds::coordinate_value(
+            crate::analysis::state_value(state, bound.variable_id())?,
+            bound.coordinate(),
+        );
+        if raw_direction < 0.0
+            && let Some(lower) = bound.lower()
+            && value + alpha * raw_direction < lower
+        {
+            alpha = alpha.min((lower - value) / raw_direction);
+        } else if raw_direction > 0.0
+            && let Some(upper) = bound.upper()
+            && value + alpha * raw_direction > upper
+        {
+            alpha = alpha.min((upper - value) / raw_direction);
+        }
+    }
+    if !alpha.is_finite() || !(0.0..=1.0).contains(&alpha) {
+        return None;
+    }
+    step.scale_mut(alpha);
+    step.iter().all(|value| value.is_finite()).then_some(alpha)
+}
+
+fn enforce_state_bounds(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    state: &mut VariableState,
+) -> Result<(), CoreError> {
+    let mut snaps = Vec::new();
+    for (bound_id, bound) in problem.bounds.iter() {
+        let value = crate::bounds::coordinate_value(
+            crate::analysis::state_value(state, bound.variable_id())
+                .ok_or(CoreError::UnknownVariable(bound.variable_id()))?,
+            bound.coordinate(),
+        );
+        let target = if let Some(lower) = bound.lower()
+            && at_bound_endpoint(value, lower)
+        {
+            Some(lower)
+        } else if let Some(upper) = bound.upper()
+            && at_bound_endpoint(value, upper)
+        {
+            Some(upper)
+        } else {
+            None
+        };
+        if !bound.contains(value) && target.is_none() {
+            let _ = bound_id;
+            return Err(CoreError::ValueOutsideBound {
+                variable: bound.variable_id(),
+                coordinate: bound.coordinate(),
+                value,
+                lower: bound.lower(),
+                upper: bound.upper(),
+            });
+        }
+        if let Some(target) = target {
+            let root = plan
+                .root(bound.variable_id())
+                .ok_or(CoreError::UnknownVariable(bound.variable_id()))?;
+            snaps.push((root, bound.coordinate(), target));
+        }
+    }
+    for (variable_id, coordinate, target) in snaps {
+        let (_, value) = state
+            .values
+            .iter_mut()
+            .find(|(id, _)| *id == variable_id)
+            .ok_or(CoreError::UnknownVariable(variable_id))?;
+        crate::bounds::set_coordinate_value(value, coordinate, target)?;
+    }
+    plan.synchronize_state(problem, state)?;
+    for (_, bound) in problem.bounds.iter() {
+        let value = crate::bounds::coordinate_value(
+            crate::analysis::state_value(state, bound.variable_id())
+                .ok_or(CoreError::UnknownVariable(bound.variable_id()))?,
+            bound.coordinate(),
+        );
+        if !bound.contains(value) {
+            return Err(CoreError::ValueOutsideBound {
+                variable: bound.variable_id(),
+                coordinate: bound.coordinate(),
+                value,
+                lower: bound.lower(),
+                upper: bound.upper(),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn project_initial_state_into_bounds(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    state: &mut VariableState,
+) -> Result<(), CoreError> {
+    let mut projections = Vec::new();
+    for (_, bound) in problem.bounds.iter() {
+        let value = crate::bounds::coordinate_value(
+            crate::analysis::state_value(state, bound.variable_id())
+                .ok_or(CoreError::UnknownVariable(bound.variable_id()))?,
+            bound.coordinate(),
+        );
+        let target = if let Some(lower) = bound.lower()
+            && value < lower
+        {
+            Some(lower)
+        } else if let Some(upper) = bound.upper()
+            && value > upper
+        {
+            Some(upper)
+        } else {
+            None
+        };
+        if let Some(target) = target {
+            let root = plan
+                .root(bound.variable_id())
+                .ok_or(CoreError::UnknownVariable(bound.variable_id()))?;
+            projections.push((root, bound.coordinate(), target));
+        }
+    }
+    for (variable_id, coordinate, target) in projections {
+        let (_, value) = state
+            .values
+            .iter_mut()
+            .find(|(id, _)| *id == variable_id)
+            .ok_or(CoreError::UnknownVariable(variable_id))?;
+        crate::bounds::set_coordinate_value(value, coordinate, target)?;
+    }
+    plan.synchronize_state(problem, state)?;
+    enforce_state_bounds(problem, plan, state)
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum LinearSolveMethod {
     Qr,
@@ -2842,11 +4756,50 @@ fn solve_dense_least_squares(
     let largest = svd.singular_values.iter().copied().fold(0.0_f64, f64::max);
     let dimension = u32::try_from(rows.max(columns)).ok()?;
     let epsilon = f64::EPSILON * f64::from(dimension) * largest;
-    let solution = svd.solve(right_hand_side, epsilon).ok()?;
-    solution
-        .iter()
-        .all(|value| value.is_finite())
-        .then_some((solution, LinearSolveMethod::Svd))
+    let mut solution = svd.solve(right_hand_side, epsilon).ok()?;
+    if solution.iter().any(|value| !value.is_finite()) {
+        return None;
+    }
+    let mut residual = matrix * &solution - right_hand_side;
+    let mut residual_norm = stable_norm(residual.iter().copied())?;
+    let mut normal_residual = matrix.transpose() * &residual;
+    let mut normal_residual_norm = stable_norm(normal_residual.iter().copied())?;
+    let matrix_norm = stable_norm(matrix.iter().copied())?;
+    let right_hand_side_norm = stable_norm(right_hand_side.iter().copied())?;
+    for _ in 0..8 {
+        let solution_norm = stable_norm(solution.iter().copied())?;
+        let roundoff_floor = 64.0
+            * f64::EPSILON
+            * matrix_norm
+            * (matrix_norm * solution_norm + right_hand_side_norm);
+        if !roundoff_floor.is_finite() || normal_residual_norm <= roundoff_floor {
+            break;
+        }
+        let correction_right_hand_side = -&residual;
+        let Ok(correction) = svd.solve(&correction_right_hand_side, epsilon) else {
+            break;
+        };
+        let candidate = &solution + correction;
+        if candidate.iter().any(|value| !value.is_finite()) {
+            break;
+        }
+        let candidate_residual = matrix * &candidate - right_hand_side;
+        let Some(candidate_residual_norm) = stable_norm(candidate_residual.iter().copied()) else {
+            break;
+        };
+        normal_residual = matrix.transpose() * &candidate_residual;
+        let Some(candidate_norm) = stable_norm(normal_residual.iter().copied()) else {
+            break;
+        };
+        if candidate_norm >= normal_residual_norm || candidate_residual_norm > residual_norm {
+            break;
+        }
+        solution = candidate;
+        residual = candidate_residual;
+        residual_norm = candidate_residual_norm;
+        normal_residual_norm = candidate_norm;
+    }
+    Some((solution, LinearSolveMethod::Svd))
 }
 
 fn limit_block_steps(step: &mut DVector<f64>, layout: &ActiveLayout, limit: f64) -> Option<f64> {
@@ -2863,6 +4816,17 @@ fn limit_block_steps(step: &mut DVector<f64>, layout: &ActiveLayout, limit: f64)
     step.iter()
         .all(|value| value.is_finite())
         .then_some(maximum)
+}
+
+fn maximum_block_step(step: &DVector<f64>, layout: &ActiveLayout) -> Option<f64> {
+    layout.blocks.iter().try_fold(0.0_f64, |maximum, block| {
+        stable_norm(
+            step.rows(block.tangent_range.start, block.tangent_range.len())
+                .iter()
+                .copied(),
+        )
+        .map(|norm| maximum.max(norm))
+    })
 }
 
 fn predicted_reduction(system: &HardSystem, step: &DVector<f64>, cost: f64) -> Option<f64> {
@@ -3207,5 +5171,97 @@ mod tests {
         assert_eq!(method, LinearSolveMethod::Svd);
         assert!((solution[0] - 2.0).abs() <= f64::EPSILON);
         assert!(solution[1].abs() <= f64::EPSILON);
+    }
+
+    #[test]
+    #[allow(clippy::unreadable_literal)]
+    fn wide_rank_deficient_svd_refines_the_normal_equation_residual() {
+        let matrix = DMatrix::from_row_slice(
+            2,
+            6,
+            &[
+                0.06399878875589683,
+                0.0,
+                0.0,
+                0.0027820941212632405,
+                -0.03072473036699153,
+                0.04005075120820309,
+                -0.6983875185918699,
+                0.0,
+                0.0,
+                -0.030359634105717875,
+                0.3352839736116159,
+                -0.43705428333532453,
+            ],
+        );
+        let right_hand_side =
+            DVector::from_vec(vec![-0.006487831513659573, -0.0005734453448315077]);
+        let (solution, method) = solve_dense_least_squares(&matrix, &right_hand_side).unwrap();
+        assert_eq!(method, LinearSolveMethod::Svd);
+        let normal_residual = matrix.transpose() * (&matrix * &solution - &right_hand_side);
+        assert!(
+            normal_residual.norm() <= 8.025757393464364e-11,
+            "normal-equation residual: {:e}",
+            normal_residual.norm()
+        );
+    }
+
+    #[test]
+    #[allow(clippy::unreadable_literal)]
+    fn wide_rank_deficient_svd_refines_without_increasing_the_objective() {
+        let matrix = DMatrix::from_row_slice(
+            2,
+            6,
+            &[
+                0.16534448628478354,
+                0.0,
+                0.0,
+                0.0004625611690347226,
+                -0.003704744068830011,
+                0.025314667355545502,
+                -0.8668417318768023,
+                0.0,
+                0.0,
+                -0.0024250420069924306,
+                0.01942264200605787,
+                -0.13271570516461637,
+            ],
+        );
+        let right_hand_side = DVector::from_vec(vec![-0.018425042972668774, 0.01555989854196734]);
+        let svd = matrix.clone().svd(true, true);
+        let largest = svd.singular_values.iter().copied().fold(0.0_f64, f64::max);
+        let initial = svd
+            .solve(&right_hand_side, f64::EPSILON * 6.0 * largest)
+            .unwrap();
+        let initial_residual = (&matrix * initial - &right_hand_side).norm();
+        let (solution, method) = solve_dense_least_squares(&matrix, &right_hand_side).unwrap();
+        assert_eq!(method, LinearSolveMethod::Svd);
+        let normal_residual = matrix.transpose() * (&matrix * &solution - &right_hand_side);
+        let residual = (&matrix * solution - right_hand_side).norm();
+        assert!(
+            normal_residual.norm() <= 7.995668163103057e-11,
+            "normal-equation residual: {:e}",
+            normal_residual.norm()
+        );
+        assert!(residual <= initial_residual);
+    }
+
+    #[test]
+    #[allow(clippy::unreadable_literal)]
+    fn constrained_roundoff_snap_preserves_material_step_coordinates() {
+        let mut step = DVector::from_vec(vec![1.0e-3, 1.2068573960262244e-19]);
+        let bounds = [
+            NormalizedStepBound {
+                lower: f64::NEG_INFINITY,
+                upper: f64::INFINITY,
+            },
+            NormalizedStepBound {
+                lower: 0.0,
+                upper: 0.0,
+            },
+        ];
+        snap_constrained_roundoff(&mut step, &bounds).unwrap();
+        assert_eq!(step[0].to_bits(), 1.0e-3f64.to_bits());
+        assert_eq!(step[1].to_bits(), 0.0f64.to_bits());
     }
 }

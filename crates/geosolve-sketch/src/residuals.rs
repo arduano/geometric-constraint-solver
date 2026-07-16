@@ -1,9 +1,518 @@
 use geosolve_core::{EvaluationError, LocalJacobian, ResidualEvaluator, VariableValue};
+use num_dual::{DualDVec64, DualNum};
 
 use crate::curves::{
     AngleOrientation, CONTACT_PARAMETER_ROUNDOFF_TOLERANCE, CircleContainment, CircleTangencyMode,
     CurveDegeneracy, CurveRef, LineParameterDomain, tangency_distance, unwrap_near,
 };
+use crate::{CurveTangentOrientation, SegmentEndpoint};
+
+#[derive(Clone, Debug)]
+enum SketchAdValue {
+    Scalar(DualDVec64),
+    Point([DualDVec64; 2]),
+}
+
+trait SketchAdFormula {
+    fn evaluate_dual(
+        &self,
+        variables: &[SketchAdValue],
+    ) -> Result<Vec<DualDVec64>, EvaluationError>;
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum BezierIncidence {
+    Quadratic([usize; 3]),
+    Cubic([usize; 4]),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum CurveParameterIncidence {
+    Variable(usize),
+    Fixed(f64),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum GenericCurveIncidence {
+    Line {
+        points: [usize; 2],
+        parameter: CurveParameterIncidence,
+        bounded: bool,
+    },
+    Circle {
+        center: usize,
+        radius: usize,
+        parameter: CurveParameterIncidence,
+    },
+    Arc {
+        center: usize,
+        radius: usize,
+        start_angle: f64,
+        signed_sweep: f64,
+        parameter: CurveParameterIncidence,
+    },
+    QuadraticBezier {
+        controls: [usize; 3],
+        parameter: CurveParameterIncidence,
+    },
+    CubicBezier {
+        controls: [usize; 4],
+        parameter: CurveParameterIncidence,
+    },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct GenericPointOnCurveResidual {
+    pub(crate) point: usize,
+    pub(crate) curve: GenericCurveIncidence,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct GenericCurvePairResidual {
+    pub(crate) first: GenericCurveIncidence,
+    pub(crate) second: GenericCurveIncidence,
+    pub(crate) orientation: Option<CurveTangentOrientation>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct PointOnBezierResidual {
+    pub(crate) point: usize,
+    pub(crate) controls: BezierIncidence,
+    pub(crate) parameter: usize,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct LineBezierTangencyResidual {
+    pub(crate) line: [usize; 2],
+    pub(crate) endpoint: SegmentEndpoint,
+    pub(crate) controls: BezierIncidence,
+    pub(crate) parameter: usize,
+    pub(crate) orientation: CurveTangentOrientation,
+}
+
+impl ResidualEvaluator for PointOnBezierResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, false).map(|(values, _)| values)
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, true).map(|(_, jacobians)| jacobians)
+    }
+}
+
+impl SketchAdFormula for PointOnBezierResidual {
+    fn evaluate_dual(
+        &self,
+        variables: &[SketchAdValue],
+    ) -> Result<Vec<DualDVec64>, EvaluationError> {
+        let point = ad_point(variables, self.point, "point-on-Bezier")?;
+        let parameter = ad_scalar(variables, self.parameter, "point-on-Bezier")?;
+        validate_ad_parameter(parameter, "point-on-Bezier")?;
+        let (position, derivative) = evaluate_ad_bezier(variables, self.controls, parameter)?;
+        require_ad_speed(&derivative, "point-on-Bezier")?;
+        Ok(vec![&point[0] - &position[0], &point[1] - &position[1]])
+    }
+}
+
+impl ResidualEvaluator for LineBezierTangencyResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, false).map(|(values, _)| values)
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, true).map(|(_, jacobians)| jacobians)
+    }
+}
+
+impl SketchAdFormula for LineBezierTangencyResidual {
+    fn evaluate_dual(
+        &self,
+        variables: &[SketchAdValue],
+    ) -> Result<Vec<DualDVec64>, EvaluationError> {
+        let start = ad_point(variables, self.line[0], "line-Bezier tangency")?;
+        let end = ad_point(variables, self.line[1], "line-Bezier tangency")?;
+        let parameter = ad_scalar(variables, self.parameter, "line-Bezier tangency")?;
+        validate_ad_parameter(parameter, "line-Bezier tangency")?;
+        let line_direction = [&end[0] - &start[0], &end[1] - &start[1]];
+        let endpoint = match self.endpoint {
+            SegmentEndpoint::Start => start,
+            SegmentEndpoint::End => end,
+        };
+        let (position, derivative) = evaluate_ad_bezier(variables, self.controls, parameter)?;
+        let line_unit = ad_unit(&line_direction, "line-Bezier tangency line")?;
+        let curve_unit = ad_unit(&derivative, "line-Bezier tangency Bezier")?;
+        let orientation = (&line_unit[0] * &curve_unit[0] + &line_unit[1] * &curve_unit[1]).re;
+        let orientation_valid = match self.orientation {
+            CurveTangentOrientation::Aligned => orientation > 0.0,
+            CurveTangentOrientation::Opposed => orientation < 0.0,
+        };
+        if !orientation_valid {
+            return Err(EvaluationError::ambiguous(
+                "line-Bezier tangency crossed its selected tangent orientation",
+            ));
+        }
+        Ok(vec![
+            &endpoint[0] - &position[0],
+            &endpoint[1] - &position[1],
+            &line_unit[0] * &curve_unit[1] - &line_unit[1] * &curve_unit[0],
+        ])
+    }
+}
+
+impl ResidualEvaluator for GenericPointOnCurveResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, false).map(|(values, _)| values)
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, true).map(|(_, jacobians)| jacobians)
+    }
+}
+
+impl SketchAdFormula for GenericPointOnCurveResidual {
+    fn evaluate_dual(
+        &self,
+        variables: &[SketchAdValue],
+    ) -> Result<Vec<DualDVec64>, EvaluationError> {
+        let point = ad_point(variables, self.point, "point-on-curve")?;
+        let (position, derivative) = evaluate_ad_curve(variables, self.curve)?;
+        require_ad_speed(&derivative, "point-on-curve")?;
+        Ok(vec![&point[0] - &position[0], &point[1] - &position[1]])
+    }
+}
+
+impl ResidualEvaluator for GenericCurvePairResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, false).map(|(values, _)| values)
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, true).map(|(_, jacobians)| jacobians)
+    }
+}
+
+impl SketchAdFormula for GenericCurvePairResidual {
+    fn evaluate_dual(
+        &self,
+        variables: &[SketchAdValue],
+    ) -> Result<Vec<DualDVec64>, EvaluationError> {
+        let (first_position, first_derivative) = evaluate_ad_curve(variables, self.first)?;
+        let (second_position, second_derivative) = evaluate_ad_curve(variables, self.second)?;
+        require_ad_speed(&first_derivative, "first contact curve")?;
+        require_ad_speed(&second_derivative, "second contact curve")?;
+        let mut values = vec![
+            &first_position[0] - &second_position[0],
+            &first_position[1] - &second_position[1],
+        ];
+        if let Some(orientation) = self.orientation {
+            let first_unit = ad_unit(&first_derivative, "first tangent curve")?;
+            let second_unit = ad_unit(&second_derivative, "second tangent curve")?;
+            let cosine = (&first_unit[0] * &second_unit[0] + &first_unit[1] * &second_unit[1]).re;
+            let orientation_valid = match orientation {
+                CurveTangentOrientation::Aligned => cosine > 0.0,
+                CurveTangentOrientation::Opposed => cosine < 0.0,
+            };
+            if !orientation_valid {
+                return Err(EvaluationError::ambiguous(
+                    "curve tangency crossed its selected tangent orientation",
+                ));
+            }
+            values.push(&first_unit[0] * &second_unit[1] - &first_unit[1] * &second_unit[0]);
+        }
+        Ok(values)
+    }
+}
+
+fn evaluate_sketch_ad(
+    formula: &impl SketchAdFormula,
+    variables: &[VariableValue],
+    seeded: bool,
+) -> Result<(Vec<f64>, Vec<LocalJacobian>), EvaluationError> {
+    let width = if seeded {
+        variables
+            .iter()
+            .map(|value| value.kind().tangent_dimension())
+            .sum()
+    } else {
+        0
+    };
+    let mut offsets = Vec::with_capacity(variables.len());
+    let mut offset = 0;
+    let values = variables
+        .iter()
+        .map(|value| {
+            offsets.push(offset);
+            let result = match *value {
+                VariableValue::Scalar(value) => {
+                    SketchAdValue::Scalar(ad_seed(value, width, offset, seeded))
+                }
+                VariableValue::Vec2(value) => SketchAdValue::Point([
+                    ad_seed(value[0], width, offset, seeded),
+                    ad_seed(value[1], width, offset + 1, seeded),
+                ]),
+                VariableValue::Pose2(_) => {
+                    return Err(EvaluationError::invalid_geometry(
+                        "generic sketch curve residual does not accept Pose2 incidence",
+                    ));
+                }
+            };
+            offset += value.kind().tangent_dimension();
+            Ok(result)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let outputs = formula.evaluate_dual(&values)?;
+    let real = outputs.iter().map(|value| value.re).collect();
+    let jacobians = if seeded {
+        variables
+            .iter()
+            .enumerate()
+            .map(|(block, variable)| {
+                let columns = variable.kind().tangent_dimension();
+                let mut derivatives = Vec::with_capacity(outputs.len() * columns);
+                for output in &outputs {
+                    for column in 0..columns {
+                        derivatives.push(ad_derivative(output, offsets[block] + column));
+                    }
+                }
+                LocalJacobian::new(outputs.len(), columns, derivatives)
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    Ok((real, jacobians))
+}
+
+fn ad_seed(real: f64, width: usize, coordinate: usize, seeded: bool) -> DualDVec64 {
+    if seeded {
+        DualDVec64::from_re(real).derivative(width, coordinate)
+    } else {
+        DualDVec64::from_re(real)
+    }
+}
+
+fn ad_derivative(value: &DualDVec64, coordinate: usize) -> f64 {
+    value
+        .eps
+        .0
+        .as_ref()
+        .map_or(0.0, |derivatives| derivatives[coordinate])
+}
+
+fn ad_point<'a>(
+    variables: &'a [SketchAdValue],
+    index: usize,
+    context: &str,
+) -> Result<&'a [DualDVec64; 2], EvaluationError> {
+    match variables.get(index) {
+        Some(SketchAdValue::Point(point)) => Ok(point),
+        _ => Err(EvaluationError::invalid_geometry(format!(
+            "{context} expected a point at incidence {index}"
+        ))),
+    }
+}
+
+fn ad_scalar<'a>(
+    variables: &'a [SketchAdValue],
+    index: usize,
+    context: &str,
+) -> Result<&'a DualDVec64, EvaluationError> {
+    match variables.get(index) {
+        Some(SketchAdValue::Scalar(value)) => Ok(value),
+        _ => Err(EvaluationError::invalid_geometry(format!(
+            "{context} expected a scalar at incidence {index}"
+        ))),
+    }
+}
+
+fn validate_ad_parameter(parameter: &DualDVec64, context: &str) -> Result<(), EvaluationError> {
+    if parameter.re.is_finite()
+        && (-CONTACT_PARAMETER_ROUNDOFF_TOLERANCE..=1.0 + CONTACT_PARAMETER_ROUNDOFF_TOLERANCE)
+            .contains(&parameter.re)
+    {
+        Ok(())
+    } else {
+        Err(EvaluationError::out_of_domain(format!(
+            "{context} parameter escaped bounded span [0, 1]"
+        )))
+    }
+}
+
+fn evaluate_ad_bezier(
+    variables: &[SketchAdValue],
+    controls: BezierIncidence,
+    parameter: &DualDVec64,
+) -> Result<([DualDVec64; 2], [DualDVec64; 2]), EvaluationError> {
+    match controls {
+        BezierIncidence::Quadratic([first, second, third]) => {
+            let first = ad_point(variables, first, "quadratic Bezier")?;
+            let second = ad_point(variables, second, "quadratic Bezier")?;
+            let third = ad_point(variables, third, "quadratic Bezier")?;
+            let one_minus = DualDVec64::from_re(1.0) - parameter;
+            let two = DualDVec64::from_re(2.0);
+            let position = std::array::from_fn(|coordinate| {
+                &one_minus * &one_minus * &first[coordinate]
+                    + &two * &one_minus * parameter * &second[coordinate]
+                    + parameter * parameter * &third[coordinate]
+            });
+            let derivative = std::array::from_fn(|coordinate| {
+                &two * (&one_minus * (&second[coordinate] - &first[coordinate])
+                    + parameter * (&third[coordinate] - &second[coordinate]))
+            });
+            Ok((position, derivative))
+        }
+        BezierIncidence::Cubic([first, second, third, fourth]) => {
+            let first = ad_point(variables, first, "cubic Bezier")?;
+            let second = ad_point(variables, second, "cubic Bezier")?;
+            let third = ad_point(variables, third, "cubic Bezier")?;
+            let fourth = ad_point(variables, fourth, "cubic Bezier")?;
+            let one_minus = DualDVec64::from_re(1.0) - parameter;
+            let three = DualDVec64::from_re(3.0);
+            let six = DualDVec64::from_re(6.0);
+            let position = std::array::from_fn(|coordinate| {
+                &one_minus * &one_minus * &one_minus * &first[coordinate]
+                    + &three * &one_minus * &one_minus * parameter * &second[coordinate]
+                    + &three * &one_minus * parameter * parameter * &third[coordinate]
+                    + parameter * parameter * parameter * &fourth[coordinate]
+            });
+            let derivative = std::array::from_fn(|coordinate| {
+                &three * &one_minus * &one_minus * (&second[coordinate] - &first[coordinate])
+                    + &six * &one_minus * parameter * (&third[coordinate] - &second[coordinate])
+                    + &three * parameter * parameter * (&fourth[coordinate] - &third[coordinate])
+            });
+            Ok((position, derivative))
+        }
+    }
+}
+
+fn evaluate_ad_curve(
+    variables: &[SketchAdValue],
+    curve: GenericCurveIncidence,
+) -> Result<([DualDVec64; 2], [DualDVec64; 2]), EvaluationError> {
+    match curve {
+        GenericCurveIncidence::Line {
+            points: [start, end],
+            parameter,
+            bounded,
+        } => {
+            let start = ad_point(variables, start, "generic line")?;
+            let end = ad_point(variables, end, "generic line")?;
+            let parameter = curve_parameter(variables, parameter, bounded, "generic line")?;
+            let derivative = [&end[0] - &start[0], &end[1] - &start[1]];
+            let position = [
+                &start[0] + &parameter * &derivative[0],
+                &start[1] + &parameter * &derivative[1],
+            ];
+            Ok((position, derivative))
+        }
+        GenericCurveIncidence::Circle {
+            center,
+            radius,
+            parameter,
+        } => {
+            let center = ad_point(variables, center, "generic circle")?;
+            let radius = ad_scalar(variables, radius, "generic circle")?;
+            if !radius.re.is_finite() || radius.re <= 0.0 {
+                return Err(EvaluationError::invalid_geometry(
+                    "generic circle radius must be positive and finite",
+                ));
+            }
+            let angle = curve_parameter(variables, parameter, false, "generic circle")?;
+            let sine = angle.clone().sin();
+            let cosine = angle.cos();
+            Ok((
+                [&center[0] + radius * &cosine, &center[1] + radius * &sine],
+                [-radius * sine, radius * cosine],
+            ))
+        }
+        GenericCurveIncidence::Arc {
+            center,
+            radius,
+            start_angle,
+            signed_sweep,
+            parameter,
+        } => {
+            let center = ad_point(variables, center, "generic arc")?;
+            let radius = ad_scalar(variables, radius, "generic arc")?;
+            if !radius.re.is_finite()
+                || radius.re <= 0.0
+                || !start_angle.is_finite()
+                || !signed_sweep.is_finite()
+                || signed_sweep == 0.0
+            {
+                return Err(EvaluationError::invalid_geometry(
+                    "generic arc definition must be finite and regular",
+                ));
+            }
+            let parameter = curve_parameter(variables, parameter, true, "generic arc")?;
+            let angle = parameter * signed_sweep + start_angle;
+            let sine = angle.clone().sin();
+            let cosine = angle.cos();
+            Ok((
+                [&center[0] + radius * &cosine, &center[1] + radius * &sine],
+                [
+                    -(radius.clone() * signed_sweep) * sine,
+                    radius.clone() * signed_sweep * cosine,
+                ],
+            ))
+        }
+        GenericCurveIncidence::QuadraticBezier {
+            controls,
+            parameter,
+        } => {
+            let parameter = curve_parameter(variables, parameter, true, "quadratic Bezier")?;
+            evaluate_ad_bezier(variables, BezierIncidence::Quadratic(controls), &parameter)
+        }
+        GenericCurveIncidence::CubicBezier {
+            controls,
+            parameter,
+        } => {
+            let parameter = curve_parameter(variables, parameter, true, "cubic Bezier")?;
+            evaluate_ad_bezier(variables, BezierIncidence::Cubic(controls), &parameter)
+        }
+    }
+}
+
+fn curve_parameter(
+    variables: &[SketchAdValue],
+    parameter: CurveParameterIncidence,
+    bounded: bool,
+    context: &str,
+) -> Result<DualDVec64, EvaluationError> {
+    let value = match parameter {
+        CurveParameterIncidence::Variable(index) => ad_scalar(variables, index, context)?.clone(),
+        CurveParameterIncidence::Fixed(value) => DualDVec64::from_re(value),
+    };
+    if !value.re.is_finite() {
+        return Err(EvaluationError::out_of_domain(format!(
+            "{context} parameter must be finite"
+        )));
+    }
+    if bounded {
+        validate_ad_parameter(&value, context)?;
+    }
+    Ok(value)
+}
+
+fn require_ad_speed(derivative: &[DualDVec64; 2], context: &str) -> Result<(), EvaluationError> {
+    let speed = derivative[0].re.hypot(derivative[1].re);
+    if speed.is_finite() && speed > 0.0 {
+        Ok(())
+    } else {
+        Err(EvaluationError::degenerate(format!(
+            "{context} has zero or non-finite speed"
+        )))
+    }
+}
+
+fn ad_unit(
+    derivative: &[DualDVec64; 2],
+    context: &str,
+) -> Result<[DualDVec64; 2], EvaluationError> {
+    require_ad_speed(derivative, context)?;
+    let norm = (&derivative[0] * &derivative[0] + &derivative[1] * &derivative[1]).sqrt();
+    Ok([&derivative[0] / &norm, &derivative[1] / &norm])
+}
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct FixedCoordinateResidual {

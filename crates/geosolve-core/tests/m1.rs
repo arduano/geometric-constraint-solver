@@ -25,7 +25,7 @@ fn scalar_value(value: VariableValue) -> f64 {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct ScalarQuadratic {
     target: f64,
 }
@@ -46,7 +46,7 @@ impl ResidualEvaluator for ScalarQuadratic {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Distance {
     target: f64,
 }
@@ -86,7 +86,7 @@ impl ResidualEvaluator for Distance {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct TransformedPoint {
     local: [f64; 2],
     target: [f64; 2],
@@ -124,7 +124,7 @@ impl ResidualEvaluator for TransformedPoint {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Heterogeneous;
 
 impl ResidualEvaluator for Heterogeneous {
@@ -157,7 +157,7 @@ impl ResidualEvaluator for Heterogeneous {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Identity {
     offset: f64,
 }
@@ -517,7 +517,7 @@ enum FailureMode {
     WrongJacobianShape,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct FailureEvaluator(FailureMode);
 
 impl ResidualEvaluator for FailureEvaluator {

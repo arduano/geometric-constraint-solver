@@ -12,11 +12,30 @@ pub(crate) enum AdVariableValue {
     Pose2([DualDVec64; 3]),
 }
 
-pub(crate) trait LocalAdFormula: Debug + Send + Sync {
+pub(crate) trait LocalAdFormulaClone {
+    fn clone_box(&self) -> Box<dyn LocalAdFormula>;
+}
+
+impl<T> LocalAdFormulaClone for T
+where
+    T: LocalAdFormula + Clone + 'static,
+{
+    fn clone_box(&self) -> Box<dyn LocalAdFormula> {
+        Box::new(self.clone())
+    }
+}
+
+impl Clone for Box<dyn LocalAdFormula> {
+    fn clone(&self) -> Self {
+        self.clone_box()
+    }
+}
+
+pub(crate) trait LocalAdFormula: LocalAdFormulaClone + Debug + Send + Sync {
     fn evaluate(&self, variables: &[AdVariableValue]) -> Result<Vec<DualDVec64>, EvaluationError>;
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct LocalAdEvaluator {
     formula: Box<dyn LocalAdFormula>,
 }
@@ -186,7 +205,7 @@ mod tests {
         VariableBlock,
     };
 
-    #[derive(Debug)]
+    #[derive(Clone, Debug)]
     struct MixedFormula {
         scale: f64,
     }
@@ -218,7 +237,7 @@ mod tests {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Clone, Debug)]
     struct MixedAnalytic {
         scale: f64,
     }

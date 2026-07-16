@@ -1,4 +1,8 @@
 //! WASM/SVG visual harness for live sketch and linkage verification fixtures.
+#![cfg_attr(target_arch = "wasm32", allow(dead_code))]
+
+#[cfg(any(target_arch = "wasm32", test))]
+mod playground;
 
 #[cfg(any(target_arch = "wasm32", test))]
 use std::f64::consts::{FRAC_PI_2, PI};
@@ -7,8 +11,9 @@ use std::fmt::Write as _;
 
 #[cfg(any(target_arch = "wasm32", test))]
 use geosolve_core::{
-    AuditAnnotations, AuditEvaluationStatus, AuditSnapshot, ResidualCategory, SolveReport,
-    SolveTermination, SolverConfig, SourceConstraintId, VariableValue,
+    AuditAnnotations, AuditEvaluationStatus, AuditSnapshot, DiagnosticCompleteness,
+    DiagnosticStatus, OneSidedMobility, ResidualCategory, SolveReport, SolveTermination,
+    SolverConfig, SourceConstraintId, VariableValue,
 };
 #[cfg(any(target_arch = "wasm32", test))]
 use geosolve_geometry::Point2;
@@ -868,6 +873,8 @@ struct LinkageRetainedDiagnostics {
     solve_diagnostics: LinkageSolveDiagnostics,
     conflict_sources: Vec<String>,
     redundancy_sources: Vec<String>,
+    conflict_diagnostics: DiagnosticCompleteness,
+    redundancy_diagnostics: DiagnosticCompleteness,
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -899,6 +906,8 @@ impl LinkageRetainedDiagnostics {
                 &report.sources_containing_redundant_rows,
                 &result.display_audit,
             ),
+            conflict_diagnostics: report.conflict_diagnostics,
+            redundancy_diagnostics: report.redundancy_diagnostics,
         })
     }
 }
@@ -1266,10 +1275,15 @@ struct RetainedDiagnostics {
     validated_hard_residual_max: Option<f64>,
     rank: Option<usize>,
     local_degrees_of_freedom: Option<usize>,
+    bounded_bidirectional_degrees_of_freedom: Option<usize>,
+    one_sided_mobility: Option<OneSidedMobility>,
     iterations: usize,
     is_singular: Option<bool>,
     conflict_sources: Vec<String>,
     redundancy_sources: Vec<String>,
+    bounds: Vec<String>,
+    conflict_diagnostics: DiagnosticCompleteness,
+    redundancy_diagnostics: DiagnosticCompleteness,
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
@@ -1290,9 +1304,11 @@ impl RetainedDiagnostics {
                 })
                 .or_else(|| audit_hard_residual_max(&result.display_audit)),
             rank: report.rank_is_valid.then_some(report.rank),
-            local_degrees_of_freedom: report
+            local_degrees_of_freedom: report.rank_is_valid.then_some(report.right_nullity),
+            bounded_bidirectional_degrees_of_freedom: report
                 .rank_is_valid
-                .then_some(report.local_degrees_of_freedom),
+                .then_some(report.bidirectional_degrees_of_freedom),
+            one_sided_mobility: report.rank_is_valid.then_some(report.one_sided_mobility),
             iterations: report.iterations,
             is_singular: report.rank_is_valid.then_some(report.is_singular),
             conflict_sources: source_labels(&report.conflicting_sources, &result.display_audit),
@@ -1300,6 +1316,13 @@ impl RetainedDiagnostics {
                 &report.sources_containing_redundant_rows,
                 &result.display_audit,
             ),
+            bounds: report
+                .bounds
+                .iter()
+                .map(|bound| format!("{}: {:?}", bound.label, bound.status))
+                .collect(),
+            conflict_diagnostics: report.conflict_diagnostics,
+            redundancy_diagnostics: report.redundancy_diagnostics,
         })
     }
 }
@@ -3284,6 +3307,9 @@ fn annotations_markup(annotations: AuditAnnotations) -> String {
     if annotations.singular {
         labels.push("singular");
     }
+    if annotations.active_bound {
+        labels.push("active-bound");
+    }
     if labels.is_empty() {
         return "<span class=\"annotation none\">none</span>".to_owned();
     }
@@ -3313,9 +3339,22 @@ fn status_markup(
     let dof = retained
         .local_degrees_of_freedom
         .map_or_else(|| "unavailable".to_owned(), |dof| dof.to_string());
+    let bounded_dof = retained
+        .bounded_bidirectional_degrees_of_freedom
+        .map_or_else(|| "unavailable".to_owned(), |dof| dof.to_string());
+    let one_sided = retained.one_sided_mobility.map_or_else(
+        || "unavailable".to_owned(),
+        |mobility| format!("{mobility:?}"),
+    );
     let (motion_label, motion_state) = scene_motion_state(sketch, scene);
-    let conflicts = text_notice(&retained.conflict_sources);
-    let redundancies = text_notice(&retained.redundancy_sources);
+    let conflicts = diagnostic_notice(&retained.conflict_sources, retained.conflict_diagnostics);
+    let redundancies = diagnostic_notice(
+        &retained.redundancy_sources,
+        retained.redundancy_diagnostics,
+    );
+    let bounds = text_notice(&retained.bounds);
+    let conflict_status = diagnostic_status(retained.conflict_diagnostics);
+    let redundancy_status = diagnostic_status(retained.redundancy_diagnostics);
     let singularity =
         retained.is_singular.map_or(
             "unavailable",
@@ -3338,12 +3377,17 @@ fn status_markup(
                 <div><span>retained termination</span><strong>{}</strong></div>
                 <div><span>retained validated max hard residual</span><strong>{}</strong></div>
                 <div><span>retained rank</span><strong>{}</strong></div>
-                <div><span>retained local DOF</span><strong>{}</strong></div>
+                <div><span>equality right nullity</span><strong>{}</strong></div>
+                <div><span>bounded bidirectional DOF</span><strong>{}</strong></div>
+                <div><span>one-sided mobility</span><strong>{}</strong></div>
                 <div><span>retained total iterations</span><strong>{}</strong></div>
                 <div><span>{}</span><strong>{}</strong></div>
                 <div><span>retained singularity</span><strong>{}</strong></div>
                 <div><span>retained conflict candidates</span><strong>{}</strong></div>
+                <div><span>conflict diagnostic</span><strong>{}</strong></div>
                 <div><span>retained redundancy notices</span><strong>{}</strong></div>
+                <div><span>redundancy diagnostic</span><strong>{}</strong></div>
+                <div><span>bound states</span><strong>{}</strong></div>
             </div>{}{}"#,
         attempt_banner,
         early_curve_status,
@@ -3351,12 +3395,17 @@ fn status_markup(
         validated_residual,
         rank,
         dof,
+        bounded_dof,
+        one_sided,
         retained.iterations,
         motion_label,
         escape_html(&motion_state),
         singularity,
         conflicts,
+        conflict_status,
         redundancies,
+        redundancy_status,
+        bounds,
         reference_status_markup(scene, display),
         late_curve_status,
     )
@@ -3453,8 +3502,11 @@ fn linkage_status_markup(app: &InteractiveLinkageState) -> Result<String, String
         format_metric(app.velocity.differentiated_residual_max),
         app.velocity.rank,
         app.velocity.local_degrees_of_freedom,
-        text_notice(&retained.conflict_sources),
-        text_notice(&retained.redundancy_sources),
+        diagnostic_notice(&retained.conflict_sources, retained.conflict_diagnostics),
+        diagnostic_notice(
+            &retained.redundancy_sources,
+            retained.redundancy_diagnostics,
+        ),
     )
     .expect("writing linkage status markup to a String cannot fail");
     Ok(html)
@@ -4050,6 +4102,26 @@ fn text_notice(values: &[String]) -> String {
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
+fn diagnostic_status(diagnostic: DiagnosticCompleteness) -> String {
+    diagnostic.reason.map_or_else(
+        || format!("{:?}", diagnostic.status),
+        |reason| format!("{:?} / {reason:?}", diagnostic.status),
+    )
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn diagnostic_notice(values: &[String], diagnostic: DiagnosticCompleteness) -> String {
+    if !values.is_empty() {
+        return text_notice(values);
+    }
+    if diagnostic.status == DiagnosticStatus::Complete {
+        "none".to_owned()
+    } else {
+        format!("not reported ({})", diagnostic_status(diagnostic))
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
 fn audit_hard_residual_max(audit: &AuditSnapshot) -> Option<f64> {
     let mut maximum = 0.0_f64;
     let mut has_hard_row = false;
@@ -4517,23 +4589,7 @@ mod wasm {
         let document = web_sys::window()
             .and_then(|window| window.document())
             .ok_or_else(|| JsValue::from_str("browser document is unavailable"))?;
-        let select = required_element(&document, "scenario")?.dyn_into::<HtmlSelectElement>()?;
-        let viewport = required_element(&document, "viewport")?;
-        let driver = required_element(&document, "driver-angle")?.dyn_into::<HtmlInputElement>()?;
-        let action_button = required_element(&document, "scene-action")?;
-        let app = Rc::new(RefCell::new(DemoApp {
-            state: DemoState::Sketch(Box::new(
-                InteractiveSketchState::new(LiveSceneKind::UnderconstrainedTriangle)
-                    .map_err(|error| JsValue::from_str(&error))?,
-            )),
-        }));
-
-        render(&document, &app.borrow())?;
-        install_scenario_listener(&document, &select, &viewport, &app)?;
-        install_pointer_listeners(&document, &viewport, &app)?;
-        install_driver_listener(&document, &driver, &app)?;
-        install_scene_action_listener(&document, &action_button, &app)?;
-        Ok(())
+        crate::playground::wasm::install(&document)
     }
 }
 
@@ -4712,7 +4768,15 @@ mod tests {
         assert!(view.audit.contains("raw residual"));
         assert!(view.audit.contains("normalized"));
         assert!(view.audit.contains("evaluated"));
-        assert!(view.status.contains("local DOF</span><strong>1"));
+        assert!(
+            view.status
+                .contains("equality right nullity</span><strong>1")
+        );
+        assert!(view.status.contains("bounded bidirectional DOF"));
+        assert!(view.status.contains("one-sided mobility"));
+        assert!(view.status.contains("conflict diagnostic"));
+        assert!(view.status.contains("redundancy diagnostic"));
+        assert!(view.status.contains("bound states"));
         assert!(view.status.contains("rightward (+x); preserved"));
         assert_eq!(view.announcement, "Sketch solve accepted.");
     }
@@ -4825,7 +4889,17 @@ mod tests {
         assert!(page.contains("value=\"four-bar-open\""));
         assert!(page.contains("value=\"four-bar-crossed\""));
         assert!(page.contains("value=\"slider-crank\""));
-        assert_eq!(page.matches("<option value=").count(), scenario_count());
+        let scenario_options = page
+            .split_once("<select id=\"scenario\">")
+            .unwrap()
+            .1
+            .split_once("</select>")
+            .unwrap()
+            .0;
+        assert_eq!(
+            scenario_options.matches("<option value=").count(),
+            scenario_count()
+        );
         let arc_contact_index = page.find("value=\"arc-contact-drag\"").unwrap();
         let auto_radius_index = page.find("value=\"arc-circle-auto-radius\"").unwrap();
         let tangent_glide_index = page.find("value=\"line-circle-tangent-glide\"").unwrap();
@@ -5870,13 +5944,21 @@ mod tests {
         assert!(rail_view.geometry.contains("reference length 3.000"));
         assert!(rail_view.audit.contains("reference-measurement"));
         assert!(rail_view.audit.contains("none; display-only measurement"));
-        assert!(rail_view.status.contains("local DOF</span><strong>1"));
+        assert!(
+            rail_view
+                .status
+                .contains("equality right nullity</span><strong>1")
+        );
 
         let coincident = InteractiveSketchState::new(LiveSceneKind::CoincidentPair).unwrap();
         let coincident_view = live_sketch_view(&coincident).unwrap();
         assert!(coincident_view.geometry.contains("coincident-point-a"));
         assert!(coincident_view.geometry.contains("coincident-point-b"));
-        assert!(coincident_view.status.contains("local DOF</span><strong>2"));
+        assert!(
+            coincident_view
+                .status
+                .contains("equality right nullity</span><strong>2")
+        );
     }
 
     #[test]
@@ -6185,7 +6267,35 @@ mod tests {
         assert_eq!(retained.validated_hard_residual_max, Some(audit_max));
         assert_eq!(retained.rank, None);
         assert_eq!(retained.local_degrees_of_freedom, None);
+        assert_eq!(retained.bounded_bidirectional_degrees_of_freedom, None);
+        assert_eq!(retained.one_sided_mobility, None);
         assert_eq!(retained.is_singular, None);
+    }
+
+    #[test]
+    fn incomplete_empty_diagnostics_are_never_rendered_as_none() {
+        let mut sketch = Sketch::new(1.0).unwrap();
+        let point = sketch.add_point(Point2::new(0.0, 0.0)).unwrap();
+        sketch.add_fixed_point(point).unwrap();
+        let accepted = sketch
+            .solve(SketchSolveRequest::default(), SolverConfig::default())
+            .unwrap();
+        let mut diagnostic = accepted.core_report.conflict_diagnostics;
+        diagnostic.status = DiagnosticStatus::Truncated;
+        diagnostic.reason = Some(geosolve_core::DiagnosticIncompleteReason::TrialBudget);
+        assert_eq!(
+            diagnostic_notice(&[], diagnostic),
+            "not reported (Truncated / TrialBudget)"
+        );
+        diagnostic.status = DiagnosticStatus::Skipped;
+        diagnostic.reason = Some(geosolve_core::DiagnosticIncompleteReason::Disabled);
+        assert_eq!(
+            diagnostic_notice(&[], diagnostic),
+            "not reported (Skipped / Disabled)"
+        );
+        diagnostic.status = DiagnosticStatus::Complete;
+        diagnostic.reason = None;
+        assert_eq!(diagnostic_notice(&[], diagnostic), "none");
     }
 
     #[test]
@@ -6435,6 +6545,10 @@ mod tests {
             );
             assert!(view.status.contains("unit angular-rate velocity residual"));
             assert!(view.status.contains("retained conflict candidates"));
+            assert!(
+                view.status
+                    .contains("not reported (Skipped / HardConstraintsValid)")
+            );
             assert!(view.status.contains("retained redundancy notices"));
             assert!(view.status.contains(&format!("{:?}", branch.kind)));
             assert!(view.status.contains(&format!("{:?}", branch.monitor_id)));

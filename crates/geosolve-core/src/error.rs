@@ -1,6 +1,8 @@
 use thiserror::Error;
 
-use crate::{EvaluationErrorCategory, ResidualId, SourceConstraintId, VariableId, VariableKind};
+use crate::{
+    BoundId, EvaluationErrorCategory, ResidualId, SourceConstraintId, VariableId, VariableKind,
+};
 
 /// Construction and evaluation failures detected before numerical solving.
 #[derive(Clone, Debug, Error, PartialEq)]
@@ -34,12 +36,45 @@ pub enum CoreError {
     UnknownResidual(ResidualId),
     #[error("unknown source constraint ID {0:?}")]
     UnknownSource(SourceConstraintId),
+    #[error("unknown bound ID {0:?}")]
+    UnknownBound(BoundId),
     #[error("variable {0:?} is still referenced by a residual block")]
     VariableInUse(VariableId),
     #[error("source constraint {0:?} is still referenced by a residual block")]
     SourceInUse(SourceConstraintId),
     #[error("residual incidence contains variable {0:?} more than once")]
     DuplicateIncidentVariable(VariableId),
+    #[error("variable {variable:?} tangent coordinate {coordinate} is already bounded")]
+    DuplicateBoundCoordinate {
+        variable: VariableId,
+        coordinate: usize,
+    },
+    #[error(
+        "bound coordinate {coordinate} is outside variable {variable:?}'s tangent dimension {dimension}"
+    )]
+    InvalidBoundCoordinate {
+        variable: VariableId,
+        coordinate: usize,
+        dimension: usize,
+    },
+    #[error("bound {side} value must be finite, got {value}")]
+    InvalidBoundValue { side: &'static str, value: f64 },
+    #[error("bound lower value {lower} exceeds upper value {upper}")]
+    InvalidBoundInterval { lower: f64, upper: f64 },
+    #[error("a coordinate bound must provide a lower or upper value")]
+    EmptyBound,
+    #[error("bound label must not be empty")]
+    EmptyBoundLabel,
+    #[error(
+        "variable {variable:?} coordinate {coordinate} value {value} is outside [{lower:?}, {upper:?}]"
+    )]
+    ValueOutsideBound {
+        variable: VariableId,
+        coordinate: usize,
+        value: f64,
+        lower: Option<f64>,
+        upper: Option<f64>,
+    },
     #[error("variable kind is {actual:?}, expected {expected:?}")]
     VariableKindMismatch {
         expected: VariableKind,
@@ -87,4 +122,9 @@ pub enum CoreError {
     },
     #[error("exact alias declaration for {variable:?} creates a cycle")]
     AliasCycle { variable: VariableId },
+    #[error("replacement for residual {residual:?} changes structural field {field}")]
+    IncompatibleResidualReplacement {
+        residual: ResidualId,
+        field: &'static str,
+    },
 }

@@ -39,6 +39,33 @@ The library must support planar and spatial CAD assemblies and linkage models, i
 
 Kinematics explicitly excludes mass, inertia, forces, reactions, forward dynamics, time integration, collision detection, unilateral contact, friction and impact.
 
+### User-approved next cut: 2D Sketch Playground Alpha
+
+M10-M14 deliver an embeddable 2D sketch library slice and a disposable browser diagnostic playground over it. The alpha is an integration and usability cut, not completion of Deliverable 1.
+
+The alpha geometry scope is exactly:
+
+- point;
+- line and polyline;
+- rectangle as a command macro over ordinary geometry and constraints;
+- circle and circular arc;
+- editable quadratic and cubic Bezier curves.
+
+The alpha constraint and dimension scope is exactly:
+
+- fixed, coincident, horizontal, vertical, point-on-curve, parallel and perpendicular;
+- equal length, equal radius, midpoint and symmetry;
+- distance, length, radius, diameter and oriented-angle dimensions;
+- generic line-curve and curve-curve contact and tangency;
+- driving and reference dimensions;
+- explicit branch, tangent-orientation, contact-neighborhood, parameter-domain, span and winding state where applicable.
+
+The playground interaction scope is select, box-select, multi-select compatible constraints, draw, solver-projected drag, dimension edit, delete/suppress, pan/zoom, undo/redo, JSON import/export, local autosave, diagnostics/conflict/DOF display and retained geometry on failed edits. Prospective coincident/horizontal/vertical inference is only a proposal and requires user confirmation before it changes the document. Desktop and mobile must both be functional.
+
+Reusable Rust APIs own `SketchDocument`, `SketchSession`, commands, history, versioned serialization, curve evaluation and all constraints/equations. Selection, hit testing, tool state, rendering and browser `localStorage` remain web-only. The web crate is non-authoritative, contains no solver or geometry equations and may be replaced without changing document semantics.
+
+Post-alpha browser policy: the playground is a robust sanity-checking instrument for the supervising user to inspect claims and expose defects, not a production application. Desktop interaction density and layout freedom take priority. Existing mobile behavior may remain, but mobile compatibility is best-effort and is not a gate for future numerical or domain milestones.
+
 ## Architectural boundaries
 
 - Keep `geosolve-sketch` and `geosolve-linkage` as separate domain models over `geosolve-core`.
@@ -48,7 +75,7 @@ Kinematics explicitly excludes mass, inertia, forces, reactions, forward dynamic
 - Keep branch, span, winding, active-bound and assembly-mode choices as explicit domain state outside differentiable formulas.
 - Use local forward automatic differentiation where it reduces fragile analytic code; retain central finite differences as an independent oracle for every residual.
 - Preserve pure Rust, GPL-3.0-or-later licensing and the workspace `unsafe_code = "forbid"` policy.
-- Keep `geosolve-demo-web` compiling as a compatibility smoke target, but do not let UI concerns shape core APIs or milestone scope.
+- Keep `geosolve-demo-web` as a separate public-API consumer. M13-M14 may shape embeddable sketch workflows, but web-only interaction and rendering concerns must not enter reusable Rust document/session APIs.
 
 ## Frozen baseline: M0-M7
 
@@ -154,22 +181,192 @@ with 98 core tests and 228 workspace tests, warnings-denied Clippy and rustdoc,
 benchmark compilation, all 24 Criterion test-mode cases, locked WASM check/test
 compilation and a release Trunk build.
 
+Historical allocation note: the milestone labels in the preceding completion record
+describe the M8-approved roadmap at that time. The user-approved M10+ rebaseline
+below supersedes only those future allocations; it does not change any M8 or M9
+completion claim or accepted ADR decision.
+
 ## M10: persistent solve sessions and first-class bounds
 
-Goal: retain compiled structure across edits and represent bounded coordinates mathematically rather than only through post-solve rejection.
+Status: complete as of 2026-07-15.
 
-- [ ] Separate immutable problem topology from mutable accepted state and source parameters.
-- [ ] Add a persistent `SolveSession` with automatic revision and dirty-component tracking.
-- [ ] Preserve domain-to-core mappings across non-structural edits.
-- [ ] Cache component layouts, accepted states and structural patterns.
-- [ ] Add scalar/tangent-coordinate box bounds and an active-set or projected LM policy.
-- [ ] Include active bounds in rank, mobility and audit output.
-- [ ] Support endpoint-active curve contacts, positive radii and bounded drivers.
-- [ ] Make accepted-state commits atomic through a validated patch or clone-and-swap.
+Goal: retain compiled structure across edits, represent bounded coordinates mathematically rather than only through post-solve rejection, and prove the lifecycle through a reusable sketch consumer.
 
-Gate: edits solve only affected components, omitted dirty IDs cannot corrupt state, endpoint-active mobility is truthful, and all prior rollback behavior remains transactional.
+- [x] Separate immutable problem topology from mutable accepted state and source parameters.
+- [x] Add a persistent `SolveSession` with automatic revision and dirty-component tracking.
+- [x] Preserve domain-to-core mappings across non-structural edits.
+- [x] Cache component layouts, accepted states and structural patterns.
+- [x] Add scalar/tangent-coordinate box bounds and an active-set or projected LM policy.
+- [x] Include active bounds in rank, mobility and audit output.
+- [x] Add `SketchSession` as the first domain consumer without moving sketch types into `geosolve-core`.
+- [x] Support endpoint-active curve contacts and positive radii through the sketch consumer.
+- [x] Make diagnostic budgets configurable and report completeness, consumed work and incomplete reasons.
+- [x] Make accepted-state commits atomic through a validated patch or clone-and-swap.
 
-## M11: manifold geometry and spatial state
+Gate: sketch source/state edits automatically solve only affected components, omitted dirty IDs cannot corrupt state, endpoint-active mobility is truthful, and all prior rollback behavior remains transactional. M10 does not yet provide the persistent document or browser playground.
+
+Completion notes: `SolveSession` owns revision-checked source/state/bound
+transactions, retained elimination/layout caches and fresh returned-state hard
+validation. Deterministic projected/active-set LM uses independent active normals,
+KKT release logic and conservative weak critical-cone status; bounds feed rank,
+one-sided mobility and structured audit identity. Configurable diagnostics retain
+complete/truncated/skipped evidence across reuse. `SketchSession` compiles once,
+rebuilds only changed source payloads for non-structural edits, synchronizes
+canonical contact state through validated core patches and atomically retains
+geometry, branch state, mappings and audit. The gate passes with 27 core M10 and
+17 sketch M10 regressions, the complete workspace suite, warnings-denied Clippy,
+rustdoc, benchmark compilation, locked WASM check, release Trunk build, format and
+diff checks.
+
+## M11: persistent SketchDocument, commands and history
+
+Status: complete as of 2026-07-15.
+
+Goal: pull the generic sketch graph forward and define one reusable, versioned edit model for programmatic consumers and the later playground.
+
+- [x] Add persistent external IDs separate from runtime generational keys.
+- [x] Add `SketchDocument` with design points, typed design scalars and one closed, versioned `CurveDefinition` for line/polyline/circle/arc topology.
+- [x] Add semantic feature references, stable contact slots and explicit branch/orientation/neighborhood/domain/span/winding state.
+- [x] Add generic dependency, compilation, validation, commit and structured-audit mappings for the alpha constraint/dimension corpus applicable to baseline geometry.
+- [x] Add a rectangle command macro that emits ordinary document entities and constraints rather than a privileged solver primitive.
+- [x] Add typed commands for create, edit, delete, suppress/unsuppress and driving/reference dimension changes.
+- [x] Add deterministic undo/redo history over accepted commands; failed commands retain the prior accepted document and do not enter history.
+- [x] Add a versioned JSON envelope, deterministic runtime-ID remapping, strict import validation and canonical export.
+- [x] Keep history policy reusable but separate from browser selection, tools and storage.
+
+Gate: S1-S3 and the full M5/M7 corpus remain semantically unchanged; commands and undo/redo preserve accepted geometry; JSON round trips preserve persistent IDs and every explicit branch field; malformed or failed edits leave the accepted document unchanged.
+
+Completion notes: `geosolve-sketch` now exposes typed opaque 128-bit persistent
+IDs, `SketchDocument`, closed baseline curve/constraint/dimension/contact state,
+semantic features, canonical version-one JSON, deterministic runtime remapping and
+accepted-state projection. `SketchDocumentSession` provides revision-checked typed
+commands, atomic coupled contact/branch edits, accepted-only history, undo/redo and
+atomic import; rejected solves retain accepted geometry/mappings while keeping a
+separate attempted mapping for diagnostics. Rectangle expansion emits four ordinary
+shared-corner lines, fixed/axis sources and width/height dimensions; all equations
+remain the existing `Sketch`/`SketchSession` equations. Ten M11 regressions cover
+S1-S3 migration, every M5/M7 source/contact role, conflict source remapping,
+ID non-reuse, branch history, malformed import retention and canonical round trips.
+The complete locked workspace suite, warnings-denied Clippy/rustdoc, WASM check,
+benchmark compilation, release Trunk build, format and diff checks passed at the
+M11 gate. M12 subsequently supplied Bezier evaluation and geometry-generic
+contact/tangency plumbing.
+
+## M12: editable Bezier curves and generic curve constraints
+
+Status: complete as of 2026-07-15.
+
+Goal: complete the reusable Rust API surface needed by the 2D Sketch Playground Alpha and prove that editable curve derivatives and contact/tangency equations are geometry-generic.
+
+- [x] Move immutable curve evaluation into `geosolve-geometry` with typed parameter-domain and regularity outcomes.
+- [x] Add position and first-through-third parameter derivatives for alpha curve definitions.
+- [x] Add editable quadratic and cubic Bezier entities whose controls are design variables.
+- [x] Add generic point-on-curve, line-curve contact/tangency and curve-curve contact/tangency plumbing.
+- [x] Use the same generic residual templates for line, polyline segment, circle, arc and Bezier combinations.
+- [x] Differentiate every incident control coordinate and latent contact parameter through local AD while keeping branch/span/winding/orientation state outside AD.
+- [x] Complete public embeddable sketch APIs for the alpha geometry, constraint, driving/reference dimension, document, session, command, history and JSON scope.
+- [x] Reject cusp, zero-speed, escaped-domain, ambiguous-neighborhood and non-finite curve states before success or commit.
+
+Gate: line/circle/arc/Bezier combinations share generic residual plumbing; every control/contact derivative passes finite differences; all alpha library acceptance scenarios pass at model scales `1e-6`, `1` and `1e6`; no web code or browser state is required to construct, edit, solve, audit or serialize a document.
+
+Completion notes: `geosolve-geometry` now exposes finite line, circle, arc,
+quadratic-Bezier and cubic-Bezier jets through third derivative with typed domain
+and regularity errors. `geosolve-sketch` adds editable Beziers, common local-AD
+point/contact/tangency residuals, explicit local contact neighborhoods, persistent
+generic curve-pair constraints, arbitrary public curve evaluation and separate
+attempted/accepted document solve views. Ten M12 regressions cover A5 edits and
+rollback, all six alpha curve families and all 15 unordered pairs, central
+finite differences, perturbed recovery and invariant rank/bounds at scales
+`1e-6`, `1` and `1e6`, JSON/audit mappings, retained bound replacement,
+drag/history/import composition and rejected-attempt diagnostics. Cusp,
+zero-speed, escaped or malformed domains, ambiguous root changes and non-finite
+states reject before commit. The complete locked workspace, warnings-denied
+Clippy/rustdoc, WASM, benchmark, release Trunk, format and diff gates pass.
+
+---
+
+# 2D Sketch Playground Alpha
+
+## M13: disposable browser playground
+
+Status: complete as of 2026-07-16.
+
+Goal: expose the M10-M12 embeddable sketch APIs through a useful but replaceable browser interaction layer.
+
+- [x] Make `geosolve-demo-web` consume only public sketch document/session/command/history/serialization/audit APIs.
+- [x] Add select, box-select and multi-select application of compatible constraints.
+- [x] Add draw tools for every alpha geometry type, including rectangle as the library command macro.
+- [x] Add solver-projected drag, dimension editing, delete and suppress/unsuppress.
+- [x] Add pan/zoom and functional pointer/touch interaction for desktop and mobile.
+- [x] Add undo/redo, JSON import/export and browser-local autosave.
+- [x] Add prospective coincident/horizontal/vertical inference as a visible proposal requiring explicit confirmation.
+- [x] Display solve status, retained accepted geometry, rank/DOF, conflicts and structured diagnostics from one accepted result.
+- [x] Keep selection, hit testing, tool state, rendering and `localStorage` in the web crate; add no equations or authoritative geometry semantics there.
+
+Gate: a user can construct and edit every alpha entity/constraint workflow on desktop and mobile; failed edits retain visible accepted geometry; page reload restores the last valid local document; replacing the web crate would not require moving any equation or document rule.
+
+Completion notes: `geosolve-demo-web` now installs a document-backed playground
+whose authoritative state is `SketchDocumentSession`. It provides all alpha draw
+tools, span-aware selection/box/multi-selection, every alpha constraint and
+dimension action, independent paired contact branch controls, projected one-step
+drag, source suppression, owned-state deletion, pan/zoom, history, canonical JSON,
+accepted-only autosave, explicit-confirmation inference, and accepted/attempted
+diagnostic separation. Compound library transactions keep circles, arcs, Beziers,
+dimensions and contact constraints atomic; public contact construction, semantic
+contact ordering, reference measurements and owned-state deletion keep document
+rules out of the browser. Fifteen playground regressions and four sketch M13
+regressions cover the complete tool/constraint/dimension matrices, branch edits,
+selection, drag/history, conflicts, cleanup, escaping, persistence and autosave.
+A fresh-profile Chromium release smoke passes desktop and mobile point/line input,
+accepted status/audit rendering, sub-two-pixel coordinate checks and byte-identical
+autosave reload. The complete locked workspace, warnings-denied Clippy/rustdoc,
+WASM, benchmark, release Trunk, format and diff gates pass.
+
+## M14: playground hardening and alpha gate
+
+Status: complete as of 2026-07-16.
+
+Goal: harden browser behavior, import failures and representative interaction performance enough to call the playground alpha complete.
+
+- [x] Add browser E2E coverage for the exact alpha scenarios in `docs/SCENARIOS.md` on desktop and mobile viewports.
+- [x] Make malformed, unknown-version, duplicate-ID, dangling-reference, non-finite and over-limit JSON imports fail atomically with actionable errors.
+- [x] Preserve the current accepted document and visible geometry after invalid command, solve, import or autosave recovery failure.
+- [x] Test undo/redo and autosave recovery across create/edit/delete/suppress and branch-bearing curve operations.
+- [x] Record separate import, first-solve, incremental edit/solve and render timings for deterministic small and medium alpha documents.
+- [x] Set and enforce documented reference-environment interaction budgets without weakening residual, rank or validation policy.
+- [x] Verify keyboard, pointer and touch paths, viewport resizing and no-loss JSON download/upload behavior.
+- [x] Keep browser diagnostics tied to accepted-state public audit data and prevent stale candidate geometry from appearing authoritative.
+
+Gate: constrained rectangle, underconstrained drag, line-circle tangency, free-radius circle-arc tangency, Bezier tangent line, conflicting dimensions, undo/redo, ID/branch JSON round trip, invalid-edit retention and `1e-6`/`1`/`1e6` scale scenarios pass through public APIs and browser E2E coverage. M14 completes the 2D Sketch Playground Alpha only; it does not complete Deliverable 1.
+
+Completion notes: reusable Rust fixtures and regressions now execute A1-A10 at
+scales `1e-6`, `1` and `1e6`, including the complete alpha primitive, constraint
+and dimension corpus, finite-difference Jacobians, invariant rank/mobility,
+explicit branches, exact conflict sources and transactional failure retention.
+Strict imports and browser file/storage paths reject malformed, oversized or stale
+input without replacing accepted state; primary/backup autosave recovery retries
+failed writes and preserves corrupt input for diagnosis. Dependency-free Chromium
+DevTools Protocol E2E passes desktop mouse and mobile touch workflows, keyboard
+history, viewport changes, canonical download/upload and A1-A10 recovery paths.
+Documented release timing gates enforce separate small/medium import, first-solve,
+incremental edit/solve and browser-render budgets without changing correctness
+policy. The complete locked workspace, warnings-denied Clippy/rustdoc, WASM,
+benchmark, native performance, release Trunk, desktop/mobile Chromium, format and
+diff gates pass. This closes the Playground Alpha; Deliverable 1 remains open.
+Post-alpha field regressions additionally protect free-line half-plane crossing,
+scale-invariant A5 line-end projection and stable unconstrained Bezier controls,
+dependency-complete rectangle deletion, free-size drawn rectangles and direct
+transactional constraint/dimension deletion from the browser object panel. The
+post-alpha playground also stages all supported primitives on pointer release with
+recoverable shape-specific previews and includes compass/Bezier-bridge constraint
+stress labs plus Bezier-cam roller and full-orbit tangent motion examples built entirely
+from public document APIs with explicit tangent orientation and periodic contact state.
+
+---
+
+# Deferred production foundations
+
+## M15: manifold geometry and spatial state
 
 Goal: add the mathematically correct state representation needed by 3D rigid-body kinematics.
 
@@ -183,7 +380,7 @@ Goal: add the mathematically correct state representation needed by 3D rigid-bod
 
 Gate: manifold property tests, tangent-coordinate finite differences, global-transform equivariance and quaternion-sign invariance pass without core regressions.
 
-## M12: sparse structure, hierarchy and continuation
+## M16: sparse structure, hierarchy and continuation
 
 Goal: scale the shared kernel before production splines and large spatial assemblies expand the graph.
 
@@ -199,28 +396,7 @@ Goal: scale the shared kernel before production splines and large spatial assemb
 
 Gate: dense and sparse paths agree on independently validated geometry, rank, mobility, diagnostics and branch state; the documented planar toggle crosses only through the explicit pseudo-arclength path.
 
----
-
-# Domain architecture migration
-
-## M13: generic sketch design graph
-
-Goal: remove the entity-pair compiler fan-out before adding more curve families.
-
-- [ ] Add persistent external IDs separate from runtime generational keys.
-- [ ] Add design points and typed design scalars with units and domains.
-- [ ] Add one stable `CurveId` store and closed `CurveDefinition` for existing segments, circles and arcs.
-- [ ] Add semantic `FeatureRef` values for endpoints, centers, axes, controls and fixed curve locations.
-- [ ] Add stable contact slots with numeric domains, periodic winding, active span and neighborhood state.
-- [ ] Add generic dependency/reference collection.
-- [ ] Add per-source compiled residuals, contact mappings, validators, commit mappings and audit metadata.
-- [ ] Replace the central M7 candidate validator and latent-role matches for migrated constraints.
-- [ ] Add generic measurements shared by driving and reference dimensions.
-- [ ] Add a versioned document envelope and deterministic runtime-ID remapping.
-
-Gate: S1-S3 and the full M5/M7 corpus remain unchanged; existing line/circle/arc constraints use the new graph and no longer require geometry-pair-specific lifecycle plumbing.
-
-## M14: shared planar kinematic architecture
+## M17: shared planar kinematic architecture
 
 Goal: migrate the planar linkage baseline onto the architecture that spatial assemblies will share.
 
@@ -238,21 +414,7 @@ Gate: L1-L3 remain unchanged; floating planar assemblies report three world-gaug
 
 # Parallel product expansion
 
-## M15: editable Bezier curves and generic contact
-
-Goal: prove that editable design derivatives and contact equations are curve-generic before implementing splines.
-
-- [ ] Move immutable curve-jet evaluation into `geosolve-geometry`.
-- [ ] Add position and first through third parameter derivatives with typed regularity/domain metadata.
-- [ ] Add editable quadratic and cubic Bezier entities whose controls are design variables.
-- [ ] Add generic point-on-curve, curve/curve contact and tangent residual templates.
-- [ ] Add endpoint tangency and explicit same/opposite tangent orientation.
-- [ ] Differentiate every incident control coordinate and contact parameter through local AD.
-- [ ] Keep span and branch selection outside AD.
-
-Gate: line/circle/arc/Bezier combinations use the same generic residual templates; every control and contact derivative passes finite differences; cusps and zero-speed contacts cannot report success.
-
-## M16: spatial kinematics vertical slice
+## M18: spatial kinematics vertical slice
 
 Goal: prove the spatial state, feature and gauge architecture with a minimal useful assembly set.
 
@@ -265,7 +427,7 @@ Goal: prove the spatial state, feature and gauge architecture with a minimal use
 
 Gate: every primitive reports expected relative DOF and passes tangent-space Jacobian, gauge, invalid-feature and independent-validation tests.
 
-## M17: ellipses and parametric conics
+## M19: ellipses and parametric conics
 
 Goal: cover the major analytic CAD curve family without introducing implicit coefficient gauges.
 
@@ -278,7 +440,7 @@ Goal: cover the major analytic CAD curve family without introducing implicit coe
 
 Gate: analytic jet oracles, affine/similarity transformations, branch retention and rational-pole rejection pass; generic contact/tangency adds no conic-pair equation code.
 
-## M18: spatial mate and joint catalog
+## M20: spatial mate and joint catalog
 
 Goal: support the common CAD assembly and linkage relationships in three dimensions.
 
@@ -291,7 +453,7 @@ Goal: support the common CAD assembly and linkage relationships in three dimensi
 
 Gate: every joint/mate has exact, recovery, tangent-Jacobian, scale, mixed-scale, degeneracy and expected-mobility fixtures; representative shaft/bearing and block/base CAD assemblies pass.
 
-## M19: non-rational B-splines
+## M21: non-rational B-splines
 
 Goal: add locally supported production spline geometry over the generic curve/contact architecture.
 
@@ -305,7 +467,7 @@ Goal: add locally supported production spline geometry over the generic curve/co
 
 Gate: Bezier equivalence, affine covariance, partition of unity, knot insertion, local support and span-transition tests pass; malformed knots and insufficient continuity reject before success.
 
-## M20: NURBS and advanced CAD constraints
+## M22: NURBS and advanced CAD constraints
 
 Goal: complete Deliverable 1.
 
@@ -325,7 +487,7 @@ Gate: unit-weight NURBS reproduce B-splines, quadratic NURBS reproduce canonical
 
 # Kinematic completion
 
-## M21: 2D/3D assembly completion
+## M23: 2D/3D assembly completion
 
 Goal: complete Deliverable 2 without adding physics.
 
@@ -341,7 +503,7 @@ Goal: complete Deliverable 2 without adding physics.
 
 Gate: planar and spatial assemblies preserve explicit modes, report truthful mobility, validate every accepted configuration and velocity equation, and retain the last accepted state on all failures.
 
-## M22: public API and release hardening
+## M24: public API and release hardening
 
 Goal: make both deliverables ready for a stable library release.
 
@@ -352,15 +514,15 @@ Goal: make both deliverables ready for a stable library release.
 - [ ] Complete GPL/licence and attribution audit.
 - [ ] Record supported scale/performance envelopes and benchmark baselines.
 - [ ] Run malformed-document and degenerate-geometry fuzzing without panic or false success.
-- [ ] Keep the WASM crate compiling as a non-authoritative smoke consumer of public APIs.
+- [ ] Keep the disposable WASM playground compiling as a non-authoritative consumer of public APIs.
 
 Gate: all acceptance suites, serialization round trips/migrations, fuzz corpora, documentation tests, performance baselines, native checks and locked WASM smoke builds pass.
 
 ## Explicit non-goals
 
-The following are not part of M8-M22:
+The following are not part of M8-M24:
 
-- solid modeling, B-rep booleans, meshing or rendering;
+- solid modeling, B-rep booleans, meshing or a production rendering system;
 - global enumeration of every geometric root;
 - arbitrary third-party curve or manifold plugins;
 - physical contact, collision detection, friction or impact;

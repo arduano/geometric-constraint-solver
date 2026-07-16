@@ -4,13 +4,14 @@ use nalgebra::{DMatrix, DVector};
 use slotmap::{Key, SlotMap};
 
 use crate::{
-    AuditBinding, CoreError, EvaluationErrorCategory, ResidualBlock, ResidualCategory, ResidualId,
-    SourceConstraint, SourceConstraintId, VariableBlock, VariableId, VariableKind, VariableValue,
+    AuditBinding, BoundId, BoundStatus, CoordinateBound, CoreError, DiagnosticCompleteness,
+    EvaluationErrorCategory, ResidualBlock, ResidualCategory, ResidualId, SourceConstraint,
+    SourceConstraintId, VariableBlock, VariableId, VariableKind, VariableValue,
     analysis::{AliasElimination, DecompositionCache, FixedElimination},
     linearization::{evaluate_values, normalize_residuals},
 };
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct StableStore<K: Key, V> {
     pub(crate) values: SlotMap<K, V>,
     pub(crate) insertion_order: Vec<K>,
@@ -40,6 +41,12 @@ impl<K: Key, V> StableStore<K, V> {
 
     fn remove(&mut self, key: K) -> Option<V> {
         self.values.remove(key)
+    }
+
+    pub(crate) fn replace(&mut self, key: K, value: V) -> Option<V> {
+        self.values
+            .get_mut(key)
+            .map(|current| std::mem::replace(current, value))
     }
 
     pub(crate) fn iter(&self) -> impl Iterator<Item = (K, &V)> {
@@ -195,6 +202,8 @@ pub struct AuditRowSnapshot {
     /// Human-readable evaluation failure, when the row was not evaluated completely.
     pub evaluation_error: Option<String>,
     pub annotations: AuditAnnotations,
+    /// Exact active/fixed bound identities affecting incident coordinates.
+    pub active_bounds: Vec<AuditBoundAnnotation>,
 }
 
 /// Whether executable value/Jacobian evaluation succeeded for an audit row.
@@ -221,6 +230,17 @@ pub struct AuditSourceSnapshot {
     pub source_label: String,
     pub rows: Vec<AuditRowSnapshot>,
     pub annotations: AuditAnnotations,
+    /// Deduplicated active/fixed bounds affecting any source row.
+    pub active_bounds: Vec<AuditBoundAnnotation>,
+}
+
+/// Structured accepted-state bound link attached to equation audit data.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct AuditBoundAnnotation {
+    pub bound_id: BoundId,
+    pub variable_id: VariableId,
+    pub coordinate: usize,
+    pub status: BoundStatus,
 }
 
 /// Diagnostic flags evaluated at the same returned state as audit values.
@@ -232,6 +252,12 @@ pub struct AuditAnnotations {
     pub redundant: bool,
     pub conflicting: bool,
     pub singular: bool,
+    /// At least one incident coordinate has an active or fixed bound.
+    pub active_bound: bool,
+    /// Completeness of the candidate algorithm behind `redundant`.
+    pub redundancy_diagnostics: Option<DiagnosticCompleteness>,
+    /// Completeness of the candidate algorithm behind `conflicting`.
+    pub conflict_diagnostics: Option<DiagnosticCompleteness>,
 }
 
 /// Deterministically ordered equation audit for a finite problem state.
@@ -289,11 +315,12 @@ impl JacobianCheckReport {
 }
 
 /// Domain-independent storage and assembly for one equality problem.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Problem {
     pub(crate) variables: StableStore<VariableId, VariableBlock>,
     pub(crate) residuals: StableStore<ResidualId, ResidualBlock>,
     pub(crate) sources: StableStore<SourceConstraintId, SourceConstraint>,
+    pub(crate) bounds: StableStore<BoundId, CoordinateBound>,
     pub(crate) fixed_eliminations: Vec<FixedElimination>,
     pub(crate) alias_eliminations: Vec<AliasElimination>,
     pub(crate) decomposition_cache: Option<DecompositionCache>,
@@ -317,6 +344,7 @@ impl Problem {
             variables: StableStore::new(),
             residuals: StableStore::new(),
             sources: StableStore::new(),
+            bounds: StableStore::new(),
             fixed_eliminations: Vec::new(),
             alias_eliminations: Vec::new(),
             decomposition_cache: None,
@@ -410,6 +438,123 @@ impl Problem {
     #[must_use]
     pub fn source(&self, source_id: SourceConstraintId) -> Option<&SourceConstraint> {
         self.sources.get(source_id)
+    }
+
+    /// Adds a validated additive tangent-coordinate box bound.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a stale variable, invalid coordinate, duplicate
+    /// coordinate bound, or invalid interval. A finite initial guess outside
+    /// the interval is projected to the nearest endpoint when solving starts.
+    pub fn add_bound(&mut self, bound: CoordinateBound) -> Result<BoundId, CoreError> {
+        bound.validate_for_problem(self)?;
+        if self.bounds.iter().any(|(_, existing)| {
+            existing.variable_id() == bound.variable_id()
+                && existing.coordinate() == bound.coordinate()
+        }) {
+            return Err(CoreError::DuplicateBoundCoordinate {
+                variable: bound.variable_id(),
+                coordinate: bound.coordinate(),
+            });
+        }
+        self.decomposition_cache = None;
+        Ok(self.bounds.insert(bound))
+    }
+
+    #[must_use]
+    pub fn bound(&self, bound_id: BoundId) -> Option<&CoordinateBound> {
+        self.bounds.get(bound_id)
+    }
+
+    /// Returns bounds in deterministic insertion order.
+    pub fn bounds(&self) -> impl Iterator<Item = (BoundId, &CoordinateBound)> {
+        self.bounds.iter()
+    }
+
+    pub(crate) fn replace_source(
+        &mut self,
+        source_id: SourceConstraintId,
+        source: SourceConstraint,
+    ) -> Result<(), CoreError> {
+        self.sources
+            .replace(source_id, source)
+            .ok_or(CoreError::UnknownSource(source_id))?;
+        Ok(())
+    }
+
+    pub(crate) fn replace_residual_compatible(
+        &mut self,
+        residual_id: ResidualId,
+        residual: ResidualBlock,
+    ) -> Result<(), CoreError> {
+        let current = self
+            .residuals
+            .get(residual_id)
+            .ok_or(CoreError::UnknownResidual(residual_id))?;
+        if let Some(field) = current.structurally_compatible_with(&residual) {
+            return Err(CoreError::IncompatibleResidualReplacement {
+                residual: residual_id,
+                field,
+            });
+        }
+        if let Some(crate::residual::ExactElimination::Fixed { variable_id, value }) =
+            residual.exact_elimination()
+        {
+            let fixed = self
+                .fixed_eliminations
+                .iter_mut()
+                .find(|fixed| fixed.residual_id == residual_id)
+                .ok_or(CoreError::InvalidEliminationResidual {
+                    residual: residual_id,
+                    declaration: "fixed-variable",
+                    message: "replacement has no matching fixed declaration",
+                })?;
+            fixed.variable_id = variable_id;
+            fixed.value = value;
+        }
+        self.residuals
+            .replace(residual_id, residual)
+            .ok_or(CoreError::UnknownResidual(residual_id))?;
+        Ok(())
+    }
+
+    pub(crate) fn replace_residual_audit_rows(
+        &mut self,
+        residual_id: ResidualId,
+        audit_rows: Vec<crate::ResidualRowAudit>,
+    ) -> Result<(), CoreError> {
+        self.residuals
+            .get_mut(residual_id)
+            .ok_or(CoreError::UnknownResidual(residual_id))?
+            .replace_audit_rows(audit_rows)
+    }
+
+    pub(crate) fn replace_bound_compatible(
+        &mut self,
+        bound_id: BoundId,
+        bound: CoordinateBound,
+    ) -> Result<(), CoreError> {
+        let current = self
+            .bounds
+            .get(bound_id)
+            .ok_or(CoreError::UnknownBound(bound_id))?;
+        if current.variable_id() != bound.variable_id()
+            || current.coordinate() != bound.coordinate()
+        {
+            return Err(CoreError::InvalidBoundCoordinate {
+                variable: bound.variable_id(),
+                coordinate: bound.coordinate(),
+                dimension: self
+                    .variable(bound.variable_id())
+                    .map_or(0, |variable| variable.kind().tangent_dimension()),
+            });
+        }
+        bound.validate_for_problem(self)?;
+        self.bounds
+            .replace(bound_id, bound)
+            .ok_or(CoreError::UnknownBound(bound_id))?;
+        Ok(())
     }
 
     /// Adds a residual after validating all declared IDs and incidence.
@@ -571,9 +716,26 @@ impl Problem {
     /// Failed rows retain a structured evaluator category when one is available.
     #[must_use]
     pub fn audit_snapshot_partial(&self) -> AuditSnapshot {
+        self.audit_snapshot_partial_filtered(None)
+    }
+
+    pub(crate) fn audit_snapshot_partial_for_residuals(
+        &self,
+        residual_ids: &[ResidualId],
+    ) -> AuditSnapshot {
+        self.audit_snapshot_partial_filtered(Some(residual_ids))
+    }
+
+    fn audit_snapshot_partial_filtered(
+        &self,
+        residual_filter: Option<&[ResidualId]>,
+    ) -> AuditSnapshot {
         let state = self.variable_state();
         let mut snapshot = self.audit_source_shell();
         for (residual_id, residual) in self.residuals.iter() {
+            if residual_filter.is_some_and(|filter| !filter.contains(&residual_id)) {
+                continue;
+            }
             let variables = match Self::incident_values_from_state(residual, &state) {
                 Ok(variables) => variables,
                 Err(error) => {
@@ -658,6 +820,7 @@ impl Problem {
                     source_label: source.label().to_owned(),
                     rows: Vec::new(),
                     annotations: AuditAnnotations::default(),
+                    active_bounds: Vec::new(),
                 })
                 .collect(),
         }
@@ -681,7 +844,7 @@ impl Problem {
         self.assemble_dense_for_state_filtered(state, None)
     }
 
-    fn assemble_dense_for_state_filtered(
+    pub(crate) fn assemble_dense_for_state_filtered(
         &self,
         state: &VariableState,
         residual_filter: Option<&[ResidualId]>,
@@ -1018,6 +1181,7 @@ fn append_audit_rows(
             evaluation_error_category: None,
             evaluation_error: None,
             annotations: AuditAnnotations::default(),
+            active_bounds: Vec::new(),
         });
     }
     Ok(())
@@ -1066,6 +1230,7 @@ fn append_failed_audit_rows(
             evaluation_error_category: error_category,
             evaluation_error: Some(error.to_owned()),
             annotations: AuditAnnotations::default(),
+            active_bounds: Vec::new(),
         });
     }
 }
