@@ -7,6 +7,7 @@ rust-version.workspace = true
 authors.workspace = true
 
 [dependencies]
+faer.workspace = true
 geosolve-geometry = { path = "../geosolve-geometry" }
 indexmap.workspace = true
 nalgebra.workspace = true
@@ -26,6 +27,10 @@ harness = false
 
 [[bench]]
 name = "representative_sparse"
+harness = false
+
+[[bench]]
+name = "connected_sparse"
 harness = false
 
 [lints]

@@ -397,6 +397,20 @@ M9 near-aligned acceptance fixture:
 - the compatibility unit-rate velocity query is likewise rank `9`, has zero local DOF, the same finite spectrum, and independently validates its differentiated residual;
 - after the finite forward crossing, adding a grounded blocker pin at `(100, 0)` and an incompatible revolute closure to the slider pin reaches the bounded solver iteration limit with `HardValidity::Invalid`; it must retain the accepted crank, rod and slider poses bitwise and keep all returned geometry finite.
 
+M16 displacement-driven fold fixture:
+
+- use the same `1.25s` crank, `3.5s` rod, x-axis guide and positive-X slider branch at each model scale `s` in `1e-6`, `1` and `1e6`;
+- start at crank angle `0.05 rad` with linear slider-displacement target `4.747880210234948s`;
+- the analytic turning point is crank angle `0` and displacement `4.75s`;
+- natural adaptive continuation toward `4.751s` retains an accepted prefix and stops with `PseudoArclengthRequired` at every required scale, without committing the negative-angle side or switching modes;
+- explicit increasing-parameter pseudo-arclength continuation for normalized path length `0.2` crosses to a negative crank angle while retaining the positive-X assembly monitor;
+- a second explicitly oriented increasing-parameter path from that negative endpoint crosses back to positive crank angle, while explicit decreasing-parameter orientation from the original positive endpoint moves away from the maximum deterministically;
+- correctors exceeding either the absolute or path-step-relative normalized locality limit are rejected and retried before any state mutation;
+- an ordinary physical corrector rejected only by post-corrector tangent policy remains visible in `rejected_attempts`, while the accepted prefix stays committed;
+- legacy bounded-step `drive_to` toward the impossible displacement `4.751s` rejects its first beyond-fold sample and retains its entry target and geometry exactly;
+- every published accepted sample is an ordinary fixed-displacement physical solve with finite geometry, independently valid hard residuals and no pseudo parameter/control source in its rank, audit or diagnostics;
+- forced dense and sparse-preferred physical endpoints agree on geometry, final driver target, rank/mobility, diagnostics, audit structure and positive-X branch state.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:

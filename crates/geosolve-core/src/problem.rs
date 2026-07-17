@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::ops::Range;
 
 use nalgebra::{DMatrix, DVector};
@@ -9,6 +10,7 @@ use crate::{
     SourceConstraintId, VariableBlock, VariableId, VariableKind, VariableValue,
     analysis::{AliasElimination, DecompositionCache, FixedElimination},
     linearization::{evaluate_values, normalize_residuals},
+    sparse::SparseSymbolicCache,
 };
 
 #[derive(Clone, Debug)]
@@ -324,6 +326,8 @@ pub struct Problem {
     pub(crate) fixed_eliminations: Vec<FixedElimination>,
     pub(crate) alias_eliminations: Vec<AliasElimination>,
     pub(crate) decomposition_cache: Option<DecompositionCache>,
+    pub(crate) sparse_symbolic_cache: RefCell<SparseSymbolicCache>,
+    pub(crate) solve_backend_evidence: RefCell<Vec<crate::solver::BackendEvidence>>,
 }
 
 #[derive(Clone, Debug)]
@@ -348,6 +352,8 @@ impl Problem {
             fixed_eliminations: Vec::new(),
             alias_eliminations: Vec::new(),
             decomposition_cache: None,
+            sparse_symbolic_cache: RefCell::new(SparseSymbolicCache::default()),
+            solve_backend_evidence: RefCell::new(Vec::new()),
         }
     }
 
@@ -1059,24 +1065,6 @@ impl Problem {
         residual_ids: &[ResidualId],
     ) -> Result<Vec<(ResidualId, usize, SourceConstraintId, f64)>, CoreError> {
         self.normalized_category_values_filtered(state, category, Some(residual_ids))
-    }
-
-    pub(crate) fn normalized_values_for_residuals(
-        &self,
-        state: &VariableState,
-        residual_ids: &[ResidualId],
-    ) -> Result<Vec<f64>, CoreError> {
-        self.validate_variable_state(state)?;
-        let mut values = Vec::new();
-        for (residual_id, residual) in self.residuals.iter() {
-            if !residual_ids.contains(&residual_id) {
-                continue;
-            }
-            let variables = Self::incident_values_from_state(residual, state)?;
-            let raw = evaluate_values(residual_id, residual, &variables)?;
-            values.extend(normalize_residuals(residual, &raw)?);
-        }
-        Ok(values)
     }
 
     fn normalized_category_values_filtered(

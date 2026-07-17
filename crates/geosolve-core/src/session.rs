@@ -4,8 +4,8 @@ use crate::analysis::EliminationPlan;
 use crate::linearization::build_accepted_hard_linearization;
 use crate::{
     AcceptedHardLinearization, BoundId, BoundStatus, CoordinateBound, CoreError, HardValidity,
-    Problem, ResidualBlock, ResidualId, ResidualRowAudit, SecondaryStatus, SolveReport,
-    SolverConfig, SourceConstraint, SourceConstraintId, VariableId, VariableValue,
+    Problem, ResidualBlock, ResidualCategory, ResidualId, ResidualRowAudit, SecondaryStatus,
+    SolveReport, SolverConfig, SourceConstraint, SourceConstraintId, VariableId, VariableValue,
 };
 
 /// Independent revision counters for one accepted persistent session state.
@@ -383,6 +383,7 @@ impl SolveSession {
         }
         let mut candidate = self.problem.clone();
         let mut dirty_components = Vec::new();
+        let mut dirty_hierarchy_residuals = Vec::new();
         let residual_changed = !patch.residual_replacements.is_empty();
         let source_changed = !patch.source_replacements.is_empty() || residual_changed;
         let bound_changed = !patch.bound_replacements.is_empty();
@@ -394,24 +395,35 @@ impl SolveSession {
         for (source_id, source) in patch.source_replacements {
             for (residual_id, residual) in self.problem.residuals.iter() {
                 if residual.source() == source_id {
-                    add_residual_dependencies(
-                        plan,
-                        residual_id,
-                        residual.incident_variables(),
-                        &mut dirty_components,
-                    )?;
+                    if residual.category() == ResidualCategory::Hard {
+                        add_residual_dependencies(
+                            plan,
+                            residual_id,
+                            residual.incident_variables(),
+                            &mut dirty_components,
+                        )?;
+                    } else {
+                        dirty_hierarchy_residuals.push(residual_id);
+                    }
                 }
             }
             candidate.replace_source(source_id, source)?;
         }
         for (residual_id, residual) in patch.residual_replacements {
-            let incidence = self
+            let previous = self
                 .problem
                 .residual(residual_id)
-                .ok_or(CoreError::UnknownResidual(residual_id))?
-                .incident_variables()
-                .to_vec();
-            add_residual_dependencies(plan, residual_id, &incidence, &mut dirty_components)?;
+                .ok_or(CoreError::UnknownResidual(residual_id))?;
+            if previous.category() == ResidualCategory::Hard {
+                add_residual_dependencies(
+                    plan,
+                    residual_id,
+                    previous.incident_variables(),
+                    &mut dirty_components,
+                )?;
+            } else {
+                dirty_hierarchy_residuals.push(residual_id);
+            }
             candidate.replace_residual_compatible(residual_id, residual)?;
         }
         for (bound_id, bound) in patch.bound_replacements {
@@ -425,6 +437,8 @@ impl SolveSession {
         }
         dirty_components.sort_unstable();
         dirty_components.dedup();
+        dirty_hierarchy_residuals.sort_unstable();
+        dirty_hierarchy_residuals.dedup();
 
         let candidate_plan = if residual_changed {
             let candidate_plan = EliminationPlan::new(&candidate)?;
@@ -433,8 +447,12 @@ impl SolveSession {
         } else {
             plan.clone()
         };
-        let mut report =
-            candidate.solve_session_components(self.config, &dirty_components, &candidate_plan)?;
+        let mut report = candidate.solve_session_components(
+            self.config,
+            &dirty_components,
+            &dirty_hierarchy_residuals,
+            &candidate_plan,
+        )?;
         let mut output = None;
         let rejection = if let Some(rejection) = core_rejection_before_domain(&report, self.config)
         {
@@ -478,7 +496,19 @@ impl SolveSession {
         }
         let mut stamps = self.component_stamps.clone();
         let stamp_count = stamps.len();
-        for &component_index in &dirty_components {
+        let mut affected_components = dirty_components.clone();
+        affected_components.extend(
+            report
+                .component_solves
+                .iter()
+                .filter(|component| {
+                    component.secondary_participated || component.state_changed_by_secondary
+                })
+                .map(|component| component.component_index),
+        );
+        affected_components.sort_unstable();
+        affected_components.dedup();
+        for &component_index in &affected_components {
             let stamp = stamps
                 .get_mut(component_index)
                 .ok_or(CoreError::DimensionMismatch {

@@ -15,9 +15,9 @@ This is not a solid modeller, B-rep kernel, mesher, renderer, collision engine, 
 
 ## 2. Status of this document
 
-M0-M7 are the frozen domain baseline. M8 accepted the target contracts, M9 implemented component-local linearization, local AD, status and numerical-rank contracts, M10 implemented persistent sessions, bounds and the first sketch consumer, M11 implemented the persistent sketch document, commands/history and JSON/remapping layer, M12 implemented immutable curve jets, editable Beziers and generic curve contact/tangency plumbing, M13 implemented the disposable browser playground over those public APIs, M14 hardened its exact scenarios, failure recovery and performance gates, and M15 implemented shared planar/spatial manifold state plus accepted hard sensitivity. Statements are therefore marked as:
+M0-M7 are the frozen domain baseline. M8 accepted the target contracts, M9 implemented component-local linearization, local AD, status and numerical-rank contracts, M10 implemented persistent sessions, bounds and the first sketch consumer, M11 implemented the persistent sketch document, commands/history and JSON/remapping layer, M12 implemented immutable curve jets, editable Beziers and generic curve contact/tangency plumbing, M13 implemented the disposable browser playground over those public APIs, M14 hardened its exact scenarios, failure recovery and performance gates, M15 implemented shared planar/spatial manifold state plus accepted hard sensitivity, and M16 implemented sparse hard steps, structural matching, coupled hierarchy and robust planar continuation. Statements are therefore marked as:
 
-- **Baseline:** implemented behavior through M15, with M1-M7 domain behavior protected as the frozen regression baseline.
+- **Baseline:** implemented behavior through M16, with M1-M7 domain behavior protected as the frozen regression baseline.
 - **Target:** behavior required by the named M10-M24 milestone.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
@@ -130,7 +130,7 @@ The logical target pipeline is:
 10. atomically commit only a finite, independently valid accepted patch;
 11. retain prior accepted state and discrete state on rejection.
 
-Baseline `Problem::solve_decomposed` has component caching but relies on caller-supplied edited variable IDs. M10 replaces that hint-based lifecycle with the persistent `SolveSession` and revision/dirty tracking in ADR 0007, with `SketchSession` as the first domain consumer. M11 layers `SketchDocumentSession` over that validated boundary: document commands lower persistent semantic IDs deterministically to fresh runtime IDs, solve through existing sketch equations, project only independently accepted continuous/contact state back to persistent IDs, and clone-and-swap the document/history atomically. Rejected full-document attempts expose retained accepted geometry/mappings separately from attempted diagnostic mappings. Clean components may reuse zero nonlinear iterations, but their hard rows, Jacobians/rank and bounded diagnostics are freshly evaluated at every returned state. Residual evaluators are behavior-pure; interior mutable telemetry cannot affect equations. M16 adds sparse storage, structural matching and symbolic cache reuse. No benchmark or performance policy may bypass independent validation.
+Baseline `Problem::solve_decomposed` has component caching but relies on caller-supplied edited variable IDs. M10 replaces that hint-based lifecycle with the persistent `SolveSession` and revision/dirty tracking in ADR 0007, with `SketchSession` as the first domain consumer. M11 layers `SketchDocumentSession` over that validated boundary: document commands lower persistent semantic IDs deterministically to fresh runtime IDs, solve through existing sketch equations, project only independently accepted continuous/contact state back to persistent IDs, and clone-and-swap the document/history atomically. Rejected full-document attempts expose retained accepted geometry/mappings separately from attempted diagnostic mappings. Clean components may reuse zero nonlinear iterations, but all hard and secondary rows, Jacobian/derivative statuses, audit snapshots, rank and bounded diagnostics are freshly evaluated at every returned state. Residual evaluators are behavior-pure; interior mutable telemetry cannot affect equations. M16 adds sparse storage, structural matching, bounded symbolic cache reuse and the continuation contract in ADR 0011. Natural continuation stops before a parameter reversal. Pseudo-arclength parameter/control rows are ephemeral, and only a separately re-solved, independently validated ordinary physical problem may be committed or published. No benchmark or performance policy may bypass independent validation.
 
 ## 6. Hard validity and secondary optimum status
 
@@ -146,6 +146,13 @@ Starting with M9, the report has these orthogonal facts:
 - rank, structural class, singularity and diagnostic completeness as separate fields.
 
 A state is hard-valid only for `HardValidity::Valid`. A domain may commit a hard-valid state even when a secondary objective is not optimal, but it must report that secondary status and the domain interaction policy may reject it. No secondary success can turn invalid or unevaluated hard geometry into a success-like result.
+
+`Optimal` is reserved for a zero-cost least-squares level or a feasible space
+with no remaining direction. Finite multi-scale curvature samples can discover
+descent but cannot prove nonnegative curvature for an arbitrary evaluator. A
+positive-cost first-order stationary level with no detected negative sample is
+therefore `Acceptable`, with converged termination so domain transactions may
+commit it, not `Optimal`.
 
 Baseline transition: through M8, `SolveReport` exposes `hard_residuals_validated` and hard norms, but top-level `SolveTermination::Converged` also requires every priority pass to terminate as `Converged`. That frozen behavior remains accepted and is not a failure of the M1-M8 baseline. M9 introduces the orthogonal fields above and makes them mandatory for all new reports. M10 `SolveSession` commits consume the M9 hard-valid field as authoritative. Compatibility wording must not call a secondary stall a hard-constraint failure.
 
@@ -182,7 +189,7 @@ Baseline transition: M1-M8 use normalized component-local Jacobians and default 
 
 ### 7.2 Structural classification
 
-Numerical rank and graph structure answer different questions. The M16 target computes maximum structural matching on the reduced hard incidence graph before numerical values are considered. For structural rank `s_c`:
+Numerical rank and graph structure answer different questions. M16 computes maximum structural matching on the reduced hard incidence graph before numerical values are considered. The public evaluator seam declares incidence by variable block rather than scalar formula slot, so each incident block contributes its complete tangent-coordinate envelope, including explicit zero entries. Structural rank and DM partitions describe that stable declared envelope; they are not a proof that every slot is analytically nonzero and never replace numerical SVD rank. For structural rank `s_c`:
 
 ```text
 structural_right_nullity = n_c - s_c
@@ -227,7 +234,7 @@ Redundancy and conflict candidates are bounded explanatory diagnostics, not proo
 
 An empty candidate list is meaningful only together with its status. In particular, an empty list with `Skipped` or `Truncated` must never be presented as “no conflict” or “no redundancy”. A `Complete` result still claims completeness only for the documented bounded deletion/rank algorithm, not global minimality.
 
-Baseline transition: conflict deletion currently has fixed limits of 12 candidate sources and 24 active tangent dimensions and silently omits over-budget components; redundancy runs only after valid hard evaluation/rank. The baseline report has no completeness or budget fields, so empty baseline candidate vectors are ambiguous. M10 makes budgets configurable/reportable in the session report; M16 extends the same contract to structural and sparse diagnostics.
+Baseline transition: conflict deletion currently has fixed limits of 12 candidate sources and 24 active tangent dimensions and silently omits over-budget components; redundancy runs only after valid hard evaluation/rank. The baseline report has no completeness or budget fields, so empty baseline candidate vectors are ambiguous. M10 makes those bounded candidate budgets configurable/reportable in the session report. M16 structural matching is complete for each declared block envelope, while sparse backend/fallback evidence is deterministic and unbudgeted; neither is represented as a bounded candidate search.
 
 ## 9. Priority semantics
 
@@ -303,7 +310,7 @@ Persistence stores domain topology, continuous accepted state and every discrete
 
 - Dense QR/SVD remains the correctness and diagnostic path for small components.
 - Successful Cholesky never proves rank.
-- M16 introduces pure-Rust `faer` sparse storage and rank-revealing least squares after canonical component-local assembly exists.
+- M16 introduces pure-Rust `faer` sparse storage after canonical component-local assembly exists. Under ADR 0012 sparse QR supplies validated damped LM steps but is not the authoritative rank-revealing path; dense SVD retains the M9 rank contract.
 - Dense and sparse paths must agree on independently validated geometry, rank/nullity, mobility, diagnostics and branch state.
 - Sparse crossover values are benchmark-derived and reported; they never alter correctness tolerances.
 - The workspace remains `unsafe_code = "forbid"`; native solver FFI is not permitted.
@@ -317,7 +324,7 @@ Persistence stores domain topology, continuous accepted state and every discrete
 - M12: editable quadratic/cubic Bezier and generic point/contact/tangency curve plumbing.
 - M13-M14: disposable browser playground, E2E/import/error/performance hardening and the alpha gate.
 - M15: completed manifold `Pose2`/`Pose3`, validated frames and accepted hard-equality sensitivity.
-- M16: sparse structure, matching, hierarchy and robust continuation.
+- M16: completed sparse structure, matching, hierarchy and robust planar continuation.
 - M17-M18 and M20/M23: migrate and complete planar/spatial kinematic product behavior.
 - M19, M21 and M22: add conics, B-splines, NURBS and complete the production 2D CAD sketch product.
 - M24: stabilize public APIs, persistence, documentation and release gates for both deliverables.

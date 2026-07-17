@@ -11,7 +11,8 @@ use crate::model::{
     validate_model_scale, validate_plane_frame, validate_point, validate_pose,
 };
 use crate::residuals::{
-    AngularDriverResidual, LinearDriverResidual, PrismaticResidual, RevoluteResidual, WeldResidual,
+    AngularDriverResidual, LinearDriverResidual, ParameterizedAngularDriverResidual,
+    ParameterizedLinearDriverResidual, PrismaticResidual, RevoluteResidual, WeldResidual,
 };
 
 const MAX_CONTINUATION_SAMPLES: usize = 1_000_000;
@@ -298,7 +299,8 @@ impl Linkage {
     /// Returns an error for invalid model geometry, stale references, or a
     /// rejected core declaration.
     pub fn compile(&self) -> Result<CompiledLinkage, LinkageError> {
-        self.compile_with_driver_override(None)
+        self.compile_internal(None, None)
+            .map(|(compiled, _)| compiled)
     }
 
     #[allow(clippy::too_many_lines)]
@@ -306,6 +308,31 @@ impl Linkage {
         &self,
         driver_override: Option<(DriverId, f64)>,
     ) -> Result<CompiledLinkage, LinkageError> {
+        self.compile_internal(driver_override, None)
+            .map(|(compiled, _)| compiled)
+    }
+
+    pub(crate) fn compile_with_parameterized_driver(
+        &self,
+        driver: DriverId,
+        parameter: f64,
+    ) -> Result<(CompiledLinkage, VariableId), LinkageError> {
+        let (compiled, parameter_variable) =
+            self.compile_internal(None, Some((driver, parameter)))?;
+        Ok((
+            compiled,
+            parameter_variable.ok_or(LinkageError::PositionNotAccepted(
+                "parameterized compilation omitted its scalar variable".to_owned(),
+            ))?,
+        ))
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn compile_internal(
+        &self,
+        driver_override: Option<(DriverId, f64)>,
+        parameterized_driver: Option<(DriverId, f64)>,
+    ) -> Result<(CompiledLinkage, Option<VariableId>), LinkageError> {
         validate_model_scale(self.model_scale)?;
         validate_plane_frame(self.plane_frame)?;
         if let Some((driver, target)) = driver_override {
@@ -313,6 +340,12 @@ impl Linkage {
                 .get(driver)
                 .ok_or(LinkageError::UnknownDriver(driver))?;
             validate_finite(target, "driver target")?;
+        }
+        if let Some((driver, parameter)) = parameterized_driver {
+            self.drivers
+                .get(driver)
+                .ok_or(LinkageError::UnknownDriver(driver))?;
+            validate_finite(parameter, "continuation parameter")?;
         }
         self.geometry()?;
 
@@ -329,6 +362,19 @@ impl Linkage {
                 variable_id,
             });
         }
+        let parameter_variable = if let Some((driver_id, parameter)) = parameterized_driver {
+            let driver = self
+                .drivers
+                .get(driver_id)
+                .ok_or(LinkageError::UnknownDriver(driver_id))?;
+            let scale = match driver.kind() {
+                DriverKind::Angular { .. } => 1.0,
+                DriverKind::Linear { .. } => self.model_scale,
+            };
+            Some(problem.add_variable(VariableBlock::scalar(parameter, scale)?))
+        } else {
+            None
+        };
 
         let mut source_mappings = Vec::new();
         for (body_id, body) in self.bodies.iter().filter(|(_, body)| body.grounded()) {
@@ -387,17 +433,31 @@ impl Linkage {
             )?);
         }
         for (driver_id, driver) in self.drivers.iter() {
-            let target = driver_override
-                .filter(|(id, _)| *id == driver_id)
-                .map_or(driver.target(), |(_, target)| target);
-            source_mappings.push(compile_driver(
-                self,
-                &mut problem,
-                &body_variables,
-                driver_id,
-                driver,
-                target,
-            )?);
+            if parameterized_driver.is_some_and(|(selected, _)| selected == driver_id) {
+                let parameter = parameter_variable.ok_or(LinkageError::PositionNotAccepted(
+                    "parameterized driver compilation omitted its scalar variable".to_owned(),
+                ))?;
+                source_mappings.push(compile_parameterized_driver(
+                    self,
+                    &mut problem,
+                    &body_variables,
+                    driver_id,
+                    driver,
+                    parameter,
+                )?);
+            } else {
+                let target = driver_override
+                    .filter(|(id, _)| *id == driver_id)
+                    .map_or(driver.target(), |(_, target)| target);
+                source_mappings.push(compile_driver(
+                    self,
+                    &mut problem,
+                    &body_variables,
+                    driver_id,
+                    driver,
+                    target,
+                )?);
+            }
         }
 
         // Fixed declarations synchronize eagerly. Restore the exact retained
@@ -408,30 +468,33 @@ impl Linkage {
                 .set_variable_value(mapping.variable_id, VariableValue::Pose2(pose.ambient()))?;
         }
 
-        Ok(CompiledLinkage {
-            problem,
-            body_variables,
-            source_mappings,
-            plane_frame: self.plane_frame,
-            point_features: self
-                .point_features
-                .iter()
-                .map(|(id, feature)| PointFeatureSpec {
-                    id,
-                    body: feature.body(),
-                    local: feature.local_point(),
-                })
-                .collect(),
-            axis_features: self
-                .axis_features
-                .iter()
-                .map(|(id, feature)| AxisFeatureSpec {
-                    id,
-                    body: feature.body(),
-                    local: feature.local_axis(),
-                })
-                .collect(),
-        })
+        Ok((
+            CompiledLinkage {
+                problem,
+                body_variables,
+                source_mappings,
+                plane_frame: self.plane_frame,
+                point_features: self
+                    .point_features
+                    .iter()
+                    .map(|(id, feature)| PointFeatureSpec {
+                        id,
+                        body: feature.body(),
+                        local: feature.local_point(),
+                    })
+                    .collect(),
+                axis_features: self
+                    .axis_features
+                    .iter()
+                    .map(|(id, feature)| AxisFeatureSpec {
+                        id,
+                        body: feature.body(),
+                        local: feature.local_axis(),
+                    })
+                    .collect(),
+            },
+            parameter_variable,
+        ))
     }
 
     /// Solves current targets, validates independently, and commits only on acceptance.
@@ -441,7 +504,7 @@ impl Linkage {
     /// Returns an error when compilation or the core solve cannot be started.
     /// Numerical solve failures are returned as rejected results.
     pub fn solve(&mut self, config: SolverConfig) -> Result<LinkageSolveResult, LinkageError> {
-        self.solve_attempt(None, config)
+        self.solve_attempt(None, None, config)
     }
 
     /// Drives one target with deterministic samples no larger than its policy step.
@@ -480,7 +543,7 @@ impl Linkage {
             initial_target.partial_cmp(&target),
             Some(std::cmp::Ordering::Equal)
         ) {
-            let solve = self.solve_attempt(Some((driver, target)), config)?;
+            let solve = self.solve_attempt(Some((driver, target)), None, config)?;
             samples.push(DriveSample {
                 target,
                 step: 0.0,
@@ -512,7 +575,7 @@ impl Linkage {
             if !step.is_finite() || step == 0.0 || step.abs() > max_step {
                 return Err(LinkageError::ContinuationSampleOverflow);
             }
-            let solve = self.solve_attempt(Some((driver, sample_target)), config)?;
+            let solve = self.solve_attempt(Some((driver, sample_target)), None, config)?;
             let accepted = solve.accepted();
             samples.push(DriveSample {
                 target: sample_target,
@@ -577,9 +640,10 @@ impl Linkage {
         geometry_from_parts(self.plane_frame, bodies, &points, &axes)
     }
 
-    fn solve_attempt(
+    pub(crate) fn solve_attempt(
         &mut self,
         driver_override: Option<(DriverId, f64)>,
+        predictor: Option<&[SolvedBody]>,
         config: SolverConfig,
     ) -> Result<LinkageSolveResult, LinkageError> {
         let mut retained_compiled = self.compile()?;
@@ -587,6 +651,16 @@ impl Linkage {
         let retained_audit = retained_compiled.problem.audit_snapshot_partial();
         let retained_source_mappings = retained_compiled.source_mappings.clone();
         let mut compiled = self.compile_with_driver_override(driver_override)?;
+        if let Some(predictor) = predictor {
+            for body in predictor {
+                let variable = compiled
+                    .variable_for_body(body.body_id)
+                    .ok_or(LinkageError::UnknownBody(body.body_id))?;
+                compiled
+                    .problem
+                    .set_variable_value(variable, VariableValue::Pose2(body.pose.ambient()))?;
+            }
+        }
         let mut core_report = compiled.problem.solve(config)?;
         let attempt_source_mappings = compiled.source_mappings.clone();
         let candidate = compiled.solved_geometry();
@@ -1119,6 +1193,94 @@ fn compile_driver(
     ))
 }
 
+fn compile_parameterized_driver(
+    linkage: &Linkage,
+    problem: &mut Problem,
+    body_variables: &[BodyVariableMapping],
+    driver_id: DriverId,
+    driver: &crate::Driver,
+    parameter: VariableId,
+) -> Result<LinkageSourceMapping, LinkageError> {
+    let label = format!(
+        "driver {}: {} = continuation parameter {}",
+        driver.ordinal(),
+        driver.label(),
+        driver.unit().symbol()
+    );
+    let source_id = problem.add_source(SourceConstraint::new(&label)?);
+    let residual = match driver.kind() {
+        DriverKind::Angular { reference, driven } => {
+            let reference_body = linkage.require_body(reference)?;
+            let driven_body = linkage.require_body(driven)?;
+            ResidualBlock::new(
+                source_id,
+                ResidualCategory::Hard,
+                vec![
+                    body_variable(body_variables, reference)?,
+                    body_variable(body_variables, driven)?,
+                    parameter,
+                ],
+                1,
+                vec![1.0],
+                vec![audit_row(
+                    "(driven.angle - reference.angle - continuation_parameter) / 1 rad",
+                    vec![
+                        AuditBinding::new("reference body", reference_body.label()),
+                        AuditBinding::new("driven body", driven_body.label()),
+                        AuditBinding::new("parameter", "ephemeral continuation scalar"),
+                        AuditBinding::new("unit", driver.unit().symbol()),
+                    ],
+                    "rad",
+                )],
+                ParameterizedAngularDriverResidual,
+            )?
+        }
+        DriverKind::Linear {
+            origin,
+            measured,
+            guide_axis,
+        } => {
+            let origin_feature = linkage.require_point_feature(origin)?;
+            let measured_feature = linkage.require_point_feature(measured)?;
+            let guide_feature = linkage.require_axis_feature(guide_axis)?;
+            ResidualBlock::new(
+                source_id,
+                ResidualCategory::Hard,
+                vec![
+                    body_variable(body_variables, origin_feature.body())?,
+                    body_variable(body_variables, measured_feature.body())?,
+                    parameter,
+                ],
+                1,
+                vec![linkage.model_scale],
+                vec![audit_row(
+                    "(dot(world(guide_axis), world(measured)-world(origin)) - continuation_parameter) / model_scale",
+                    vec![
+                        AuditBinding::new("origin", origin_feature.label()),
+                        AuditBinding::new("measured", measured_feature.label()),
+                        AuditBinding::new("guide axis", guide_feature.label()),
+                        AuditBinding::new("parameter", "ephemeral continuation scalar"),
+                        AuditBinding::new("unit", driver.unit().symbol()),
+                    ],
+                    "model-unit",
+                )],
+                ParameterizedLinearDriverResidual {
+                    origin_local: point_array(origin_feature.local_point()),
+                    measured_local: point_array(measured_feature.local_point()),
+                    guide_axis: vector_array(guide_feature.local_axis()),
+                },
+            )?
+        }
+    };
+    let residual_id = problem.add_residual(residual)?;
+    Ok(source_mapping(
+        LinkageSource::Driver(driver_id),
+        label,
+        source_id,
+        residual_id,
+    ))
+}
+
 fn geometry_from_parts(
     plane_frame: PlaneFrame,
     bodies: Vec<SolvedBody>,
@@ -1225,7 +1387,7 @@ fn vector_array(vector: Vector2<f64>) -> [f64; 2] {
     [vector.x, vector.y]
 }
 
-fn fresh_hard_audit_max(problem: &Problem) -> Result<f64, LinkageError> {
+pub(crate) fn fresh_hard_audit_max(problem: &Problem) -> Result<f64, LinkageError> {
     let audit = problem.audit_snapshot()?;
     let mut maximum = 0.0_f64;
     for row in audit
@@ -1544,5 +1706,36 @@ mod tests {
                 .iter()
                 .all(|component| !component.near_singular && !component.is_singular)
         );
+    }
+
+    #[test]
+    fn parameterized_driver_rows_have_audit_and_finite_difference_coverage() {
+        let (angular, angular_ids) = crate::slider_crank().unwrap();
+        let (linear, linear_ids) = crate::slider_crank_displacement_driven().unwrap();
+        for (linkage, driver_id) in [(angular, angular_ids.driver), (linear, linear_ids.driver)] {
+            let target = linkage.driver(driver_id).unwrap().target();
+            let (compiled, parameter) = linkage
+                .compile_with_parameterized_driver(driver_id, target)
+                .unwrap();
+            let check = compiled.problem.check_jacobians(1.0e-6).unwrap();
+            assert!(check.all_within(1.0e-6), "{check:#?}");
+            let mapping = compiled
+                .source_mapping(LinkageSource::Driver(driver_id))
+                .unwrap();
+            let residual = compiled.problem.residual(mapping.residual_ids[0]).unwrap();
+            assert!(residual.incident_variables().contains(&parameter));
+            let rows = compiled.problem.audit_rows().unwrap();
+            let driver_row = rows
+                .iter()
+                .find(|row| row.residual_id == mapping.residual_ids[0])
+                .unwrap();
+            assert!(driver_row.template.contains("continuation_parameter"));
+            assert!(
+                driver_row
+                    .bindings
+                    .iter()
+                    .any(|binding| binding.name == "parameter")
+            );
+        }
     }
 }

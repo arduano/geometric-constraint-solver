@@ -198,6 +198,25 @@ pub(crate) struct AngularDriverResidual {
     pub(crate) target: f64,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ParameterizedAngularDriverResidual;
+
+impl ResidualEvaluator for ParameterizedAngularDriverResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        let (reference, driven, parameter) = two_poses_and_scalar(variables, "angular driver")?;
+        Ok(vec![driven[2] - reference[2] - parameter])
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        two_poses_and_scalar(variables, "angular driver")?;
+        Ok(vec![
+            LocalJacobian::new(1, 3, vec![0.0, 0.0, -1.0]),
+            LocalJacobian::new(1, 3, vec![0.0, 0.0, 1.0]),
+            LocalJacobian::new(1, 1, vec![-1.0]),
+        ])
+    }
+}
+
 impl ResidualEvaluator for AngularDriverResidual {
     fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
         let (reference, driven) = two_poses(variables, "angular driver")?;
@@ -219,6 +238,61 @@ pub(crate) struct LinearDriverResidual {
     pub(crate) measured_local: [f64; 2],
     pub(crate) guide_axis: [f64; 2],
     pub(crate) target: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ParameterizedLinearDriverResidual {
+    pub(crate) origin_local: [f64; 2],
+    pub(crate) measured_local: [f64; 2],
+    pub(crate) guide_axis: [f64; 2],
+}
+
+impl ResidualEvaluator for ParameterizedLinearDriverResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        let (reference, measured, parameter) = two_poses_and_scalar(variables, "linear driver")?;
+        let origin = transformed_point(reference, self.origin_local);
+        let measured = transformed_point(measured, self.measured_local);
+        let guide = rotated(reference[2], self.guide_axis);
+        Ok(vec![dot(guide, subtract(measured, origin)) - parameter])
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        let (reference, measured, _) = two_poses_and_scalar(variables, "linear driver")?;
+        let origin_rotated = rotated(reference[2], self.origin_local);
+        let measured_rotated = rotated(measured[2], self.measured_local);
+        let origin = add_translation(reference, origin_rotated);
+        let measured_point = add_translation(measured, measured_rotated);
+        let displacement = subtract(measured_point, origin);
+        let guide = rotated(reference[2], self.guide_axis);
+        let reference_translation_x = rotated(reference[2], [1.0, 0.0]);
+        let reference_translation_y = rotated(reference[2], [0.0, 1.0]);
+        let measured_translation_x = rotated(measured[2], [1.0, 0.0]);
+        let measured_translation_y = rotated(measured[2], [0.0, 1.0]);
+        let reference_angle =
+            dot(perpendicular(guide), displacement) - dot(guide, perpendicular(origin_rotated));
+        let measured_angle = dot(guide, perpendicular(measured_rotated));
+        Ok(vec![
+            LocalJacobian::new(
+                1,
+                3,
+                vec![
+                    -dot(guide, reference_translation_x),
+                    -dot(guide, reference_translation_y),
+                    reference_angle,
+                ],
+            ),
+            LocalJacobian::new(
+                1,
+                3,
+                vec![
+                    dot(guide, measured_translation_x),
+                    dot(guide, measured_translation_y),
+                    measured_angle,
+                ],
+            ),
+            LocalJacobian::new(1, 1, vec![-1.0]),
+        ])
+    }
 }
 
 impl ResidualEvaluator for LinearDriverResidual {
@@ -278,6 +352,23 @@ fn two_poses(
         )));
     };
     Ok((*first, *second))
+}
+
+fn two_poses_and_scalar(
+    variables: &[VariableValue],
+    context: &str,
+) -> Result<([f64; 3], [f64; 3], f64), EvaluationError> {
+    let [
+        VariableValue::Pose2(first),
+        VariableValue::Pose2(second),
+        VariableValue::Scalar(parameter),
+    ] = variables
+    else {
+        return Err(EvaluationError::invalid_geometry(format!(
+            "parameterized {context} residual expected two Pose2 variables and one scalar"
+        )));
+    };
+    Ok((*first, *second, *parameter))
 }
 
 pub(crate) fn rotated(angle: f64, local: [f64; 2]) -> [f64; 2] {

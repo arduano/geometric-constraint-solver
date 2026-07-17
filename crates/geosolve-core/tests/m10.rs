@@ -202,6 +202,59 @@ impl ResidualEvaluator for MaskedBoundSaddle {
 }
 
 #[derive(Clone, Copy, Debug)]
+struct SmoothSampleMaskedMaximum;
+
+impl SmoothSampleMaskedMaximum {
+    const RADII: [f64; 3] = [1.0e-3, 5.0e-4, 2.5e-4];
+
+    fn value_and_derivative(value: f64) -> (f64, f64) {
+        let mut factors = [0.0; 3];
+        let mut derivatives = [0.0; 3];
+        for (index, radius) in Self::RADII.into_iter().enumerate() {
+            let difference = value * value - radius * radius;
+            let radius_fourth = radius.powi(4);
+            factors[index] = difference * difference / radius_fourth;
+            derivatives[index] = 4.0 * value * difference / radius_fourth;
+        }
+        let product = factors.iter().product::<f64>();
+        let product_derivative = (0..3)
+            .map(|index| {
+                derivatives[index]
+                    * factors
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(other, factor)| (other != index).then_some(*factor))
+                        .product::<f64>()
+            })
+            .sum::<f64>();
+        (
+            1.0 - value * value * product,
+            -2.0 * value * product - value * value * product_derivative,
+        )
+    }
+}
+
+impl ResidualEvaluator for SmoothSampleMaskedMaximum {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        let [VariableValue::Scalar(value)] = variables else {
+            return Err(EvaluationError::invalid_geometry("expected scalar"));
+        };
+        Ok(vec![Self::value_and_derivative(*value).0])
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        let [VariableValue::Scalar(value)] = variables else {
+            return Err(EvaluationError::invalid_geometry("expected scalar"));
+        };
+        Ok(vec![LocalJacobian::new(
+            1,
+            1,
+            vec![Self::value_and_derivative(*value).1],
+        )])
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 struct ConstantSecondary(f64);
 
 impl ResidualEvaluator for ConstantSecondary {
@@ -217,6 +270,24 @@ impl ResidualEvaluator for ConstantSecondary {
             return Err(EvaluationError::invalid_geometry("expected no variables"));
         }
         Ok(Vec::new())
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ConstantSecondaryWithInvalidDerivative;
+
+impl ResidualEvaluator for ConstantSecondaryWithInvalidDerivative {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        if !variables.is_empty() {
+            return Err(EvaluationError::invalid_geometry("expected no variables"));
+        }
+        Ok(vec![1.0])
+    }
+
+    fn jacobian(&self, _: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        Err(EvaluationError::nondifferentiable(
+            "constant secondary derivative intentionally unavailable",
+        ))
     }
 }
 
@@ -661,7 +732,7 @@ fn temporary_bound_optimum_dominates_preference_and_inward_motion_releases() {
     let report = problem.solve(SolverConfig::default()).unwrap();
     assert_eq!(scalar(&problem, variable).to_bits(), 1.0_f64.to_bits());
     assert_eq!(report.bounds[0].status, BoundStatus::ActiveUpper);
-    assert_eq!(report.temporary_status, SecondaryStatus::Optimal);
+    assert_eq!(report.temporary_status, SecondaryStatus::Acceptable);
 
     let mut inward = Problem::new();
     let variable = inward.add_variable(VariableBlock::scalar(1.0, 1.0).unwrap());
@@ -1397,6 +1468,91 @@ fn finite_one_sided_stencil_cannot_certify_weak_bound_optimality() {
 }
 
 #[test]
+fn multiscale_unbounded_curvature_does_not_mask_a_singleton_saddle() {
+    let mut problem = Problem::new();
+    let variable = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());
+    let source_id = source(&mut problem, "masked unbounded saddle");
+    problem
+        .add_residual(
+            ResidualBlock::new(
+                source_id,
+                ResidualCategory::Temporary,
+                vec![variable],
+                1,
+                vec![1.0],
+                vec![row("1 - x^2 + 1e6*x^4")],
+                MaskedBoundSaddle,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let report = problem
+        .solve(SolverConfig {
+            max_iterations: 1,
+            ..SolverConfig::default()
+        })
+        .unwrap();
+    assert_eq!(report.termination, SolveTermination::IterationLimit);
+    assert_eq!(report.temporary_status, SecondaryStatus::IterationLimit);
+    assert!(scalar(&problem, variable).abs() > 1.0e-6, "{report:#?}");
+}
+
+#[test]
+fn smooth_maximum_masked_at_every_sampled_radius_is_acceptable_not_optimal() {
+    let mut oracle = Problem::new();
+    let variable = oracle.add_variable(VariableBlock::scalar(1.0e-4, 1.0).unwrap());
+    let source_id = source(&mut oracle, "smooth sampled-radius mask oracle");
+    oracle
+        .add_residual(
+            ResidualBlock::new(
+                source_id,
+                ResidualCategory::Temporary,
+                vec![variable],
+                1,
+                vec![1.0],
+                vec![row("analytic sampled-radius masked maximum")],
+                SmoothSampleMaskedMaximum,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let jacobian = oracle.check_jacobians(1.0e-7).unwrap();
+    assert!(jacobian.all_within(1.0e-5), "{jacobian:#?}");
+
+    let mut problem = Problem::new();
+    let variable = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());
+    let source_id = source(&mut problem, "smooth sampled-radius mask");
+    problem
+        .add_residual(
+            ResidualBlock::new(
+                source_id,
+                ResidualCategory::Temporary,
+                vec![variable],
+                1,
+                vec![1.0],
+                vec![row("analytic sampled-radius masked maximum")],
+                SmoothSampleMaskedMaximum,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let report = problem.solve(SolverConfig::default()).unwrap();
+    assert_eq!(
+        report.termination,
+        SolveTermination::Converged,
+        "{report:#?}"
+    );
+    assert_eq!(report.temporary_status, SecondaryStatus::Acceptable);
+    assert_eq!(
+        report.priority_solves[0].status,
+        SecondaryStatus::Acceptable
+    );
+    assert_ne!(report.priority_solves[0].status, SecondaryStatus::Optimal);
+    assert!(scalar(&problem, variable).abs() <= f64::EPSILON);
+    assert!((report.priority_solves[0].final_cost.unwrap() - 0.5).abs() <= f64::EPSILON);
+}
+
+#[test]
 fn mobility_uses_the_authoritative_weak_equality_nullspace_at_all_scales() {
     for scale in [1.0e-6, 1.0, 1.0e6] {
         let mut problem = Problem::new();
@@ -1481,7 +1637,7 @@ fn diagnostic_trial_budget_never_omits_component_reports_and_counts_dimensions()
 }
 
 #[test]
-fn clean_session_components_freshly_validate_hard_without_rerunning_secondary_optimization() {
+fn clean_session_components_freshly_validate_all_rows_without_rerunning_secondary_optimization() {
     let mut problem = Problem::new();
     let x = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());
     let y = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());
@@ -1546,7 +1702,7 @@ fn clean_session_components_freshly_validate_hard_without_rerunning_secondary_op
     assert!(x_hard.load(Ordering::Relaxed) > 0);
     assert!(x_secondary.load(Ordering::Relaxed) > 0);
     assert!(y_hard.load(Ordering::Relaxed) > 0);
-    assert_eq!(y_secondary.load(Ordering::Relaxed), 0);
+    assert!(y_secondary.load(Ordering::Relaxed) > 0);
     let y_component = transaction
         .report
         .structural
@@ -1918,4 +2074,30 @@ fn componentless_secondary_sources_support_normal_and_audit_session_patches() {
         SecondaryStatus::Acceptable
     );
     assert!((transaction.report.audit.sources[0].rows[0].raw_residual - 2.0).abs() <= f64::EPSILON);
+}
+
+#[test]
+fn componentless_secondary_derivative_failure_cannot_enter_a_session_as_acceptable() {
+    let mut problem = Problem::new();
+    let source_id = source(&mut problem, "invalid constant secondary derivative");
+    problem
+        .add_residual(
+            ResidualBlock::new(
+                source_id,
+                ResidualCategory::Preference,
+                Vec::new(),
+                1,
+                vec![1.0],
+                vec![row("invalid constant secondary derivative")],
+                ConstantSecondaryWithInvalidDerivative,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+    let error = SolveSession::new(problem, SolverConfig::default()).unwrap_err();
+    assert!(matches!(
+        error,
+        SessionError::InitialRejected(geosolve_core::SessionCoreRejection::EvaluationFailure)
+    ));
 }

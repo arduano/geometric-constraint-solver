@@ -6,7 +6,7 @@ A GPL-3.0-or-later, pure-Rust geometric constraint solver for:
 - planar rigid-body mechanisms embedded in arbitrary 3D workplanes;
 - spatial rigid-body assembly and linkage kinematics.
 
-The validated baseline includes a nonlinear equality solver with strict residual validation, rank/DOF and source diagnostics, 2D sketch constraints through curves and tangency, planar rigid-body linkage continuation, shared `SE(2)`/`SE(3)` manifold state, accepted hard-equality sensitivity, and the completed disposable 2D Sketch Playground Alpha over reusable Rust APIs. The roadmap now continues with sparse solving, robust continuation, generic production CAD curves and complete 2D/3D kinematics. Physics, collision and a production rendering system are out of scope.
+The validated baseline includes a nonlinear equality solver with strict residual validation, dense-authoritative rank/DOF and source diagnostics, indexed sparse hard steps, structural matching, cross-component strict priorities, adaptive natural and explicit pseudo-arclength planar linkage continuation, 2D sketch constraints through curves and tangency, shared `SE(2)`/`SE(3)` manifold state, accepted hard-equality sensitivity, and the completed disposable 2D Sketch Playground Alpha over reusable Rust APIs. The roadmap now continues with shared planar kinematic architecture, generic production CAD curves and complete 2D/3D kinematics. Physics, collision and a production rendering system are out of scope.
 
 ## Start here
 
@@ -20,7 +20,7 @@ The validated baseline includes a nonlinear equality solver with strict residual
 ## Workspace
 
 - `geosolve-geometry` — immutable geometry, curve evaluation, validated frames/workplanes and `Pose2`/`Pose3` manifold operations; no solver state.
-- `geosolve-core` — variables, residual blocks, Jacobians, nonlinear solve, rank analysis and revision-stamped accepted hard linearization/sensitivity.
+- `geosolve-core` — variables, residual blocks, dense/sparse Jacobian paths, nonlinear solve, structural/numerical analysis, strict hierarchy, continuation primitives and revision-stamped accepted hard linearization/sensitivity.
 - `geosolve-sketch` — baseline sketch entities/constraints and compilation into core residuals; M10-M12 provide the reusable document/session/command/history/serialization APIs.
 - `geosolve-linkage` — planar rigid bodies, joints, drivers, assembly modes and continuation; M18/M20/M23 spatial kinematics remains in this domain crate.
 - `geosolve-demo-web` — separate disposable, desktop-first WASM/SVG diagnostic playground and audit consumer without equations or authoritative document semantics.

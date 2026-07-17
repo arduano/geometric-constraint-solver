@@ -400,17 +400,81 @@ objectives and world-frame conversions remain future work.
 
 ## M16: sparse structure, hierarchy and continuation
 
+Status: complete as of 2026-07-17.
+
 Goal: scale the shared kernel before production splines and large spatial assemblies expand the graph.
 
-- [ ] Add indexed block COO/triplet assembly from the canonical linearization.
-- [ ] Add structural matching and under/well/over-constrained partitions.
-- [ ] Convert to `faer` sparse storage and rank-revealing sparse least-squares.
-- [ ] Retain dense QR/SVD fallback for small or diagnostically ambiguous components.
-- [ ] Cache symbolic ordering/factorization structure.
-- [ ] Record and enforce a benchmark-derived dense/sparse crossover policy.
-- [ ] Replace large explicit dense nullspaces with sparse-compatible hierarchy operations.
-- [ ] Support secondary objectives spanning multiple hard components.
-- [ ] Add adaptive predictor-corrector and pseudo-arclength continuation.
+- [x] Add indexed block COO/triplet assembly from the canonical linearization.
+- [x] Convert to `faer` CSC storage and validated sparse damped least-squares while retaining dense SVD as the rank-revealing authority under ADR 0012.
+- [x] Add structural matching and under/well/over-constrained partitions.
+- [x] Retain dense QR/SVD fallback for small or diagnostically ambiguous components.
+- [x] Cache symbolic ordering/factorization structure.
+- [x] Record and enforce a benchmark-derived dense/sparse crossover policy.
+- [x] Replace large explicit dense nullspaces with sparse-compatible hierarchy operations.
+- [x] Support secondary objectives spanning multiple hard components.
+- [x] Add adaptive predictor-corrector and pseudo-arclength continuation.
+
+2026-07-16 hierarchy slice: cross-hard-component Temporary/Preference groups,
+block-local nullspace application, validated projected CGLS, protected-level
+reporting, bounds, and session hierarchy invalidation are implemented and
+covered by M5/M10/M16 regressions.
+
+Independent review follow-up: returned-state secondary costs/audit are always
+fresh, curvature certification is multi-scale and conservative, hierarchy-only
+dependency stamps advance, sparse symbolic cache capacity/eviction are fixed,
+and parity/crossover/benchmark evidence is tightened. Continuation is implemented
+as a planar single-driver slice. ADR 0012 records the caller-approved backend
+scope: current faer sparse QR supplies validated damped LM steps, while dense SVD
+remains the rank-revealing authority for the M9 report contract.
+
+2026-07-17 bounded hierarchy closure: groups at or above 128 reduced coordinates
+now use a deterministic projected-CGLS active set over block-local bound normals,
+protected Temporary rows and implicit large-component hard rows. Fixed and active
+bounds enter the row-space projector without a global `n x nullity` basis; finite
+first events, independent activation, multiplier-sign release, projected KKT,
+full-coordinate feasibility, predicted decrease and nonlinear restoration are
+validated before acceptance. Large interior/endpoint/release/alias/protection,
+dense-oracle, evaluator-domain and constrained-singleton regressions complete
+item 413.
+
+2026-07-17 continuation slice: core now provides accepted-threshold augmented
+null tangents, deterministic adaptive step control and a manifold-aware audited
+pseudo-arclength row. Linkage natural continuation stops transactionally at a
+turning point, while explicit pseudo-arclength continuation crosses the
+displacement-driven L3 fold at model scales `1e-6`, `1` and `1e6`. Ephemeral
+parameter/control rows are never published; every accepted sample is re-solved
+and independently validated as an ordinary physical fixed-driver problem.
+
+Independent continuation review follow-up: zero-distance requests now perform
+fresh ordinary validation, tangent snapshots must match accepted linkage poses,
+pseudo predictors retain explicit tangent orientation, natural predictors are
+branch-checked before correction, and absolute/path-relative corrector locality
+is required before clone-and-swap commit. Reverse/decreasing
+pseudo paths, multi-Pose2 threshold orientation, direct physical endpoint parity
+and extreme/nonlocal rollback are covered by M16 regressions.
+
+Second continuation review follow-up: pseudo-row coefficients now resolve only
+through `Problem` from authoritative variable scales; accepted physical trials
+rejected by tangent policy remain visible; legacy beyond-fold `drive_to` rollback
+and full dense/sparse physical endpoint publication parity are regression-tested.
+Samples expose only corrector backend/fallback evidence, proving actual sparse QR
+without publishing ephemeral equations or rank. Common-left `SE(2)` continuation
+equivariance is also covered.
+Branch-event claims are limited to predictor-endpoint checks plus locality for the
+documented fixtures rather than interval crossing detection.
+
+Completion notes: canonical indexed assembly, deterministic DM partitions,
+bounded exact-pattern symbolic reuse, benchmark-routed sparse LM, dense rank
+authority/fallback, projected-CGLS hierarchy with bounds and cross-component
+strict priorities, and explicit pseudo-arclength continuation all pass their M16
+regressions. Every sparse step, hierarchy trial and continuation endpoint is
+independently validated before publication. Secondary returned-state costs require
+fresh derivative validation, cached Temporary protection retains the originally
+attained cost, and operator projectors use the unsquared authoritative rank
+threshold. The locked workspace, warnings-denied
+Clippy/rustdoc, WASM, benchmark compilation/test mode, native performance, release
+Trunk, desktop/mobile Chromium, format and diff gates pass. Spatial/multi-driver
+continuation and planar model/session/gauge migration remain assigned to M17+.
 
 Gate: dense and sparse paths agree on independently validated geometry, rank, mobility, diagnostics and branch state; the documented planar toggle crosses only through the explicit pseudo-arclength path.
 

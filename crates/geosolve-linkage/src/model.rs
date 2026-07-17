@@ -1,4 +1,4 @@
-use geosolve_core::CoreError;
+use geosolve_core::{ContinuationError, CoreError};
 use geosolve_geometry::{PlaneFrame, Point2, Pose2, Vector2};
 use slotmap::{Key, SlotMap, new_key_type};
 use thiserror::Error;
@@ -37,6 +37,8 @@ pub enum LinkageError {
     NonFiniteValue { context: &'static str, value: f64 },
     #[error("maximum continuation step must be positive and finite, got {0}")]
     InvalidContinuationStep(f64),
+    #[error("pseudo-arclength distance must be positive and finite, got {0}")]
+    InvalidContinuationDistance(f64),
     #[error("requested continuation requires too many deterministic samples")]
     ContinuationSampleOverflow,
     #[error("{0} label must not be empty")]
@@ -71,6 +73,8 @@ pub enum LinkageError {
     PositionNotAccepted(String),
     #[error("velocity solve failed: {0}")]
     VelocityFailure(&'static str),
+    #[error(transparent)]
+    Continuation(#[from] ContinuationError),
     #[error(transparent)]
     Core(#[from] CoreError),
 }

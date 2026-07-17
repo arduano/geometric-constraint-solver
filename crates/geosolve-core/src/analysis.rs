@@ -2,9 +2,10 @@ use crate::linearization::{ComponentTangentLayout, component_tangent_layout};
 use crate::problem::VariableState;
 use crate::residual::ExactElimination;
 use crate::{
-    CoreError, Problem, ResidualCategory, ResidualId, SourceConstraintId, VariableId, VariableKind,
-    VariableValue,
+    CoreError, Problem, ResidualCategory, ResidualId, ResidualRowRef, SourceConstraintId,
+    VariableId, VariableKind, VariableValue,
 };
+use std::collections::VecDeque;
 
 /// One declared variable-to-residual edge in deterministic residual/incidence order.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -30,11 +31,48 @@ pub struct IncidenceAnalysis {
     pub components: Vec<IncidenceComponent>,
 }
 
+/// Structural under/well/over classification of the declared reduced hard
+/// block envelope. Numerical zeros do not remove declared incidence slots.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum StructuralClassification {
+    Under,
+    #[default]
+    Well,
+    Over,
+    Mixed,
+}
+
+/// One normalized tangent coordinate, identified through its reduced alias root.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TangentCoordinateRef {
+    pub root: VariableId,
+    pub coordinate_in_block: usize,
+}
+
+/// Rows and tangent coordinates in one Dulmage-Mendelsohn part.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct DulmageMendelsohnPartition {
+    pub rows: Vec<ResidualRowRef>,
+    pub tangent_coordinates: Vec<TangentCoordinateRef>,
+}
+
+/// Canonically ordered Dulmage-Mendelsohn parts of a reduced hard system.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct DulmageMendelsohnPartitions {
+    pub under: DulmageMendelsohnPartition,
+    pub well: DulmageMendelsohnPartition,
+    pub over: DulmageMendelsohnPartition,
+}
+
 /// Structural counts and signature for one reduced solve component.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ComponentStructuralSummary {
     pub component_index: usize,
+    /// Existing topology/cache signature, including scales and declared order.
     pub pattern_signature: u64,
+    /// Scale- and value-independent reduced block-envelope sparsity signature.
+    pub sparsity_signature: u64,
     pub variable_ids: Vec<VariableId>,
     pub residual_ids: Vec<ResidualId>,
     pub variable_blocks: usize,
@@ -47,11 +85,21 @@ pub struct ComponentStructuralSummary {
     pub active_tangent_dimensions: usize,
     pub active_rows: usize,
     pub active_hard_rows: usize,
+    /// Canonical reduced block-envelope entries, including explicit zero slots.
+    pub structural_nnz: usize,
+    /// Maximum matching rank of the declared block envelope, not numerical rank.
+    pub structural_rank: usize,
+    pub structural_left_nullity: usize,
+    pub structural_right_nullity: usize,
+    pub structural_classification: StructuralClassification,
+    pub dm_partitions: DulmageMendelsohnPartitions,
 }
 
 /// Whole-problem structural facts, separate from numerical Jacobian rank.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct StructuralSummary {
+    /// Scale- and value-independent signature of all declared block envelopes.
+    pub sparsity_signature: u64,
     pub variable_blocks: usize,
     pub tangent_dimensions: usize,
     pub residual_blocks: usize,
@@ -63,6 +111,14 @@ pub struct StructuralSummary {
     pub active_tangent_dimensions: usize,
     pub active_rows: usize,
     pub active_hard_rows: usize,
+    /// Sum of canonical reduced block-envelope entries, including explicit zeros.
+    pub structural_nnz: usize,
+    /// Sum of component maximum-matching ranks for the declared block envelopes.
+    pub structural_rank: usize,
+    pub structural_left_nullity: usize,
+    pub structural_right_nullity: usize,
+    pub structural_classification: StructuralClassification,
+    pub dm_partitions: DulmageMendelsohnPartitions,
     pub component_summaries: Vec<ComponentStructuralSummary>,
 }
 
@@ -816,6 +872,7 @@ fn structural_summary(
 ) -> Result<StructuralSummary, CoreError> {
     let mut component_summaries = Vec::with_capacity(components.len());
     for component in components {
+        let structural_analysis = component_structural_analysis(problem, active_groups, component)?;
         let tangent_dimensions = component
             .variable_ids
             .iter()
@@ -881,7 +938,7 @@ fn structural_summary(
             .iter()
             .map(|&index| active_groups[index].kind.tangent_dimension())
             .sum();
-        let active_rows = component
+        let active_rows: usize = component
             .active_residual_ids
             .iter()
             .map(|&id| {
@@ -892,6 +949,18 @@ fn structural_summary(
                     .output_dimension()
             })
             .sum();
+        if active_tangent_dimensions != structural_analysis.tangent_coordinates.len()
+            || active_rows != structural_analysis.rows.len()
+        {
+            return Err(CoreError::DimensionMismatch {
+                context: "component structural envelope",
+                expected: active_rows.saturating_add(active_tangent_dimensions),
+                actual: structural_analysis
+                    .rows
+                    .len()
+                    .saturating_add(structural_analysis.tangent_coordinates.len()),
+            });
+        }
         component_summaries.push(ComponentStructuralSummary {
             component_index: component.index,
             pattern_signature: component_signature(
@@ -900,6 +969,7 @@ fn structural_summary(
                 component,
                 eliminated_residuals,
             )?,
+            sparsity_signature: structural_analysis.sparsity_signature,
             variable_ids: component.variable_ids.clone(),
             residual_ids: component.residual_ids.clone(),
             variable_blocks: component.variable_ids.len(),
@@ -912,10 +982,35 @@ fn structural_summary(
             active_tangent_dimensions,
             active_rows,
             active_hard_rows: active_rows,
+            structural_nnz: structural_analysis.structural_nnz,
+            structural_rank: structural_analysis.structural_rank,
+            structural_left_nullity: structural_analysis.structural_left_nullity,
+            structural_right_nullity: structural_analysis.structural_right_nullity,
+            structural_classification: structural_analysis.classification,
+            dm_partitions: structural_analysis.dm_partitions,
         });
     }
 
+    let structural_rank = component_summaries
+        .iter()
+        .map(|component| component.structural_rank)
+        .sum();
+    let structural_left_nullity = component_summaries
+        .iter()
+        .map(|component| component.structural_left_nullity)
+        .sum();
+    let structural_right_nullity = component_summaries
+        .iter()
+        .map(|component| component.structural_right_nullity)
+        .sum();
+    let mut dm_partitions = DulmageMendelsohnPartitions::default();
+    for component in &component_summaries {
+        append_dm_partitions(&mut dm_partitions, &component.dm_partitions);
+    }
+    let sparsity_signature = aggregate_sparsity_signature(&component_summaries);
+
     Ok(StructuralSummary {
+        sparsity_signature,
         variable_blocks: incidence.variable_ids.len(),
         tangent_dimensions: problem
             .variables
@@ -975,8 +1070,352 @@ fn structural_summary(
             .iter()
             .map(|component| component.active_hard_rows)
             .sum(),
+        structural_nnz: component_summaries
+            .iter()
+            .map(|component| component.structural_nnz)
+            .sum(),
+        structural_rank,
+        structural_left_nullity,
+        structural_right_nullity,
+        structural_classification: structural_classification(
+            structural_left_nullity,
+            structural_right_nullity,
+        ),
+        dm_partitions,
         component_summaries,
     })
+}
+
+struct ComponentStructuralAnalysis {
+    rows: Vec<ResidualRowRef>,
+    tangent_coordinates: Vec<TangentCoordinateRef>,
+    sparsity_signature: u64,
+    structural_nnz: usize,
+    structural_rank: usize,
+    structural_left_nullity: usize,
+    structural_right_nullity: usize,
+    classification: StructuralClassification,
+    dm_partitions: DulmageMendelsohnPartitions,
+}
+
+fn component_structural_analysis(
+    problem: &Problem,
+    active_groups: &[ActiveGroup],
+    component: &SolveComponent,
+) -> Result<ComponentStructuralAnalysis, CoreError> {
+    let mut tangent_coordinates = Vec::new();
+    let mut group_columns = Vec::new();
+    for &group_index in &component.active_group_indices {
+        let group = &active_groups[group_index];
+        let start = tangent_coordinates.len();
+        for coordinate_in_block in 0..group.kind.tangent_dimension() {
+            tangent_coordinates.push(TangentCoordinateRef {
+                root: group.root,
+                coordinate_in_block,
+            });
+        }
+        group_columns.push((group_index, start));
+    }
+
+    let mut rows = Vec::new();
+    let mut edges = Vec::new();
+    for &residual_id in &component.active_residual_ids {
+        let residual = problem
+            .residuals
+            .get(residual_id)
+            .ok_or(CoreError::UnknownResidual(residual_id))?;
+        for row_in_block in 0..residual.output_dimension() {
+            let row = rows.len();
+            rows.push(ResidualRowRef {
+                residual_id,
+                row_in_block,
+                source_id: residual.source(),
+            });
+            let mut row_columns = Vec::new();
+            for &variable_id in residual.incident_variables() {
+                let Some(&(group_index, column_start)) = group_columns
+                    .iter()
+                    .find(|&&(index, _)| active_groups[index].members.contains(&variable_id))
+                else {
+                    // Fixed coordinates remain in canonical evaluation but have
+                    // no reduced structural column.
+                    continue;
+                };
+                // ResidualEvaluator declares incidence by variable block, not by
+                // scalar formula slot. Keep that entire stable block envelope so
+                // matching and sparse patterns never depend on current values.
+                for coordinate in 0..active_groups[group_index].kind.tangent_dimension() {
+                    row_columns.push(column_start + coordinate);
+                }
+            }
+            row_columns.sort_unstable();
+            row_columns.dedup();
+            edges.extend(row_columns.into_iter().map(|column| (row, column)));
+        }
+    }
+
+    let matching = structural_matching(rows.len(), tangent_coordinates.len(), &edges);
+    let structural_rank = matching.row_to_column.iter().flatten().count();
+    let structural_left_nullity = rows.len().saturating_sub(structural_rank);
+    let structural_right_nullity = tangent_coordinates.len().saturating_sub(structural_rank);
+    let dm_partitions =
+        dulmage_mendelsohn_partitions(&rows, &tangent_coordinates, &matching, &edges);
+    Ok(ComponentStructuralAnalysis {
+        sparsity_signature: calculate_sparsity_signature(
+            rows.len(),
+            tangent_coordinates.len(),
+            edges.iter().copied(),
+        ),
+        structural_nnz: edges.len(),
+        rows,
+        tangent_coordinates,
+        structural_rank,
+        structural_left_nullity,
+        structural_right_nullity,
+        classification: structural_classification(
+            structural_left_nullity,
+            structural_right_nullity,
+        ),
+        dm_partitions,
+    })
+}
+
+struct StructuralMatching {
+    row_to_column: Vec<Option<usize>>,
+    column_to_row: Vec<Option<usize>>,
+}
+
+fn structural_matching(
+    rows: usize,
+    columns: usize,
+    edges: &[(usize, usize)],
+) -> StructuralMatching {
+    // Sorted adjacency plus breadth-first augmenting paths makes the chosen
+    // maximum matching deterministic without making DM membership depend on it.
+    let adjacency = row_adjacency(rows, edges);
+    let mut row_to_column: Vec<Option<usize>> = vec![None; rows];
+    let mut column_to_row: Vec<Option<usize>> = vec![None; columns];
+    for start_row in 0..rows {
+        if row_to_column[start_row].is_some() {
+            continue;
+        }
+        let mut queue = VecDeque::from([start_row]);
+        let mut seen_rows = vec![false; rows];
+        let mut seen_columns = vec![false; columns];
+        let mut parent_column: Vec<Option<usize>> = vec![None; columns];
+        seen_rows[start_row] = true;
+        let mut free_column = None;
+        while let Some(row) = queue.pop_front() {
+            for &column in &adjacency[row] {
+                if row_to_column[row] == Some(column) || seen_columns[column] {
+                    continue;
+                }
+                seen_columns[column] = true;
+                parent_column[column] = Some(row);
+                if let Some(matched_row) = column_to_row[column] {
+                    if !seen_rows[matched_row] {
+                        seen_rows[matched_row] = true;
+                        queue.push_back(matched_row);
+                    }
+                } else {
+                    free_column = Some(column);
+                    break;
+                }
+            }
+            if free_column.is_some() {
+                break;
+            }
+        }
+        let Some(mut column) = free_column else {
+            continue;
+        };
+        loop {
+            let row = parent_column[column].expect("augmenting path records each column parent");
+            let prior_column = row_to_column[row];
+            row_to_column[row] = Some(column);
+            column_to_row[column] = Some(row);
+            let Some(previous) = prior_column else {
+                break;
+            };
+            column = previous;
+        }
+    }
+    StructuralMatching {
+        row_to_column,
+        column_to_row,
+    }
+}
+
+fn dulmage_mendelsohn_partitions(
+    rows: &[ResidualRowRef],
+    tangent_coordinates: &[TangentCoordinateRef],
+    matching: &StructuralMatching,
+    edges: &[(usize, usize)],
+) -> DulmageMendelsohnPartitions {
+    let row_edges = row_adjacency(rows.len(), edges);
+    let mut column_edges = vec![Vec::new(); tangent_coordinates.len()];
+    for &(row, column) in edges {
+        column_edges[column].push(row);
+    }
+
+    let mut under_rows = vec![false; rows.len()];
+    let mut under_columns = vec![false; tangent_coordinates.len()];
+    let mut column_queue = VecDeque::new();
+    // Under part: alternating reachability from unmatched tangent coordinates.
+    for (column, matched_row) in matching.column_to_row.iter().enumerate() {
+        if matched_row.is_none() {
+            under_columns[column] = true;
+            column_queue.push_back(column);
+        }
+    }
+    while let Some(column) = column_queue.pop_front() {
+        for &row in &column_edges[column] {
+            if matching.column_to_row[column] == Some(row) || under_rows[row] {
+                continue;
+            }
+            under_rows[row] = true;
+            if let Some(matched_column) = matching.row_to_column[row]
+                && !under_columns[matched_column]
+            {
+                under_columns[matched_column] = true;
+                column_queue.push_back(matched_column);
+            }
+        }
+    }
+
+    let mut over_rows = vec![false; rows.len()];
+    let mut over_columns = vec![false; tangent_coordinates.len()];
+    let mut row_queue = VecDeque::new();
+    // Over part: alternating reachability from unmatched hard rows.
+    for (row, matched_column) in matching.row_to_column.iter().enumerate() {
+        if matched_column.is_none() {
+            over_rows[row] = true;
+            row_queue.push_back(row);
+        }
+    }
+    while let Some(row) = row_queue.pop_front() {
+        for &column in &row_edges[row] {
+            if matching.row_to_column[row] == Some(column) || over_columns[column] {
+                continue;
+            }
+            over_columns[column] = true;
+            if let Some(matched_row) = matching.column_to_row[column]
+                && !over_rows[matched_row]
+            {
+                over_rows[matched_row] = true;
+                row_queue.push_back(matched_row);
+            }
+        }
+    }
+
+    debug_assert!((0..rows.len()).all(|row| !(under_rows[row] && over_rows[row])));
+    debug_assert!(
+        (0..tangent_coordinates.len())
+            .all(|column| !(under_columns[column] && over_columns[column]))
+    );
+    DulmageMendelsohnPartitions {
+        under: partition_members(rows, tangent_coordinates, &under_rows, &under_columns),
+        well: partition_members(
+            rows,
+            tangent_coordinates,
+            &(0..rows.len())
+                .map(|row| !under_rows[row] && !over_rows[row])
+                .collect::<Vec<_>>(),
+            &(0..tangent_coordinates.len())
+                .map(|column| !under_columns[column] && !over_columns[column])
+                .collect::<Vec<_>>(),
+        ),
+        over: partition_members(rows, tangent_coordinates, &over_rows, &over_columns),
+    }
+}
+
+fn row_adjacency(rows: usize, edges: &[(usize, usize)]) -> Vec<Vec<usize>> {
+    let mut adjacency = vec![Vec::new(); rows];
+    for &(row, column) in edges {
+        adjacency[row].push(column);
+    }
+    for columns in &mut adjacency {
+        columns.sort_unstable();
+        columns.dedup();
+    }
+    adjacency
+}
+
+fn partition_members(
+    rows: &[ResidualRowRef],
+    tangent_coordinates: &[TangentCoordinateRef],
+    selected_rows: &[bool],
+    selected_columns: &[bool],
+) -> DulmageMendelsohnPartition {
+    DulmageMendelsohnPartition {
+        rows: rows
+            .iter()
+            .zip(selected_rows)
+            .filter_map(|(&row, &selected)| selected.then_some(row))
+            .collect(),
+        tangent_coordinates: tangent_coordinates
+            .iter()
+            .zip(selected_columns)
+            .filter_map(|(&coordinate, &selected)| selected.then_some(coordinate))
+            .collect(),
+    }
+}
+
+const fn structural_classification(
+    left_nullity: usize,
+    right_nullity: usize,
+) -> StructuralClassification {
+    match (left_nullity > 0, right_nullity > 0) {
+        (false, true) => StructuralClassification::Under,
+        (false, false) => StructuralClassification::Well,
+        (true, false) => StructuralClassification::Over,
+        (true, true) => StructuralClassification::Mixed,
+    }
+}
+
+fn append_dm_partitions(
+    aggregate: &mut DulmageMendelsohnPartitions,
+    component: &DulmageMendelsohnPartitions,
+) {
+    aggregate.under.rows.extend(&component.under.rows);
+    aggregate
+        .under
+        .tangent_coordinates
+        .extend(&component.under.tangent_coordinates);
+    aggregate.well.rows.extend(&component.well.rows);
+    aggregate
+        .well
+        .tangent_coordinates
+        .extend(&component.well.tangent_coordinates);
+    aggregate.over.rows.extend(&component.over.rows);
+    aggregate
+        .over
+        .tangent_coordinates
+        .extend(&component.over.tangent_coordinates);
+}
+
+fn aggregate_sparsity_signature(components: &[ComponentStructuralSummary]) -> u64 {
+    let mut hash = Fnv64::new();
+    hash.add_usize(components.len());
+    for component in components {
+        hash.add_u64(component.sparsity_signature);
+    }
+    hash.finish()
+}
+
+pub(crate) fn calculate_sparsity_signature(
+    rows: usize,
+    columns: usize,
+    edges: impl IntoIterator<Item = (usize, usize)>,
+) -> u64 {
+    let mut hash = Fnv64::new();
+    hash.add_usize(rows);
+    hash.add_usize(columns);
+    for (row, column) in edges {
+        hash.add_usize(row);
+        hash.add_usize(column);
+    }
+    hash.finish()
 }
 
 fn component_signature(

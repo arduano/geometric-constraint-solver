@@ -1,6 +1,7 @@
 //! Planar rigid-body linkages compiled into the shared constraint solver.
 
 mod compiler;
+mod continuation;
 mod model;
 mod residuals;
 mod scenarios;
@@ -12,6 +13,10 @@ pub use compiler::{
     LinkageSourceMapping, SolveRejection, SolvedBody, TransformedAxisFeature,
     TransformedPointFeature,
 };
+pub use continuation::{
+    AdaptiveContinuationMode, AdaptiveContinuationRequest, AdaptiveContinuationResult,
+    AdaptiveContinuationSample, AdaptiveContinuationStatus, ContinuationDirection,
+};
 pub use model::{
     AxisDirectionBranch, AxisFeature, AxisFeatureId, BodyId, BranchMonitor, BranchMonitorId,
     BranchSign, BranchViolation, Driver, DriverId, DriverKind, DriverUnit, Joint, JointId,
@@ -19,8 +24,9 @@ pub use model::{
 };
 pub use scenarios::{
     FourBarAssemblyMode, FourBarIds, SliderCrankAssemblyMode, SliderCrankIds, four_bar,
-    four_bar_crossed, four_bar_open, four_bar_with_scale, slider_crank, slider_crank_with_scale,
-    xy_plane_frame,
+    four_bar_crossed, four_bar_open, four_bar_with_scale, slider_crank,
+    slider_crank_displacement_driven, slider_crank_displacement_driven_with_scale,
+    slider_crank_with_scale, xy_plane_frame,
 };
 pub use velocity::{BodyVelocity, VelocityResult};
 

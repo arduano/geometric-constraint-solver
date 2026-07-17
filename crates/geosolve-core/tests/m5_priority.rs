@@ -4,9 +4,9 @@ use std::sync::{
 };
 
 use geosolve_core::{
-    AuditBinding, EvaluationError, LocalJacobian, Problem, ResidualBlock, ResidualCategory,
-    ResidualEvaluator, ResidualRowAudit, SolveTermination, SolverConfig, SourceConstraint,
-    VariableBlock, VariableId, VariableValue,
+    AuditBinding, EvaluationError, LocalJacobian, PrioritySolveBackend, PrioritySolveScope,
+    Problem, ResidualBlock, ResidualCategory, ResidualEvaluator, ResidualRowAudit,
+    SolveTermination, SolverConfig, SourceConstraint, VariableBlock, VariableId, VariableValue,
 };
 
 #[derive(Clone, Debug)]
@@ -669,6 +669,10 @@ fn true_constrained_circle_minimum_reports_converged() {
         report.priority_solves[0].termination,
         SolveTermination::Converged
     );
+    assert_eq!(
+        report.priority_solves[0].status,
+        geosolve_core::SecondaryStatus::Acceptable
+    );
 }
 
 #[test]
@@ -849,7 +853,7 @@ fn invalid_priority_component_does_not_block_a_healthy_component() {
     let report = problem.solve(SolverConfig::default()).unwrap();
     assert_eq!(report.termination, SolveTermination::NumericalFailure);
     assert!((scalar(&problem, healthy) - 2.0).abs() <= 1.0e-12);
-    assert_eq!(report.priority_solves.len(), 3);
+    assert_eq!(report.priority_solves.len(), 4);
     assert!(report.priority_solves.iter().any(|item| {
         item.termination == SolveTermination::NumericalFailure && item.final_cost.is_none()
     }));
@@ -861,34 +865,19 @@ fn invalid_priority_component_does_not_block_a_healthy_component() {
         .iter()
         .filter(|item| item.category == ResidualCategory::Preference)
         .collect();
-    assert_eq!(preference_reports.len(), 1);
-    assert_eq!(preference_reports[0].attained_temporary_cost, Some(0.0));
+    assert_eq!(preference_reports.len(), 2);
+    assert!(preference_reports.iter().any(|item| {
+        item.termination == SolveTermination::Converged && item.attained_temporary_cost == Some(0.0)
+    }));
 }
 
 #[test]
-fn cross_component_secondary_incidence_reports_numerical_failure() {
+fn cross_component_secondary_incidence_is_optimized_as_one_group() {
     let mut problem = Problem::new();
     let first = problem.add_variable(VariableBlock::scalar(-2.0, 1.0).unwrap());
     let second = problem.add_variable(VariableBlock::scalar(3.0, 1.0).unwrap());
     let healthy = problem.add_variable(VariableBlock::scalar(-4.0, 1.0).unwrap());
-    for (variable, target) in [(first, 0.0), (second, 1.0)] {
-        let source_id = source(&mut problem, "hard scalar target");
-        problem
-            .add_residual(
-                ResidualBlock::new(
-                    source_id,
-                    ResidualCategory::Hard,
-                    vec![variable],
-                    1,
-                    vec![1.0],
-                    vec![row("scalar - target")],
-                    ScalarTarget(target),
-                )
-                .unwrap(),
-            )
-            .unwrap();
-    }
-    let temporary_source = source(&mut problem, "unsupported coupled temporary");
+    let temporary_source = source(&mut problem, "coupled temporary");
     problem
         .add_residual(
             ResidualBlock::new(
@@ -906,21 +895,23 @@ fn cross_component_secondary_incidence_reports_numerical_failure() {
     add_scalar_target(&mut problem, healthy, ResidualCategory::Temporary, 2.0, 1.0);
 
     let report = problem.solve(SolverConfig::default()).unwrap();
-    assert_eq!(report.termination, SolveTermination::NumericalFailure);
+    assert_eq!(report.termination, SolveTermination::Converged);
     assert!(report.hard_residuals_validated);
     assert!(report.hard_residual_max <= 1.0e-9);
-    assert!((scalar(&problem, first) - 0.0).abs() <= 1.0e-9);
-    assert!((scalar(&problem, second) - 1.0).abs() <= 1.0e-9);
+    assert!((scalar(&problem, first) - 0.5).abs() <= 1.0e-9);
+    assert!((scalar(&problem, second) - 0.5).abs() <= 1.0e-9);
     assert!((scalar(&problem, healthy) - 2.0).abs() <= 1.0e-12);
-    assert!(report.priority_solves.iter().any(|item| {
-        item.component_index.is_none()
-            && item.category == ResidualCategory::Temporary
-            && item.termination == SolveTermination::NumericalFailure
-    }));
-    assert!(report.priority_solves.iter().any(|item| {
-        item.component_index.is_some()
-            && item.category == ResidualCategory::Temporary
-            && item.termination == SolveTermination::Converged
-            && item.final_cost == Some(0.0)
-    }));
+    let coupled = report
+        .priority_solves
+        .iter()
+        .find(|item| item.component_indices.len() == 2)
+        .unwrap();
+    assert_eq!(coupled.component_index, None);
+    assert_eq!(coupled.scope, PrioritySolveScope::Movable);
+    assert_eq!(
+        coupled.backend,
+        Some(PrioritySolveBackend::DenseBlockNullspace)
+    );
+    assert_eq!(coupled.termination, SolveTermination::Converged);
+    assert_eq!(coupled.final_cost, Some(0.0));
 }

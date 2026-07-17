@@ -2,9 +2,14 @@ use nalgebra::{DMatrix, DVector};
 
 use crate::analysis::{
     CachedComponent, DecompositionCache, EliminationPlan, SolveComponent, set_state_value,
+    state_value,
 };
-use crate::linearization::{ComponentDenseSystem, ComponentTangentLayout};
+use crate::linearization::{
+    ComponentDenseSystem, ComponentIndexedSystem, ComponentLinearization, ComponentTangentLayout,
+    composite_tangent_layout,
+};
 use crate::problem::VariableState;
+use crate::sparse::{restricted_structural_nnz, solve_damped_least_squares};
 use crate::{
     AuditBoundAnnotation, AuditEvaluationStatus, AuditSnapshot, BoundId, BoundReport, BoundStatus,
     CoordinateBound, CoreError, OneSidedMobility, Problem, ResidualCategory, ResidualId,
@@ -15,7 +20,17 @@ const MAX_PRIORITY_LINE_SEARCH_STEPS: usize = 20;
 const PRIORITY_REPROJECTION_TOLERANCE: f64 = 8.0 * f64::EPSILON;
 const PRIORITY_COST_RESOLUTION_FACTOR: f64 = 8.0;
 const PRIORITY_HESSIAN_NORMALIZED_STEP: f64 = 1.0e-3;
+const PROJECTED_CGLS_MIN_NULLITY: usize = 128;
 const NEAR_SINGULAR_FACTOR: f64 = 100.0;
+/// Auto keeps components below this hard-row count on the dense correctness path.
+pub const AUTO_SPARSE_MIN_ROWS: usize = 256;
+/// Auto keeps components below this active/free-column count on the dense correctness path.
+pub const AUTO_SPARSE_MIN_COLUMNS: usize = 256;
+/// Auto requires at least this many canonical Jacobian structural entries.
+pub const AUTO_SPARSE_MIN_NNZ: usize = 256;
+const AUTO_SPARSE_MAX_DENSITY_DENOMINATOR: usize = 128;
+/// Auto uses sparse QR only at or below the measured 256-column chain envelope.
+pub const AUTO_SPARSE_MAX_DENSITY: f64 = 1.0 / 128.0;
 // This is only the squared residual roundoff band for preserving an attained zero cost.
 const PRIORITY_ZERO_COST_ROUNDOFF: f64 =
     0.5 * PRIORITY_REPROJECTION_TOLERANCE * PRIORITY_REPROJECTION_TOLERANCE;
@@ -48,6 +63,76 @@ pub enum HardValidity {
     NotEvaluated,
 }
 
+/// Deterministic policy selecting the hard LM linear solve backend.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum LinearSolveBackendPolicy {
+    /// Use the documented row/column/nnz/density crossover constants.
+    #[default]
+    Auto,
+    /// Always use the existing dense QR/SVD least-squares path.
+    DenseOnly,
+    /// Attempt sparse QR for every nonempty free-column LM solve and fall back truthfully.
+    SparsePreferred,
+}
+
+/// Backend that actually produced one or more hard LM steps.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum LinearSolveBackend {
+    Dense,
+    SparseQr,
+    /// Both backends produced steps during this component/report.
+    Mixed,
+}
+
+/// Why an attempted sparse LM solve used the dense fallback.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum SparseFallbackReason {
+    /// Auto retained dense solving because current numerical rank was ambiguous.
+    RankAmbiguous,
+    ConstructionFailure,
+    SymbolicAnalysisFailure,
+    NumericFactorizationFailure,
+    SolutionValidationFailure,
+}
+
+/// Geometric scope of one deterministic secondary optimization group.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum PrioritySolveScope {
+    /// At least one active hard-component tangent participates.
+    Movable,
+    /// Every incident coordinate was removed by trusted fixed elimination.
+    Fixed,
+    /// At least one incident variable could not be mapped through the accepted plan.
+    InvalidIncidence,
+}
+
+/// Linear hierarchy implementation used by one priority pass.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum PrioritySolveBackend {
+    /// Existing singleton dense nullspace, active-set, and curvature path.
+    DenseNullspace,
+    /// Coupled solve using independently materialized component nullspaces.
+    DenseBlockNullspace,
+    /// Coupled unbounded least squares using block-local projector operations and CGLS.
+    ProjectedCgls,
+}
+
+/// Evidence that one independently attained Temporary group survived a Preference pass.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct ProtectedTemporaryReport {
+    pub group_index: usize,
+    pub attained_cost: f64,
+    pub final_cost: Option<f64>,
+    pub preservation_tolerance: f64,
+    pub preserved: bool,
+}
+
 /// Aggregate outcome for one requested secondary priority level.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
@@ -56,7 +141,8 @@ pub enum SecondaryStatus {
     NotRequested,
     /// The requested secondary objective met its optimum criteria.
     Optimal,
-    /// The immutable hard state made the finite secondary result acceptable but not optimal.
+    /// The finite result is acceptable for commit, but second-order optimality
+    /// is unproved (or immutable hard state prevents further optimization).
     Acceptable,
     /// Finite secondary iteration could not find an acceptable improving step.
     Stalled,
@@ -189,11 +275,32 @@ pub struct ComponentSolveReport {
     pub component_index: usize,
     /// Deterministic reduced-incidence pattern signature.
     pub pattern_signature: u64,
+    /// Scale- and value-independent reduced block-envelope sparsity signature.
+    pub sparsity_signature: u64,
+    /// Canonical reduced hard block-envelope entries, including explicit zero slots.
+    pub structural_nnz: usize,
+    /// Public policy requested for hard LM solves.
+    pub requested_backend: LinearSolveBackendPolicy,
+    /// Backend(s) that produced a hard LM step, including hard reprojection
+    /// performed inside a secondary trial; `None` means no hard LM solve ran.
+    pub actual_backend: Option<LinearSolveBackend>,
+    /// Whether any successful sparse numeric solve reused an immutable symbolic QR entry.
+    pub symbolic_analysis_reused: bool,
+    /// Number of successful sparse numeric solves that reused an exact symbolic cache entry.
+    pub symbolic_analysis_reuse_count: usize,
+    /// First deterministic sparse failure that required a dense fallback.
+    pub sparse_fallback_reason: Option<SparseFallbackReason>,
     /// Whether the existing decomposed cache supplied this component result.
     pub reused: bool,
-    /// Hard and secondary outer iterations attributed to this component.
+    /// Whether a rerun secondary group included this hard component.
+    pub secondary_participated: bool,
+    /// Whether secondary optimization changed this component after its hard solve/reuse.
+    pub state_changed_by_secondary: bool,
+    /// Hard nonlinear iterations only. Secondary outer iterations are reported
+    /// by `PrioritySolveReport::iterations`.
     pub iterations: usize,
-    /// Compatibility aggregate termination including secondary optimization.
+    /// Hard component solve/numerical-report termination. Secondary termination
+    /// is reported separately by `PrioritySolveReport` and aggregated globally.
     pub termination: SolveTermination,
     /// Termination of hard nonlinear iteration alone.
     pub hard_termination: SolveTermination,
@@ -241,18 +348,30 @@ pub struct ComponentSolveReport {
     pub near_singular: bool,
     /// Finite component singular values in decomposition order.
     pub singular_values: Vec<f64>,
-    /// Component-local costs. Reused components always have an empty trace.
+    /// Hard nonlinear trace only. Reused components always have an empty trace;
+    /// secondary hard reprojection may still contribute backend evidence above.
     pub trace: SolveTrace,
 }
 
-/// Outcome of one category-level optimization on one reduced hard component.
+/// Outcome of one deterministic secondary coupling group.
 ///
-/// `component_index` is `None` for fixed-only rows and unsupported
-/// cross-component incidence. Costs are absent when initial evaluation failed.
+/// `component_index` is retained only for singleton movable groups. Use
+/// `component_indices` and `scope` for cross-component, fixed-only, and invalid
+/// incidence. Costs are absent when initial evaluation failed.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct PrioritySolveReport {
+    /// Stable zero-based group index within this category.
+    pub group_index: usize,
     pub component_index: Option<usize>,
+    /// All participating hard components in deterministic hard-component order.
+    pub component_indices: Vec<usize>,
+    pub scope: PrioritySolveScope,
+    pub backend: Option<PrioritySolveBackend>,
+    /// Largest full-coordinate row count of any explicitly stored local nullspace block.
+    pub largest_explicit_nullspace_block_rows: usize,
+    /// Independently protected Temporary levels for a Preference group.
+    pub protected_temporary: Vec<ProtectedTemporaryReport>,
     /// Priority category represented by this pass.
     pub category: ResidualCategory,
     /// Iterations consumed by this category-level pass.
@@ -261,7 +380,9 @@ pub struct PrioritySolveReport {
     pub initial_cost: Option<f64>,
     /// Returned-state dimensionless `0.5 * ||r||^2`, absent when evaluation failed.
     pub final_cost: Option<f64>,
-    /// Temporary cost attained before this Preference pass, when applicable.
+    /// Cost attained by this Temporary pass, or the legacy singleton Temporary
+    /// cost protected by this Preference pass. Cross-component Preference
+    /// callers should inspect `protected_temporary` instead.
     pub attained_temporary_cost: Option<f64>,
     /// Compatibility termination for this priority pass.
     pub termination: SolveTermination,
@@ -334,6 +455,18 @@ pub struct SolveReport {
     pub conflict_diagnostics: DiagnosticCompleteness,
     /// Hard rows associated with a numerical singularity diagnostic.
     pub singular_rows: Vec<ResidualRowRef>,
+    /// Sum of canonical reduced hard-Jacobian structural entries.
+    pub structural_nnz: usize,
+    /// Public policy requested for hard LM solves.
+    pub requested_backend: LinearSolveBackendPolicy,
+    /// Backend(s) that actually produced hard LM steps; `None` means no such solve ran.
+    pub actual_backend: Option<LinearSolveBackend>,
+    /// Whether any successful sparse numeric solve reused symbolic QR analysis.
+    pub symbolic_analysis_reused: bool,
+    /// Aggregate successful exact symbolic-cache reuse count.
+    pub symbolic_analysis_reuse_count: usize,
+    /// First component-ordered reason Auto or a sparse failure selected dense fallback.
+    pub sparse_fallback_reason: Option<SparseFallbackReason>,
     /// Separate graph/count structural summary; this is not numerical rank.
     pub structural: StructuralSummary,
     /// Authoritative component-local solve and rank reports.
@@ -362,6 +495,7 @@ pub struct SolverConfig {
     pub damping_decrease_factor: f64,
     pub step_acceptance_ratio: f64,
     pub max_block_normalized_step: f64,
+    pub linear_solve_backend: LinearSolveBackendPolicy,
     pub redundancy_diagnostic_budget: DiagnosticBudget,
     pub conflict_diagnostic_budget: DiagnosticBudget,
 }
@@ -436,6 +570,7 @@ impl Default for SolverConfig {
             damping_decrease_factor: 0.25,
             step_acceptance_ratio: 1.0e-4,
             max_block_normalized_step: 1.0,
+            linear_solve_backend: LinearSolveBackendPolicy::Auto,
             redundancy_diagnostic_budget: DiagnosticBudget::unlimited(),
             conflict_diagnostic_budget: DiagnosticBudget {
                 enabled: true,
@@ -456,7 +591,7 @@ impl Problem {
     /// Returns an error for invalid configuration or stale/invalid static
     /// declarations. Evaluator and numerical failures remain report outcomes.
     pub fn solve(&mut self, config: SolverConfig) -> Result<SolveReport, CoreError> {
-        self.solve_reduced(config, DirtyRequest::All, None)
+        self.solve_reduced(config, DirtyRequest::All, None, &[])
     }
 
     /// Solves edited/cache-invalid components and reuses independently validated cache entries.
@@ -470,27 +605,31 @@ impl Problem {
         config: SolverConfig,
         edited_variables: &[VariableId],
     ) -> Result<SolveReport, CoreError> {
-        self.solve_reduced(config, DirtyRequest::Variables(edited_variables), None)
+        self.solve_reduced(config, DirtyRequest::Variables(edited_variables), None, &[])
     }
 
     pub(crate) fn solve_session_components(
         &mut self,
         config: SolverConfig,
         dirty_components: &[usize],
+        dirty_hierarchy_residuals: &[ResidualId],
         cached_plan: &EliminationPlan,
     ) -> Result<SolveReport, CoreError> {
         self.solve_reduced(
             config,
             DirtyRequest::Components(dirty_components),
             Some(cached_plan),
+            dirty_hierarchy_residuals,
         )
     }
 
+    #[allow(clippy::too_many_lines)]
     fn solve_reduced(
         &mut self,
         config: SolverConfig,
         dirty_request: DirtyRequest<'_>,
         cached_plan: Option<&EliminationPlan>,
+        dirty_hierarchy_residuals: &[ResidualId],
     ) -> Result<SolveReport, CoreError> {
         config.validate()?;
         let plan = if let Some(plan) = cached_plan {
@@ -498,6 +637,8 @@ impl Problem {
         } else {
             EliminationPlan::new(self)?
         };
+        *self.solve_backend_evidence.borrow_mut() =
+            vec![BackendEvidence::new(config.linear_solve_backend); plan.components.len()];
         let mut edited_components = Vec::new();
         if let DirtyRequest::Variables(edited_variables) = dirty_request {
             for &variable_id in edited_variables {
@@ -567,7 +708,17 @@ impl Problem {
         let PriorityPassOutcome {
             state: priority_state,
             reports: priority_records,
-        } = optimize_priorities(self, &plan, state, config, &executions, prior_report);
+            component_participated,
+            component_state_changed,
+        } = optimize_priorities(
+            self,
+            &plan,
+            state,
+            config,
+            &executions,
+            prior_report,
+            dirty_hierarchy_residuals,
+        );
         state = priority_state;
         let priority_reports: Vec<_> = priority_records
             .into_iter()
@@ -575,20 +726,27 @@ impl Problem {
             .collect();
 
         self.replace_variable_state(&state)?;
-        let report =
-            self.build_report(config, &plan, &executions, &priority_reports, prior_report)?;
+        let report = self.build_report(
+            config,
+            &plan,
+            &executions,
+            &priority_reports,
+            &component_participated,
+            &component_state_changed,
+        )?;
         self.update_decomposition_cache(&plan, &report)?;
         Ok(report)
     }
 
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
     fn build_report(
         &self,
         config: SolverConfig,
         plan: &EliminationPlan,
         executions: &[ComponentExecution],
         priority_solves: &[PrioritySolveReport],
-        prior_report: Option<&SolveReport>,
+        component_secondary_participated: &[bool],
+        component_state_changed_by_secondary: &[bool],
     ) -> Result<SolveReport, CoreError> {
         let state = self.variable_state();
         let accepted_state = self.packed_state()?;
@@ -611,6 +769,16 @@ impl Problem {
                     context: "component execution report",
                     expected: plan.components.len(),
                     actual: executions.len(),
+                })?;
+            let backend = self
+                .solve_backend_evidence
+                .borrow()
+                .get(component.index)
+                .copied()
+                .ok_or(CoreError::DimensionMismatch {
+                    context: "component backend evidence",
+                    expected: plan.components.len(),
+                    actual: component.index,
                 })?;
             // Reuse skips nonlinear iteration only. Acceptance values,
             // Jacobians/rank, mobility, and bounded diagnostics are rebuilt at
@@ -716,7 +884,22 @@ impl Problem {
             component_solves.push(ComponentSolveReport {
                 component_index: component.index,
                 pattern_signature: summary.pattern_signature,
+                sparsity_signature: summary.sparsity_signature,
+                structural_nnz: summary.structural_nnz,
+                requested_backend: backend.requested,
+                actual_backend: backend.actual,
+                symbolic_analysis_reused: backend.symbolic_reuse_count > 0,
+                symbolic_analysis_reuse_count: backend.symbolic_reuse_count,
+                sparse_fallback_reason: backend.fallback_reason,
                 reused: execution.reused,
+                secondary_participated: component_secondary_participated
+                    .get(component.index)
+                    .copied()
+                    .unwrap_or(false),
+                state_changed_by_secondary: component_state_changed_by_secondary
+                    .get(component.index)
+                    .copied()
+                    .unwrap_or(false),
                 iterations: execution.trace.records.len(),
                 termination,
                 hard_termination: execution.termination,
@@ -810,38 +993,19 @@ impl Problem {
             .iter()
             .flat_map(|component| component.singular_values.iter().copied())
             .collect();
-        let mut evaluated_residuals = self
-            .residuals
+        let actual_backend = component_solves.iter().fold(None, |aggregate, component| {
+            merge_actual_backend(aggregate, component.actual_backend)
+        });
+        let symbolic_analysis_reuse_count = component_solves
             .iter()
-            .filter_map(|(residual_id, residual)| {
-                (residual.category() == ResidualCategory::Hard).then_some(residual_id)
-            })
-            .collect::<Vec<_>>();
-        let priority_assignments = classify_priority_residuals(self, plan);
-        for execution in executions.iter().filter(|execution| !execution.reused) {
-            for category in [ResidualCategory::Temporary, ResidualCategory::Preference] {
-                for &residual_id in
-                    priority_assignments.component(category, execution.component_index)
-                {
-                    push_unique(&mut evaluated_residuals, residual_id);
-                }
-            }
-        }
-        for category in [ResidualCategory::Temporary, ResidualCategory::Preference] {
-            for &residual_id in priority_assignments.fixed(category) {
-                push_unique(&mut evaluated_residuals, residual_id);
-            }
-            for &residual_id in priority_assignments.unsupported(category) {
-                push_unique(&mut evaluated_residuals, residual_id);
-            }
-        }
-        let returned_evaluation = validate_returned_rows(
-            self,
-            &state,
-            prior_report
-                .is_some()
-                .then_some(evaluated_residuals.as_slice()),
-        );
+            .map(|component| component.symbolic_analysis_reuse_count)
+            .sum();
+        let sparse_fallback_reason = component_solves
+            .iter()
+            .find_map(|component| component.sparse_fallback_reason);
+        // Cache reuse may skip optimization, never returned-state value/Jacobian
+        // evaluation. Audit and secondary costs must describe this exact state.
+        let returned_evaluation = validate_returned_rows(self, &state, None);
         let hard_termination = component_solves
             .iter()
             .map(|component| component.hard_termination)
@@ -886,15 +1050,9 @@ impl Problem {
             termination = SolveTermination::NumericalFailure;
         }
 
-        let mut audit = if let Some(prior) = prior_report {
-            merge_reused_audit(
-                prior.audit.clone(),
-                self.audit_snapshot_partial_for_residuals(&evaluated_residuals),
-            )
-        } else {
-            self.audit_snapshot()
-                .unwrap_or_else(|_| self.audit_snapshot_partial())
-        };
+        let mut audit = self
+            .audit_snapshot()
+            .unwrap_or_else(|_| self.audit_snapshot_partial());
         annotate_audit(
             &mut audit,
             plan,
@@ -946,6 +1104,12 @@ impl Problem {
             redundancy_diagnostics,
             conflict_diagnostics,
             singular_rows,
+            structural_nnz: plan.structural.structural_nnz,
+            requested_backend: config.linear_solve_backend,
+            actual_backend,
+            symbolic_analysis_reused: symbolic_analysis_reuse_count > 0,
+            symbolic_analysis_reuse_count,
+            sparse_fallback_reason,
             structural: plan.structural.clone(),
             component_solves,
             priority_solves: priority_solves.to_vec(),
@@ -1019,6 +1183,73 @@ struct IterationOutcome {
     trace: SolveTrace,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct BackendEvidence {
+    requested: LinearSolveBackendPolicy,
+    actual: Option<LinearSolveBackend>,
+    symbolic_reuse_count: usize,
+    fallback_reason: Option<SparseFallbackReason>,
+}
+
+impl BackendEvidence {
+    const fn new(requested: LinearSolveBackendPolicy) -> Self {
+        Self {
+            requested,
+            actual: None,
+            symbolic_reuse_count: 0,
+            fallback_reason: None,
+        }
+    }
+
+    fn record_backend(&mut self, backend: LinearSolveBackend) {
+        self.actual = merge_actual_backend(self.actual, Some(backend));
+    }
+
+    fn record_symbolic_reuse(&mut self, reused: bool) {
+        self.symbolic_reuse_count += usize::from(reused);
+    }
+
+    fn record_fallback(&mut self, reason: SparseFallbackReason) {
+        self.fallback_reason.get_or_insert(reason);
+    }
+
+    fn merge(&mut self, other: Self) {
+        debug_assert_eq!(self.requested, other.requested);
+        self.actual = merge_actual_backend(self.actual, other.actual);
+        self.symbolic_reuse_count = self
+            .symbolic_reuse_count
+            .saturating_add(other.symbolic_reuse_count);
+        if self.fallback_reason.is_none() {
+            self.fallback_reason = other.fallback_reason;
+        }
+    }
+}
+
+fn record_backend_evidence(problem: &Problem, component_index: usize, evidence: BackendEvidence) {
+    let mut aggregate = problem.solve_backend_evidence.borrow_mut();
+    // Conflict diagnostics may solve a temporary suppression plan after the
+    // accepted-plan component reports have already captured their evidence.
+    if let Some(component) = aggregate.get_mut(component_index) {
+        component.merge(evidence);
+    }
+}
+
+const fn merge_actual_backend(
+    first: Option<LinearSolveBackend>,
+    second: Option<LinearSolveBackend>,
+) -> Option<LinearSolveBackend> {
+    match (first, second) {
+        (None, backend) | (backend, None) => backend,
+        (Some(LinearSolveBackend::Dense), Some(LinearSolveBackend::Dense)) => {
+            Some(LinearSolveBackend::Dense)
+        }
+        (Some(LinearSolveBackend::SparseQr), Some(LinearSolveBackend::SparseQr)) => {
+            Some(LinearSolveBackend::SparseQr)
+        }
+        _ => Some(LinearSolveBackend::Mixed),
+    }
+}
+
 fn cache_matches(
     cached: &CachedComponent,
     plan: &EliminationPlan,
@@ -1075,6 +1306,7 @@ fn iterate_component(
     config: SolverConfig,
 ) -> IterationOutcome {
     let mut trace = SolveTrace::default();
+    let mut backend = BackendEvidence::new(config.linear_solve_backend);
     let mut damping = config.initial_damping;
     let layout = active_layout(plan, component.index);
     if plan.synchronize_state(problem, &mut state).is_err()
@@ -1118,8 +1350,12 @@ fn iterate_component(
                 &layout,
                 &current_hard.jacobian,
                 &current_hard.residuals,
+                current_hard.indexed.as_ref(),
                 damping,
                 config.normalized_step_tolerance,
+                config.rank_relative_tolerance,
+                config.linear_solve_backend,
+                &mut backend,
             ) else {
                 termination = SolveTermination::NumericalFailure;
                 break;
@@ -1246,6 +1482,7 @@ fn iterate_component(
             }
         }
     }
+    record_backend_evidence(problem, component.index, backend);
     IterationOutcome {
         termination,
         state,
@@ -1257,59 +1494,86 @@ fn iterate_component(
 struct PriorityPassOutcome {
     state: VariableState,
     reports: Vec<PriorityReportRecord>,
+    component_participated: Vec<bool>,
+    component_state_changed: Vec<bool>,
 }
 
 #[derive(Debug)]
 struct PriorityReportRecord {
     report: PrioritySolveReport,
     residual_ids: Vec<ResidualId>,
-    reused: bool,
 }
 
 #[derive(Debug)]
-struct PriorityAssignments {
-    temporary: Vec<Vec<ResidualId>>,
-    preference: Vec<Vec<ResidualId>>,
-    fixed_temporary: Vec<ResidualId>,
-    fixed_preference: Vec<ResidualId>,
-    unsupported_temporary: Vec<ResidualId>,
-    unsupported_preference: Vec<ResidualId>,
+struct PriorityGroup {
+    group_index: usize,
+    component_indices: Vec<usize>,
+    residual_ids: Vec<ResidualId>,
+    protected_temporary_groups: Vec<usize>,
 }
 
-impl PriorityAssignments {
-    fn new(component_count: usize) -> Self {
+#[derive(Debug)]
+struct PriorityCategoryPlan {
+    movable: Vec<PriorityGroup>,
+    fixed: Vec<ResidualId>,
+    invalid: Vec<ResidualId>,
+}
+
+#[derive(Debug)]
+struct PriorityPlan {
+    temporary: PriorityCategoryPlan,
+    preference: PriorityCategoryPlan,
+}
+
+#[derive(Debug)]
+struct PriorityIncidence {
+    residual_id: ResidualId,
+    component_indices: Vec<usize>,
+}
+
+#[derive(Clone, Debug)]
+struct TemporaryLevel {
+    group_index: usize,
+    component_indices: Vec<usize>,
+    residual_ids: Vec<ResidualId>,
+    attained_cost: f64,
+}
+
+#[derive(Debug)]
+struct DisjointSet {
+    parents: Vec<usize>,
+}
+
+impl DisjointSet {
+    fn new(len: usize) -> Self {
         Self {
-            temporary: vec![Vec::new(); component_count],
-            preference: vec![Vec::new(); component_count],
-            fixed_temporary: Vec::new(),
-            fixed_preference: Vec::new(),
-            unsupported_temporary: Vec::new(),
-            unsupported_preference: Vec::new(),
+            parents: (0..len).collect(),
         }
     }
 
-    fn component(&self, category: ResidualCategory, component: usize) -> &[ResidualId] {
-        match category {
-            ResidualCategory::Temporary => &self.temporary[component],
-            ResidualCategory::Preference => &self.preference[component],
-            ResidualCategory::Hard => &[],
+    fn root(&mut self, index: usize) -> usize {
+        let parent = self.parents[index];
+        if parent == index {
+            index
+        } else {
+            let root = self.root(parent);
+            self.parents[index] = root;
+            root
         }
     }
 
-    fn fixed(&self, category: ResidualCategory) -> &[ResidualId] {
-        match category {
-            ResidualCategory::Temporary => &self.fixed_temporary,
-            ResidualCategory::Preference => &self.fixed_preference,
-            ResidualCategory::Hard => &[],
+    fn union(&mut self, first: usize, second: usize) {
+        let first_root = self.root(first);
+        let second_root = self.root(second);
+        if first_root == second_root {
+            return;
         }
-    }
-
-    fn unsupported(&self, category: ResidualCategory) -> &[ResidualId] {
-        match category {
-            ResidualCategory::Temporary => &self.unsupported_temporary,
-            ResidualCategory::Preference => &self.unsupported_preference,
-            ResidualCategory::Hard => &[],
-        }
+        let (root, child) = if first_root < second_root {
+            (first_root, second_root)
+        } else {
+            (second_root, first_root)
+        };
+        self.parents[child] = root;
     }
 }
 
@@ -1321,153 +1585,199 @@ fn optimize_priorities(
     config: SolverConfig,
     executions: &[ComponentExecution],
     prior_report: Option<&SolveReport>,
+    dirty_hierarchy_residuals: &[ResidualId],
 ) -> PriorityPassOutcome {
-    let assignments = classify_priority_residuals(problem, plan);
+    let priority_plan = build_priority_plan(problem, plan);
     let hard_state = state.clone();
     let mut reports = Vec::new();
-    let mut temporary_succeeded = vec![true; plan.components.len()];
-    let mut attained_temporary_costs = vec![None; plan.components.len()];
+    let mut component_participated = vec![false; plan.components.len()];
+    let mut temporary_levels = vec![None; priority_plan.temporary.movable.len()];
+    let mut temporary_reran = vec![false; priority_plan.temporary.movable.len()];
 
-    for component in &plan.components {
-        let residual_ids = assignments.component(ResidualCategory::Temporary, component.index);
-        if residual_ids.is_empty() {
-            continue;
-        }
-        if executions[component.index].reused {
-            let report =
-                cached_priority_report(prior_report, component.index, ResidualCategory::Temporary);
-            let succeeded =
-                report.termination == SolveTermination::Converged && report.final_cost.is_some();
-            temporary_succeeded[component.index] = succeeded;
-            if succeeded {
-                attained_temporary_costs[component.index] = report.final_cost;
+    for group in &priority_plan.temporary.movable {
+        let dirty = priority_group_is_dirty(group, executions, dirty_hierarchy_residuals, &[]);
+        if !dirty {
+            let report = cached_priority_report(prior_report, group, ResidualCategory::Temporary);
+            if report.termination == SolveTermination::Converged
+                && let Some(attained_cost) = cached_temporary_attained_cost(&report)
+            {
+                temporary_levels[group.group_index] = Some(TemporaryLevel {
+                    group_index: group.group_index,
+                    component_indices: group.component_indices.clone(),
+                    residual_ids: group.residual_ids.clone(),
+                    attained_cost,
+                });
             }
             reports.push(PriorityReportRecord {
                 report,
-                residual_ids: residual_ids.to_vec(),
-                reused: true,
+                residual_ids: group.residual_ids.clone(),
             });
             continue;
         }
-        let outcome = optimize_component_priority(
+        for &component_index in &group.component_indices {
+            component_participated[component_index] = true;
+        }
+        temporary_reran[group.group_index] = true;
+        let mut outcome = optimize_priority_group(
             problem,
             plan,
-            component,
+            group,
             state,
             ResidualCategory::Temporary,
-            residual_ids,
             &[],
-            None,
             config,
         );
         state = outcome.state;
-        let succeeded = outcome.report.termination == SolveTermination::Converged
-            && outcome.report.final_cost.is_some();
-        temporary_succeeded[component.index] = succeeded;
-        if succeeded {
-            attained_temporary_costs[component.index] = outcome.report.final_cost;
+        if outcome.report.termination == SolveTermination::Converged
+            && let Some(attained_cost) = outcome.report.final_cost
+        {
+            outcome.report.attained_temporary_cost = Some(attained_cost);
+            temporary_levels[group.group_index] = Some(TemporaryLevel {
+                group_index: group.group_index,
+                component_indices: group.component_indices.clone(),
+                residual_ids: group.residual_ids.clone(),
+                attained_cost,
+            });
         }
         reports.push(PriorityReportRecord {
             report: outcome.report,
-            residual_ids: residual_ids.to_vec(),
-            reused: false,
+            residual_ids: group.residual_ids.clone(),
         });
     }
 
-    let fixed_temporary = assignments.fixed(ResidualCategory::Temporary);
-    if !fixed_temporary.is_empty() {
+    let mut next_temporary_group = priority_plan.temporary.movable.len();
+    if !priority_plan.temporary.fixed.is_empty() {
         reports.push(evaluate_nonmoving_priority(
             problem,
             &state,
+            next_temporary_group,
             ResidualCategory::Temporary,
-            fixed_temporary,
+            &priority_plan.temporary.fixed,
+            PrioritySolveScope::Fixed,
             SolveTermination::Converged,
         ));
+        next_temporary_group += 1;
     }
-    let unsupported_temporary = assignments.unsupported(ResidualCategory::Temporary);
-    if !unsupported_temporary.is_empty() {
+    if !priority_plan.temporary.invalid.is_empty() {
         reports.push(evaluate_nonmoving_priority(
             problem,
             &hard_state,
+            next_temporary_group,
             ResidualCategory::Temporary,
-            unsupported_temporary,
+            &priority_plan.temporary.invalid,
+            PrioritySolveScope::InvalidIncidence,
             SolveTermination::NumericalFailure,
         ));
     }
 
-    let preference_start = state.clone();
-    for component in &plan.components {
-        let residual_ids = assignments.component(ResidualCategory::Preference, component.index);
-        if residual_ids.is_empty() || !temporary_succeeded[component.index] {
-            continue;
-        }
-        if executions[component.index].reused {
+    for group in &priority_plan.preference.movable {
+        let protected = group
+            .protected_temporary_groups
+            .iter()
+            .map(|&index| temporary_levels[index].clone())
+            .collect::<Option<Vec<_>>>();
+        let dirty = priority_group_is_dirty(
+            group,
+            executions,
+            dirty_hierarchy_residuals,
+            &group
+                .protected_temporary_groups
+                .iter()
+                .copied()
+                .filter(|&index| temporary_reran[index])
+                .collect::<Vec<_>>(),
+        );
+        if protected.is_some() && !dirty {
             reports.push(PriorityReportRecord {
-                report: cached_priority_report(
-                    prior_report,
-                    component.index,
-                    ResidualCategory::Preference,
-                ),
-                residual_ids: residual_ids.to_vec(),
-                reused: true,
+                report: cached_priority_report(prior_report, group, ResidualCategory::Preference),
+                residual_ids: group.residual_ids.clone(),
             });
             continue;
         }
-        let protected_temporary_ids =
-            assignments.component(ResidualCategory::Temporary, component.index);
-        let outcome = optimize_component_priority(
-            problem,
-            plan,
-            component,
-            state,
-            ResidualCategory::Preference,
-            residual_ids,
-            protected_temporary_ids,
-            attained_temporary_costs[component.index],
-            config,
-        );
+        for &component_index in &group.component_indices {
+            component_participated[component_index] = true;
+        }
+        let outcome = if let Some(protected) = protected {
+            optimize_priority_group(
+                problem,
+                plan,
+                group,
+                state,
+                ResidualCategory::Preference,
+                &protected,
+                config,
+            )
+        } else {
+            priority_group_failure_report(
+                group,
+                state,
+                ResidualCategory::Preference,
+                &[],
+                SolveTermination::NumericalFailure,
+            )
+        };
         state = outcome.state;
         reports.push(PriorityReportRecord {
             report: outcome.report,
-            residual_ids: residual_ids.to_vec(),
-            reused: false,
+            residual_ids: group.residual_ids.clone(),
         });
     }
 
-    let fixed_preference = assignments.fixed(ResidualCategory::Preference);
-    if !fixed_preference.is_empty() {
+    let mut next_preference_group = priority_plan.preference.movable.len();
+    if !priority_plan.preference.fixed.is_empty() {
         reports.push(evaluate_nonmoving_priority(
             problem,
             &state,
+            next_preference_group,
             ResidualCategory::Preference,
-            fixed_preference,
+            &priority_plan.preference.fixed,
+            PrioritySolveScope::Fixed,
             SolveTermination::Converged,
         ));
+        next_preference_group += 1;
     }
-    let unsupported_preference = assignments.unsupported(ResidualCategory::Preference);
-    if !unsupported_preference.is_empty() {
+    if !priority_plan.preference.invalid.is_empty() {
         reports.push(evaluate_nonmoving_priority(
             problem,
-            &preference_start,
+            &state,
+            next_preference_group,
             ResidualCategory::Preference,
-            unsupported_preference,
+            &priority_plan.preference.invalid,
+            PrioritySolveScope::InvalidIncidence,
             SolveTermination::NumericalFailure,
         ));
     }
 
-    refresh_priority_final_costs(problem, &state, &mut reports);
-    PriorityPassOutcome { state, reports }
+    refresh_priority_final_costs(
+        problem,
+        &state,
+        &priority_plan.temporary.movable,
+        &mut reports,
+    );
+    let component_state_changed = plan
+        .components
+        .iter()
+        .map(|component| component_state_changed(component, &hard_state, &state))
+        .collect();
+    PriorityPassOutcome {
+        state,
+        reports,
+        component_participated,
+        component_state_changed,
+    }
 }
 
 fn cached_priority_report(
     prior_report: Option<&SolveReport>,
-    component_index: usize,
+    group: &PriorityGroup,
     category: ResidualCategory,
 ) -> PrioritySolveReport {
     prior_report
         .and_then(|report| {
             report.priority_solves.iter().find(|priority| {
-                priority.component_index == Some(component_index) && priority.category == category
+                priority.group_index == group.group_index
+                    && priority.component_indices == group.component_indices
+                    && priority.category == category
             })
         })
         .cloned()
@@ -1476,7 +1786,14 @@ fn cached_priority_report(
             report
         })
         .unwrap_or(PrioritySolveReport {
-            component_index: Some(component_index),
+            group_index: group.group_index,
+            component_index: (group.component_indices.len() == 1)
+                .then_some(group.component_indices[0]),
+            component_indices: group.component_indices.clone(),
+            scope: PrioritySolveScope::Movable,
+            backend: None,
+            largest_explicit_nullspace_block_rows: 0,
+            protected_temporary: Vec::new(),
             category,
             iterations: 0,
             initial_cost: None,
@@ -1487,11 +1804,62 @@ fn cached_priority_report(
         })
 }
 
-fn classify_priority_residuals(problem: &Problem, plan: &EliminationPlan) -> PriorityAssignments {
-    let mut assignments = PriorityAssignments::new(plan.components.len());
+fn cached_temporary_attained_cost(report: &PrioritySolveReport) -> Option<f64> {
+    report.attained_temporary_cost.or(report.final_cost)
+}
+
+fn build_priority_plan(problem: &Problem, plan: &EliminationPlan) -> PriorityPlan {
+    let (temporary_incidence, fixed_temporary, invalid_temporary) =
+        classify_priority_incidence(problem, plan, ResidualCategory::Temporary);
+    let (preference_incidence, fixed_preference, invalid_preference) =
+        classify_priority_incidence(problem, plan, ResidualCategory::Preference);
+    let mut temporary_dsu = DisjointSet::new(plan.components.len());
+    union_priority_hyperedges(&mut temporary_dsu, &temporary_incidence);
+    let temporary = priority_groups(&temporary_incidence, &mut temporary_dsu);
+
+    let mut preference_dsu = DisjointSet::new(plan.components.len());
+    for group in &temporary {
+        union_components(&mut preference_dsu, &group.component_indices);
+    }
+    union_priority_hyperedges(&mut preference_dsu, &preference_incidence);
+    let mut preference = priority_groups(&preference_incidence, &mut preference_dsu);
+    for group in &mut preference {
+        group.protected_temporary_groups = temporary
+            .iter()
+            .filter(|temporary_group| {
+                temporary_group
+                    .component_indices
+                    .iter()
+                    .any(|component| group.component_indices.contains(component))
+            })
+            .map(|temporary_group| temporary_group.group_index)
+            .collect();
+    }
+    PriorityPlan {
+        temporary: PriorityCategoryPlan {
+            movable: temporary,
+            fixed: fixed_temporary,
+            invalid: invalid_temporary,
+        },
+        preference: PriorityCategoryPlan {
+            movable: preference,
+            fixed: fixed_preference,
+            invalid: invalid_preference,
+        },
+    }
+}
+
+fn classify_priority_incidence(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    selected_category: ResidualCategory,
+) -> (Vec<PriorityIncidence>, Vec<ResidualId>, Vec<ResidualId>) {
+    let mut movable = Vec::new();
+    let mut fixed = Vec::new();
+    let mut invalid = Vec::new();
     for (residual_id, residual) in problem.residuals.iter() {
         let category = residual.category();
-        if category == ResidualCategory::Hard {
+        if category != selected_category {
             continue;
         }
         let mut components = Vec::new();
@@ -1505,41 +1873,1796 @@ fn classify_priority_residuals(problem: &Problem, plan: &EliminationPlan) -> Pri
                 push_unique(&mut components, group.component_index);
             }
         }
-        if !incidence_is_valid || components.len() > 1 {
-            match category {
-                ResidualCategory::Temporary => {
-                    assignments.unsupported_temporary.push(residual_id);
-                }
-                ResidualCategory::Preference => {
-                    assignments.unsupported_preference.push(residual_id);
-                }
-                ResidualCategory::Hard => {}
-            }
-            continue;
-        }
-        if let Some(&component) = components.first() {
-            match category {
-                ResidualCategory::Temporary => assignments.temporary[component].push(residual_id),
-                ResidualCategory::Preference => {
-                    assignments.preference[component].push(residual_id);
-                }
-                ResidualCategory::Hard => {}
-            }
+        components.sort_unstable();
+        if !incidence_is_valid {
+            invalid.push(residual_id);
+        } else if components.is_empty() {
+            fixed.push(residual_id);
         } else {
-            match category {
-                ResidualCategory::Temporary => assignments.fixed_temporary.push(residual_id),
-                ResidualCategory::Preference => assignments.fixed_preference.push(residual_id),
-                ResidualCategory::Hard => {}
+            movable.push(PriorityIncidence {
+                residual_id,
+                component_indices: components,
+            });
+        }
+    }
+    (movable, fixed, invalid)
+}
+
+fn union_priority_hyperedges(dsu: &mut DisjointSet, incidences: &[PriorityIncidence]) {
+    for incidence in incidences {
+        union_components(dsu, &incidence.component_indices);
+    }
+}
+
+fn union_components(dsu: &mut DisjointSet, component_indices: &[usize]) {
+    if let Some((&first, rest)) = component_indices.split_first() {
+        for &component_index in rest {
+            dsu.union(first, component_index);
+        }
+    }
+}
+
+fn priority_groups(incidences: &[PriorityIncidence], dsu: &mut DisjointSet) -> Vec<PriorityGroup> {
+    let mut roots = Vec::new();
+    let mut groups = Vec::new();
+    for incidence in incidences {
+        let root = dsu.root(incidence.component_indices[0]);
+        let group_index = if let Some(index) = roots.iter().position(|&existing| existing == root) {
+            index
+        } else {
+            roots.push(root);
+            groups.push(PriorityGroup {
+                group_index: groups.len(),
+                component_indices: Vec::new(),
+                residual_ids: Vec::new(),
+                protected_temporary_groups: Vec::new(),
+            });
+            groups.len() - 1
+        };
+        groups[group_index].residual_ids.push(incidence.residual_id);
+    }
+    for (group_index, &root) in roots.iter().enumerate() {
+        for component_index in 0..dsu.parents.len() {
+            if dsu.root(component_index) == root {
+                groups[group_index].component_indices.push(component_index);
             }
         }
     }
-    assignments
+    groups
+}
+
+fn priority_group_is_dirty(
+    group: &PriorityGroup,
+    executions: &[ComponentExecution],
+    dirty_hierarchy_residuals: &[ResidualId],
+    rerun_protected_groups: &[usize],
+) -> bool {
+    !rerun_protected_groups.is_empty()
+        || group
+            .component_indices
+            .iter()
+            .any(|&index| !executions[index].reused)
+        || group
+            .residual_ids
+            .iter()
+            .any(|id| dirty_hierarchy_residuals.contains(id))
+}
+
+fn component_state_changed(
+    component: &SolveComponent,
+    before: &VariableState,
+    after: &VariableState,
+) -> bool {
+    component
+        .variable_ids
+        .iter()
+        .any(|&variable_id| state_value(before, variable_id) != state_value(after, variable_id))
+}
+
+fn optimize_priority_group(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    group: &PriorityGroup,
+    state: VariableState,
+    category: ResidualCategory,
+    protected: &[TemporaryLevel],
+    config: SolverConfig,
+) -> PriorityComponentOutcome {
+    if group.component_indices.len() == 1
+        && protected.len() <= 1
+        && plan.component_layouts[group.component_indices[0]].tangent_dimension
+            < PROJECTED_CGLS_MIN_NULLITY
+    {
+        let component_index = group.component_indices[0];
+        let (protected_ids, attained_cost) = protected.first().map_or((&[][..], None), |level| {
+            (level.residual_ids.as_slice(), Some(level.attained_cost))
+        });
+        let mut outcome = optimize_component_priority(
+            problem,
+            plan,
+            &plan.components[component_index],
+            state,
+            category,
+            &group.residual_ids,
+            protected_ids,
+            attained_cost,
+            config,
+        );
+        decorate_priority_report(
+            &mut outcome.report,
+            group,
+            PrioritySolveBackend::DenseNullspace,
+            plan.component_layouts[component_index].tangent_dimension,
+            protected,
+        );
+        return outcome;
+    }
+    optimize_coupled_priority(problem, plan, group, state, category, protected, config)
+}
+
+fn decorate_priority_report(
+    report: &mut PrioritySolveReport,
+    group: &PriorityGroup,
+    backend: PrioritySolveBackend,
+    largest_explicit_nullspace_block_rows: usize,
+    protected: &[TemporaryLevel],
+) {
+    report.group_index = group.group_index;
+    report.component_index =
+        (group.component_indices.len() == 1).then_some(group.component_indices[0]);
+    report
+        .component_indices
+        .clone_from(&group.component_indices);
+    report.scope = PrioritySolveScope::Movable;
+    report.backend = Some(backend);
+    report.largest_explicit_nullspace_block_rows = largest_explicit_nullspace_block_rows;
+    report.protected_temporary = protected_reports(protected);
+}
+
+fn protected_reports(protected: &[TemporaryLevel]) -> Vec<ProtectedTemporaryReport> {
+    protected
+        .iter()
+        .map(|level| ProtectedTemporaryReport {
+            group_index: level.group_index,
+            attained_cost: level.attained_cost,
+            final_cost: None,
+            preservation_tolerance: objective_roundoff_tolerance(
+                level.attained_cost,
+                level.attained_cost,
+            )
+            .max(PRIORITY_ZERO_COST_ROUNDOFF),
+            preserved: false,
+        })
+        .collect()
+}
+
+fn priority_group_failure_report(
+    group: &PriorityGroup,
+    state: VariableState,
+    category: ResidualCategory,
+    protected: &[TemporaryLevel],
+    termination: SolveTermination,
+) -> PriorityComponentOutcome {
+    let mut report = PrioritySolveReport {
+        group_index: group.group_index,
+        component_index: (group.component_indices.len() == 1).then_some(group.component_indices[0]),
+        component_indices: group.component_indices.clone(),
+        scope: PrioritySolveScope::Movable,
+        backend: None,
+        largest_explicit_nullspace_block_rows: 0,
+        protected_temporary: protected_reports(protected),
+        category,
+        iterations: 0,
+        initial_cost: None,
+        final_cost: None,
+        attained_temporary_cost: protected.first().map(|level| level.attained_cost),
+        termination,
+        status: secondary_status(termination, false),
+    };
+    for protection in &mut report.protected_temporary {
+        protection.preserved = false;
+    }
+    PriorityComponentOutcome { state, report }
+}
+
+#[derive(Debug)]
+struct LocalNullspaceBlock {
+    full_range: std::ops::Range<usize>,
+    reduced_range: std::ops::Range<usize>,
+    map: LocalNullspaceMap,
+}
+
+#[derive(Debug)]
+enum LocalNullspaceMap {
+    Explicit(DMatrix<f64>),
+    Identity,
+}
+
+#[derive(Debug)]
+struct BlockProtectedSpace {
+    blocks: Vec<LocalNullspaceBlock>,
+    full_dimension: usize,
+    reduced_dimension: usize,
+    largest_block_rows: usize,
+    protected_rows: DMatrix<f64>,
+}
+
+impl BlockProtectedSpace {
+    fn apply_local_bases(&self, reduced: &DVector<f64>) -> Option<DVector<f64>> {
+        if reduced.len() != self.reduced_dimension {
+            return None;
+        }
+        let mut full = DVector::zeros(self.full_dimension);
+        for block in &self.blocks {
+            let reduced_local = reduced.rows(block.reduced_range.start, block.reduced_range.len());
+            let local = match &block.map {
+                LocalNullspaceMap::Explicit(basis) => basis * reduced_local,
+                LocalNullspaceMap::Identity => reduced_local.into_owned(),
+            };
+            full.rows_mut(block.full_range.start, block.full_range.len())
+                .copy_from(&local);
+        }
+        full.iter().all(|value| value.is_finite()).then_some(full)
+    }
+
+    fn apply_local_transposes(&self, full: &DVector<f64>) -> Option<DVector<f64>> {
+        if full.len() != self.full_dimension {
+            return None;
+        }
+        let mut reduced = DVector::zeros(self.reduced_dimension);
+        for block in &self.blocks {
+            let full_local = full.rows(block.full_range.start, block.full_range.len());
+            let local = match &block.map {
+                LocalNullspaceMap::Explicit(basis) => basis.transpose() * full_local,
+                LocalNullspaceMap::Identity => full_local.into_owned(),
+            };
+            reduced
+                .rows_mut(block.reduced_range.start, block.reduced_range.len())
+                .copy_from(&local);
+        }
+        reduced
+            .iter()
+            .all(|value| value.is_finite())
+            .then_some(reduced)
+    }
+
+    fn project_protected(&self, value: &DVector<f64>, tolerance: f64) -> Option<DVector<f64>> {
+        if self.protected_rows.nrows() == 0 {
+            return Some(value.clone());
+        }
+        let gram = &self.protected_rows * self.protected_rows.transpose();
+        let rhs = &self.protected_rows * value;
+        let correction = solve_rank_aware_least_squares(&gram, &rhs, tolerance)?;
+        let projected = value - self.protected_rows.transpose() * correction;
+        let violation = &self.protected_rows * &projected;
+        let scale = stable_norm(self.protected_rows.iter().copied())?
+            * stable_norm(projected.iter().copied())?;
+        let allowed = tolerance.max(64.0 * f64::EPSILON * scale);
+        (stable_norm(violation.iter().copied())? <= allowed).then_some(projected)
+    }
+
+    fn apply(&self, reduced: &DVector<f64>, tolerance: f64) -> Option<DVector<f64>> {
+        let projected = self.project_protected(reduced, tolerance)?;
+        self.apply_local_bases(&projected)
+    }
+
+    fn apply_transpose(&self, full: &DVector<f64>, tolerance: f64) -> Option<DVector<f64>> {
+        let reduced = self.apply_local_transposes(full)?;
+        self.project_protected(&reduced, tolerance)
+    }
+}
+
+struct EqualityProjector {
+    rows: DMatrix<f64>,
+    row_space_basis: DMatrix<f64>,
+}
+
+impl EqualityProjector {
+    fn new(rows: DMatrix<f64>, relative_tolerance: f64) -> Option<Self> {
+        if rows.iter().any(|value| !value.is_finite()) {
+            return None;
+        }
+        if rows.nrows() == 0 {
+            let columns = rows.ncols();
+            return Some(Self {
+                rows,
+                row_space_basis: DMatrix::zeros(0, columns),
+            });
+        }
+        let diagnostics = rank_diagnostics(&rows, relative_tolerance)?;
+        let decomposition = rows.clone().svd(false, true);
+        let right_vectors = decomposition.v_t?;
+        let retained = decomposition
+            .singular_values
+            .iter()
+            .enumerate()
+            .filter_map(|(index, &value)| (value > diagnostics.threshold).then_some(index))
+            .collect::<Vec<_>>();
+        let row_space_basis = DMatrix::from_fn(retained.len(), rows.ncols(), |row, column| {
+            right_vectors[(retained[row], column)]
+        });
+        row_space_basis
+            .iter()
+            .all(|value| value.is_finite())
+            .then_some(Self {
+                rows,
+                row_space_basis,
+            })
+    }
+
+    fn project(&self, value: &DVector<f64>, tolerance: f64) -> Option<DVector<f64>> {
+        if value.len() != self.rows.ncols() || value.iter().any(|entry| !entry.is_finite()) {
+            return None;
+        }
+        if self.rows.nrows() == 0 {
+            return Some(value.clone());
+        }
+        let projected = value - self.row_space_basis.transpose() * (&self.row_space_basis * value);
+        self.contains(&projected, tolerance).then_some(projected)
+    }
+
+    fn contains(&self, value: &DVector<f64>, tolerance: f64) -> bool {
+        if value.len() != self.rows.ncols() || value.iter().any(|entry| !entry.is_finite()) {
+            return false;
+        }
+        let Some(violation) = stable_norm((&self.rows * value).iter().copied()) else {
+            return false;
+        };
+        let Some(row_norm) = stable_norm(self.rows.iter().copied()) else {
+            return false;
+        };
+        let Some(value_norm) = stable_norm(value.iter().copied()) else {
+            return false;
+        };
+        violation <= tolerance.max(64.0 * f64::EPSILON * row_norm * value_norm)
+    }
+}
+
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+fn optimize_coupled_priority(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    group: &PriorityGroup,
+    mut state: VariableState,
+    category: ResidualCategory,
+    protected: &[TemporaryLevel],
+    config: SolverConfig,
+) -> PriorityComponentOutcome {
+    let initial_system = match linearized_composite_category_system(
+        problem,
+        plan,
+        &group.component_indices,
+        &state,
+        category,
+        &group.residual_ids,
+    ) {
+        Ok(system) => system,
+        Err(error) => {
+            return priority_group_failure_report(
+                group,
+                state,
+                category,
+                protected,
+                error_termination(&error),
+            );
+        }
+    };
+    let Some(initial_cost) = residual_cost(&initial_system.residuals) else {
+        return priority_group_failure_report(
+            group,
+            state,
+            category,
+            protected,
+            SolveTermination::NumericalFailure,
+        );
+    };
+    if !validate_priority_components(problem, plan, group, &state, config)
+        || !protected_levels_are_preserved(problem, &state, protected)
+    {
+        return coupled_priority_report(
+            group,
+            state,
+            category,
+            protected,
+            None,
+            0,
+            Some(initial_cost),
+            Some(initial_cost),
+            SolveTermination::NumericalFailure,
+            0,
+        );
+    }
+
+    let mut cost = initial_cost;
+    let mut backend = None;
+    let mut largest_block_rows = 0;
+    let mut reprojection_config = config;
+    reprojection_config.normalized_residual_tolerance = config
+        .normalized_residual_tolerance
+        .min(config.normalized_step_tolerance)
+        .min(PRIORITY_REPROJECTION_TOLERANCE);
+    reprojection_config.normalized_step_tolerance = config
+        .normalized_step_tolerance
+        .min(PRIORITY_REPROJECTION_TOLERANCE);
+
+    for iteration in 1..=config.max_iterations {
+        let current = match linearized_composite_category_system(
+            problem,
+            plan,
+            &group.component_indices,
+            &state,
+            category,
+            &group.residual_ids,
+        ) {
+            Ok(system) => system,
+            Err(error) => {
+                return coupled_priority_report(
+                    group,
+                    state,
+                    category,
+                    protected,
+                    backend,
+                    iteration - 1,
+                    Some(initial_cost),
+                    Some(cost),
+                    error_termination(&error),
+                    largest_block_rows,
+                );
+            }
+        };
+        if priority_cost_is_numerically_zero(cost, current.residuals.len(), config) {
+            return coupled_priority_report(
+                group,
+                state,
+                category,
+                protected,
+                backend,
+                iteration - 1,
+                Some(initial_cost),
+                Some(cost),
+                SolveTermination::Converged,
+                largest_block_rows,
+            );
+        }
+        let space = match block_protected_space(problem, plan, group, &state, protected, config) {
+            Ok(space) => space,
+            Err(error) => {
+                return coupled_priority_report(
+                    group,
+                    state,
+                    category,
+                    protected,
+                    backend,
+                    iteration - 1,
+                    Some(initial_cost),
+                    Some(cost),
+                    error_termination(&error),
+                    largest_block_rows,
+                );
+            }
+        };
+        largest_block_rows = largest_block_rows.max(space.largest_block_rows);
+        if space.reduced_dimension == 0 {
+            return coupled_priority_report(
+                group,
+                state,
+                category,
+                protected,
+                Some(PrioritySolveBackend::DenseBlockNullspace),
+                iteration - 1,
+                Some(initial_cost),
+                Some(cost),
+                SolveTermination::Converged,
+                largest_block_rows,
+            );
+        }
+        let group_has_bounds = priority_group_has_bounds(problem, plan, group);
+        let use_projected = space.reduced_dimension >= PROJECTED_CGLS_MIN_NULLITY;
+        let selected_backend = if use_projected {
+            PrioritySolveBackend::ProjectedCgls
+        } else {
+            PrioritySolveBackend::DenseBlockNullspace
+        };
+        backend = Some(selected_backend);
+        let layout = match composite_tangent_layout(plan, &group.component_indices) {
+            Ok(layout) => layout,
+            Err(error) => {
+                return coupled_priority_report(
+                    group,
+                    state,
+                    category,
+                    protected,
+                    backend,
+                    iteration - 1,
+                    Some(initial_cost),
+                    Some(cost),
+                    error_termination(&error),
+                    largest_block_rows,
+                );
+            }
+        };
+        let reduced_step = if use_projected && group_has_bounds {
+            bounded_projected_cgls_step(
+                problem,
+                &state,
+                &layout,
+                &current.jacobian,
+                &current.residuals,
+                &space,
+                config.rank_relative_tolerance,
+                config.normalized_step_tolerance,
+            )
+        } else if use_projected {
+            projected_cgls_step(
+                &current.jacobian,
+                &current.residuals,
+                &space,
+                config.rank_relative_tolerance,
+                config.normalized_step_tolerance,
+            )
+        } else {
+            dense_block_constrained_step(
+                problem,
+                &state,
+                &layout,
+                &current.jacobian,
+                &current.residuals,
+                &space,
+                config.rank_relative_tolerance,
+                config.normalized_step_tolerance,
+            )
+        };
+        let Some(reduced_step) = reduced_step else {
+            return coupled_priority_report(
+                group,
+                state,
+                category,
+                protected,
+                backend,
+                iteration - 1,
+                Some(initial_cost),
+                Some(cost),
+                if use_projected {
+                    SolveTermination::Stalled
+                } else {
+                    SolveTermination::NumericalFailure
+                },
+                largest_block_rows,
+            );
+        };
+        let mut reduced_step = reduced_step;
+        let Some(mut step) = (if use_projected {
+            space.apply_local_bases(&reduced_step)
+        } else {
+            space.apply(&reduced_step, config.normalized_step_tolerance)
+        }) else {
+            return coupled_priority_report(
+                group,
+                state,
+                category,
+                protected,
+                backend,
+                iteration - 1,
+                Some(initial_cost),
+                Some(cost),
+                if use_projected {
+                    SolveTermination::Stalled
+                } else {
+                    SolveTermination::NumericalFailure
+                },
+                largest_block_rows,
+            );
+        };
+        let step_limit_valid = if use_projected {
+            limit_operator_step(
+                &mut reduced_step,
+                &mut step,
+                &layout,
+                config.max_block_normalized_step,
+            )
+        } else {
+            limit_block_steps(&mut step, &layout, config.max_block_normalized_step).map(|_| ())
+        };
+        let bounds_valid = if use_projected && group_has_bounds {
+            operator_step_is_within_bounds(problem, &state, &layout, &step)
+        } else {
+            limit_step_to_bound_events(problem, &state, &layout, &mut step).map(|_| ())
+        };
+        let projected_valid = !use_projected
+            || EqualityProjector::new(space.protected_rows.clone(), config.rank_relative_tolerance)
+                .is_some_and(|projector| {
+                    projector.contains(&reduced_step, config.normalized_step_tolerance)
+                });
+        if step_limit_valid.is_none() || bounds_valid.is_none() || !projected_valid {
+            return coupled_priority_report(
+                group,
+                state,
+                category,
+                protected,
+                backend,
+                iteration - 1,
+                Some(initial_cost),
+                Some(cost),
+                if use_projected {
+                    SolveTermination::Stalled
+                } else {
+                    SolveTermination::NumericalFailure
+                },
+                largest_block_rows,
+            );
+        }
+        let step_max = maximum_block_step(&step, &layout).unwrap_or(f64::INFINITY);
+        let predicted_decrease = residual_cost(&(&current.residuals + &current.jacobian * &step))
+            .is_some_and(|model_cost| objective_decreases(cost, model_cost));
+        if use_projected && step_max > config.normalized_step_tolerance && !predicted_decrease {
+            return coupled_priority_report(
+                group,
+                state,
+                category,
+                protected,
+                backend,
+                iteration,
+                Some(initial_cost),
+                Some(cost),
+                SolveTermination::Stalled,
+                largest_block_rows,
+            );
+        }
+        if step_max <= config.normalized_step_tolerance {
+            match search_coupled_negative_curvature(
+                problem,
+                plan,
+                group,
+                &state,
+                category,
+                protected,
+                &space,
+                &layout,
+                cost,
+                config,
+                reprojection_config,
+            ) {
+                CurvatureSearch::Improved(improved_state, improved_cost) => {
+                    state = improved_state;
+                    cost = improved_cost;
+                    continue;
+                }
+                CurvatureSearch::NoNegativeCurvature => {
+                    return acceptable_secondary_outcome(coupled_priority_report(
+                        group,
+                        state,
+                        category,
+                        protected,
+                        backend,
+                        iteration,
+                        Some(initial_cost),
+                        Some(cost),
+                        SolveTermination::Converged,
+                        largest_block_rows,
+                    ));
+                }
+                CurvatureSearch::Incomplete | CurvatureSearch::Failed => {
+                    return coupled_priority_report(
+                        group,
+                        state,
+                        category,
+                        protected,
+                        backend,
+                        iteration,
+                        Some(initial_cost),
+                        Some(cost),
+                        SolveTermination::Stalled,
+                        largest_block_rows,
+                    );
+                }
+            }
+        }
+
+        let mut accepted = None;
+        let mut alpha = 1.0;
+        for _ in 0..MAX_PRIORITY_LINE_SEARCH_STEPS {
+            let trial_step = &step * alpha;
+            let mut trial_state = state.clone();
+            if apply_normalized_step(problem, plan, &mut trial_state, &layout, &trial_step).is_ok()
+                && let Some((candidate_state, candidate_cost)) = evaluate_coupled_priority_trial(
+                    problem,
+                    plan,
+                    group,
+                    trial_state,
+                    category,
+                    protected,
+                    config,
+                    reprojection_config,
+                )
+                && objective_decreases(cost, candidate_cost)
+                && accepted
+                    .as_ref()
+                    .is_none_or(|(_, accepted_cost)| candidate_cost < *accepted_cost)
+            {
+                accepted = Some((candidate_state, candidate_cost));
+            }
+            alpha *= 0.5;
+        }
+        if let Some((accepted_state, accepted_cost)) = accepted {
+            state = accepted_state;
+            cost = accepted_cost;
+        } else {
+            match search_coupled_negative_curvature(
+                problem,
+                plan,
+                group,
+                &state,
+                category,
+                protected,
+                &space,
+                &layout,
+                cost,
+                config,
+                reprojection_config,
+            ) {
+                CurvatureSearch::Improved(improved_state, improved_cost) => {
+                    state = improved_state;
+                    cost = improved_cost;
+                }
+                CurvatureSearch::NoNegativeCurvature => {
+                    return acceptable_secondary_outcome(coupled_priority_report(
+                        group,
+                        state,
+                        category,
+                        protected,
+                        backend,
+                        iteration,
+                        Some(initial_cost),
+                        Some(cost),
+                        SolveTermination::Converged,
+                        largest_block_rows,
+                    ));
+                }
+                CurvatureSearch::Incomplete | CurvatureSearch::Failed => {
+                    return coupled_priority_report(
+                        group,
+                        state,
+                        category,
+                        protected,
+                        backend,
+                        iteration,
+                        Some(initial_cost),
+                        Some(cost),
+                        SolveTermination::Stalled,
+                        largest_block_rows,
+                    );
+                }
+            }
+        }
+    }
+    coupled_priority_report(
+        group,
+        state,
+        category,
+        protected,
+        backend,
+        config.max_iterations,
+        Some(initial_cost),
+        Some(cost),
+        SolveTermination::IterationLimit,
+        largest_block_rows,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn coupled_priority_report(
+    group: &PriorityGroup,
+    state: VariableState,
+    category: ResidualCategory,
+    protected: &[TemporaryLevel],
+    backend: Option<PrioritySolveBackend>,
+    iterations: usize,
+    initial_cost: Option<f64>,
+    final_cost: Option<f64>,
+    termination: SolveTermination,
+    largest_block_rows: usize,
+) -> PriorityComponentOutcome {
+    PriorityComponentOutcome {
+        state,
+        report: PrioritySolveReport {
+            group_index: group.group_index,
+            component_index: None,
+            component_indices: group.component_indices.clone(),
+            scope: PrioritySolveScope::Movable,
+            backend,
+            largest_explicit_nullspace_block_rows: largest_block_rows,
+            protected_temporary: protected_reports(protected),
+            category,
+            iterations,
+            initial_cost,
+            final_cost,
+            attained_temporary_cost: protected.first().map(|level| level.attained_cost),
+            termination,
+            status: secondary_status(termination, false),
+        },
+    }
+}
+
+fn block_protected_space(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    group: &PriorityGroup,
+    state: &VariableState,
+    protected: &[TemporaryLevel],
+    config: SolverConfig,
+) -> Result<BlockProtectedSpace, CoreError> {
+    let mut blocks = Vec::new();
+    let mut implicit_hard_rows = Vec::new();
+    let mut full_offset = 0;
+    let mut reduced_offset = 0;
+    let mut largest_block_rows = 0;
+    for &component_index in &group.component_indices {
+        let component = &plan.components[component_index];
+        let hard = linearized_hard_system(problem, plan, component, state)?;
+        let full_rows = hard.jacobian.ncols();
+        let use_implicit_hard_projector =
+            full_rows >= PROJECTED_CGLS_MIN_NULLITY && !component.active_residual_ids.is_empty();
+        let (reduced_columns, map) = if use_implicit_hard_projector {
+            let reduced_range = reduced_offset..reduced_offset + full_rows;
+            implicit_hard_rows.push((reduced_range, hard.jacobian));
+            (full_rows, LocalNullspaceMap::Identity)
+        } else {
+            let basis = numerical_nullspace(&hard.jacobian, config.rank_relative_tolerance).ok_or(
+                CoreError::NonFiniteValue {
+                    context: "priority local hard nullspace",
+                    index: component_index,
+                    value: f64::NAN,
+                },
+            )?;
+            largest_block_rows = largest_block_rows.max(basis.nrows());
+            (basis.ncols(), LocalNullspaceMap::Explicit(basis))
+        };
+        let full_end = full_offset + full_rows;
+        let reduced_end = reduced_offset + reduced_columns;
+        blocks.push(LocalNullspaceBlock {
+            full_range: full_offset..full_end,
+            reduced_range: reduced_offset..reduced_end,
+            map,
+        });
+        full_offset = full_end;
+        reduced_offset = reduced_end;
+    }
+    let mut space = BlockProtectedSpace {
+        blocks,
+        full_dimension: full_offset,
+        reduced_dimension: reduced_offset,
+        largest_block_rows,
+        protected_rows: DMatrix::zeros(0, reduced_offset),
+    };
+    let mut protected_rows = Vec::new();
+    for (range, hard) in implicit_hard_rows {
+        for row in 0..hard.nrows() {
+            let mut reduced_row = DVector::zeros(reduced_offset);
+            reduced_row
+                .rows_mut(range.start, range.len())
+                .copy_from(&hard.row(row).transpose());
+            protected_rows.push(reduced_row);
+        }
+    }
+    for level in protected {
+        let temporary = linearized_composite_category_system(
+            problem,
+            plan,
+            &group.component_indices,
+            state,
+            ResidualCategory::Temporary,
+            &level.residual_ids,
+        )?;
+        if priority_cost_is_numerically_zero(level.attained_cost, temporary.residuals.len(), config)
+        {
+            // At zero least-squares cost the scalar objective gradient vanishes.
+            // Preserving the attained level instead requires tangent motion to
+            // remain in the nullspace of every zero residual row.
+            for row in 0..temporary.jacobian.nrows() {
+                let full_row = temporary.jacobian.row(row).transpose().into_owned();
+                let reduced_row =
+                    space
+                        .apply_local_transposes(&full_row)
+                        .ok_or(CoreError::NonFiniteValue {
+                            context: "protected zero-cost Temporary row",
+                            index: protected_rows.len(),
+                            value: f64::NAN,
+                        })?;
+                protected_rows.push(reduced_row);
+            }
+        } else {
+            let full_gradient = temporary.jacobian.transpose() * temporary.residuals;
+            let reduced_gradient =
+                space
+                    .apply_local_transposes(&full_gradient)
+                    .ok_or(CoreError::NonFiniteValue {
+                        context: "protected Temporary gradient",
+                        index: protected_rows.len(),
+                        value: f64::NAN,
+                    })?;
+            protected_rows.push(reduced_gradient);
+        }
+    }
+    space.protected_rows = DMatrix::from_fn(protected_rows.len(), reduced_offset, |row, column| {
+        protected_rows[row][column]
+    });
+    Ok(space)
+}
+
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+fn dense_block_constrained_step(
+    problem: &Problem,
+    state: &VariableState,
+    layout: &ActiveLayout,
+    jacobian: &DMatrix<f64>,
+    residuals: &DVector<f64>,
+    space: &BlockProtectedSpace,
+    relative_tolerance: f64,
+    normalized_step_tolerance: f64,
+) -> Option<DVector<f64>> {
+    let protected_nullspace = numerical_nullspace(&space.protected_rows, relative_tolerance)?;
+    if protected_nullspace.ncols() == 0 {
+        return Some(DVector::zeros(space.reduced_dimension));
+    }
+    let mut reduced_jacobian = DMatrix::zeros(jacobian.nrows(), protected_nullspace.ncols());
+    for column in 0..protected_nullspace.ncols() {
+        let full = space.apply_local_bases(&protected_nullspace.column(column).into_owned())?;
+        reduced_jacobian
+            .column_mut(column)
+            .copy_from(&(jacobian * full));
+    }
+    let full_bounds = normalized_step_bounds(problem, state, layout, space.full_dimension)?;
+    let mut constraints = Vec::new();
+    for (column, bound) in full_bounds.iter().enumerate() {
+        if !bound.lower.is_finite() && !bound.upper.is_finite() {
+            continue;
+        }
+        let mut coordinate = DVector::zeros(space.full_dimension);
+        coordinate[column] = 1.0;
+        let local_normal = space.apply_local_transposes(&coordinate)?;
+        let normal = protected_nullspace.transpose() * local_normal;
+        if stable_norm(normal.iter().copied())? == 0.0 {
+            continue;
+        }
+        constraints.push(ReducedStepBound {
+            normal,
+            lower: bound.lower,
+            upper: bound.upper,
+        });
+    }
+    let unconstrained =
+        solve_rank_aware_least_squares(&reduced_jacobian, &(-residuals), relative_tolerance)?;
+    if constraints
+        .iter()
+        .all(|constraint| constraint_satisfied(constraint, &unconstrained))
+    {
+        return Some(protected_nullspace * unconstrained);
+    }
+    let desired_working = constraints
+        .iter()
+        .map(|constraint| {
+            if constraint.lower <= constraint.upper && constraint.upper <= constraint.lower {
+                WorkingBound::Fixed
+            } else if constraint.lower == 0.0 {
+                WorkingBound::Lower
+            } else if constraint.upper == 0.0 {
+                WorkingBound::Upper
+            } else {
+                WorkingBound::Free
+            }
+        })
+        .collect::<Vec<_>>();
+    let mut working =
+        independent_initial_working_set(&constraints, &desired_working, relative_tolerance)?;
+    let mut coefficients = DVector::zeros(protected_nullspace.ncols());
+    let maximum_iterations = 8usize.saturating_mul(constraints.len().saturating_add(1));
+    let mut kkt_certified = false;
+    for _ in 0..maximum_iterations {
+        let candidate = solve_active_reduced_least_squares(
+            &reduced_jacobian,
+            residuals,
+            &constraints,
+            &working,
+            relative_tolerance,
+        )?;
+        if let Some((alpha, constraint, side)) =
+            first_linear_bound_event(&coefficients, &candidate, &constraints, &working)
+        {
+            coefficients += (candidate - &coefficients) * alpha;
+            if working_constraint_is_independent(
+                &constraints,
+                &working,
+                constraint,
+                relative_tolerance,
+            )? {
+                working[constraint] = side;
+            } else if !constraint_satisfied(&constraints[constraint], &coefficients) {
+                return None;
+            }
+            continue;
+        }
+        coefficients = candidate;
+        let model_residuals = &reduced_jacobian * &coefficients + residuals;
+        let gradient = reduced_jacobian.transpose() * model_residuals;
+        let tolerance = kkt_gradient_tolerance(
+            &reduced_jacobian,
+            residuals,
+            &coefficients,
+            0.0,
+            normalized_step_tolerance,
+        )?;
+        let kkt = working_set_kkt(&gradient, &constraints, &working, tolerance).ok()?;
+        if let Some(constraint) = kkt.release {
+            working[constraint] = WorkingBound::Free;
+            continue;
+        }
+        kkt_certified = true;
+        break;
+    }
+    if !kkt_certified {
+        return None;
+    }
+    let step = protected_nullspace * coefficients;
+    step.iter().all(|value| value.is_finite()).then_some(step)
+}
+
+fn projected_cgls_step(
+    jacobian: &DMatrix<f64>,
+    residuals: &DVector<f64>,
+    space: &BlockProtectedSpace,
+    rank_tolerance: f64,
+    step_tolerance: f64,
+) -> Option<DVector<f64>> {
+    let projector = EqualityProjector::new(space.protected_rows.clone(), rank_tolerance)?;
+    projected_cgls_correction(
+        jacobian,
+        residuals,
+        &DVector::zeros(space.reduced_dimension),
+        space,
+        &projector,
+        rank_tolerance,
+        step_tolerance,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn projected_cgls_correction(
+    jacobian: &DMatrix<f64>,
+    residuals: &DVector<f64>,
+    current: &DVector<f64>,
+    space: &BlockProtectedSpace,
+    projector: &EqualityProjector,
+    rank_tolerance: f64,
+    step_tolerance: f64,
+) -> Option<DVector<f64>> {
+    let current_full = space.apply_local_bases(current)?;
+    let effective_residuals = residuals + jacobian * current_full;
+    let apply = |value: &DVector<f64>| -> Option<DVector<f64>> {
+        Some(jacobian * space.apply_local_bases(&projector.project(value, step_tolerance)?)?)
+    };
+    let apply_transpose = |value: &DVector<f64>| -> Option<DVector<f64>> {
+        projector.project(
+            &space.apply_local_transposes(&(jacobian.transpose() * value))?,
+            step_tolerance,
+        )
+    };
+    let right_hand_side = -effective_residuals;
+    let mut solution = DVector::zeros(space.reduced_dimension);
+    let mut equation_residual = right_hand_side.clone();
+    let mut gradient = apply_transpose(&equation_residual)?;
+    let initial_gradient_norm = stable_norm(gradient.iter().copied())?;
+    if initial_gradient_norm == 0.0 {
+        return Some(solution);
+    }
+    let tolerance = step_tolerance.max(rank_tolerance) * initial_gradient_norm;
+    let mut direction = gradient.clone();
+    let mut gradient_norm_squared = gradient.dot(&gradient);
+    let max_iterations = space.reduced_dimension.saturating_mul(2).clamp(1, 4096);
+    for _ in 0..max_iterations {
+        let image = apply(&direction)?;
+        let denominator = image.dot(&image);
+        if !denominator.is_finite() || denominator <= f64::EPSILON * gradient_norm_squared {
+            break;
+        }
+        let alpha = gradient_norm_squared / denominator;
+        solution += alpha * &direction;
+        equation_residual -= alpha * image;
+        let next_gradient = apply_transpose(&equation_residual)?;
+        let next_norm_squared = next_gradient.dot(&next_gradient);
+        if !next_norm_squared.is_finite() {
+            return None;
+        }
+        gradient = next_gradient;
+        if next_norm_squared.sqrt() <= tolerance {
+            break;
+        }
+        direction = &gradient + (next_norm_squared / gradient_norm_squared) * direction;
+        gradient_norm_squared = next_norm_squared;
+    }
+    let validated_gradient = apply_transpose(&(apply(&solution)? - right_hand_side))?;
+    let validated_norm = stable_norm(validated_gradient.iter().copied())?;
+    (validated_norm <= tolerance.max(64.0 * f64::EPSILON * initial_gradient_norm))
+        .then_some(projector.project(&solution, step_tolerance)?)
+}
+
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+fn bounded_projected_cgls_step(
+    problem: &Problem,
+    state: &VariableState,
+    layout: &ActiveLayout,
+    jacobian: &DMatrix<f64>,
+    residuals: &DVector<f64>,
+    space: &BlockProtectedSpace,
+    rank_tolerance: f64,
+    step_tolerance: f64,
+) -> Option<DVector<f64>> {
+    let full_bounds = normalized_step_bounds(problem, state, layout, space.full_dimension)?;
+    let constraints = operator_bound_constraints(&full_bounds, space)?;
+    let desired = constraints
+        .iter()
+        .map(|constraint| {
+            if constraint.lower <= constraint.upper && constraint.upper <= constraint.lower {
+                WorkingBound::Fixed
+            } else if constraint.lower == 0.0 {
+                WorkingBound::Lower
+            } else if constraint.upper == 0.0 {
+                WorkingBound::Upper
+            } else {
+                WorkingBound::Free
+            }
+        })
+        .collect::<Vec<_>>();
+    let mut working = vec![WorkingBound::Free; constraints.len()];
+    for fixed_only in [true, false] {
+        for (index, status) in desired.iter().copied().enumerate() {
+            if status == WorkingBound::Free || (status == WorkingBound::Fixed) != fixed_only {
+                continue;
+            }
+            if operator_bound_is_independent(
+                space,
+                &constraints,
+                &working,
+                index,
+                rank_tolerance,
+                step_tolerance,
+            )? {
+                working[index] = status;
+            }
+        }
+    }
+
+    let mut step = DVector::zeros(space.reduced_dimension);
+    let maximum_iterations = 8usize.saturating_mul(constraints.len().saturating_add(1));
+    for _ in 0..maximum_iterations {
+        let equality_rows = operator_equality_rows(space, &constraints, &working);
+        let projector = EqualityProjector::new(equality_rows, rank_tolerance)?;
+        let correction = projected_cgls_correction(
+            jacobian,
+            residuals,
+            &step,
+            space,
+            &projector,
+            rank_tolerance,
+            step_tolerance,
+        )?;
+        let candidate = &step + correction;
+        if let OperatorBoundEvent::Event(alpha, constraint, side) =
+            first_operator_bound_event(&step, &candidate, &constraints, &working)?
+        {
+            step += (candidate - &step) * alpha;
+            if operator_bound_is_independent(
+                space,
+                &constraints,
+                &working,
+                constraint,
+                rank_tolerance,
+                step_tolerance,
+            )? {
+                working[constraint] = side;
+            } else if !constraint_satisfied(&constraints[constraint], &step) {
+                return None;
+            }
+            continue;
+        }
+        step = candidate;
+        if !constraints
+            .iter()
+            .all(|constraint| constraint_satisfied(constraint, &step))
+            || !operator_active_equalities_satisfied(&step, &constraints, &working, step_tolerance)
+        {
+            return None;
+        }
+
+        let full_step = space.apply_local_bases(&step)?;
+        if !operator_full_step_satisfies_bounds(&full_step, &full_bounds) {
+            return None;
+        }
+        let model_residuals = residuals + jacobian * &full_step;
+        let full_gradient = jacobian.transpose() * &model_residuals;
+        let reduced_gradient = space.apply_local_transposes(&full_gradient)?;
+        let tolerance =
+            kkt_gradient_tolerance(jacobian, residuals, &full_step, 0.0, step_tolerance)?;
+        let kkt = operator_working_set_kkt(
+            &reduced_gradient,
+            space,
+            &constraints,
+            &working,
+            rank_tolerance,
+            tolerance,
+        )?;
+        if let Some(release) = kkt.release {
+            working[release] = WorkingBound::Free;
+            continue;
+        }
+        let projector = EqualityProjector::new(
+            operator_equality_rows(space, &constraints, &working),
+            rank_tolerance,
+        )?;
+        let projected_gradient = projector.project(&reduced_gradient, step_tolerance)?;
+        let projected_norm = stable_norm(projected_gradient.iter().copied())?;
+        let gradient_norm = stable_norm(reduced_gradient.iter().copied())?;
+        if projected_norm > tolerance.max(64.0 * f64::EPSILON * gradient_norm)
+            || !EqualityProjector::new(space.protected_rows.clone(), rank_tolerance)?
+                .contains(&step, step_tolerance)
+        {
+            return None;
+        }
+        let current_cost = residual_cost(residuals)?;
+        let model_cost = residual_cost(&model_residuals)?;
+        let step_norm = stable_norm(full_step.iter().copied())?;
+        if step_norm > step_tolerance && !objective_decreases(current_cost, model_cost) {
+            return None;
+        }
+        return step.iter().all(|value| value.is_finite()).then_some(step);
+    }
+    None
+}
+
+fn operator_bound_constraints(
+    full_bounds: &[NormalizedStepBound],
+    space: &BlockProtectedSpace,
+) -> Option<Vec<ReducedStepBound>> {
+    let mut constraints = Vec::new();
+    for (column, bound) in full_bounds.iter().copied().enumerate() {
+        if !bound.lower.is_finite() && !bound.upper.is_finite() {
+            continue;
+        }
+        let mut coordinate = DVector::zeros(space.full_dimension);
+        coordinate[column] = 1.0;
+        let normal = space.apply_local_transposes(&coordinate)?;
+        if stable_norm(normal.iter().copied())? == 0.0 {
+            continue;
+        }
+        constraints.push(ReducedStepBound {
+            normal,
+            lower: bound.lower,
+            upper: bound.upper,
+        });
+    }
+    Some(constraints)
+}
+
+fn operator_equality_rows(
+    space: &BlockProtectedSpace,
+    constraints: &[ReducedStepBound],
+    working: &[WorkingBound],
+) -> DMatrix<f64> {
+    let active = working
+        .iter()
+        .enumerate()
+        .filter_map(|(index, status)| (*status != WorkingBound::Free).then_some(index))
+        .collect::<Vec<_>>();
+    DMatrix::from_fn(
+        space.protected_rows.nrows() + active.len(),
+        space.reduced_dimension,
+        |row, column| {
+            if row < space.protected_rows.nrows() {
+                space.protected_rows[(row, column)]
+            } else {
+                constraints[active[row - space.protected_rows.nrows()]].normal[column]
+            }
+        },
+    )
+}
+
+fn operator_bound_is_independent(
+    space: &BlockProtectedSpace,
+    constraints: &[ReducedStepBound],
+    working: &[WorkingBound],
+    candidate: usize,
+    rank_tolerance: f64,
+    step_tolerance: f64,
+) -> Option<bool> {
+    if working.get(candidate)? != &WorkingBound::Free {
+        return Some(false);
+    }
+    let projector = EqualityProjector::new(
+        operator_equality_rows(space, constraints, working),
+        rank_tolerance,
+    )?;
+    let normal = constraints.get(candidate)?.normal.clone();
+    let projected = projector.project(&normal, step_tolerance)?;
+    let normal_norm = stable_norm(normal.iter().copied())?;
+    let projected_norm = stable_norm(projected.iter().copied())?;
+    let dimension = f64::from(u32::try_from(normal.len().max(1)).unwrap_or(u32::MAX));
+    let threshold =
+        (rank_tolerance * normal_norm).max(f64::EPSILON * dimension * normal_norm.max(1.0));
+    Some(projected_norm > threshold)
+}
+
+enum OperatorBoundEvent {
+    None,
+    Event(f64, usize, WorkingBound),
+}
+
+fn first_operator_bound_event(
+    current: &DVector<f64>,
+    candidate: &DVector<f64>,
+    constraints: &[ReducedStepBound],
+    working: &[WorkingBound],
+) -> Option<OperatorBoundEvent> {
+    let mut event: Option<(f64, usize, WorkingBound)> = None;
+    for (index, constraint) in constraints.iter().enumerate() {
+        if working[index] != WorkingBound::Free {
+            continue;
+        }
+        let current_value = constraint.normal.dot(current);
+        let candidate_value = constraint.normal.dot(candidate);
+        let direction = candidate_value - current_value;
+        if !current_value.is_finite() || !candidate_value.is_finite() || !direction.is_finite() {
+            return None;
+        }
+        let fixed = constraint.lower <= constraint.upper && constraint.upper <= constraint.lower;
+        let candidate_event = if candidate_value < constraint.lower && direction < 0.0 {
+            Some((
+                (constraint.lower - current_value) / direction,
+                if fixed {
+                    WorkingBound::Fixed
+                } else {
+                    WorkingBound::Lower
+                },
+            ))
+        } else if candidate_value > constraint.upper && direction > 0.0 {
+            Some((
+                (constraint.upper - current_value) / direction,
+                if fixed {
+                    WorkingBound::Fixed
+                } else {
+                    WorkingBound::Upper
+                },
+            ))
+        } else {
+            None
+        };
+        let Some((alpha, side)) = candidate_event else {
+            continue;
+        };
+        if !alpha.is_finite() || !(0.0..=1.0).contains(&alpha) {
+            return None;
+        }
+        if event
+            .as_ref()
+            .is_none_or(|(current_alpha, current_index, _)| {
+                alpha < *current_alpha
+                    || alpha.total_cmp(current_alpha).is_eq() && index < *current_index
+            })
+        {
+            event = Some((alpha, index, side));
+        }
+    }
+    Some(
+        event.map_or(OperatorBoundEvent::None, |(alpha, index, side)| {
+            OperatorBoundEvent::Event(alpha, index, side)
+        }),
+    )
+}
+
+fn operator_working_set_kkt(
+    gradient: &DVector<f64>,
+    space: &BlockProtectedSpace,
+    constraints: &[ReducedStepBound],
+    working: &[WorkingBound],
+    rank_tolerance: f64,
+    tolerance: f64,
+) -> Option<WorkingSetKkt> {
+    let active = working
+        .iter()
+        .enumerate()
+        .filter_map(|(index, status)| (*status != WorkingBound::Free).then_some(index))
+        .collect::<Vec<_>>();
+    let matrix = operator_equality_rows(space, constraints, working);
+    if matrix.nrows() == 0 {
+        let norm = stable_norm(gradient.iter().copied())?;
+        return (norm <= tolerance.max(64.0 * f64::EPSILON * norm)).then_some(WorkingSetKkt {
+            release: None,
+            multipliers: vec![0.0; constraints.len()],
+        });
+    }
+    let multiplier_values =
+        solve_rank_aware_least_squares(&matrix.transpose(), &(-gradient), rank_tolerance)?;
+    let stationarity = gradient + matrix.transpose() * &multiplier_values;
+    let stationarity_norm = stable_norm(stationarity.iter().copied())?;
+    let gradient_norm = stable_norm(gradient.iter().copied())?;
+    if stationarity_norm > tolerance.max(64.0 * f64::EPSILON * gradient_norm) {
+        return None;
+    }
+    let mut multipliers = vec![0.0; constraints.len()];
+    let offset = space.protected_rows.nrows();
+    for (position, &index) in active.iter().enumerate() {
+        multipliers[index] = multiplier_values[offset + position];
+    }
+    let mut release: Option<(usize, f64)> = None;
+    for &index in &active {
+        let violation = match working[index] {
+            WorkingBound::Lower if multipliers[index] > tolerance => multipliers[index],
+            WorkingBound::Upper if multipliers[index] < -tolerance => -multipliers[index],
+            WorkingBound::Free
+            | WorkingBound::Lower
+            | WorkingBound::Upper
+            | WorkingBound::Fixed => 0.0,
+        };
+        if violation > 0.0
+            && release
+                .as_ref()
+                .is_none_or(|(_, current)| violation > *current)
+        {
+            release = Some((index, violation));
+        }
+    }
+    Some(WorkingSetKkt {
+        release: release.map(|(index, _)| index),
+        multipliers,
+    })
+}
+
+fn operator_active_equalities_satisfied(
+    step: &DVector<f64>,
+    constraints: &[ReducedStepBound],
+    working: &[WorkingBound],
+    tolerance: f64,
+) -> bool {
+    constraints.iter().zip(working).all(|(constraint, status)| {
+        let target = match status {
+            WorkingBound::Lower | WorkingBound::Fixed => Some(constraint.lower),
+            WorkingBound::Upper => Some(constraint.upper),
+            WorkingBound::Free => None,
+        };
+        target.is_none_or(|target| {
+            let value = constraint.normal.dot(step);
+            let scale = stable_norm(constraint.normal.iter().copied())
+                .and_then(|normal| stable_norm(step.iter().copied()).map(|step| normal * step))
+                .unwrap_or(f64::INFINITY);
+            value.is_finite()
+                && (value - target).abs() <= tolerance.max(64.0 * f64::EPSILON * scale)
+        })
+    })
+}
+
+fn priority_group_has_bounds(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    group: &PriorityGroup,
+) -> bool {
+    problem.bounds().any(|(_, bound)| {
+        plan.component_for_variable(bound.variable_id())
+            .is_some_and(|component| group.component_indices.contains(&component))
+    })
+}
+
+fn validate_priority_components(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    group: &PriorityGroup,
+    state: &VariableState,
+    config: SolverConfig,
+) -> bool {
+    group.component_indices.iter().all(|&component_index| {
+        let component = &plan.components[component_index];
+        validate_component(problem, component, state, config).valid
+            && linearized_hard_system(problem, plan, component, state).is_ok()
+    })
+}
+
+fn protected_levels_are_preserved(
+    problem: &Problem,
+    state: &VariableState,
+    protected: &[TemporaryLevel],
+) -> bool {
+    protected.iter().all(|level| {
+        priority_cost_for_residuals(problem, state, &level.residual_ids)
+            .is_ok_and(|cost| objective_within_limit(cost, level.attained_cost))
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn evaluate_coupled_priority_trial(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    group: &PriorityGroup,
+    mut trial_state: VariableState,
+    category: ResidualCategory,
+    protected: &[TemporaryLevel],
+    config: SolverConfig,
+    reprojection_config: SolverConfig,
+) -> Option<(VariableState, f64)> {
+    for &component_index in &group.component_indices {
+        trial_state = iterate_component(
+            problem,
+            plan,
+            &plan.components[component_index],
+            trial_state,
+            reprojection_config,
+        )
+        .state;
+    }
+    if !validate_priority_components(problem, plan, group, &trial_state, config) {
+        return None;
+    }
+    if category == ResidualCategory::Preference {
+        for level in protected {
+            let temporary_group = PriorityGroup {
+                group_index: level.group_index,
+                component_indices: level.component_indices.clone(),
+                residual_ids: level.residual_ids.clone(),
+                protected_temporary_groups: Vec::new(),
+            };
+            let outcome = optimize_priority_group(
+                problem,
+                plan,
+                &temporary_group,
+                trial_state,
+                ResidualCategory::Temporary,
+                &[],
+                config,
+            );
+            if outcome.report.termination != SolveTermination::Converged {
+                return None;
+            }
+            trial_state = outcome.state;
+        }
+        if !protected_levels_are_preserved(problem, &trial_state, protected) {
+            return None;
+        }
+    }
+    let system = linearized_composite_category_system(
+        problem,
+        plan,
+        &group.component_indices,
+        &trial_state,
+        category,
+        &group.residual_ids,
+    )
+    .ok()?;
+    Some((trial_state, residual_cost(&system.residuals)?))
+}
+
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+fn search_coupled_negative_curvature(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    group: &PriorityGroup,
+    state: &VariableState,
+    category: ResidualCategory,
+    protected: &[TemporaryLevel],
+    space: &BlockProtectedSpace,
+    layout: &ActiveLayout,
+    current_cost: f64,
+    config: SolverConfig,
+    reprojection_config: SolverConfig,
+) -> CurvatureSearch {
+    let hessian_step =
+        PRIORITY_HESSIAN_NORMALIZED_STEP.min(config.max_block_normalized_step / 2.0_f64.sqrt());
+    let Ok(current) = linearized_composite_category_system(
+        problem,
+        plan,
+        &group.component_indices,
+        state,
+        category,
+        &group.residual_ids,
+    ) else {
+        return CurvatureSearch::Failed;
+    };
+    let full_gradient = current.jacobian.transpose() * &current.residuals;
+    let Some(reduced_gradient) =
+        space.apply_transpose(&full_gradient, config.normalized_step_tolerance)
+    else {
+        return CurvatureSearch::Failed;
+    };
+    let Some(gradient_tolerance) = kkt_gradient_tolerance(
+        &current.jacobian,
+        &current.residuals,
+        &DVector::zeros(current.jacobian.ncols()),
+        0.0,
+        config.normalized_step_tolerance,
+    ) else {
+        return CurvatureSearch::Failed;
+    };
+    if stable_norm(reduced_gradient.iter().copied()).is_none_or(|norm| norm > gradient_tolerance) {
+        return CurvatureSearch::Incomplete;
+    }
+    if space.reduced_dimension >= PROJECTED_CGLS_MIN_NULLITY {
+        // Do not materialize any group-wide nullspace basis after selecting the
+        // large operator path.
+        return CurvatureSearch::Incomplete;
+    }
+    let Some(protected_nullspace) =
+        numerical_nullspace(&space.protected_rows, config.rank_relative_tolerance)
+    else {
+        return CurvatureSearch::Failed;
+    };
+    let dimension = protected_nullspace.ncols();
+    if dimension == 0 {
+        return CurvatureSearch::NoNegativeCurvature;
+    }
+    if dimension > 16 {
+        // Do not hide a quadratic dense fallback inside a medium operator group.
+        return CurvatureSearch::Incomplete;
+    }
+    let Some(step_bounds) = normalized_step_bounds(problem, state, layout, space.full_dimension)
+    else {
+        return CurvatureSearch::Failed;
+    };
+    let mut full_curvature_basis = DMatrix::zeros(space.full_dimension, dimension);
+    for column in 0..dimension {
+        let Some(full) = space.apply_local_bases(&protected_nullspace.column(column).into_owned())
+        else {
+            return CurvatureSearch::Failed;
+        };
+        full_curvature_basis.column_mut(column).copy_from(&full);
+    }
+    for (coordinate, bound) in step_bounds.iter().enumerate() {
+        let Some(radius) = curvature_stencil_coordinate_radius(
+            full_curvature_basis.row(coordinate).iter().copied(),
+            hessian_step,
+        ) else {
+            return CurvatureSearch::Failed;
+        };
+        if bound.lower > -radius || bound.upper < radius {
+            // Without a complete interior ball in the actual protected search
+            // space, the symmetric stencil cannot certify a one-sided cone.
+            return CurvatureSearch::Incomplete;
+        }
+    }
+    let curvature = multi_scale_curvature(
+        dimension,
+        current_cost,
+        hessian_step,
+        config,
+        CurvatureStencilPolicy::ConsistentFineScales,
+        |delta| {
+            sample_coupled_priority_cost(
+                problem,
+                plan,
+                group,
+                state,
+                category,
+                protected,
+                space,
+                &protected_nullspace,
+                layout,
+                delta,
+                config,
+                reprojection_config,
+            )
+        },
+    );
+    let reduced_direction = match curvature {
+        Some(MultiScaleCurvature::Negative(direction)) => direction,
+        Some(MultiScaleCurvature::NoNegative) => {
+            return CurvatureSearch::NoNegativeCurvature;
+        }
+        Some(MultiScaleCurvature::Inconclusive) => return CurvatureSearch::Incomplete,
+        None => return CurvatureSearch::Failed,
+    };
+    let protected_direction = protected_nullspace * reduced_direction;
+    let Some(mut direction) = space.apply_local_bases(&protected_direction) else {
+        return CurvatureSearch::Failed;
+    };
+    if limit_block_steps(&mut direction, layout, config.max_block_normalized_step).is_none() {
+        return CurvatureSearch::Failed;
+    }
+    let mut best: Option<(VariableState, f64)> = None;
+    for sign in [1.0, -1.0] {
+        let mut alpha = 1.0;
+        for _ in 0..MAX_PRIORITY_LINE_SEARCH_STEPS {
+            let step = &direction * (sign * alpha);
+            let mut trial_state = state.clone();
+            if apply_normalized_step(problem, plan, &mut trial_state, layout, &step).is_ok()
+                && let Some((candidate_state, candidate_cost)) = evaluate_coupled_priority_trial(
+                    problem,
+                    plan,
+                    group,
+                    trial_state,
+                    category,
+                    protected,
+                    config,
+                    reprojection_config,
+                )
+                && objective_decreases(current_cost, candidate_cost)
+                && best
+                    .as_ref()
+                    .is_none_or(|(_, best_cost)| candidate_cost < *best_cost)
+            {
+                best = Some((candidate_state, candidate_cost));
+            }
+            alpha *= 0.5;
+        }
+    }
+    best.map_or(
+        CurvatureSearch::Failed,
+        |(improved_state, improved_cost)| CurvatureSearch::Improved(improved_state, improved_cost),
+    )
+}
+
+fn curvature_stencil_coordinate_radius(
+    coefficients: impl Iterator<Item = f64>,
+    step: f64,
+) -> Option<f64> {
+    if !step.is_finite() || step < 0.0 {
+        return None;
+    }
+    let mut largest = 0.0_f64;
+    let mut second_largest = 0.0_f64;
+    for coefficient in coefficients {
+        if !coefficient.is_finite() {
+            return None;
+        }
+        let magnitude = coefficient.abs();
+        if magnitude > largest {
+            second_largest = largest;
+            largest = magnitude;
+        } else if magnitude > second_largest {
+            second_largest = magnitude;
+        }
+    }
+    let radius = step * (largest + second_largest);
+    radius.is_finite().then_some(radius)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn sample_coupled_priority_cost(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    group: &PriorityGroup,
+    state: &VariableState,
+    category: ResidualCategory,
+    protected: &[TemporaryLevel],
+    space: &BlockProtectedSpace,
+    protected_nullspace: &DMatrix<f64>,
+    layout: &ActiveLayout,
+    delta: &DVector<f64>,
+    config: SolverConfig,
+    reprojection_config: SolverConfig,
+) -> Option<f64> {
+    let reduced = protected_nullspace * delta;
+    let mut step = space.apply_local_bases(&reduced)?;
+    limit_block_steps(&mut step, layout, config.max_block_normalized_step)?;
+    step_is_within_bounds(problem, state, layout, &mut step)?;
+    let mut trial_state = state.clone();
+    apply_normalized_step(problem, plan, &mut trial_state, layout, &step).ok()?;
+    evaluate_coupled_priority_trial(
+        problem,
+        plan,
+        group,
+        trial_state,
+        category,
+        protected,
+        config,
+        reprojection_config,
+    )
+    .map(|(_, cost)| cost)
 }
 
 #[derive(Debug)]
 struct PriorityComponentOutcome {
     state: VariableState,
     report: PrioritySolveReport,
+}
+
+fn acceptable_secondary_outcome(mut outcome: PriorityComponentOutcome) -> PriorityComponentOutcome {
+    debug_assert_eq!(outcome.report.termination, SolveTermination::Converged);
+    outcome.report.status = SecondaryStatus::Acceptable;
+    outcome
 }
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
@@ -1949,7 +4072,7 @@ fn optimize_component_priority(
                 cost = curvature_cost;
             }
             CurvatureSearch::NoNegativeCurvature => {
-                return priority_component_report(
+                return acceptable_secondary_outcome(priority_component_report(
                     state,
                     component.index,
                     category,
@@ -1958,7 +4081,7 @@ fn optimize_component_priority(
                     Some(cost),
                     attained_temporary_cost,
                     SolveTermination::Converged,
-                );
+                ));
             }
             CurvatureSearch::Incomplete | CurvatureSearch::Failed => {
                 return priority_component_report(
@@ -2023,7 +4146,13 @@ fn priority_component_report(
     PriorityComponentOutcome {
         state,
         report: PrioritySolveReport {
+            group_index: component_index,
             component_index: Some(component_index),
+            component_indices: vec![component_index],
+            scope: PrioritySolveScope::Movable,
+            backend: Some(PrioritySolveBackend::DenseNullspace),
+            largest_explicit_nullspace_block_rows: 0,
+            protected_temporary: Vec::new(),
             category,
             iterations,
             initial_cost,
@@ -2038,8 +4167,10 @@ fn priority_component_report(
 fn evaluate_nonmoving_priority(
     problem: &Problem,
     state: &VariableState,
+    group_index: usize,
     category: ResidualCategory,
     residual_ids: &[ResidualId],
+    scope: PrioritySolveScope,
     required_termination: SolveTermination,
 ) -> PriorityReportRecord {
     let (cost, evaluation_termination) =
@@ -2049,7 +4180,13 @@ fn evaluate_nonmoving_priority(
         };
     PriorityReportRecord {
         report: PrioritySolveReport {
+            group_index,
             component_index: None,
+            component_indices: Vec::new(),
+            scope,
+            backend: None,
+            largest_explicit_nullspace_block_rows: 0,
+            protected_temporary: Vec::new(),
             category,
             iterations: 0,
             initial_cost: cost,
@@ -2068,25 +4205,51 @@ fn evaluate_nonmoving_priority(
             },
         },
         residual_ids: residual_ids.to_vec(),
-        reused: false,
     }
 }
 
 fn refresh_priority_final_costs(
     problem: &Problem,
     state: &VariableState,
+    temporary_groups: &[PriorityGroup],
     reports: &mut [PriorityReportRecord],
 ) {
     for record in reports {
-        if record.reused {
-            continue;
-        }
         match priority_cost_for_residuals(problem, state, &record.residual_ids) {
             Ok(cost) => record.report.final_cost = Some(cost),
             Err(error) => {
                 record.report.final_cost = None;
                 record.report.termination =
                     worse_termination(record.report.termination, error_termination(&error));
+                record.report.status = SecondaryStatus::EvaluationFailure;
+            }
+        }
+        for protection in &mut record.report.protected_temporary {
+            let result = temporary_groups
+                .get(protection.group_index)
+                .ok_or(CoreError::DimensionMismatch {
+                    context: "protected Temporary group",
+                    expected: temporary_groups.len(),
+                    actual: protection.group_index,
+                })
+                .and_then(|group| priority_cost_for_residuals(problem, state, &group.residual_ids));
+            if let Ok(cost) = result {
+                protection.final_cost = Some(cost);
+                protection.preserved = objective_within_limit(cost, protection.attained_cost);
+                if !protection.preserved {
+                    record.report.termination = worse_termination(
+                        record.report.termination,
+                        SolveTermination::NumericalFailure,
+                    );
+                    record.report.status = SecondaryStatus::EvaluationFailure;
+                }
+            } else {
+                protection.final_cost = None;
+                protection.preserved = false;
+                record.report.termination = worse_termination(
+                    record.report.termination,
+                    SolveTermination::NumericalFailure,
+                );
                 record.report.status = SecondaryStatus::EvaluationFailure;
             }
         }
@@ -2098,8 +4261,16 @@ fn priority_cost_for_residuals(
     state: &VariableState,
     residual_ids: &[ResidualId],
 ) -> Result<f64, CoreError> {
-    let residuals =
-        DVector::from_vec(problem.normalized_values_for_residuals(state, residual_ids)?);
+    // A finite value alone is not an acceptable secondary result: validate the
+    // derivative at the same returned state before assigning a success-like status.
+    let linearization = problem.linearize_blocks_for_state(state, Some(residual_ids))?;
+    let residuals = DVector::from_iterator(
+        linearization.scalar_rows,
+        linearization
+            .blocks
+            .iter()
+            .flat_map(|block| block.normalized_residuals.iter().copied()),
+    );
     residual_cost(&residuals).ok_or(CoreError::NonFiniteValue {
         context: "priority residual cost",
         index: 0,
@@ -2131,6 +4302,15 @@ fn objective_within_limit(candidate: f64, limit: f64) -> bool {
     candidate <= limit
         || candidate - limit
             <= objective_roundoff_tolerance(candidate, limit).max(PRIORITY_ZERO_COST_ROUNDOFF)
+}
+
+fn priority_cost_is_numerically_zero(
+    cost: f64,
+    residual_rows: usize,
+    config: SolverConfig,
+) -> bool {
+    let rows = f64::from(u32::try_from(residual_rows.max(1)).unwrap_or(u32::MAX));
+    cost <= 0.5 * config.normalized_step_tolerance * config.normalized_step_tolerance * rows
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2210,6 +4390,151 @@ enum CurvatureSearch {
     NoNegativeCurvature,
     Incomplete,
     Failed,
+}
+
+enum MultiScaleCurvature {
+    Negative(DVector<f64>),
+    NoNegative,
+    Inconclusive,
+}
+
+#[derive(Clone, Copy)]
+enum CurvatureStencilPolicy {
+    ConsistentFineScales,
+    SingletonAnyResolvedScale,
+}
+
+struct CurvatureStencil {
+    minimum: f64,
+    tolerance: f64,
+    minimum_direction: DVector<f64>,
+}
+
+#[allow(clippy::too_many_lines)]
+fn multi_scale_curvature(
+    dimension: usize,
+    current_cost: f64,
+    base_step: f64,
+    config: SolverConfig,
+    policy: CurvatureStencilPolicy,
+    mut sample_cost: impl FnMut(&DVector<f64>) -> Option<f64>,
+) -> Option<MultiScaleCurvature> {
+    if dimension == 0 {
+        return Some(MultiScaleCurvature::NoNegative);
+    }
+    if !base_step.is_finite() || base_step <= 0.0 {
+        return None;
+    }
+    let mut stencils = Vec::with_capacity(3);
+    for level in 0..3 {
+        let step = base_step * 0.5_f64.powi(level);
+        let mut hessian = DMatrix::zeros(dimension, dimension);
+        let mut sample_magnitude = current_cost.abs();
+        for axis in 0..dimension {
+            let mut delta = DVector::zeros(dimension);
+            delta[axis] = step;
+            let positive = sample_cost(&delta)?;
+            delta[axis] = -step;
+            let negative = sample_cost(&delta)?;
+            sample_magnitude = sample_magnitude.max(positive.abs()).max(negative.abs());
+            let diagonal = (positive - 2.0 * current_cost + negative) / (step * step);
+            if !diagonal.is_finite() {
+                return None;
+            }
+            hessian[(axis, axis)] = diagonal;
+        }
+        for first in 0..dimension {
+            for second in (first + 1)..dimension {
+                let mut costs = [0.0; 4];
+                for (index, (first_sign, second_sign)) in
+                    [(1.0, 1.0), (1.0, -1.0), (-1.0, 1.0), (-1.0, -1.0)]
+                        .into_iter()
+                        .enumerate()
+                {
+                    let mut delta = DVector::zeros(dimension);
+                    delta[first] = first_sign * step;
+                    delta[second] = second_sign * step;
+                    let cost = sample_cost(&delta)?;
+                    costs[index] = cost;
+                    sample_magnitude = sample_magnitude.max(cost.abs());
+                }
+                let mixed = (costs[0] - costs[1] - costs[2] + costs[3]) / (4.0 * step * step);
+                if !mixed.is_finite() {
+                    return None;
+                }
+                hessian[(first, second)] = mixed;
+                hessian[(second, first)] = mixed;
+            }
+        }
+        let eigen = hessian.symmetric_eigen();
+        if eigen.eigenvalues.iter().any(|value| !value.is_finite())
+            || eigen.eigenvectors.iter().any(|value| !value.is_finite())
+        {
+            return None;
+        }
+        let (minimum_index, &minimum) = eigen
+            .eigenvalues
+            .iter()
+            .enumerate()
+            .min_by(|(_, first), (_, second)| first.total_cmp(second))?;
+        let largest = eigen
+            .eigenvalues
+            .iter()
+            .map(|value| value.abs())
+            .fold(0.0_f64, f64::max);
+        let relative_tolerance = config
+            .rank_relative_tolerance
+            .max((PRIORITY_COST_RESOLUTION_FACTOR * f64::EPSILON).sqrt());
+        let roundoff =
+            4.0 * PRIORITY_COST_RESOLUTION_FACTOR * f64::EPSILON * sample_magnitude / (step * step);
+        let tolerance = (largest * relative_tolerance).max(roundoff);
+        if !tolerance.is_finite() {
+            return None;
+        }
+        stencils.push(CurvatureStencil {
+            minimum,
+            tolerance,
+            minimum_direction: eigen.eigenvectors.column(minimum_index).into_owned(),
+        });
+    }
+
+    let previous = &stencils[1];
+    let finest = &stencils[2];
+    if matches!(policy, CurvatureStencilPolicy::SingletonAnyResolvedScale)
+        && let Some(stencil) = stencils
+            .iter()
+            .find(|stencil| stencil.minimum < -stencil.tolerance)
+    {
+        // Preserve the established singleton behavior: search every resolved
+        // negative-curvature direction, starting at the original coarse scale.
+        // Finer scales still prevent a cancellation at the coarse scale from
+        // being certified as nonnegative.
+        return Some(MultiScaleCurvature::Negative(
+            stencil.minimum_direction.clone(),
+        ));
+    }
+    if previous.minimum < -previous.tolerance && finest.minimum < -finest.tolerance {
+        let alignment = previous
+            .minimum_direction
+            .dot(&finest.minimum_direction)
+            .abs();
+        if alignment >= 0.75 {
+            return Some(MultiScaleCurvature::Negative(
+                finest.minimum_direction.clone(),
+            ));
+        }
+        return Some(MultiScaleCurvature::Inconclusive);
+    }
+    if previous.minimum < -previous.tolerance || finest.minimum < -finest.tolerance {
+        return Some(MultiScaleCurvature::Inconclusive);
+    }
+
+    // Requiring the finite-difference Hessian magnitudes themselves to agree
+    // rejects ordinary nonlinear minima whose curvature changes over the
+    // stencil interval. The safety condition is instead that every scale is
+    // free of significant negative curvature; cancellation at one scale is
+    // exposed by either finer scale, as covered by the masked-maximum tests.
+    Some(MultiScaleCurvature::NoNegative)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2317,64 +4642,68 @@ fn search_one_sided_curvature(
 
     let mut most_negative: Option<(f64, f64)> = None;
     for sign in feasible_signs {
-        let first_delta = DVector::from_element(1, sign * hessian_step);
-        let Some(first_cost) = sample_reduced_priority_cost(
-            problem,
-            plan,
-            component,
-            state,
-            category,
-            residual_ids,
-            protected_temporary_ids,
-            attained_temporary_cost,
-            span,
-            layout,
-            &first_delta,
-            config,
-            reprojection_config,
-        ) else {
-            return CurvatureSearch::Failed;
-        };
-        let second_delta = DVector::from_element(1, sign * 2.0 * hessian_step);
-        let Some(second_cost) = sample_reduced_priority_cost(
-            problem,
-            plan,
-            component,
-            state,
-            category,
-            residual_ids,
-            protected_temporary_ids,
-            attained_temporary_cost,
-            span,
-            layout,
-            &second_delta,
-            config,
-            reprojection_config,
-        ) else {
-            return CurvatureSearch::Failed;
-        };
-        let curvature =
-            (second_cost - 2.0 * first_cost + current_cost) / (hessian_step * hessian_step);
-        let sample_magnitude = current_cost
-            .abs()
-            .max(first_cost.abs())
-            .max(second_cost.abs());
-        let relative_tolerance = config
-            .rank_relative_tolerance
-            .max((PRIORITY_COST_RESOLUTION_FACTOR * f64::EPSILON).sqrt());
-        let stencil_roundoff =
-            4.0 * PRIORITY_COST_RESOLUTION_FACTOR * f64::EPSILON * sample_magnitude
-                / (hessian_step * hessian_step);
-        let curvature_tolerance = (curvature.abs() * relative_tolerance).max(stencil_roundoff);
-        if !curvature.is_finite() || !curvature_tolerance.is_finite() {
-            return CurvatureSearch::Failed;
+        let mut evidence = Vec::with_capacity(3);
+        for level in 0..3 {
+            let step = hessian_step * 0.5_f64.powi(level);
+            let first_delta = DVector::from_element(1, sign * step);
+            let Some(first_cost) = sample_reduced_priority_cost(
+                problem,
+                plan,
+                component,
+                state,
+                category,
+                residual_ids,
+                protected_temporary_ids,
+                attained_temporary_cost,
+                span,
+                layout,
+                &first_delta,
+                config,
+                reprojection_config,
+            ) else {
+                return CurvatureSearch::Failed;
+            };
+            let second_delta = DVector::from_element(1, sign * 2.0 * step);
+            let Some(second_cost) = sample_reduced_priority_cost(
+                problem,
+                plan,
+                component,
+                state,
+                category,
+                residual_ids,
+                protected_temporary_ids,
+                attained_temporary_cost,
+                span,
+                layout,
+                &second_delta,
+                config,
+                reprojection_config,
+            ) else {
+                return CurvatureSearch::Failed;
+            };
+            let curvature = (second_cost - 2.0 * first_cost + current_cost) / (step * step);
+            let sample_magnitude = current_cost
+                .abs()
+                .max(first_cost.abs())
+                .max(second_cost.abs());
+            let relative_tolerance = config
+                .rank_relative_tolerance
+                .max((PRIORITY_COST_RESOLUTION_FACTOR * f64::EPSILON).sqrt());
+            let roundoff = 4.0 * PRIORITY_COST_RESOLUTION_FACTOR * f64::EPSILON * sample_magnitude
+                / (step * step);
+            let tolerance = (curvature.abs() * relative_tolerance).max(roundoff);
+            if !curvature.is_finite() || !tolerance.is_finite() {
+                return CurvatureSearch::Failed;
+            }
+            evidence.push((curvature, tolerance));
         }
-        if curvature < -curvature_tolerance
+        if evidence[1].0 < -evidence[1].1
+            && evidence[2].0 < -evidence[2].1
             && most_negative
                 .as_ref()
-                .is_none_or(|(current, _)| curvature < *current)
+                .is_none_or(|(current, _)| evidence[2].0 < *current)
         {
-            most_negative = Some((curvature, sign));
+            most_negative = Some((evidence[2].0, sign));
         }
     }
     let Some((_, sign)) = most_negative else {
@@ -2452,131 +4781,38 @@ fn search_negative_curvature(
     }
     let hessian_step =
         PRIORITY_HESSIAN_NORMALIZED_STEP.min(config.max_block_normalized_step / 2.0_f64.sqrt());
-    if !hessian_step.is_finite() || hessian_step <= 0.0 {
-        return CurvatureSearch::Failed;
-    }
-    let mut hessian = DMatrix::zeros(dimension, dimension);
-    let mut sample_cost_magnitude = current_cost.abs();
-    for axis in 0..dimension {
-        let mut delta = DVector::zeros(dimension);
-        delta[axis] = hessian_step;
-        let Some(positive_cost) = sample_reduced_priority_cost(
-            problem,
-            plan,
-            component,
-            state,
-            category,
-            residual_ids,
-            protected_temporary_ids,
-            attained_temporary_cost,
-            nullspace,
-            layout,
-            &delta,
-            config,
-            reprojection_config,
-        ) else {
-            return CurvatureSearch::Failed;
-        };
-        sample_cost_magnitude = sample_cost_magnitude.max(positive_cost.abs());
-        delta[axis] = -hessian_step;
-        let Some(negative_cost) = sample_reduced_priority_cost(
-            problem,
-            plan,
-            component,
-            state,
-            category,
-            residual_ids,
-            protected_temporary_ids,
-            attained_temporary_cost,
-            nullspace,
-            layout,
-            &delta,
-            config,
-            reprojection_config,
-        ) else {
-            return CurvatureSearch::Failed;
-        };
-        sample_cost_magnitude = sample_cost_magnitude.max(negative_cost.abs());
-        let diagonal =
-            (positive_cost - 2.0 * current_cost + negative_cost) / (hessian_step * hessian_step);
-        if !diagonal.is_finite() {
-            return CurvatureSearch::Failed;
+    let curvature = multi_scale_curvature(
+        dimension,
+        current_cost,
+        hessian_step,
+        config,
+        CurvatureStencilPolicy::SingletonAnyResolvedScale,
+        |delta| {
+            sample_reduced_priority_cost(
+                problem,
+                plan,
+                component,
+                state,
+                category,
+                residual_ids,
+                protected_temporary_ids,
+                attained_temporary_cost,
+                nullspace,
+                layout,
+                delta,
+                config,
+                reprojection_config,
+            )
+        },
+    );
+    let reduced_direction = match curvature {
+        Some(MultiScaleCurvature::Negative(direction)) => direction,
+        Some(MultiScaleCurvature::NoNegative) => {
+            return CurvatureSearch::NoNegativeCurvature;
         }
-        hessian[(axis, axis)] = diagonal;
-    }
-
-    for first in 0..dimension {
-        for second in (first + 1)..dimension {
-            let mut costs = [0.0; 4];
-            for (sample, (first_sign, second_sign)) in
-                [(1.0, 1.0), (1.0, -1.0), (-1.0, 1.0), (-1.0, -1.0)]
-                    .into_iter()
-                    .enumerate()
-            {
-                let mut delta = DVector::zeros(dimension);
-                delta[first] = first_sign * hessian_step;
-                delta[second] = second_sign * hessian_step;
-                let Some(cost) = sample_reduced_priority_cost(
-                    problem,
-                    plan,
-                    component,
-                    state,
-                    category,
-                    residual_ids,
-                    protected_temporary_ids,
-                    attained_temporary_cost,
-                    nullspace,
-                    layout,
-                    &delta,
-                    config,
-                    reprojection_config,
-                ) else {
-                    return CurvatureSearch::Failed;
-                };
-                costs[sample] = cost;
-                sample_cost_magnitude = sample_cost_magnitude.max(cost.abs());
-            }
-            let mixed =
-                (costs[0] - costs[1] - costs[2] + costs[3]) / (4.0 * hessian_step * hessian_step);
-            if !mixed.is_finite() {
-                return CurvatureSearch::Failed;
-            }
-            hessian[(first, second)] = mixed;
-            hessian[(second, first)] = mixed;
-        }
-    }
-
-    let eigen = hessian.symmetric_eigen();
-    if eigen.eigenvalues.iter().any(|value| !value.is_finite())
-        || eigen.eigenvectors.iter().any(|value| !value.is_finite())
-    {
-        return CurvatureSearch::Failed;
-    }
-    let Some((minimum_index, &minimum)) = eigen
-        .eigenvalues
-        .iter()
-        .enumerate()
-        .min_by(|(_, first), (_, second)| first.total_cmp(second))
-    else {
-        return CurvatureSearch::NoNegativeCurvature;
+        Some(MultiScaleCurvature::Inconclusive) => return CurvatureSearch::Incomplete,
+        None => return CurvatureSearch::Failed,
     };
-    let largest = eigen
-        .eigenvalues
-        .iter()
-        .map(|value| value.abs())
-        .fold(0.0_f64, f64::max);
-    let relative_tolerance = config
-        .rank_relative_tolerance
-        .max((PRIORITY_COST_RESOLUTION_FACTOR * f64::EPSILON).sqrt());
-    let stencil_roundoff =
-        4.0 * PRIORITY_COST_RESOLUTION_FACTOR * f64::EPSILON * sample_cost_magnitude
-            / (hessian_step * hessian_step);
-    let curvature_tolerance = (largest * relative_tolerance).max(stencil_roundoff);
-    if !curvature_tolerance.is_finite() || minimum >= -curvature_tolerance {
-        return CurvatureSearch::NoNegativeCurvature;
-    }
-
-    let reduced_direction = eigen.eigenvectors.column(minimum_index).into_owned();
     let mut direction = nullspace * reduced_direction;
     if limit_block_steps(&mut direction, layout, config.max_block_normalized_step).is_none() {
         return CurvatureSearch::Failed;
@@ -2673,9 +4909,21 @@ fn linearized_hard_system(
 ) -> Result<HardSystem, CoreError> {
     let linearization =
         problem.linearize_component(plan, component, state, &component.active_residual_ids)?;
-    Ok(component_dense_system(
-        linearization.project_dense(plan, ResidualCategory::Hard)?,
-    ))
+    let dense = linearization.project_dense(plan, ResidualCategory::Hard)?;
+    let indexed = linearization.project_indexed(plan, ResidualCategory::Hard)?;
+    if !indexed.numerically_matches(&dense)
+        || indexed.sparsity_signature
+            != plan.structural.component_summaries[component.index].sparsity_signature
+    {
+        return Err(CoreError::DimensionMismatch {
+            context: "component indexed/dense hard projection",
+            expected: 1,
+            actual: 0,
+        });
+    }
+    let mut hard = component_dense_system(dense);
+    hard.indexed = Some(indexed);
+    Ok(hard)
 }
 
 fn linearized_category_system(
@@ -2695,6 +4943,23 @@ fn linearized_category_system(
             actual: component_index,
         })?;
     let linearization = problem.linearize_component(plan, component, state, residual_ids)?;
+    Ok(component_dense_system(
+        linearization.project_dense(plan, category)?,
+    ))
+}
+
+fn linearized_composite_category_system(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    component_indices: &[usize],
+    state: &VariableState,
+    category: ResidualCategory,
+    residual_ids: &[ResidualId],
+) -> Result<HardSystem, CoreError> {
+    let linearization = ComponentLinearization {
+        layout: composite_tangent_layout(plan, component_indices)?,
+        numeric: problem.linearize_blocks_for_state(state, Some(residual_ids))?,
+    };
     Ok(component_dense_system(
         linearization.project_dense(plan, category)?,
     ))
@@ -3082,6 +5347,7 @@ struct HardSystem {
     residuals: DVector<f64>,
     jacobian: DMatrix<f64>,
     rows: Vec<ResidualRowRef>,
+    indexed: Option<ComponentIndexedSystem>,
 }
 
 fn component_dense_system(system: ComponentDenseSystem) -> HardSystem {
@@ -3097,6 +5363,7 @@ fn component_dense_system(system: ComponentDenseSystem) -> HardSystem {
                 source_id: row.source_id,
             })
             .collect(),
+        indexed: None,
     }
 }
 
@@ -3217,9 +5484,17 @@ fn component_numerics(
         residuals: DVector::zeros(0),
         jacobian: DMatrix::zeros(0, summary.active_tangent_dimensions),
         rows: Vec::new(),
+        indexed: None,
     };
-    let hard = match linearized_hard_system(problem, plan, component, state) {
-        Ok(hard) => hard,
+    let projections = (|| {
+        let linearization =
+            problem.linearize_component(plan, component, state, &component.active_residual_ids)?;
+        let dense = linearization.project_dense(plan, ResidualCategory::Hard)?;
+        let indexed = linearization.project_indexed(plan, ResidualCategory::Hard)?;
+        Ok::<_, CoreError>((dense, indexed))
+    })();
+    let (dense, indexed) = match projections {
+        Ok(projections) => projections,
         Err(error) => {
             return ComponentNumerics {
                 termination: error_termination(&error),
@@ -3235,6 +5510,23 @@ fn component_numerics(
             };
         }
     };
+    if indexed.sparsity_signature != summary.sparsity_signature
+        || !indexed.numerically_matches(&dense)
+    {
+        return ComponentNumerics {
+            termination: SolveTermination::NumericalFailure,
+            rank_is_valid: false,
+            is_singular: false,
+            diagnostics: empty_rank_diagnostics(
+                summary.active_hard_rows,
+                summary.active_tangent_dimensions,
+                config.rank_relative_tolerance,
+            ),
+            singular_rows: Vec::new(),
+            hard: empty(),
+        };
+    }
+    let hard = component_dense_system(dense);
     let Some(rank) = rank_diagnostics(&hard.jacobian, config.rank_relative_tolerance) else {
         return ComponentNumerics {
             termination: SolveTermination::NumericalFailure,
@@ -3682,27 +5974,6 @@ fn validate_returned_rows(
     }
 }
 
-fn merge_reused_audit(mut retained: AuditSnapshot, fresh: AuditSnapshot) -> AuditSnapshot {
-    for fresh_source in fresh.sources {
-        if let Some(retained_source) = retained
-            .sources
-            .iter_mut()
-            .find(|source| source.source_id == fresh_source.source_id)
-        {
-            retained_source.source_label = fresh_source.source_label;
-            for fresh_row in fresh_source.rows {
-                if let Some(retained_row) = retained_source.rows.iter_mut().find(|row| {
-                    row.residual_id == fresh_row.residual_id
-                        && row.row_in_block == fresh_row.row_in_block
-                }) {
-                    *retained_row = fresh_row;
-                }
-            }
-        }
-    }
-    retained
-}
-
 fn annotate_evaluation_failures(audit: &mut AuditSnapshot, failures: &[RowEvaluationFailure]) {
     for source in &mut audit.sources {
         for row in &mut source.rows {
@@ -3882,14 +6153,19 @@ fn lm_step(
     solve_dense_least_squares(&augmented, &right_hand_side).map(|(solution, _)| solution)
 }
 
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn bounded_lm_step(
     problem: &Problem,
     state: &VariableState,
     layout: &ActiveLayout,
     jacobian: &DMatrix<f64>,
     residuals: &DVector<f64>,
+    indexed: Option<&ComponentIndexedSystem>,
     damping: f64,
     normalized_step_tolerance: f64,
+    rank_relative_tolerance: f64,
+    policy: LinearSolveBackendPolicy,
+    backend: &mut BackendEvidence,
 ) -> Option<DVector<f64>> {
     let bounds = normalized_step_bounds(problem, state, layout, jacobian.ncols())?;
     let mut step = DVector::zeros(jacobian.ncols());
@@ -3924,14 +6200,28 @@ fn bounded_lm_step(
             .collect::<Vec<_>>();
         let mut candidate = step.clone();
         if !free.is_empty() {
-            let reduced = DMatrix::from_fn(jacobian.nrows(), free.len(), |row, column| {
-                jacobian[(row, free[column])]
-            });
             let active_model = jacobian * &step + residuals;
-            let free_contribution = &reduced
-                * DVector::from_iterator(free.len(), free.iter().map(|&column| step[column]));
+            let free_contribution = DVector::from_iterator(
+                jacobian.nrows(),
+                (0..jacobian.nrows()).map(|row| {
+                    free.iter()
+                        .map(|&column| jacobian[(row, column)] * step[column])
+                        .sum::<f64>()
+                }),
+            );
             let effective_residual = active_model - free_contribution;
-            let reduced_step = lm_step(&reduced, &effective_residual, damping)?;
+            let reduced_step = lm_step_with_backend(
+                problem,
+                indexed,
+                jacobian,
+                &effective_residual,
+                &free,
+                damping,
+                normalized_step_tolerance,
+                rank_relative_tolerance,
+                policy,
+                backend,
+            )?;
             for (reduced_column, &column) in free.iter().enumerate() {
                 candidate[column] = reduced_step[reduced_column];
             }
@@ -3994,6 +6284,87 @@ fn bounded_lm_step(
         return step.iter().all(|value| value.is_finite()).then_some(step);
     }
     None
+}
+
+#[allow(clippy::too_many_arguments)]
+fn lm_step_with_backend(
+    problem: &Problem,
+    indexed: Option<&ComponentIndexedSystem>,
+    jacobian: &DMatrix<f64>,
+    effective_residual: &DVector<f64>,
+    free_columns: &[usize],
+    damping: f64,
+    normalized_step_tolerance: f64,
+    rank_relative_tolerance: f64,
+    policy: LinearSolveBackendPolicy,
+    backend: &mut BackendEvidence,
+) -> Option<DVector<f64>> {
+    let reduced = DMatrix::from_fn(jacobian.nrows(), free_columns.len(), |row, column| {
+        jacobian[(row, free_columns[column])]
+    });
+    let sparse_requested = match policy {
+        LinearSolveBackendPolicy::DenseOnly => false,
+        LinearSolveBackendPolicy::SparsePreferred => true,
+        LinearSolveBackendPolicy::Auto => indexed.is_some_and(|indexed| {
+            if !auto_prefers_sparse(indexed, free_columns) {
+                return false;
+            }
+            let rank = rank_diagnostics(&reduced, rank_relative_tolerance);
+            if rank.is_some_and(|rank| {
+                rank.rank == reduced.nrows().min(reduced.ncols()) && !rank.near_singular
+            }) {
+                true
+            } else {
+                backend.record_fallback(SparseFallbackReason::RankAmbiguous);
+                false
+            }
+        }),
+    };
+    if sparse_requested {
+        let sparse = indexed
+            .ok_or(SparseFallbackReason::ConstructionFailure)
+            .and_then(|indexed| {
+                solve_damped_least_squares(
+                    indexed,
+                    effective_residual,
+                    free_columns,
+                    damping,
+                    normalized_step_tolerance,
+                    &mut problem.sparse_symbolic_cache.borrow_mut(),
+                )
+                .map_err(|failure| failure.reason)
+            });
+        match sparse {
+            Ok(outcome) => {
+                backend.record_symbolic_reuse(outcome.symbolic_reused);
+                backend.record_backend(LinearSolveBackend::SparseQr);
+                return Some(outcome.step);
+            }
+            Err(reason) => backend.record_fallback(reason),
+        }
+    }
+
+    let step = lm_step(&reduced, effective_residual, damping)?;
+    backend.record_backend(LinearSolveBackend::Dense);
+    Some(step)
+}
+
+fn auto_prefers_sparse(system: &ComponentIndexedSystem, free_columns: &[usize]) -> bool {
+    if system.row_count < AUTO_SPARSE_MIN_ROWS || free_columns.len() < AUTO_SPARSE_MIN_COLUMNS {
+        return false;
+    }
+    let Some(nnz) = restricted_structural_nnz(system, free_columns) else {
+        return false;
+    };
+    let Some(capacity) = system.row_count.checked_mul(free_columns.len()) else {
+        return true;
+    };
+    if nnz < AUTO_SPARSE_MIN_NNZ || capacity == 0 {
+        return false;
+    }
+    // AUTO_SPARSE_MAX_DENSITY is exactly 1/128; integer comparison avoids
+    // architecture-dependent precision loss for large dimensions.
+    nnz <= capacity / AUTO_SPARSE_MAX_DENSITY_DENOMINATOR
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -4570,6 +6941,47 @@ fn step_is_within_bounds(
         .then_some(())
 }
 
+fn operator_step_is_within_bounds(
+    problem: &Problem,
+    state: &VariableState,
+    layout: &ActiveLayout,
+    step: &DVector<f64>,
+) -> Option<()> {
+    let bounds = normalized_step_bounds(problem, state, layout, step.len())?;
+    operator_full_step_satisfies_bounds(step, &bounds).then_some(())
+}
+
+fn operator_full_step_satisfies_bounds(
+    step: &DVector<f64>,
+    bounds: &[NormalizedStepBound],
+) -> bool {
+    step.len() == bounds.len()
+        && step.iter().all(|value| value.is_finite())
+        && step
+            .iter()
+            .zip(bounds)
+            .all(|(value, bound)| *value >= bound.lower && *value <= bound.upper)
+}
+
+fn limit_operator_step(
+    reduced_step: &mut DVector<f64>,
+    full_step: &mut DVector<f64>,
+    layout: &ActiveLayout,
+    limit: f64,
+) -> Option<()> {
+    let maximum = maximum_block_step(full_step, layout)?;
+    if maximum > limit {
+        let scale = limit / maximum;
+        reduced_step.scale_mut(scale);
+        full_step.scale_mut(scale);
+    }
+    reduced_step
+        .iter()
+        .chain(full_step.iter())
+        .all(|value| value.is_finite())
+        .then_some(())
+}
+
 fn limit_step_to_bound_events(
     problem: &Problem,
     state: &VariableState,
@@ -4800,6 +7212,29 @@ fn solve_dense_least_squares(
         normal_residual_norm = candidate_norm;
     }
     Some((solution, LinearSolveMethod::Svd))
+}
+
+fn solve_rank_aware_least_squares(
+    matrix: &DMatrix<f64>,
+    right_hand_side: &DVector<f64>,
+    relative_tolerance: f64,
+) -> Option<DVector<f64>> {
+    if right_hand_side.len() != matrix.nrows() {
+        return None;
+    }
+    if matrix.ncols() == 0 {
+        return Some(DVector::zeros(0));
+    }
+    let diagnostics = rank_diagnostics(matrix, relative_tolerance)?;
+    let solution = matrix
+        .clone()
+        .svd(true, true)
+        .solve(right_hand_side, diagnostics.threshold)
+        .ok()?;
+    solution
+        .iter()
+        .all(|value| value.is_finite())
+        .then_some(solution)
 }
 
 fn limit_block_steps(step: &mut DVector<f64>, layout: &ActiveLayout, limit: f64) -> Option<f64> {
@@ -5167,10 +7602,179 @@ fn push_unique<T: Copy + PartialEq>(values: &mut Vec<T>, value: T) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::linearization::IndexedJacobianEntry;
 
     #[test]
     fn defaults_are_strict_but_finite() {
         SolverConfig::default().validate().unwrap();
+    }
+
+    #[test]
+    fn singleton_curvature_preserves_resolved_coarse_descent_when_fine_scale_is_flat() {
+        let sample = |delta: &DVector<f64>| {
+            let value = delta[0];
+            Some(0.5 + 1.0e-8 * value * value - 0.1 * value.powi(4))
+        };
+        let singleton = multi_scale_curvature(
+            1,
+            0.5,
+            1.0e-3,
+            SolverConfig::default(),
+            CurvatureStencilPolicy::SingletonAnyResolvedScale,
+            sample,
+        );
+        assert!(matches!(singleton, Some(MultiScaleCurvature::Negative(_))));
+
+        let coupled = multi_scale_curvature(
+            1,
+            0.5,
+            1.0e-3,
+            SolverConfig::default(),
+            CurvatureStencilPolicy::ConsistentFineScales,
+            sample,
+        );
+        assert!(matches!(coupled, Some(MultiScaleCurvature::Inconclusive)));
+    }
+
+    #[test]
+    fn curvature_stencil_radius_matches_axis_and_mixed_coordinate_probes() {
+        let step = 1.0e-3;
+        assert_eq!(
+            curvature_stencil_coordinate_radius([1.0].into_iter(), step),
+            Some(step)
+        );
+        let diagonal = 1.0 / 2.0_f64.sqrt();
+        let mixed =
+            curvature_stencil_coordinate_radius([diagonal, diagonal].into_iter(), step).unwrap();
+        assert!(
+            (mixed - 2.0_f64.sqrt() * step).abs() <= f64::EPSILON * step,
+            "{mixed:e}"
+        );
+        assert_eq!(
+            curvature_stencil_coordinate_radius([1.0, -3.0, 2.0].into_iter(), step),
+            Some(5.0 * step)
+        );
+    }
+
+    #[test]
+    fn auto_sparse_crossover_enforces_dimensions_nnz_and_density() {
+        let system = |rows: usize, columns: usize, nnz: usize| ComponentIndexedSystem {
+            residuals: DVector::zeros(rows),
+            rows: Vec::new(),
+            row_count: rows,
+            column_count: columns,
+            entries: (0..nnz)
+                .map(|position| IndexedJacobianEntry {
+                    row: position / columns,
+                    column: position % columns,
+                    value: 1.0,
+                })
+                .collect(),
+            sparsity_signature: 0,
+        };
+        let all_columns = |columns: usize| (0..columns).collect::<Vec<_>>();
+
+        assert!(auto_prefers_sparse(
+            &system(256, 256, 256),
+            &all_columns(256)
+        ));
+        assert!(!auto_prefers_sparse(
+            &system(255, 256, 256),
+            &all_columns(256)
+        ));
+        assert!(!auto_prefers_sparse(
+            &system(256, 255, 256),
+            &all_columns(255)
+        ));
+        assert!(!auto_prefers_sparse(
+            &system(256, 256, 255),
+            &all_columns(256)
+        ));
+        assert!(auto_prefers_sparse(
+            &system(256, 256, 512),
+            &all_columns(256)
+        ));
+        assert!(!auto_prefers_sparse(
+            &system(256, 256, 513),
+            &all_columns(256)
+        ));
+    }
+
+    #[test]
+    fn malformed_sparse_input_falls_back_to_a_validated_dense_step_with_typed_evidence() {
+        let malformed = ComponentIndexedSystem {
+            residuals: DVector::from_vec(vec![-2.0]),
+            rows: Vec::new(),
+            row_count: 1,
+            column_count: 1,
+            entries: vec![IndexedJacobianEntry {
+                row: 1,
+                column: 0,
+                value: 1.0,
+            }],
+            sparsity_signature: 0,
+        };
+        let jacobian = DMatrix::from_element(1, 1, 1.0);
+        let residual = DVector::from_vec(vec![-2.0]);
+        let problem = Problem::new();
+        let mut evidence = BackendEvidence::new(LinearSolveBackendPolicy::SparsePreferred);
+        let step = lm_step_with_backend(
+            &problem,
+            Some(&malformed),
+            &jacobian,
+            &residual,
+            &[0],
+            1.0e-3,
+            1.0e-12,
+            1.0e-10,
+            LinearSolveBackendPolicy::SparsePreferred,
+            &mut evidence,
+        )
+        .unwrap();
+
+        assert!(step[0].is_finite());
+        assert!(
+            residual_cost(&(&residual + jacobian * &step)).unwrap()
+                < residual_cost(&residual).unwrap()
+        );
+        assert_eq!(evidence.actual, Some(LinearSolveBackend::Dense));
+        assert_eq!(
+            evidence.fallback_reason,
+            Some(SparseFallbackReason::ConstructionFailure)
+        );
+    }
+
+    #[test]
+    fn cached_temporary_protection_uses_the_attained_cost_not_the_returned_cost() {
+        let report = PrioritySolveReport {
+            group_index: 0,
+            component_index: Some(0),
+            component_indices: vec![0],
+            scope: PrioritySolveScope::Movable,
+            backend: Some(PrioritySolveBackend::DenseNullspace),
+            largest_explicit_nullspace_block_rows: 1,
+            protected_temporary: Vec::new(),
+            category: ResidualCategory::Temporary,
+            iterations: 0,
+            initial_cost: Some(1.0),
+            final_cost: Some(0.25 + 1.0e-12),
+            attained_temporary_cost: Some(0.25),
+            termination: SolveTermination::Converged,
+            status: SecondaryStatus::Acceptable,
+        };
+
+        assert_eq!(cached_temporary_attained_cost(&report), Some(0.25));
+    }
+
+    #[test]
+    fn equality_projector_uses_the_authoritative_unsquared_rank_threshold() {
+        let rows = DMatrix::from_diagonal(&DVector::from_vec(vec![1.0, 1.0e-7]));
+        let projector = EqualityProjector::new(rows, 1.0e-10).unwrap();
+        let projected = projector
+            .project(&DVector::from_vec(vec![1.0, 1.0]), 1.0e-12)
+            .unwrap();
+
+        assert!(projected.norm() <= 1.0e-12, "{projected:?}");
     }
 
     #[test]

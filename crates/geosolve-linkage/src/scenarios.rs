@@ -218,16 +218,53 @@ pub fn slider_crank() -> Result<(Linkage, SliderCrankIds), LinkageError> {
     slider_crank_with_scale(1.0)
 }
 
+/// Builds the displacement-driven L3 fold fixture at model scale one.
+///
+/// The accepted crank angle is `0.05 rad`; the selected linear driver starts
+/// below the positive-X dead-centre maximum at approximately `4.7478802102`.
+///
+/// # Errors
+///
+/// Returns an error if canonical finite geometry cannot be constructed.
+pub fn slider_crank_displacement_driven() -> Result<(Linkage, SliderCrankIds), LinkageError> {
+    slider_crank_displacement_driven_with_scale(1.0)
+}
+
 /// Builds geometrically similar L3 data for scale-invariance verification.
 ///
 /// # Errors
 ///
 /// Returns an error for an invalid scale or non-constructible geometry.
 pub fn slider_crank_with_scale(scale: f64) -> Result<(Linkage, SliderCrankIds), LinkageError> {
+    slider_crank_fixture(scale, 45.0 * PI / 180.0, SliderCrankDriver::Angular)
+}
+
+/// Builds the displacement-driven L3 fold fixture at an explicit model scale.
+///
+/// # Errors
+///
+/// Returns an error for an invalid scale or non-constructible geometry.
+pub fn slider_crank_displacement_driven_with_scale(
+    scale: f64,
+) -> Result<(Linkage, SliderCrankIds), LinkageError> {
+    slider_crank_fixture(scale, 0.05, SliderCrankDriver::Linear)
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SliderCrankDriver {
+    Angular,
+    Linear,
+}
+
+#[allow(clippy::too_many_lines)]
+fn slider_crank_fixture(
+    scale: f64,
+    crank_angle: f64,
+    selected_driver: SliderCrankDriver,
+) -> Result<(Linkage, SliderCrankIds), LinkageError> {
     let mut linkage = Linkage::new(scale, xy_plane_frame())?;
     let crank_length = 1.25 * scale;
     let rod_length = 3.5 * scale;
-    let crank_angle = 45.0 * PI / 180.0;
     let a = Point2::new(
         crank_length * crank_angle.cos(),
         crank_length * crank_angle.sin(),
@@ -292,8 +329,23 @@ pub fn slider_crank_with_scale(scale: f64) -> Result<(Linkage, SliderCrankIds), 
         slider_axis,
         AxisDirectionBranch::Same,
     )?;
-    let driver =
-        linkage.add_angular_driver("crank angle", ground, crank, crank_angle, 2.0 * PI / 180.0)?;
+    let driver = match selected_driver {
+        SliderCrankDriver::Angular => linkage.add_angular_driver(
+            "crank angle",
+            ground,
+            crank,
+            crank_angle,
+            2.0 * PI / 180.0,
+        )?,
+        SliderCrankDriver::Linear => linkage.add_linear_driver(
+            "slider displacement",
+            ground_guide_origin,
+            slider_pin,
+            ground_guide_axis,
+            slider_point.x,
+            0.01 * scale,
+        )?,
+    };
     let positive_x_monitor = linkage.add_directed_displacement_branch_monitor(
         ground_guide_origin,
         slider_pin,

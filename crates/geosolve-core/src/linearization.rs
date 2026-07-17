@@ -1,16 +1,18 @@
+use std::collections::BTreeMap;
 use std::ops::Range;
 
 use nalgebra::{DMatrix, DVector};
 
-use crate::analysis::{EliminationPlan, SolveComponent};
+use crate::analysis::{EliminationPlan, SolveComponent, calculate_sparsity_signature};
 use crate::problem::VariableState;
 use crate::residual::{JacobianCoordinates, LinearizationStorage, LocalJacobianStorage};
 use crate::solver::{RankDiagnostics, rank_diagnostics};
 use crate::{
-    ComponentSolveReport, CoreError, EvaluationError, HardValidity, LocalJacobian, PackedState,
-    Problem, ResidualBlock, ResidualCategory, ResidualId, ResidualRowRef, SensitivityError,
-    SessionRevisions, SolveReport, SolverConfig, SourceConstraintId, VariableId, VariableKind,
-    VariableValue,
+    ComponentSolveReport, ContinuationError, ContinuationTangent, ContinuationTangentOrientation,
+    CoreError, EvaluationError, HardValidity, InitialParameterDirection, LocalJacobian,
+    PackedState, Problem, ResidualBlock, ResidualCategory, ResidualId, ResidualRowRef,
+    SensitivityError, SessionRevisions, SolveReport, SolverConfig, SourceConstraintId, VariableId,
+    VariableKind, VariableValue,
 };
 
 /// One active reduced tangent block in deterministic component-column order.
@@ -147,6 +149,165 @@ impl AcceptedHardComponentLinearization {
     #[must_use]
     pub fn singular_values(&self) -> &[f64] {
         &self.singular_values
+    }
+
+    /// Computes the oriented unit null tangent of `[J_q J_lambda]`.
+    ///
+    /// The parameter column is expressed for one normalized parameter
+    /// coordinate. The augmented matrix must have exactly one numerical right
+    /// null direction under this accepted component's rank threshold. The
+    /// first tangent is oriented by an explicit parameter direction; later
+    /// tangents are oriented to have positive dot product with the previous
+    /// accepted tangent.
+    ///
+    /// # Errors
+    ///
+    /// Rejects non-finite or mismatched data, an augmented system without the
+    /// expected one-dimensional nullspace, an ambiguous orientation, or a
+    /// tangent that fails independent equation validation.
+    #[allow(clippy::too_many_lines)]
+    pub fn augmented_unit_null_tangent(
+        &self,
+        normalized_parameter_column: &DVector<f64>,
+        orientation: &ContinuationTangentOrientation,
+    ) -> Result<ContinuationTangent, ContinuationError> {
+        if normalized_parameter_column.len() != self.normalized_jacobian.nrows() {
+            return Err(ContinuationError::DimensionMismatch {
+                context: "augmented continuation parameter column",
+                expected: self.normalized_jacobian.nrows(),
+                actual: normalized_parameter_column.len(),
+            });
+        }
+        if let Some((index, &value)) = normalized_parameter_column
+            .iter()
+            .enumerate()
+            .find(|(_, value)| !value.is_finite())
+        {
+            return Err(ContinuationError::NonFiniteValue {
+                context: "augmented continuation parameter column",
+                index,
+                value,
+            });
+        }
+        let rows = self.normalized_jacobian.nrows();
+        let state_columns = self.normalized_jacobian.ncols();
+        let columns = state_columns
+            .checked_add(1)
+            .ok_or(ContinuationError::NumericalFailure {
+                context: "augmented continuation dimension overflow",
+            })?;
+        let mut augmented = DMatrix::zeros(rows, columns);
+        augmented
+            .view_mut((0, 0), self.normalized_jacobian.shape())
+            .copy_from(&self.normalized_jacobian);
+        augmented
+            .column_mut(state_columns)
+            .copy_from(normalized_parameter_column);
+        if augmented.iter().any(|value| !value.is_finite()) {
+            return Err(ContinuationError::NumericalFailure {
+                context: "augmented continuation matrix is non-finite",
+            });
+        }
+
+        // Padding requests a complete right-vector basis from nalgebra for a
+        // rectangular system without changing any nonzero singular value.
+        let decomposition_rows = rows.max(columns);
+        let mut padded = DMatrix::zeros(decomposition_rows, columns);
+        padded
+            .view_mut((0, 0), augmented.shape())
+            .copy_from(&augmented);
+        let decomposition = padded.svd(false, true);
+        if decomposition
+            .singular_values
+            .iter()
+            .any(|value| !value.is_finite())
+        {
+            return Err(ContinuationError::NumericalFailure {
+                context: "augmented continuation SVD is non-finite",
+            });
+        }
+        let rank = decomposition
+            .singular_values
+            .iter()
+            .filter(|&&value| value > self.rank_threshold)
+            .count();
+        let right_nullity = columns.saturating_sub(rank);
+        if right_nullity != 1 || rank + 1 != columns {
+            return Err(ContinuationError::UnexpectedAugmentedNullity {
+                rank,
+                columns,
+                right_nullity,
+            });
+        }
+        let right_vectors = decomposition
+            .v_t
+            .ok_or(ContinuationError::NumericalFailure {
+                context: "augmented continuation SVD omitted right vectors",
+            })?;
+        let mut combined = right_vectors.row(rank).transpose().into_owned();
+        if combined.len() != columns || combined.iter().any(|value| !value.is_finite()) {
+            return Err(ContinuationError::NumericalFailure {
+                context: "augmented continuation null tangent is invalid",
+            });
+        }
+        let norm = combined
+            .iter()
+            .fold(0.0_f64, |norm, value| norm.hypot(*value));
+        if !norm.is_finite() || norm <= 64.0 * f64::EPSILON {
+            return Err(ContinuationError::NumericalFailure {
+                context: "augmented continuation null tangent has zero norm",
+            });
+        }
+        combined /= norm;
+
+        let orientation_measure = match orientation {
+            ContinuationTangentOrientation::Initial(direction) => {
+                let requested = match direction {
+                    InitialParameterDirection::Increasing => 1.0,
+                    InitialParameterDirection::Decreasing => -1.0,
+                };
+                combined[state_columns] * requested
+            }
+            ContinuationTangentOrientation::Previous(previous) => {
+                if previous.normalized_state().len() != state_columns {
+                    return Err(ContinuationError::DimensionMismatch {
+                        context: "previous continuation tangent",
+                        expected: state_columns,
+                        actual: previous.normalized_state().len(),
+                    });
+                }
+                combined
+                    .rows(0, state_columns)
+                    .dot(previous.normalized_state())
+                    + combined[state_columns] * previous.parameter_component()
+            }
+        };
+        if !orientation_measure.is_finite() || orientation_measure.abs() <= 64.0 * f64::EPSILON {
+            return Err(ContinuationError::AmbiguousOrientation);
+        }
+        if orientation_measure < 0.0 {
+            combined *= -1.0;
+        }
+
+        let equation = &augmented * &combined;
+        let equation_residual_max = equation.iter().map(|value| value.abs()).fold(0.0, f64::max);
+        if !equation_residual_max.is_finite()
+            || equation_residual_max > self.normalized_residual_tolerance
+        {
+            return Err(ContinuationError::TangentValidationFailed {
+                maximum: equation_residual_max,
+                tolerance: self.normalized_residual_tolerance,
+            });
+        }
+        let normalized_state = combined.rows(0, state_columns).into_owned();
+        let parameter_component = combined[state_columns];
+        ContinuationTangent::new(
+            normalized_state,
+            parameter_component,
+            equation_residual_max,
+            rank,
+            self.rank_threshold,
+        )
     }
 
     /// Solves `J * delta + normalized_residual_rate = 0` with the accepted
@@ -426,6 +587,23 @@ pub(crate) struct ComponentDenseSystem {
     pub(crate) rows: Vec<RowIdentity>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct IndexedJacobianEntry {
+    pub(crate) row: usize,
+    pub(crate) column: usize,
+    pub(crate) value: f64,
+}
+
+#[derive(Debug)]
+pub(crate) struct ComponentIndexedSystem {
+    pub(crate) residuals: DVector<f64>,
+    pub(crate) rows: Vec<RowIdentity>,
+    pub(crate) row_count: usize,
+    pub(crate) column_count: usize,
+    pub(crate) entries: Vec<IndexedJacobianEntry>,
+    pub(crate) sparsity_signature: u64,
+}
+
 impl Problem {
     pub(crate) fn linearize_blocks_for_state(
         &self,
@@ -495,12 +673,7 @@ impl ComponentLinearization {
             .numeric
             .blocks
             .iter()
-            .filter(|block| {
-                block.category == category
-                    && (category != ResidualCategory::Hard
-                        || (!plan.is_eliminated(block.residual_id)
-                            && !plan.source_is_suppressed(block.source_id)))
-            })
+            .filter(|block| selected_block(block, plan, category))
             .try_fold(0usize, |rows, block| {
                 rows.checked_add(block.normalized_residuals.len())
             })
@@ -518,11 +691,7 @@ impl ComponentLinearization {
         let mut target_row = 0;
 
         for block in &self.numeric.blocks {
-            if block.category != category
-                || (category == ResidualCategory::Hard
-                    && (plan.is_eliminated(block.residual_id)
-                        || plan.source_is_suppressed(block.source_id)))
-            {
+            if !selected_block(block, plan, category) {
                 continue;
             }
             debug_assert_eq!(block.status, EvaluationStatus::Evaluated);
@@ -577,6 +746,144 @@ impl ComponentLinearization {
             rows,
         })
     }
+
+    pub(crate) fn project_indexed(
+        &self,
+        plan: &EliminationPlan,
+        category: ResidualCategory,
+    ) -> Result<ComponentIndexedSystem, CoreError> {
+        let selected_rows = self
+            .numeric
+            .blocks
+            .iter()
+            .filter(|block| selected_block(block, plan, category))
+            .try_fold(0usize, |rows, block| {
+                rows.checked_add(block.normalized_residuals.len())
+            })
+            .ok_or(CoreError::DimensionOverflow {
+                context: "component indexed residual",
+            })?;
+        let mut residuals = DVector::zeros(selected_rows);
+        let mut rows = Vec::with_capacity(selected_rows);
+        let mut entries = BTreeMap::new();
+        let mut target_row = 0;
+
+        for block in &self.numeric.blocks {
+            if !selected_block(block, plan, category) {
+                continue;
+            }
+            debug_assert_eq!(block.status, EvaluationStatus::Evaluated);
+            for (local_row, &value) in block.normalized_residuals.iter().enumerate() {
+                residuals[target_row + local_row] = value;
+                rows.push(block.rows[local_row]);
+            }
+            for local in &block.jacobian_blocks {
+                debug_assert_eq!(local.status, EvaluationStatus::Evaluated);
+                let Some(active) = self
+                    .layout
+                    .blocks
+                    .iter()
+                    .find(|active| active.members.contains(&local.variable_id))
+                else {
+                    continue;
+                };
+                if local.columns != active.tangent_range.len() {
+                    return Err(CoreError::DimensionMismatch {
+                        context: "component indexed local Jacobian columns",
+                        expected: active.tangent_range.len(),
+                        actual: local.columns,
+                    });
+                }
+                for local_row in 0..local.rows {
+                    for local_column in 0..local.columns {
+                        let position = (
+                            target_row + local_row,
+                            active.tangent_range.start + local_column,
+                        );
+                        let value =
+                            local.normalized_values[local_row * local.columns + local_column];
+                        let accumulated = entries.entry(position).or_insert(0.0);
+                        *accumulated += value;
+                        if !accumulated.is_finite() {
+                            return Err(CoreError::NonFiniteValue {
+                                context: "component indexed projection",
+                                index: position.0,
+                                value: *accumulated,
+                            });
+                        }
+                    }
+                }
+            }
+            target_row += block.normalized_residuals.len();
+        }
+        if residuals.iter().any(|value| !value.is_finite()) {
+            return Err(CoreError::NonFiniteValue {
+                context: "component indexed projection",
+                index: 0,
+                value: f64::NAN,
+            });
+        }
+        let sparsity_signature = calculate_sparsity_signature(
+            selected_rows,
+            self.layout.tangent_dimension,
+            entries.keys().copied(),
+        );
+        let entries = entries
+            .into_iter()
+            .map(|((row, column), value)| IndexedJacobianEntry { row, column, value })
+            .collect();
+        Ok(ComponentIndexedSystem {
+            residuals,
+            rows,
+            row_count: selected_rows,
+            column_count: self.layout.tangent_dimension,
+            entries,
+            sparsity_signature,
+        })
+    }
+}
+
+impl ComponentIndexedSystem {
+    pub(crate) fn numerically_matches(&self, dense: &ComponentDenseSystem) -> bool {
+        if self.row_count != dense.jacobian.nrows()
+            || self.column_count != dense.jacobian.ncols()
+            || self.residuals != dense.residuals
+            || self.rows != dense.rows
+        {
+            return false;
+        }
+        let mut entry_index = 0;
+        for row in 0..self.row_count {
+            for column in 0..self.column_count {
+                if self
+                    .entries
+                    .get(entry_index)
+                    .is_some_and(|entry| entry.row == row && entry.column == column)
+                {
+                    if self.entries[entry_index].value.to_bits()
+                        != dense.jacobian[(row, column)].to_bits()
+                    {
+                        return false;
+                    }
+                    entry_index += 1;
+                } else if dense.jacobian[(row, column)].to_bits() != 0.0_f64.to_bits() {
+                    return false;
+                }
+            }
+        }
+        entry_index == self.entries.len()
+    }
+}
+
+fn selected_block(
+    block: &LinearizedResidualBlock,
+    plan: &EliminationPlan,
+    category: ResidualCategory,
+) -> bool {
+    block.category == category
+        && (category != ResidualCategory::Hard
+            || (!plan.is_eliminated(block.residual_id)
+                && !plan.source_is_suppressed(block.source_id)))
 }
 
 #[allow(clippy::too_many_lines)]
@@ -628,6 +935,7 @@ pub(crate) fn build_accepted_hard_linearization(
         if summary.component_index != component.index
             || component_report.component_index != component.index
             || component_report.pattern_signature != summary.pattern_signature
+            || component_report.sparsity_signature != summary.sparsity_signature
             || component_report.hard_validity != HardValidity::Valid
             || !component_report.hard_residuals_validated
             || !component_report.rank_is_valid
@@ -936,6 +1244,59 @@ pub(crate) fn component_tangent_layout(
         layout.tangent_dimension = end;
     }
     layout
+}
+
+pub(crate) fn composite_tangent_layout(
+    plan: &EliminationPlan,
+    component_indices: &[usize],
+) -> Result<ComponentTangentLayout, CoreError> {
+    let mut layout = ComponentTangentLayout::default();
+    let mut previous = None;
+    for &component_index in component_indices {
+        if component_index >= plan.components.len()
+            || previous.is_some_and(|previous| previous >= component_index)
+        {
+            return Err(CoreError::DimensionMismatch {
+                context: "priority component ordering",
+                expected: plan.components.len(),
+                actual: component_index,
+            });
+        }
+        previous = Some(component_index);
+        let component_layout =
+            plan.component_layouts
+                .get(component_index)
+                .ok_or(CoreError::DimensionMismatch {
+                    context: "priority component layout",
+                    expected: plan.component_layouts.len(),
+                    actual: component_index,
+                })?;
+        let offset = layout.tangent_dimension;
+        for block in &component_layout.blocks {
+            let start = offset.checked_add(block.tangent_range.start).ok_or(
+                CoreError::DimensionOverflow {
+                    context: "priority tangent layout",
+                },
+            )?;
+            let end = offset.checked_add(block.tangent_range.end).ok_or(
+                CoreError::DimensionOverflow {
+                    context: "priority tangent layout",
+                },
+            )?;
+            layout.blocks.push(ActiveTangentBlock {
+                root: block.root,
+                members: block.members.clone(),
+                tangent_range: start..end,
+                step_scales: block.step_scales.clone(),
+            });
+        }
+        layout.tangent_dimension = offset
+            .checked_add(component_layout.tangent_dimension)
+            .ok_or(CoreError::DimensionOverflow {
+                context: "priority tangent layout",
+            })?;
+    }
+    Ok(layout)
 }
 
 pub(crate) fn evaluate_values(
@@ -1295,6 +1656,48 @@ mod tests {
     }
 
     #[derive(Clone, Copy, Debug)]
+    struct ScalarDenseBlocks {
+        coefficients: [[f64; 4]; 3],
+    }
+
+    impl ResidualEvaluator for ScalarDenseBlocks {
+        fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+            let values = variables
+                .iter()
+                .map(|value| match value {
+                    VariableValue::Scalar(value) => Ok(*value),
+                    _ => Err(EvaluationError::invalid_geometry("expected scalar blocks")),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            if values.len() != 4 {
+                return Err(EvaluationError::invalid_geometry(
+                    "expected four scalar blocks",
+                ));
+            }
+            Ok(self
+                .coefficients
+                .iter()
+                .map(|row| row.iter().zip(&values).map(|(a, x)| a * x).sum())
+                .collect())
+        }
+
+        fn jacobian(
+            &self,
+            _variables: &[VariableValue],
+        ) -> Result<Vec<LocalJacobian>, EvaluationError> {
+            Ok((0..4)
+                .map(|column| {
+                    LocalJacobian::new(
+                        3,
+                        1,
+                        self.coefficients.iter().map(|row| row[column]).collect(),
+                    )
+                })
+                .collect())
+        }
+    }
+
+    #[derive(Clone, Copy, Debug)]
     struct MustNotEvaluate;
 
     impl ResidualEvaluator for MustNotEvaluate {
@@ -1508,6 +1911,121 @@ mod tests {
             .unwrap();
         assert_eq!(dense.jacobian.shape(), (1, 1));
         assert!((dense.jacobian[(0, 0)] - 5.0).abs() <= f64::EPSILON);
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn indexed_projection_matches_dense_with_aliases_fixed_columns_and_zero_slots() {
+        let mut problem = Problem::new();
+        let alias_a = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());
+        let root = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());
+        let alias_b = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());
+        let fixed = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());
+
+        for (alias, label) in [(alias_a, "alias a"), (alias_b, "alias b")] {
+            let source_id = source(&mut problem, label);
+            let residual_id = problem
+                .add_residual(
+                    ResidualBlock::exact_alias(
+                        source_id,
+                        alias,
+                        root,
+                        VariableKind::Scalar,
+                        vec![1.0],
+                        vec![row()],
+                    )
+                    .unwrap(),
+                )
+                .unwrap();
+            problem
+                .declare_exact_alias(alias, root, residual_id)
+                .unwrap();
+        }
+        let fixed_source = source(&mut problem, "fixed");
+        let fixed_residual = problem
+            .add_residual(
+                ResidualBlock::fixed_variable(
+                    fixed_source,
+                    fixed,
+                    VariableValue::Scalar(0.0),
+                    vec![1.0],
+                    vec![row()],
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        problem
+            .declare_fixed_variable(fixed, VariableValue::Scalar(0.0), fixed_residual)
+            .unwrap();
+
+        let active_source = source(&mut problem, "indexed projection");
+        let active_residual = problem
+            .add_residual(
+                ResidualBlock::new(
+                    active_source,
+                    ResidualCategory::Hard,
+                    vec![alias_a, root, alias_b, fixed],
+                    3,
+                    vec![1.0; 3],
+                    vec![row(), row(), row()],
+                    ScalarDenseBlocks {
+                        coefficients: [
+                            [1.0e16, -1.0e16, 1.0, 7.0],
+                            [0.0, 0.0, 0.0, 8.0],
+                            [2.0, 3.0, 4.0, 0.0],
+                        ],
+                    },
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        let plan = EliminationPlan::new(&problem).unwrap();
+        let component = plan
+            .components
+            .iter()
+            .find(|component| component.active_residual_ids.contains(&active_residual))
+            .unwrap();
+        let linearization = problem
+            .linearize_component(
+                &plan,
+                component,
+                &problem.variable_state(),
+                &component.active_residual_ids,
+            )
+            .unwrap();
+        let dense = linearization
+            .project_dense(&plan, ResidualCategory::Hard)
+            .unwrap();
+        let indexed = linearization
+            .project_indexed(&plan, ResidualCategory::Hard)
+            .unwrap();
+
+        assert!(indexed.numerically_matches(&dense));
+        assert_eq!((indexed.row_count, indexed.column_count), (3, 1));
+        assert_eq!(
+            indexed.entries,
+            vec![
+                IndexedJacobianEntry {
+                    row: 0,
+                    column: 0,
+                    value: 1.0,
+                },
+                IndexedJacobianEntry {
+                    row: 1,
+                    column: 0,
+                    value: 0.0,
+                },
+                IndexedJacobianEntry {
+                    row: 2,
+                    column: 0,
+                    value: 9.0,
+                },
+            ]
+        );
+        assert_eq!(
+            indexed.sparsity_signature,
+            plan.structural.component_summaries[component.index].sparsity_signature
+        );
     }
 
     #[test]

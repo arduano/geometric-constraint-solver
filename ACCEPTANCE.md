@@ -261,12 +261,20 @@ conversion are not part of this acceptance claim.
 
 ## M16 acceptance: sparse structure, hierarchy and continuation
 
-- Structural matching reports structural rank, structural left/right nullity and deterministic under/well/over/mixed partitions separately from M9 numerical rank.
-- Block triplet assembly and pure-Rust sparse solve agree with dense results on geometry, rank, mobility, diagnostics and branch state.
-- Dense fallback remains available for small or diagnostically ambiguous components.
-- Symbolic ordering/factorization reuse and dense/sparse crossover are demonstrated by M8 benchmark descendants.
-- Cross-component secondary objectives retain strict priority semantics.
-- The documented planar toggle crosses only through explicit pseudo-arclength continuation.
+- [x] Structural matching reports declared block-envelope rank, structural left/right nullity and deterministic under/well/over/mixed partitions separately from M9 numerical rank.
+- [x] Block triplet assembly and pure-Rust sparse solve agree with dense results on geometry, rank, mobility, diagnostics and branch state.
+- [x] Dense fallback remains available for small or diagnostically ambiguous components.
+- [x] Symbolic ordering/factorization reuse and dense/sparse crossover are demonstrated by the dedicated connected-chain Criterion probe following the M8 benchmark discipline.
+- [x] Cross-component secondary objectives retain strict priority semantics.
+- [x] The documented planar toggle crosses only through explicit pseudo-arclength continuation.
+
+Completion record (2026-07-17): accepted-threshold augmented tangents, adaptive
+retry, manifold pseudo-arclength control and ordinary-physical-report publication
+are implemented. The displacement-driven L3 fixture stops in natural mode and
+crosses explicitly in pseudo mode at scales `1e-6`, `1` and `1e6`, with
+dense/sparse physical parity. Under caller-approved ADR 0012, sparse QR owns
+validated damped LM steps while dense SVD remains the rank-revealing authority;
+no sparse factorization success is used as rank or convergence evidence.
 
 ## M17 acceptance: planar kinematic migration
 

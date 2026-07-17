@@ -369,15 +369,18 @@ async function openPage(browserUrl, url, viewport, touch) {
   const endpoint = new URL(browserUrl);
   let lastError;
   for (let attempt = 0; attempt < 3; attempt++) {
-    const created = await fetch(`http://${endpoint.host}/json/new?${encodeURIComponent('about:blank')}`, { method: 'PUT' }).then((response) => response.json());
-    const page = new BrowserPage(await new Cdp(created.webSocketDebuggerUrl).open(), viewport, touch);
+    let page;
     try {
+      const created = await fetch(`http://${endpoint.host}/json/new?${encodeURIComponent('about:blank')}`, { method: 'PUT' }).then((response) => response.json());
+      page = new BrowserPage(await new Cdp(created.webSocketDebuggerUrl).open(), viewport, touch);
       await page.initialize(url);
       return page;
     } catch (error) {
       lastError = error;
-      await page.cdp.send('Page.close').catch(() => {});
-      page.cdp.close();
+      if (page) {
+        await page.cdp.send('Page.close').catch(() => {});
+        page.cdp.close();
+      }
       await new Promise((resolveWait) => setTimeout(resolveWait, 250));
     }
   }
