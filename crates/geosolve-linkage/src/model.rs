@@ -1,5 +1,6 @@
 use geosolve_core::{ContinuationError, CoreError};
 use geosolve_geometry::{PlaneFrame, Point2, Pose2, Vector2};
+use serde::{Deserialize, Serialize};
 use slotmap::{Key, SlotMap, new_key_type};
 use thiserror::Error;
 
@@ -128,6 +129,7 @@ pub struct RigidBody {
     label: String,
     pose: Pose2,
     grounded: bool,
+    ground_source_label: Option<String>,
 }
 
 impl RigidBody {
@@ -144,6 +146,10 @@ impl RigidBody {
     #[must_use]
     pub const fn grounded(&self) -> bool {
         self.grounded
+    }
+
+    pub(crate) fn ground_source_label(&self) -> Option<&str> {
+        self.ground_source_label.as_deref()
     }
 }
 
@@ -198,7 +204,8 @@ impl AxisFeature {
 }
 
 /// Explicit relative direction selected for the two axes of a prismatic joint.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum AxisDirectionBranch {
     Same,
     Opposite,
@@ -336,7 +343,8 @@ impl Driver {
 }
 
 /// Sign retained by an explicit branch monitor.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum BranchSign {
     Positive,
     Negative,
@@ -472,6 +480,7 @@ impl Linkage {
             label,
             pose,
             grounded,
+            ground_source_label: None,
         }))
     }
 
@@ -495,6 +504,25 @@ impl Linkage {
             .get_mut(body)
             .ok_or(LinkageError::UnknownBody(body))?
             .pose = pose;
+        Ok(())
+    }
+
+    pub(crate) fn set_ground_source_label(
+        &mut self,
+        body: BodyId,
+        label: impl Into<String>,
+    ) -> Result<(), LinkageError> {
+        let label = nonempty_label(label, "ground source")?;
+        let body = self
+            .bodies
+            .get_mut(body)
+            .ok_or(LinkageError::UnknownBody(body))?;
+        if !body.grounded {
+            return Err(LinkageError::PositionNotAccepted(
+                "a numerical gauge cannot be labeled as a physical ground".to_owned(),
+            ));
+        }
+        body.ground_source_label = Some(label);
         Ok(())
     }
 

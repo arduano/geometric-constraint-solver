@@ -257,6 +257,15 @@ Expected behavior:
 - `stress-bridge`: two cubic Beziers meet through explicit End/Start contacts and aligned generic curve-curve tangency. The equal seam-handle source loads suppressed, exposing one bounded seam-sliding DOF; restoring it locks the C1 seam. A drag toward a collapsed handle projects to valid geometry, while an exact edit/import collapse rejects as degenerate and retains the accepted bridge.
 - `motion-cam`: two equal-radius circles have independent generic tangencies to a fixed quadratic Bezier cam. The document loads with two DOF; dragging either center makes that roller follow the cam's normal-offset path while a transient stability target leaves the other roller stationary.
 - `motion-orbit`: a radius-1 satellite circle is externally tangent to a fixed radius-3 circle through generic curve contact with explicit opposed tangent orientation and periodic contact state. It loads with one orbital DOF; center drag follows the complete radius-4 locus while retaining the external-tangency branch.
+- `motion-trammel`: the ends of a length-5 bar slide on perpendicular bounded rails. Two nested midpoint constraints place a tracer one quarter of the way from the vertical slider, so projected drag reveals an exact ellipse without an ellipse primitive or equation in the browser.
+- `motion-scotch-yoke`: a length-5 crank rotates about a fixed center while a vertical slot shares its pin and its opposite end is restricted to a horizontal guide. Crank rotation therefore emerges as sinusoidal slider travel from only distance, vertical and fixed-coordinate constraints.
+- `motion-rotating-square`: four ordinary lines become a rigid square through one driving side length, adjacent perpendicular/equal-length relations and opposite parallel relations. The assembly retains one rotational DOF about its fixed corner even though no rectangle or square primitive is used.
+- `motion-scissor`: equal upper arms meet between a fixed anchor and horizontal base slider, while a symmetry constraint reflects the upper joint into a lower joint across the moving base. Dragging the slider opens and closes the mirrored jack with one DOF.
+- `motion-scissor-tower`: five stacked X stages use twelve level pivots, ten equal diagonal bars and six equal-width horizontal platforms. One fixed base pivot and one horizontal base slider leave 24 point coordinates under 23 independent hard rows, so moving the base synchronously raises or lowers the entire sixteen-member tower with one DOF.
+- `motion-peaucellier`: two equal length-5 links and a four-sided length-3 rhombus form a Peaucellier-Lipkin inversor, driven by a length-4 input crank whose fixed circle passes through the origin. Seven bars and eleven independent hard rows leave one DOF; circular input motion maps to an exact vertical output line even though the output point has no line or coordinate constraint.
+- `diagnostic-rank-drop`: two fixed radius-2 circles are tangent at a free point constrained to distance 2 from both centers. The declared block envelope is structurally well-constrained, while the accepted numerical Jacobian has left/right nullity `(1, 1)` at the dependent-gradient configuration.
+- `diagnostic-endpoint-bound`: a fixed `t = 1` line contact is shown beside a circle radius at its positive lower domain. Equality mobility is two, the fixed endpoint and active radius remove bidirectional mobility, and only the radius contributes one-sided feasible motion.
+- `diagnostic-redundancy`: a fixed-origin horizontal arm has two independent driving length-4 sources. Geometry remains valid and locked, structural/numerical left nullity is one, and the duplicate source receives deterministic complete redundancy evidence.
 
 These examples are loadable interaction/audit stress labs, not additional canonical A1-A10 gates. They compose existing public document constraints and add no browser equations or new curve family.
 
@@ -287,6 +296,55 @@ one end-to-end assembly:
 These fixtures do not claim pose-coordinate box bounds, active-bound sensitivity,
 secondary-objective sensitivity, world-frame sensitivity conversion or spatial
 joints. Those contracts remain assigned to later milestones.
+
+## M17 persistent planar gauge and velocity fixtures
+
+The planar migration corpus applies ADR 0009 through persistent domain sessions:
+
+- one floating two-body weld at scales `1e-6`, `1` and `1e6` has physical equality
+  right nullity three, `gauge_dof = 3`, `internal_mobility = 0`; automatic
+  lowest-ID and explicit alternate body references preserve relative `SE(2)`
+  geometry, physical rank, structural diagnostics, source order and public audit;
+- one floating revolute has one internal rotational mobility after the three world
+  gauge DOF are separated; adding a relative-angle driver removes that internal
+  mobility, and the selected numerical reference has zero representative velocity;
+- two disconnected floating welded pairs contribute six gauge DOF, while a
+  disconnected physically grounded body contributes none and retains its physical
+  ground source in audit;
+- a branch monitor joining otherwise equality-disconnected bodies forms one domain
+  component: floating it reports three world gauge plus three internal DOF, while
+  grounding one body reports zero gauge plus three internal DOF;
+- explicit gauge policy JSON requires exactly one reference per floating component,
+  no references in grounded components and transactional revision changes;
+- persistent L3 velocity and the compatibility facade use the same accepted hard
+  component ranks, thresholds, row scales and independently validated physical
+  differentiated equations.
+
+Private numerical gauge rows never appear in physical source order, audit,
+conflict/redundancy candidates or published rank. A certified floating component
+whose physical right nullity is below three is an error, not a saturating mobility
+subtraction.
+
+The post-M17 adversarial corpus additionally protects:
+
+- a perturbed three-body welded chain whose private gauge candidate, ungauged
+  physical session, persistent document, runtime geometry, accepted result and audit
+  remain one coherent state before and after an explicit live gauge rebuild;
+- every valid body reference in that floating chain under common-left `SE(2)`
+  transforms at scales `1e-6`, `1` and `1e6`;
+- a physically grounded nonlowest-ID body, proving automatic policy never selects a
+  numerical reference in a grounded domain component;
+- selected-driver velocity across driven, unselected welded, isolated floating and
+  isolated grounded components, with zero cross-component motion;
+- alternative offset-revolute velocity gauges related by exactly one common rigid
+  world twist, including the angular lever arm at each body origin;
+- two centered revolute closures with normalized separation above and below the
+  accepted component rank threshold, changing internal mobility while retaining
+  exactly three world gauge DOF;
+- multi-component missing, duplicate, grounded, unknown and private gauge JSON
+  references plus current-revision transactional rejection;
+- duplicate physical weld diagnostics, where every public row and candidate belongs
+  to a persistent physical source and no private gauge identity leaks.
 
 ## M9 sketch dependent-gradient fixture
 

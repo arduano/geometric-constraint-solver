@@ -5817,6 +5817,7 @@ fn find_redundancy(
 ) -> RedundancyDiagnostics {
     let mut diagnostics = RedundancyDiagnostics::default();
     let mut prior_source_rows = Vec::new();
+    let mut prior_rank = 0;
     for &source in source_order {
         let source_rows: Vec<_> = hard
             .rows
@@ -5834,7 +5835,6 @@ fn find_redundancy(
             validated_value(validated_rows, hard.rows[row])
                 .is_some_and(|value| value.abs() <= residual_tolerance)
         });
-        let prior_rank = selected_row_rank(&hard.jacobian, &prior_source_rows, threshold);
         let mut combined = prior_source_rows.clone();
         combined.extend_from_slice(&source_rows);
         let combined_rank = selected_row_rank(&hard.jacobian, &combined, threshold);
@@ -5850,11 +5850,16 @@ fn find_redundancy(
         } else {
             let mut earlier_source_rows = Vec::new();
             let mut basis = prior_source_rows.clone();
-            for &row in &source_rows {
-                let before = selected_row_rank(&hard.jacobian, &basis, threshold);
+            let mut basis_rank = prior_rank;
+            for (position, &row) in source_rows.iter().enumerate() {
+                let before = basis_rank;
                 let mut with_row = basis.clone();
                 with_row.push(row);
-                let after = selected_row_rank(&hard.jacobian, &with_row, threshold);
+                let after = if position + 1 == source_rows.len() {
+                    combined_rank
+                } else {
+                    selected_row_rank(&hard.jacobian, &with_row, threshold)
+                };
                 if before > 0
                     && row_is_nonzero(hard, row, threshold)
                     && validated_value(validated_rows, hard.rows[row])
@@ -5876,10 +5881,12 @@ fn find_redundancy(
                     });
                 }
                 basis.push(row);
+                basis_rank = after;
                 earlier_source_rows.push(row);
             }
         }
         prior_source_rows = combined;
+        prior_rank = combined_rank;
     }
     diagnostics
 }

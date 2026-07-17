@@ -361,6 +361,18 @@ post-alpha playground also stages all supported primitives on pointer release wi
 recoverable shape-specific previews and includes compass/Bezier-bridge constraint
 stress labs plus Bezier-cam roller and full-orbit tangent motion examples built entirely
 from public document APIs with explicit tangent orientation and periodic contact state.
+The example selector also exposes scale-invariant structural-versus-numerical rank,
+fixed-endpoint-versus-active-radius mobility and deterministic redundancy diagnostic labs,
+with structural class/backend evidence rendered from public solve reports.
+Further public-document motion examples combine rails, midpoint constructions, fixed
+coordinates, perpendicular/parallel relations, equal lengths and symmetry into an
+elliptic trammel, offset Scotch yoke, rotating square and scissor jack.
+Linkage-heavy follow-ups add a synchronized five-stage scissor tower and a
+seven-bar Peaucellier-Lipkin cell whose unconstrained output traces an exact line.
+The post-alpha WASM drag path coalesces pointer moves to animation frames, renders
+straight spans from exact endpoints, reuses one accepted report per frame and defers
+heavy object/audit DOM refresh until release. Redundancy diagnostics reuse exact
+prefix ranks within each report without changing thresholds or evidence.
 
 ---
 
@@ -480,17 +492,52 @@ Gate: dense and sparse paths agree on independently validated geometry, rank, mo
 
 ## M17: shared planar kinematic architecture
 
+Status: complete as of 2026-07-17.
+
 Goal: migrate the planar linkage baseline onto the architecture that spatial assemblies will share.
 
-- [ ] Separate model topology, accepted state and compiled session.
-- [ ] Add persistent body, feature and source IDs separate from runtime generational keys.
-- [ ] Make local coordinate frames the primary body-feature representation.
-- [ ] Distinguish physical grounding from numerical gauge removal.
-- [ ] Add explicit gauge policies for floating components.
-- [ ] Move velocity solving onto the shared reduced-linearization/rank policy.
-- [ ] Preserve `geosolve-linkage` as the public crate and retain the existing planar API as a compatibility facade where practical.
+- [x] Separate model topology, accepted state and compiled session.
+- [x] Add persistent body, feature and source IDs separate from runtime generational keys.
+- [x] Make local coordinate frames the primary body-feature representation.
+- [x] Distinguish physical grounding from numerical gauge removal.
+- [x] Add explicit gauge policies for floating components.
+- [x] Move velocity solving onto the shared reduced-linearization/rank policy.
+- [x] Preserve `geosolve-linkage` as the public crate and retain the existing planar API as a compatibility facade where practical.
 
 Gate: L1-L3 remain unchanged; floating planar assemblies report three world-gauge DOF separately from internal mobility, and alternative gauges preserve all relative geometry and diagnostics.
+
+Completion notes: `PlanarLinkageDocument` separates persistent topology, accepted
+continuous state and numerical gauge metadata. Opaque body, body-local point/axis
+feature and source IDs round-trip through strict canonical JSON and lower
+deterministically to private runtime keys. Domain connectivity includes physical
+equations and branch monitors; exhaustive planar source certification distinguishes
+physical grounds from common-left-`SE(2)`-invariant relationships. Floating
+components solve through private manifold fixed-pose gauges, while a separately
+validated ungauged `SolveSession` remains authoritative for public audit, rank,
+diagnostics and checked `gauge_dof`/`internal_mobility` reports. Automatic and
+explicit persistent gauge references are transactional and never become physical
+sources. Persistent and compatibility velocity APIs now consume the same accepted
+component-local hard linearization, residual scales and rank thresholds, publish
+world-frame body-origin velocities, apply only representative gauge twists and
+independently validate every differentiated physical equation. L1-L3, floating
+weld/revolute, disconnected, branch-only, scale `1e-6`/`1`/`1e6`, alternative
+gauge, persistence and inconsistent-rate regressions pass. The locked workspace,
+warnings-denied Clippy/rustdoc, WASM, benchmark compilation/test mode, native
+performance, release Trunk, desktop/mobile Chromium, format and diff gates pass.
+
+Post-M17 adversarial hardening adds a separate deterministic public-API corpus for
+the architectural seams M18 will reuse. Three-body private-gauge recovery and live
+gauge rebuilds keep document, runtime, accepted geometry, audit and accepted core
+linearization coherent. Every body reference in a floating welded component is
+common-left-`SE(2)` and scale equivariant; a physical ground on a nonlowest body
+prevents numerical gauge selection. Disconnected floating/grounded velocity remains
+component-local, and alternative velocity gauges differ by exactly one common world
+twist. A two-revolute fixture crosses the configured physical rank threshold while
+retaining exactly three certified gauge DOF. Multi-component malformed gauge JSON,
+current-revision invalid gauge edits and duplicate-weld diagnostics are transactional,
+and private gauge rows are absent from every public source, audit, structural, rank,
+conflict, redundancy and singularity surface. All eight adversarial tests pass
+without a production-code correction.
 
 ---
 

@@ -680,20 +680,9 @@ impl PlaygroundState {
         })
     }
 
-    pub(crate) fn update_gesture(&mut self, pointer_id: i32, svg: [f64; 2]) {
+    #[allow(clippy::too_many_lines)]
+    pub(crate) fn update_gesture(&mut self, pointer_id: i32, svg: [f64; 2]) -> bool {
         let model = self.viewport.svg_to_model(svg);
-        let drag_candidate = matches!(
-            self.gesture,
-            Some(PointerGesture::DragPoint {
-                pointer_id: active,
-                ..
-            }) if active == pointer_id
-        )
-        .then(|| {
-            self.drag_preview
-                .as_ref()
-                .map_or_else(|| self.session.clone(), |preview| preview.session.clone())
-        });
         match &mut self.gesture {
             Some(PointerGesture::DragPoint {
                 pointer_id: active,
@@ -703,9 +692,27 @@ impl PlaygroundState {
             }) if *active == pointer_id => {
                 *moved |= distance(*start_svg, svg) >= 3.0;
                 if !*moved {
-                    return;
+                    return false;
                 }
-                if let Some(mut candidate) = drag_candidate {
+                let duplicate_target = self
+                    .drag_preview
+                    .as_ref()
+                    .map_or_else(
+                        || self.session.request(),
+                        |preview| preview.session.request(),
+                    )
+                    .drag
+                    .is_some_and(|drag| {
+                        drag.point == *point && same_point_bits(drag.target, model)
+                    });
+                if duplicate_target {
+                    return false;
+                }
+                let mut candidate = self
+                    .drag_preview
+                    .as_ref()
+                    .map_or_else(|| self.session.clone(), |preview| preview.session.clone());
+                {
                     let previous = candidate
                         .document()
                         .point(*point)
@@ -750,28 +757,40 @@ impl PlaygroundState {
                         }
                     }
                 }
+                true
             }
             Some(PointerGesture::Pan {
                 pointer_id: active,
                 last_svg,
             }) if *active == pointer_id => {
+                if same_point_bits(*last_svg, svg) {
+                    return false;
+                }
                 self.viewport.center[0] -= (svg[0] - last_svg[0]) / self.viewport.pixels_per_unit;
                 self.viewport.center[1] += (svg[1] - last_svg[1]) / self.viewport.pixels_per_unit;
                 *last_svg = svg;
+                true
             }
             Some(PointerGesture::BoxSelect {
                 pointer_id: active,
                 current_svg,
                 ..
-            }) if *active == pointer_id => *current_svg = svg,
+            }) if *active == pointer_id => {
+                if same_point_bits(*current_svg, svg) {
+                    return false;
+                }
+                *current_svg = svg;
+                true
+            }
             Some(PointerGesture::PlaceDraft {
                 pointer_id: active,
                 current_svg,
             }) if *active == pointer_id => {
                 *current_svg = svg;
                 self.draft_cursor = Some(model);
+                true
             }
-            _ => {}
+            _ => false,
         }
     }
 
@@ -1685,9 +1704,12 @@ impl PlaygroundState {
     }
 
     pub(crate) fn object_list_markup(&self) -> String {
-        let session = self.display_session();
-        let document = session.document();
-        let result = session.accepted_result();
+        let result = self.display_session().accepted_result();
+        self.object_list_markup_with_result(&result)
+    }
+
+    fn object_list_markup_with_result(&self, result: &DocumentSolveResult) -> String {
+        let document = self.display_session().document();
         let mut markup = String::new();
         for point in document.points() {
             object_row(&mut markup, "point", point.id.0, &point.label, "");
@@ -1742,10 +1764,15 @@ impl PlaygroundState {
 
     pub(crate) fn solve_status_markup(&self) -> String {
         let result = self.display_session().accepted_result();
+        Self::solve_status_markup_with_result(&result)
+    }
+
+    fn solve_status_markup_with_result(result: &DocumentSolveResult) -> String {
         let report = &result.accepted_view().core_report;
-        let (rank, equality_dof, bounded_dof) = if report.rank_is_valid {
+        let (rank, left_nullity, equality_dof, bounded_dof) = if report.rank_is_valid {
             (
                 report.rank.to_string(),
+                report.left_nullity.to_string(),
                 report.right_nullity.to_string(),
                 report.bidirectional_degrees_of_freedom.to_string(),
             )
@@ -1754,18 +1781,45 @@ impl PlaygroundState {
                 "unavailable".into(),
                 "unavailable".into(),
                 "unavailable".into(),
+                "unavailable".into(),
             )
         };
+        let structural = &report.structural;
+        let structural_nullity = format!(
+            "L{} / R{}",
+            structural.structural_left_nullity, structural.structural_right_nullity
+        );
+        let backend = report.sparse_fallback_reason.map_or_else(
+            || {
+                format!(
+                    "{:?} -> {:?}",
+                    report.requested_backend, report.actual_backend
+                )
+            },
+            |reason| {
+                format!(
+                    "{:?} -> {:?} ({reason:?})",
+                    report.requested_backend, report.actual_backend
+                )
+            },
+        );
         format!(
-            "<div class=\"status-grid\"><div><span>hard validity</span><strong>{:?}</strong></div><div><span>normalized max</span><strong>{}</strong></div><div><span>rank</span><strong>{rank}</strong></div><div><span>equality DOF</span><strong>{equality_dof}</strong></div><div><span>bounded DOF</span><strong>{bounded_dof}</strong></div><div><span>one-sided motion</span><strong>{:?}</strong></div></div>",
+            "<div class=\"status-grid\"><div><span>hard validity</span><strong>{:?}</strong></div><div><span>normalized max</span><strong>{}</strong></div><div><span>numerical rank</span><strong>{rank}</strong></div><div><span>numerical left nullity</span><strong>{left_nullity}</strong></div><div><span>equality DOF</span><strong>{equality_dof}</strong></div><div><span>bounded DOF</span><strong>{bounded_dof}</strong></div><div><span>one-sided motion</span><strong>{:?}</strong></div><div><span>structural class</span><strong>{:?}</strong></div><div><span>structural rank</span><strong>{}</strong></div><div><span>structural nullity</span><strong>{structural_nullity}</strong></div><div><span>hard components</span><strong>{}</strong></div><div><span>linear backend</span><strong>{backend}</strong></div></div>",
             report.hard_validity,
             crate::format_metric(report.hard_residual_max),
             report.one_sided_mobility,
+            structural.structural_classification,
+            structural.structural_rank,
+            structural.components,
         )
     }
 
     pub(crate) fn audit_markup(&self) -> String {
         let result = self.display_session().accepted_result();
+        Self::audit_markup_with_result(&result)
+    }
+
+    fn audit_markup_with_result(result: &DocumentSolveResult) -> String {
         crate::audit_markup(&result.accepted_view().display_audit, &[])
     }
 
@@ -1823,12 +1877,11 @@ impl PlaygroundState {
     }
 
     pub(crate) fn accepted_is_valid(&self) -> bool {
-        self.display_session()
-            .accepted_result()
-            .accepted_view()
-            .core_report
-            .hard_validity
-            == HardValidity::Valid
+        Self::result_is_valid(&self.display_session().accepted_result())
+    }
+
+    fn result_is_valid(result: &DocumentSolveResult) -> bool {
+        result.accepted_view().core_report.hard_validity == HardValidity::Valid
     }
 
     pub(crate) fn render_svg(&self) -> String {
@@ -2426,9 +2479,17 @@ fn sampled_curves(document: &SketchDocument) -> Vec<CurveSamples> {
                 segment,
             };
             let circle = matches!(curve.definition, CurveDefinition::Circle { .. });
+            let sample_count = if matches!(
+                curve.definition,
+                CurveDefinition::Line { .. } | CurveDefinition::Polyline { .. }
+            ) {
+                1
+            } else {
+                CURVE_SAMPLES
+            };
             let mut samples = Vec::new();
-            for index in 0..=CURVE_SAMPLES {
-                let fraction = f64::from(index) / f64::from(CURVE_SAMPLES);
+            for index in 0..=sample_count {
+                let fraction = f64::from(index) / f64::from(sample_count);
                 let parameter = if circle { fraction * TAU } else { fraction };
                 if let Ok(jet) = document.evaluate_curve_jet(span, parameter) {
                     samples.push((parameter, [jet.position.x, jet.position.y]));
@@ -2517,6 +2578,10 @@ fn angle(center: [f64; 2], point: [f64; 2]) -> f64 {
 
 fn distance(first: [f64; 2], second: [f64; 2]) -> f64 {
     (first[0] - second[0]).hypot(first[1] - second[1])
+}
+
+fn same_point_bits(first: [f64; 2], second: [f64; 2]) -> bool {
+    first[0].to_bits() == second[0].to_bits() && first[1].to_bits() == second[1].to_bits()
 }
 
 fn finite_span(min: f64, max: f64, fallback: f64) -> f64 {
@@ -2621,6 +2686,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)]
     fn advanced_constraint_stress_examples_render_valid_public_documents() {
         for (kind, labels, equality_dof, bounded_dof) in [
             (
@@ -2647,6 +2713,75 @@ mod tests {
                 1,
                 1,
             ),
+            (
+                AlphaScenarioKind::MotionTrammel,
+                ["Trammel bar length 5", "Trammel T bisects AM"],
+                1,
+                1,
+            ),
+            (
+                AlphaScenarioKind::MotionScotchYoke,
+                ["Yoke slot remains vertical", "Yoke crank radius 5"],
+                1,
+                1,
+            ),
+            (
+                AlphaScenarioKind::MotionRotatingSquare,
+                [
+                    "Rotating square adjacent edges perpendicular",
+                    "Rotating square opposite edges AB CD parallel",
+                ],
+                1,
+                1,
+            ),
+            (
+                AlphaScenarioKind::MotionScissor,
+                [
+                    "Scissor upper arms equal",
+                    "Scissor joints mirror across base",
+                ],
+                1,
+                1,
+            ),
+            (
+                AlphaScenarioKind::MotionScissorTower,
+                [
+                    "Tower master diagonal length 10",
+                    "Tower diagonal 10 matches master",
+                ],
+                1,
+                1,
+            ),
+            (
+                AlphaScenarioKind::MotionPeaucellier,
+                [
+                    "Peaucellier long bars equal",
+                    "Peaucellier input circle radius 4",
+                ],
+                1,
+                1,
+            ),
+            (
+                AlphaScenarioKind::DiagnosticRankDrop,
+                ["Rank distance A-P = 2", "Rank distance B-P = 2"],
+                1,
+                1,
+            ),
+            (
+                AlphaScenarioKind::DiagnosticEndpointBound,
+                [
+                    "Endpoint follower on bounded rail",
+                    "Endpoint-fixed contact t=1",
+                ],
+                2,
+                0,
+            ),
+            (
+                AlphaScenarioKind::DiagnosticRedundancy,
+                ["Primary arm length 4", "Duplicate arm length 4"],
+                0,
+                0,
+            ),
         ] {
             let state = PlaygroundState::example(kind, 1.0).unwrap();
             assert!(state.accepted_is_valid());
@@ -2659,6 +2794,27 @@ mod tests {
                 assert!(objects.contains(label));
             }
             assert!(state.render_svg().contains("playground-curve"));
+        }
+    }
+
+    #[test]
+    fn straight_curves_use_only_their_exact_endpoints() {
+        let state = PlaygroundState::example(AlphaScenarioKind::Corpus, 1.0).unwrap();
+        for (span, samples) in sampled_curves(state.document()) {
+            let curve = state.document().curve(span.curve).unwrap();
+            match curve.definition {
+                CurveDefinition::Line { .. } | CurveDefinition::Polyline { .. } => {
+                    assert_eq!(samples.len(), 2, "{}", curve.label);
+                    assert_eq!(samples[0].0.to_bits(), 0.0f64.to_bits());
+                    assert_eq!(samples[1].0.to_bits(), 1.0f64.to_bits());
+                }
+                CurveDefinition::Circle { .. }
+                | CurveDefinition::CircularArc { .. }
+                | CurveDefinition::QuadraticBezier { .. }
+                | CurveDefinition::CubicBezier { .. } => {
+                    assert_eq!(samples.len(), CURVE_SAMPLES as usize + 1, "{}", curve.label);
+                }
+            }
         }
     }
 
@@ -2883,6 +3039,8 @@ mod tests {
         state.redo();
         assert!(state.accepted_is_valid());
         assert!(state.solve_status_markup().contains("equality DOF"));
+        assert!(state.solve_status_markup().contains("structural class"));
+        assert!(state.solve_status_markup().contains("linear backend"));
         assert!(state.audit_markup().contains("audit"));
     }
 
@@ -3138,6 +3296,16 @@ mod tests {
         assert!(page.contains("value=\"stress-bridge\""));
         assert!(page.contains("value=\"motion-cam\""));
         assert!(page.contains("value=\"motion-orbit\""));
+        assert!(page.contains("value=\"motion-trammel\""));
+        assert!(page.contains("value=\"motion-scotch-yoke\""));
+        assert!(page.contains("value=\"motion-rotating-square\""));
+        assert!(page.contains("value=\"motion-scissor\""));
+        assert!(page.contains("value=\"motion-scissor-tower\""));
+        assert!(page.contains("value=\"motion-peaucellier\""));
+        assert!(page.contains("value=\"diagnostic-rank-drop\""));
+        assert!(page.contains("value=\"diagnostic-endpoint-bound\""));
+        assert!(page.contains("value=\"diagnostic-redundancy\""));
+        assert!(page.contains("<optgroup label=\"Solver diagnostics\">"));
         assert!(page.contains("data-action=\"undo-draft\""));
         assert!(page.contains("data-action=\"cancel-draft\""));
         assert!(page.contains("data-action=\"confirm-inference\""));
@@ -3159,7 +3327,16 @@ mod tests {
         let history = state.session().history_len();
         let svg = state.viewport().model_to_svg([0.0, 0.0]);
         state.begin_point_drag(5, point, svg);
+        assert!(!state.update_gesture(5, svg));
+        assert!(!state.update_gesture(5, [svg[0] + 2.0, svg[1]]));
         state.end_gesture(5, true);
+        assert_eq!(state.session().history_len(), history);
+
+        state.begin_point_drag(6, point, svg);
+        let target = state.viewport().model_to_svg([1.0, 0.0]);
+        assert!(state.update_gesture(6, target));
+        assert!(!state.update_gesture(6, target));
+        state.end_gesture(6, false);
         assert_eq!(state.session().history_len(), history);
 
         draw(
@@ -3697,6 +3874,18 @@ pub(crate) mod wasm {
     const STORAGE_KEY: &str = "geosolve.sketch-playground.accepted.v1";
     const STORAGE_BACKUP_KEY: &str = "geosolve.sketch-playground.accepted.backup.v1";
 
+    #[derive(Clone, Copy)]
+    struct PendingPointerMove {
+        pointer_id: i32,
+        svg: [f64; 2],
+    }
+
+    #[derive(Default)]
+    struct PointerMoveQueue {
+        pending: Cell<Option<PendingPointerMove>>,
+        scheduled: Cell<bool>,
+    }
+
     pub(crate) fn install(document: &Document) -> Result<(), JsValue> {
         let window = web_sys::window().ok_or_else(|| JsValue::from_str("window unavailable"))?;
         let storage = window.local_storage().ok().flatten();
@@ -3824,6 +4013,7 @@ pub(crate) mod wasm {
         )?;
         if report.rank_is_valid {
             root.set_attribute("data-rank", &report.rank.to_string())?;
+            root.set_attribute("data-left-nullity", &report.left_nullity.to_string())?;
             root.set_attribute("data-equality-dof", &report.right_nullity.to_string())?;
             root.set_attribute(
                 "data-bounded-dof",
@@ -3831,8 +4021,46 @@ pub(crate) mod wasm {
             )?;
         } else {
             root.remove_attribute("data-rank")?;
+            root.remove_attribute("data-left-nullity")?;
             root.remove_attribute("data-equality-dof")?;
             root.remove_attribute("data-bounded-dof")?;
+        }
+        root.set_attribute(
+            "data-structural-classification",
+            &format!("{:?}", report.structural.structural_classification),
+        )?;
+        root.set_attribute(
+            "data-structural-rank",
+            &report.structural.structural_rank.to_string(),
+        )?;
+        root.set_attribute(
+            "data-structural-left-nullity",
+            &report.structural.structural_left_nullity.to_string(),
+        )?;
+        root.set_attribute(
+            "data-structural-right-nullity",
+            &report.structural.structural_right_nullity.to_string(),
+        )?;
+        root.set_attribute(
+            "data-hard-components",
+            &report.structural.components.to_string(),
+        )?;
+        root.set_attribute(
+            "data-one-sided-motion",
+            &format!("{:?}", report.one_sided_mobility),
+        )?;
+        root.set_attribute(
+            "data-requested-backend",
+            &format!("{:?}", report.requested_backend),
+        )?;
+        root.set_attribute(
+            "data-actual-backend",
+            &format!("{:?}", report.actual_backend),
+        )?;
+        if let Some(reason) = report.sparse_fallback_reason {
+            root.set_attribute("data-sparse-fallback", &format!("{reason:?}"))?;
+        } else {
+            root.remove_attribute("data-sparse-fallback")?;
         }
         let viewport = required(document, "sketch-viewport")?;
         viewport.set_inner_html(&state.render_svg());
@@ -3847,9 +4075,24 @@ pub(crate) mod wasm {
         required(document, "document-status")?.set_text_content(Some(&state.document_status()));
         required(document, "interaction-help")?.set_text_content(Some(&state.interaction_help()));
         required(document, "selection-summary")?.set_text_content(Some(&state.selection_summary()));
-        required(document, "object-list")?.set_inner_html(&state.object_list_markup());
-        required(document, "playground-solve-status")?.set_inner_html(&state.solve_status_markup());
-        required(document, "playground-audit")?.set_inner_html(&state.audit_markup());
+        required(document, "playground-solve-status")?
+            .set_inner_html(&PlaygroundState::solve_status_markup_with_result(&accepted));
+        let object_list = required(document, "object-list")?;
+        let audit = required(document, "playground-audit")?;
+        if state.preview_active() {
+            object_list.set_attribute("aria-busy", "true")?;
+            if root.get_attribute("data-detail-refresh").as_deref() != Some("deferred") {
+                root.set_attribute("data-detail-refresh", "deferred")?;
+                audit.set_inner_html(
+                    "<p class=\"selection-summary\">Detailed audit refreshes when the drag is released.</p>",
+                );
+            }
+        } else {
+            root.remove_attribute("data-detail-refresh")?;
+            object_list.remove_attribute("aria-busy")?;
+            object_list.set_inner_html(&state.object_list_markup_with_result(&accepted));
+            audit.set_inner_html(&PlaygroundState::audit_markup_with_result(&accepted));
+        }
         required(document, "last-attempt")?.set_inner_html(&state.last_attempt_markup());
         required(document, "solve-view-label")?.set_text_content(Some(if state.preview_active() {
             "Accepted drag preview (not saved)"
@@ -3857,16 +4100,15 @@ pub(crate) mod wasm {
             "Accepted solve"
         }));
         let badge = required(document, "solve-badge")?;
-        badge.set_text_content(Some(
-            if state.preview_active() && state.accepted_is_valid() {
-                "accepted preview"
-            } else if state.accepted_is_valid() {
-                "accepted"
-            } else {
-                "not valid"
-            },
-        ));
-        badge.set_class_name(if state.accepted_is_valid() {
+        let accepted_is_valid = PlaygroundState::result_is_valid(&accepted);
+        badge.set_text_content(Some(if state.preview_active() && accepted_is_valid {
+            "accepted preview"
+        } else if accepted_is_valid {
+            "accepted"
+        } else {
+            "not valid"
+        }));
+        badge.set_class_name(if accepted_is_valid {
             "live-badge"
         } else {
             "live-badge expected-conflict"
@@ -3985,6 +4227,17 @@ pub(crate) mod wasm {
                         "stress-bridge" => Some(AlphaScenarioKind::StressBridge),
                         "motion-cam" => Some(AlphaScenarioKind::MotionCam),
                         "motion-orbit" => Some(AlphaScenarioKind::MotionOrbit),
+                        "motion-trammel" => Some(AlphaScenarioKind::MotionTrammel),
+                        "motion-scotch-yoke" => Some(AlphaScenarioKind::MotionScotchYoke),
+                        "motion-rotating-square" => Some(AlphaScenarioKind::MotionRotatingSquare),
+                        "motion-scissor" => Some(AlphaScenarioKind::MotionScissor),
+                        "motion-scissor-tower" => Some(AlphaScenarioKind::MotionScissorTower),
+                        "motion-peaucellier" => Some(AlphaScenarioKind::MotionPeaucellier),
+                        "diagnostic-rank-drop" => Some(AlphaScenarioKind::DiagnosticRankDrop),
+                        "diagnostic-endpoint-bound" => {
+                            Some(AlphaScenarioKind::DiagnosticEndpointBound)
+                        }
+                        "diagnostic-redundancy" => Some(AlphaScenarioKind::DiagnosticRedundancy),
                         _ => None,
                     });
                     let scale = select_value(&callback_document, "alpha-scale")
@@ -4094,10 +4347,18 @@ pub(crate) mod wasm {
         app: &Rc<RefCell<PlaygroundState>>,
     ) -> Result<(), JsValue> {
         let viewport = required(document, "sketch-viewport")?;
+        let move_queue = Rc::new(PointerMoveQueue::default());
         install_pointer_down(document, &viewport, app)?;
-        install_pointer_move(document, &viewport, app)?;
-        install_pointer_end(document, &viewport, app, "pointerup", true)?;
-        install_pointer_end(document, &viewport, app, "pointercancel", false)?;
+        install_pointer_move(document, &viewport, app, &move_queue)?;
+        install_pointer_end(document, &viewport, app, &move_queue, "pointerup", true)?;
+        install_pointer_end(
+            document,
+            &viewport,
+            app,
+            &move_queue,
+            "pointercancel",
+            false,
+        )?;
         Ok(())
     }
 
@@ -4183,28 +4444,56 @@ pub(crate) mod wasm {
         document: &Document,
         viewport: &Element,
         app: &Rc<RefCell<PlaygroundState>>,
+        move_queue: &Rc<PointerMoveQueue>,
     ) -> Result<(), JsValue> {
         let callback_document = document.clone();
         let callback_viewport = viewport.clone();
         let callback_app = Rc::clone(app);
+        let callback_queue = Rc::clone(move_queue);
+        let frame_document = document.clone();
+        let frame_app = Rc::clone(app);
+        let frame_queue = Rc::clone(move_queue);
+        let frame_callback: Rc<RefCell<Option<Closure<dyn FnMut(f64)>>>> =
+            Rc::new(RefCell::new(None));
+        *frame_callback.borrow_mut() = Some(Closure::new(move |_timestamp: f64| {
+            frame_queue.scheduled.set(false);
+            if apply_pending_pointer_move(&frame_queue, &frame_app) {
+                render_shared(&frame_document, &frame_app);
+            }
+        }));
+        let callback_frame = Rc::clone(&frame_callback);
         let callback = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
             let Some(svg) = pointer_svg(&event, &callback_viewport) else {
                 return;
             };
-            let mut state = callback_app.borrow_mut();
-            let should_render = if state.gesture_pointer() == Some(event.pointer_id()) {
-                event.prevent_default();
-                state.update_gesture(event.pointer_id(), svg);
-                true
-            } else if matches!(state.tool(), Tool::Draw(_)) {
-                let model = state.viewport().svg_to_model(svg);
-                state.set_draft_cursor(model);
-                true
-            } else {
-                false
-            };
+            let state = callback_app.borrow();
+            let active_gesture = state.gesture_pointer() == Some(event.pointer_id());
+            let should_queue = active_gesture || matches!(state.tool(), Tool::Draw(_));
             drop(state);
-            if should_render {
+            if !should_queue {
+                return;
+            }
+            if active_gesture {
+                event.prevent_default();
+            }
+            callback_queue.pending.set(Some(PendingPointerMove {
+                pointer_id: event.pointer_id(),
+                svg,
+            }));
+            if callback_queue.scheduled.replace(true) {
+                return;
+            }
+            let scheduled = web_sys::window().is_some_and(|window| {
+                callback_frame.borrow().as_ref().is_some_and(|callback| {
+                    window
+                        .request_animation_frame(callback.as_ref().unchecked_ref())
+                        .is_ok()
+                })
+            });
+            if !scheduled {
+                callback_queue.scheduled.set(false);
+            }
+            if !scheduled && apply_pending_pointer_move(&callback_queue, &callback_app) {
                 render_shared(&callback_document, &callback_app);
             }
         });
@@ -4218,17 +4507,24 @@ pub(crate) mod wasm {
         document: &Document,
         viewport: &Element,
         app: &Rc<RefCell<PlaygroundState>>,
+        move_queue: &Rc<PointerMoveQueue>,
         event_name: &str,
         commit: bool,
     ) -> Result<(), JsValue> {
         let callback_document = document.clone();
         let callback_viewport = viewport.clone();
         let callback_app = Rc::clone(app);
+        let callback_queue = Rc::clone(move_queue);
         let callback = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
             if callback_app.borrow().gesture_pointer() != Some(event.pointer_id()) {
                 return;
             }
             event.prevent_default();
+            if commit {
+                apply_pending_pointer_move(&callback_queue, &callback_app);
+            } else {
+                callback_queue.pending.set(None);
+            }
             if commit && let Some(svg) = pointer_svg(&event, &callback_viewport) {
                 callback_app
                     .borrow_mut()
@@ -4243,6 +4539,29 @@ pub(crate) mod wasm {
         viewport.add_event_listener_with_callback(event_name, callback.as_ref().unchecked_ref())?;
         callback.forget();
         Ok(())
+    }
+
+    fn apply_pending_pointer_move(
+        move_queue: &PointerMoveQueue,
+        app: &Rc<RefCell<PlaygroundState>>,
+    ) -> bool {
+        let Some(pending) = move_queue.pending.take() else {
+            return false;
+        };
+        let mut state = app.borrow_mut();
+        if state.gesture_pointer() == Some(pending.pointer_id) {
+            state.update_gesture(pending.pointer_id, pending.svg)
+        } else if matches!(state.tool(), Tool::Draw(_)) {
+            let model = state.viewport().svg_to_model(pending.svg);
+            if state.draft_cursor == Some(model) {
+                false
+            } else {
+                state.set_draft_cursor(model);
+                true
+            }
+        } else {
+            false
+        }
     }
 
     fn install_wheel_listener(

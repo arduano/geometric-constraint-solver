@@ -3,6 +3,7 @@
 mod compiler;
 mod continuation;
 mod model;
+mod planar;
 mod residuals;
 mod scenarios;
 mod velocity;
@@ -21,6 +22,14 @@ pub use model::{
     AxisDirectionBranch, AxisFeature, AxisFeatureId, BodyId, BranchMonitor, BranchMonitorId,
     BranchSign, BranchViolation, Driver, DriverId, DriverKind, DriverUnit, Joint, JointId,
     JointKind, Linkage, LinkageError, PointFeature, PointFeatureId, RigidBody,
+};
+pub use planar::{
+    PLANAR_LINKAGE_DOCUMENT_VERSION, PlanarAxisFeature, PlanarBody, PlanarBodyId, PlanarBodyState,
+    PlanarComponentGaugeReport, PlanarDocumentId, PlanarDriverState, PlanarFeatureId,
+    PlanarGaugePolicy, PlanarGaugeReference, PlanarGaugeReport, PlanarLinkageAcceptedState,
+    PlanarLinkageDocument, PlanarLinkageError, PlanarLinkageRuntimeMap, PlanarLinkageSession,
+    PlanarLinkageTopology, PlanarPointFeature, PlanarRuntimeFeature, PlanarRuntimeSource,
+    PlanarSource, PlanarSourceId, PlanarSourceKind, PlanarWorldActionCertification,
 };
 pub use scenarios::{
     FourBarAssemblyMode, FourBarIds, SliderCrankAssemblyMode, SliderCrankIds, four_bar,

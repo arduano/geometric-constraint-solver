@@ -1,8 +1,8 @@
-use geosolve_core::{ResidualCategory, SolverConfig};
+use geosolve_core::{SensitivityStatus, SolverConfig, VariableId, VariableKind, VariableValue};
 use geosolve_geometry::{Rotation2, Vector2};
-use nalgebra::{DMatrix, DVector};
+use nalgebra::DVector;
 
-use crate::compiler::{LinkageGeometry, LinkageSource, cross2};
+use crate::compiler::{AcceptedCompiledLinkage, LinkageGeometry, LinkageSource, cross2};
 use crate::model::{
     BodyId, DriverId, DriverKind, JointKind, Linkage, LinkageError, validate_finite,
 };
@@ -37,11 +37,10 @@ pub struct VelocityResult {
     pub differentiated_residual_max: f64,
 }
 
-#[derive(Clone, Copy, Debug)]
-struct ReducedBodyLayout {
-    body_id: BodyId,
-    reduced_start: usize,
-    step_scales: [f64; 3],
+#[derive(Clone, Debug)]
+pub(crate) struct VelocityGaugeComponent {
+    pub(crate) bodies: Vec<BodyId>,
+    pub(crate) reference: BodyId,
 }
 
 impl VelocityResult {
@@ -57,17 +56,16 @@ impl VelocityResult {
 impl Linkage {
     /// Solves `J_q q_dot + J_s s_dot = 0` at the current accepted position.
     ///
-    /// Dense columns are normalized by core variable step scales; the returned
-    /// body-local rates are converted back to physical units and rotated before
-    /// publication so [`BodyVelocity::linear`] remains a world-frame origin
-    /// velocity.
+    /// The solve uses the accepted core component linearization and rank
+    /// thresholds. Returned body-local rates are converted to physical units
+    /// and rotated before publication so [`BodyVelocity::linear`] remains a
+    /// world-frame origin velocity.
     ///
     /// # Errors
     ///
     /// Returns an error for a stale driver, non-finite rate, a position that
     /// fails fresh hard/branch validation, invalid rank data, or a differentiated
     /// system whose independently evaluated residual exceeds tolerance.
-    #[allow(clippy::too_many_lines)]
     pub fn velocity(
         &self,
         driver: DriverId,
@@ -78,227 +76,11 @@ impl Linkage {
             .get(driver)
             .ok_or(LinkageError::UnknownDriver(driver))?;
         let compiled = self.compile()?;
-        let geometry = compiled.solved_geometry()?;
-        let tolerance = SolverConfig::default().normalized_residual_tolerance;
-        let domain_max = self.domain_hard_residual_max(&geometry, None)?;
-        if domain_max > tolerance {
-            return Err(LinkageError::PositionNotAccepted(format!(
-                "domain hard residual {domain_max:e} exceeds {tolerance:e}"
-            )));
-        }
-        if let Some(violation) = self.first_branch_violation(&geometry)? {
-            return Err(LinkageError::PositionNotAccepted(format!(
-                "explicit branch check failed: {violation:?}"
-            )));
-        }
-        let audit = compiled.problem.audit_snapshot()?;
-        let audit_max = audit
-            .sources
-            .iter()
-            .flat_map(|source| &source.rows)
-            .filter(|row| row.category == ResidualCategory::Hard)
-            .try_fold(0.0_f64, |maximum, row| {
-                row.normalized_residual
-                    .is_finite()
-                    .then_some(maximum.max(row.normalized_residual.abs()))
-            })
-            .ok_or(LinkageError::VelocityFailure(
-                "hard audit contains a non-finite row",
-            ))?;
-        if audit_max > tolerance {
-            return Err(LinkageError::PositionNotAccepted(format!(
-                "hard audit residual {audit_max:e} exceeds {tolerance:e}"
-            )));
-        }
-
-        let assembly = compiled.problem.assemble_dense()?;
-        let grounded_residuals: Vec<_> = compiled
-            .source_mappings()
-            .iter()
-            .filter(|mapping| matches!(mapping.source, LinkageSource::Ground(_)))
-            .flat_map(|mapping| mapping.residual_ids.iter().copied())
-            .collect();
-        let hard_rows: Vec<_> = assembly
-            .residual_layout()
-            .iter()
-            .filter(|layout| {
-                compiled
-                    .problem
-                    .residual(layout.residual_id)
-                    .is_some_and(|residual| residual.category() == ResidualCategory::Hard)
-                    && !grounded_residuals.contains(&layout.residual_id)
-            })
-            .flat_map(|layout| layout.row_range.clone())
-            .collect();
-        let mut active_columns = Vec::new();
-        let mut reduced_body_layouts = Vec::new();
-        for mapping in compiled.body_variables() {
-            if self.require_body(mapping.body_id)?.grounded() {
-                continue;
-            }
-            let block = assembly
-                .variable_layout()
-                .block(mapping.variable_id)
-                .ok_or(geosolve_core::CoreError::UnknownVariable(
-                    mapping.variable_id,
-                ))?;
-            if block.tangent_range.len() != 3 || block.step_scales.len() != 3 {
-                return Err(LinkageError::VelocityFailure(
-                    "body variable does not have a Pose2 tangent layout",
-                ));
-            }
-            let reduced_start = active_columns.len();
-            active_columns.extend(block.tangent_range.clone());
-            reduced_body_layouts.push(ReducedBodyLayout {
-                body_id: mapping.body_id,
-                reduced_start,
-                step_scales: [
-                    block.step_scales[0],
-                    block.step_scales[1],
-                    block.step_scales[2],
-                ],
-            });
-        }
-        let mut matrix = DMatrix::zeros(hard_rows.len(), active_columns.len());
-        for (target_row, &source_row) in hard_rows.iter().enumerate() {
-            for (target_column, &source_column) in active_columns.iter().enumerate() {
-                matrix[(target_row, target_column)] =
-                    assembly.jacobian()[(source_row, source_column)];
-            }
-        }
-        let driver_mapping = compiled
-            .source_mapping(LinkageSource::Driver(driver))
-            .ok_or(LinkageError::UnknownDriver(driver))?;
-        let driver_residual_id =
-            *driver_mapping
-                .residual_ids
-                .first()
-                .ok_or(LinkageError::VelocityFailure(
-                    "selected driver has no executable row",
-                ))?;
-        let driver_range =
-            assembly
-                .residual_range(driver_residual_id)
-                .ok_or(LinkageError::VelocityFailure(
-                    "selected driver row is absent from dense assembly",
-                ))?;
-        let source_driver_row = driver_range.start;
-        let hard_driver_row = hard_rows
-            .iter()
-            .position(|&row| row == source_driver_row)
-            .ok_or(LinkageError::VelocityFailure(
-                "selected driver is not a hard row",
-            ))?;
-        let driver_residual = compiled.problem.residual(driver_residual_id).ok_or(
-            geosolve_core::CoreError::UnknownResidual(driver_residual_id),
-        )?;
-        let mut right_hand_side = DVector::zeros(hard_rows.len());
-        // Both driver residuals contain `-target`; rows are normalized by their
-        // own physical residual scale.
-        right_hand_side[hard_driver_row] = driver_rate / driver_residual.scales()[0];
-
-        let rank_relative_tolerance = SolverConfig::default().rank_relative_tolerance;
-        let singular_values: Vec<_> = matrix
-            .clone()
-            .svd(false, false)
-            .singular_values
-            .iter()
-            .copied()
-            .collect();
-        if singular_values.iter().any(|value| !value.is_finite()) {
-            return Err(LinkageError::VelocityFailure(
-                "singular-value calculation returned non-finite data",
-            ));
-        }
-        let largest = singular_values.iter().copied().fold(0.0_f64, f64::max);
-        let dimension = u32::try_from(matrix.nrows().max(matrix.ncols()))
-            .map_err(|_| LinkageError::VelocityFailure("velocity system dimension is too large"))?;
-        let configured_threshold = largest * rank_relative_tolerance;
-        let machine_threshold = f64::EPSILON * f64::from(dimension) * largest;
-        let rank_threshold = configured_threshold.max(machine_threshold);
-        if !rank_threshold.is_finite() {
-            return Err(LinkageError::VelocityFailure("rank threshold is invalid"));
-        }
-        let rank = singular_values
-            .iter()
-            .filter(|&&value| value > rank_threshold)
-            .count();
-        let normalized_rates =
-            solve_velocity_system(&matrix, &right_hand_side, rank, rank_threshold)?;
-
-        let mut body_velocities = Vec::with_capacity(compiled.body_variables().len());
-        for mapping in compiled.body_variables() {
-            let velocity = if self.require_body(mapping.body_id)?.grounded() {
-                BodyVelocity {
-                    body_id: mapping.body_id,
-                    linear: Vector2::zeros(),
-                    angular: 0.0,
-                }
-            } else {
-                let layout = reduced_body_layouts
-                    .iter()
-                    .find(|layout| layout.body_id == mapping.body_id)
-                    .ok_or(LinkageError::VelocityFailure(
-                        "free body is absent from the reduced velocity layout",
-                    ))?;
-                let local_linear = Vector2::new(
-                    normalized_rates[layout.reduced_start] * layout.step_scales[0],
-                    normalized_rates[layout.reduced_start + 1] * layout.step_scales[1],
-                );
-                let pose = geometry
-                    .body_pose(mapping.body_id)
-                    .ok_or(LinkageError::UnknownBody(mapping.body_id))?;
-                BodyVelocity {
-                    body_id: mapping.body_id,
-                    linear: pose.transform_vector(local_linear),
-                    angular: normalized_rates[layout.reduced_start + 2] * layout.step_scales[2],
-                }
-            };
-            if !velocity.linear.iter().all(|value| value.is_finite())
-                || !velocity.angular.is_finite()
-            {
-                return Err(LinkageError::VelocityFailure(
-                    "physical body velocity is non-finite",
-                ));
-            }
-            body_velocities.push(velocity);
-        }
-
-        let linearized_residual = &matrix * &normalized_rates - &right_hand_side;
-        let matrix_residual_max = linearized_residual
-            .iter()
-            .map(|value| value.abs())
-            .fold(0.0_f64, f64::max);
-        let differentiated_residual_max = self.differentiated_hard_residual_max(
-            &geometry,
-            &body_velocities,
-            driver,
-            driver_rate,
-        )?;
-        if !matrix_residual_max.is_finite()
-            || !differentiated_residual_max.is_finite()
-            || matrix_residual_max > tolerance
-            || differentiated_residual_max > tolerance
-        {
-            return Err(LinkageError::VelocityFailure(
-                "differentiated hard equations did not validate",
-            ));
-        }
-
-        let columns = matrix.ncols();
-        Ok(VelocityResult {
-            driver_id: driver,
-            driver_rate,
-            body_velocities,
-            rank_is_valid: true,
-            rank,
-            local_degrees_of_freedom: columns.saturating_sub(rank),
-            is_singular: rank < matrix.nrows().min(columns),
-            rank_relative_tolerance,
-            rank_threshold,
-            singular_values,
-            differentiated_residual_max,
-        })
+        let accepted = compiled
+            .into_accepted_session(SolverConfig::default())
+            .map_err(|error| LinkageError::PositionNotAccepted(error.to_string()))?;
+        require_same_body_state(self, &accepted)?;
+        velocity_from_accepted_session(self, &accepted, driver, driver_rate, &[])
     }
 
     #[allow(clippy::too_many_lines)]
@@ -426,43 +208,229 @@ impl Linkage {
     }
 }
 
-fn solve_velocity_system(
-    matrix: &DMatrix<f64>,
-    right_hand_side: &DVector<f64>,
-    rank: usize,
-    rank_threshold: f64,
-) -> Result<DVector<f64>, LinkageError> {
-    let rows = matrix.nrows();
-    let columns = matrix.ncols();
-    if right_hand_side.len() != rows {
-        return Err(LinkageError::VelocityFailure(
-            "velocity right-hand side has the wrong dimension",
-        ));
+#[allow(clippy::too_many_lines)]
+pub(crate) fn velocity_from_accepted_session(
+    linkage: &Linkage,
+    accepted: &AcceptedCompiledLinkage,
+    driver: DriverId,
+    driver_rate: f64,
+    gauges: &[VelocityGaugeComponent],
+) -> Result<VelocityResult, LinkageError> {
+    validate_finite(driver_rate, "driver rate")?;
+    linkage
+        .drivers
+        .get(driver)
+        .ok_or(LinkageError::UnknownDriver(driver))?;
+    let tolerance = accepted.session().config().normalized_residual_tolerance;
+    let geometry = accepted.solved_geometry()?;
+    let domain_max = linkage.domain_hard_residual_max(&geometry, None)?;
+    if domain_max > tolerance {
+        return Err(LinkageError::PositionNotAccepted(format!(
+            "domain hard residual {domain_max:e} exceeds {tolerance:e}"
+        )));
     }
-    if columns == 0 {
-        return Ok(DVector::zeros(0));
+    if let Some(violation) = linkage.first_branch_violation(&geometry)? {
+        return Err(LinkageError::PositionNotAccepted(format!(
+            "explicit branch check failed: {violation:?}"
+        )));
     }
-    if rows >= columns && rank == columns {
-        let qr = matrix.clone().qr();
-        let mut transformed = right_hand_side.clone();
-        qr.q_tr_mul(&mut transformed);
-        let triangular = qr.r();
-        let transformed_top = transformed.rows(0, columns).into_owned();
-        if let Some(solution) = triangular.solve_upper_triangular(&transformed_top)
-            && solution.iter().all(|value| value.is_finite())
+
+    let driver_mapping = accepted
+        .source_mapping(LinkageSource::Driver(driver))
+        .ok_or(LinkageError::UnknownDriver(driver))?;
+    let linearization = accepted.session().accepted_hard_linearization()?;
+    let mut raw_rates = accepted
+        .body_variables()
+        .iter()
+        .map(|mapping| {
+            let rate = linkage
+                .require_body(mapping.body_id)?
+                .grounded()
+                .then_some([0.0; 3]);
+            Ok((mapping.body_id, rate))
+        })
+        .collect::<Result<Vec<_>, LinkageError>>()?;
+    let mut selected_rows = 0_usize;
+
+    for component in linearization.components() {
+        let mut residual_rate = DVector::zeros(component.hard_rows().len());
+        for (index, row) in component.hard_rows().iter().enumerate() {
+            if row.row.source_id == driver_mapping.core_source_id
+                && driver_mapping.residual_ids.contains(&row.row.residual_id)
+                && row.row.row_in_block == 0
+            {
+                residual_rate[index] = -driver_rate / row.residual_scale;
+                selected_rows += 1;
+            }
+        }
+        let solution = component
+            .solve_sensitivity(&residual_rate)
+            .map_err(|_| LinkageError::VelocityFailure("accepted sensitivity solve failed"))?;
+        if !matches!(
+            solution.status,
+            SensitivityStatus::Unique | SensitivityStatus::UnderdeterminedMinimumNorm
+        ) || solution.equation_residual_max > tolerance
         {
-            return Ok(solution);
+            return Err(LinkageError::VelocityFailure(
+                "differentiated hard equations did not validate",
+            ));
+        }
+        for block in &solution.raw_tangent_blocks {
+            if block.kind != VariableKind::Pose2 || block.values.len() != 3 {
+                return Err(LinkageError::VelocityFailure(
+                    "accepted tangent block is not a Pose2 velocity",
+                ));
+            }
+            let values = [block.values[0], block.values[1], block.values[2]];
+            assign_raw_rate(accepted, &mut raw_rates, block.root, values)?;
+            for &alias in &block.alias_members {
+                assign_raw_rate(accepted, &mut raw_rates, alias, values)?;
+            }
         }
     }
-    let svd = matrix.clone().svd(true, true);
-    let solution = svd
-        .solve(right_hand_side, rank_threshold)
-        .map_err(|_| LinkageError::VelocityFailure("QR and SVD velocity solves failed"))?;
-    if solution.iter().all(|value| value.is_finite()) {
-        Ok(solution)
+    if selected_rows != 1 {
+        return Err(LinkageError::VelocityFailure(
+            "selected driver does not map to exactly one accepted hard row",
+        ));
+    }
+
+    let mut body_velocities = Vec::with_capacity(raw_rates.len());
+    for (body_id, raw) in raw_rates {
+        let [local_x, local_y, angular] = raw.ok_or(LinkageError::VelocityFailure(
+            "free body is absent from the accepted tangent layout",
+        ))?;
+        let pose = geometry
+            .body_pose(body_id)
+            .ok_or(LinkageError::UnknownBody(body_id))?;
+        let velocity = BodyVelocity {
+            body_id,
+            linear: pose.transform_vector(Vector2::new(local_x, local_y)),
+            angular,
+        };
+        require_finite_velocity(velocity)?;
+        body_velocities.push(velocity);
+    }
+    apply_velocity_gauges(&geometry, &mut body_velocities, gauges)?;
+
+    let differentiated_residual_max = linkage.differentiated_hard_residual_max(
+        &geometry,
+        &body_velocities,
+        driver,
+        driver_rate,
+    )?;
+    if !differentiated_residual_max.is_finite() || differentiated_residual_max > tolerance {
+        return Err(LinkageError::VelocityFailure(
+            "differentiated hard equations did not validate",
+        ));
+    }
+    let report = accepted.session().report();
+    Ok(VelocityResult {
+        driver_id: driver,
+        driver_rate,
+        body_velocities,
+        rank_is_valid: report.rank_is_valid,
+        rank: report.rank,
+        local_degrees_of_freedom: report.right_nullity,
+        is_singular: report.is_singular,
+        rank_relative_tolerance: report.rank_relative_tolerance,
+        rank_threshold: report.rank_threshold,
+        singular_values: report.singular_values.clone(),
+        differentiated_residual_max,
+    })
+}
+
+fn require_same_body_state(
+    linkage: &Linkage,
+    accepted: &AcceptedCompiledLinkage,
+) -> Result<(), LinkageError> {
+    for mapping in accepted.body_variables() {
+        let expected = linkage.require_body(mapping.body_id)?.pose().ambient();
+        let VariableValue::Pose2(actual) = accepted
+            .session()
+            .problem()
+            .variable(mapping.variable_id)
+            .ok_or(geosolve_core::CoreError::UnknownVariable(
+                mapping.variable_id,
+            ))?
+            .value()
+        else {
+            return Err(LinkageError::VelocityFailure(
+                "accepted body variable is not Pose2",
+            ));
+        };
+        if actual
+            .iter()
+            .zip(expected)
+            .any(|(actual, expected)| actual.to_bits() != expected.to_bits())
+        {
+            return Err(LinkageError::PositionNotAccepted(
+                "private velocity solve diverged from the current accepted linkage state"
+                    .to_owned(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn assign_raw_rate(
+    accepted: &AcceptedCompiledLinkage,
+    raw_rates: &mut [(BodyId, Option<[f64; 3]>)],
+    variable: VariableId,
+    values: [f64; 3],
+) -> Result<(), LinkageError> {
+    let body = accepted
+        .body_variables()
+        .iter()
+        .find_map(|mapping| (mapping.variable_id == variable).then_some(mapping.body_id))
+        .ok_or(LinkageError::VelocityFailure(
+            "accepted tangent block is not a linkage body",
+        ))?;
+    let slot = raw_rates
+        .iter_mut()
+        .find(|(candidate, _)| *candidate == body)
+        .ok_or(LinkageError::UnknownBody(body))?;
+    if slot.1.replace(values).is_some() {
+        return Err(LinkageError::VelocityFailure(
+            "accepted body velocity was assigned more than once",
+        ));
+    }
+    Ok(())
+}
+
+fn apply_velocity_gauges(
+    geometry: &LinkageGeometry,
+    velocities: &mut [BodyVelocity],
+    gauges: &[VelocityGaugeComponent],
+) -> Result<(), LinkageError> {
+    for gauge in gauges {
+        let reference_velocity = body_velocity(velocities, gauge.reference)?;
+        let reference_pose = geometry
+            .body_pose(gauge.reference)
+            .ok_or(LinkageError::UnknownBody(gauge.reference))?;
+        for &body in &gauge.bodies {
+            let pose = geometry
+                .body_pose(body)
+                .ok_or(LinkageError::UnknownBody(body))?;
+            let velocity = velocities
+                .iter_mut()
+                .find(|velocity| velocity.body_id == body)
+                .ok_or(LinkageError::UnknownBody(body))?;
+            velocity.linear -= reference_velocity.linear
+                + perpendicular(pose.translation - reference_pose.translation)
+                    * reference_velocity.angular;
+            velocity.angular -= reference_velocity.angular;
+            require_finite_velocity(*velocity)?;
+        }
+    }
+    Ok(())
+}
+
+fn require_finite_velocity(velocity: BodyVelocity) -> Result<(), LinkageError> {
+    if velocity.linear.iter().all(|value| value.is_finite()) && velocity.angular.is_finite() {
+        Ok(())
     } else {
         Err(LinkageError::VelocityFailure(
-            "velocity solution is non-finite",
+            "physical body velocity is non-finite",
         ))
     }
 }

@@ -15,8 +15,11 @@ mod session;
 
 pub use alpha_scenarios::{
     A1ScenarioIds, A2ScenarioIds, A3ScenarioIds, A4ScenarioIds, A5ScenarioIds, A8ScenarioIds,
-    AlphaPerformanceSize, AlphaScenarioFixture, AlphaScenarioIds, AlphaScenarioKind, MotionCamIds,
-    MotionOrbitIds, StressBridgeIds, StressCompassIds, alpha_performance_document, alpha_scenario,
+    AlphaPerformanceSize, AlphaScenarioFixture, AlphaScenarioIds, AlphaScenarioKind,
+    DiagnosticEndpointBoundIds, DiagnosticRankDropIds, DiagnosticRedundancyIds, MotionCamIds,
+    MotionOrbitIds, MotionPeaucellierIds, MotionRotatingSquareIds, MotionScissorIds,
+    MotionScissorTowerIds, MotionScotchYokeIds, MotionTrammelIds, StressBridgeIds,
+    StressCompassIds, alpha_performance_document, alpha_scenario,
 };
 pub use beziers::{BezierCurve, BezierEvaluationError, BezierKind};
 pub use compiler::{

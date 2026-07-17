@@ -41,7 +41,7 @@ Starting at M9, and not as a retroactive M8 gate:
 - each component uses the machine-floor numerical rank threshold in `ARCHITECTURE.md`;
 - numerical left and right nullity are both reported;
 - near-singular warnings use the documented band without silently changing rank or convergence.
-- the M9 rank contract governs core equality/position reports; linkage velocity remains on its compatibility policy until the shared M17 migration.
+- the M9 rank contract governs core equality/position reports; starting at M17, linkage velocity consumes the same accepted component-local hard linearization and rank thresholds.
 
 Starting at M10, active-bound mobility and one-sided feasible motion are mandatory. Starting at M16, structural matching and deterministic under/well/over/mixed partitions are mandatory. A target rule does not make the frozen baseline fail before its assigned milestone.
 
@@ -284,6 +284,16 @@ no sparse factorization success is used as rank or convergence evidence.
 - Physical ground and numerical gauge produce identical relative geometry under alternative gauge choices.
 - A floating planar component reports three gauge DOF separately from internal mobility.
 - L1-L3 and compatibility APIs remain valid.
+
+Completion record (2026-07-17): persistent planar topology, accepted state,
+body-local features, runtime mappings and gauge metadata are separate. Private
+manifold gauges select coordinates for certified floating components but are absent
+from the independently validated physical report, source audit and diagnostics.
+Reports check and expose physical equality nullity as `gauge_dof +
+internal_mobility`; alternative references preserve relative geometry and source
+diagnostics at all required scales. Persistent and compatibility velocity queries
+reuse accepted hard component rows, scales, rank thresholds and sensitivity solves,
+then independently validate published world-frame velocities. L1-L3 remain valid.
 
 ## M18 acceptance: spatial vertical slice
 

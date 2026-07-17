@@ -55,3 +55,8 @@ node e2e/m14.mjs
 ```
 
 The Chromium suite uses only Node standard-library APIs, including the global `WebSocket`, and raw DevTools Protocol. It requires Node 22 or newer, an external Chromium executable, and no npm packages, WebDriver, or browser-test framework.
+
+The browser gate also dispatches a 40-event desktop pointer burst against the
+five-stage scissor tower. The burst must coalesce into exactly one animation-frame
+render within 100 ms, retain validated projected geometry, defer detailed audit DOM
+updates only while the drag is active and flush the final target before release.

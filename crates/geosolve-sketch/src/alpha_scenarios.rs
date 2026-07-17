@@ -3,9 +3,10 @@ use std::f64::consts::PI;
 use crate::{
     ContactId, ContactNeighborhood, CurveDefinition, CurveId, CurveSpan, DesignPointId,
     DesignScalarId, DocumentArcSweep, DocumentArcTangencySide, DocumentConstraintDefinition,
-    DocumentConstraintId, DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode,
-    DocumentError, DocumentId, DocumentLineSide, DocumentSolveRequest, FeatureEndpoint,
-    PersistentId, RectangleIds, ScalarDomain, ScalarUnit, SketchDocument, TangentOrientation,
+    DocumentConstraintId, DocumentCoordinateAxis, DocumentDimensionDefinition, DocumentDimensionId,
+    DocumentDimensionMode, DocumentError, DocumentId, DocumentLineSide, DocumentSolveRequest,
+    FeatureEndpoint, MIN_REPRESENTABLE_RADIUS, PersistentId, RectangleIds, ScalarDomain,
+    ScalarUnit, SketchDocument, TangentOrientation,
 };
 
 /// Canonical playground-alpha scenarios shared by native tests and browser examples.
@@ -22,6 +23,15 @@ pub enum AlphaScenarioKind {
     StressBridge,
     MotionCam,
     MotionOrbit,
+    MotionTrammel,
+    MotionScotchYoke,
+    MotionRotatingSquare,
+    MotionScissor,
+    MotionScissorTower,
+    MotionPeaucellier,
+    DiagnosticRankDrop,
+    DiagnosticEndpointBound,
+    DiagnosticRedundancy,
 }
 
 /// Deterministic workload sizes used by the M14 interaction budgets.
@@ -46,6 +56,15 @@ impl AlphaScenarioKind {
             Self::StressBridge => "stress-bridge",
             Self::MotionCam => "motion-cam",
             Self::MotionOrbit => "motion-orbit",
+            Self::MotionTrammel => "motion-trammel",
+            Self::MotionScotchYoke => "motion-scotch-yoke",
+            Self::MotionRotatingSquare => "motion-rotating-square",
+            Self::MotionScissor => "motion-scissor",
+            Self::MotionScissorTower => "motion-scissor-tower",
+            Self::MotionPeaucellier => "motion-peaucellier",
+            Self::DiagnosticRankDrop => "diagnostic-rank-drop",
+            Self::DiagnosticEndpointBound => "diagnostic-endpoint-bound",
+            Self::DiagnosticRedundancy => "diagnostic-redundancy",
         }
     }
 }
@@ -157,6 +176,91 @@ pub struct MotionOrbitIds {
     pub tangency: DocumentConstraintId,
 }
 
+/// Persistent roles in the elliptic-trammel motion example.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MotionTrammelIds {
+    pub horizontal_slider: DesignPointId,
+    pub vertical_slider: DesignPointId,
+    pub tracer: DesignPointId,
+    pub bar: CurveId,
+    pub horizontal_contact: ContactId,
+    pub vertical_contact: ContactId,
+}
+
+/// Persistent roles in the offset Scotch-yoke motion example.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MotionScotchYokeIds {
+    pub crank_center: DesignPointId,
+    pub crank_pin: DesignPointId,
+    pub slider: DesignPointId,
+    pub crank: CurveId,
+    pub slot: CurveId,
+}
+
+/// Persistent roles in the constraint-built rotating-square example.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MotionRotatingSquareIds {
+    pub corners: [DesignPointId; 4],
+    pub edges: [CurveId; 4],
+}
+
+/// Persistent roles in the symmetric scissor-jack motion example.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MotionScissorIds {
+    pub anchor: DesignPointId,
+    pub slider: DesignPointId,
+    pub upper_joint: DesignPointId,
+    pub lower_joint: DesignPointId,
+    pub axis: CurveId,
+}
+
+/// Persistent roles in the synchronized five-stage scissor-tower example.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MotionScissorTowerIds {
+    pub left_levels: [DesignPointId; 6],
+    pub right_levels: [DesignPointId; 6],
+    pub platforms: [CurveId; 6],
+    pub diagonal_bars: [CurveId; 10],
+}
+
+/// Persistent roles in the Peaucellier-Lipkin straight-line example.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MotionPeaucellierIds {
+    pub origin: DesignPointId,
+    pub input_center: DesignPointId,
+    pub input: DesignPointId,
+    pub output: DesignPointId,
+    pub shoulders: [DesignPointId; 2],
+    pub bars: [CurveId; 7],
+}
+
+/// Persistent roles in the structural-versus-numerical rank diagnostic example.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DiagnosticRankDropIds {
+    pub point: DesignPointId,
+    pub first_distance: DocumentDimensionId,
+    pub second_distance: DocumentDimensionId,
+}
+
+/// Persistent roles in the fixed-endpoint versus active-radius diagnostic example.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DiagnosticEndpointBoundIds {
+    pub line: CurveId,
+    pub point: DesignPointId,
+    pub contact: ContactId,
+    pub point_on_curve: DocumentConstraintId,
+    pub circle: CurveId,
+    pub radius: DesignScalarId,
+}
+
+/// Persistent roles in the redundant-source diagnostic example.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DiagnosticRedundancyIds {
+    pub line: CurveId,
+    pub primary_length: DocumentDimensionId,
+    pub duplicate_length: DocumentDimensionId,
+}
+
 /// Scenario-specific persistent roles.
 #[derive(Clone, Debug, PartialEq)]
 pub enum AlphaScenarioIds {
@@ -171,6 +275,15 @@ pub enum AlphaScenarioIds {
     StressBridge(StressBridgeIds),
     MotionCam(MotionCamIds),
     MotionOrbit(MotionOrbitIds),
+    MotionTrammel(MotionTrammelIds),
+    MotionScotchYoke(MotionScotchYokeIds),
+    MotionRotatingSquare(MotionRotatingSquareIds),
+    MotionScissor(MotionScissorIds),
+    MotionScissorTower(MotionScissorTowerIds),
+    MotionPeaucellier(MotionPeaucellierIds),
+    DiagnosticRankDrop(DiagnosticRankDropIds),
+    DiagnosticEndpointBound(DiagnosticEndpointBoundIds),
+    DiagnosticRedundancy(DiagnosticRedundancyIds),
 }
 
 /// One deterministic document and initial solve request for an alpha scenario.
@@ -189,6 +302,7 @@ pub struct AlphaScenarioFixture {
 ///
 /// Returns a document validation error for a nonpositive/non-finite scale or an
 /// unexpected construction failure.
+#[allow(clippy::too_many_lines)]
 pub fn alpha_scenario(
     kind: AlphaScenarioKind,
     scale: f64,
@@ -211,6 +325,15 @@ pub fn alpha_scenario(
         AlphaScenarioKind::StressBridge => 0xc2_0000,
         AlphaScenarioKind::MotionCam => 0xc3_0000,
         AlphaScenarioKind::MotionOrbit => 0xc4_0000,
+        AlphaScenarioKind::MotionTrammel => 0xc5_0000,
+        AlphaScenarioKind::MotionScotchYoke => 0xc6_0000,
+        AlphaScenarioKind::MotionRotatingSquare => 0xc7_0000,
+        AlphaScenarioKind::MotionScissor => 0xc8_0000,
+        AlphaScenarioKind::MotionScissorTower => 0xc9_0000,
+        AlphaScenarioKind::MotionPeaucellier => 0xca_0000,
+        AlphaScenarioKind::DiagnosticRankDrop => 0xd1_0000,
+        AlphaScenarioKind::DiagnosticEndpointBound => 0xd2_0000,
+        AlphaScenarioKind::DiagnosticRedundancy => 0xd3_0000,
     };
     let mut document =
         SketchDocument::with_id(10.0 * scale, DocumentId(PersistentId::from_u128(namespace)))?;
@@ -264,6 +387,51 @@ pub fn alpha_scenario(
         AlphaScenarioKind::MotionOrbit => (
             AlphaScenarioIds::MotionOrbit(add_motion_orbit(&mut document, scale)?),
             DocumentSolveRequest::default(),
+        ),
+        AlphaScenarioKind::MotionTrammel => (
+            AlphaScenarioIds::MotionTrammel(add_motion_trammel(&mut document, scale)?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::MotionScotchYoke => (
+            AlphaScenarioIds::MotionScotchYoke(add_motion_scotch_yoke(&mut document, scale)?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::MotionRotatingSquare => (
+            AlphaScenarioIds::MotionRotatingSquare(add_motion_rotating_square(
+                &mut document,
+                scale,
+            )?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::MotionScissor => (
+            AlphaScenarioIds::MotionScissor(add_motion_scissor(&mut document, scale)?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::MotionScissorTower => (
+            AlphaScenarioIds::MotionScissorTower(add_motion_scissor_tower(&mut document, scale)?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::MotionPeaucellier => (
+            AlphaScenarioIds::MotionPeaucellier(add_motion_peaucellier(&mut document, scale)?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::DiagnosticRankDrop => (
+            AlphaScenarioIds::DiagnosticRankDrop(add_diagnostic_rank_drop(&mut document, scale)?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::DiagnosticEndpointBound => (
+            AlphaScenarioIds::DiagnosticEndpointBound(add_diagnostic_endpoint_bound(
+                &mut document,
+                scale,
+            )?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::DiagnosticRedundancy => (
+            AlphaScenarioIds::DiagnosticRedundancy(add_diagnostic_redundancy(
+                &mut document,
+                scale,
+            )?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
         ),
     };
     Ok(AlphaScenarioFixture {
@@ -677,6 +845,169 @@ fn add_a5(
     })
 }
 
+fn add_diagnostic_rank_drop(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<DiagnosticRankDropIds, DocumentError> {
+    let first_center = document.add_point("Rank lens center A", [-2.0 * scale, 0.0])?;
+    let second_center = document.add_point("Rank lens center B", [2.0 * scale, 0.0])?;
+    let point = document.add_point("Rank-dependent point P", [0.0, 0.0])?;
+    let first_radius = document.add_scalar(
+        "Rank lens radius A",
+        2.0 * scale,
+        ScalarUnit::Length,
+        ScalarDomain::Positive,
+    )?;
+    let second_radius = document.add_scalar(
+        "Rank lens radius B",
+        2.0 * scale,
+        ScalarUnit::Length,
+        ScalarDomain::Positive,
+    )?;
+    let first_circle = document.add_curve(
+        "Rank lens circle A",
+        CurveDefinition::Circle {
+            center: first_center,
+            radius: first_radius,
+        },
+    )?;
+    let second_circle = document.add_curve(
+        "Rank lens circle B",
+        CurveDefinition::Circle {
+            center: second_center,
+            radius: second_radius,
+        },
+    )?;
+    fix_point(document, "Rank lens center A fixed", first_center)?;
+    fix_point(document, "Rank lens center B fixed", second_center)?;
+    add_radius_dimension(
+        document,
+        "Rank lens circle A radius 2",
+        first_circle,
+        2.0 * scale,
+    )?;
+    add_radius_dimension(
+        document,
+        "Rank lens circle B radius 2",
+        second_circle,
+        2.0 * scale,
+    )?;
+    let first_target = document.add_scalar(
+        "Rank distance A-P target",
+        2.0 * scale,
+        ScalarUnit::Length,
+        ScalarDomain::Positive,
+    )?;
+    let first_distance = document.add_dimension(
+        "Rank distance A-P = 2",
+        DocumentDimensionDefinition::PointDistance {
+            first: first_center,
+            second: point,
+            target: first_target,
+        },
+        DocumentDimensionMode::Driving,
+    )?;
+    let second_target = document.add_scalar(
+        "Rank distance B-P target",
+        2.0 * scale,
+        ScalarUnit::Length,
+        ScalarDomain::Positive,
+    )?;
+    let second_distance = document.add_dimension(
+        "Rank distance B-P = 2",
+        DocumentDimensionDefinition::PointDistance {
+            first: second_center,
+            second: point,
+            target: second_target,
+        },
+        DocumentDimensionMode::Driving,
+    )?;
+    Ok(DiagnosticRankDropIds {
+        point,
+        first_distance,
+        second_distance,
+    })
+}
+
+fn add_diagnostic_endpoint_bound(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<DiagnosticEndpointBoundIds, DocumentError> {
+    let start = document.add_point("Endpoint rail start", [-4.0 * scale, 0.0])?;
+    let end = document.add_point("Endpoint rail end", [4.0 * scale, 0.0])?;
+    let point = document.add_point("Endpoint-fixed follower", [4.0 * scale, 0.0])?;
+    let line = add_line(document, "Endpoint-bounded rail", start, end)?;
+    fix_point(document, "Endpoint rail start fixed", start)?;
+    fix_point(document, "Endpoint rail end fixed", end)?;
+    let contact = document.add_curve_contact(
+        "Endpoint-fixed contact t=1",
+        CurveSpan::line(line),
+        1.0,
+        0,
+        ContactNeighborhood::End,
+        None,
+    )?;
+    let point_on_curve = document.add_constraint(
+        "Endpoint follower on bounded rail",
+        DocumentConstraintDefinition::PointOnCurve { point, contact },
+    )?;
+    let center = document.add_point("Positive-radius center", [0.0, 2.0 * scale])?;
+    let radius = document.add_scalar(
+        "Positive radius at lower domain",
+        MIN_REPRESENTABLE_RADIUS,
+        ScalarUnit::Length,
+        ScalarDomain::Positive,
+    )?;
+    let circle = document.add_curve(
+        "Positive-radius bound",
+        CurveDefinition::Circle { center, radius },
+    )?;
+    fix_point(document, "Positive-radius center fixed", center)?;
+    Ok(DiagnosticEndpointBoundIds {
+        line,
+        point,
+        contact,
+        point_on_curve,
+        circle,
+        radius,
+    })
+}
+
+fn add_diagnostic_redundancy(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<DiagnosticRedundancyIds, DocumentError> {
+    let origin = document.add_point("Redundancy arm origin", [0.0, 0.0])?;
+    let tip = document.add_point("Redundancy arm tip", [4.0 * scale, 0.0])?;
+    let line = add_line(document, "Redundancy test arm", origin, tip)?;
+    fix_point(document, "Redundancy arm origin fixed", origin)?;
+    document.add_constraint(
+        "Redundancy arm horizontal",
+        DocumentConstraintDefinition::Horizontal {
+            line: CurveSpan::line(line),
+        },
+    )?;
+    let primary_length = add_length_dimension(
+        document,
+        "Primary arm length 4",
+        CurveSpan::line(line),
+        4.0 * scale,
+        DocumentDimensionMode::Driving,
+    )?;
+    let duplicate_length = add_length_dimension(
+        document,
+        "Duplicate arm length 4",
+        CurveSpan::line(line),
+        4.0 * scale,
+        DocumentDimensionMode::Driving,
+    )?;
+    Ok(DiagnosticRedundancyIds {
+        line,
+        primary_length,
+        duplicate_length,
+    })
+}
+
 fn add_stress_compass(
     document: &mut SketchDocument,
     scale: f64,
@@ -1048,6 +1379,541 @@ fn add_motion_orbit(
         fixed_circle,
         moving_circle,
         tangency,
+    })
+}
+
+#[allow(clippy::too_many_lines)]
+fn add_motion_trammel(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<MotionTrammelIds, DocumentError> {
+    let horizontal_start =
+        document.add_point("Trammel horizontal rail start", [-6.0 * scale, 0.0])?;
+    let horizontal_end = document.add_point("Trammel horizontal rail end", [6.0 * scale, 0.0])?;
+    let vertical_start = document.add_point("Trammel vertical rail start", [0.0, -6.0 * scale])?;
+    let vertical_end = document.add_point("Trammel vertical rail end", [0.0, 6.0 * scale])?;
+    let horizontal_rail = add_line(
+        document,
+        "Trammel horizontal rail",
+        horizontal_start,
+        horizontal_end,
+    )?;
+    let vertical_rail = add_line(
+        document,
+        "Trammel vertical rail",
+        vertical_start,
+        vertical_end,
+    )?;
+    for (label, point) in [
+        ("Trammel horizontal rail start fixed", horizontal_start),
+        ("Trammel horizontal rail end fixed", horizontal_end),
+        ("Trammel vertical rail start fixed", vertical_start),
+        ("Trammel vertical rail end fixed", vertical_end),
+    ] {
+        fix_point(document, label, point)?;
+    }
+
+    let horizontal_slider =
+        document.add_point("Trammel horizontal slider A", [4.0 * scale, 0.0])?;
+    let vertical_slider = document.add_point("Trammel vertical slider B", [0.0, 3.0 * scale])?;
+    let midpoint = document.add_point("Trammel bar midpoint M", [2.0 * scale, 1.5 * scale])?;
+    let tracer = document.add_point("Trammel elliptic tracer T", [3.0 * scale, 0.75 * scale])?;
+    let bar = document.add_curve(
+        "Trammel fixed-length bar AB",
+        CurveDefinition::Line {
+            start: horizontal_slider,
+            end: vertical_slider,
+            branch_direction: [-0.8, 0.6],
+        },
+    )?;
+    let quarter_arm = document.add_curve(
+        "Trammel quarter arm AM",
+        CurveDefinition::Line {
+            start: horizontal_slider,
+            end: midpoint,
+            branch_direction: [-0.8, 0.6],
+        },
+    )?;
+    let horizontal_contact = document.add_curve_contact(
+        "Trammel horizontal slider contact",
+        CurveSpan::line(horizontal_rail),
+        5.0 / 6.0,
+        0,
+        ContactNeighborhood::Interior,
+        None,
+    )?;
+    let vertical_contact = document.add_curve_contact(
+        "Trammel vertical slider contact",
+        CurveSpan::line(vertical_rail),
+        0.75,
+        0,
+        ContactNeighborhood::Interior,
+        None,
+    )?;
+    document.add_constraint(
+        "Trammel A slides horizontally",
+        DocumentConstraintDefinition::PointOnCurve {
+            point: horizontal_slider,
+            contact: horizontal_contact,
+        },
+    )?;
+    document.add_constraint(
+        "Trammel B slides vertically",
+        DocumentConstraintDefinition::PointOnCurve {
+            point: vertical_slider,
+            contact: vertical_contact,
+        },
+    )?;
+    add_length_dimension(
+        document,
+        "Trammel bar length 5",
+        CurveSpan::line(bar),
+        5.0 * scale,
+        DocumentDimensionMode::Driving,
+    )?;
+    document.add_constraint(
+        "Trammel M bisects AB",
+        DocumentConstraintDefinition::Midpoint {
+            point: midpoint,
+            line: CurveSpan::line(bar),
+        },
+    )?;
+    document.add_constraint(
+        "Trammel T bisects AM",
+        DocumentConstraintDefinition::Midpoint {
+            point: tracer,
+            line: CurveSpan::line(quarter_arm),
+        },
+    )?;
+    Ok(MotionTrammelIds {
+        horizontal_slider,
+        vertical_slider,
+        tracer,
+        bar,
+        horizontal_contact,
+        vertical_contact,
+    })
+}
+
+fn add_motion_scotch_yoke(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<MotionScotchYokeIds, DocumentError> {
+    let crank_center = document.add_point("Yoke crank center O", [0.0, 0.0])?;
+    let crank_pin = document.add_point("Yoke crank pin P", [3.0 * scale, 4.0 * scale])?;
+    let slider = document.add_point("Yoke horizontal slider S", [3.0 * scale, -6.0 * scale])?;
+    let crank = document.add_curve(
+        "Yoke crank OP",
+        CurveDefinition::Line {
+            start: crank_center,
+            end: crank_pin,
+            branch_direction: [0.6, 0.8],
+        },
+    )?;
+    let slot = add_line(document, "Yoke vertical slot SP", slider, crank_pin)?;
+    fix_point(document, "Yoke crank center fixed", crank_center)?;
+    document.add_constraint(
+        "Yoke slider on horizontal guide",
+        DocumentConstraintDefinition::FixedCoordinate {
+            point: slider,
+            axis: DocumentCoordinateAxis::Y,
+            target: -6.0 * scale,
+        },
+    )?;
+    document.add_constraint(
+        "Yoke slot remains vertical",
+        DocumentConstraintDefinition::Vertical {
+            line: CurveSpan::line(slot),
+        },
+    )?;
+    add_length_dimension(
+        document,
+        "Yoke crank radius 5",
+        CurveSpan::line(crank),
+        5.0 * scale,
+        DocumentDimensionMode::Driving,
+    )?;
+    Ok(MotionScotchYokeIds {
+        crank_center,
+        crank_pin,
+        slider,
+        crank,
+        slot,
+    })
+}
+
+fn add_motion_rotating_square(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<MotionRotatingSquareIds, DocumentError> {
+    let corners = [
+        document.add_point("Rotating square anchor A", [0.0, 0.0])?,
+        document.add_point("Rotating square corner B", [3.0 * scale, 0.0])?,
+        document.add_point("Rotating square corner C", [3.0 * scale, 3.0 * scale])?,
+        document.add_point("Rotating square corner D", [0.0, 3.0 * scale])?,
+    ];
+    let edges = [
+        add_line(document, "Rotating square edge AB", corners[0], corners[1])?,
+        add_line(document, "Rotating square edge BC", corners[1], corners[2])?,
+        add_line(document, "Rotating square edge CD", corners[2], corners[3])?,
+        add_line(document, "Rotating square edge DA", corners[3], corners[0])?,
+    ];
+    fix_point(document, "Rotating square anchor fixed", corners[0])?;
+    add_length_dimension(
+        document,
+        "Rotating square side length 3",
+        CurveSpan::line(edges[0]),
+        3.0 * scale,
+        DocumentDimensionMode::Driving,
+    )?;
+    document.add_constraint(
+        "Rotating square adjacent edges perpendicular",
+        DocumentConstraintDefinition::Perpendicular {
+            first: CurveSpan::line(edges[0]),
+            second: CurveSpan::line(edges[1]),
+        },
+    )?;
+    document.add_constraint(
+        "Rotating square adjacent edges equal",
+        DocumentConstraintDefinition::EqualLength {
+            first: CurveSpan::line(edges[0]),
+            second: CurveSpan::line(edges[1]),
+        },
+    )?;
+    document.add_constraint(
+        "Rotating square opposite edges AB CD parallel",
+        DocumentConstraintDefinition::Parallel {
+            first: CurveSpan::line(edges[0]),
+            second: CurveSpan::line(edges[2]),
+        },
+    )?;
+    document.add_constraint(
+        "Rotating square opposite edges BC DA parallel",
+        DocumentConstraintDefinition::Parallel {
+            first: CurveSpan::line(edges[1]),
+            second: CurveSpan::line(edges[3]),
+        },
+    )?;
+    Ok(MotionRotatingSquareIds { corners, edges })
+}
+
+fn add_motion_scissor(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<MotionScissorIds, DocumentError> {
+    let anchor = document.add_point("Scissor fixed anchor A", [-4.0 * scale, 0.0])?;
+    let slider = document.add_point("Scissor base slider B", [4.0 * scale, 0.0])?;
+    let upper_joint = document.add_point("Scissor upper joint U", [0.0, 3.0 * scale])?;
+    let lower_joint = document.add_point("Scissor lower joint L", [0.0, -3.0 * scale])?;
+    let axis = add_line(document, "Scissor sliding base AB", anchor, slider)?;
+    let upper_left = document.add_curve(
+        "Scissor upper-left arm AU",
+        CurveDefinition::Line {
+            start: anchor,
+            end: upper_joint,
+            branch_direction: [0.8, 0.6],
+        },
+    )?;
+    let upper_right = document.add_curve(
+        "Scissor upper-right arm UB",
+        CurveDefinition::Line {
+            start: upper_joint,
+            end: slider,
+            branch_direction: [0.8, -0.6],
+        },
+    )?;
+    document.add_curve(
+        "Scissor lower-left arm AL",
+        CurveDefinition::Line {
+            start: anchor,
+            end: lower_joint,
+            branch_direction: [0.8, -0.6],
+        },
+    )?;
+    document.add_curve(
+        "Scissor lower-right arm LB",
+        CurveDefinition::Line {
+            start: lower_joint,
+            end: slider,
+            branch_direction: [0.8, 0.6],
+        },
+    )?;
+    fix_point(document, "Scissor anchor fixed", anchor)?;
+    document.add_constraint(
+        "Scissor B slides horizontally",
+        DocumentConstraintDefinition::FixedCoordinate {
+            point: slider,
+            axis: DocumentCoordinateAxis::Y,
+            target: 0.0,
+        },
+    )?;
+    add_length_dimension(
+        document,
+        "Scissor arm length 5",
+        CurveSpan::line(upper_left),
+        5.0 * scale,
+        DocumentDimensionMode::Driving,
+    )?;
+    document.add_constraint(
+        "Scissor upper arms equal",
+        DocumentConstraintDefinition::EqualLength {
+            first: CurveSpan::line(upper_left),
+            second: CurveSpan::line(upper_right),
+        },
+    )?;
+    document.add_constraint(
+        "Scissor joints mirror across base",
+        DocumentConstraintDefinition::SymmetricAboutLine {
+            first: upper_joint,
+            second: lower_joint,
+            line: CurveSpan::line(axis),
+        },
+    )?;
+    Ok(MotionScissorIds {
+        anchor,
+        slider,
+        upper_joint,
+        lower_joint,
+        axis,
+    })
+}
+
+#[allow(clippy::too_many_lines)]
+fn add_motion_scissor_tower(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<MotionScissorTowerIds, DocumentError> {
+    let mut left_levels = Vec::with_capacity(6);
+    let mut right_levels = Vec::with_capacity(6);
+    for level in 0..=5 {
+        let height = 6.0 * f64::from(level) * scale;
+        left_levels
+            .push(document.add_point(format!("Tower level {level} left"), [-4.0 * scale, height])?);
+        right_levels
+            .push(document.add_point(format!("Tower level {level} right"), [4.0 * scale, height])?);
+    }
+    let left_levels: [DesignPointId; 6] = left_levels.try_into().expect("six left tower levels");
+    let right_levels: [DesignPointId; 6] = right_levels.try_into().expect("six right tower levels");
+
+    let mut platforms = Vec::with_capacity(6);
+    for level in 0..=5 {
+        platforms.push(add_line(
+            document,
+            &format!("Tower platform level {level}"),
+            left_levels[level],
+            right_levels[level],
+        )?);
+    }
+    let platforms: [CurveId; 6] = platforms.try_into().expect("six tower platforms");
+
+    let mut diagonal_bars = Vec::with_capacity(10);
+    for stage in 0..5 {
+        diagonal_bars.push(document.add_curve(
+            format!("Tower stage {} rising-right bar", stage + 1),
+            CurveDefinition::Line {
+                start: left_levels[stage],
+                end: right_levels[stage + 1],
+                branch_direction: [0.8, 0.6],
+            },
+        )?);
+        diagonal_bars.push(document.add_curve(
+            format!("Tower stage {} rising-left bar", stage + 1),
+            CurveDefinition::Line {
+                start: right_levels[stage],
+                end: left_levels[stage + 1],
+                branch_direction: [-0.8, 0.6],
+            },
+        )?);
+    }
+    let diagonal_bars: [CurveId; 10] = diagonal_bars.try_into().expect("ten tower diagonal bars");
+
+    fix_point(document, "Tower base left fixed", left_levels[0])?;
+    document.add_constraint(
+        "Tower base right slides horizontally",
+        DocumentConstraintDefinition::FixedCoordinate {
+            point: right_levels[0],
+            axis: DocumentCoordinateAxis::Y,
+            target: 0.0,
+        },
+    )?;
+    for (level, platform) in platforms.iter().copied().enumerate().skip(1) {
+        document.add_constraint(
+            format!("Tower platform {level} remains horizontal"),
+            DocumentConstraintDefinition::Horizontal {
+                line: CurveSpan::line(platform),
+            },
+        )?;
+        document.add_constraint(
+            format!("Tower platform {level} matches base width"),
+            DocumentConstraintDefinition::EqualLength {
+                first: CurveSpan::line(platforms[0]),
+                second: CurveSpan::line(platform),
+            },
+        )?;
+    }
+    add_length_dimension(
+        document,
+        "Tower master diagonal length 10",
+        CurveSpan::line(diagonal_bars[0]),
+        10.0 * scale,
+        DocumentDimensionMode::Driving,
+    )?;
+    for (index, bar) in diagonal_bars.iter().copied().enumerate().skip(1) {
+        document.add_constraint(
+            format!("Tower diagonal {} matches master", index + 1),
+            DocumentConstraintDefinition::EqualLength {
+                first: CurveSpan::line(diagonal_bars[0]),
+                second: CurveSpan::line(bar),
+            },
+        )?;
+    }
+    Ok(MotionScissorTowerIds {
+        left_levels,
+        right_levels,
+        platforms,
+        diagonal_bars,
+    })
+}
+
+#[allow(clippy::too_many_lines)]
+fn add_motion_peaucellier(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<MotionPeaucellierIds, DocumentError> {
+    let shoulder_offset = 3.5_f64.sqrt();
+    let origin = document.add_point("Peaucellier fixed origin O", [0.0, 0.0])?;
+    let input_center = document.add_point("Peaucellier input center S", [4.0 * scale, 0.0])?;
+    let input = document.add_point("Peaucellier circular input P", [4.0 * scale, 4.0 * scale])?;
+    let output = document.add_point(
+        "Peaucellier straight-line output Q",
+        [2.0 * scale, 2.0 * scale],
+    )?;
+    let shoulders = [
+        document.add_point(
+            "Peaucellier shoulder B",
+            [
+                (3.0 - shoulder_offset) * scale,
+                (3.0 + shoulder_offset) * scale,
+            ],
+        )?,
+        document.add_point(
+            "Peaucellier shoulder D",
+            [
+                (3.0 + shoulder_offset) * scale,
+                (3.0 - shoulder_offset) * scale,
+            ],
+        )?,
+    ];
+    let bars = [
+        document.add_curve(
+            "Peaucellier long bar OB",
+            CurveDefinition::Line {
+                start: origin,
+                end: shoulders[0],
+                branch_direction: [(3.0 - shoulder_offset) / 5.0, (3.0 + shoulder_offset) / 5.0],
+            },
+        )?,
+        document.add_curve(
+            "Peaucellier long bar OD",
+            CurveDefinition::Line {
+                start: origin,
+                end: shoulders[1],
+                branch_direction: [(3.0 + shoulder_offset) / 5.0, (3.0 - shoulder_offset) / 5.0],
+            },
+        )?,
+        document.add_curve(
+            "Peaucellier rhombus bar BP",
+            CurveDefinition::Line {
+                start: shoulders[0],
+                end: input,
+                branch_direction: [(1.0 + shoulder_offset) / 3.0, (1.0 - shoulder_offset) / 3.0],
+            },
+        )?,
+        document.add_curve(
+            "Peaucellier rhombus bar PD",
+            CurveDefinition::Line {
+                start: input,
+                end: shoulders[1],
+                branch_direction: [
+                    (shoulder_offset - 1.0) / 3.0,
+                    (-1.0 - shoulder_offset) / 3.0,
+                ],
+            },
+        )?,
+        document.add_curve(
+            "Peaucellier rhombus bar DQ",
+            CurveDefinition::Line {
+                start: shoulders[1],
+                end: output,
+                branch_direction: [
+                    (-1.0 - shoulder_offset) / 3.0,
+                    (shoulder_offset - 1.0) / 3.0,
+                ],
+            },
+        )?,
+        document.add_curve(
+            "Peaucellier rhombus bar QB",
+            CurveDefinition::Line {
+                start: output,
+                end: shoulders[0],
+                branch_direction: [(1.0 - shoulder_offset) / 3.0, (1.0 + shoulder_offset) / 3.0],
+            },
+        )?,
+        document.add_curve(
+            "Peaucellier circular driver SP",
+            CurveDefinition::Line {
+                start: input_center,
+                end: input,
+                branch_direction: [0.0, 1.0],
+            },
+        )?,
+    ];
+    fix_point(document, "Peaucellier origin fixed", origin)?;
+    fix_point(document, "Peaucellier input center fixed", input_center)?;
+    add_length_dimension(
+        document,
+        "Peaucellier long radius 5",
+        CurveSpan::line(bars[0]),
+        5.0 * scale,
+        DocumentDimensionMode::Driving,
+    )?;
+    document.add_constraint(
+        "Peaucellier long bars equal",
+        DocumentConstraintDefinition::EqualLength {
+            first: CurveSpan::line(bars[0]),
+            second: CurveSpan::line(bars[1]),
+        },
+    )?;
+    add_length_dimension(
+        document,
+        "Peaucellier rhombus side 3",
+        CurveSpan::line(bars[2]),
+        3.0 * scale,
+        DocumentDimensionMode::Driving,
+    )?;
+    for (index, bar) in bars[3..=5].iter().copied().enumerate() {
+        document.add_constraint(
+            format!("Peaucellier rhombus side {} equal", index + 2),
+            DocumentConstraintDefinition::EqualLength {
+                first: CurveSpan::line(bars[2]),
+                second: CurveSpan::line(bar),
+            },
+        )?;
+    }
+    add_length_dimension(
+        document,
+        "Peaucellier input circle radius 4",
+        CurveSpan::line(bars[6]),
+        4.0 * scale,
+        DocumentDimensionMode::Driving,
+    )?;
+    Ok(MotionPeaucellierIds {
+        origin,
+        input_center,
+        input,
+        output,
+        shoulders,
+        bars,
     })
 }
 

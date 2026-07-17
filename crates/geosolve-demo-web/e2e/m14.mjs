@@ -250,6 +250,28 @@ class BrowserPage {
     await this.waitFor(`Number(document.querySelector('#playground-root').dataset.renderSequence) > ${before}`);
   }
 
+  async burstDragPoint(label, x, y, steps = 40) {
+    assert.equal(this.touch, false, 'burst drag profiling uses the desktop pointer path');
+    const start = await this.point(label);
+    assert.ok(start, `missing point ${label}`);
+    const target = await this.modelClient(x, y);
+    await this.cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: start.clientX, y: start.clientY });
+    await this.cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: start.clientX, y: start.clientY, button: 'left', clickCount: 1 });
+    assert.equal(await this.evaluate(`document.querySelector('#playground-root').dataset.detailRefresh`), 'deferred');
+    assert.match(await this.evaluate(`document.querySelector('#playground-audit').textContent`), /refreshes when the drag is released/i);
+    const before = Number(await this.evaluate(`document.querySelector('#playground-root').dataset.renderSequence`));
+    const started = Date.now();
+    await this.evaluate(`(() => { const viewport = document.querySelector('#sketch-viewport'); for (let index = 1; index <= ${steps}; index++) { const fraction = index / ${steps}; viewport.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, cancelable: true, clientX: ${start.clientX} + (${target.x} - ${start.clientX}) * fraction, clientY: ${start.clientY} + (${target.y} - ${start.clientY}) * fraction, pointerId: 1, pointerType: 'mouse', isPrimary: true, button: -1, buttons: 1 })); } return true; })()`);
+    await this.waitFor(`Number(document.querySelector('#playground-root').dataset.renderSequence) > ${before}`, 30_000);
+    const elapsed = Date.now() - started;
+    const after = Number(await this.evaluate(`document.querySelector('#playground-root').dataset.renderSequence`));
+    assert.equal(after - before, 1, `${steps} queued pointer moves produced ${after - before} renders`);
+    await this.cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: target.x, y: target.y, button: 'left', clickCount: 1 });
+    await this.waitFor(`document.querySelector('#playground-root').dataset.detailRefresh !== 'deferred' && Number(document.querySelector('#playground-root').dataset.renderSequence) > ${after}`, 30_000);
+    assert.doesNotMatch(await this.evaluate(`document.querySelector('#playground-audit').textContent`), /refreshes when the drag is released/i);
+    return { elapsed, renders: after - before };
+  }
+
   async panCanvas(dx, dy) {
     const rect = await this.evaluate(`(() => { const rect = document.querySelector('#sketch-viewport').getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }; })()`);
     const before = Number(await this.evaluate(`document.querySelector('#playground-root').dataset.renderSequence`));
@@ -529,6 +551,89 @@ async function stressExampleSuite(page) {
     near(satellite.y, y, 0.08);
     near(Math.hypot(satellite.x, satellite.y), 4, 1e-8);
   }
+
+  await page.loadExample('motion-trammel');
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.boundedDof`), '1');
+  await page.dragPoint('Trammel elliptic tracer T', 0, 1.25, 10);
+  const trammelA = await page.point('Trammel horizontal slider A');
+  const trammelB = await page.point('Trammel vertical slider B');
+  near(trammelA.x, 0, 0.08);
+  near(trammelA.y, 0, 1e-8);
+  near(trammelB.x, 0, 1e-8);
+  near(trammelB.y, 5, 0.08);
+
+  await page.loadExample('motion-scotch-yoke');
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.equalityDof`), '1');
+  await page.dragPoint('Yoke crank pin P', 0, 5, 8);
+  const yokePin = await page.point('Yoke crank pin P');
+  const yokeSlider = await page.point('Yoke horizontal slider S');
+  near(Math.hypot(yokePin.x, yokePin.y), 5, 1e-8);
+  near(yokeSlider.x, yokePin.x, 1e-8);
+  near(yokeSlider.y, -6, 1e-8);
+
+  await page.loadExample('motion-rotating-square');
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.equalityDof`), '1');
+  const rotatedSide = 3 / Math.sqrt(2);
+  await page.dragPoint('Rotating square corner B', rotatedSide, rotatedSide, 8);
+  const squareB = await page.point('Rotating square corner B');
+  const squareC = await page.point('Rotating square corner C');
+  near(Math.hypot(squareB.x, squareB.y), 3, 1e-8);
+  near(squareC.x, 0, 0.08);
+  near(squareC.y, 2 * rotatedSide, 0.08);
+
+  await page.loadExample('motion-scissor');
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.equalityDof`), '1');
+  await page.dragPoint('Scissor base slider B', 2, 0, 8);
+  const scissorUpper = await page.point('Scissor upper joint U');
+  const scissorLower = await page.point('Scissor lower joint L');
+  near(scissorUpper.x, -1, 0.08);
+  near(scissorUpper.y, 4, 0.08);
+  near(scissorLower.x, -1, 0.08);
+  near(scissorLower.y, -4, 0.08);
+
+  await page.loadExample('motion-scissor-tower');
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.equalityDof`), '1');
+  if (page.touch) {
+    await page.dragPoint('Tower level 0 right', 2, 0, 10);
+  } else {
+    const profile = await page.burstDragPoint('Tower level 0 right', 2, 0);
+    console.log(`tower/burst-drag: ${profile.elapsed}ms renders=${profile.renders} budget=100ms`);
+    assert.ok(profile.elapsed <= 100, `tower burst drag ${profile.elapsed}ms exceeded 100ms`);
+  }
+  const towerTopLeft = await page.point('Tower level 5 left');
+  const towerTopRight = await page.point('Tower level 5 right');
+  near(towerTopLeft.x, -4, 0.08);
+  near(towerTopLeft.y, 40, 0.08);
+  near(towerTopRight.x, 2, 0.08);
+  near(towerTopRight.y, 40, 0.08);
+
+  await page.loadExample('motion-peaucellier');
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.equalityDof`), '1');
+  await page.dragPoint('Peaucellier circular input P', 6, 2 * Math.sqrt(3), 10);
+  const peaucellierOutput = await page.point('Peaucellier straight-line output Q');
+  near(peaucellierOutput.x, 2, 1e-8);
+  near(peaucellierOutput.y, 2 / Math.sqrt(3), 0.08);
+
+  await page.loadExample('diagnostic-rank-drop');
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.leftNullity`), '1');
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.equalityDof`), '1');
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.structuralClassification`), 'Well');
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.structuralLeftNullity`), '0');
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.structuralRightNullity`), '0');
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.requestedBackend`), 'Auto');
+  assert.ok((await page.evaluate(`document.querySelector('#playground-root').dataset.actualBackend`)).length > 0);
+  assert.match(await page.evaluate(`document.querySelector('#playground-solve-status').textContent`), /structural classWell/i);
+
+  await page.loadExample('diagnostic-endpoint-bound');
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.equalityDof`), '2');
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.boundedDof`), '0');
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.oneSidedMotion`), 'Exists');
+  assert.match(await page.evaluate(`document.querySelector('#object-list').textContent`), /Endpoint-fixed contact t=1/);
+
+  await page.loadExample('diagnostic-redundancy');
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.leftNullity`), '1');
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.structuralClassification`), 'Over');
+  assert.match(await page.evaluate(`document.querySelector('#playground-audit').textContent`), /redundant/i);
   await page.assertAccepted();
 }
 

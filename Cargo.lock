@@ -602,6 +602,8 @@ dependencies = [
  "geosolve-core",
  "geosolve-geometry",
  "nalgebra",
+ "serde",
+ "serde_json",
  "slotmap",
  "thiserror 2.0.18",
 ]

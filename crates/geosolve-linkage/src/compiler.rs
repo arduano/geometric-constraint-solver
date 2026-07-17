@@ -1,7 +1,7 @@
 use geosolve_core::{
     AuditBinding, AuditEvaluationStatus, AuditSnapshot, HardValidity, Problem, ResidualBlock,
-    ResidualCategory, ResidualId, ResidualRowAudit, SolveReport, SolveTermination, SolverConfig,
-    SourceConstraint, SourceConstraintId, VariableBlock, VariableId, VariableValue,
+    ResidualCategory, ResidualId, ResidualRowAudit, SolveReport, SolveSession, SolveTermination,
+    SolverConfig, SourceConstraint, SourceConstraintId, VariableBlock, VariableId, VariableValue,
 };
 use geosolve_geometry::{PlaneFrame, Point2, Point3, Pose2, Vector2, Vector3};
 
@@ -68,6 +68,17 @@ pub struct CompiledLinkage {
     axis_features: Vec<AxisFeatureSpec>,
 }
 
+/// One accepted core session retained with the exact linkage mappings that produced it.
+#[derive(Clone, Debug)]
+pub(crate) struct AcceptedCompiledLinkage {
+    session: SolveSession,
+    body_variables: Vec<BodyVariableMapping>,
+    source_mappings: Vec<LinkageSourceMapping>,
+    plane_frame: PlaneFrame,
+    point_features: Vec<PointFeatureSpec>,
+    axis_features: Vec<AxisFeatureSpec>,
+}
+
 impl CompiledLinkage {
     #[must_use]
     pub const fn problem(&self) -> &Problem {
@@ -98,36 +109,136 @@ impl CompiledLinkage {
             .find(|mapping| mapping.source == source)
     }
 
+    pub(crate) fn add_numerical_pose_gauge(
+        &mut self,
+        body: BodyId,
+        target: Pose2,
+        model_scale: f64,
+    ) -> Result<(), LinkageError> {
+        validate_pose(target, "numerical gauge target")?;
+        validate_model_scale(model_scale)?;
+        let variable_id = self
+            .variable_for_body(body)
+            .ok_or(LinkageError::UnknownBody(body))?;
+        let label = format!("private numerical gauge for {body:?}");
+        let source_id = self.problem.add_source(SourceConstraint::new(&label)?);
+        let fixed = VariableValue::Pose2(target.ambient());
+        let residual_id = self.problem.add_residual(ResidualBlock::fixed_variable(
+            source_id,
+            variable_id,
+            fixed,
+            vec![model_scale, model_scale, 1.0],
+            vec![
+                audit_row(
+                    "private numerical gauge local x / model_scale",
+                    vec![AuditBinding::new("body", format!("{body:?}"))],
+                    "model-unit",
+                ),
+                audit_row(
+                    "private numerical gauge local y / model_scale",
+                    vec![AuditBinding::new("body", format!("{body:?}"))],
+                    "model-unit",
+                ),
+                audit_row(
+                    "private numerical gauge local angle / 1 rad",
+                    vec![AuditBinding::new("body", format!("{body:?}"))],
+                    "rad",
+                ),
+            ],
+        )?)?;
+        self.problem
+            .declare_fixed_variable(variable_id, fixed, residual_id)?;
+        Ok(())
+    }
+
+    pub(crate) fn into_accepted_session(
+        self,
+        config: SolverConfig,
+    ) -> Result<AcceptedCompiledLinkage, geosolve_core::SessionError> {
+        let Self {
+            problem,
+            body_variables,
+            source_mappings,
+            plane_frame,
+            point_features,
+            axis_features,
+        } = self;
+        Ok(AcceptedCompiledLinkage {
+            session: SolveSession::new(problem, config)?,
+            body_variables,
+            source_mappings,
+            plane_frame,
+            point_features,
+            axis_features,
+        })
+    }
+
     pub(crate) fn solved_geometry(&self) -> Result<LinkageGeometry, LinkageError> {
-        let mut bodies = Vec::with_capacity(self.body_variables.len());
-        for mapping in &self.body_variables {
-            let variable = self.problem.variable(mapping.variable_id).ok_or(
-                geosolve_core::CoreError::UnknownVariable(mapping.variable_id),
-            )?;
-            let VariableValue::Pose2([x, y, angle]) = variable.value() else {
-                return Err(geosolve_core::CoreError::VariableKindMismatch {
-                    expected: geosolve_core::VariableKind::Pose2,
-                    actual: variable.kind(),
-                }
-                .into());
-            };
-            let pose =
-                Pose2::from_ambient([x, y, angle]).map_err(|_| LinkageError::NonFinitePose {
-                    context: "solved body",
-                })?;
-            validate_pose(pose, "solved body")?;
-            bodies.push(SolvedBody {
-                body_id: mapping.body_id,
-                pose,
-            });
-        }
-        geometry_from_parts(
+        solved_geometry_from_problem(
+            &self.problem,
+            &self.body_variables,
             self.plane_frame,
-            bodies,
             &self.point_features,
             &self.axis_features,
         )
     }
+}
+
+impl AcceptedCompiledLinkage {
+    pub(crate) const fn session(&self) -> &SolveSession {
+        &self.session
+    }
+
+    pub(crate) fn body_variables(&self) -> &[BodyVariableMapping] {
+        &self.body_variables
+    }
+
+    pub(crate) fn source_mapping(&self, source: LinkageSource) -> Option<&LinkageSourceMapping> {
+        self.source_mappings
+            .iter()
+            .find(|mapping| mapping.source == source)
+    }
+
+    pub(crate) fn solved_geometry(&self) -> Result<LinkageGeometry, LinkageError> {
+        solved_geometry_from_problem(
+            self.session.problem(),
+            &self.body_variables,
+            self.plane_frame,
+            &self.point_features,
+            &self.axis_features,
+        )
+    }
+}
+
+fn solved_geometry_from_problem(
+    problem: &Problem,
+    body_variables: &[BodyVariableMapping],
+    plane_frame: PlaneFrame,
+    point_features: &[PointFeatureSpec],
+    axis_features: &[AxisFeatureSpec],
+) -> Result<LinkageGeometry, LinkageError> {
+    let mut bodies = Vec::with_capacity(body_variables.len());
+    for mapping in body_variables {
+        let variable = problem.variable(mapping.variable_id).ok_or(
+            geosolve_core::CoreError::UnknownVariable(mapping.variable_id),
+        )?;
+        let VariableValue::Pose2([x, y, angle]) = variable.value() else {
+            return Err(geosolve_core::CoreError::VariableKindMismatch {
+                expected: geosolve_core::VariableKind::Pose2,
+                actual: variable.kind(),
+            }
+            .into());
+        };
+        let pose = Pose2::from_ambient([x, y, angle]).map_err(|_| LinkageError::NonFinitePose {
+            context: "solved body",
+        })?;
+        validate_pose(pose, "solved body")?;
+        bodies.push(SolvedBody {
+            body_id: mapping.body_id,
+            pose,
+        });
+    }
+    geometry_from_parts(plane_frame, bodies, point_features, axis_features)
 }
 
 /// One solved body pose in deterministic insertion order.
@@ -378,7 +489,9 @@ impl Linkage {
 
         let mut source_mappings = Vec::new();
         for (body_id, body) in self.bodies.iter().filter(|(_, body)| body.grounded()) {
-            let label = format!("grounded body {}", body.label());
+            let label = body
+                .ground_source_label()
+                .map_or_else(|| format!("grounded body {}", body.label()), str::to_owned);
             let source_id = problem.add_source(SourceConstraint::new(&label)?);
             let variable_id = body_variable(&body_variables, body_id)?;
             let fixed = VariableValue::Pose2(body.pose().ambient());
@@ -638,6 +751,40 @@ impl Linkage {
             })
             .collect();
         geometry_from_parts(self.plane_frame, bodies, &points, &axes)
+    }
+
+    pub(crate) fn accepted_result_from_session(
+        &self,
+        accepted: &AcceptedCompiledLinkage,
+    ) -> Result<LinkageSolveResult, LinkageError> {
+        let geometry = accepted.solved_geometry()?;
+        let config = accepted.session.config();
+        let core_max = fresh_hard_audit_max(accepted.session.problem())?;
+        let domain_max = self.domain_hard_residual_max(&geometry, None)?;
+        let acceptance_hard_residual_max = core_max.max(domain_max);
+        if acceptance_hard_residual_max > config.normalized_residual_tolerance {
+            return Err(LinkageError::PositionNotAccepted(format!(
+                "hard residual {acceptance_hard_residual_max:e} exceeds {:e}",
+                config.normalized_residual_tolerance
+            )));
+        }
+        if let Some(violation) = self.first_branch_violation(&geometry)? {
+            return Err(LinkageError::PositionNotAccepted(format!(
+                "explicit branch check failed: {violation:?}"
+            )));
+        }
+        let core_report = accepted.session.report().clone();
+        let source_mappings = accepted.source_mappings.clone();
+        Ok(LinkageSolveResult {
+            geometry,
+            display_audit: core_report.audit.clone(),
+            source_mappings: source_mappings.clone(),
+            attempt_source_mappings: source_mappings,
+            diagnostics: linkage_diagnostics(&core_report),
+            core_report,
+            rejection: None,
+            acceptance_hard_residual_max: Some(acceptance_hard_residual_max),
+        })
     }
 
     pub(crate) fn solve_attempt(

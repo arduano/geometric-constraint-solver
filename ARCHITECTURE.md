@@ -15,9 +15,9 @@ This is not a solid modeller, B-rep kernel, mesher, renderer, collision engine, 
 
 ## 2. Status of this document
 
-M0-M7 are the frozen domain baseline. M8 accepted the target contracts, M9 implemented component-local linearization, local AD, status and numerical-rank contracts, M10 implemented persistent sessions, bounds and the first sketch consumer, M11 implemented the persistent sketch document, commands/history and JSON/remapping layer, M12 implemented immutable curve jets, editable Beziers and generic curve contact/tangency plumbing, M13 implemented the disposable browser playground over those public APIs, M14 hardened its exact scenarios, failure recovery and performance gates, M15 implemented shared planar/spatial manifold state plus accepted hard sensitivity, and M16 implemented sparse hard steps, structural matching, coupled hierarchy and robust planar continuation. Statements are therefore marked as:
+M0-M7 are the frozen domain baseline. M8 accepted the target contracts, M9 implemented component-local linearization, local AD, status and numerical-rank contracts, M10 implemented persistent sessions, bounds and the first sketch consumer, M11 implemented the persistent sketch document, commands/history and JSON/remapping layer, M12 implemented immutable curve jets, editable Beziers and generic curve contact/tangency plumbing, M13 implemented the disposable browser playground over those public APIs, M14 hardened its exact scenarios, failure recovery and performance gates, M15 implemented shared planar/spatial manifold state plus accepted hard sensitivity, M16 implemented sparse hard steps, structural matching, coupled hierarchy and robust planar continuation, and M17 implemented persistent gauge-separated planar linkage sessions plus shared velocity linearization. Statements are therefore marked as:
 
-- **Baseline:** implemented behavior through M16, with M1-M7 domain behavior protected as the frozen regression baseline.
+- **Baseline:** implemented behavior through M17, with M1-M7 domain behavior protected as the frozen regression baseline.
 - **Target:** behavior required by the named M10-M24 milestone.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
@@ -80,7 +80,7 @@ Owns planar and spatial kinematic domain models:
 - branch-preserving continuation and velocity-level queries;
 - domain validation, source mapping and persistence.
 
-The frozen baseline is planar `Pose2` linkage kinematics. M17 migrates it to the shared session/gauge architecture; M18, M20 and M23 add and complete spatial kinematics. No linkage API implies physics.
+The frozen baseline is planar `Pose2` linkage kinematics. M17 migrated it to persistent topology/state/session, gauge-separated mobility and shared accepted-linearization velocity; M18, M20 and M23 add and complete spatial kinematics. No linkage API implies physics.
 
 ### `geosolve-demo-web`
 
@@ -181,7 +181,7 @@ left_nullity  = m_c - r_c   // dependent hard-row space
 
 Whole-problem rank and nullities are sums of component-local values. A global largest singular value never sets another component's threshold.
 
-This M9 contract governs core equality/position reports and every sketch/linkage position solve built from them. The compatibility linkage velocity solver retains its existing dense reduced policy until M17 moves velocity solving onto the shared accepted hard linearization and rank policy. Linkage position conditioning summaries use within-component spectra and M9 `near_singular`; they never compare concatenated extrema from disconnected components.
+This M9 contract governs core equality/position reports and every sketch/linkage position solve built from them. Starting at M17, persistent and compatibility linkage velocity queries use the same accepted component-local hard linearization, residual scales and rank thresholds; they do not assemble or rank a separate global dense velocity matrix. Linkage position conditioning summaries use within-component spectra and M9 `near_singular`; they never compare concatenated extrema from disconnected components.
 
 A component is numerically singular when `r_c < min(m_c, n_c)`. A distinct near-singular warning is raised without changing rank when the smallest retained singular value is at most `near_singular_factor * tau_c`; the configured factor and ratio are reported. The initial target factor is `100`. A warning is not convergence and a rank drop is not nonlinear failure.
 
@@ -290,7 +290,7 @@ M11 migrates baseline entities, commands and persistence topology. M12 proves ge
 
 Rigid bodies own local features; joints and mates relate features rather than reconstructing rigidity with sketch distance webs. Branch/assembly state is persistent domain state. Physical ground and numerical gauge are distinct under ADR 0009. Position and velocity queries use the same accepted-state reduced hard linearization and rank policy.
 
-M17 migrates planar linkage to shared sessions and gauges. M18 adds a spatial vertical slice. M20 completes common spatial joints/mates. M23 completes continuation, multi-driver velocity queries and planar/spatial consistency. These milestones do not add forces, reactions or dynamics.
+M17 migrated planar linkage to shared persistent sessions, physical-ground/numerical-gauge certification and accepted-linearization velocity. M18 adds a spatial vertical slice. M20 completes common spatial joints/mates. M23 completes continuation, multi-driver velocity queries and planar/spatial consistency. These milestones do not add forces, reactions or dynamics.
 
 ## 13. Equation audit and persistence
 
@@ -304,7 +304,7 @@ Every executable residual row has structured audit metadata generated with the e
 - elimination, active-bound, redundancy, conflict and singularity annotations;
 - diagnostic completeness links where candidate analysis is bounded.
 
-Persistence stores domain topology, continuous accepted state and every discrete branch/span/winding/gauge/assembly choice in a versioned envelope. Runtime slot-map keys are remapped deterministically and are never serialized as persistent identity. M11 establishes the alpha sketch document; M22 and M23 complete each product schema; M24 finalizes migration and public compatibility policy.
+Persistence stores domain topology, continuous accepted state and every discrete branch/span/winding/gauge/assembly choice in a versioned envelope. Runtime slot-map keys are remapped deterministically and are never serialized as persistent identity. M11 establishes the alpha sketch document, M17 establishes the first planar linkage document and gauge schema, M22 and M23 complete each product schema, and M24 finalizes migration and public compatibility policy.
 
 ## 14. Linear algebra policy
 
@@ -325,6 +325,6 @@ Persistence stores domain topology, continuous accepted state and every discrete
 - M13-M14: disposable browser playground, E2E/import/error/performance hardening and the alpha gate.
 - M15: completed manifold `Pose2`/`Pose3`, validated frames and accepted hard-equality sensitivity.
 - M16: completed sparse structure, matching, hierarchy and robust planar continuation.
-- M17-M18 and M20/M23: migrate and complete planar/spatial kinematic product behavior.
+- M17: completed persistent planar topology/state/session, gauge separation and shared velocity linearization; M18 and M20/M23 add and complete spatial kinematic product behavior.
 - M19, M21 and M22: add conics, B-splines, NURBS and complete the production 2D CAD sketch product.
 - M24: stabilize public APIs, persistence, documentation and release gates for both deliverables.

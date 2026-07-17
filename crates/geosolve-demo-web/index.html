@@ -26,18 +26,35 @@
       <section class="example-bar" aria-label="Examples and constraint stress labs">
         <label for="alpha-example">Example</label>
         <select id="alpha-example">
-          <option value="a1">A1 / constrained rectangle</option>
-          <option value="a2">A2 / projected drag</option>
-          <option value="a3">A3 / line-circle tangency</option>
-          <option value="a4">A4 / free-radius circle-arc</option>
-          <option value="a5">A5 / Bezier tangent line</option>
-          <option value="a8">A8 / combined persistence</option>
-          <option value="corpus">A10 / complete alpha corpus</option>
-          <option value="stress-compass">Stress / symmetric drafting compass</option>
-          <option value="stress-bridge">Stress / cubic C1 bridge</option>
-          <option value="motion-cam">Motion / twin Bezier-cam rollers</option>
-          <option value="motion-orbit">Motion / branch-preserving tangent orbit</option>
-          <option value="medium">M14 / medium performance document</option>
+          <optgroup label="Canonical workflows">
+            <option value="a1">A1 / constrained rectangle</option>
+            <option value="a2">A2 / projected drag</option>
+            <option value="a3">A3 / line-circle tangency</option>
+            <option value="a4">A4 / free-radius circle-arc</option>
+            <option value="a5">A5 / Bezier tangent line</option>
+            <option value="a8">A8 / combined persistence</option>
+          </optgroup>
+          <optgroup label="Solver diagnostics">
+            <option value="diagnostic-rank-drop">Rank / structural vs numerical</option>
+            <option value="diagnostic-endpoint-bound">Fixed endpoint vs active bound</option>
+            <option value="diagnostic-redundancy">Diagnostics / redundant dimensions</option>
+          </optgroup>
+          <optgroup label="Motion and constraint stress">
+            <option value="stress-compass">Stress / symmetric drafting compass</option>
+            <option value="stress-bridge">Stress / cubic C1 bridge</option>
+            <option value="motion-cam">Motion / twin Bezier-cam rollers</option>
+            <option value="motion-orbit">Motion / branch-preserving tangent orbit</option>
+            <option value="motion-trammel">Motion / elliptic trammel</option>
+            <option value="motion-scotch-yoke">Motion / offset Scotch yoke</option>
+            <option value="motion-rotating-square">Motion / constraint-built square</option>
+            <option value="motion-scissor">Motion / symmetric scissor jack</option>
+            <option value="motion-scissor-tower">Motion / five-stage scissor tower</option>
+            <option value="motion-peaucellier">Motion / Peaucellier straight-line cell</option>
+          </optgroup>
+          <optgroup label="Scale and performance">
+            <option value="corpus">A10 / complete alpha corpus</option>
+            <option value="medium">M14 / medium performance document</option>
+          </optgroup>
         </select>
         <label for="alpha-scale">Scale</label>
         <select id="alpha-scale"><option value="0.000001">1e-6</option><option value="1" selected>1</option><option value="1000000">1e6</option></select>

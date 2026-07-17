@@ -33,6 +33,15 @@ The implementation is pure safe Rust with no `unsafe` code or native solver FFI.
 
 The planar baseline represents its ground body through fixed pose behavior, has runtime body identity only and does not report gauge/internal mobility separately. M14 adds persistent linkage identity before selecting the default gauge, performs the planar transition and must show three gauge DOF for a fully floating planar assembly. M16 applies the contract to spatial assemblies and must show six for a fully floating spatial assembly. Existing explicitly grounded L1-L3 behavior remains unchanged.
 
+Implementation note (2026-07-17): current roadmap M17 completed the planar
+transition. Persistent `PlanarGaugePolicy` metadata selects the lowest body ID or
+one explicit body per floating domain component. A private fixed-pose manifold
+gauge produces a deterministic candidate, but publication is always recompiled and
+independently validated as the ungauged physical problem. `PlanarGaugeReport`
+therefore derives checked gauge/internal mobility from physical component rank, and
+velocity uses the same accepted physical hard linearization before applying a
+representative common-world twist.
+
 ## Consequences
 
 - Numerical conditioning choices cannot masquerade as user constraints.

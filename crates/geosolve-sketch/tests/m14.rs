@@ -1,6 +1,9 @@
 use std::collections::BTreeSet;
 
-use geosolve_core::{DiagnosticStatus, HardValidity, SolverConfig};
+use geosolve_core::{
+    BoundStatus, DiagnosticStatus, HardValidity, OneSidedMobility, SolverConfig,
+    StructuralClassification,
+};
 use geosolve_sketch::{
     AlphaScenarioIds, AlphaScenarioKind, ContactNeighborhood, ContactStateEdit, CurveDefinition,
     DocumentCommand, DocumentDimensionDefinition, DocumentDimensionMode, DocumentEdit,
@@ -49,6 +52,15 @@ fn alpha_fixtures_solve_with_scale_invariant_ids_and_explicit_branches() {
         AlphaScenarioKind::StressBridge,
         AlphaScenarioKind::MotionCam,
         AlphaScenarioKind::MotionOrbit,
+        AlphaScenarioKind::MotionTrammel,
+        AlphaScenarioKind::MotionScotchYoke,
+        AlphaScenarioKind::MotionRotatingSquare,
+        AlphaScenarioKind::MotionScissor,
+        AlphaScenarioKind::MotionScissorTower,
+        AlphaScenarioKind::MotionPeaucellier,
+        AlphaScenarioKind::DiagnosticRankDrop,
+        AlphaScenarioKind::DiagnosticEndpointBound,
+        AlphaScenarioKind::DiagnosticRedundancy,
     ] {
         let mut baseline_json = None;
         for scale in SCALES {
@@ -93,6 +105,9 @@ fn alpha_fixtures_solve_with_scale_invariant_ids_and_explicit_branches() {
                 })).collect::<Vec<_>>(),
                 "dimension_modes": value["dimensions"].as_array().unwrap().iter().map(|item| [item["id"].clone(), item["mode"].clone(), item["suppressed"].clone()]).collect::<Vec<_>>(),
                 "rank": [report.rank, report.left_nullity, report.right_nullity, report.bidirectional_degrees_of_freedom],
+                "structural": [format!("{:?}", report.structural.structural_classification), report.structural.structural_rank.to_string(), report.structural.structural_left_nullity.to_string(), report.structural.structural_right_nullity.to_string()],
+                "one_sided_mobility": format!("{:?}", report.one_sided_mobility),
+                "bound_statuses": report.bounds.iter().map(|bound| format!("{:?}", bound.status)).collect::<Vec<_>>(),
                 "diagnostics": [format!("{:?}", report.conflict_diagnostics.status), format!("{:?}", report.redundancy_diagnostics.status)],
                 "conflicting_sources": conflicting_sources,
                 "redundant_sources": redundant_sources,
@@ -172,6 +187,86 @@ fn alpha_fixtures_solve_with_scale_invariant_ids_and_explicit_branches() {
             }
         }
     }
+}
+
+#[test]
+fn advanced_diagnostic_examples_expose_rank_bounds_and_redundancy() {
+    let (rank_drop, rank_ids) = session(AlphaScenarioKind::DiagnosticRankDrop, 1.0);
+    let AlphaScenarioIds::DiagnosticRankDrop(rank_ids) = rank_ids else {
+        panic!("rank-drop IDs expected");
+    };
+    let rank_result = rank_drop.accepted_result();
+    let rank_report = &rank_result.accepted_view().core_report;
+    assert_eq!(
+        (rank_report.left_nullity, rank_report.right_nullity),
+        (1, 1)
+    );
+    assert_eq!(
+        rank_report.structural.structural_classification,
+        StructuralClassification::Well
+    );
+    assert_eq!(
+        (
+            rank_report.structural.structural_left_nullity,
+            rank_report.structural.structural_right_nullity,
+        ),
+        (0, 0)
+    );
+    assert!(rank_report.is_singular);
+    assert!(rank_drop.document().point(rank_ids.point).is_some());
+
+    let (endpoint, endpoint_ids) = session(AlphaScenarioKind::DiagnosticEndpointBound, 1.0);
+    let AlphaScenarioIds::DiagnosticEndpointBound(endpoint_ids) = endpoint_ids else {
+        panic!("endpoint-bound IDs expected");
+    };
+    let endpoint_result = endpoint.accepted_result();
+    let endpoint_report = &endpoint_result.accepted_view().core_report;
+    assert_eq!(endpoint_report.right_nullity, 2);
+    assert_eq!(endpoint_report.bidirectional_degrees_of_freedom, 0);
+    assert_eq!(endpoint_report.one_sided_mobility, OneSidedMobility::Exists);
+    assert!(
+        endpoint_report
+            .bounds
+            .iter()
+            .any(|bound| bound.status == BoundStatus::ActiveLower)
+    );
+    assert!(endpoint.document().contact(endpoint_ids.contact).is_some());
+    assert!(endpoint.document().curve(endpoint_ids.circle).is_some());
+    assert!(endpoint.document().scalar(endpoint_ids.radius).is_some());
+
+    let (redundancy, redundancy_ids) = session(AlphaScenarioKind::DiagnosticRedundancy, 1.0);
+    let AlphaScenarioIds::DiagnosticRedundancy(redundancy_ids) = redundancy_ids else {
+        panic!("redundancy IDs expected");
+    };
+    let redundancy_result = redundancy.accepted_result();
+    let redundancy_report = &redundancy_result.accepted_view().core_report;
+    assert_eq!(
+        (
+            redundancy_report.left_nullity,
+            redundancy_report.right_nullity
+        ),
+        (1, 0)
+    );
+    assert_eq!(
+        redundancy_report.structural.structural_classification,
+        StructuralClassification::Over
+    );
+    assert_eq!(
+        redundancy_report.redundancy_diagnostics.status,
+        DiagnosticStatus::Complete
+    );
+    let duplicate_source = redundancy
+        .document()
+        .dimension(redundancy_ids.duplicate_length)
+        .unwrap()
+        .source_id;
+    assert!(
+        redundancy_report
+            .sources_containing_redundant_rows
+            .iter()
+            .any(|source| redundancy_result.persistent_core_source(*source)
+                == Some(duplicate_source))
+    );
 }
 
 #[test]
@@ -386,6 +481,237 @@ fn tangent_orbit_projected_drag_traverses_all_quadrants() {
             released.solve()
         );
         assert_eq!(released.accepted_view().core_report.right_nullity, 1);
+    }
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn compound_constraint_mechanisms_follow_their_emergent_motion() {
+    for scale in SCALES {
+        let (mut trammel, trammel_ids) = session(AlphaScenarioKind::MotionTrammel, scale);
+        let AlphaScenarioIds::MotionTrammel(trammel_ids) = trammel_ids else {
+            panic!("trammel IDs expected");
+        };
+        assert_eq!(
+            trammel
+                .accepted_result()
+                .accepted_view()
+                .core_report
+                .right_nullity,
+            1
+        );
+        let initial_angle = 0.8_f64.acos();
+        for step in 1..=4 {
+            let angle = initial_angle
+                + (std::f64::consts::FRAC_PI_2 - initial_angle) * f64::from(step) / 4.0;
+            let target = [3.75 * angle.cos() * scale, 1.25 * angle.sin() * scale];
+            let request = trammel
+                .request()
+                .without_previous_state_preferences()
+                .with_drag(trammel_ids.tracer, target);
+            let moved = trammel
+                .rebuild_request(trammel.revision(), request)
+                .unwrap();
+            assert!(moved.accepted(), "scale={scale:e}: {:#?}", moved.solve());
+        }
+        assert_point(
+            trammel
+                .document()
+                .point(trammel_ids.horizontal_slider)
+                .unwrap()
+                .position,
+            [0.0, 0.0],
+            scale,
+        );
+        assert_point(
+            trammel
+                .document()
+                .point(trammel_ids.vertical_slider)
+                .unwrap()
+                .position,
+            [0.0, 5.0 * scale],
+            scale,
+        );
+
+        let (mut yoke, yoke_ids) = session(AlphaScenarioKind::MotionScotchYoke, scale);
+        let AlphaScenarioIds::MotionScotchYoke(yoke_ids) = yoke_ids else {
+            panic!("Scotch-yoke IDs expected");
+        };
+        assert_eq!(
+            yoke.accepted_result()
+                .accepted_view()
+                .core_report
+                .right_nullity,
+            1
+        );
+        let initial_angle = (4.0_f64).atan2(3.0);
+        for step in 1..=4 {
+            let angle = initial_angle
+                + (std::f64::consts::FRAC_PI_2 - initial_angle) * f64::from(step) / 4.0;
+            let target = [5.0 * angle.cos() * scale, 5.0 * angle.sin() * scale];
+            let request = yoke
+                .request()
+                .without_previous_state_preferences()
+                .with_drag(yoke_ids.crank_pin, target);
+            let moved = yoke.rebuild_request(yoke.revision(), request).unwrap();
+            assert!(moved.accepted(), "scale={scale:e}: {:#?}", moved.solve());
+        }
+        assert_point(
+            yoke.document().point(yoke_ids.slider).unwrap().position,
+            [0.0, -6.0 * scale],
+            scale,
+        );
+
+        let (mut square, square_ids) = session(AlphaScenarioKind::MotionRotatingSquare, scale);
+        let AlphaScenarioIds::MotionRotatingSquare(square_ids) = square_ids else {
+            panic!("rotating-square IDs expected");
+        };
+        assert_eq!(
+            square
+                .accepted_result()
+                .accepted_view()
+                .core_report
+                .right_nullity,
+            1
+        );
+        for step in 1..=4 {
+            let angle = std::f64::consts::FRAC_PI_4 * f64::from(step) / 4.0;
+            let target = [3.0 * angle.cos() * scale, 3.0 * angle.sin() * scale];
+            let request = square
+                .request()
+                .without_previous_state_preferences()
+                .with_drag(square_ids.corners[1], target);
+            let moved = square.rebuild_request(square.revision(), request).unwrap();
+            assert!(moved.accepted(), "scale={scale:e}: {:#?}", moved.solve());
+        }
+        let side = 3.0 * std::f64::consts::FRAC_1_SQRT_2 * scale;
+        assert_point(
+            square
+                .document()
+                .point(square_ids.corners[2])
+                .unwrap()
+                .position,
+            [0.0, 2.0 * side],
+            scale,
+        );
+
+        let (mut scissor, scissor_ids) = session(AlphaScenarioKind::MotionScissor, scale);
+        let AlphaScenarioIds::MotionScissor(scissor_ids) = scissor_ids else {
+            panic!("scissor IDs expected");
+        };
+        assert_eq!(
+            scissor
+                .accepted_result()
+                .accepted_view()
+                .core_report
+                .right_nullity,
+            1
+        );
+        for step in 1..=4 {
+            let x = (4.0 - 0.5 * f64::from(step)) * scale;
+            let request = scissor
+                .request()
+                .without_previous_state_preferences()
+                .with_drag(scissor_ids.slider, [x, 0.0]);
+            let moved = scissor
+                .rebuild_request(scissor.revision(), request)
+                .unwrap();
+            assert!(moved.accepted(), "scale={scale:e}: {:#?}", moved.solve());
+        }
+        assert_point(
+            scissor
+                .document()
+                .point(scissor_ids.upper_joint)
+                .unwrap()
+                .position,
+            [-scale, 4.0 * scale],
+            scale,
+        );
+        assert_point(
+            scissor
+                .document()
+                .point(scissor_ids.lower_joint)
+                .unwrap()
+                .position,
+            [-scale, -4.0 * scale],
+            scale,
+        );
+    }
+}
+
+#[test]
+fn advanced_linkage_examples_propagate_one_driver_through_every_bar() {
+    for scale in SCALES {
+        let (mut tower, tower_ids) = session(AlphaScenarioKind::MotionScissorTower, scale);
+        let AlphaScenarioIds::MotionScissorTower(tower_ids) = tower_ids else {
+            panic!("scissor-tower IDs expected");
+        };
+        assert_eq!(
+            tower
+                .accepted_result()
+                .accepted_view()
+                .core_report
+                .right_nullity,
+            1
+        );
+        for step in 1..=4 {
+            let x = (4.0 - 0.5 * f64::from(step)) * scale;
+            let request = tower
+                .request()
+                .without_previous_state_preferences()
+                .with_drag(tower_ids.right_levels[0], [x, 0.0]);
+            let moved = tower.rebuild_request(tower.revision(), request).unwrap();
+            assert!(moved.accepted(), "scale={scale:e}: {:#?}", moved.solve());
+        }
+        assert_point(
+            tower
+                .document()
+                .point(tower_ids.left_levels[5])
+                .unwrap()
+                .position,
+            [-4.0 * scale, 40.0 * scale],
+            scale,
+        );
+        assert_point(
+            tower
+                .document()
+                .point(tower_ids.right_levels[5])
+                .unwrap()
+                .position,
+            [2.0 * scale, 40.0 * scale],
+            scale,
+        );
+
+        let (mut cell, cell_ids) = session(AlphaScenarioKind::MotionPeaucellier, scale);
+        let AlphaScenarioIds::MotionPeaucellier(cell_ids) = cell_ids else {
+            panic!("Peaucellier IDs expected");
+        };
+        assert_eq!(
+            cell.accepted_result()
+                .accepted_view()
+                .core_report
+                .right_nullity,
+            1
+        );
+        for step in 1..=6 {
+            let angle = std::f64::consts::FRAC_PI_2
+                - (std::f64::consts::FRAC_PI_2 - std::f64::consts::FRAC_PI_3) * f64::from(step)
+                    / 6.0;
+            let target = [(4.0 + 4.0 * angle.cos()) * scale, 4.0 * angle.sin() * scale];
+            let request = cell
+                .request()
+                .without_previous_state_preferences()
+                .with_drag(cell_ids.input, target);
+            let moved = cell.rebuild_request(cell.revision(), request).unwrap();
+            assert!(moved.accepted(), "scale={scale:e}: {:#?}", moved.solve());
+            let output = cell.document().point(cell_ids.output).unwrap().position;
+            assert!((output[0] - 2.0 * scale).abs() <= 2.0e-9 * scale.max(1.0));
+        }
+        assert_point(
+            cell.document().point(cell_ids.output).unwrap().position,
+            [2.0 * scale, 2.0 * scale / 3.0_f64.sqrt()],
+            scale,
+        );
     }
 }
 
