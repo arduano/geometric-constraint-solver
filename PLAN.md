@@ -547,14 +547,38 @@ without a production-code correction.
 
 Goal: prove the spatial state, feature and gauge architecture with a minimal useful assembly set.
 
-- [ ] Add `SpatialAssembly` within `geosolve-linkage`.
-- [ ] Add spatial rigid bodies and body-local point/frame features.
-- [ ] Add physical ground and automatic floating-component gauge policies.
-- [ ] Add fixed-frame, ball and revolute joints/mates.
-- [ ] Add source mapping, accepted geometry, audit, rank/mobility and rollback APIs.
-- [ ] Add transformed/scaled exact and perturbed fixtures.
+- [x] Add `SpatialAssembly` within `geosolve-linkage`.
+- [x] Add spatial rigid bodies and body-local point/frame features.
+- [x] Add physical ground and automatic floating-component gauge policies.
+- [x] Add fixed-frame, ball and revolute joints/mates.
+- [x] Add source mapping, accepted geometry, audit, rank/mobility and rollback APIs.
+- [x] Add transformed/scaled exact and perturbed fixtures.
 
 Gate: every primitive reports expected relative DOF and passes tangent-space Jacobian, gauge, invalid-feature and independent-validation tests.
+
+Completion notes: `SpatialAssembly` owns one quaternion-backed `Pose3` variable
+per rigid body plus finite body-local point and checked right-handed frame features.
+Physical fixed-pose ground uses trusted core elimination. Certified floating
+components solve first with one private six-coordinate manifold gauge and then
+publish only a separately solved ungauged physical session; accepted audit, source
+mappings, structural/numerical rank and mobility therefore contain no private gauge
+rows. Fixed-frame, ball and explicitly directed-axis revolute sources have six,
+three and five analytic rows respectively, with right/body-local Jacobians checked
+against central retraction differences. Their floating physical right nullities are
+six, nine and seven, split into six world-gauge DOF plus zero, three and one internal
+DOF; physically grounded reports expose only the internal values. Independent
+geometry validation recomputes every equation, enforces the stricter of caller
+tolerance and `1e-9`, rejects fixed-frame half-turn roots and wrong revolute parity,
+and never accepts non-finite transformed features. Revision-checked pose/feature and
+gauge edits rebuild and swap atomically; all-fixed residual-only core components map
+back through physical source incidence for truthful rollback reports. Ten public
+acceptance tests cover exact and perturbed geometry, scales `1e-6`/`1`/`1e6`, common
+left `SE(3)` transforms, all primitive mobility counts, disconnected gauges, audit
+and private-row isolation, invalid geometry, loose solver tolerances and complete
+rollback. Spatial persistence, drivers, velocity and the broader mate catalog remain
+allocated to M20/M23. Locked format/diff, warnings-denied workspace Clippy, full
+workspace tests, WASM check, warnings-denied rustdoc, core benchmark compilation and
+release Trunk build gates pass.
 
 ## M19: ellipses and parametric conics
 

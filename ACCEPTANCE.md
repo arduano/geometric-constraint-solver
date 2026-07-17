@@ -302,6 +302,17 @@ then independently validate published world-frame velocities. L1-L3 remain valid
 - Exact, perturbed, tangent-Jacobian, transformed/scaled, invalid-feature and rollback fixtures pass.
 - Every accepted configuration is independently validated.
 
+Completion record (2026-07-17): `SpatialAssembly` provides one `Pose3` state per
+body, checked local point/frame features, physical fixed-pose grounding and private
+six-DOF gauges for certified floating components. Fixed-frame, ball and explicit
+aligned/opposed revolute sources report the expected rank and internal mobility in
+floating and grounded assemblies. Public physical sessions exclude private gauge
+rows from source mappings, audit, rank and accepted linearization. Analytic
+right-tangent Jacobians, required scales and common-left `SE(3)` fixtures pass.
+Independent validation is capped at `1e-9`, rejects half-turn/parity false roots and
+non-finite world features, and revision-checked failed edits retain every accepted
+view.
+
 ## M19 acceptance: conics
 
 - Ellipses, elliptical arcs, rational-quadratic conics and explicit parabola/hyperbola branches have validated jets and domains.

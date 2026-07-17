@@ -469,6 +469,54 @@ M16 displacement-driven fold fixture:
 - every published accepted sample is an ordinary fixed-displacement physical solve with finite geometry, independently valid hard residuals and no pseudo parameter/control source in its rank, audit or diagnostics;
 - forced dense and sparse-preferred physical endpoints agree on geometry, final driver target, rank/mobility, diagnostics, audit structure and positive-X branch state.
 
+## S1-S3 — Spatial vertical slice
+
+Purpose: prove one-pose-per-body spatial assembly state, local feature transforms,
+six-coordinate gauge separation and minimal useful joint mobility before the larger
+M20 mate catalog.
+
+Shared construction:
+
+- each body stores `T_WB` as a checked quaternion-backed `Pose3` and receives
+  right/body-local increments `[v_x, v_y, v_z, omega_x, omega_y, omega_z]`;
+- local point and right-handed frame features transform through their owning pose;
+- exact fixtures use arbitrary non-axis-aligned body poses and offset local features;
+- perturbed fixtures right-retract the second body before solving;
+- every fixture is repeated at model scales `1e-6`, `1` and `1e6`, with both
+  scale-proportional and mixed common-left `SE(3)` transforms.
+
+Expected physical equality counts:
+
+| Fixture | Scalar rows/rank | Floating right nullity | Gauge DOF | Internal mobility | Grounded right nullity |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| S1 ball | 3 | 9 | 6 | 3 | 3 |
+| S2 fixed frame | 6 | 6 | 6 | 0 | 0 |
+| S3 revolute | 5 | 7 | 6 | 1 | 1 |
+
+Gauge and validation policy:
+
+- each certified floating connected component selects the lowest body ID by default
+  or exactly one explicit reference; grounded components select none;
+- private manifold fixed-pose gauges are used only by the scratch solve, while the
+  published physical source mapping, audit, rank and accepted linearization come
+  from a separately solved ungauged session;
+- fixed-frame executable rows use origin coincidence plus three independent
+  off-diagonal orientation rows; independent positive diagonal-axis checks reject
+  all half-turn false roots;
+- revolute rows use origin coincidence plus two directed z-axis alignment rows;
+  explicit aligned/opposed parity is independently checked and cannot flip silently;
+- independent physical acceptance uses `min(caller tolerance, 1e-9)` and freshly
+  rebuilds every transformed point and frame.
+
+Rollback fixture:
+
+- two physically grounded bodies begin with coincident ball points;
+- moving one local point makes the all-fixed source impossible;
+- the failed revision-checked patch retains the prior revision, geometry, audit,
+  source mappings, gauge report, core report and accepted hard linearization exactly;
+- the residual-only all-fixed core component is mapped through physical source
+  incidence rather than being mistaken for a missing spatial body component.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:

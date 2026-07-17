@@ -1,4 +1,4 @@
-//! Planar rigid-body linkages compiled into the shared constraint solver.
+//! Planar and spatial rigid-body kinematics compiled into the shared constraint solver.
 
 mod compiler;
 mod continuation;
@@ -6,6 +6,8 @@ mod model;
 mod planar;
 mod residuals;
 mod scenarios;
+mod spatial;
+mod spatial_residuals;
 mod velocity;
 
 pub use compiler::{
@@ -36,6 +38,15 @@ pub use scenarios::{
     four_bar_crossed, four_bar_open, four_bar_with_scale, slider_crank,
     slider_crank_displacement_driven, slider_crank_displacement_driven_with_scale,
     slider_crank_with_scale, xy_plane_frame,
+};
+pub use spatial::{
+    CompiledSpatialAssembly, SpatialAssembly, SpatialAssemblyError, SpatialAssemblySession,
+    SpatialAxisParity, SpatialBody, SpatialBodyId, SpatialBodyVariableMapping,
+    SpatialComponentGaugeReport, SpatialFrameFeature, SpatialFrameFeatureId, SpatialGaugePolicy,
+    SpatialGaugeReference, SpatialGaugeReport, SpatialGeometry, SpatialPatch, SpatialPointFeature,
+    SpatialPointFeatureId, SpatialSolveResult, SpatialSolvedBody, SpatialSource, SpatialSourceId,
+    SpatialSourceKind, SpatialSourceMapping, SpatialTransformedFrameFeature,
+    SpatialTransformedPointFeature, SpatialWorldActionCertification,
 };
 pub use velocity::{BodyVelocity, VelocityResult};
 
