@@ -320,12 +320,35 @@ view.
 - Circle-limit geometry remains valid while unobservable orientation is reported truthfully.
 - Generic contact/tangency adds no geometry-pair equation implementation.
 
+Completion record (2026-07-18): immutable analytic and homogeneous rational conics
+provide finite validated third-order jets, directed domains, explicit hyperbola
+branches, semantic features and CAD measurements. Runtime and persistent sketch
+layers use deterministic point/vector/scalar mappings and the existing generic
+contact/tangency residuals; no conic-pair equation was added. Required-scale central
+differences, affine/similarity covariance, rational poles, branch retention,
+circle-limit rank truthfulness, canonical JSON, accepted projection and transactional
+rollback pass. Independent acceptance is capped at `1e-9`, and the web consumer
+renders imported periodic ellipses through the public document evaluation API.
+Post-draw arc/parabola/hyperbola trim handles and rational homogeneous-middle handles
+project through public document APIs, retain explicit sweep/branch state and commit one
+accepted undoable transaction; invalid targets retain the prior document and history.
+
 ## M20 acceptance: spatial joints and mates
 
 - Axis/plane features and prismatic, cylindrical, planar and universal joints implement expected mobility.
 - Distance, angle, alignment and frame-offset mates support multiple explicit drivers.
 - Axis parity, winding, side and signed-volume state prevent silent mode changes.
 - Each primitive passes exact, recovery, tangent-Jacobian, scale, mixed-scale and degeneracy fixtures.
+
+Completion record (2026-07-18): complete clocked axis/plane features feed the
+prismatic, cylindrical, planar and universal joints and all four documented mate
+families. Analytic right-local Jacobians, required-scale and within-component
+mixed-scale fixtures, independent `1e-9` validation, explicit parity/winding/side/volume
+state, and gauge-separated expected mobility pass. Hinge and axial/planar translation
+drivers solve simultaneously through atomic assembly-mode transactions. Representative
+shaft/bearing and block/base assemblies pass exact, recovery, driver-stage, false-root
+and complete retained-state rollback scenarios; monitor-only modes never enter equality
+rank or physical audit rows.
 
 ## M21 acceptance: B-splines
 

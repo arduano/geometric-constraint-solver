@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use geosolve_geometry::Point2;
+use geosolve_geometry::{DirectedParameterTrim, Point2, Vector2};
 
 use crate::document::{
     ContactDomain, ContactId, CurveDefinition, CurveId, CurveSpan, DesignPointId, DesignScalarId,
@@ -8,14 +8,15 @@ use crate::document::{
     DocumentCircleTangencyMode, DocumentConstraint, DocumentConstraintDefinition,
     DocumentConstraintId, DocumentCoordinateAxis, DocumentDimension, DocumentDimensionDefinition,
     DocumentDimensionId, DocumentDimensionMode, DocumentError, DocumentLineSide, DocumentSourceId,
-    FeatureEndpoint, PersistentId, SketchDocument, TangentOrientation,
+    FeatureEndpoint, PersistentId, SketchDocument, TangentOrientation, document_arc_signed_sweep,
+    document_hyperbola_branch,
 };
 use crate::{
     AngleOrientation, ArcCircleTangencySide, ArcId, ArcSweep, CenterDirectionBranch,
-    CircleContainment, CircleId, CircleTangencyMode, ContactState, CoordinateAxis,
-    CurveContactNeighborhood, CurveTangentOrientation, DimensionMode, LineParameterDomain,
-    LineSide, PointId, SegmentBranch, SegmentEndpoint, SegmentId, Sketch, SketchConstraintId,
-    SketchCurve, SketchCurveContact, SketchDimensionId,
+    CircleContainment, CircleId, CircleTangencyMode, ConicId, ConicKind, ContactState,
+    CoordinateAxis, CurveContactNeighborhood, CurveTangentOrientation, DimensionMode,
+    LineParameterDomain, LineSide, PointId, SegmentBranch, SegmentEndpoint, SegmentId, Sketch,
+    SketchConstraintId, SketchCurve, SketchCurveContact, SketchDimensionId,
 };
 
 /// Runtime entities generated for one persistent curve.
@@ -27,6 +28,7 @@ pub enum RuntimeCurve {
     CircularArc(ArcId),
     QuadraticBezier(crate::BezierId),
     CubicBezier(crate::BezierId),
+    Conic(ConicId),
 }
 
 /// Persistent point to ephemeral runtime identity.
@@ -65,6 +67,7 @@ pub enum DocumentContactRole {
     CircleAngle,
     ArcSpanParameter,
     BezierParameter,
+    ConicParameter,
     FirstCurveParameter,
     SecondCurveParameter,
 }
@@ -136,7 +139,8 @@ impl DocumentRuntimeMap {
             RuntimeCurve::Circle(_)
             | RuntimeCurve::CircularArc(_)
             | RuntimeCurve::QuadraticBezier(_)
-            | RuntimeCurve::CubicBezier(_) => None,
+            | RuntimeCurve::CubicBezier(_)
+            | RuntimeCurve::Conic(_) => None,
         }
     }
 
@@ -150,6 +154,15 @@ impl DocumentRuntimeMap {
     fn runtime_arc(&self, id: CurveId) -> Option<ArcId> {
         match self.runtime_curve(id)? {
             RuntimeCurve::CircularArc(arc) => Some(*arc),
+            _ => None,
+        }
+    }
+
+    /// Returns the runtime conic generated for one persistent conic curve.
+    #[must_use]
+    pub fn runtime_conic(&self, id: CurveId) -> Option<ConicId> {
+        match self.runtime_curve(id)? {
+            RuntimeCurve::Conic(conic) => Some(*conic),
             _ => None,
         }
     }
@@ -266,6 +279,19 @@ impl SketchDocument {
         sketch: &Sketch,
         mappings: &DocumentRuntimeMap,
     ) -> Result<(), DocumentError> {
+        let mut candidate = self.clone();
+        candidate.project_accepted_state_inner(sketch, mappings)?;
+        candidate.validate()?;
+        *self = candidate;
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn project_accepted_state_inner(
+        &mut self,
+        sketch: &Sketch,
+        mappings: &DocumentRuntimeMap,
+    ) -> Result<(), DocumentError> {
         for mapping in &mappings.points {
             let position = sketch
                 .point(mapping.runtime)
@@ -307,6 +333,10 @@ impl SketchDocument {
                 | RuntimeCurve::Polyline(_)
                 | RuntimeCurve::QuadraticBezier(_)
                 | RuntimeCurve::CubicBezier(_) => continue,
+                RuntimeCurve::Conic(conic) => {
+                    project_conic_state(self, sketch, mapping.persistent, conic)?;
+                    continue;
+                }
             };
             self.scalar_mut(scalar)
                 .ok_or_else(|| unknown_runtime("scalar", scalar.0))?
@@ -322,7 +352,8 @@ impl SketchDocument {
                     DocumentContactRole::LineParameter
                     | DocumentContactRole::CircleAngle
                     | DocumentContactRole::ArcSpanParameter
-                    | DocumentContactRole::BezierParameter,
+                    | DocumentContactRole::BezierParameter
+                    | DocumentContactRole::ConicParameter,
                     ContactState::PointOnCurve { parameter }
                     | ContactState::LineCurveTangency { parameter },
                 )
@@ -373,7 +404,7 @@ impl SketchDocument {
             };
             set_contact_value(self, mapping.persistent, value)?;
         }
-        self.validate()
+        Ok(())
     }
 }
 
@@ -483,8 +514,156 @@ fn lower_curve(
                 runtime_point(mappings, *fourth)?,
             ],
         )?),
+        CurveDefinition::Ellipse {
+            center,
+            major_axis_point,
+            minor_axis_ratio,
+        } => RuntimeCurve::Conic(sketch.add_named_ellipse(
+            &curve.label,
+            runtime_point(mappings, *center)?,
+            runtime_point(mappings, *major_axis_point)?,
+            scalar_value(document, *minor_axis_ratio)?,
+        )?),
+        CurveDefinition::EllipticalArc {
+            center,
+            major_axis_point,
+            minor_axis_ratio,
+            start_angle,
+            end_angle,
+            sweep,
+        } => {
+            let start = scalar_value(document, *start_angle)?;
+            let end = scalar_value(document, *end_angle)?;
+            RuntimeCurve::Conic(sketch.add_named_elliptical_arc(
+                &curve.label,
+                runtime_point(mappings, *center)?,
+                runtime_point(mappings, *major_axis_point)?,
+                scalar_value(document, *minor_axis_ratio)?,
+                start,
+                document_arc_signed_sweep(start, end, *sweep)?,
+            )?)
+        }
+        CurveDefinition::RationalQuadraticConic {
+            start,
+            weighted_middle,
+            middle_weight,
+            end,
+        } => RuntimeCurve::Conic(sketch.add_named_rational_quadratic(
+            &curve.label,
+            runtime_point(mappings, *start)?,
+            Vector2::new(weighted_middle[0], weighted_middle[1]),
+            scalar_value(document, *middle_weight)?,
+            runtime_point(mappings, *end)?,
+        )?),
+        CurveDefinition::ParabolaSegment {
+            vertex,
+            focus,
+            trim_start,
+            trim_end,
+        } => RuntimeCurve::Conic(sketch.add_named_parabola_segment(
+            &curve.label,
+            runtime_point(mappings, *vertex)?,
+            runtime_point(mappings, *focus)?,
+            directed_trim(document, curve.id, *trim_start, *trim_end)?,
+        )?),
+        CurveDefinition::HyperbolaSegment {
+            center,
+            transverse_axis_point,
+            semi_conjugate,
+            branch,
+            trim_start,
+            trim_end,
+        } => RuntimeCurve::Conic(sketch.add_named_hyperbola_segment(
+            &curve.label,
+            runtime_point(mappings, *center)?,
+            runtime_point(mappings, *transverse_axis_point)?,
+            scalar_value(document, *semi_conjugate)?,
+            document_hyperbola_branch(*branch),
+            directed_trim(document, curve.id, *trim_start, *trim_end)?,
+        )?),
     };
     Ok(runtime)
+}
+
+fn project_conic_state(
+    document: &mut SketchDocument,
+    sketch: &Sketch,
+    persistent: CurveId,
+    runtime: ConicId,
+) -> Result<(), DocumentError> {
+    let definition = document
+        .curve(persistent)
+        .ok_or_else(|| unknown_runtime("curve", persistent.0))?
+        .definition
+        .clone();
+    let kind = sketch
+        .conic(runtime)
+        .ok_or_else(|| unknown_runtime("runtime conic", persistent.0))?
+        .kind();
+    match (definition, kind) {
+        (
+            CurveDefinition::Ellipse {
+                minor_axis_ratio, ..
+            },
+            ConicKind::Ellipse {
+                minor_axis_ratio: value,
+                ..
+            },
+        )
+        | (
+            CurveDefinition::EllipticalArc {
+                minor_axis_ratio, ..
+            },
+            ConicKind::EllipticalArc {
+                minor_axis_ratio: value,
+                ..
+            },
+        ) => {
+            document
+                .scalar_mut(minor_axis_ratio)
+                .ok_or_else(|| unknown_runtime("scalar", minor_axis_ratio.0))?
+                .value = value;
+        }
+        (
+            CurveDefinition::RationalQuadraticConic { middle_weight, .. },
+            ConicKind::RationalQuadratic {
+                weighted_middle,
+                middle_weight: value,
+                ..
+            },
+        ) => {
+            document
+                .scalar_mut(middle_weight)
+                .ok_or_else(|| unknown_runtime("scalar", middle_weight.0))?
+                .value = value;
+            let CurveDefinition::RationalQuadraticConic {
+                weighted_middle: persistent_middle,
+                ..
+            } = &mut document
+                .curve_mut(persistent)
+                .ok_or_else(|| unknown_runtime("curve", persistent.0))?
+                .definition
+            else {
+                return invalid_runtime("curve mapping kind changed");
+            };
+            *persistent_middle = [weighted_middle.x, weighted_middle.y];
+        }
+        (
+            CurveDefinition::HyperbolaSegment { semi_conjugate, .. },
+            ConicKind::HyperbolaSegment {
+                semi_conjugate: value,
+                ..
+            },
+        ) => {
+            document
+                .scalar_mut(semi_conjugate)
+                .ok_or_else(|| unknown_runtime("scalar", semi_conjugate.0))?
+                .value = value;
+        }
+        (CurveDefinition::ParabolaSegment { .. }, ConicKind::ParabolaSegment { .. }) => {}
+        _ => return invalid_runtime("curve mapping kind changed"),
+    }
+    Ok(())
 }
 
 #[allow(clippy::too_many_lines)]
@@ -831,6 +1010,16 @@ fn scalar_value(document: &SketchDocument, id: DesignScalarId) -> Result<f64, Do
         .ok_or_else(|| unknown_runtime("scalar", id.0))
 }
 
+fn directed_trim(
+    document: &SketchDocument,
+    curve: CurveId,
+    start: DesignScalarId,
+    end: DesignScalarId,
+) -> Result<DirectedParameterTrim, DocumentError> {
+    DirectedParameterTrim::try_new(scalar_value(document, start)?, scalar_value(document, end)?)
+        .map_err(|source| DocumentError::ConicDefinition { curve, source })
+}
+
 fn contact_value(
     document: &SketchDocument,
     contact: &crate::document::ContactSlot,
@@ -861,6 +1050,7 @@ fn runtime_curve_contact(
             RuntimeCurve::QuadraticBezier(bezier) | RuntimeCurve::CubicBezier(bezier) => {
                 SketchCurve::Bezier(*bezier)
             }
+            RuntimeCurve::Conic(conic) => SketchCurve::Conic(*conic),
         },
         parameter: contact_value(document, contact)?,
         neighborhood: match contact.neighborhood {
@@ -888,6 +1078,7 @@ fn contact_role(
         RuntimeCurve::QuadraticBezier(_) | RuntimeCurve::CubicBezier(_) => {
             Ok(DocumentContactRole::BezierParameter)
         }
+        RuntimeCurve::Conic(_) => Ok(DocumentContactRole::ConicParameter),
     }
 }
 

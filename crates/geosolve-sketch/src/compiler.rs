@@ -4,7 +4,7 @@ use geosolve_core::{
     SolveTermination, SolverConfig, SourceConstraint, SourceConstraintId, VariableBlock,
     VariableId, VariableValue,
 };
-use geosolve_geometry::Point2;
+use geosolve_geometry::{Point2, Vector2};
 
 use crate::curves::{
     CENTER_DIRECTION_COSINE_MARGIN, CIRCLE_ARC_TANGENCY_DIRECTION_TOLERANCE,
@@ -13,10 +13,10 @@ use crate::curves::{
     tangency_distance, unwrap_near, validate_bounded_parameter, validate_radius,
 };
 use crate::model::{
-    ArcId, CircleId, CoordinateAxis, CurveContactNeighborhood, DimensionKind, DimensionMode,
-    PersistentSource, PointId, SegmentId, Sketch, SketchConstraintId, SketchConstraintKind,
-    SketchCurve, SketchCurveContact, SketchDimensionId, SketchError, validate_model_scale,
-    validate_point,
+    ArcId, CircleId, ConicId, CoordinateAxis, CurveContactNeighborhood, DimensionKind,
+    DimensionMode, PersistentSource, PointId, SegmentId, Sketch, SketchConstraintId,
+    SketchConstraintKind, SketchCurve, SketchCurveContact, SketchDimensionId, SketchError,
+    validate_model_scale, validate_point,
 };
 use crate::residuals::{
     AxisDifferenceResidual, BezierIncidence, CircleArcTangencyResidual, CircleTangencyResidual,
@@ -119,6 +119,36 @@ pub struct ArcRadiusVariableMapping {
     pub variable_id: VariableId,
 }
 
+/// Scalar shape coordinate owned by one runtime conic.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ConicScalarRole {
+    MinorAxisRatio,
+    MiddleWeight,
+    SemiConjugate,
+}
+
+/// Exact conic-shape-scalar-to-core-variable relationship in conic insertion order.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ConicScalarVariableMapping {
+    pub conic_id: ConicId,
+    pub role: ConicScalarRole,
+    pub variable_id: VariableId,
+}
+
+/// Vector shape coordinate owned by one runtime conic.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ConicVectorRole {
+    WeightedMiddle,
+}
+
+/// Exact conic-shape-vector-to-core-variable relationship in conic insertion order.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ConicVectorVariableMapping {
+    pub conic_id: ConicId,
+    pub role: ConicVectorRole,
+    pub variable_id: VariableId,
+}
+
 /// Semantic role of an ordinary scalar variable retained inside a source constraint.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LatentVariableRole {
@@ -144,6 +174,10 @@ pub struct LatentVariableMapping {
 pub enum SketchBound {
     CircleRadius(CircleId),
     ArcRadius(ArcId),
+    ConicScalar {
+        conic_id: ConicId,
+        role: ConicScalarRole,
+    },
     Contact {
         constraint_id: SketchConstraintId,
         role: LatentVariableRole,
@@ -161,6 +195,21 @@ pub struct SketchBoundMapping {
 /// the baseline model, including subnormal fixtures.
 pub const MIN_REPRESENTABLE_RADIUS: f64 = f64::from_bits(1);
 
+/// Inclusive representable core bound implementing the strict geometric `w > -1` domain.
+pub const MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT: f64 = -1.0 + f64::EPSILON;
+
+/// Mandatory sketch-domain acceptance ceiling for normalized hard residuals.
+pub const SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE: f64 = 1.0e-9;
+
+pub(crate) fn acceptance_solver_config(mut config: SolverConfig) -> SolverConfig {
+    if config.normalized_residual_tolerance.is_finite()
+        && config.normalized_residual_tolerance > SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE
+    {
+        config.normalized_residual_tolerance = SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE;
+    }
+    config
+}
+
 /// Read-only compilation seam for audit, incidence, and Jacobian verification.
 #[derive(Clone, Debug)]
 pub struct CompiledSketch {
@@ -168,6 +217,8 @@ pub struct CompiledSketch {
     point_variables: Vec<PointVariableMapping>,
     circle_radius_variables: Vec<CircleRadiusVariableMapping>,
     arc_radius_variables: Vec<ArcRadiusVariableMapping>,
+    conic_vector_variables: Vec<ConicVectorVariableMapping>,
+    conic_scalar_variables: Vec<ConicScalarVariableMapping>,
     latent_variables: Vec<LatentVariableMapping>,
     bound_mappings: Vec<SketchBoundMapping>,
     source_mappings: Vec<SketchSourceMapping>,
@@ -201,6 +252,16 @@ impl CompiledSketch {
     #[must_use]
     pub fn arc_radius_variables(&self) -> &[ArcRadiusVariableMapping] {
         &self.arc_radius_variables
+    }
+
+    #[must_use]
+    pub fn conic_scalar_variables(&self) -> &[ConicScalarVariableMapping] {
+        &self.conic_scalar_variables
+    }
+
+    #[must_use]
+    pub fn conic_vector_variables(&self) -> &[ConicVectorVariableMapping] {
+        &self.conic_vector_variables
     }
 
     #[must_use]
@@ -239,10 +300,33 @@ impl CompiledSketch {
             .find_map(|mapping| (mapping.arc_id == arc).then_some(mapping.variable_id))
     }
 
+    #[must_use]
+    pub fn variable_for_conic_scalar(
+        &self,
+        conic: ConicId,
+        role: ConicScalarRole,
+    ) -> Option<VariableId> {
+        self.conic_scalar_variables.iter().find_map(|mapping| {
+            (mapping.conic_id == conic && mapping.role == role).then_some(mapping.variable_id)
+        })
+    }
+
+    #[must_use]
+    pub fn variable_for_conic_vector(
+        &self,
+        conic: ConicId,
+        role: ConicVectorRole,
+    ) -> Option<VariableId> {
+        self.conic_vector_variables.iter().find_map(|mapping| {
+            (mapping.conic_id == conic && mapping.role == role).then_some(mapping.variable_id)
+        })
+    }
+
     fn solved_state(&self, sketch: &Sketch) -> Result<SolvedSketchState, SketchError> {
         self.solved_state_for_problem(&self.problem, sketch)
     }
 
+    #[allow(clippy::too_many_lines)]
     pub(crate) fn solved_state_for_problem(
         &self,
         problem: &Problem,
@@ -291,6 +375,89 @@ impl CompiledSketch {
                 sweep: arc.sweep(),
             });
         }
+        let mut conics = Vec::with_capacity(sketch.conics.iter().count());
+        for (conic_id, conic) in sketch.conics.iter() {
+            let kind = match conic.kind() {
+                crate::ConicKind::Ellipse {
+                    center,
+                    major_axis_point,
+                    ..
+                } => SolvedConicKind::Ellipse {
+                    center: solved_point(&points, center)?,
+                    major_axis_point: solved_point(&points, major_axis_point)?,
+                    minor_axis_ratio: conic_scalar_value(
+                        problem,
+                        &self.conic_scalar_variables,
+                        conic_id,
+                        ConicScalarRole::MinorAxisRatio,
+                    )?,
+                },
+                crate::ConicKind::EllipticalArc {
+                    center,
+                    major_axis_point,
+                    start_angle,
+                    signed_sweep,
+                    ..
+                } => SolvedConicKind::EllipticalArc {
+                    center: solved_point(&points, center)?,
+                    major_axis_point: solved_point(&points, major_axis_point)?,
+                    minor_axis_ratio: conic_scalar_value(
+                        problem,
+                        &self.conic_scalar_variables,
+                        conic_id,
+                        ConicScalarRole::MinorAxisRatio,
+                    )?,
+                    start_angle,
+                    signed_sweep,
+                },
+                crate::ConicKind::RationalQuadratic { start, end, .. } => {
+                    SolvedConicKind::RationalQuadratic {
+                        start: solved_point(&points, start)?,
+                        weighted_middle: conic_vector_value(
+                            problem,
+                            &self.conic_vector_variables,
+                            conic_id,
+                            ConicVectorRole::WeightedMiddle,
+                        )?,
+                        middle_weight: conic_scalar_value(
+                            problem,
+                            &self.conic_scalar_variables,
+                            conic_id,
+                            ConicScalarRole::MiddleWeight,
+                        )?,
+                        end: solved_point(&points, end)?,
+                    }
+                }
+                crate::ConicKind::ParabolaSegment {
+                    vertex,
+                    focus,
+                    trim,
+                } => SolvedConicKind::ParabolaSegment {
+                    vertex: solved_point(&points, vertex)?,
+                    focus: solved_point(&points, focus)?,
+                    trim,
+                },
+                crate::ConicKind::HyperbolaSegment {
+                    center,
+                    transverse_axis_point,
+                    branch,
+                    trim,
+                    ..
+                } => SolvedConicKind::HyperbolaSegment {
+                    center: solved_point(&points, center)?,
+                    transverse_axis_point: solved_point(&points, transverse_axis_point)?,
+                    semi_conjugate: conic_scalar_value(
+                        problem,
+                        &self.conic_scalar_variables,
+                        conic_id,
+                        ConicScalarRole::SemiConjugate,
+                    )?,
+                    branch,
+                    trim,
+                },
+            };
+            conics.push(SolvedConic { conic_id, kind });
+        }
         let mut latents = Vec::with_capacity(self.latent_variables.len());
         for mapping in &self.latent_variables {
             latents.push(SolvedLatent {
@@ -304,6 +471,7 @@ impl CompiledSketch {
                 points,
                 circles,
                 arcs,
+                conics,
             },
             latents,
         })
@@ -365,6 +533,8 @@ impl CompiledSketch {
                     &self.point_variables,
                     &self.circle_radius_variables,
                     &self.arc_radius_variables,
+                    &self.conic_vector_variables,
+                    &self.conic_scalar_variables,
                     &mut generated_latents,
                     &mut generated_bounds,
                     constraint_id,
@@ -608,12 +778,141 @@ impl SolvedArc {
     }
 }
 
+/// Solved point/scalar data for one runtime conic family.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SolvedConicKind {
+    Ellipse {
+        center: Point2<f64>,
+        major_axis_point: Point2<f64>,
+        minor_axis_ratio: f64,
+    },
+    EllipticalArc {
+        center: Point2<f64>,
+        major_axis_point: Point2<f64>,
+        minor_axis_ratio: f64,
+        start_angle: f64,
+        signed_sweep: f64,
+    },
+    RationalQuadratic {
+        start: Point2<f64>,
+        weighted_middle: Vector2<f64>,
+        middle_weight: f64,
+        end: Point2<f64>,
+    },
+    ParabolaSegment {
+        vertex: Point2<f64>,
+        focus: Point2<f64>,
+        trim: geosolve_geometry::DirectedParameterTrim,
+    },
+    HyperbolaSegment {
+        center: Point2<f64>,
+        transverse_axis_point: Point2<f64>,
+        semi_conjugate: f64,
+        branch: geosolve_geometry::HyperbolaBranch,
+        trim: geosolve_geometry::DirectedParameterTrim,
+    },
+}
+
+/// One independently reconstructable solved conic in deterministic insertion order.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SolvedConic {
+    pub conic_id: ConicId,
+    pub kind: SolvedConicKind,
+}
+
+#[allow(clippy::missing_errors_doc)]
+impl SolvedConic {
+    #[must_use]
+    pub const fn kind(self) -> SolvedConicKind {
+        self.kind
+    }
+
+    /// Reconstructs a validated immutable conic from solved controls and shape scalars.
+    pub fn geometry(self) -> Result<crate::ConicGeometry, SketchError> {
+        solved_conic_geometry(self.kind)
+    }
+
+    /// Evaluates a solved conic through the immutable geometry jet API.
+    pub fn evaluate(self, parameter: f64) -> Result<geosolve_geometry::CurveJet2, SketchError> {
+        self.geometry()?
+            .evaluate(parameter)
+            .map_err(SketchError::InvalidConicEvaluation)
+    }
+
+    pub fn endpoints(self) -> Result<Option<[Point2<f64>; 2]>, SketchError> {
+        self.geometry()?
+            .endpoints()
+            .map_err(SketchError::InvalidConicEvaluation)
+    }
+
+    pub fn foci(self) -> Result<Option<[Point2<f64>; 2]>, SketchError> {
+        Ok(self.geometry()?.foci())
+    }
+
+    pub fn focus(self) -> Result<Option<Point2<f64>>, SketchError> {
+        Ok(self.geometry()?.focus())
+    }
+
+    pub fn axis_observability(
+        self,
+    ) -> Result<Option<geosolve_geometry::EllipseAxisObservability>, SketchError> {
+        Ok(self.geometry()?.axis_observability())
+    }
+
+    pub fn major_axis_endpoints(self) -> Result<Option<[Point2<f64>; 2]>, SketchError> {
+        Ok(self.geometry()?.major_axis_endpoints())
+    }
+
+    pub fn minor_axis_endpoints(self) -> Result<Option<[Point2<f64>; 2]>, SketchError> {
+        Ok(self.geometry()?.minor_axis_endpoints())
+    }
+
+    pub fn major_axis_length(self) -> Result<Option<f64>, SketchError> {
+        Ok(self.geometry()?.major_axis_length())
+    }
+
+    pub fn minor_axis_length(self) -> Result<Option<f64>, SketchError> {
+        Ok(self.geometry()?.minor_axis_length())
+    }
+
+    pub fn linear_eccentricity(self) -> Result<Option<f64>, SketchError> {
+        Ok(self.geometry()?.linear_eccentricity())
+    }
+
+    pub fn proper_conic_kind(
+        self,
+    ) -> Result<Option<geosolve_geometry::ProperConicKind>, SketchError> {
+        Ok(self.geometry()?.proper_conic_kind())
+    }
+
+    pub fn selected_branch_focus(self) -> Result<Option<Point2<f64>>, SketchError> {
+        Ok(self.geometry()?.selected_branch_focus())
+    }
+
+    pub fn selected_branch_vertex(self) -> Result<Option<Point2<f64>>, SketchError> {
+        Ok(self.geometry()?.selected_branch_vertex())
+    }
+
+    pub fn focal_distance(self) -> Result<Option<f64>, SketchError> {
+        Ok(self.geometry()?.focal_distance())
+    }
+
+    pub fn transverse_axis_length(self) -> Result<Option<f64>, SketchError> {
+        Ok(self.geometry()?.transverse_axis_length())
+    }
+
+    pub fn conjugate_axis_length(self) -> Result<Option<f64>, SketchError> {
+        Ok(self.geometry()?.conjugate_axis_length())
+    }
+}
+
 /// Finite geometry returned for display or downstream queries.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SketchGeometry {
     pub points: Vec<SolvedPoint>,
     pub circles: Vec<SolvedCircle>,
     pub arcs: Vec<SolvedArc>,
+    pub conics: Vec<SolvedConic>,
 }
 
 impl SketchGeometry {
@@ -632,6 +931,11 @@ impl SketchGeometry {
     #[must_use]
     pub fn arc(&self, arc: ArcId) -> Option<&SolvedArc> {
         self.arcs.iter().find(|item| item.arc_id == arc)
+    }
+
+    #[must_use]
+    pub fn conic(&self, conic: ConicId) -> Option<&SolvedConic> {
+        self.conics.iter().find(|item| item.conic_id == conic)
     }
 }
 
@@ -670,6 +974,7 @@ pub enum SolveRejection {
     NonPositiveArcRadius(ArcId),
     DegenerateSegment(SegmentId),
     DegenerateCurve(SketchConstraintId),
+    InvalidConicEntity(ConicId),
     ContactParameterOutOfDomain(SketchConstraintId),
     AmbiguousContactNeighborhood(SketchConstraintId),
     LineSideFlipped(SketchConstraintId),
@@ -719,6 +1024,7 @@ impl Sketch {
         validate_model_scale(self.model_scale)?;
         validate_request(self, request)?;
         self.preflight_segments()?;
+        self.preflight_conics()?;
 
         let mut problem = Problem::new();
         let mut point_variables = Vec::new();
@@ -777,6 +1083,76 @@ impl Sketch {
                 bound_id,
             });
         }
+        let mut conic_vector_variables = Vec::new();
+        for (conic_id, conic) in self.conics.iter() {
+            let crate::ConicKind::RationalQuadratic {
+                weighted_middle, ..
+            } = conic.kind()
+            else {
+                continue;
+            };
+            let variable_id = problem.add_variable(VariableBlock::vec2(
+                [weighted_middle.x, weighted_middle.y],
+                [self.model_scale, self.model_scale],
+            )?);
+            conic_vector_variables.push(ConicVectorVariableMapping {
+                conic_id,
+                role: ConicVectorRole::WeightedMiddle,
+                variable_id,
+            });
+        }
+        let mut conic_scalar_variables = Vec::new();
+        for (conic_id, conic) in self.conics.iter() {
+            let scalar = match conic.kind() {
+                crate::ConicKind::Ellipse {
+                    minor_axis_ratio, ..
+                }
+                | crate::ConicKind::EllipticalArc {
+                    minor_axis_ratio, ..
+                } => Some((
+                    ConicScalarRole::MinorAxisRatio,
+                    minor_axis_ratio,
+                    1.0,
+                    Some(MIN_REPRESENTABLE_RADIUS),
+                    Some(1.0),
+                )),
+                crate::ConicKind::RationalQuadratic { middle_weight, .. } => Some((
+                    ConicScalarRole::MiddleWeight,
+                    middle_weight,
+                    1.0,
+                    Some(MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT),
+                    None,
+                )),
+                crate::ConicKind::HyperbolaSegment { semi_conjugate, .. } => Some((
+                    ConicScalarRole::SemiConjugate,
+                    semi_conjugate,
+                    self.model_scale,
+                    Some(MIN_REPRESENTABLE_RADIUS),
+                    None,
+                )),
+                crate::ConicKind::ParabolaSegment { .. } => None,
+            };
+            let Some((role, value, step, lower, upper)) = scalar else {
+                continue;
+            };
+            let variable_id = problem.add_variable(VariableBlock::scalar(value, step)?);
+            conic_scalar_variables.push(ConicScalarVariableMapping {
+                conic_id,
+                role,
+                variable_id,
+            });
+            let bound_id = problem.add_bound(CoordinateBound::new(
+                variable_id,
+                0,
+                lower,
+                upper,
+                format!("{role:?} for {}", conic.label()),
+            )?)?;
+            bound_mappings.push(SketchBoundMapping {
+                bound: SketchBound::ConicScalar { conic_id, role },
+                bound_id,
+            });
+        }
 
         let mut source_mappings = Vec::new();
         let mut latent_variables = Vec::new();
@@ -792,6 +1168,8 @@ impl Sketch {
                         &point_variables,
                         &circle_radius_variables,
                         &arc_radius_variables,
+                        &conic_vector_variables,
+                        &conic_scalar_variables,
                         &mut latent_variables,
                         &mut bound_mappings,
                         constraint_id,
@@ -880,6 +1258,8 @@ impl Sketch {
             point_variables,
             circle_radius_variables,
             arc_radius_variables,
+            conic_vector_variables,
+            conic_scalar_variables,
             latent_variables,
             bound_mappings,
             source_mappings,
@@ -898,6 +1278,7 @@ impl Sketch {
         request: SketchSolveRequest,
         config: SolverConfig,
     ) -> Result<SketchSolveResult, SketchError> {
+        let config = acceptance_solver_config(config);
         let mut compiled = self.compile(request)?;
         let mut retained_audit = compiled.problem.audit_snapshot_partial();
         let mut core_report = compiled.problem.solve(config)?;
@@ -1048,6 +1429,13 @@ impl Sketch {
                     })
                 })
                 .collect(),
+            conics: self
+                .conics
+                .iter()
+                .filter_map(|(conic_id, conic)| {
+                    solved_conic_from_runtime(self, conic_id, conic).ok()
+                })
+                .collect(),
         }
     }
 
@@ -1105,6 +1493,10 @@ impl Sketch {
             if !arc.radius.is_finite() || arc.radius <= 0.0 {
                 return Err(SolveRejection::NonPositiveArcRadius(arc.arc_id));
             }
+        }
+        for conic in &candidate.geometry.conics {
+            validate_solved_conic_entity(*conic)
+                .map_err(|_| SolveRejection::InvalidConicEntity(conic.conic_id))?;
         }
         for (constraint_id, constraint) in self.constraints.iter() {
             match constraint.kind() {
@@ -1622,6 +2014,7 @@ impl Sketch {
                 SketchConstraintKind::PointOnCurve { contact, .. }
                 | SketchConstraintKind::LineCurveTangency { contact, .. } => {
                     normalize_generic_latent(
+                        self,
                         &mut candidate.latents,
                         constraint_id,
                         LatentVariableRole::CurveParameter,
@@ -1632,6 +2025,7 @@ impl Sketch {
                 SketchConstraintKind::CurveCurveContact { first, second }
                 | SketchConstraintKind::CurveCurveTangency { first, second, .. } => {
                     normalize_generic_latent(
+                        self,
                         &mut candidate.latents,
                         constraint_id,
                         LatentVariableRole::FirstCurveParameter,
@@ -1639,6 +2033,7 @@ impl Sketch {
                         &mut changed,
                     );
                     normalize_generic_latent(
+                        self,
                         &mut candidate.latents,
                         constraint_id,
                         LatentVariableRole::SecondCurveParameter,
@@ -1748,7 +2143,7 @@ impl Sketch {
                                 second: contact, ..
                             },
                             LatentVariableRole::SecondCurveParameter,
-                        ) => generic_curve_is_bounded(contact.curve),
+                        ) => generic_curve_is_bounded(self, contact.curve),
                         _ => false,
                     });
             if !is_bounded {
@@ -1838,6 +2233,11 @@ impl Sketch {
                 .arcs
                 .iter()
                 .any(|arc| !arc.radius.is_finite() || arc.radius <= 0.0)
+            || candidate
+                .geometry
+                .conics
+                .iter()
+                .any(|conic| validate_solved_conic_entity(*conic).is_err())
     }
 
     fn commit_latents(&mut self, latents: &[SolvedLatent]) -> Result<(), SketchError> {
@@ -1918,6 +2318,29 @@ impl Sketch {
         }
         for arc in &candidate.geometry.arcs {
             self.set_arc_radius(arc.arc_id, arc.radius)?;
+        }
+        for conic in &candidate.geometry.conics {
+            match conic.kind {
+                SolvedConicKind::Ellipse {
+                    minor_axis_ratio, ..
+                }
+                | SolvedConicKind::EllipticalArc {
+                    minor_axis_ratio, ..
+                } => self.set_conic_minor_axis_ratio(conic.conic_id, minor_axis_ratio)?,
+                SolvedConicKind::RationalQuadratic {
+                    weighted_middle,
+                    middle_weight,
+                    ..
+                } => self.set_rational_quadratic_homogeneous(
+                    conic.conic_id,
+                    weighted_middle,
+                    middle_weight,
+                )?,
+                SolvedConicKind::HyperbolaSegment { semi_conjugate, .. } => {
+                    self.set_conic_semi_conjugate(conic.conic_id, semi_conjugate)?;
+                }
+                SolvedConicKind::ParabolaSegment { .. } => {}
+            }
         }
         self.commit_latents(&candidate.latents)
     }
@@ -2128,6 +2551,8 @@ fn compile_constraint(
     point_variables: &[PointVariableMapping],
     circle_radius_variables: &[CircleRadiusVariableMapping],
     arc_radius_variables: &[ArcRadiusVariableMapping],
+    conic_vector_variables: &[ConicVectorVariableMapping],
+    conic_scalar_variables: &[ConicScalarVariableMapping],
     latent_variables: &mut Vec<LatentVariableMapping>,
     bound_mappings: &mut Vec<SketchBoundMapping>,
     constraint_id: SketchConstraintId,
@@ -2269,6 +2694,8 @@ fn compile_constraint(
                 point_variables,
                 circle_radius_variables,
                 arc_radius_variables,
+                conic_vector_variables,
+                conic_scalar_variables,
                 latent_variables,
                 bound_mappings,
                 constraint_id,
@@ -2341,6 +2768,8 @@ fn compile_curve_constraint(
     point_variables: &[PointVariableMapping],
     circle_radius_variables: &[CircleRadiusVariableMapping],
     arc_radius_variables: &[ArcRadiusVariableMapping],
+    conic_vector_variables: &[ConicVectorVariableMapping],
+    conic_scalar_variables: &[ConicScalarVariableMapping],
     latent_variables: &mut Vec<LatentVariableMapping>,
     bound_mappings: &mut Vec<SketchBoundMapping>,
     constraint_id: SketchConstraintId,
@@ -2540,6 +2969,7 @@ fn compile_curve_constraint(
             let point_name = sketch.point_name(point)?;
             let curve_label = generic_curve_label(sketch, contact.curve)?;
             let parameter_variable = add_curve_contact_latent(
+                sketch,
                 problem,
                 latent_variables,
                 bound_mappings,
@@ -2557,6 +2987,8 @@ fn compile_curve_constraint(
                         point_variables,
                         circle_radius_variables,
                         arc_radius_variables,
+                        conic_vector_variables,
+                        conic_scalar_variables,
                         &mut incidence,
                         contact.curve,
                         parameter,
@@ -2879,6 +3311,7 @@ fn compile_curve_constraint(
             let (start, end, line_value) = segment_points(sketch, line)?;
             let curve_label = generic_curve_label(sketch, contact.curve)?;
             let parameter_variable = add_curve_contact_latent(
+                sketch,
                 problem,
                 latent_variables,
                 bound_mappings,
@@ -2903,6 +3336,8 @@ fn compile_curve_constraint(
                 point_variables,
                 circle_radius_variables,
                 arc_radius_variables,
+                conic_vector_variables,
+                conic_scalar_variables,
                 &mut incidence,
                 contact.curve,
                 parameter,
@@ -2946,6 +3381,7 @@ fn compile_curve_constraint(
             let first_label = generic_curve_label(sketch, first.curve)?;
             let second_label = generic_curve_label(sketch, second.curve)?;
             let first_parameter = add_curve_contact_latent(
+                sketch,
                 problem,
                 latent_variables,
                 bound_mappings,
@@ -2954,6 +3390,7 @@ fn compile_curve_constraint(
                 first,
             )?;
             let second_parameter = add_curve_contact_latent(
+                sketch,
                 problem,
                 latent_variables,
                 bound_mappings,
@@ -2967,6 +3404,8 @@ fn compile_curve_constraint(
                 point_variables,
                 circle_radius_variables,
                 arc_radius_variables,
+                conic_vector_variables,
+                conic_scalar_variables,
                 &mut incidence,
                 first.curve,
                 first_parameter,
@@ -2978,6 +3417,8 @@ fn compile_curve_constraint(
                 point_variables,
                 circle_radius_variables,
                 arc_radius_variables,
+                conic_vector_variables,
+                conic_scalar_variables,
                 &mut incidence,
                 second.curve,
                 second_parameter,
@@ -3719,11 +4160,14 @@ fn bezier_incidence(
     })
 }
 
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn generic_curve_incidence(
     sketch: &Sketch,
     point_variables: &[PointVariableMapping],
     circle_radius_variables: &[CircleRadiusVariableMapping],
     arc_radius_variables: &[ArcRadiusVariableMapping],
+    conic_vector_variables: &[ConicVectorVariableMapping],
+    conic_scalar_variables: &[ConicScalarVariableMapping],
     incidence: &mut IncidenceBuilder,
     curve: SketchCurve,
     parameter: CurveParameterIncidence,
@@ -3773,10 +4217,96 @@ fn generic_curve_incidence(
                 },
             })
         }
+        SketchCurve::Conic(conic) => {
+            let value = sketch.conic_value(conic)?;
+            Ok(match value.kind() {
+                crate::ConicKind::Ellipse {
+                    center,
+                    major_axis_point,
+                    ..
+                } => GenericCurveIncidence::Ellipse {
+                    center: incidence.add(point_variable(point_variables, center)?),
+                    major_axis_point: incidence
+                        .add(point_variable(point_variables, major_axis_point)?),
+                    minor_axis_ratio: incidence.add(conic_scalar_variable(
+                        conic_scalar_variables,
+                        conic,
+                        ConicScalarRole::MinorAxisRatio,
+                    )?),
+                    parameter,
+                },
+                crate::ConicKind::EllipticalArc {
+                    center,
+                    major_axis_point,
+                    start_angle,
+                    signed_sweep,
+                    ..
+                } => GenericCurveIncidence::EllipticalArc {
+                    center: incidence.add(point_variable(point_variables, center)?),
+                    major_axis_point: incidence
+                        .add(point_variable(point_variables, major_axis_point)?),
+                    minor_axis_ratio: incidence.add(conic_scalar_variable(
+                        conic_scalar_variables,
+                        conic,
+                        ConicScalarRole::MinorAxisRatio,
+                    )?),
+                    start_angle,
+                    signed_sweep,
+                    parameter,
+                },
+                crate::ConicKind::RationalQuadratic { start, end, .. } => {
+                    GenericCurveIncidence::RationalQuadratic {
+                        start: incidence.add(point_variable(point_variables, start)?),
+                        weighted_middle: incidence.add(conic_vector_variable(
+                            conic_vector_variables,
+                            conic,
+                            ConicVectorRole::WeightedMiddle,
+                        )?),
+                        middle_weight: incidence.add(conic_scalar_variable(
+                            conic_scalar_variables,
+                            conic,
+                            ConicScalarRole::MiddleWeight,
+                        )?),
+                        end: incidence.add(point_variable(point_variables, end)?),
+                        parameter,
+                    }
+                }
+                crate::ConicKind::ParabolaSegment {
+                    vertex,
+                    focus,
+                    trim,
+                } => GenericCurveIncidence::ParabolaSegment {
+                    vertex: incidence.add(point_variable(point_variables, vertex)?),
+                    focus: incidence.add(point_variable(point_variables, focus)?),
+                    trim,
+                    parameter,
+                },
+                crate::ConicKind::HyperbolaSegment {
+                    center,
+                    transverse_axis_point,
+                    branch,
+                    trim,
+                    ..
+                } => GenericCurveIncidence::HyperbolaSegment {
+                    center: incidence.add(point_variable(point_variables, center)?),
+                    transverse_axis_point: incidence
+                        .add(point_variable(point_variables, transverse_axis_point)?),
+                    semi_conjugate: incidence.add(conic_scalar_variable(
+                        conic_scalar_variables,
+                        conic,
+                        ConicScalarRole::SemiConjugate,
+                    )?),
+                    branch,
+                    trim,
+                    parameter,
+                },
+            })
+        }
     }
 }
 
 fn add_curve_contact_latent(
+    sketch: &Sketch,
     problem: &mut Problem,
     mappings: &mut Vec<LatentVariableMapping>,
     bound_mappings: &mut Vec<SketchBoundMapping>,
@@ -3784,14 +4314,7 @@ fn add_curve_contact_latent(
     role: LatentVariableRole,
     contact: SketchCurveContact,
 ) -> Result<VariableId, SketchError> {
-    let bounded = matches!(
-        contact.curve,
-        SketchCurve::Line {
-            domain: crate::LineParameterDomain::BoundedSegment,
-            ..
-        } | SketchCurve::Arc(_)
-            | SketchCurve::Bezier(_)
-    );
+    let bounded = generic_curve_is_bounded(sketch, contact.curve);
     let bounds = if bounded {
         Some(match contact.neighborhood {
             CurveContactNeighborhood::Start => (0.0, 0.0),
@@ -3825,6 +4348,7 @@ fn generic_curve_label(sketch: &Sketch, curve: SketchCurve) -> Result<&str, Sket
             .bezier(bezier)
             .map(crate::BezierCurve::label)
             .ok_or(SketchError::UnknownBezier(bezier)),
+        SketchCurve::Conic(conic) => sketch.conic_value(conic).map(crate::ConicCurve::label),
     }
 }
 
@@ -3907,6 +4431,68 @@ fn arc_radius_variable(
         .ok_or(SketchError::UnknownArc(arc))
 }
 
+fn conic_scalar_variable(
+    mappings: &[ConicScalarVariableMapping],
+    conic: ConicId,
+    role: ConicScalarRole,
+) -> Result<VariableId, SketchError> {
+    mappings
+        .iter()
+        .find_map(|mapping| {
+            (mapping.conic_id == conic && mapping.role == role).then_some(mapping.variable_id)
+        })
+        .ok_or(SketchError::InvalidConicScalarRole(conic))
+}
+
+fn conic_vector_variable(
+    mappings: &[ConicVectorVariableMapping],
+    conic: ConicId,
+    role: ConicVectorRole,
+) -> Result<VariableId, SketchError> {
+    mappings
+        .iter()
+        .find_map(|mapping| {
+            (mapping.conic_id == conic && mapping.role == role).then_some(mapping.variable_id)
+        })
+        .ok_or(SketchError::InvalidConicScalarRole(conic))
+}
+
+fn conic_scalar_value(
+    problem: &Problem,
+    mappings: &[ConicScalarVariableMapping],
+    conic: ConicId,
+    role: ConicScalarRole,
+) -> Result<f64, SketchError> {
+    scalar_variable(problem, conic_scalar_variable(mappings, conic, role)?)
+}
+
+fn conic_vector_value(
+    problem: &Problem,
+    mappings: &[ConicVectorVariableMapping],
+    conic: ConicId,
+    role: ConicVectorRole,
+) -> Result<Vector2<f64>, SketchError> {
+    let variable = conic_vector_variable(mappings, conic, role)?;
+    let block = problem
+        .variable(variable)
+        .ok_or(geosolve_core::CoreError::UnknownVariable(variable))?;
+    let VariableValue::Vec2([x, y]) = block.value() else {
+        return Err(geosolve_core::CoreError::VariableKindMismatch {
+            expected: geosolve_core::VariableKind::Vec2,
+            actual: block.kind(),
+        }
+        .into());
+    };
+    let value = Vector2::new(x, y);
+    if value.iter().all(|component| component.is_finite()) {
+        Ok(value)
+    } else {
+        Err(SketchError::InvalidConic(
+            geosolve_geometry::ConicDefinitionError::NonFiniteVector,
+        ))
+    }
+}
+
 fn scalar_variable(problem: &Problem, variable: VariableId) -> Result<f64, SketchError> {
     let block = problem
         .variable(variable)
@@ -3935,18 +4521,204 @@ fn solved_point(points: &[SolvedPoint], point: PointId) -> Result<Point2<f64>, S
         .ok_or(SketchError::UnknownPoint(point))
 }
 
-fn generic_curve_is_bounded(curve: SketchCurve) -> bool {
-    matches!(
-        curve,
+fn solved_conic_from_runtime(
+    sketch: &Sketch,
+    conic_id: ConicId,
+    conic: &crate::ConicCurve,
+) -> Result<SolvedConic, SketchError> {
+    let point = |id| sketch.point_position(id);
+    let kind = match conic.kind() {
+        crate::ConicKind::Ellipse {
+            center,
+            major_axis_point,
+            minor_axis_ratio,
+        } => SolvedConicKind::Ellipse {
+            center: point(center)?,
+            major_axis_point: point(major_axis_point)?,
+            minor_axis_ratio,
+        },
+        crate::ConicKind::EllipticalArc {
+            center,
+            major_axis_point,
+            minor_axis_ratio,
+            start_angle,
+            signed_sweep,
+        } => SolvedConicKind::EllipticalArc {
+            center: point(center)?,
+            major_axis_point: point(major_axis_point)?,
+            minor_axis_ratio,
+            start_angle,
+            signed_sweep,
+        },
+        crate::ConicKind::RationalQuadratic {
+            start,
+            weighted_middle,
+            middle_weight,
+            end,
+        } => SolvedConicKind::RationalQuadratic {
+            start: point(start)?,
+            weighted_middle,
+            middle_weight,
+            end: point(end)?,
+        },
+        crate::ConicKind::ParabolaSegment {
+            vertex,
+            focus,
+            trim,
+        } => SolvedConicKind::ParabolaSegment {
+            vertex: point(vertex)?,
+            focus: point(focus)?,
+            trim,
+        },
+        crate::ConicKind::HyperbolaSegment {
+            center,
+            transverse_axis_point,
+            semi_conjugate,
+            branch,
+            trim,
+        } => SolvedConicKind::HyperbolaSegment {
+            center: point(center)?,
+            transverse_axis_point: point(transverse_axis_point)?,
+            semi_conjugate,
+            branch,
+            trim,
+        },
+    };
+    Ok(SolvedConic { conic_id, kind })
+}
+
+fn solved_conic_geometry(kind: SolvedConicKind) -> Result<crate::ConicGeometry, SketchError> {
+    use geosolve_geometry::{
+        Ellipse2, EllipticalArc2, HyperbolaSegment2, ParabolaSegment2,
+        RationalQuadraticConicSegment2, UnitDirection2,
+    };
+
+    match kind {
+        SolvedConicKind::Ellipse {
+            center,
+            major_axis_point,
+            minor_axis_ratio,
+        } => {
+            crate::conics::validate_minor_axis_ratio(minor_axis_ratio)?;
+            let axis = major_axis_point - center;
+            let semi_major = axis.norm();
+            let direction = UnitDirection2::try_new(axis).map_err(SketchError::InvalidConic)?;
+            Ok(crate::ConicGeometry::Ellipse(
+                Ellipse2::try_new(center, direction, semi_major, semi_major * minor_axis_ratio)
+                    .map_err(SketchError::InvalidConic)?,
+            ))
+        }
+        SolvedConicKind::EllipticalArc {
+            center,
+            major_axis_point,
+            minor_axis_ratio,
+            start_angle,
+            signed_sweep,
+        } => {
+            crate::conics::validate_minor_axis_ratio(minor_axis_ratio)?;
+            let axis = major_axis_point - center;
+            let semi_major = axis.norm();
+            let direction = UnitDirection2::try_new(axis).map_err(SketchError::InvalidConic)?;
+            let ellipse =
+                Ellipse2::try_new(center, direction, semi_major, semi_major * minor_axis_ratio)
+                    .map_err(SketchError::InvalidConic)?;
+            Ok(crate::ConicGeometry::EllipticalArc(
+                EllipticalArc2::try_new(ellipse, start_angle, signed_sweep)
+                    .map_err(SketchError::InvalidConic)?,
+            ))
+        }
+        SolvedConicKind::RationalQuadratic {
+            start,
+            weighted_middle,
+            middle_weight,
+            end,
+        } => Ok(crate::ConicGeometry::RationalQuadratic(
+            RationalQuadraticConicSegment2::try_new(start, weighted_middle, middle_weight, end)
+                .map_err(SketchError::InvalidConic)?,
+        )),
+        SolvedConicKind::ParabolaSegment {
+            vertex,
+            focus,
+            trim,
+        } => {
+            let axis = focus - vertex;
+            let focal_length = axis.norm();
+            let direction = UnitDirection2::try_new(axis).map_err(SketchError::InvalidConic)?;
+            Ok(crate::ConicGeometry::ParabolaSegment(
+                ParabolaSegment2::try_new(vertex, direction, focal_length, trim)
+                    .map_err(SketchError::InvalidConic)?,
+            ))
+        }
+        SolvedConicKind::HyperbolaSegment {
+            center,
+            transverse_axis_point,
+            semi_conjugate,
+            branch,
+            trim,
+        } => {
+            crate::conics::validate_positive_conic_scalar(semi_conjugate)?;
+            let axis = transverse_axis_point - center;
+            let semi_transverse = axis.norm();
+            let direction = UnitDirection2::try_new(axis).map_err(SketchError::InvalidConic)?;
+            Ok(crate::ConicGeometry::HyperbolaSegment(
+                HyperbolaSegment2::try_new(
+                    center,
+                    direction,
+                    semi_transverse,
+                    semi_conjugate,
+                    branch,
+                    trim,
+                )
+                .map_err(SketchError::InvalidConic)?,
+            ))
+        }
+    }
+}
+
+fn validate_solved_conic_entity(conic: SolvedConic) -> Result<(), SketchError> {
+    let geometry = conic.geometry()?;
+    crate::conics::validate_conic_geometry(geometry)?;
+    if let crate::ConicGeometry::RationalQuadratic(_) = geometry {
+        for index in 0..=16 {
+            geometry
+                .evaluate(f64::from(index) / 16.0)
+                .map_err(SketchError::InvalidConicEvaluation)?;
+        }
+    }
+    if let crate::ConicGeometry::HyperbolaSegment(value) = geometry {
+        for parameter in [0.0, 0.5, 1.0] {
+            let point = geometry
+                .evaluate(parameter)
+                .map_err(SketchError::InvalidConicEvaluation)?
+                .position;
+            let witness = (point - value.center()).dot(&value.branch_witness());
+            if !witness.is_finite() || witness <= 0.0 {
+                return Err(SketchError::InvalidConic(
+                    geosolve_geometry::ConicDefinitionError::ZeroDirection,
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn generic_curve_is_bounded(sketch: &Sketch, curve: SketchCurve) -> bool {
+    match curve {
         SketchCurve::Line {
             domain: crate::LineParameterDomain::BoundedSegment,
             ..
-        } | SketchCurve::Arc(_)
-            | SketchCurve::Bezier(_)
-    )
+        }
+        | SketchCurve::Arc(_)
+        | SketchCurve::Bezier(_) => true,
+        SketchCurve::Conic(conic) => sketch
+            .conic(conic)
+            .is_some_and(|value| !value.is_periodic()),
+        SketchCurve::Line { .. } | SketchCurve::Circle(_) => false,
+    }
 }
 
 fn normalize_generic_latent(
+    sketch: &Sketch,
     latents: &mut [SolvedLatent],
     constraint: SketchConstraintId,
     role: LatentVariableRole,
@@ -3958,11 +4730,18 @@ fn normalize_generic_latent(
     };
     let normalized = match contact.curve {
         SketchCurve::Circle(_) => unwrap_near(latent.value, contact.parameter),
-        curve if generic_curve_is_bounded(curve) => {
+        SketchCurve::Conic(conic)
+            if sketch
+                .conic(conic)
+                .is_some_and(crate::ConicCurve::is_periodic) =>
+        {
+            unwrap_near(latent.value, contact.parameter)
+        }
+        curve if generic_curve_is_bounded(sketch, curve) => {
             normalize_bounded_candidate(latent.value).unwrap_or(latent.value)
         }
         SketchCurve::Line { .. } => latent.value,
-        SketchCurve::Arc(_) | SketchCurve::Bezier(_) => unreachable!(),
+        SketchCurve::Arc(_) | SketchCurve::Bezier(_) | SketchCurve::Conic(_) => unreachable!(),
     };
     *changed |= normalized.to_bits() != latent.value.to_bits();
     latent.value = normalized;
@@ -3978,7 +4757,7 @@ fn validate_generic_contact_candidate(
     if !parameter.is_finite() {
         return Err(SolveRejection::ContactParameterOutOfDomain(constraint));
     }
-    if generic_curve_is_bounded(contact.curve) {
+    if generic_curve_is_bounded(sketch, contact.curve) {
         let Some(normalized) = normalize_bounded_candidate(parameter) else {
             return Err(SolveRejection::ContactParameterOutOfDomain(constraint));
         };
@@ -4074,6 +4853,12 @@ fn candidate_curve_jet(
         SketchCurve::Bezier(bezier) => {
             candidate_bezier_jet(sketch, candidate, bezier, parameter).map_err(|_| ())
         }
+        SketchCurve::Conic(conic) => candidate
+            .geometry
+            .conic(conic)
+            .ok_or(())?
+            .evaluate(parameter)
+            .map_err(|_| ()),
     }
 }
 

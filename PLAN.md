@@ -373,6 +373,9 @@ The post-alpha WASM drag path coalesces pointer moves to animation frames, rende
 straight spans from exact endpoints, reuses one accepted report per frame and defers
 heavy object/audit DOM refresh until release. Redundancy diagnostics reuse exact
 prefix ranks within each report without changing thresholds or evidence.
+The diagnostic-layout follow-up makes the geometry canvas the dominant desktop
+surface, keeps editing controls in a sticky inspector, places accepted state beside
+the canvas controls and moves detailed solve/audit output into a below-canvas dock.
 
 ---
 
@@ -584,27 +587,61 @@ release Trunk build gates pass.
 
 Goal: cover the major analytic CAD curve family without introducing implicit coefficient gauges.
 
-- [ ] Add ellipses and elliptical arcs with explicit axis/orientation state.
-- [ ] Add rational-quadratic conic segments.
-- [ ] Add explicit parabola/hyperbola branches and trimmed parameter domains.
-- [ ] Add center, focus, axis and endpoint features.
-- [ ] Add ellipse/conic measurements justified by CAD use cases.
-- [ ] Preserve valid circle-limit geometry while reporting unobservable orientation truthfully.
+- [x] Add ellipses and elliptical arcs with explicit axis/orientation state.
+- [x] Add rational-quadratic conic segments.
+- [x] Add explicit parabola/hyperbola branches and trimmed parameter domains.
+- [x] Add center, focus, axis and endpoint features.
+- [x] Add ellipse/conic measurements justified by CAD use cases.
+- [x] Preserve valid circle-limit geometry while reporting unobservable orientation truthfully.
 
 Gate: analytic jet oracles, affine/similarity transformations, branch retention and rational-pole rejection pass; generic contact/tangency adds no conic-pair equation code.
+
+Completion note (2026-07-18): immutable third-order jets now cover full ellipses,
+directed elliptical arcs, homogeneous rational quadratics, trimmed parabolas and
+explicit hyperbola branches. The sketch compiler gives homogeneous controls and
+shape scalars deterministic active mappings, lowers every contact and tangency
+through the existing generic local-AD residuals, independently reconstructs every
+candidate conic and caps acceptance at `1e-9`. Persistent version-one curve variants,
+semantic features, CAD measurements, commands/history, canonical JSON, deterministic
+runtime remapping and accepted-state projection preserve trims, winding, arc sweep and
+branch state. Fourteen geometry tests and twenty-four sketch tests cover analytic and
+finite-difference jets, required scales, affine/similarity covariance, circle limits,
+all-family generic tangent Jacobians, poles, overflow, recovery and rollback. Locked
+format/diff, warnings-denied workspace Clippy, full workspace tests, WASM check,
+warnings-denied rustdoc, core benchmark compilation and release Trunk build gates pass.
+Post-completion playground follow-up exposes domain-projected draggable start/end trim
+handles for circular/elliptical arcs, parabolas and hyperbolas plus the rational
+homogeneous middle coordinate. Preview and release remain independently validated and
+commit as one history step without moving conic equations into the browser.
 
 ## M20: spatial mate and joint catalog
 
 Goal: support the common CAD assembly and linkage relationships in three dimensions.
 
-- [ ] Add axis and plane features with stable local clocking.
-- [ ] Add prismatic, cylindrical, planar and universal joints.
-- [ ] Add distance, angle, axis-alignment and frame-offset mates.
-- [ ] Add hinge and translation coordinates with position drivers.
-- [ ] Add explicit axis parity, winding, side and signed-volume branch monitors.
-- [ ] Add multiple simultaneous drivers and explicit assembly-mode transactions.
+- [x] Add axis and plane features with stable local clocking.
+- [x] Add prismatic, cylindrical, planar and universal joints.
+- [x] Add distance, angle, axis-alignment and frame-offset mates.
+- [x] Add hinge and translation coordinates with position drivers.
+- [x] Add explicit axis parity, winding, side and signed-volume branch monitors.
+- [x] Add multiple simultaneous drivers and explicit assembly-mode transactions.
 
 Gate: every joint/mate has exact, recovery, tangent-Jacobian, scale, mixed-scale, degeneracy and expected-mobility fixtures; representative shaft/bearing and block/base CAD assemblies pass.
+
+Completion note (2026-07-18): spatial axis and plane features retain complete
+body-local `Frame3` clocks. Prismatic, cylindrical, planar and universal joints;
+point-distance, interior axis-angle, direction-only axis-alignment and full frame-offset
+mates; axial and planar translation plus hinge coordinates; and separate hard position
+drivers compile with analytic right-tangent Jacobians and fresh independent domain
+validation. Axis parity, winding, side and signed-volume monitors connect domain
+components and publish finite mode evaluations without synthetic equality rows.
+Revision-checked batch transactions stage multiple driver and mode edits and swap only
+one fully validated private-gauge/physical candidate. Spatial IDs carry private assembly
+provenance, while M23 retains ownership of serialized persistence. Fifty M20 tests cover
+exact/recovery/Jacobian behavior, scales `1e-6`/`1`/`1e6`, true mixed-scale geometry,
+rank/mobility, false roots, monitor-only gauges, complete rollback, shaft/bearing and
+block/base assemblies. Locked format/diff, warnings-denied workspace Clippy, full
+workspace tests, WASM check, warnings-denied rustdoc, core benchmark compilation and
+release Trunk build gates pass.
 
 ## M21: non-rational B-splines
 

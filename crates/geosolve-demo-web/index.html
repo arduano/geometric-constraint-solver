@@ -9,16 +9,16 @@
     <link data-trunk rel="rust" data-wasm-opt="z" />
   </head>
   <body>
-    <main class="playground" id="playground-root">
+    <main class="playground" id="playground-root" data-example-mode="sketch">
       <header class="playground-header">
-        <div>
-          <span class="page-kicker">2D sketch playground / alpha</span>
-          <h1>Draw the constraint, not the answer.</h1>
-          <p>Persistent geometry, projected edits, explicit branches, and the accepted audit in one workspace.</p>
+        <div class="playground-brand">
+          <span class="page-kicker" id="workspace-kicker">2D sketch playground / alpha</span>
+          <h1 id="workspace-title">Draw the constraint, not the answer.</h1>
+          <p id="workspace-summary">Persistent geometry, projected edits, explicit branches, and the accepted audit in one workspace.</p>
         </div>
         <div class="history-actions" aria-label="Document history">
-          <button type="button" data-action="undo" id="undo">Undo</button>
-          <button type="button" data-action="redo" id="redo">Redo</button>
+          <button type="button" class="sketch-edit-only" data-action="undo" id="undo">Undo</button>
+          <button type="button" class="sketch-edit-only" data-action="redo" id="redo">Redo</button>
           <button type="button" data-action="new">New</button>
         </div>
       </header>
@@ -38,6 +38,15 @@
             <option value="diagnostic-rank-drop">Rank / structural vs numerical</option>
             <option value="diagnostic-endpoint-bound">Fixed endpoint vs active bound</option>
             <option value="diagnostic-redundancy">Diagnostics / redundant dimensions</option>
+          </optgroup>
+          <optgroup label="M19 / analytic conics">
+            <option value="conic-gallery">Conic gallery / five families</option>
+            <option value="conic-tangency">Conic contact and tangency</option>
+            <option value="conic-circle-limit">Circle-limit observability</option>
+          </optgroup>
+          <optgroup label="M20 / spatial assemblies">
+            <option value="shaft-bearing">Driven shaft in bearing</option>
+            <option value="block-base">Driven block on base</option>
           </optgroup>
           <optgroup label="Motion and constraint stress">
             <option value="stress-compass">Stress / symmetric drafting compass</option>
@@ -62,32 +71,79 @@
       </section>
 
       <nav class="tool-rail" aria-label="Sketch tools">
-        <button type="button" class="active" data-tool="select">Select</button>
+        <button type="button" class="active sketch-edit-only" data-tool="select">Select</button>
         <button type="button" data-tool="pan">Pan</button>
-        <span class="tool-divider" aria-hidden="true"></span>
-        <button type="button" data-tool="point">Point</button>
-        <button type="button" data-tool="line">Line</button>
-        <button type="button" data-tool="polyline">Polyline</button>
-        <button type="button" data-tool="rectangle">Rectangle</button>
-        <button type="button" data-tool="circle">Circle</button>
-        <button type="button" data-tool="arc">Arc</button>
-        <button type="button" data-tool="quadratic">Quadratic Bézier</button>
-        <button type="button" data-tool="cubic">Cubic Bézier</button>
+        <span class="tool-divider sketch-edit-only" aria-hidden="true"></span>
+        <button type="button" class="sketch-edit-only" data-tool="point">Point</button>
+        <button type="button" class="sketch-edit-only" data-tool="line">Line</button>
+        <button type="button" class="sketch-edit-only" data-tool="polyline">Polyline</button>
+        <button type="button" class="sketch-edit-only" data-tool="rectangle">Rectangle</button>
+        <button type="button" class="sketch-edit-only" data-tool="circle">Circle</button>
+        <button type="button" class="sketch-edit-only" data-tool="arc">Arc</button>
+        <button type="button" class="sketch-edit-only" data-tool="quadratic">Quadratic Bézier</button>
+        <button type="button" class="sketch-edit-only" data-tool="cubic">Cubic Bézier</button>
+        <span class="tool-divider sketch-edit-only" aria-hidden="true"></span>
+        <button type="button" class="sketch-edit-only" data-tool="ellipse" title="Shortcut: E">Ellipse</button>
+        <button type="button" class="sketch-edit-only" data-tool="elliptical-arc" title="Shortcut: Shift+E">Elliptical arc</button>
+        <button type="button" class="sketch-edit-only" data-tool="rational-conic" title="Shortcut: R">Rational conic</button>
+        <button type="button" class="sketch-edit-only" data-tool="parabola" title="Shortcut: B">Parabola</button>
+        <button type="button" class="sketch-edit-only" data-tool="hyperbola" title="Shortcut: H">Hyperbola</button>
       </nav>
 
-      <section class="draft-bar" aria-label="Drawing progress">
+      <section id="conic-options" class="conic-options sketch-edit-only" aria-label="Conic creation options" hidden>
+        <div class="conic-options-heading">
+          <span class="draft-kicker">M19 conic definition</span>
+          <p id="conic-options-help">Values are persisted exactly. Invalid values are never clamped, reordered, normalized, or substituted; correct them and use Finish to retry the retained draft.</p>
+        </div>
+        <div id="conic-ratio-options" class="conic-option-group" hidden>
+          <label for="conic-ratio">Minor-axis ratio</label>
+          <input id="conic-ratio" type="number" value="0.5" min="5e-324" max="1" step="any" inputmode="decimal" />
+        </div>
+        <div id="conic-arc-options" class="conic-option-group conic-arc-options" hidden>
+          <label for="conic-arc-start">Arc start angle (rad)</label>
+          <input id="conic-arc-start" type="number" value="0" step="any" inputmode="decimal" />
+          <label for="conic-arc-end">Arc end angle (rad)</label>
+          <input id="conic-arc-end" type="number" value="1.5707963267948966" step="any" inputmode="decimal" />
+          <label for="conic-arc-sweep">Explicit arc sweep</label>
+          <select id="conic-arc-sweep"><option>Counterclockwise</option><option>Clockwise</option></select>
+        </div>
+        <div id="conic-weight-options" class="conic-option-group" hidden>
+          <label for="conic-weight">Homogeneous Q_h weight</label>
+          <input id="conic-weight" type="number" value="1" min="-0.9999999999999998" max="1.7976931348623157e308" step="any" inputmode="decimal" />
+          <p>Second click is Q_h, the homogeneous weighted coordinate. It is not an ordinary control point when weight != 1 and is never created as a DesignPoint.</p>
+        </div>
+        <div id="conic-trim-options" class="conic-option-group conic-trim-options" hidden>
+          <label for="conic-trim-start">Directed trim start</label>
+          <input id="conic-trim-start" type="number" value="-1" step="any" inputmode="decimal" />
+          <label for="conic-trim-end">Directed trim end</label>
+          <input id="conic-trim-end" type="number" value="1" step="any" inputmode="decimal" />
+        </div>
+        <div id="conic-hyperbola-options" class="conic-option-group conic-hyperbola-options" hidden>
+          <label for="conic-semi-conjugate">Semi-conjugate length</label>
+          <input id="conic-semi-conjugate" type="number" value="1" min="5e-324" step="any" inputmode="decimal" />
+          <label for="conic-hyperbola-branch">Explicit hyperbola branch</label>
+          <select id="conic-hyperbola-branch"><option>Positive branch</option><option>Negative branch</option></select>
+        </div>
+        <p id="conic-options-error" class="conic-options-error" role="alert" hidden></p>
+      </section>
+
+      <section class="draft-bar sketch-edit-only" aria-label="Drawing progress">
         <div><span class="draft-kicker">Active drawing</span><strong id="draft-status">Choose a draw tool to begin.</strong></div>
         <div class="draft-actions">
           <button type="button" data-action="undo-draft" id="undo-draft">Undo point</button>
           <button type="button" data-action="cancel-draft" id="cancel-draft">Cancel</button>
-          <button type="button" data-action="finish-draft" id="finish-draft">Finish polyline</button>
+          <button type="button" data-action="finish-draft" id="finish-draft">Finish / retry</button>
         </div>
       </section>
 
       <section class="playground-grid">
         <section class="canvas-panel" aria-label="Sketch canvas">
           <div class="canvas-heading">
-            <div><strong id="tool-status">Select</strong><span id="document-status">Empty document</span></div>
+            <div class="canvas-context"><strong id="tool-status">Select</strong><span id="document-status">Empty document</span></div>
+            <div class="canvas-solve-state" aria-label="Current accepted solve state">
+              <span id="solve-view-label">Accepted solve</span>
+              <span id="solve-badge" class="live-badge">valid</span>
+            </div>
             <div class="zoom-actions" aria-label="Viewport zoom">
               <button type="button" data-action="zoom-out" aria-label="Zoom out">−</button>
               <button type="button" data-action="zoom-fit">Fit</button>
@@ -100,13 +156,13 @@
         </section>
 
         <aside class="inspector-panel" aria-label="Sketch inspector">
-          <section class="inspector-section selection-section">
+          <section class="inspector-section selection-section sketch-edit-only">
             <div class="section-heading"><span>Selection</span><button type="button" data-action="clear-selection">Clear</button></div>
             <div id="selection-summary" class="selection-summary">Nothing selected</div>
             <div class="selection-actions"><button type="button" data-action="delete">Delete</button><button type="button" data-action="toggle-suppressed">Suppress / restore</button></div>
           </section>
 
-          <section class="inspector-section">
+          <section class="inspector-section sketch-edit-only">
             <div class="section-heading"><span>Constraint</span></div>
             <label class="field-label" for="constraint-kind">Compatible operation</label>
             <select id="constraint-kind">
@@ -117,7 +173,7 @@
             <button type="button" class="primary-action" data-action="apply-constraint">Apply constraint</button>
           </section>
 
-          <section class="inspector-section">
+          <section class="inspector-section sketch-edit-only">
             <div class="section-heading"><span>Dimension</span></div>
             <div class="field-row"><select id="dimension-kind"><option>Distance</option><option>Length</option><option>Radius</option><option>Diameter</option><option>Angle</option></select><select id="dimension-mode"><option>Driving</option><option>Reference</option></select></div>
             <label class="field-label" for="angle-orientation">Angle orientation</label>
@@ -129,30 +185,32 @@
             <button type="button" class="primary-action" data-action="apply-dimension">Create / update dimension</button>
           </section>
 
-          <section class="inspector-section">
-            <div class="section-heading"><span>Explicit branch state</span></div>
-            <label class="field-label" for="arc-sweep">Arc sweep</label>
-            <select id="arc-sweep"><option>Counterclockwise</option><option>Clockwise</option></select>
-            <label class="field-label" for="contact-neighborhood">First / point neighborhood</label>
-            <select id="contact-neighborhood"><option>Picked local / endpoint</option><option>Interior</option><option>Start</option><option>End</option></select>
-            <label class="field-label" for="contact-parameter">First contact parameter (blank retains)</label>
-            <input id="contact-parameter" type="number" step="any" inputmode="decimal" />
-            <label class="field-label" for="tangent-orientation">First tangent orientation</label>
-            <select id="tangent-orientation"><option>Aligned</option><option>Opposed</option></select>
-            <label class="field-label" for="contact-winding">First periodic winding</label>
-            <input id="contact-winding" type="number" value="0" step="1" inputmode="numeric" />
-            <label class="field-label" for="second-contact-neighborhood">Second neighborhood</label>
-            <select id="second-contact-neighborhood"><option>Picked local / endpoint</option><option>Interior</option><option>Start</option><option>End</option></select>
-            <label class="field-label" for="second-contact-parameter">Second contact parameter (blank retains)</label>
-            <input id="second-contact-parameter" type="number" step="any" inputmode="decimal" />
-            <label class="field-label" for="second-tangent-orientation">Second tangent orientation</label>
-            <select id="second-tangent-orientation"><option>Aligned</option><option>Opposed</option></select>
-            <label class="field-label" for="second-contact-winding">Second periodic winding</label>
-            <input id="second-contact-winding" type="number" value="0" step="1" inputmode="numeric" />
-            <button type="button" class="primary-action" data-action="apply-branch-state">Apply to selected arcs / contacts</button>
-          </section>
+          <details class="inspector-section inspector-disclosure sketch-edit-only">
+            <summary>Explicit branch state</summary>
+            <div class="inspector-disclosure-body">
+              <label class="field-label" for="arc-sweep">Arc sweep</label>
+              <select id="arc-sweep"><option>Counterclockwise</option><option>Clockwise</option></select>
+              <label class="field-label" for="contact-neighborhood">First / point neighborhood</label>
+              <select id="contact-neighborhood"><option>Picked local / endpoint</option><option>Interior</option><option>Start</option><option>End</option></select>
+              <label class="field-label" for="contact-parameter">First contact parameter (blank retains)</label>
+              <input id="contact-parameter" type="number" step="any" inputmode="decimal" />
+              <label class="field-label" for="tangent-orientation">First tangent orientation</label>
+              <select id="tangent-orientation"><option>Aligned</option><option>Opposed</option></select>
+              <label class="field-label" for="contact-winding">First periodic winding</label>
+              <input id="contact-winding" type="number" value="0" step="1" inputmode="numeric" />
+              <label class="field-label" for="second-contact-neighborhood">Second neighborhood</label>
+              <select id="second-contact-neighborhood"><option>Picked local / endpoint</option><option>Interior</option><option>Start</option><option>End</option></select>
+              <label class="field-label" for="second-contact-parameter">Second contact parameter (blank retains)</label>
+              <input id="second-contact-parameter" type="number" step="any" inputmode="decimal" />
+              <label class="field-label" for="second-tangent-orientation">Second tangent orientation</label>
+              <select id="second-tangent-orientation"><option>Aligned</option><option>Opposed</option></select>
+              <label class="field-label" for="second-contact-winding">Second periodic winding</label>
+              <input id="second-contact-winding" type="number" value="0" step="1" inputmode="numeric" />
+              <button type="button" class="primary-action" data-action="apply-branch-state">Apply to selected arcs / contacts</button>
+            </div>
+          </details>
 
-          <section id="inference-panel" class="inspector-section inference-panel" hidden>
+          <section id="inference-panel" class="inspector-section inference-panel sketch-edit-only" hidden>
             <div class="section-heading"><span>Proposed inference</span></div>
             <p id="inference-summary"></p>
             <div class="field-row"><button type="button" data-action="confirm-inference">Confirm</button><button type="button" data-action="cancel-inference">Dismiss</button></div>
@@ -165,8 +223,8 @@
         </aside>
 
         <aside class="diagnostics-panel" aria-label="Accepted solver diagnostics">
-          <section class="inspector-section">
-            <div class="section-heading"><span id="solve-view-label">Accepted solve</span><span id="solve-badge" class="live-badge">valid</span></div>
+          <section class="inspector-section diagnostics-summary">
+            <div class="section-heading"><span>Solver detail</span><span>accepted state</span></div>
             <div id="playground-solve-status" class="solve-status"></div>
             <div id="last-attempt" class="attempt-notice"></div>
           </section>
@@ -174,7 +232,7 @@
             <div class="section-heading"><span>Residual audit</span></div>
             <div id="playground-audit"></div>
           </section>
-          <details class="inspector-section persistence-section">
+          <details class="inspector-section persistence-section sketch-edit-only">
             <summary>JSON and autosave</summary>
             <textarea id="document-json" spellcheck="false" aria-label="Sketch document JSON"></textarea>
             <div class="field-row"><button type="button" data-action="export-json">Export to text</button><button type="button" data-action="import-json">Import text</button></div>

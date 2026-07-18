@@ -110,6 +110,16 @@ impl Sketch {
                     .map_err(|_| SketchError::InvalidCurveContact("Bezier jet is not regular"))?;
                 validate_neighborhood(true, contact.parameter, contact.neighborhood)
             }
+            SketchCurve::Conic(conic) => {
+                let value = self.conic_value(conic)?;
+                self.evaluate_conic(conic, contact.parameter)
+                    .map_err(|_| SketchError::InvalidCurveContact("conic jet is not regular"))?;
+                validate_neighborhood(
+                    !value.is_periodic(),
+                    contact.parameter,
+                    contact.neighborhood,
+                )
+            }
         }
     }
 }

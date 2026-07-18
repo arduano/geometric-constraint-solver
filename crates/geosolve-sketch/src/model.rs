@@ -1,5 +1,5 @@
 use geosolve_core::CoreError;
-use geosolve_geometry::Point2;
+use geosolve_geometry::{ConicDefinitionError, ConicEvaluationError, Point2};
 use slotmap::{Key, SlotMap, new_key_type};
 use thiserror::Error;
 
@@ -19,6 +19,8 @@ new_key_type! {
     pub struct ArcId;
     /// Stable identity of a quadratic or cubic Bezier curve.
     pub struct BezierId;
+    /// Stable identity of any runtime conic family.
+    pub struct ConicId;
     /// Stable identity of a geometric sketch constraint.
     pub struct SketchConstraintId;
     /// Stable identity of a driving or reference dimension.
@@ -52,6 +54,8 @@ pub enum SketchError {
     UnknownArc(ArcId),
     #[error("unknown or stale Bezier ID {0:?}")]
     UnknownBezier(BezierId),
+    #[error("unknown or stale conic ID {0:?}")]
+    UnknownConic(ConicId),
     #[error("unknown or stale sketch constraint ID {0:?}")]
     UnknownConstraint(SketchConstraintId),
     #[error("unknown or stale sketch dimension ID {0:?}")]
@@ -66,6 +70,16 @@ pub enum SketchError {
     ArcInUse(ArcId),
     #[error("Bezier {0:?} is still referenced by a constraint")]
     BezierInUse(BezierId),
+    #[error("conic {0:?} is still referenced by a constraint")]
+    ConicInUse(ConicId),
+    #[error("invalid conic definition: {0}")]
+    InvalidConic(ConicDefinitionError),
+    #[error("invalid conic evaluation: {0}")]
+    InvalidConicEvaluation(ConicEvaluationError),
+    #[error("conic {0:?} does not own the requested scalar role")]
+    InvalidConicScalarRole(ConicId),
+    #[error("conic {0:?} is not a hyperbola segment")]
+    InvalidConicBranchRole(ConicId),
     #[error("a line segment requires two different, noncoincident points")]
     DegenerateSegment,
     #[error("retained segment {0:?} has zero-length or non-finite geometry")]
@@ -276,6 +290,7 @@ pub enum SketchCurve {
     Circle(CircleId),
     Arc(ArcId),
     Bezier(BezierId),
+    Conic(ConicId),
 }
 
 /// Explicit selected neighborhood for a runtime curve contact.
@@ -514,6 +529,7 @@ pub struct Sketch {
     pub(crate) circles: StableStore<CircleId, crate::curves::Circle>,
     pub(crate) arcs: StableStore<ArcId, crate::curves::CircularArc>,
     pub(crate) beziers: StableStore<BezierId, crate::beziers::BezierCurve>,
+    pub(crate) conics: StableStore<ConicId, crate::conics::ConicCurve>,
     pub(crate) constraints: StableStore<SketchConstraintId, SketchConstraint>,
     pub(crate) dimensions: StableStore<SketchDimensionId, SketchDimension>,
     pub(crate) source_order: Vec<PersistentSource>,
@@ -534,6 +550,7 @@ impl Sketch {
             circles: StableStore::new(),
             arcs: StableStore::new(),
             beziers: StableStore::new(),
+            conics: StableStore::new(),
             constraints: StableStore::new(),
             dimensions: StableStore::new(),
             source_order: Vec::new(),
@@ -627,6 +644,10 @@ impl Sketch {
                 .beziers
                 .iter()
                 .any(|(_, curve)| curve.controls().contains(&point))
+            || self
+                .conics
+                .iter()
+                .any(|(_, curve)| curve.kind().references_point(point))
             || self
                 .constraints
                 .iter()
@@ -1354,6 +1375,10 @@ impl SketchCurve {
                 .beziers
                 .get(bezier)
                 .is_some_and(|value| value.controls().contains(&point)),
+            Self::Conic(conic) => sketch
+                .conics
+                .get(conic)
+                .is_some_and(|value| value.kind().references_point(point)),
         }
     }
 

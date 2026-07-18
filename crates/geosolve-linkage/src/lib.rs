@@ -8,6 +8,7 @@ mod residuals;
 mod scenarios;
 mod spatial;
 mod spatial_residuals;
+mod spatial_scenarios;
 mod velocity;
 
 pub use compiler::{
@@ -40,13 +41,23 @@ pub use scenarios::{
     slider_crank_with_scale, xy_plane_frame,
 };
 pub use spatial::{
-    CompiledSpatialAssembly, SpatialAssembly, SpatialAssemblyError, SpatialAssemblySession,
+    CompiledSpatialAssembly, SpatialAssembly, SpatialAssemblyEdit, SpatialAssemblyError,
+    SpatialAssemblySession, SpatialAssemblyTransaction, SpatialAxisFeature, SpatialAxisFeatureId,
     SpatialAxisParity, SpatialBody, SpatialBodyId, SpatialBodyVariableMapping,
-    SpatialComponentGaugeReport, SpatialFrameFeature, SpatialFrameFeatureId, SpatialGaugePolicy,
-    SpatialGaugeReference, SpatialGaugeReport, SpatialGeometry, SpatialPatch, SpatialPointFeature,
-    SpatialPointFeatureId, SpatialSolveResult, SpatialSolvedBody, SpatialSource, SpatialSourceId,
-    SpatialSourceKind, SpatialSourceMapping, SpatialTransformedFrameFeature,
+    SpatialComponentGaugeReport, SpatialCoordinate, SpatialCoordinateId, SpatialCoordinateKind,
+    SpatialCoordinateValue, SpatialCoordinateValueKind, SpatialFrameFeature, SpatialFrameFeatureId,
+    SpatialGaugePolicy, SpatialGaugeReference, SpatialGaugeReport, SpatialGeometry,
+    SpatialHingeCoordinateValue, SpatialHingeTarget, SpatialModeEvaluation, SpatialModeFeature,
+    SpatialModeMonitor, SpatialModeMonitorId, SpatialModeMonitorKind, SpatialModeSign,
+    SpatialPatch, SpatialPlanarTranslationAxis, SpatialPlaneFeature, SpatialPlaneFeatureId,
+    SpatialPointFeature, SpatialPointFeatureId, SpatialSolveResult, SpatialSolvedBody,
+    SpatialSource, SpatialSourceId, SpatialSourceKind, SpatialSourceMapping,
+    SpatialTransformedAxisFeature, SpatialTransformedFrameFeature, SpatialTransformedPlaneFeature,
     SpatialTransformedPointFeature, SpatialWorldActionCertification,
+};
+pub use spatial_scenarios::{
+    BlockBaseExampleIds, ShaftBearingExampleIds, SpatialExampleFixture, SpatialExampleIds,
+    SpatialExampleKind, spatial_example,
 };
 pub use velocity::{BodyVelocity, VelocityResult};
 

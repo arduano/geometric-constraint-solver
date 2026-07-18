@@ -15,9 +15,9 @@ This is not a solid modeller, B-rep kernel, mesher, renderer, collision engine, 
 
 ## 2. Status of this document
 
-M0-M7 are the frozen domain baseline. M8 accepted the target contracts, M9 implemented component-local linearization, local AD, status and numerical-rank contracts, M10 implemented persistent sessions, bounds and the first sketch consumer, M11 implemented the persistent sketch document, commands/history and JSON/remapping layer, M12 implemented immutable curve jets, editable Beziers and generic curve contact/tangency plumbing, M13 implemented the disposable browser playground over those public APIs, M14 hardened its exact scenarios, failure recovery and performance gates, M15 implemented shared planar/spatial manifold state plus accepted hard sensitivity, M16 implemented sparse hard steps, structural matching, coupled hierarchy and robust planar continuation, and M17 implemented persistent gauge-separated planar linkage sessions plus shared velocity linearization. Statements are therefore marked as:
+M0-M7 are the frozen domain baseline. M8 accepted the target contracts, M9 implemented component-local linearization, local AD, status and numerical-rank contracts, M10 implemented persistent sessions, bounds and the first sketch consumer, M11 implemented the persistent sketch document, commands/history and JSON/remapping layer, M12 implemented immutable curve jets, editable Beziers and generic curve contact/tangency plumbing, M13 implemented the disposable browser playground over those public APIs, M14 hardened its exact scenarios, failure recovery and performance gates, M15 implemented shared planar/spatial manifold state plus accepted hard sensitivity, M16 implemented sparse hard steps, structural matching, coupled hierarchy and robust planar continuation, M17 implemented persistent gauge-separated planar linkage sessions plus shared velocity linearization, M18 established the independently validated spatial slice, M19 added conics, and M20 completed the common spatial joint/mate and position-driver catalog. Statements are therefore marked as:
 
-- **Baseline:** implemented behavior through M17, with M1-M7 domain behavior protected as the frozen regression baseline.
+- **Baseline:** implemented behavior through M20, with M1-M7 domain behavior protected as the frozen regression baseline.
 - **Target:** behavior required by the named M10-M24 milestone.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
@@ -69,7 +69,7 @@ Owns the 2D design graph:
 
 The frozen baseline includes points, segments, circles, oriented arcs and the M5/M7 constraint corpus. M10 adds the session consumer; M11 now migrates baseline entities and editing into the persistent generic design graph with opaque document IDs, strict JSON, deterministic lowering, accepted-state projection and accepted-only command history; M12 adds editable quadratic/cubic Bezier curves and generic point/contact/tangency plumbing. The M10-M14 alpha geometry surface is point, line/polyline, rectangle command macro, circle, circular arc and quadratic/cubic Bezier. Its reusable constraint surface is fixed, coincident, horizontal, vertical, point-on-curve, parallel, perpendicular, equal length/radius, midpoint, symmetry, distance, length, radius, diameter, oriented angle, and generic line-curve/curve-curve contact and tangency, with driving/reference dimensions and explicit discrete branch state.
 
-Ellipse/conic, B-spline/NURBS and curvature/G2/parametric-C2 production work remains explicitly deferred to M19, M21 and M22. A rectangle is command expansion into ordinary geometry and constraints, not a new core residual primitive.
+B-spline/NURBS and curvature/G2/parametric-C2 production work remains explicitly deferred to M21 and M22. A rectangle is command expansion into ordinary geometry and constraints, not a new core residual primitive.
 
 ### `geosolve-linkage`
 
@@ -80,7 +80,7 @@ Owns planar and spatial kinematic domain models:
 - branch-preserving continuation and velocity-level queries;
 - domain validation, source mapping and persistence.
 
-The frozen baseline is planar `Pose2` linkage kinematics. M17 migrated it to persistent topology/state/session, gauge-separated mobility and shared accepted-linearization velocity; M18, M20 and M23 add and complete spatial kinematics. No linkage API implies physics.
+The frozen baseline is planar `Pose2` linkage kinematics. M17 migrated it to persistent topology/state/session, gauge-separated mobility and shared accepted-linearization velocity; M18 established the spatial slice and M20 added stable-clock axis/plane features, common joints/mates, position coordinates/drivers, explicit mode monitors and atomic assembly-mode transactions under ADR 0013. M23 completes spatial continuation, velocity and persistence. No linkage API implies physics.
 
 ### `geosolve-demo-web`
 
@@ -290,7 +290,7 @@ M11 migrates baseline entities, commands and persistence topology. M12 proves ge
 
 Rigid bodies own local features; joints and mates relate features rather than reconstructing rigidity with sketch distance webs. Branch/assembly state is persistent domain state. Physical ground and numerical gauge are distinct under ADR 0009. Position and velocity queries use the same accepted-state reduced hard linearization and rank policy.
 
-M17 migrated planar linkage to shared persistent sessions, physical-ground/numerical-gauge certification and accepted-linearization velocity. M18 adds a spatial vertical slice. M20 completes common spatial joints/mates. M23 completes continuation, multi-driver velocity queries and planar/spatial consistency. These milestones do not add forces, reactions or dynamics.
+M17 migrated planar linkage to shared persistent sessions, physical-ground/numerical-gauge certification and accepted-linearization velocity. M18 added a spatial vertical slice. M20 completed common spatial joints/mates, position drivers and assembly-mode transactions under ADR 0013. M23 completes continuation, multi-driver velocity queries and planar/spatial consistency. These milestones do not add forces, reactions or dynamics.
 
 ## 13. Equation audit and persistence
 
@@ -325,6 +325,6 @@ Persistence stores domain topology, continuous accepted state and every discrete
 - M13-M14: disposable browser playground, E2E/import/error/performance hardening and the alpha gate.
 - M15: completed manifold `Pose2`/`Pose3`, validated frames and accepted hard-equality sensitivity.
 - M16: completed sparse structure, matching, hierarchy and robust planar continuation.
-- M17: completed persistent planar topology/state/session, gauge separation and shared velocity linearization; M18 and M20/M23 add and complete spatial kinematic product behavior.
-- M19, M21 and M22: add conics, B-splines, NURBS and complete the production 2D CAD sketch product.
+- M17-M20: completed persistent planar architecture, the first spatial slice, conics and the common spatial joint/mate catalog; M23 completes spatial kinematic product behavior.
+- M21-M22: add B-splines, NURBS and complete the production 2D CAD sketch product.
 - M24: stabilize public APIs, persistence, documentation and release gates for both deliverables.

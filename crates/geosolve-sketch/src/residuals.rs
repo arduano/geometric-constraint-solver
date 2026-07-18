@@ -59,6 +59,41 @@ pub(crate) enum GenericCurveIncidence {
         controls: [usize; 4],
         parameter: CurveParameterIncidence,
     },
+    Ellipse {
+        center: usize,
+        major_axis_point: usize,
+        minor_axis_ratio: usize,
+        parameter: CurveParameterIncidence,
+    },
+    EllipticalArc {
+        center: usize,
+        major_axis_point: usize,
+        minor_axis_ratio: usize,
+        start_angle: f64,
+        signed_sweep: f64,
+        parameter: CurveParameterIncidence,
+    },
+    RationalQuadratic {
+        start: usize,
+        weighted_middle: usize,
+        middle_weight: usize,
+        end: usize,
+        parameter: CurveParameterIncidence,
+    },
+    ParabolaSegment {
+        vertex: usize,
+        focus: usize,
+        trim: geosolve_geometry::DirectedParameterTrim,
+        parameter: CurveParameterIncidence,
+    },
+    HyperbolaSegment {
+        center: usize,
+        transverse_axis_point: usize,
+        semi_conjugate: usize,
+        branch: geosolve_geometry::HyperbolaBranch,
+        trim: geosolve_geometry::DirectedParameterTrim,
+        parameter: CurveParameterIncidence,
+    },
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -385,6 +420,7 @@ fn evaluate_ad_bezier(
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn evaluate_ad_curve(
     variables: &[SketchAdValue],
     curve: GenericCurveIncidence,
@@ -470,6 +506,238 @@ fn evaluate_ad_curve(
             let parameter = curve_parameter(variables, parameter, true, "cubic Bezier")?;
             evaluate_ad_bezier(variables, BezierIncidence::Cubic(controls), &parameter)
         }
+        GenericCurveIncidence::Ellipse {
+            center,
+            major_axis_point,
+            minor_axis_ratio,
+            parameter,
+        } => {
+            let center = ad_point(variables, center, "ellipse")?;
+            let axis_point = ad_point(variables, major_axis_point, "ellipse")?;
+            let ratio = ad_scalar(variables, minor_axis_ratio, "ellipse")?;
+            validate_ad_ellipse_ratio(ratio, "ellipse")?;
+            let angle = curve_parameter(variables, parameter, false, "ellipse")?;
+            evaluate_ad_ellipse(center, axis_point, ratio, &angle, 1.0, "ellipse")
+        }
+        GenericCurveIncidence::EllipticalArc {
+            center,
+            major_axis_point,
+            minor_axis_ratio,
+            start_angle,
+            signed_sweep,
+            parameter,
+        } => {
+            if !start_angle.is_finite() || !signed_sweep.is_finite() || signed_sweep == 0.0 {
+                return Err(EvaluationError::invalid_geometry(
+                    "elliptical arc angles must be finite with nonzero sweep",
+                ));
+            }
+            let center = ad_point(variables, center, "elliptical arc")?;
+            let axis_point = ad_point(variables, major_axis_point, "elliptical arc")?;
+            let ratio = ad_scalar(variables, minor_axis_ratio, "elliptical arc")?;
+            validate_ad_ellipse_ratio(ratio, "elliptical arc")?;
+            let parameter = curve_parameter(variables, parameter, true, "elliptical arc")?;
+            let angle = parameter * signed_sweep + start_angle;
+            evaluate_ad_ellipse(
+                center,
+                axis_point,
+                ratio,
+                &angle,
+                signed_sweep,
+                "elliptical arc",
+            )
+        }
+        GenericCurveIncidence::RationalQuadratic {
+            start,
+            weighted_middle,
+            middle_weight,
+            end,
+            parameter,
+        } => {
+            let start = ad_point(variables, start, "rational quadratic")?;
+            let weighted_middle = ad_point(
+                variables,
+                weighted_middle,
+                "rational quadratic weighted middle",
+            )?;
+            let end = ad_point(variables, end, "rational quadratic")?;
+            let weight = ad_scalar(variables, middle_weight, "rational quadratic")?;
+            if !weight.re.is_finite() || weight.re <= -1.0 {
+                return Err(EvaluationError::out_of_domain(
+                    "rational quadratic middle weight must be finite and strictly greater than -1",
+                ));
+            }
+            let parameter = curve_parameter(variables, parameter, true, "rational quadratic")?;
+            let one = DualDVec64::from_re(1.0);
+            let two = DualDVec64::from_re(2.0);
+            let one_minus = &one - &parameter;
+            let b0 = &one_minus * &one_minus;
+            let b1 = &two * &one_minus * &parameter;
+            let b2 = &parameter * &parameter;
+            let weighted_b1 = weight * &b1;
+            let denominator = &b0 + &weighted_b1 + &b2;
+            let condition_scale = b0.re.abs() + weighted_b1.re.abs() + b2.re.abs();
+            if !denominator.re.is_finite()
+                || !condition_scale.is_finite()
+                || denominator.re.abs() <= 64.0 * f64::EPSILON * condition_scale
+            {
+                return Err(EvaluationError::ambiguous(
+                    "rational quadratic denominator is singular or ill-conditioned",
+                ));
+            }
+            let b0_first = -(&two * &one_minus);
+            let b1_first = &two * (&one - &two * &parameter);
+            let b2_first = &two * &parameter;
+            let denominator_first = &b0_first + weight * &b1_first + &b2_first;
+            let position = std::array::from_fn(|coordinate| {
+                (&b0 * &start[coordinate]
+                    + &b1 * &weighted_middle[coordinate]
+                    + &b2 * &end[coordinate])
+                    / &denominator
+            });
+            let derivative = std::array::from_fn(|coordinate| {
+                let numerator_first = &b0_first * &start[coordinate]
+                    + &b1_first * &weighted_middle[coordinate]
+                    + &b2_first * &end[coordinate];
+                (numerator_first - &position[coordinate] * &denominator_first) / &denominator
+            });
+            require_finite_ad_jet(&position, &derivative, "rational quadratic")?;
+            Ok((position, derivative))
+        }
+        GenericCurveIncidence::ParabolaSegment {
+            vertex,
+            focus,
+            trim,
+            parameter,
+        } => {
+            let vertex = ad_point(variables, vertex, "parabola")?;
+            let focus = ad_point(variables, focus, "parabola")?;
+            let parameter = curve_parameter(variables, parameter, true, "parabola")?;
+            let native = parameter * trim.signed_rate() + trim.start();
+            let direction = [&focus[0] - &vertex[0], &focus[1] - &vertex[1]];
+            require_ad_axis(&direction, "parabola focus axis")?;
+            let normal = [-direction[1].clone(), direction[0].clone()];
+            let two = DualDVec64::from_re(2.0);
+            let position = std::array::from_fn(|coordinate| {
+                &vertex[coordinate]
+                    + &direction[coordinate] * &native * &native
+                    + &two * &normal[coordinate] * &native
+            });
+            let derivative = std::array::from_fn(|coordinate| {
+                (&two * &direction[coordinate] * &native + &two * &normal[coordinate])
+                    * trim.signed_rate()
+            });
+            require_finite_ad_jet(&position, &derivative, "parabola")?;
+            Ok((position, derivative))
+        }
+        GenericCurveIncidence::HyperbolaSegment {
+            center,
+            transverse_axis_point,
+            semi_conjugate,
+            branch,
+            trim,
+            parameter,
+        } => {
+            let center = ad_point(variables, center, "hyperbola")?;
+            let axis_point = ad_point(variables, transverse_axis_point, "hyperbola")?;
+            let semi_conjugate = ad_scalar(variables, semi_conjugate, "hyperbola")?;
+            if !semi_conjugate.re.is_finite() || semi_conjugate.re <= 0.0 {
+                return Err(EvaluationError::out_of_domain(
+                    "hyperbola semi-conjugate axis must be positive and finite",
+                ));
+            }
+            let parameter = curve_parameter(variables, parameter, true, "hyperbola")?;
+            let native = parameter * trim.signed_rate() + trim.start();
+            let sine = native.clone().sinh();
+            let cosine = native.cosh();
+            if !sine.re.is_finite() || !cosine.re.is_finite() {
+                return Err(EvaluationError::invalid_geometry(
+                    "hyperbola native parameter overflowed sinh/cosh",
+                ));
+            }
+            let direction = [&axis_point[0] - &center[0], &axis_point[1] - &center[1]];
+            require_ad_axis(&direction, "hyperbola transverse axis")?;
+            let length = (&direction[0] * &direction[0] + &direction[1] * &direction[1]).sqrt();
+            let normal = [-&direction[1] / &length, &direction[0] / &length];
+            let branch = branch.multiplier();
+            let position = std::array::from_fn(|coordinate| {
+                &center[coordinate]
+                    + direction[coordinate].clone() * branch * &cosine
+                    + &normal[coordinate] * semi_conjugate * &sine
+            });
+            let derivative = std::array::from_fn(|coordinate| {
+                (direction[coordinate].clone() * branch * &sine
+                    + &normal[coordinate] * semi_conjugate * &cosine)
+                    * trim.signed_rate()
+            });
+            require_finite_ad_jet(&position, &derivative, "hyperbola")?;
+            Ok((position, derivative))
+        }
+    }
+}
+
+fn evaluate_ad_ellipse(
+    center: &[DualDVec64; 2],
+    axis_point: &[DualDVec64; 2],
+    ratio: &DualDVec64,
+    angle: &DualDVec64,
+    angle_rate: f64,
+    context: &str,
+) -> Result<([DualDVec64; 2], [DualDVec64; 2]), EvaluationError> {
+    let direction = [&axis_point[0] - &center[0], &axis_point[1] - &center[1]];
+    require_ad_axis(&direction, context)?;
+    let normal = [-direction[1].clone(), direction[0].clone()];
+    let sine = angle.clone().sin();
+    let cosine = angle.clone().cos();
+    let position = std::array::from_fn(|coordinate| {
+        &center[coordinate] + &direction[coordinate] * &cosine + ratio * &normal[coordinate] * &sine
+    });
+    let derivative = std::array::from_fn(|coordinate| {
+        (-&direction[coordinate] * &sine + ratio * &normal[coordinate] * &cosine) * angle_rate
+    });
+    require_finite_ad_jet(&position, &derivative, context)?;
+    Ok((position, derivative))
+}
+
+fn validate_ad_ellipse_ratio(ratio: &DualDVec64, context: &str) -> Result<(), EvaluationError> {
+    if ratio.re.is_finite() && ratio.re > 0.0 && ratio.re <= 1.0 {
+        Ok(())
+    } else {
+        Err(EvaluationError::out_of_domain(format!(
+            "{context} minor-axis ratio must satisfy 0 < ratio <= 1"
+        )))
+    }
+}
+
+fn require_ad_axis(axis: &[DualDVec64; 2], context: &str) -> Result<(), EvaluationError> {
+    let length = axis[0].re.hypot(axis[1].re);
+    if length.is_finite() && length > 0.0 {
+        Ok(())
+    } else {
+        Err(EvaluationError::degenerate(format!(
+            "{context} is collapsed or non-finite"
+        )))
+    }
+}
+
+fn require_finite_ad_jet(
+    position: &[DualDVec64; 2],
+    derivative: &[DualDVec64; 2],
+    context: &str,
+) -> Result<(), EvaluationError> {
+    if position.iter().chain(derivative).all(|value| {
+        value.re.is_finite()
+            && value
+                .eps
+                .0
+                .as_ref()
+                .is_none_or(|derivatives| derivatives.iter().all(|entry| entry.is_finite()))
+    }) {
+        Ok(())
+    } else {
+        Err(EvaluationError::invalid_geometry(format!(
+            "{context} produced a non-finite jet"
+        )))
     }
 }
 

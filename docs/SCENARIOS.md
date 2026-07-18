@@ -517,6 +517,67 @@ Rollback fixture:
 - the residual-only all-fixed core component is mapped through physical source
   incidence rather than being mistaken for a missing spatial body component.
 
+## M20 spatial mate catalog and driven assembly fixtures
+
+Axis and plane features store complete checked body-local frames. Their directed
+`z` axis is the axis direction or plane normal, while `x/y` are persistent clocks.
+Every feature is transformed and independently validated even when no source uses
+it. Feature, relation and coordinate conventions follow ADR 0013.
+
+Primitive equality counts are:
+
+| Fixture | Scalar rows/rank | Floating right nullity | Gauge DOF | Internal mobility | Grounded right nullity |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| M20-J1 prismatic | 5 | 7 | 6 | 1 | 1 |
+| M20-J2 cylindrical | 4 | 8 | 6 | 2 | 2 |
+| M20-J3 planar | 3 | 9 | 6 | 3 | 3 |
+| M20-J4 universal | 4 | 8 | 6 | 2 | 2 |
+| M20-M1 point distance | 1 | 11 | 6 | 5 | 5 |
+| M20-M2 interior axis angle | 1 | 11 | 6 | 5 | 5 |
+| M20-M3 direction-only axis alignment | 2 | 10 | 6 | 4 | 4 |
+| M20-M4 frame offset | 6 | 6 | 6 | 0 | 0 |
+
+Each primitive has exact, perturbed, right-tangent Jacobian, common-left `SE(3)`,
+uniform-scale `1e-6`/`1`/`1e6`, mixed-scale, invalid-geometry, branch-retention,
+audit and rollback fixtures. Expected rank applies to the documented regular
+configuration; a special rank is reported truthfully rather than forced to match
+the table.
+
+The literal mixed-scale fixtures use nominal model scale `1` and place
+approximately `1e-6` feature offsets together with approximately `1e6` body,
+feature or target offsets in the actual relative geometry. They preserve finite
+accepted geometry/audit, source-local row scales, rank, gauge/internal mobility
+and branch state. Central differences run at the literal span where resolvable;
+universal/frame-offset cancellation columns use the documented `1e4` span, and
+the planar microscopic-transverse driver oracle uses `1e-3..1`, rather than
+weakening the `1e-6` Jacobian tolerance.
+
+The `A-SB` shaft/bearing fixture uses one grounded bearing and one shaft connected
+by a cylindrical joint. Undriven internal mobility is two; a hinge or translation
+driver leaves one; both simultaneous drivers leave zero. Hinge winding, axis parity
+and translation side are explicit mode state. The translation side is evaluated
+by a row-free plane/point monitor. A failed combined hinge-target,
+translation-target and mode transaction retains both prior targets, the mode and
+every accepted publication.
+
+The `A-BB` block/base fixture uses one grounded base and a three-DOF planar joint.
+Its coordinates are a planar-parent hinge plus explicit plane-X and plane-Y
+translations constructed with `SpatialPlanarTranslationAxis::{X,Y}`. It reports
+internal mobility `3/2/1/0` with zero/one/two/three drivers. One successful
+three-target transaction commits once; incompatible duplicate targets or an
+invalid mode edit roll all three targets and complete accepted state back. A full
+frame-offset variant has rank six and zero internal mobility. Directed normal
+parity, witness side and ordered signed volume reject mirrored roots without
+adding fake equality rows.
+
+All public spatial IDs also run a same-local-ordinal foreign-assembly corpus.
+Private assembly provenance makes constructor, gauge, coordinate, monitor and
+transaction use return typed `Unknown*` rather than aliasing a local object;
+`as_u64` and deterministic audit text remain local-ordinal compatible.
+
+Position transactions only are in M20. Spatial continuation, event hysteresis,
+multi-driver velocity and complete spatial persistence remain M23 work.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:

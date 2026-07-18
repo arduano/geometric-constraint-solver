@@ -4,9 +4,10 @@ use crate::{
     ContactId, ContactNeighborhood, CurveDefinition, CurveId, CurveSpan, DesignPointId,
     DesignScalarId, DocumentArcSweep, DocumentArcTangencySide, DocumentConstraintDefinition,
     DocumentConstraintId, DocumentCoordinateAxis, DocumentDimensionDefinition, DocumentDimensionId,
-    DocumentDimensionMode, DocumentError, DocumentId, DocumentLineSide, DocumentSolveRequest,
-    FeatureEndpoint, MIN_REPRESENTABLE_RADIUS, PersistentId, RectangleIds, ScalarDomain,
-    ScalarUnit, SketchDocument, TangentOrientation,
+    DocumentDimensionMode, DocumentError, DocumentHyperbolaBranch, DocumentId, DocumentLineSide,
+    DocumentSolveRequest, FeatureEndpoint, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT,
+    MIN_REPRESENTABLE_RADIUS, PersistentId, RectangleIds, ScalarDomain, ScalarUnit, SketchDocument,
+    TangentOrientation,
 };
 
 /// Canonical playground-alpha scenarios shared by native tests and browser examples.
@@ -32,6 +33,9 @@ pub enum AlphaScenarioKind {
     DiagnosticRankDrop,
     DiagnosticEndpointBound,
     DiagnosticRedundancy,
+    ConicGallery,
+    ConicTangency,
+    ConicCircleLimit,
 }
 
 /// Deterministic workload sizes used by the M14 interaction budgets.
@@ -65,6 +69,9 @@ impl AlphaScenarioKind {
             Self::DiagnosticRankDrop => "diagnostic-rank-drop",
             Self::DiagnosticEndpointBound => "diagnostic-endpoint-bound",
             Self::DiagnosticRedundancy => "diagnostic-redundancy",
+            Self::ConicGallery => "conic-gallery",
+            Self::ConicTangency => "conic-tangency",
+            Self::ConicCircleLimit => "conic-circle-limit",
         }
     }
 }
@@ -261,6 +268,32 @@ pub struct DiagnosticRedundancyIds {
     pub duplicate_length: DocumentDimensionId,
 }
 
+/// Persistent curve roles in the five-family conic gallery.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ConicGalleryIds {
+    /// Ellipse, elliptical arc, rational quadratic, parabola, and hyperbola.
+    pub curves: [CurveId; 5],
+}
+
+/// Persistent roles in the generic conic-contact and tangency example.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ConicTangencyIds {
+    pub curves: [CurveId; 2],
+    pub contact_points: [DesignPointId; 2],
+    pub point_contacts: [ContactId; 2],
+    pub tangency_contacts: [ContactId; 2],
+    pub tangency: DocumentConstraintId,
+}
+
+/// Persistent roles in the full-ellipse and directed-arc circle-limit example.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ConicCircleLimitIds {
+    /// Full ellipse followed by directed elliptical arc.
+    pub curves: [CurveId; 2],
+    pub full_ellipse_contacts: [ContactId; 2],
+    pub arc_endpoint_contacts: [ContactId; 2],
+}
+
 /// Scenario-specific persistent roles.
 #[derive(Clone, Debug, PartialEq)]
 pub enum AlphaScenarioIds {
@@ -284,6 +317,9 @@ pub enum AlphaScenarioIds {
     DiagnosticRankDrop(DiagnosticRankDropIds),
     DiagnosticEndpointBound(DiagnosticEndpointBoundIds),
     DiagnosticRedundancy(DiagnosticRedundancyIds),
+    ConicGallery(ConicGalleryIds),
+    ConicTangency(ConicTangencyIds),
+    ConicCircleLimit(ConicCircleLimitIds),
 }
 
 /// One deterministic document and initial solve request for an alpha scenario.
@@ -334,6 +370,9 @@ pub fn alpha_scenario(
         AlphaScenarioKind::DiagnosticRankDrop => 0xd1_0000,
         AlphaScenarioKind::DiagnosticEndpointBound => 0xd2_0000,
         AlphaScenarioKind::DiagnosticRedundancy => 0xd3_0000,
+        AlphaScenarioKind::ConicGallery => 0xe1_0000,
+        AlphaScenarioKind::ConicTangency => 0xe2_0000,
+        AlphaScenarioKind::ConicCircleLimit => 0xe3_0000,
     };
     let mut document =
         SketchDocument::with_id(10.0 * scale, DocumentId(PersistentId::from_u128(namespace)))?;
@@ -431,6 +470,18 @@ pub fn alpha_scenario(
                 &mut document,
                 scale,
             )?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::ConicGallery => (
+            AlphaScenarioIds::ConicGallery(add_conic_gallery(&mut document, scale)?),
+            DocumentSolveRequest::default(),
+        ),
+        AlphaScenarioKind::ConicTangency => (
+            AlphaScenarioIds::ConicTangency(add_conic_tangency(&mut document, scale)?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::ConicCircleLimit => (
+            AlphaScenarioIds::ConicCircleLimit(add_conic_circle_limit(&mut document, scale)?),
             DocumentSolveRequest::default().without_previous_state_preferences(),
         ),
     };
@@ -842,6 +893,409 @@ fn add_a5(
         bezier,
         bezier_contact,
         tangency,
+    })
+}
+
+fn conic_ratio(
+    document: &mut SketchDocument,
+    label: &str,
+    value: f64,
+) -> Result<DesignScalarId, DocumentError> {
+    document.add_scalar(
+        label,
+        value,
+        ScalarUnit::Parameter,
+        ScalarDomain::Bounded {
+            lower: f64::from_bits(1),
+            upper: 1.0,
+        },
+    )
+}
+
+fn conic_parameter(
+    document: &mut SketchDocument,
+    label: &str,
+    value: f64,
+    unit: ScalarUnit,
+) -> Result<DesignScalarId, DocumentError> {
+    document.add_scalar(label, value, unit, ScalarDomain::Finite)
+}
+
+#[allow(clippy::too_many_lines)]
+fn add_conic_gallery(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<ConicGalleryIds, DocumentError> {
+    let ellipse_center =
+        document.add_point("Gallery ellipse center", [-8.0 * scale, 4.0 * scale])?;
+    let ellipse_axis = document.add_point(
+        "Gallery ellipse major-axis handle",
+        [-5.5 * scale, 4.0 * scale],
+    )?;
+    let ellipse_ratio = conic_ratio(document, "Gallery ellipse minor-axis ratio", 0.55)?;
+    let ellipse = document.add_curve(
+        "Ellipse - full periodic conic",
+        CurveDefinition::Ellipse {
+            center: ellipse_center,
+            major_axis_point: ellipse_axis,
+            minor_axis_ratio: ellipse_ratio,
+        },
+    )?;
+
+    let arc_center = document.add_point("Gallery arc center", [0.0, 4.0 * scale])?;
+    let arc_axis =
+        document.add_point("Gallery arc major-axis handle", [2.7 * scale, 4.4 * scale])?;
+    let arc_ratio = conic_ratio(document, "Gallery arc minor-axis ratio", 0.62)?;
+    let arc_start = conic_parameter(document, "Gallery arc start angle", 2.25, ScalarUnit::Angle)?;
+    let arc_end = conic_parameter(document, "Gallery arc end angle", -0.35, ScalarUnit::Angle)?;
+    let arc = document.add_curve(
+        "Elliptical arc - clockwise directed trim",
+        CurveDefinition::EllipticalArc {
+            center: arc_center,
+            major_axis_point: arc_axis,
+            minor_axis_ratio: arc_ratio,
+            start_angle: arc_start,
+            end_angle: arc_end,
+            sweep: DocumentArcSweep::Clockwise,
+        },
+    )?;
+
+    let rational_start =
+        document.add_point("Gallery rational start", [6.0 * scale, 2.5 * scale])?;
+    let rational_end = document.add_point("Gallery rational end", [10.0 * scale, 2.2 * scale])?;
+    let rational_weight = document.add_scalar(
+        "Gallery rational middle weight",
+        0.65,
+        ScalarUnit::Parameter,
+        ScalarDomain::Bounded {
+            lower: MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT,
+            upper: f64::MAX,
+        },
+    )?;
+    let rational = document.add_curve(
+        "Rational quadratic - homogeneous control",
+        CurveDefinition::RationalQuadraticConic {
+            start: rational_start,
+            weighted_middle: [5.2 * scale, 3.25 * scale],
+            middle_weight: rational_weight,
+            end: rational_end,
+        },
+    )?;
+
+    let parabola_vertex =
+        document.add_point("Gallery parabola vertex", [-5.0 * scale, -4.0 * scale])?;
+    let parabola_focus =
+        document.add_point("Gallery parabola focus", [-4.0 * scale, -3.6 * scale])?;
+    let parabola_start = conic_parameter(
+        document,
+        "Gallery parabola reversed trim start",
+        1.2,
+        ScalarUnit::Parameter,
+    )?;
+    let parabola_end = conic_parameter(
+        document,
+        "Gallery parabola reversed trim end",
+        -1.1,
+        ScalarUnit::Parameter,
+    )?;
+    let parabola = document.add_curve(
+        "Parabola - reversed directed trim",
+        CurveDefinition::ParabolaSegment {
+            vertex: parabola_vertex,
+            focus: parabola_focus,
+            trim_start: parabola_start,
+            trim_end: parabola_end,
+        },
+    )?;
+
+    let hyperbola_center =
+        document.add_point("Gallery hyperbola center", [4.0 * scale, -4.0 * scale])?;
+    let hyperbola_axis = document.add_point(
+        "Gallery hyperbola transverse-axis handle",
+        [6.2 * scale, -3.5 * scale],
+    )?;
+    let hyperbola_semi_conjugate = document.add_scalar(
+        "Gallery hyperbola semi-conjugate length",
+        1.4 * scale,
+        ScalarUnit::Length,
+        ScalarDomain::Positive,
+    )?;
+    let hyperbola_start = conic_parameter(
+        document,
+        "Gallery hyperbola reversed trim start",
+        0.9,
+        ScalarUnit::Parameter,
+    )?;
+    let hyperbola_end = conic_parameter(
+        document,
+        "Gallery hyperbola reversed trim end",
+        -0.7,
+        ScalarUnit::Parameter,
+    )?;
+    let hyperbola = document.add_curve(
+        "Hyperbola - negative branch reversed trim",
+        CurveDefinition::HyperbolaSegment {
+            center: hyperbola_center,
+            transverse_axis_point: hyperbola_axis,
+            semi_conjugate: hyperbola_semi_conjugate,
+            branch: DocumentHyperbolaBranch::Negative,
+            trim_start: hyperbola_start,
+            trim_end: hyperbola_end,
+        },
+    )?;
+
+    Ok(ConicGalleryIds {
+        curves: [ellipse, arc, rational, parabola, hyperbola],
+    })
+}
+
+fn add_fixed_curve_point(
+    document: &mut SketchDocument,
+    label: &str,
+    curve: CurveId,
+    parameter: f64,
+    winding: i32,
+    neighborhood: ContactNeighborhood,
+) -> Result<(DesignPointId, ContactId), DocumentError> {
+    let position = document
+        .evaluate_curve_jet(CurveSpan::line(curve), parameter)
+        .map_err(|error| DocumentError::InvalidField {
+            field: "conic example contact",
+            message: error.to_string(),
+        })?
+        .position;
+    let point = document.add_point(format!("{label} witness"), [position.x, position.y])?;
+    fix_point(document, &format!("{label} witness fixed"), point)?;
+    let contact = document.add_curve_contact(
+        format!("{label} contact"),
+        CurveSpan::line(curve),
+        parameter,
+        winding,
+        neighborhood,
+        None,
+    )?;
+    document.add_constraint(
+        format!("{label} point on conic"),
+        DocumentConstraintDefinition::PointOnCurve { point, contact },
+    )?;
+    Ok((point, contact))
+}
+
+fn add_conic_tangency(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<ConicTangencyIds, DocumentError> {
+    let first_center = document.add_point("Tangency left ellipse center", [-2.0 * scale, 0.0])?;
+    let first_axis = document.add_point("Tangency left ellipse axis", [0.0, 0.0])?;
+    let second_center = document.add_point("Tangency right ellipse center", [2.0 * scale, 0.0])?;
+    let second_axis = document.add_point("Tangency right ellipse reversed axis", [0.0, 0.0])?;
+    let first_ratio = conic_ratio(document, "Tangency left ellipse ratio", 0.6)?;
+    let second_ratio = conic_ratio(document, "Tangency right ellipse ratio", 0.6)?;
+    let first = document.add_curve(
+        "Left ellipse",
+        CurveDefinition::Ellipse {
+            center: first_center,
+            major_axis_point: first_axis,
+            minor_axis_ratio: first_ratio,
+        },
+    )?;
+    let second = document.add_curve(
+        "Right ellipse",
+        CurveDefinition::Ellipse {
+            center: second_center,
+            major_axis_point: second_axis,
+            minor_axis_ratio: second_ratio,
+        },
+    )?;
+    for (label, point) in [
+        ("Tangency left center fixed", first_center),
+        ("Tangency left axis fixed", first_axis),
+        ("Tangency right center fixed", second_center),
+        ("Tangency right axis fixed", second_axis),
+    ] {
+        fix_point(document, label, point)?;
+    }
+
+    let first_tangent = document.add_curve_contact(
+        "Tangency left ellipse contact",
+        CurveSpan::line(first),
+        0.0,
+        0,
+        ContactNeighborhood::Interior,
+        Some(TangentOrientation::Opposed),
+    )?;
+    let second_tangent = document.add_curve_contact(
+        "Tangency right ellipse contact",
+        CurveSpan::line(second),
+        0.0,
+        0,
+        ContactNeighborhood::Interior,
+        Some(TangentOrientation::Opposed),
+    )?;
+    let tangency = document.add_constraint(
+        "Generic ellipse-ellipse external tangency",
+        DocumentConstraintDefinition::CurveCurveTangency {
+            first_contact: first_tangent,
+            second_contact: second_tangent,
+        },
+    )?;
+
+    let (first_point, first_point_contact) = add_fixed_curve_point(
+        document,
+        "Tangency left upper",
+        first,
+        PI / 2.0,
+        0,
+        ContactNeighborhood::Interior,
+    )?;
+    let (second_point, second_point_contact) = add_fixed_curve_point(
+        document,
+        "Tangency right lower",
+        second,
+        PI / 2.0,
+        0,
+        ContactNeighborhood::Interior,
+    )?;
+    Ok(ConicTangencyIds {
+        curves: [first, second],
+        contact_points: [first_point, second_point],
+        point_contacts: [first_point_contact, second_point_contact],
+        tangency_contacts: [first_tangent, second_tangent],
+        tangency,
+    })
+}
+
+fn add_axis_length_constraint(
+    document: &mut SketchDocument,
+    label: &str,
+    center: DesignPointId,
+    axis: DesignPointId,
+    length: f64,
+) -> Result<DocumentDimensionId, DocumentError> {
+    let target = document.add_scalar(
+        format!("{label} target"),
+        length,
+        ScalarUnit::Length,
+        ScalarDomain::Positive,
+    )?;
+    document.add_dimension(
+        label,
+        DocumentDimensionDefinition::PointDistance {
+            first: center,
+            second: axis,
+            target,
+        },
+        DocumentDimensionMode::Driving,
+    )
+}
+
+#[allow(clippy::too_many_lines)]
+fn add_conic_circle_limit(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<ConicCircleLimitIds, DocumentError> {
+    let ellipse_center =
+        document.add_point("Circle-limit full ellipse center", [-4.0 * scale, 0.0])?;
+    let ellipse_axis =
+        document.add_point("Circle-limit full ellipse axis handle", [-2.0 * scale, 0.0])?;
+    let ellipse_ratio = conic_ratio(document, "Circle-limit full ellipse ratio = 1", 1.0)?;
+    let ellipse = document.add_curve(
+        "Circle-limit full ellipse - orientation unobservable",
+        CurveDefinition::Ellipse {
+            center: ellipse_center,
+            major_axis_point: ellipse_axis,
+            minor_axis_ratio: ellipse_ratio,
+        },
+    )?;
+    fix_point(
+        document,
+        "Circle-limit full ellipse center fixed",
+        ellipse_center,
+    )?;
+    add_axis_length_constraint(
+        document,
+        "Circle-limit full ellipse radius",
+        ellipse_center,
+        ellipse_axis,
+        2.0 * scale,
+    )?;
+    let (_, full_first) = add_fixed_curve_point(
+        document,
+        "Circle-limit full ellipse first",
+        ellipse,
+        0.4,
+        1,
+        ContactNeighborhood::Interior,
+    )?;
+    let (_, full_second) = add_fixed_curve_point(
+        document,
+        "Circle-limit full ellipse second",
+        ellipse,
+        1.6,
+        0,
+        ContactNeighborhood::Interior,
+    )?;
+
+    let arc_center = document.add_point("Circle-limit directed arc center", [4.0 * scale, 0.0])?;
+    let arc_axis =
+        document.add_point("Circle-limit directed arc axis handle", [6.0 * scale, 0.0])?;
+    let arc_ratio = conic_ratio(document, "Circle-limit directed arc ratio = 1", 1.0)?;
+    let arc_start = conic_parameter(
+        document,
+        "Circle-limit directed arc start",
+        -0.4,
+        ScalarUnit::Angle,
+    )?;
+    let arc_end = conic_parameter(
+        document,
+        "Circle-limit directed arc end",
+        1.4,
+        ScalarUnit::Angle,
+    )?;
+    let arc = document.add_curve(
+        "Circle-limit elliptical arc - directed orientation observable",
+        CurveDefinition::EllipticalArc {
+            center: arc_center,
+            major_axis_point: arc_axis,
+            minor_axis_ratio: arc_ratio,
+            start_angle: arc_start,
+            end_angle: arc_end,
+            sweep: DocumentArcSweep::CounterClockwise,
+        },
+    )?;
+    fix_point(
+        document,
+        "Circle-limit directed arc center fixed",
+        arc_center,
+    )?;
+    add_axis_length_constraint(
+        document,
+        "Circle-limit directed arc radius",
+        arc_center,
+        arc_axis,
+        2.0 * scale,
+    )?;
+    let (_, arc_start_contact) = add_fixed_curve_point(
+        document,
+        "Circle-limit directed arc start",
+        arc,
+        0.0,
+        0,
+        ContactNeighborhood::Start,
+    )?;
+    let (_, arc_end_contact) = add_fixed_curve_point(
+        document,
+        "Circle-limit directed arc end",
+        arc,
+        1.0,
+        0,
+        ContactNeighborhood::End,
+    )?;
+
+    Ok(ConicCircleLimitIds {
+        curves: [ellipse, arc],
+        full_ellipse_contacts: [full_first, full_second],
+        arc_endpoint_contacts: [arc_start_contact, arc_end_contact],
     })
 }
 

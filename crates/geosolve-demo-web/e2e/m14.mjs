@@ -181,9 +181,10 @@ class BrowserPage {
     await this.click('[data-action="load-example"]');
     await this.assertAccepted();
     if (kind !== 'medium') {
+      const prefix = ['shaft-bearing', 'block-base'].includes(kind) ? 'accepted spatial' : 'canonical';
       assert.match(
         await this.evaluate(`document.querySelector('#last-attempt').textContent`),
-        new RegExp(`canonical ${kind}`, 'i'),
+        new RegExp(`${prefix} ${kind}`, 'i'),
       );
     }
   }
@@ -204,12 +205,18 @@ class BrowserPage {
     return this.evaluate(`(() => { const point = [...document.querySelectorAll('[data-point-id]')].find((item) => item.dataset.label === ${JSON.stringify(label)}); if (!point) return null; document.querySelector('#sketch-viewport').scrollIntoView({ block: 'center', inline: 'center' }); const rect = point.getBoundingClientRect(); return { x: Number(point.dataset.modelX), y: Number(point.dataset.modelY), clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2, id: point.dataset.pointId }; })()`);
   }
 
+  async configurationHandle(label) {
+    return this.evaluate(`(() => { const handle = [...document.querySelectorAll('[data-configuration-handle]')].find((item) => item.dataset.label === ${JSON.stringify(label)}); if (!handle) return null; document.querySelector('#sketch-viewport').scrollIntoView({ block: 'center', inline: 'center' }); const rect = handle.getBoundingClientRect(); return { x: Number(handle.dataset.modelX), y: Number(handle.dataset.modelY), clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2, curve: handle.dataset.configurationCurveId, kind: handle.dataset.configurationHandle }; })()`);
+  }
+
   async modelClient(x, y) {
     return this.evaluate(`(() => { const root = document.querySelector('#playground-root'); const viewport = document.querySelector('#sketch-viewport'); viewport.scrollIntoView({ block: 'center', inline: 'center' }); const svg = viewport.getBoundingClientRect(); const sx = 500 + (${x} - Number(root.dataset.viewportCenterX)) * Number(root.dataset.pixelsPerUnit); const sy = 350 - (${y} - Number(root.dataset.viewportCenterY)) * Number(root.dataset.pixelsPerUnit); return { x: svg.left + sx * svg.width / 1000, y: svg.top + sy * svg.height / 700 }; })()`);
   }
 
   async pointerClick(point) {
     const before = Number(await this.evaluate(`document.querySelector('#playground-root').dataset.renderSequence`));
+    const target = await this.evaluate(`(() => { const target = document.elementFromPoint(${point.x}, ${point.y}); return { tag: target?.tagName, id: target?.id, inViewport: target?.closest('#sketch-viewport') !== null }; })()`);
+    assert.equal(target.inViewport, true, `pointer point missed viewport: ${JSON.stringify(target)} at ${JSON.stringify(point)}`);
     if (this.touch) {
       await this.evaluate(`(() => { const target = document.elementFromPoint(${point.x}, ${point.y}); if (!target?.closest('#sketch-viewport')) throw new Error('touch point missed viewport: ' + target?.tagName + '#' + target?.id); target.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, clientX: ${point.x}, clientY: ${point.y}, pointerId: 41, pointerType: 'touch', isPrimary: true, button: 0, buttons: 1 })); document.elementFromPoint(${point.x}, ${point.y}).dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, clientX: ${point.x}, clientY: ${point.y}, pointerId: 41, pointerType: 'touch', isPrimary: true, button: 0, buttons: 0 })); return true; })()`);
     } else {
@@ -217,6 +224,14 @@ class BrowserPage {
       await this.cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'left', clickCount: 1 });
       await this.cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', clickCount: 1 });
     }
+    await this.waitFor(`Number(document.querySelector('#playground-root').dataset.renderSequence) > ${before}`);
+  }
+
+  async hoverModel(x, y) {
+    assert.equal(this.touch, false, 'hover preview uses the desktop pointer path');
+    const point = await this.modelClient(x, y);
+    const before = Number(await this.evaluate(`document.querySelector('#playground-root').dataset.renderSequence`));
+    await this.cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y });
     await this.waitFor(`Number(document.querySelector('#playground-root').dataset.renderSequence) > ${before}`);
   }
 
@@ -229,6 +244,30 @@ class BrowserPage {
   async dragPoint(label, x, y, steps = 1) {
     const start = await this.point(label);
     assert.ok(start, `missing point ${label}`);
+    const target = await this.modelClient(x, y);
+    const before = Number(await this.evaluate(`document.querySelector('#playground-root').dataset.renderSequence`));
+    if (this.touch) {
+      await this.cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: start.clientX, y: start.clientY, id: 1, radiusX: 8, radiusY: 8 }] });
+      for (let index = 1; index <= steps; index++) {
+        const fraction = index / steps;
+        await this.cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: start.clientX + (target.x - start.clientX) * fraction, y: start.clientY + (target.y - start.clientY) * fraction, id: 1, radiusX: 8, radiusY: 8 }] });
+      }
+      await this.cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    } else {
+      await this.cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: start.clientX, y: start.clientY });
+      await this.cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: start.clientX, y: start.clientY, button: 'left', clickCount: 1 });
+      for (let index = 1; index <= steps; index++) {
+        const fraction = index / steps;
+        await this.cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: start.clientX + (target.x - start.clientX) * fraction, y: start.clientY + (target.y - start.clientY) * fraction, button: 'left', buttons: 1 });
+      }
+      await this.cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: target.x, y: target.y, button: 'left', clickCount: 1 });
+    }
+    await this.waitFor(`Number(document.querySelector('#playground-root').dataset.renderSequence) > ${before}`);
+  }
+
+  async dragConfigurationHandle(label, x, y, steps = 4) {
+    const start = await this.configurationHandle(label);
+    assert.ok(start, `missing configuration handle ${label}`);
     const target = await this.modelClient(x, y);
     const before = Number(await this.evaluate(`document.querySelector('#playground-root').dataset.renderSequence`));
     if (this.touch) {
@@ -356,6 +395,7 @@ async function startChromium() {
     '--no-first-run',
     '--noerrdialogs',
     '--no-zygote',
+    '--no-proxy-server',
     '--ozone-platform=headless',
     '--renderer-process-limit=1',
     '--single-process',
@@ -635,6 +675,281 @@ async function stressExampleSuite(page) {
   assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.structuralClassification`), 'Over');
   assert.match(await page.evaluate(`document.querySelector('#playground-audit').textContent`), /redundant/i);
   await page.assertAccepted();
+}
+
+async function newDomainExampleSuite(page) {
+  assert.deepEqual(
+    await page.evaluate(`[...document.querySelectorAll('#alpha-example option')].map((option) => option.value).filter((value) => ['conic-gallery', 'conic-tangency', 'conic-circle-limit', 'shaft-bearing', 'block-base'].includes(value))`),
+    ['conic-gallery', 'conic-tangency', 'conic-circle-limit', 'shaft-bearing', 'block-base'],
+  );
+
+  await page.loadExample('conic-gallery', '0.000001');
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.exampleMode`), 'sketch');
+  assert.ok(Number(await page.evaluate(`document.querySelectorAll('.playground-curve').length`)) >= 5);
+  assert.match(await page.evaluate(`document.querySelector('#object-list').textContent`), /Ellipse - full periodic conic/);
+  assert.match(await page.evaluate(`document.querySelector('#object-list').textContent`), /Hyperbola - negative branch reversed trim/);
+  const conicJson = await page.exportJson();
+  assert.equal(JSON.parse(conicJson).curves.length, 5);
+  assert.equal(await page.evaluate(`localStorage.getItem('geosolve.sketch-playground.accepted.v1')`), conicJson);
+
+  const storageBeforeSpatial = await page.evaluate(`localStorage.getItem('geosolve.sketch-playground.accepted.v1')`);
+  await page.loadExample('shaft-bearing', '1000000');
+  const spatial = await page.evaluate(`(() => { const root = document.querySelector('#playground-root'); return { mode: root.dataset.exampleMode, rank: root.dataset.rank, gauge: root.dataset.totalGaugeDof, internal: root.dataset.totalInternalMobility, pointTool: getComputedStyle(document.querySelector('[data-tool="point"]')).display, persistence: getComputedStyle(document.querySelector('.persistence-section')).display, bodies: document.querySelectorAll('[data-spatial-body-id]').length, axes: document.querySelectorAll('[data-spatial-axis-id]').length, planes: document.querySelectorAll('[data-spatial-plane-id]').length, audit: document.querySelectorAll('#playground-audit [data-source-id]').length }; })()`);
+  assert.deepEqual(spatial, {
+    mode: 'spatial',
+    rank: '6',
+    gauge: '0',
+    internal: '0',
+    pointTool: 'none',
+    persistence: 'none',
+    bodies: 2,
+    axes: 2,
+    planes: 1,
+    audit: 4,
+  });
+  assert.match(await page.evaluate(`document.querySelector('#object-list').textContent`), /Shaft hinge coordinate.*phase.*winding/s);
+  assert.match(await page.evaluate(`document.querySelector('#object-list').textContent`), /Shaft winding 2 mode.*retained.*normalized/s);
+  assert.match(await page.evaluate(`document.querySelector('#playground-solve-status').textContent`), /physical rank6.*gauge DOF0.*internal mobility0/s);
+  assert.equal(await page.evaluate(`localStorage.getItem('geosolve.sketch-playground.accepted.v1')`), storageBeforeSpatial);
+
+  const centerBeforePan = await page.evaluate(`document.querySelector('#playground-root').dataset.viewportCenterX`);
+  await page.panCanvas(35, -20);
+  assert.notEqual(await page.evaluate(`document.querySelector('#playground-root').dataset.viewportCenterX`), centerBeforePan);
+  const zoomBefore = await page.evaluate(`document.querySelector('#playground-root').dataset.pixelsPerUnit`);
+  await page.click('[data-action="zoom-in"]');
+  assert.notEqual(await page.evaluate(`document.querySelector('#playground-root').dataset.pixelsPerUnit`), zoomBefore);
+  await page.key('z', 'KeyZ', 2);
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.exampleMode`), 'spatial');
+  assert.match(await page.evaluate(`document.querySelector('#last-attempt').textContent`), /Undo is unavailable in the read-only spatial view/);
+  assert.equal(await page.evaluate(`localStorage.getItem('geosolve.sketch-playground.accepted.v1')`), storageBeforeSpatial);
+
+  await page.click('[data-action="new"]');
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.exampleMode`), 'sketch');
+  assert.notEqual(await page.evaluate(`getComputedStyle(document.querySelector('[data-tool="point"]')).display`), 'none');
+  assert.equal(JSON.parse(await page.exportJson()).points.length, 0);
+  assert.notEqual(await page.evaluate(`localStorage.getItem('geosolve.sketch-playground.accepted.v1')`), storageBeforeSpatial);
+  page.assertNoErrors();
+  console.log('desktop: M19 editable conic and M20 read-only spatial workflows passed');
+}
+
+async function conicCreationSuite(page) {
+  assert.equal(page.touch, false, 'complete conic creation suite uses desktop pointer previews');
+  await page.click('[data-action="new"]');
+
+  const acceptedSnapshot = () => page.evaluate(`(() => { const root = document.querySelector('#playground-root'); return { revision: root.dataset.authoritativeRevision, historyLength: root.dataset.historyLength, historyCursor: root.dataset.historyCursor, audit: document.querySelector('#playground-audit').innerHTML, storage: localStorage.getItem('geosolve.sketch-playground.accepted.v1') }; })()`);
+  const drawConic = async (tool, points, configure) => {
+    const historyBefore = Number(await page.evaluate(`document.querySelector('#playground-root').dataset.historyCursor`));
+    await page.click(`[data-tool="${tool}"]`);
+    assert.notEqual(await page.evaluate(`getComputedStyle(document.querySelector('#conic-options')).display`), 'none');
+    await configure();
+    for (const point of points.slice(0, -1)) await page.pointerClick(await page.modelClient(...point));
+    const beforePreviewJson = await page.exportJson();
+    const beforePreview = await acceptedSnapshot();
+    await page.hoverModel(...points.at(-1));
+    const previewState = await page.evaluate(`(() => ({ exists: document.querySelector('[data-draft-kind="${tool}"]') !== null, controls: document.querySelectorAll('.draft-control').length, status: document.querySelector('#draft-status').textContent, tool: document.querySelector('#sketch-viewport').dataset.tool, last: document.querySelector('#last-attempt').textContent }))()`);
+    assert.equal(previewState.exists, true, `missing ${tool} draft preview: ${JSON.stringify(previewState)}`);
+    assert.equal(await page.exportJson(), beforePreviewJson);
+    assert.deepEqual(await acceptedSnapshot(), beforePreview);
+    await page.pointerClick(await page.modelClient(...points.at(-1)));
+    assert.equal(Number(await page.evaluate(`document.querySelector('#playground-root').dataset.historyCursor`)), historyBefore + 1);
+    assert.equal(await page.evaluate(`document.querySelector('[data-draft-kind]') === null`), true);
+    await page.assertAccepted();
+  };
+
+  await drawConic('ellipse', [[-5, 3], [-3, 3]], async () => {
+    await page.setInput('conic-ratio', 0.5);
+  });
+  await drawConic('elliptical-arc', [[0, 3], [2, 3]], async () => {
+    await page.setInput('conic-ratio', 0.6);
+    await page.setInput('conic-arc-start', 0.2);
+    await page.setInput('conic-arc-end', 2);
+    await page.setSelect('conic-arc-sweep', 'Clockwise');
+    assert.equal(await page.evaluate(`document.querySelector('#arc-sweep').value`), 'Clockwise');
+  });
+  await drawConic('rational-conic', [[3, 2], [4, 4], [5, 2]], async () => {
+    await page.setInput('conic-weight', 0.7);
+  });
+  await drawConic('parabola', [[-4, -2], [-3, -2]], async () => {
+    await page.setInput('conic-trim-start', 1.5);
+    await page.setInput('conic-trim-end', -1);
+  });
+  await drawConic('hyperbola', [[1, -4], [3, -4]], async () => {
+    await page.setInput('conic-trim-start', 0.8);
+    await page.setInput('conic-trim-end', -0.6);
+    await page.setInput('conic-semi-conjugate', 1.2);
+    await page.setSelect('conic-hyperbola-branch', 'Negative branch');
+  });
+
+  const canonical = await page.exportJson();
+  const document = JSON.parse(canonical);
+  assert.equal(document.points.length, 10);
+  assert.equal(document.scalars.length, 10);
+  assert.deepEqual(document.curves.map((curve) => curve.definition.kind), [
+    'ellipse',
+    'elliptical_arc',
+    'rational_quadratic_conic',
+    'parabola_segment',
+    'hyperbola_segment',
+  ]);
+  const scalar = (id) => document.scalars.find((item) => item.id === id);
+  const [ellipse, arc, rational, parabola, hyperbola] = document.curves.map((curve) => curve.definition);
+  assert.deepEqual(scalar(ellipse.minor_axis_ratio).domain, { kind: 'bounded', lower: Number.MIN_VALUE, upper: 1 });
+  assert.equal(scalar(ellipse.minor_axis_ratio).unit, 'parameter');
+  assert.equal(arc.sweep, 'clockwise');
+  assert.equal(scalar(arc.start_angle).unit, 'angle');
+  assert.equal(scalar(arc.start_angle).value, 0.2);
+  assert.equal(scalar(arc.end_angle).value, 2);
+  near(rational.weighted_middle[0], 4, 0.03);
+  near(rational.weighted_middle[1], 4, 0.03);
+  assert.equal(scalar(rational.middle_weight).value, 0.7);
+  assert.equal(scalar(rational.middle_weight).domain.kind, 'bounded');
+  assert.equal(document.points.some((point) => point.position[0] === rational.weighted_middle[0] && point.position[1] === rational.weighted_middle[1]), false);
+  assert.equal(scalar(parabola.trim_start).value, 1.5);
+  assert.equal(scalar(parabola.trim_end).value, -1);
+  assert.equal(hyperbola.branch, 'negative');
+  assert.equal(scalar(hyperbola.semi_conjugate).unit, 'length');
+  assert.deepEqual(scalar(hyperbola.semi_conjugate).domain, { kind: 'positive' });
+  assert.equal(scalar(hyperbola.trim_start).value, 0.8);
+  assert.equal(scalar(hyperbola.trim_end).value, -0.6);
+  assert.match(await page.evaluate(`document.querySelector('#sketch-viewport').textContent`), /Q_h homogeneous.*w=7\.000e-1/s);
+  assert.equal(await page.evaluate(`localStorage.getItem('geosolve.sketch-playground.accepted.v1')`), canonical);
+
+  await page.click('[data-action="delete"]');
+  const deletedJson = await page.exportJson();
+  const deleted = JSON.parse(deletedJson);
+  assert.equal(deleted.curves.length, 4);
+  assert.equal(deleted.points.length, 8);
+  assert.equal(deleted.scalars.length, 7);
+  await page.key('z', 'KeyZ', 2);
+  assert.equal(await page.exportJson(), canonical);
+  await page.key('y', 'KeyY', 2);
+  assert.equal(await page.exportJson(), deletedJson);
+  await page.key('z', 'KeyZ', 2);
+  assert.equal(await page.exportJson(), canonical);
+  await page.key('z', 'KeyZ', 2);
+  assert.equal(JSON.parse(await page.exportJson()).curves.length, 4);
+  await page.key('y', 'KeyY', 2);
+  assert.equal(await page.exportJson(), canonical);
+
+  await page.click('[data-tool="ellipse"]');
+  await page.setInput('conic-ratio', 0);
+  const beforeFailureJson = await page.exportJson();
+  const beforeFailure = await acceptedSnapshot();
+  await page.pointerClick(await page.modelClient(4, -4));
+  await page.pointerClick(await page.modelClient(5, -4));
+  assert.equal(await page.exportJson(), beforeFailureJson);
+  assert.deepEqual(await acceptedSnapshot(), beforeFailure);
+  assert.equal(await page.evaluate(`document.querySelectorAll('.draft-control').length`), 2);
+  await page.pointerClick(await page.modelClient(6, -4));
+  assert.equal(await page.evaluate(`document.querySelectorAll('.draft-control').length`), 2);
+  assert.match(await page.evaluate(`document.querySelector('#last-attempt').textContent`), /already full/i);
+  await page.setInput('conic-ratio', 'NaN');
+  assert.notEqual(await page.evaluate(`getComputedStyle(document.querySelector('#conic-options-error')).display`), 'none');
+  assert.match(await page.evaluate(`document.querySelector('#conic-options-error').textContent`), /finite number/i);
+  await page.click('[data-action="finish-draft"]');
+  assert.equal(await page.exportJson(), beforeFailureJson);
+  assert.equal(await page.evaluate(`document.querySelectorAll('.draft-control').length`), 2);
+  await page.setInput('conic-ratio', 0.4);
+  assert.equal(await page.evaluate(`document.querySelector('[data-draft-kind="ellipse"]') !== null`), true);
+  await page.click('[data-action="finish-draft"]');
+  assert.equal(Number(await page.evaluate(`document.querySelector('#playground-root').dataset.historyCursor`)), 6);
+  assert.equal(JSON.parse(await page.exportJson()).curves.length, 6);
+
+  await page.click('[data-tool="select"]');
+  assert.equal(Number(await page.evaluate(`document.querySelectorAll('[data-configuration-handle]').length`)), 7);
+  let configurationHistory = 6;
+  for (const [label, target] of [
+    ['Elliptical arc 2 trim end', [0, 1.8]],
+    ['Rational conic 3 Q_h homogeneous coordinate', [4.4, 4.7]],
+    ['Parabola 4 trim start', [0, 2]],
+    ['Hyperbola 5 trim start', [0, -1]],
+  ]) {
+    const before = await page.configurationHandle(label);
+    await page.dragConfigurationHandle(label, ...target);
+    configurationHistory += 1;
+    assert.equal(Number(await page.evaluate(`document.querySelector('#playground-root').dataset.historyCursor`)), configurationHistory);
+    const after = await page.configurationHandle(label);
+    assert.ok(Math.hypot(after.x - before.x, after.y - before.y) > 1e-6, `${label} did not move`);
+    await page.assertAccepted();
+  }
+  const configuredJson = await page.exportJson();
+  const configured = JSON.parse(configuredJson);
+  const configuredScalar = (id) => configured.scalars.find((item) => item.id === id);
+  const configuredArc = configured.curves.find((curve) => curve.label === 'Elliptical arc 2').definition;
+  const configuredRational = configured.curves.find((curve) => curve.label === 'Rational conic 3').definition;
+  const configuredParabola = configured.curves.find((curve) => curve.label === 'Parabola 4').definition;
+  const configuredHyperbola = configured.curves.find((curve) => curve.label === 'Hyperbola 5').definition;
+  assert.notEqual(configuredScalar(configuredArc.end_angle).value, 2);
+  near(configuredRational.weighted_middle[0], 4.4, 0.03);
+  near(configuredRational.weighted_middle[1], 4.7, 0.03);
+  assert.notEqual(configuredScalar(configuredParabola.trim_start).value, 1.5);
+  assert.notEqual(configuredScalar(configuredHyperbola.trim_start).value, 0.8);
+  assert.equal(await page.evaluate(`localStorage.getItem('geosolve.sketch-playground.accepted.v1')`), configuredJson);
+  await page.key('z', 'KeyZ', 2);
+  assert.notEqual(await page.exportJson(), configuredJson);
+  await page.key('y', 'KeyY', 2);
+  assert.equal(await page.exportJson(), configuredJson);
+
+  await page.click('[data-action="new"]');
+  await page.click('[data-tool="arc"]');
+  for (const point of [[0, 0], [2, 0], [0, 2]]) await page.pointerClick(await page.modelClient(...point));
+  await page.click('[data-tool="select"]');
+  assert.ok(await page.configurationHandle('Arc 1 trim start'));
+  assert.ok(await page.configurationHandle('Arc 1 trim end'));
+  await page.dragConfigurationHandle('Arc 1 trim end', -2, 0);
+  const circular = JSON.parse(await page.exportJson());
+  const circularArc = circular.curves[0].definition;
+  near(circular.scalars.find((item) => item.id === circularArc.end_angle).value, Math.PI, 1e-9);
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.historyCursor`), '2');
+  await page.assertAccepted();
+  page.assertNoErrors();
+  console.log('desktop: conic creation plus circular/conic trim and homogeneous-handle editing passed');
+}
+
+async function mobileConicSuite(page) {
+  assert.equal(page.touch, true);
+  await page.click('[data-action="new"]');
+  await page.click('[data-tool="ellipse"]');
+  await page.setInput('conic-ratio', 0.45);
+  const narrowLayout = await page.evaluate(`(() => { const panel = document.querySelector('#conic-options').getBoundingClientRect(); const input = document.querySelector('#conic-ratio').getBoundingClientRect(); return { panelWidth: panel.width, viewportWidth: innerWidth, inputHeight: input.height, visible: getComputedStyle(document.querySelector('#conic-options')).display !== 'none' }; })()`);
+  assert.equal(narrowLayout.visible, true);
+  assert.ok(narrowLayout.panelWidth <= narrowLayout.viewportWidth);
+  assert.ok(narrowLayout.inputHeight >= 35);
+  await page.pointerClick(await page.modelClient(-2, 2));
+  assert.match(await page.evaluate(`document.querySelector('#draft-status').textContent`), /major-axis endpoint/i);
+  await page.pointerClick(await page.modelClient(1, 2));
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.historyCursor`), '1');
+
+  await page.click('[data-tool="hyperbola"]');
+  await page.setInput('conic-trim-start', -0.75);
+  await page.setInput('conic-trim-end', 1.25);
+  await page.setInput('conic-semi-conjugate', 0.8);
+  await page.setSelect('conic-hyperbola-branch', 'Positive branch');
+  await page.pointerClick(await page.modelClient(-2, -2));
+  assert.equal(await page.evaluate(`document.querySelectorAll('.draft-control').length`), 1);
+  assert.match(await page.evaluate(`document.querySelector('#draft-status').textContent`), /transverse-axis endpoint/i);
+  await page.pointerClick(await page.modelClient(0, -2));
+  const json = await page.exportJson();
+  const document = JSON.parse(json);
+  assert.equal(document.curves.length, 2);
+  assert.equal(document.curves[0].definition.kind, 'ellipse');
+  assert.equal(document.curves[1].definition.kind, 'hyperbola_segment');
+  assert.equal(document.curves[1].definition.branch, 'positive');
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.historyCursor`), '2');
+  assert.equal(await page.evaluate(`localStorage.getItem('geosolve.sketch-playground.accepted.v1')`), json);
+  await page.click('[data-tool="select"]');
+  const trimBefore = await page.configurationHandle('Hyperbola 2 trim start');
+  assert.ok(trimBefore);
+  await page.dragConfigurationHandle('Hyperbola 2 trim start', -1, 0);
+  const editedJson = await page.exportJson();
+  const edited = JSON.parse(editedJson);
+  const editedHyperbola = edited.curves[1].definition;
+  assert.notEqual(edited.scalars.find((item) => item.id === editedHyperbola.trim_start).value, -0.75);
+  assert.equal(await page.evaluate(`document.querySelector('#playground-root').dataset.historyCursor`), '3');
+  assert.equal(await page.evaluate(`localStorage.getItem('geosolve.sketch-playground.accepted.v1')`), editedJson);
+  await page.assertAccepted();
+  page.assertNoErrors();
+  console.log('mobile: ellipse/hyperbola creation and touch trim-handle editing passed');
 }
 
 async function historySuite(page) {
@@ -1181,6 +1496,42 @@ async function renderBudgets(page) {
   page.assertNoErrors();
 }
 
+async function layoutPrioritySuite(page) {
+  const layout = await page.evaluate(`(() => {
+    const viewport = document.querySelector('#sketch-viewport').getBoundingClientRect();
+    const inspector = document.querySelector('.inspector-panel').getBoundingClientRect();
+    const diagnostics = document.querySelector('.diagnostics-panel').getBoundingClientRect();
+    const header = document.querySelector('.playground-header').getBoundingClientRect();
+    const canvas = document.querySelector('.canvas-panel').getBoundingClientRect();
+    const badge = document.querySelector('#solve-badge');
+    return {
+      viewport: { width: viewport.width, height: viewport.height, bottom: viewport.bottom },
+      inspector: { width: inspector.width, top: inspector.top, bottom: inspector.bottom },
+      diagnosticsTop: diagnostics.top,
+      canvasTop: canvas.top,
+      headerHeight: header.height,
+      badgeInCanvas: badge.closest('.canvas-panel') !== null,
+      scrollWidth: document.documentElement.scrollWidth,
+      innerWidth,
+    };
+  })()`);
+  assert.equal(layout.badgeInCanvas, true);
+  assert.ok(layout.scrollWidth <= layout.innerWidth + 1, JSON.stringify(layout));
+  if (page.touch) {
+    assert.ok(layout.viewport.width >= layout.innerWidth - 16, JSON.stringify(layout));
+    assert.ok(layout.viewport.height >= 240, JSON.stringify(layout));
+    assert.ok(layout.diagnosticsTop >= layout.inspector.bottom, JSON.stringify(layout));
+    console.log(`mobile/layout: canvas=${layout.viewport.width.toFixed(0)}x${layout.viewport.height.toFixed(0)} no horizontal overflow`);
+  } else {
+    assert.ok(layout.viewport.width >= layout.inspector.width * 2.4, JSON.stringify(layout));
+    assert.ok(layout.viewport.height >= 700, JSON.stringify(layout));
+    assert.ok(layout.headerHeight <= 60, JSON.stringify(layout));
+    assert.ok(Math.abs(layout.inspector.top - layout.canvasTop) <= 1, JSON.stringify(layout));
+    assert.ok(layout.diagnosticsTop >= layout.viewport.bottom, JSON.stringify(layout));
+    console.log(`desktop/layout: canvas=${layout.viewport.width.toFixed(0)}x${layout.viewport.height.toFixed(0)} inspector=${layout.inspector.width.toFixed(0)} header=${layout.headerHeight.toFixed(0)}`);
+  }
+}
+
 async function waitForFile(directory, name) {
   const started = Date.now();
   let priorSize = -1;
@@ -1206,19 +1557,32 @@ try {
   server = serving.server;
   chrome = await startChromium();
   const desktop = await openPage(chrome.cdp.socket.url, serving.url, { width: 1440, height: 1000 }, false);
-  await scenarioSuite(desktop, 'desktop');
-  await fileSuite(desktop, chrome.cdp, 'desktop');
-  await recoverySuite(desktop, 'desktop');
-  await branchHistoryRecoverySuite(desktop, 'desktop');
-  await renderBudgets(desktop);
-  const mobile = await openPage(chrome.cdp.socket.url, serving.url, { width: 390, height: 844 }, true);
-  await scenarioSuite(mobile, 'mobile');
-  await fileSuite(mobile, chrome.cdp, 'mobile');
-  await recoverySuite(mobile, 'mobile');
-  await branchHistoryRecoverySuite(mobile, 'mobile');
+  await layoutPrioritySuite(desktop);
+  let mobile;
+  if (process.env.GEOSOLVE_E2E_CONICS_ONLY === '1') {
+    await conicCreationSuite(desktop);
+    mobile = await openPage(chrome.cdp.socket.url, serving.url, { width: 390, height: 844 }, true);
+    await layoutPrioritySuite(mobile);
+    await mobileConicSuite(mobile);
+  } else {
+    await scenarioSuite(desktop, 'desktop');
+    await conicCreationSuite(desktop);
+    await newDomainExampleSuite(desktop);
+    await fileSuite(desktop, chrome.cdp, 'desktop');
+    await recoverySuite(desktop, 'desktop');
+    await branchHistoryRecoverySuite(desktop, 'desktop');
+    await renderBudgets(desktop);
+    mobile = await openPage(chrome.cdp.socket.url, serving.url, { width: 390, height: 844 }, true);
+    await layoutPrioritySuite(mobile);
+    await scenarioSuite(mobile, 'mobile');
+    await mobileConicSuite(mobile);
+    await fileSuite(mobile, chrome.cdp, 'mobile');
+    await recoverySuite(mobile, 'mobile');
+    await branchHistoryRecoverySuite(mobile, 'mobile');
+  }
   desktop.cdp.close();
   mobile.cdp.close();
-  console.log('M14 browser E2E passed');
+  console.log(process.env.GEOSOLVE_E2E_CONICS_ONLY === '1' ? 'M19 focused browser E2E passed' : 'M14 browser E2E passed');
 } catch (error) {
   console.error(error.stack || error);
   if (chrome) console.error(chrome.stderr());

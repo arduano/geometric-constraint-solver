@@ -150,6 +150,24 @@ pub enum DocumentError {
         #[source]
         source: geosolve_geometry::CurveRegularityError,
     },
+    #[error("contact {contact} conic evaluation failure: {source}")]
+    ContactConicEvaluation {
+        contact: ContactId,
+        #[source]
+        source: geosolve_geometry::ConicEvaluationError,
+    },
+    #[error("curve {curve} has an invalid conic definition: {source}")]
+    ConicDefinition {
+        curve: CurveId,
+        #[source]
+        source: geosolve_geometry::ConicDefinitionError,
+    },
+    #[error("curve {curve} has an invalid conic evaluation: {source}")]
+    ConicEvaluation {
+        curve: CurveId,
+        #[source]
+        source: geosolve_geometry::ConicEvaluationError,
+    },
     #[error("document resource limit exceeded for {resource}: {actual} > {limit}")]
     ResourceLimit {
         resource: &'static str,
@@ -174,6 +192,39 @@ pub enum DocumentCurveEvaluationError {
     Document(#[from] DocumentError),
     #[error(transparent)]
     Curve(#[from] geosolve_geometry::CurveEvaluationError),
+    #[error(transparent)]
+    ConicDefinition(#[from] geosolve_geometry::ConicDefinitionError),
+    #[error(transparent)]
+    ConicEvaluation(#[from] geosolve_geometry::ConicEvaluationError),
+}
+
+/// Immutable projection of one draggable curve-trim endpoint onto its owned scalar.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DocumentTrimProjection {
+    pub scalar: DesignScalarId,
+    pub value: f64,
+}
+
+/// Typed failure to project a world target onto a persistent curve-trim scalar.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum DocumentTrimProjectionError {
+    #[error(transparent)]
+    Document(#[from] DocumentError),
+    #[error("curve {curve} has invalid conic geometry: {source}")]
+    ConicDefinition {
+        curve: CurveId,
+        #[source]
+        source: geosolve_geometry::ConicDefinitionError,
+    },
+    #[error("curve {curve} does not support trim-endpoint projection")]
+    UnsupportedCurve { curve: CurveId },
+    #[error("trim-endpoint projection target for curve {curve} must be finite")]
+    NonFiniteTarget { curve: CurveId },
+    #[error("trim-endpoint projection target for curve {curve} is its ambiguous center")]
+    AmbiguousCenterTarget { curve: CurveId },
+    #[error("trim-endpoint projection for curve {curve} produced a non-finite value")]
+    NonFiniteResult { curve: CurveId },
 }
 
 /// Physical meaning carried by a persistent scalar.
@@ -223,6 +274,14 @@ pub enum DocumentArcSweep {
     Clockwise,
 }
 
+/// Explicit selected branch of a persistent hyperbola segment.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DocumentHyperbolaBranch {
+    Positive,
+    Negative,
+}
+
 /// Closed alpha curve-definition set.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -253,6 +312,39 @@ pub enum CurveDefinition {
     },
     CubicBezier {
         controls: [DesignPointId; 4],
+    },
+    Ellipse {
+        center: DesignPointId,
+        major_axis_point: DesignPointId,
+        minor_axis_ratio: DesignScalarId,
+    },
+    EllipticalArc {
+        center: DesignPointId,
+        major_axis_point: DesignPointId,
+        minor_axis_ratio: DesignScalarId,
+        start_angle: DesignScalarId,
+        end_angle: DesignScalarId,
+        sweep: DocumentArcSweep,
+    },
+    RationalQuadraticConic {
+        start: DesignPointId,
+        weighted_middle: [f64; 2],
+        middle_weight: DesignScalarId,
+        end: DesignPointId,
+    },
+    ParabolaSegment {
+        vertex: DesignPointId,
+        focus: DesignPointId,
+        trim_start: DesignScalarId,
+        trim_end: DesignScalarId,
+    },
+    HyperbolaSegment {
+        center: DesignPointId,
+        transverse_axis_point: DesignPointId,
+        semi_conjugate: DesignScalarId,
+        branch: DocumentHyperbolaBranch,
+        trim_start: DesignScalarId,
+        trim_end: DesignScalarId,
     },
 }
 
@@ -302,9 +394,59 @@ pub enum FeatureRef {
         curve: CurveId,
         index: u32,
     },
+    CurveFocus {
+        curve: CurveId,
+        index: u32,
+    },
     FixedCurveLocation {
         contact: ContactId,
     },
+}
+
+/// One finite point-valued feature exposed by the persistent conic query seam.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DocumentConicFeature {
+    Center,
+    Focus { index: u32 },
+    MajorAxisEndpoint { endpoint: FeatureEndpoint },
+    MinorAxisEndpoint { endpoint: FeatureEndpoint },
+    BoundedEndpoint { endpoint: FeatureEndpoint },
+    SelectedBranchVertex,
+}
+
+/// One finite scalar measurement exposed by the persistent conic query seam.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DocumentConicMeasurement {
+    MajorAxisLength,
+    MinorAxisLength,
+    LinearEccentricity,
+    FocalDistance,
+    TransverseAxisLength,
+    ConjugateAxisLength,
+}
+
+/// Typed persistent conic feature/measurement query failure.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum DocumentConicQueryError {
+    #[error(transparent)]
+    Document(#[from] DocumentError),
+    #[error(transparent)]
+    Definition(#[from] geosolve_geometry::ConicDefinitionError),
+    #[error(transparent)]
+    Evaluation(#[from] geosolve_geometry::ConicEvaluationError),
+    #[error("feature {feature:?} is unsupported for curve {curve}")]
+    UnsupportedFeature {
+        curve: CurveId,
+        feature: DocumentConicFeature,
+    },
+    #[error("measurement {measurement:?} is unsupported for curve {curve}")]
+    UnsupportedMeasurement {
+        curve: CurveId,
+        measurement: DocumentConicMeasurement,
+    },
+    #[error("conic query for curve {curve} returned a non-finite value")]
+    NonFiniteResult { curve: CurveId },
 }
 
 impl CurveSpan {
@@ -739,7 +881,7 @@ impl SketchDocument {
 
     /// Evaluates one accepted curve span at an arbitrary rendering/query parameter.
     ///
-    /// Line and polyline spans, arcs, and Beziers use `[0, 1]`; circles use an unwrapped angle.
+    /// Bounded curves use `[0, 1]`; circles and full ellipses use an unwrapped angle.
     ///
     /// # Errors
     ///
@@ -751,15 +893,147 @@ impl SketchDocument {
     ) -> Result<geosolve_geometry::CurveJet2, DocumentCurveEvaluationError> {
         let curve = self.validate_span(span)?;
         let domain = match &curve.definition {
-            CurveDefinition::Circle { .. } => ContactDomain::Periodic {
-                period: std::f64::consts::TAU,
-            },
+            CurveDefinition::Circle { .. } | CurveDefinition::Ellipse { .. } => {
+                ContactDomain::Periodic {
+                    period: std::f64::consts::TAU,
+                }
+            }
             _ => ContactDomain::Bounded {
                 lower: 0.0,
                 upper: 1.0,
             },
         };
         self.evaluate_curve_jet_in_domain(span, parameter, domain)
+    }
+
+    /// Projects a world target onto one curve's existing start/end trim scalar.
+    ///
+    /// Angular results are unwrapped near the selected endpoint's current scalar. The method does
+    /// not clamp, reorder, swap, allocate, or change explicit sweep/branch state.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed error for a missing or unsupported curve, non-finite input/result, invalid
+    /// conic geometry, or an angular target exactly at the curve center.
+    #[allow(clippy::too_many_lines)]
+    pub fn project_curve_trim_endpoint(
+        &self,
+        curve: CurveId,
+        endpoint: FeatureEndpoint,
+        target: [f64; 2],
+    ) -> Result<DocumentTrimProjection, DocumentTrimProjectionError> {
+        use crate::ConicGeometry as G;
+
+        let definition = &self
+            .curve(curve)
+            .ok_or_else(|| unknown("curve", curve.0))?
+            .definition;
+        if !matches!(
+            definition,
+            CurveDefinition::CircularArc { .. }
+                | CurveDefinition::EllipticalArc { .. }
+                | CurveDefinition::ParabolaSegment { .. }
+                | CurveDefinition::HyperbolaSegment { .. }
+        ) {
+            return Err(DocumentTrimProjectionError::UnsupportedCurve { curve });
+        }
+        if !target.iter().all(|value| value.is_finite()) {
+            return Err(DocumentTrimProjectionError::NonFiniteTarget { curve });
+        }
+
+        let select_scalar = |start, end| match endpoint {
+            FeatureEndpoint::Start => start,
+            FeatureEndpoint::End => end,
+        };
+        let (scalar, value) = match definition {
+            CurveDefinition::CircularArc {
+                center,
+                start_angle,
+                end_angle,
+                ..
+            } => {
+                let scalar = select_scalar(*start_angle, *end_angle);
+                let seed = self.require_scalar(scalar)?.value;
+                let center = self.require_point(*center)?.position;
+                let difference = angular_target_difference(curve, center, target)?;
+                let principal = difference[1].atan2(difference[0]);
+                (scalar, crate::curves::unwrap_near(principal, seed))
+            }
+            CurveDefinition::EllipticalArc {
+                start_angle,
+                end_angle,
+                ..
+            } => {
+                let scalar = select_scalar(*start_angle, *end_angle);
+                let seed = self.require_scalar(scalar)?.value;
+                let geometry = self
+                    .conic_geometry(definition)
+                    .map_err(|error| document_trim_projection_geometry_error(curve, error))?;
+                let G::EllipticalArc(arc) = geometry else {
+                    unreachable!("elliptical-arc definition reconstructed another conic family")
+                };
+                let ellipse = arc.ellipse();
+                let difference = angular_target_difference(
+                    curve,
+                    [ellipse.center().x, ellipse.center().y],
+                    target,
+                )?;
+                let difference = geosolve_geometry::Vector2::new(difference[0], difference[1]);
+                let major =
+                    difference.dot(&ellipse.directed_major_axis().vector()) / ellipse.semi_major();
+                let minor =
+                    difference.dot(&ellipse.directed_minor_axis().vector()) / ellipse.semi_minor();
+                if !major.is_finite() || !minor.is_finite() {
+                    return Err(DocumentTrimProjectionError::NonFiniteResult { curve });
+                }
+                if major == 0.0 && minor == 0.0 {
+                    return Err(DocumentTrimProjectionError::AmbiguousCenterTarget { curve });
+                }
+                (scalar, crate::curves::unwrap_near(minor.atan2(major), seed))
+            }
+            CurveDefinition::ParabolaSegment {
+                trim_start,
+                trim_end,
+                ..
+            } => {
+                let scalar = select_scalar(*trim_start, *trim_end);
+                let geometry = self
+                    .conic_geometry(definition)
+                    .map_err(|error| document_trim_projection_geometry_error(curve, error))?;
+                let G::ParabolaSegment(parabola) = geometry else {
+                    unreachable!("parabola definition reconstructed another conic family")
+                };
+                let target = geosolve_geometry::Point2::new(target[0], target[1]);
+                let normal = parabola.opening_axis().left_normal().vector();
+                let value =
+                    (target - parabola.vertex()).dot(&normal) / (2.0 * parabola.focal_length());
+                (scalar, value)
+            }
+            CurveDefinition::HyperbolaSegment {
+                trim_start,
+                trim_end,
+                ..
+            } => {
+                let scalar = select_scalar(*trim_start, *trim_end);
+                let geometry = self
+                    .conic_geometry(definition)
+                    .map_err(|error| document_trim_projection_geometry_error(curve, error))?;
+                let G::HyperbolaSegment(hyperbola) = geometry else {
+                    unreachable!("hyperbola definition reconstructed another conic family")
+                };
+                let target = geosolve_geometry::Point2::new(target[0], target[1]);
+                let conjugate = hyperbola.conjugate_axis().vector();
+                let value = ((target - hyperbola.center()).dot(&conjugate)
+                    / hyperbola.semi_conjugate())
+                .asinh();
+                (scalar, value)
+            }
+            _ => unreachable!("unsupported curve families returned above"),
+        };
+        if !value.is_finite() {
+            return Err(DocumentTrimProjectionError::NonFiniteResult { curve });
+        }
+        Ok(DocumentTrimProjection { scalar, value })
     }
 
     fn evaluate_curve_jet_in_domain(
@@ -846,6 +1120,303 @@ impl SketchDocument {
                 ],
                 parameter,
             )?,
+            definition @ (CurveDefinition::Ellipse { .. }
+            | CurveDefinition::EllipticalArc { .. }
+            | CurveDefinition::RationalQuadraticConic { .. }
+            | CurveDefinition::ParabolaSegment { .. }
+            | CurveDefinition::HyperbolaSegment { .. }) => self
+                .conic_geometry(definition)
+                .map_err(document_curve_conic_geometry_error)?
+                .evaluate(parameter)?,
+        })
+    }
+
+    /// Evaluates one finite point-valued feature from immutable persistent conic geometry.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed definition/evaluation failure or an unsupported feature/family pair.
+    pub fn evaluate_conic_feature(
+        &self,
+        curve: CurveId,
+        feature: DocumentConicFeature,
+    ) -> Result<[f64; 2], DocumentConicQueryError> {
+        let definition = &self
+            .curve(curve)
+            .ok_or_else(|| unknown("curve", curve.0))?
+            .definition;
+        if !is_conic_definition(definition) {
+            return Err(DocumentConicQueryError::UnsupportedFeature { curve, feature });
+        }
+        let geometry = self
+            .conic_geometry(definition)
+            .map_err(document_query_conic_geometry_error)?;
+        Self::evaluate_conic_feature_inner(curve, geometry, feature)
+    }
+
+    fn evaluate_conic_feature_inner(
+        curve: CurveId,
+        geometry: crate::ConicGeometry,
+        feature: DocumentConicFeature,
+    ) -> Result<[f64; 2], DocumentConicQueryError> {
+        use crate::ConicGeometry as G;
+        use DocumentConicFeature as F;
+        let endpoint = |points: [geosolve_geometry::Point2<f64>; 2], endpoint| match endpoint {
+            FeatureEndpoint::Start => points[0],
+            FeatureEndpoint::End => points[1],
+        };
+        let point = match (geometry, feature) {
+            (G::Ellipse(value), F::Center) => Some(value.center()),
+            (G::EllipticalArc(value), F::Center) => Some(value.ellipse().center()),
+            (G::HyperbolaSegment(value), F::Center) => Some(value.center()),
+            (G::Ellipse(value), F::Focus { index }) => indexed_point(value.foci(), index),
+            (G::EllipticalArc(value), F::Focus { index }) => {
+                indexed_point(value.ellipse().foci(), index)
+            }
+            (G::HyperbolaSegment(value), F::Focus { index }) => indexed_point(value.foci(), index),
+            (G::ParabolaSegment(value), F::Focus { index: 0 }) => Some(value.focus()),
+            (G::Ellipse(value), F::MajorAxisEndpoint { endpoint: selected }) => {
+                Some(endpoint(value.major_axis_endpoints(), selected))
+            }
+            (G::EllipticalArc(value), F::MajorAxisEndpoint { endpoint: selected }) => {
+                Some(endpoint(value.ellipse().major_axis_endpoints(), selected))
+            }
+            (G::Ellipse(value), F::MinorAxisEndpoint { endpoint: selected }) => {
+                Some(endpoint(value.minor_axis_endpoints(), selected))
+            }
+            (G::EllipticalArc(value), F::MinorAxisEndpoint { endpoint: selected }) => {
+                Some(endpoint(value.ellipse().minor_axis_endpoints(), selected))
+            }
+            (G::EllipticalArc(value), F::BoundedEndpoint { endpoint: selected }) => Some(endpoint(
+                [value.start_point()?, value.end_point()?],
+                selected,
+            )),
+            (G::RationalQuadratic(value), F::BoundedEndpoint { endpoint: selected }) => {
+                Some(endpoint([value.start_point(), value.end_point()], selected))
+            }
+            (G::ParabolaSegment(value), F::BoundedEndpoint { endpoint: selected }) => Some(
+                endpoint([value.start_point()?, value.end_point()?], selected),
+            ),
+            (G::HyperbolaSegment(value), F::BoundedEndpoint { endpoint: selected }) => Some(
+                endpoint([value.start_point()?, value.end_point()?], selected),
+            ),
+            (G::HyperbolaSegment(value), F::SelectedBranchVertex) => {
+                Some(value.selected_branch_vertex())
+            }
+            _ => None,
+        }
+        .ok_or(DocumentConicQueryError::UnsupportedFeature { curve, feature })?;
+        finite_query_point(curve, point)
+    }
+
+    /// Measures one finite CAD-useful scalar from immutable persistent conic geometry.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed definition failure or an unsupported measurement/family pair.
+    pub fn measure_conic(
+        &self,
+        curve: CurveId,
+        measurement: DocumentConicMeasurement,
+    ) -> Result<f64, DocumentConicQueryError> {
+        use crate::ConicGeometry as G;
+        use DocumentConicMeasurement as M;
+        let definition = &self
+            .curve(curve)
+            .ok_or_else(|| unknown("curve", curve.0))?
+            .definition;
+        if !is_conic_definition(definition) {
+            return Err(DocumentConicQueryError::UnsupportedMeasurement { curve, measurement });
+        }
+        let geometry = self
+            .conic_geometry(definition)
+            .map_err(document_query_conic_geometry_error)?;
+        let value = match (geometry, measurement) {
+            (G::Ellipse(value), M::MajorAxisLength) => Some(value.major_axis_length()),
+            (G::EllipticalArc(value), M::MajorAxisLength) => {
+                Some(value.ellipse().major_axis_length())
+            }
+            (G::Ellipse(value), M::MinorAxisLength) => Some(value.minor_axis_length()),
+            (G::EllipticalArc(value), M::MinorAxisLength) => {
+                Some(value.ellipse().minor_axis_length())
+            }
+            (G::Ellipse(value), M::LinearEccentricity) => Some(value.linear_eccentricity()),
+            (G::EllipticalArc(value), M::LinearEccentricity) => {
+                Some(value.ellipse().linear_eccentricity())
+            }
+            (G::ParabolaSegment(value), M::FocalDistance) => Some(value.focal_length()),
+            (G::HyperbolaSegment(value), M::FocalDistance) => Some(value.focal_distance()),
+            (G::HyperbolaSegment(value), M::TransverseAxisLength) => {
+                Some(value.transverse_axis_length())
+            }
+            (G::HyperbolaSegment(value), M::ConjugateAxisLength) => {
+                Some(value.conjugate_axis_length())
+            }
+            _ => None,
+        }
+        .ok_or(DocumentConicQueryError::UnsupportedMeasurement { curve, measurement })?;
+        if value.is_finite() {
+            Ok(value)
+        } else {
+            Err(DocumentConicQueryError::NonFiniteResult { curve })
+        }
+    }
+
+    /// Reports whether an ellipse's stored axis orientation is geometrically observable.
+    ///
+    /// # Errors
+    ///
+    /// Returns an unsupported-feature error for non-ellipse conics.
+    pub fn conic_axis_observability(
+        &self,
+        curve: CurveId,
+    ) -> Result<geosolve_geometry::EllipseAxisObservability, DocumentConicQueryError> {
+        let definition = &self
+            .curve(curve)
+            .ok_or_else(|| unknown("curve", curve.0))?
+            .definition;
+        if !is_conic_definition(definition) {
+            return Err(DocumentConicQueryError::UnsupportedFeature {
+                curve,
+                feature: DocumentConicFeature::MajorAxisEndpoint {
+                    endpoint: FeatureEndpoint::Start,
+                },
+            });
+        }
+        self.conic_geometry(definition)
+            .map_err(document_query_conic_geometry_error)?
+            .axis_observability()
+            .ok_or(DocumentConicQueryError::UnsupportedFeature {
+                curve,
+                feature: DocumentConicFeature::MajorAxisEndpoint {
+                    endpoint: FeatureEndpoint::Start,
+                },
+            })
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn conic_geometry(
+        &self,
+        definition: &CurveDefinition,
+    ) -> Result<crate::ConicGeometry, DocumentConicGeometryError> {
+        use geosolve_geometry::{
+            DirectedParameterTrim, Ellipse2, EllipticalArc2, HyperbolaSegment2, ParabolaSegment2,
+            Point2, RationalQuadraticConicSegment2, UnitDirection2, Vector2,
+        };
+
+        let point = |id: DesignPointId| -> Result<Point2<f64>, DocumentConicGeometryError> {
+            let value = self.require_point(id)?;
+            Ok(Point2::new(value.position[0], value.position[1]))
+        };
+        let axis = |first: Point2<f64>, second: Point2<f64>| {
+            UnitDirection2::try_new(second - first).map_err(DocumentConicGeometryError::from)
+        };
+        Ok(match definition {
+            CurveDefinition::Ellipse {
+                center,
+                major_axis_point,
+                minor_axis_ratio,
+            } => {
+                let center = point(*center)?;
+                let axis_point = point(*major_axis_point)?;
+                let semi_major = (axis_point - center).x.hypot((axis_point - center).y);
+                let ratio = self.require_scalar(*minor_axis_ratio)?.value;
+                crate::ConicGeometry::Ellipse(Ellipse2::try_new(
+                    center,
+                    axis(center, axis_point)?,
+                    semi_major,
+                    semi_major * ratio,
+                )?)
+            }
+            CurveDefinition::EllipticalArc {
+                center,
+                major_axis_point,
+                minor_axis_ratio,
+                start_angle,
+                end_angle,
+                sweep,
+            } => {
+                let center = point(*center)?;
+                let axis_point = point(*major_axis_point)?;
+                let semi_major = (axis_point - center).x.hypot((axis_point - center).y);
+                let ratio = self.require_scalar(*minor_axis_ratio)?.value;
+                let start = self.require_scalar(*start_angle)?.value;
+                let end = self.require_scalar(*end_angle)?.value;
+                let signed_sweep = document_arc_signed_sweep(start, end, *sweep)?;
+                let ellipse = Ellipse2::try_new(
+                    center,
+                    axis(center, axis_point)?,
+                    semi_major,
+                    semi_major * ratio,
+                )?;
+                crate::ConicGeometry::EllipticalArc(EllipticalArc2::try_new(
+                    ellipse,
+                    start,
+                    signed_sweep,
+                )?)
+            }
+            CurveDefinition::RationalQuadraticConic {
+                start,
+                weighted_middle,
+                middle_weight,
+                end,
+            } => crate::ConicGeometry::RationalQuadratic(
+                RationalQuadraticConicSegment2::try_from_homogeneous_middle(
+                    point(*start)?,
+                    Vector2::new(weighted_middle[0], weighted_middle[1]),
+                    self.require_scalar(*middle_weight)?.value,
+                    point(*end)?,
+                )?,
+            ),
+            CurveDefinition::ParabolaSegment {
+                vertex,
+                focus,
+                trim_start,
+                trim_end,
+            } => {
+                let vertex = point(*vertex)?;
+                let focus = point(*focus)?;
+                let focal_length = (focus - vertex).x.hypot((focus - vertex).y);
+                crate::ConicGeometry::ParabolaSegment(ParabolaSegment2::try_new(
+                    vertex,
+                    axis(vertex, focus)?,
+                    focal_length,
+                    DirectedParameterTrim::try_new(
+                        self.require_scalar(*trim_start)?.value,
+                        self.require_scalar(*trim_end)?.value,
+                    )?,
+                )?)
+            }
+            CurveDefinition::HyperbolaSegment {
+                center,
+                transverse_axis_point,
+                semi_conjugate,
+                branch,
+                trim_start,
+                trim_end,
+            } => {
+                let center = point(*center)?;
+                let axis_point = point(*transverse_axis_point)?;
+                let semi_transverse = (axis_point - center).x.hypot((axis_point - center).y);
+                crate::ConicGeometry::HyperbolaSegment(HyperbolaSegment2::try_new(
+                    center,
+                    axis(center, axis_point)?,
+                    semi_transverse,
+                    self.require_scalar(*semi_conjugate)?.value,
+                    document_hyperbola_branch(*branch),
+                    DirectedParameterTrim::try_new(
+                        self.require_scalar(*trim_start)?.value,
+                        self.require_scalar(*trim_end)?.value,
+                    )?,
+                )?)
+            }
+            _ => {
+                return Err(DocumentError::InvalidField {
+                    field: "curve",
+                    message: "expected a persistent conic curve".into(),
+                }
+                .into());
+            }
         })
     }
 
@@ -871,33 +1442,70 @@ impl SketchDocument {
             }
             FeatureRef::CurveEndpoint { curve, .. } => {
                 let value = self.curve(curve).ok_or_else(|| unknown("curve", curve.0))?;
-                if matches!(value.definition, CurveDefinition::Circle { .. }) {
-                    return invalid("feature endpoint", "a periodic circle has no endpoint");
+                if matches!(
+                    value.definition,
+                    CurveDefinition::Circle { .. } | CurveDefinition::Ellipse { .. }
+                ) {
+                    return invalid("feature endpoint", "a periodic curve has no endpoint");
                 }
             }
             FeatureRef::CurveAxis { curve } => {
                 let value = self.curve(curve).ok_or_else(|| unknown("curve", curve.0))?;
                 if !matches!(
                     value.definition,
-                    CurveDefinition::Line { .. } | CurveDefinition::Polyline { .. }
+                    CurveDefinition::Line { .. }
+                        | CurveDefinition::Polyline { .. }
+                        | CurveDefinition::Ellipse { .. }
+                        | CurveDefinition::EllipticalArc { .. }
+                        | CurveDefinition::ParabolaSegment { .. }
+                        | CurveDefinition::HyperbolaSegment { .. }
                 ) {
-                    return invalid("feature axis", "axis requires a line or polyline");
+                    return invalid("feature axis", "curve family has no semantic axis");
                 }
             }
             FeatureRef::CurveCenter { curve } => {
-                self.require_radial_curve(curve)?;
+                let value = self.curve(curve).ok_or_else(|| unknown("curve", curve.0))?;
+                if !matches!(
+                    value.definition,
+                    CurveDefinition::Circle { .. }
+                        | CurveDefinition::CircularArc { .. }
+                        | CurveDefinition::Ellipse { .. }
+                        | CurveDefinition::EllipticalArc { .. }
+                        | CurveDefinition::HyperbolaSegment { .. }
+                ) {
+                    return invalid("feature center", "curve family has no center");
+                }
             }
             FeatureRef::CurveControl { curve, index } => {
                 let entity = self.curve(curve).ok_or_else(|| unknown("curve", curve.0))?;
                 let count = match &entity.definition {
                     CurveDefinition::Line { .. } => 2,
                     CurveDefinition::Polyline { points, .. } => points.len(),
-                    CurveDefinition::Circle { .. } | CurveDefinition::CircularArc { .. } => 0,
+                    CurveDefinition::Circle { .. }
+                    | CurveDefinition::CircularArc { .. }
+                    | CurveDefinition::Ellipse { .. }
+                    | CurveDefinition::EllipticalArc { .. }
+                    | CurveDefinition::RationalQuadraticConic { .. }
+                    | CurveDefinition::ParabolaSegment { .. }
+                    | CurveDefinition::HyperbolaSegment { .. } => 0,
                     CurveDefinition::QuadraticBezier { .. } => 3,
                     CurveDefinition::CubicBezier { .. } => 4,
                 };
                 if usize::try_from(index).map_or(true, |value| value >= count) {
                     return invalid("feature control", "control index is outside the curve");
+                }
+            }
+            FeatureRef::CurveFocus { curve, index } => {
+                let value = self.curve(curve).ok_or_else(|| unknown("curve", curve.0))?;
+                let count = match value.definition {
+                    CurveDefinition::Ellipse { .. }
+                    | CurveDefinition::EllipticalArc { .. }
+                    | CurveDefinition::HyperbolaSegment { .. } => 2,
+                    CurveDefinition::ParabolaSegment { .. } => 1,
+                    _ => 0,
+                };
+                if index >= count {
+                    return invalid("feature focus", "focus index is outside the curve");
                 }
             }
             FeatureRef::FixedCurveLocation { contact } => {
@@ -1025,8 +1633,8 @@ impl SketchDocument {
 
     /// Atomically creates a parameter scalar and contact slot for one alpha curve span.
     ///
-    /// Circles use an angular periodic scalar; every other alpha curve span uses a bounded
-    /// `[0, 1]` parameter. Neighborhood, winding, and tangent orientation remain explicit input.
+    /// Circles and full ellipses use an angular periodic scalar; every other curve span uses a
+    /// bounded `[0, 1]` parameter. Neighborhood, winding, and tangent orientation remain explicit.
     ///
     /// # Errors
     ///
@@ -1047,30 +1655,32 @@ impl SketchDocument {
             .definition
             .clone();
         self.validate_span(curve)?;
-        let (unit, scalar_domain, contact_domain) =
-            if matches!(definition, CurveDefinition::Circle { .. }) {
-                (
-                    ScalarUnit::Angle,
-                    ScalarDomain::Periodic {
-                        period: std::f64::consts::TAU,
-                    },
-                    ContactDomain::Periodic {
-                        period: std::f64::consts::TAU,
-                    },
-                )
-            } else {
-                (
-                    ScalarUnit::Parameter,
-                    ScalarDomain::Bounded {
-                        lower: 0.0,
-                        upper: 1.0,
-                    },
-                    ContactDomain::Bounded {
-                        lower: 0.0,
-                        upper: 1.0,
-                    },
-                )
-            };
+        let (unit, scalar_domain, contact_domain) = if matches!(
+            definition,
+            CurveDefinition::Circle { .. } | CurveDefinition::Ellipse { .. }
+        ) {
+            (
+                ScalarUnit::Angle,
+                ScalarDomain::Periodic {
+                    period: std::f64::consts::TAU,
+                },
+                ContactDomain::Periodic {
+                    period: std::f64::consts::TAU,
+                },
+            )
+        } else {
+            (
+                ScalarUnit::Parameter,
+                ScalarDomain::Bounded {
+                    lower: 0.0,
+                    upper: 1.0,
+                },
+                ContactDomain::Bounded {
+                    lower: 0.0,
+                    upper: 1.0,
+                },
+            )
+        };
         let mut candidate = self.clone();
         let scalar =
             candidate.add_scalar(format!("{label} parameter"), parameter, unit, scalar_domain)?;
@@ -1103,7 +1713,10 @@ impl SketchDocument {
         parameter: f64,
     ) -> Result<ContactNeighborhood, DocumentError> {
         let definition = &self.validate_span(curve)?.definition;
-        if matches!(definition, CurveDefinition::Circle { .. }) {
+        if matches!(
+            definition,
+            CurveDefinition::Circle { .. } | CurveDefinition::Ellipse { .. }
+        ) {
             finite(parameter, "contact parameter")?;
             return Ok(ContactNeighborhood::Interior);
         }
@@ -1371,6 +1984,67 @@ impl SketchDocument {
         Ok(())
     }
 
+    /// Replaces the homogeneous weighted middle coordinate of a rational quadratic conic.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a stale/wrong-family curve or invalid resulting conic geometry.
+    pub fn set_conic_weighted_middle(
+        &mut self,
+        curve: CurveId,
+        weighted_middle: [f64; 2],
+    ) -> Result<(), DocumentError> {
+        finite_pair(weighted_middle, "conic weighted_middle")?;
+        let mut candidate = self.clone();
+        let value = candidate
+            .curves
+            .iter_mut()
+            .find(|value| value.id == curve)
+            .ok_or_else(|| unknown("curve", curve.0))?;
+        let CurveDefinition::RationalQuadraticConic {
+            weighted_middle: current,
+            ..
+        } = &mut value.definition
+        else {
+            return invalid(
+                "curve",
+                "weighted-middle edit requires a rational quadratic conic",
+            );
+        };
+        *current = weighted_middle;
+        candidate.validate()?;
+        *self = candidate;
+        Ok(())
+    }
+
+    /// Explicitly changes one persistent hyperbola segment's selected branch.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a stale/wrong-family curve or invalid resulting conic geometry.
+    pub fn set_hyperbola_branch(
+        &mut self,
+        curve: CurveId,
+        branch: DocumentHyperbolaBranch,
+    ) -> Result<(), DocumentError> {
+        let mut candidate = self.clone();
+        let value = candidate
+            .curves
+            .iter_mut()
+            .find(|value| value.id == curve)
+            .ok_or_else(|| unknown("curve", curve.0))?;
+        let CurveDefinition::HyperbolaSegment {
+            branch: current, ..
+        } = &mut value.definition
+        else {
+            return invalid("curve", "branch edit requires a hyperbola segment");
+        };
+        *current = branch;
+        candidate.validate()?;
+        *self = candidate;
+        Ok(())
+    }
+
     /// Replaces one line/polyline segment branch without changing curve identity.
     ///
     /// # Errors
@@ -1429,7 +2103,7 @@ impl SketchDocument {
         self.set_curve_branch(span, direction)
     }
 
-    /// Replaces a circular arc's explicit sweep branch.
+    /// Replaces a circular or elliptical arc's explicit sweep branch.
     ///
     /// # Errors
     ///
@@ -1445,8 +2119,10 @@ impl SketchDocument {
             .iter_mut()
             .find(|value| value.id == curve)
             .ok_or_else(|| unknown("curve", curve.0))?;
-        let CurveDefinition::CircularArc { sweep: current, .. } = &mut value.definition else {
-            return invalid("curve", "sweep edit requires a circular arc");
+        let (CurveDefinition::CircularArc { sweep: current, .. }
+        | CurveDefinition::EllipticalArc { sweep: current, .. }) = &mut value.definition
+        else {
+            return invalid("curve", "sweep edit requires a circular or elliptical arc");
         };
         *current = sweep;
         candidate.validate()?;
@@ -1765,6 +2441,29 @@ impl SketchDocument {
                         end_angle,
                         ..
                     } => vec![*radius, *start_angle, *end_angle],
+                    CurveDefinition::Ellipse {
+                        minor_axis_ratio, ..
+                    } => vec![*minor_axis_ratio],
+                    CurveDefinition::EllipticalArc {
+                        minor_axis_ratio,
+                        start_angle,
+                        end_angle,
+                        ..
+                    } => vec![*minor_axis_ratio, *start_angle, *end_angle],
+                    CurveDefinition::RationalQuadraticConic { middle_weight, .. } => {
+                        vec![*middle_weight]
+                    }
+                    CurveDefinition::ParabolaSegment {
+                        trim_start,
+                        trim_end,
+                        ..
+                    } => vec![*trim_start, *trim_end],
+                    CurveDefinition::HyperbolaSegment {
+                        semi_conjugate,
+                        trim_start,
+                        trim_end,
+                        ..
+                    } => vec![*semi_conjugate, *trim_start, *trim_end],
                     CurveDefinition::Line { .. }
                     | CurveDefinition::Polyline { .. }
                     | CurveDefinition::QuadraticBezier { .. }
@@ -1888,6 +2587,11 @@ impl SketchDocument {
                 CurveDefinition::Polyline { points, .. } => points.len(),
                 CurveDefinition::QuadraticBezier { controls } => controls.len(),
                 CurveDefinition::CubicBezier { controls } => controls.len(),
+                CurveDefinition::Ellipse { .. }
+                | CurveDefinition::EllipticalArc { .. }
+                | CurveDefinition::RationalQuadraticConic { .. }
+                | CurveDefinition::ParabolaSegment { .. }
+                | CurveDefinition::HyperbolaSegment { .. } => 2,
                 _ => 0,
             })
             .sum();
@@ -2038,6 +2742,10 @@ impl SketchDocument {
 
     pub(crate) fn scalar_mut(&mut self, id: DesignScalarId) -> Option<&mut DesignScalar> {
         self.scalars.iter_mut().find(|value| value.id == id)
+    }
+
+    pub(crate) fn curve_mut(&mut self, id: CurveId) -> Option<&mut DesignCurve> {
+        self.curves.iter_mut().find(|value| value.id == id)
     }
 
     pub(crate) fn contact_mut(&mut self, id: ContactId) -> Option<&mut ContactSlot> {
@@ -2289,7 +2997,131 @@ impl SketchDocument {
                     self.require_point(*control)?;
                 }
             }
+            CurveDefinition::Ellipse {
+                center,
+                major_axis_point,
+                minor_axis_ratio,
+            } => {
+                self.require_distinct_noncoincident_points(*center, *major_axis_point)?;
+                require_scalar_role(
+                    self.require_scalar(*minor_axis_ratio)?,
+                    ScalarUnit::Parameter,
+                    conic_ratio_domain(),
+                    "ellipse minor-axis ratio",
+                )?;
+            }
+            CurveDefinition::EllipticalArc {
+                center,
+                major_axis_point,
+                minor_axis_ratio,
+                start_angle,
+                end_angle,
+                sweep,
+            } => {
+                self.require_distinct_noncoincident_points(*center, *major_axis_point)?;
+                require_scalar_role(
+                    self.require_scalar(*minor_axis_ratio)?,
+                    ScalarUnit::Parameter,
+                    conic_ratio_domain(),
+                    "elliptical-arc minor-axis ratio",
+                )?;
+                let start = self.require_scalar(*start_angle)?;
+                let end = self.require_scalar(*end_angle)?;
+                require_scalar_role(
+                    start,
+                    ScalarUnit::Angle,
+                    ScalarDomain::Finite,
+                    "elliptical-arc start angle",
+                )?;
+                require_scalar_role(
+                    end,
+                    ScalarUnit::Angle,
+                    ScalarDomain::Finite,
+                    "elliptical-arc end angle",
+                )?;
+                document_arc_signed_sweep(start.value, end.value, *sweep)?;
+            }
+            CurveDefinition::RationalQuadraticConic {
+                start,
+                weighted_middle,
+                middle_weight,
+                end,
+            } => {
+                self.require_distinct_noncoincident_points(*start, *end)?;
+                finite_pair(*weighted_middle, "rational homogeneous middle")?;
+                require_scalar_role(
+                    self.require_scalar(*middle_weight)?,
+                    ScalarUnit::Parameter,
+                    conic_weight_domain(),
+                    "rational middle weight",
+                )?;
+            }
+            CurveDefinition::ParabolaSegment {
+                vertex,
+                focus,
+                trim_start,
+                trim_end,
+            } => {
+                self.require_distinct_noncoincident_points(*vertex, *focus)?;
+                require_trim_scalar(self.require_scalar(*trim_start)?, "parabola trim start")?;
+                require_trim_scalar(self.require_scalar(*trim_end)?, "parabola trim end")?;
+                geosolve_geometry::DirectedParameterTrim::try_new(
+                    self.require_scalar(*trim_start)?.value,
+                    self.require_scalar(*trim_end)?.value,
+                )
+                .map_err(|source| DocumentError::ConicDefinition { curve, source })?;
+            }
+            CurveDefinition::HyperbolaSegment {
+                center,
+                transverse_axis_point,
+                semi_conjugate,
+                trim_start,
+                trim_end,
+                ..
+            } => {
+                self.require_distinct_noncoincident_points(*center, *transverse_axis_point)?;
+                require_scalar_role(
+                    self.require_scalar(*semi_conjugate)?,
+                    ScalarUnit::Length,
+                    ScalarDomain::Positive,
+                    "hyperbola semi-conjugate",
+                )?;
+                require_trim_scalar(self.require_scalar(*trim_start)?, "hyperbola trim start")?;
+                require_trim_scalar(self.require_scalar(*trim_end)?, "hyperbola trim end")?;
+                geosolve_geometry::DirectedParameterTrim::try_new(
+                    self.require_scalar(*trim_start)?.value,
+                    self.require_scalar(*trim_end)?.value,
+                )
+                .map_err(|source| DocumentError::ConicDefinition { curve, source })?;
+            }
         }
+        if is_conic_definition(definition) {
+            self.validate_conic_definition_geometry(curve, definition)?;
+        }
+        Ok(())
+    }
+
+    fn validate_conic_definition_geometry(
+        &self,
+        curve: CurveId,
+        definition: &CurveDefinition,
+    ) -> Result<(), DocumentError> {
+        let geometry = self
+            .conic_geometry(definition)
+            .map_err(|error| document_conic_geometry_document_error(curve, error))?;
+        let samples: &[f64] = if matches!(definition, CurveDefinition::Ellipse { .. }) {
+            &[0.0, std::f64::consts::FRAC_PI_2, std::f64::consts::PI]
+        } else {
+            &[0.0, 0.5, 1.0]
+        };
+        for &parameter in samples {
+            geometry
+                .evaluate(parameter)
+                .map_err(|source| DocumentError::ConicEvaluation { curve, source })?;
+        }
+        geometry
+            .endpoints()
+            .map_err(|source| DocumentError::ConicEvaluation { curve, source })?;
         Ok(())
     }
 
@@ -2562,6 +3394,17 @@ impl SketchDocument {
         }
     }
 
+    fn require_distinct_noncoincident_points(
+        &self,
+        first: DesignPointId,
+        second: DesignPointId,
+    ) -> Result<(), DocumentError> {
+        self.require_distinct_points(first, second)?;
+        let first = self.require_point(first)?.position;
+        let second = self.require_point(second)?.position;
+        validate_direction(point_difference(first, second), "directed conic axis")
+    }
+
     fn require_circle(&self, id: CurveId) -> Result<&DesignCurve, DocumentError> {
         let curve = self.curve(id).ok_or_else(|| unknown("curve", id.0))?;
         if matches!(curve.definition, CurveDefinition::Circle { .. }) {
@@ -2652,79 +3495,10 @@ impl SketchDocument {
     }
 
     fn contact_tangent(&self, contact: &ContactSlot) -> Result<[f64; 2], DocumentError> {
-        let curve = self
-            .curve(contact.curve.curve)
-            .ok_or_else(|| unknown("curve", contact.curve.curve.0))?;
-        let parameter = contact_total_value(contact, self.require_scalar(contact.parameter)?.value);
-        let tangent = match &curve.definition {
-            CurveDefinition::Line { start, end, .. } => point_difference(
-                self.require_point(*start)?.position,
-                self.require_point(*end)?.position,
-            ),
-            CurveDefinition::Polyline { points, closed, .. } => {
-                let index = contact.curve.segment as usize;
-                let next = if index + 1 == points.len() {
-                    if *closed {
-                        0
-                    } else {
-                        return invalid("contact.curve", "polyline contact segment is invalid");
-                    }
-                } else {
-                    index + 1
-                };
-                point_difference(
-                    self.require_point(points[index])?.position,
-                    self.require_point(points[next])?.position,
-                )
-            }
-            CurveDefinition::Circle { radius, .. } => {
-                let radius = self.require_scalar(*radius)?.value;
-                [-radius * parameter.sin(), radius * parameter.cos()]
-            }
-            CurveDefinition::CircularArc {
-                radius,
-                start_angle,
-                end_angle,
-                sweep,
-                ..
-            } => {
-                let radius = self.require_scalar(*radius)?.value;
-                let start = self.require_scalar(*start_angle)?.value;
-                let end = self.require_scalar(*end_angle)?.value;
-                let signed_sweep = document_arc_signed_sweep(start, end, *sweep)?;
-                let angle = start + signed_sweep * parameter;
-                [
-                    -radius * signed_sweep * angle.sin(),
-                    radius * signed_sweep * angle.cos(),
-                ]
-            }
-            CurveDefinition::QuadraticBezier { controls } => {
-                let jet = geosolve_geometry::quadratic_bezier_jet(
-                    controls.map(|control| {
-                        let point = self
-                            .point(control)
-                            .expect("validated Bezier control reference");
-                        geosolve_geometry::Point2::new(point.position[0], point.position[1])
-                    }),
-                    parameter,
-                )
-                .map_err(|error| contact_evaluation_error(contact.id, error))?;
-                [jet.first_derivative.x, jet.first_derivative.y]
-            }
-            CurveDefinition::CubicBezier { controls } => {
-                let jet = geosolve_geometry::cubic_bezier_jet(
-                    controls.map(|control| {
-                        let point = self
-                            .point(control)
-                            .expect("validated Bezier control reference");
-                        geosolve_geometry::Point2::new(point.position[0], point.position[1])
-                    }),
-                    parameter,
-                )
-                .map_err(|error| contact_evaluation_error(contact.id, error))?;
-                [jet.first_derivative.x, jet.first_derivative.y]
-            }
-        };
+        let jet = self.evaluate_contact_jet(contact.id).map_err(|error| {
+            contact_document_evaluation_error(contact.id, contact.curve.curve, error)
+        })?;
+        let tangent = [jet.first_derivative.x, jet.first_derivative.y];
         validate_direction(tangent, "contact tangent")?;
         Ok(tangent)
     }
@@ -2748,6 +3522,142 @@ impl SketchDocument {
             self.require_point(start)?.position,
             self.require_point(end)?.position,
         ))
+    }
+}
+
+enum DocumentConicGeometryError {
+    Document(DocumentError),
+    Definition(geosolve_geometry::ConicDefinitionError),
+}
+
+impl From<DocumentError> for DocumentConicGeometryError {
+    fn from(error: DocumentError) -> Self {
+        Self::Document(error)
+    }
+}
+
+impl From<geosolve_geometry::ConicDefinitionError> for DocumentConicGeometryError {
+    fn from(error: geosolve_geometry::ConicDefinitionError) -> Self {
+        Self::Definition(error)
+    }
+}
+
+fn document_curve_conic_geometry_error(
+    error: DocumentConicGeometryError,
+) -> DocumentCurveEvaluationError {
+    match error {
+        DocumentConicGeometryError::Document(error) => {
+            DocumentCurveEvaluationError::Document(error)
+        }
+        DocumentConicGeometryError::Definition(error) => {
+            DocumentCurveEvaluationError::ConicDefinition(error)
+        }
+    }
+}
+
+fn document_query_conic_geometry_error(
+    error: DocumentConicGeometryError,
+) -> DocumentConicQueryError {
+    match error {
+        DocumentConicGeometryError::Document(error) => DocumentConicQueryError::Document(error),
+        DocumentConicGeometryError::Definition(error) => DocumentConicQueryError::Definition(error),
+    }
+}
+
+fn document_trim_projection_geometry_error(
+    curve: CurveId,
+    error: DocumentConicGeometryError,
+) -> DocumentTrimProjectionError {
+    match error {
+        DocumentConicGeometryError::Document(error) => DocumentTrimProjectionError::Document(error),
+        DocumentConicGeometryError::Definition(source) => {
+            DocumentTrimProjectionError::ConicDefinition { curve, source }
+        }
+    }
+}
+
+fn angular_target_difference(
+    curve: CurveId,
+    center: [f64; 2],
+    target: [f64; 2],
+) -> Result<[f64; 2], DocumentTrimProjectionError> {
+    let difference = [target[0] - center[0], target[1] - center[1]];
+    if !difference.iter().all(|value| value.is_finite()) {
+        return Err(DocumentTrimProjectionError::NonFiniteResult { curve });
+    }
+    if difference[0] == 0.0 && difference[1] == 0.0 {
+        return Err(DocumentTrimProjectionError::AmbiguousCenterTarget { curve });
+    }
+    Ok(difference)
+}
+
+fn document_conic_geometry_document_error(
+    curve: CurveId,
+    error: DocumentConicGeometryError,
+) -> DocumentError {
+    match error {
+        DocumentConicGeometryError::Document(error) => error,
+        DocumentConicGeometryError::Definition(source) => {
+            DocumentError::ConicDefinition { curve, source }
+        }
+    }
+}
+
+fn indexed_point(
+    points: [geosolve_geometry::Point2<f64>; 2],
+    index: u32,
+) -> Option<geosolve_geometry::Point2<f64>> {
+    usize::try_from(index)
+        .ok()
+        .and_then(|index| points.get(index).copied())
+}
+
+fn finite_query_point(
+    curve: CurveId,
+    point: geosolve_geometry::Point2<f64>,
+) -> Result<[f64; 2], DocumentConicQueryError> {
+    if point.coords.iter().all(|value| value.is_finite()) {
+        Ok([point.x, point.y])
+    } else {
+        Err(DocumentConicQueryError::NonFiniteResult { curve })
+    }
+}
+
+const fn conic_ratio_domain() -> ScalarDomain {
+    ScalarDomain::Bounded {
+        lower: f64::from_bits(1),
+        upper: 1.0,
+    }
+}
+
+const fn conic_weight_domain() -> ScalarDomain {
+    ScalarDomain::Bounded {
+        lower: crate::MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT,
+        upper: f64::MAX,
+    }
+}
+
+fn require_trim_scalar(scalar: &DesignScalar, field: &'static str) -> Result<(), DocumentError> {
+    require_scalar_role(scalar, ScalarUnit::Parameter, ScalarDomain::Finite, field)
+}
+
+const fn is_conic_definition(definition: &CurveDefinition) -> bool {
+    matches!(
+        definition,
+        CurveDefinition::Ellipse { .. }
+            | CurveDefinition::EllipticalArc { .. }
+            | CurveDefinition::RationalQuadraticConic { .. }
+            | CurveDefinition::ParabolaSegment { .. }
+            | CurveDefinition::HyperbolaSegment { .. }
+    )
+}
+
+pub(crate) const fn document_hyperbola_branch(
+    branch: DocumentHyperbolaBranch,
+) -> geosolve_geometry::HyperbolaBranch {
+    match branch {
+        DocumentHyperbolaBranch::Positive => geosolve_geometry::HyperbolaBranch::Positive,
+        DocumentHyperbolaBranch::Negative => geosolve_geometry::HyperbolaBranch::Negative,
     }
 }
 
@@ -2801,15 +3711,28 @@ fn validate_contact(contact: &ContactSlot, scalar: &DesignScalar) -> Result<(), 
     Ok(())
 }
 
-fn contact_evaluation_error(
+fn contact_document_evaluation_error(
     contact: ContactId,
-    error: geosolve_geometry::CurveEvaluationError,
+    curve: CurveId,
+    error: DocumentCurveEvaluationError,
 ) -> DocumentError {
     match error {
-        geosolve_geometry::CurveEvaluationError::Regularity(source) => {
-            DocumentError::ContactRegularity { contact, source }
+        DocumentCurveEvaluationError::Document(source) => source,
+        DocumentCurveEvaluationError::Curve(
+            geosolve_geometry::CurveEvaluationError::Regularity(source),
+        )
+        | DocumentCurveEvaluationError::ConicEvaluation(
+            geosolve_geometry::ConicEvaluationError::Curve(
+                geosolve_geometry::CurveEvaluationError::Regularity(source),
+            ),
+        ) => DocumentError::ContactRegularity { contact, source },
+        DocumentCurveEvaluationError::ConicDefinition(source) => {
+            DocumentError::ConicDefinition { curve, source }
         }
-        other => DocumentError::InvalidField {
+        DocumentCurveEvaluationError::ConicEvaluation(source) => {
+            DocumentError::ContactConicEvaluation { contact, source }
+        }
+        DocumentCurveEvaluationError::Curve(other) => DocumentError::InvalidField {
             field: "contact tangent",
             message: other.to_string(),
         },
@@ -2855,7 +3778,11 @@ fn validate_contact_curve(
             | CurveDefinition::Polyline { .. }
             | CurveDefinition::CircularArc { .. }
             | CurveDefinition::QuadraticBezier { .. }
-            | CurveDefinition::CubicBezier { .. },
+            | CurveDefinition::CubicBezier { .. }
+            | CurveDefinition::EllipticalArc { .. }
+            | CurveDefinition::RationalQuadraticConic { .. }
+            | CurveDefinition::ParabolaSegment { .. }
+            | CurveDefinition::HyperbolaSegment { .. },
             ContactDomain::Bounded { lower, upper },
         ) if is_unit_interval(lower, upper) => {
             if scalar.unit != ScalarUnit::Parameter
@@ -2867,9 +3794,10 @@ fn validate_contact_curve(
                 );
             }
         }
-        (CurveDefinition::Circle { .. }, ContactDomain::Periodic { period })
-            if period.to_bits() == std::f64::consts::TAU.to_bits() =>
-        {
+        (
+            CurveDefinition::Circle { .. } | CurveDefinition::Ellipse { .. },
+            ContactDomain::Periodic { period },
+        ) if period.to_bits() == std::f64::consts::TAU.to_bits() => {
             if scalar.unit != ScalarUnit::Angle
                 || scalar.domain != (ScalarDomain::Periodic { period })
             {
@@ -2976,6 +3904,35 @@ fn curve_references_object(definition: &CurveDefinition, object: DocumentObjectI
         (CurveDefinition::CubicBezier { controls }, DocumentObjectId::Point(point)) => {
             controls.contains(&point)
         }
+        (
+            CurveDefinition::Ellipse {
+                center,
+                major_axis_point,
+                ..
+            }
+            | CurveDefinition::EllipticalArc {
+                center,
+                major_axis_point,
+                ..
+            },
+            DocumentObjectId::Point(point),
+        ) => *center == point || *major_axis_point == point,
+        (
+            CurveDefinition::RationalQuadraticConic { start, end, .. },
+            DocumentObjectId::Point(point),
+        ) => *start == point || *end == point,
+        (
+            CurveDefinition::ParabolaSegment { vertex, focus, .. },
+            DocumentObjectId::Point(point),
+        ) => *vertex == point || *focus == point,
+        (
+            CurveDefinition::HyperbolaSegment {
+                center,
+                transverse_axis_point,
+                ..
+            },
+            DocumentObjectId::Point(point),
+        ) => *center == point || *transverse_axis_point == point,
         (CurveDefinition::Circle { radius, .. }, DocumentObjectId::Scalar(scalar)) => {
             *radius == scalar
         }
@@ -2988,6 +3945,42 @@ fn curve_references_object(definition: &CurveDefinition, object: DocumentObjectI
             },
             DocumentObjectId::Scalar(scalar),
         ) => *radius == scalar || *start_angle == scalar || *end_angle == scalar,
+        (
+            CurveDefinition::Ellipse {
+                minor_axis_ratio, ..
+            },
+            DocumentObjectId::Scalar(scalar),
+        ) => *minor_axis_ratio == scalar,
+        (
+            CurveDefinition::EllipticalArc {
+                minor_axis_ratio,
+                start_angle,
+                end_angle,
+                ..
+            },
+            DocumentObjectId::Scalar(scalar),
+        ) => *minor_axis_ratio == scalar || *start_angle == scalar || *end_angle == scalar,
+        (
+            CurveDefinition::RationalQuadraticConic { middle_weight, .. },
+            DocumentObjectId::Scalar(scalar),
+        ) => *middle_weight == scalar,
+        (
+            CurveDefinition::ParabolaSegment {
+                trim_start,
+                trim_end,
+                ..
+            },
+            DocumentObjectId::Scalar(scalar),
+        ) => *trim_start == scalar || *trim_end == scalar,
+        (
+            CurveDefinition::HyperbolaSegment {
+                semi_conjugate,
+                trim_start,
+                trim_end,
+                ..
+            },
+            DocumentObjectId::Scalar(scalar),
+        ) => *semi_conjugate == scalar || *trim_start == scalar || *trim_end == scalar,
         _ => false,
     }
 }
@@ -3144,7 +4137,12 @@ fn curve_segment_count(definition: &CurveDefinition) -> usize {
         | CurveDefinition::Circle { .. }
         | CurveDefinition::CircularArc { .. }
         | CurveDefinition::QuadraticBezier { .. }
-        | CurveDefinition::CubicBezier { .. } => 1,
+        | CurveDefinition::CubicBezier { .. }
+        | CurveDefinition::Ellipse { .. }
+        | CurveDefinition::EllipticalArc { .. }
+        | CurveDefinition::RationalQuadraticConic { .. }
+        | CurveDefinition::ParabolaSegment { .. }
+        | CurveDefinition::HyperbolaSegment { .. } => 1,
     }
 }
 
@@ -3161,6 +4159,27 @@ fn curve_scalars(definition: &CurveDefinition) -> Vec<DesignScalarId> {
             end_angle,
             ..
         } => vec![*radius, *start_angle, *end_angle],
+        CurveDefinition::Ellipse {
+            minor_axis_ratio, ..
+        } => vec![*minor_axis_ratio],
+        CurveDefinition::EllipticalArc {
+            minor_axis_ratio,
+            start_angle,
+            end_angle,
+            ..
+        } => vec![*minor_axis_ratio, *start_angle, *end_angle],
+        CurveDefinition::RationalQuadraticConic { middle_weight, .. } => vec![*middle_weight],
+        CurveDefinition::ParabolaSegment {
+            trim_start,
+            trim_end,
+            ..
+        } => vec![*trim_start, *trim_end],
+        CurveDefinition::HyperbolaSegment {
+            semi_conjugate,
+            trim_start,
+            trim_end,
+            ..
+        } => vec![*semi_conjugate, *trim_start, *trim_end],
     }
 }
 
@@ -3215,7 +4234,7 @@ fn point_difference(first: [f64; 2], second: [f64; 2]) -> [f64; 2] {
     [second[0] - first[0], second[1] - first[1]]
 }
 
-fn document_arc_signed_sweep(
+pub(crate) fn document_arc_signed_sweep(
     start: f64,
     end: f64,
     sweep: DocumentArcSweep,

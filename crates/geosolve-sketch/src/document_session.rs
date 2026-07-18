@@ -8,8 +8,9 @@ use crate::document::{
     ContactDefinition, ContactId, ContactStateEdit, CurveDefinition, CurveId, CurveSpan,
     DesignPointId, DesignScalarId, DocumentArcSweep, DocumentCircleTangencyMode,
     DocumentConstraintDefinition, DocumentConstraintId, DocumentDimensionDefinition,
-    DocumentDimensionId, DocumentDimensionMode, DocumentError, DocumentObjectId, DocumentSourceId,
-    PersistentId, RectangleIds, ScalarDomain, ScalarUnit, SketchDocument,
+    DocumentDimensionId, DocumentDimensionMode, DocumentError, DocumentHyperbolaBranch,
+    DocumentObjectId, DocumentSourceId, PersistentId, RectangleIds, ScalarDomain, ScalarUnit,
+    SketchDocument,
 };
 use crate::document_lowering::{DocumentRuntimeMap, RuntimeSource};
 use crate::{
@@ -224,6 +225,14 @@ pub enum DocumentEdit {
         curve: CurveId,
         sweep: DocumentArcSweep,
     },
+    SetConicWeightedMiddle {
+        curve: CurveId,
+        weighted_middle: [f64; 2],
+    },
+    SetHyperbolaBranch {
+        curve: CurveId,
+        branch: DocumentHyperbolaBranch,
+    },
     SetContactStates {
         edits: Vec<ContactStateEdit>,
     },
@@ -276,6 +285,8 @@ pub enum DocumentCommandEffect {
     UpdatedPoint(DesignPointId),
     UpdatedScalar(DesignScalarId),
     UpdatedCurve(CurveId),
+    UpdatedConicWeightedMiddle(CurveId),
+    UpdatedHyperbolaBranch(CurveId),
     UpdatedContacts(Vec<ContactId>),
     UpdatedConstraint(DocumentConstraintId),
     UpdatedDimension(DocumentDimensionId),
@@ -918,6 +929,17 @@ fn apply_edit(
         DocumentEdit::SetArcSweep { curve, sweep } => {
             document.set_arc_sweep(curve, sweep)?;
             DocumentCommandEffect::UpdatedCurve(curve)
+        }
+        DocumentEdit::SetConicWeightedMiddle {
+            curve,
+            weighted_middle,
+        } => {
+            document.set_conic_weighted_middle(curve, weighted_middle)?;
+            DocumentCommandEffect::UpdatedConicWeightedMiddle(curve)
+        }
+        DocumentEdit::SetHyperbolaBranch { curve, branch } => {
+            document.set_hyperbola_branch(curve, branch)?;
+            DocumentCommandEffect::UpdatedHyperbolaBranch(curve)
         }
         DocumentEdit::SetContactStates { edits } => {
             let contacts = edits.iter().map(|edit| edit.contact).collect();

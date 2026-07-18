@@ -1,10 +1,17 @@
 //! Pure geometric value types shared by sketches and mechanisms.
 
+mod conics;
 mod curves;
 mod frames;
 mod pose;
 mod validation;
 
+pub use conics::{
+    ConicDefinitionError, ConicEvaluationError, DirectedParameterTrim, Ellipse2,
+    EllipseAxisObservability, EllipticalArc2, HyperbolaBranch, HyperbolaSegment2, ParabolaSegment2,
+    ProperConicKind, RationalQuadraticConicSegment2, UnitDirection2, ellipse_jet,
+    elliptical_arc_jet, hyperbola_segment_jet, parabola_segment_jet, rational_quadratic_conic_jet,
+};
 pub use curves::{
     CurveEvaluationError, CurveJet2, CurveParameterDomain, CurveParameterError,
     CurveRegularityError, circle_jet, circular_arc_jet, cubic_bezier_jet, line_jet,

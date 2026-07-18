@@ -2,16 +2,17 @@ use geosolve_core::{
     AcceptedAuditPatch, HardValidity, SessionCoreRejection, SessionDomainRejection, SessionError,
     SessionPatch, SessionTransactionRejection, SolveSession, SolveTermination, SolverConfig,
 };
-use geosolve_geometry::Point2;
+use geosolve_geometry::{Point2, Vector2};
 use thiserror::Error;
 
 use crate::compiler::{
-    CompiledSketch, ReferenceDimensionValue, SketchGeometry, SketchSource, SketchSourceMapping,
-    SolvedLatent, rejection_hard_validity,
+    CompiledSketch, ConicVectorRole, ReferenceDimensionValue, SketchGeometry, SketchSource,
+    SketchSourceMapping, SolvedLatent, acceptance_solver_config, rejection_hard_validity,
 };
 use crate::{
-    ArcId, CircleId, CircleTangencyMode, ContactState, PointId, Sketch, SketchConstraintId,
-    SketchDimensionId, SketchError, SketchSolveRequest, SketchSolveResult, SolveRejection,
+    ArcId, CircleId, CircleTangencyMode, ConicId, ContactState, PointId, Sketch,
+    SketchConstraintId, SketchDimensionId, SketchError, SketchSolveRequest, SketchSolveResult,
+    SolveRejection,
 };
 
 /// One additive, non-structural edit supported by the M10 sketch session.
@@ -29,6 +30,10 @@ pub enum SketchPatch {
     ArcRadius {
         arc: ArcId,
         radius: f64,
+    },
+    ConicWeightedMiddle {
+        conic: ConicId,
+        weighted_middle: Vector2<f64>,
     },
     DimensionTarget {
         dimension: SketchDimensionId,
@@ -136,6 +141,7 @@ impl SketchSession {
         request: SketchSolveRequest,
         config: SolverConfig,
     ) -> Result<Self, SketchSessionError> {
+        let config = acceptance_solver_config(config);
         let validation_sketch = sketch.clone();
         let mut compiled = sketch.compile(request)?;
         let mut core = SolveSession::new(compiled.problem().clone(), config)?;
@@ -291,6 +297,14 @@ impl SketchSession {
             }
             SketchPatch::ArcRadius { arc, .. } => {
                 copy_arc_radius_value(&candidate_sketch, &self.compiled, arc, &mut core_patch)?;
+            }
+            SketchPatch::ConicWeightedMiddle { conic, .. } => {
+                copy_conic_weighted_middle_value(
+                    &candidate_sketch,
+                    &self.compiled,
+                    conic,
+                    &mut core_patch,
+                )?;
             }
             SketchPatch::DimensionTarget { dimension, .. } => {
                 push_unique(&mut replacement_sources, SketchSource::Dimension(dimension));
@@ -711,6 +725,10 @@ fn apply_domain_edit(
         }
         SketchPatch::CircleRadius { circle, radius } => sketch.set_circle_radius(circle, radius)?,
         SketchPatch::ArcRadius { arc, radius } => sketch.set_arc_radius(arc, radius)?,
+        SketchPatch::ConicWeightedMiddle {
+            conic,
+            weighted_middle,
+        } => sketch.set_conic_weighted_middle(conic, weighted_middle)?,
         SketchPatch::DimensionTarget { dimension, target } => {
             sketch.set_dimension_target(dimension, target)?;
         }
@@ -779,6 +797,28 @@ fn copy_arc_radius_value(
         .ok_or(SketchError::UnknownArc(arc))?;
     let radius = sketch.arc_value(arc)?.radius();
     patch.set_variable_value(variable, geosolve_core::VariableValue::Scalar(radius));
+    Ok(())
+}
+
+fn copy_conic_weighted_middle_value(
+    sketch: &Sketch,
+    compiled: &CompiledSketch,
+    conic: ConicId,
+    patch: &mut SessionPatch,
+) -> Result<(), SketchSessionError> {
+    let variable = compiled
+        .variable_for_conic_vector(conic, ConicVectorRole::WeightedMiddle)
+        .ok_or(SketchError::UnknownConic(conic))?;
+    let crate::ConicKind::RationalQuadratic {
+        weighted_middle, ..
+    } = sketch.conic_value(conic)?.kind()
+    else {
+        return Err(SketchError::InvalidConicScalarRole(conic).into());
+    };
+    patch.set_variable_value(
+        variable,
+        geosolve_core::VariableValue::Vec2([weighted_middle.x, weighted_middle.y]),
+    );
     Ok(())
 }
 

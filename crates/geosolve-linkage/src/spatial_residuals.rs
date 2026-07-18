@@ -37,6 +37,282 @@ impl ResidualEvaluator for SpatialBallResidual {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub(crate) struct SpatialPointDistanceResidual {
+    pub(crate) first_local: [f64; 3],
+    pub(crate) second_local: [f64; 3],
+    pub(crate) distance: f64,
+}
+
+impl ResidualEvaluator for SpatialPointDistanceResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        validate_positive_distance(self.distance)?;
+        let (first, second) = two_poses(variables, "spatial point distance")?;
+        let first_world = transform_point(
+            first,
+            self.first_local,
+            "spatial point distance first point",
+        )?;
+        let second_world = transform_point(
+            second,
+            self.second_local,
+            "spatial point distance second point",
+        )?;
+        let (_, separation) =
+            regular_point_separation(first_world, second_world, "spatial point distance")?;
+        checked_residual(vec![separation - self.distance], "spatial point distance")
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        validate_positive_distance(self.distance)?;
+        let (first, second) = two_poses(variables, "spatial point distance")?;
+        let first_point = point(self.first_local);
+        let second_point = point(self.second_local);
+        let first_world = first
+            .try_transform_point(first_point)
+            .map_err(|error| geometry_error("spatial point distance first point", error))?;
+        let second_world = second
+            .try_transform_point(second_point)
+            .map_err(|error| geometry_error("spatial point distance second point", error))?;
+        let (direction, _) =
+            regular_point_separation(first_world, second_world, "spatial point distance")?;
+        let first_derivative =
+            point_derivative(first, first_point, "spatial point distance first point")?;
+        let second_derivative =
+            point_derivative(second, second_point, "spatial point distance second point")?;
+        let mut first_values = Vec::with_capacity(TANGENT_DIMENSION);
+        let mut second_values = Vec::with_capacity(TANGENT_DIMENSION);
+        for column in 0..TANGENT_DIMENSION {
+            first_values.push(-direction.dot(&first_derivative.column(column)));
+            second_values.push(direction.dot(&second_derivative.column(column)));
+        }
+        checked_jacobians(1, first_values, second_values, "spatial point distance")
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct SpatialAxisAngleResidual {
+    pub(crate) first_local: Frame3,
+    pub(crate) second_local: Frame3,
+    pub(crate) angle: f64,
+}
+
+impl ResidualEvaluator for SpatialAxisAngleResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        validate_interior_angle(self.angle)?;
+        let frames = frame_pair(
+            variables,
+            self.first_local,
+            self.second_local,
+            "spatial axis angle",
+        )?;
+        checked_residual(
+            vec![
+                frames
+                    .first_world
+                    .z_axis()
+                    .dot(&frames.second_world.z_axis())
+                    - self.angle.cos(),
+            ],
+            "spatial axis angle",
+        )
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        validate_interior_angle(self.angle)?;
+        let frames = frame_pair(
+            variables,
+            self.first_local,
+            self.second_local,
+            "spatial axis angle",
+        )?;
+        require_regular_axis_angle(
+            frames.first_world.z_axis(),
+            frames.second_world.z_axis(),
+            "spatial axis angle",
+        )?;
+        let (first, second) = orientation_derivatives(
+            frames.first_pose,
+            frames.second_pose,
+            frames.first_local.z_axis(),
+            frames.second_local.z_axis(),
+            "spatial axis angle",
+        )?;
+        let mut first_values = Vec::with_capacity(TANGENT_DIMENSION);
+        let mut second_values = Vec::with_capacity(TANGENT_DIMENSION);
+        push_orientation_row(&mut first_values, first);
+        push_orientation_row(&mut second_values, second);
+        checked_jacobians(1, first_values, second_values, "spatial axis angle")
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct SpatialAxisAlignmentResidual {
+    pub(crate) first_local: Frame3,
+    pub(crate) second_local: Frame3,
+    pub(crate) parity_multiplier: f64,
+}
+
+impl ResidualEvaluator for SpatialAxisAlignmentResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        validate_parity(self.parity_multiplier)?;
+        let frames = frame_pair(
+            variables,
+            self.first_local,
+            self.second_local,
+            "spatial axis alignment",
+        )?;
+        let second_axis = frames.second_world.z_axis() * self.parity_multiplier;
+        checked_residual(
+            vec![
+                frames.first_world.x_axis().dot(&second_axis),
+                frames.first_world.y_axis().dot(&second_axis),
+            ],
+            "spatial axis alignment",
+        )
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        validate_parity(self.parity_multiplier)?;
+        let frames = frame_pair(
+            variables,
+            self.first_local,
+            self.second_local,
+            "spatial axis alignment",
+        )?;
+        let second_axis = frames.second_local.z_axis() * self.parity_multiplier;
+        let mut first_values = Vec::with_capacity(2 * TANGENT_DIMENSION);
+        let mut second_values = Vec::with_capacity(2 * TANGENT_DIMENSION);
+        for (first_axis, context) in [
+            (frames.first_local.x_axis(), "spatial axis alignment x-z"),
+            (frames.first_local.y_axis(), "spatial axis alignment y-z"),
+        ] {
+            let (first, second) = orientation_derivatives(
+                frames.first_pose,
+                frames.second_pose,
+                first_axis,
+                second_axis,
+                context,
+            )?;
+            push_orientation_row(&mut first_values, first);
+            push_orientation_row(&mut second_values, second);
+        }
+        checked_jacobians(2, first_values, second_values, "spatial axis alignment")
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct SpatialHingePositionResidual {
+    pub(crate) first_local: Frame3,
+    pub(crate) second_local: Frame3,
+    pub(crate) parity_multiplier: f64,
+    pub(crate) target_principal_phase: f64,
+}
+
+impl ResidualEvaluator for SpatialHingePositionResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        validate_parity(self.parity_multiplier)?;
+        validate_canonical_phase(self.target_principal_phase)?;
+        let frames = frame_pair(
+            variables,
+            self.first_local,
+            self.second_local,
+            "spatial hinge position driver",
+        )?;
+        let (target_sine, target_cosine) = self.target_principal_phase.sin_cos();
+        let target_normal =
+            frames.first_world.y_axis() * target_cosine - frames.first_world.x_axis() * target_sine;
+        checked_residual(
+            vec![target_normal.dot(&frames.second_world.x_axis())],
+            "spatial hinge position driver",
+        )
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        validate_parity(self.parity_multiplier)?;
+        validate_canonical_phase(self.target_principal_phase)?;
+        let frames = frame_pair(
+            variables,
+            self.first_local,
+            self.second_local,
+            "spatial hinge position driver",
+        )?;
+        let (target_sine, target_cosine) = self.target_principal_phase.sin_cos();
+        let first_target_normal =
+            frames.first_local.y_axis() * target_cosine - frames.first_local.x_axis() * target_sine;
+        let (first, second) = orientation_derivatives(
+            frames.first_pose,
+            frames.second_pose,
+            first_target_normal,
+            frames.second_local.x_axis(),
+            "spatial hinge position driver",
+        )?;
+        let mut first_values = Vec::with_capacity(TANGENT_DIMENSION);
+        let mut second_values = Vec::with_capacity(TANGENT_DIMENSION);
+        push_orientation_row(&mut first_values, first);
+        push_orientation_row(&mut second_values, second);
+        checked_jacobians(
+            1,
+            first_values,
+            second_values,
+            "spatial hinge position driver",
+        )
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct SpatialTranslationPositionResidual {
+    pub(crate) first_local: Frame3,
+    pub(crate) second_local: Frame3,
+    pub(crate) first_local_axis: Vector3<f64>,
+    pub(crate) parity_multiplier: f64,
+    pub(crate) target: f64,
+}
+
+impl ResidualEvaluator for SpatialTranslationPositionResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        validate_parity(self.parity_multiplier)?;
+        validate_finite_translation_target(self.target)?;
+        let frames = frame_pair(
+            variables,
+            self.first_local,
+            self.second_local,
+            "spatial translation position driver",
+        )?;
+        let displacement = frames.second_world.origin() - frames.first_world.origin();
+        let first_axis = frames
+            .first_pose
+            .try_transform_vector(self.first_local_axis)
+            .map_err(|error| geometry_error("spatial translation position driver axis", error))?;
+        checked_residual(
+            vec![first_axis.dot(&displacement) - self.target],
+            "spatial translation position driver",
+        )
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        validate_parity(self.parity_multiplier)?;
+        validate_finite_translation_target(self.target)?;
+        let frames = frame_pair(
+            variables,
+            self.first_local,
+            self.second_local,
+            "spatial translation position driver",
+        )?;
+        let (first, second) = moving_axis_displacement_derivatives(
+            &frames,
+            self.first_local_axis,
+            "spatial translation position driver",
+        )?;
+        checked_jacobians(
+            1,
+            first.to_vec(),
+            second.to_vec(),
+            "spatial translation position driver",
+        )
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct SpatialFixedFrameResidual {
     pub(crate) first_local: Frame3,
     pub(crate) second_local: Frame3,
@@ -131,6 +407,214 @@ pub(crate) struct SpatialRevoluteResidual {
     pub(crate) first_local: Frame3,
     pub(crate) second_local: Frame3,
     pub(crate) parity_multiplier: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum SpatialRelationKind {
+    Prismatic,
+    Cylindrical,
+    Planar,
+    Universal,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct SpatialRelationResidual {
+    pub(crate) first_local: Frame3,
+    pub(crate) second_local: Frame3,
+    pub(crate) parity_multiplier: f64,
+    pub(crate) kind: SpatialRelationKind,
+}
+
+impl ResidualEvaluator for SpatialRelationResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        validate_parity(self.parity_multiplier)?;
+        let context = self.context();
+        let frames = frame_pair(variables, self.first_local, self.second_local, context)?;
+        let displacement = frames.second_world.origin() - frames.first_world.origin();
+        let second_axis = frames.second_world.z_axis() * self.parity_multiplier;
+        let values = match self.kind {
+            SpatialRelationKind::Prismatic => vec![
+                frames.first_world.x_axis().dot(&displacement),
+                frames.first_world.y_axis().dot(&displacement),
+                frames.first_world.x_axis().dot(&second_axis),
+                frames.first_world.y_axis().dot(&second_axis),
+                frames
+                    .first_world
+                    .y_axis()
+                    .dot(&frames.second_world.x_axis()),
+            ],
+            SpatialRelationKind::Cylindrical => vec![
+                frames.first_world.x_axis().dot(&displacement),
+                frames.first_world.y_axis().dot(&displacement),
+                frames.first_world.x_axis().dot(&second_axis),
+                frames.first_world.y_axis().dot(&second_axis),
+            ],
+            SpatialRelationKind::Planar => vec![
+                frames.first_world.z_axis().dot(&displacement),
+                frames.first_world.x_axis().dot(&second_axis),
+                frames.first_world.y_axis().dot(&second_axis),
+            ],
+            SpatialRelationKind::Universal => vec![
+                displacement.x,
+                displacement.y,
+                displacement.z,
+                frames
+                    .first_world
+                    .z_axis()
+                    .dot(&frames.second_world.z_axis()),
+            ],
+        };
+        checked_residual(values, context)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        validate_parity(self.parity_multiplier)?;
+        let context = self.context();
+        let frames = frame_pair(variables, self.first_local, self.second_local, context)?;
+        let rows = self.rows();
+        let mut first_values = Vec::with_capacity(rows * TANGENT_DIMENSION);
+        let mut second_values = Vec::with_capacity(rows * TANGENT_DIMENSION);
+
+        match self.kind {
+            SpatialRelationKind::Prismatic => {
+                for (axis, name) in [
+                    (frames.first_local.x_axis(), "x-displacement"),
+                    (frames.first_local.y_axis(), "y-displacement"),
+                ] {
+                    let (first, second) = moving_axis_displacement_derivatives(
+                        &frames,
+                        axis,
+                        &format!("{context} {name}"),
+                    )?;
+                    push_scalar_row(&mut first_values, first);
+                    push_scalar_row(&mut second_values, second);
+                }
+                for (first_axis, second_axis, name) in [
+                    (
+                        frames.first_local.x_axis(),
+                        frames.second_local.z_axis() * self.parity_multiplier,
+                        "x-axis alignment",
+                    ),
+                    (
+                        frames.first_local.y_axis(),
+                        frames.second_local.z_axis() * self.parity_multiplier,
+                        "y-axis alignment",
+                    ),
+                    (
+                        frames.first_local.y_axis(),
+                        frames.second_local.x_axis(),
+                        "clock alignment",
+                    ),
+                ] {
+                    let (first, second) = orientation_derivatives(
+                        frames.first_pose,
+                        frames.second_pose,
+                        first_axis,
+                        second_axis,
+                        &format!("{context} {name}"),
+                    )?;
+                    push_orientation_row(&mut first_values, first);
+                    push_orientation_row(&mut second_values, second);
+                }
+            }
+            SpatialRelationKind::Cylindrical => {
+                for (axis, name) in [
+                    (frames.first_local.x_axis(), "x-displacement"),
+                    (frames.first_local.y_axis(), "y-displacement"),
+                ] {
+                    let (first, second) = moving_axis_displacement_derivatives(
+                        &frames,
+                        axis,
+                        &format!("{context} {name}"),
+                    )?;
+                    push_scalar_row(&mut first_values, first);
+                    push_scalar_row(&mut second_values, second);
+                }
+                for (first_axis, name) in [
+                    (frames.first_local.x_axis(), "x-axis alignment"),
+                    (frames.first_local.y_axis(), "y-axis alignment"),
+                ] {
+                    let (first, second) = orientation_derivatives(
+                        frames.first_pose,
+                        frames.second_pose,
+                        first_axis,
+                        frames.second_local.z_axis() * self.parity_multiplier,
+                        &format!("{context} {name}"),
+                    )?;
+                    push_orientation_row(&mut first_values, first);
+                    push_orientation_row(&mut second_values, second);
+                }
+            }
+            SpatialRelationKind::Planar => {
+                let (first, second) = moving_axis_displacement_derivatives(
+                    &frames,
+                    frames.first_local.z_axis(),
+                    &format!("{context} normal displacement"),
+                )?;
+                push_scalar_row(&mut first_values, first);
+                push_scalar_row(&mut second_values, second);
+                for (first_axis, name) in [
+                    (frames.first_local.x_axis(), "x-normal alignment"),
+                    (frames.first_local.y_axis(), "y-normal alignment"),
+                ] {
+                    let (first, second) = orientation_derivatives(
+                        frames.first_pose,
+                        frames.second_pose,
+                        first_axis,
+                        frames.second_local.z_axis() * self.parity_multiplier,
+                        &format!("{context} {name}"),
+                    )?;
+                    push_orientation_row(&mut first_values, first);
+                    push_orientation_row(&mut second_values, second);
+                }
+            }
+            SpatialRelationKind::Universal => {
+                let first_point = point_derivative(
+                    frames.first_pose,
+                    frames.first_local.origin(),
+                    &format!("{context} first origin"),
+                )?;
+                let second_point = point_derivative(
+                    frames.second_pose,
+                    frames.second_local.origin(),
+                    &format!("{context} second origin"),
+                )?;
+                push_point_rows(&mut first_values, &first_point, -1.0);
+                push_point_rows(&mut second_values, &second_point, 1.0);
+                let (first, second) = orientation_derivatives(
+                    frames.first_pose,
+                    frames.second_pose,
+                    frames.first_local.z_axis(),
+                    frames.second_local.z_axis(),
+                    &format!("{context} axis orthogonality"),
+                )?;
+                push_orientation_row(&mut first_values, first);
+                push_orientation_row(&mut second_values, second);
+            }
+        }
+
+        checked_jacobians(rows, first_values, second_values, context)
+    }
+}
+
+impl SpatialRelationResidual {
+    const fn context(self) -> &'static str {
+        match self.kind {
+            SpatialRelationKind::Prismatic => "spatial prismatic",
+            SpatialRelationKind::Cylindrical => "spatial cylindrical",
+            SpatialRelationKind::Planar => "spatial planar",
+            SpatialRelationKind::Universal => "spatial universal",
+        }
+    }
+
+    const fn rows(self) -> usize {
+        match self.kind {
+            SpatialRelationKind::Prismatic => 5,
+            SpatialRelationKind::Cylindrical | SpatialRelationKind::Universal => 4,
+            SpatialRelationKind::Planar => 3,
+        }
+    }
 }
 
 impl ResidualEvaluator for SpatialRevoluteResidual {
@@ -295,6 +779,62 @@ fn transform_point(
         .map_err(|error| geometry_error(context, error))
 }
 
+fn regular_point_separation(
+    first: Point3<f64>,
+    second: Point3<f64>,
+    context: &str,
+) -> Result<(Vector3<f64>, f64), EvaluationError> {
+    let displacement = second - first;
+    if !displacement.iter().all(|value| value.is_finite()) {
+        return Err(EvaluationError::invalid_geometry(format!(
+            "{context} displacement is non-finite"
+        )));
+    }
+    let distance = robust_norm(displacement);
+    if !distance.is_finite() {
+        return Err(EvaluationError::invalid_geometry(format!(
+            "{context} distance is non-finite"
+        )));
+    }
+    if distance == 0.0 {
+        return Err(EvaluationError::nondifferentiable(format!(
+            "{context} derivative is undefined for coincident points"
+        )));
+    }
+    let direction = displacement / distance;
+    if !direction.iter().all(|value| value.is_finite()) {
+        return Err(EvaluationError::invalid_geometry(format!(
+            "{context} direction is non-finite"
+        )));
+    }
+    Ok((direction, distance))
+}
+
+fn require_regular_axis_angle(
+    first: Vector3<f64>,
+    second: Vector3<f64>,
+    context: &str,
+) -> Result<(), EvaluationError> {
+    let cross = first.cross(&second);
+    if !cross.iter().all(|value| value.is_finite()) {
+        return Err(EvaluationError::invalid_geometry(format!(
+            "{context} cross product is non-finite"
+        )));
+    }
+    let sine = robust_norm(cross);
+    if !sine.is_finite() {
+        return Err(EvaluationError::invalid_geometry(format!(
+            "{context} principal-angle sine is non-finite"
+        )));
+    }
+    if sine == 0.0 {
+        return Err(EvaluationError::nondifferentiable(format!(
+            "{context} derivative is singular at principal-angle endpoints"
+        )));
+    }
+    Ok(())
+}
+
 const fn point(value: [f64; 3]) -> Point3<f64> {
     Point3::new(value[0], value[1], value[2])
 }
@@ -357,6 +897,67 @@ fn orientation_derivatives(
     }
 }
 
+fn moving_axis_displacement_derivatives(
+    frames: &FramePair,
+    first_local_axis: Vector3<f64>,
+    context: &str,
+) -> Result<([f64; TANGENT_DIMENSION], [f64; TANGENT_DIMENSION]), EvaluationError> {
+    let first_axis = frames
+        .first_pose
+        .try_transform_vector(first_local_axis)
+        .map_err(|error| geometry_error(context, error))?;
+    let displacement = frames.second_world.origin() - frames.first_world.origin();
+    let first_axis_derivative = direction_derivative(
+        frames.first_pose,
+        first_local_axis,
+        &format!("{context} first axis"),
+    )?;
+    let first_point_derivative = point_derivative(
+        frames.first_pose,
+        frames.first_local.origin(),
+        &format!("{context} first origin"),
+    )?;
+    let second_point_derivative = point_derivative(
+        frames.second_pose,
+        frames.second_local.origin(),
+        &format!("{context} second origin"),
+    )?;
+    let mut first = [0.0; TANGENT_DIMENSION];
+    let mut second = [0.0; TANGENT_DIMENSION];
+    for column in 0..TANGENT_DIMENSION {
+        first[column] = first_axis_derivative.column(column).dot(&displacement)
+            - first_axis.dot(&first_point_derivative.column(column));
+        second[column] = first_axis.dot(&second_point_derivative.column(column));
+    }
+    if first.iter().chain(&second).all(|value| value.is_finite()) {
+        Ok((first, second))
+    } else {
+        Err(EvaluationError::invalid_geometry(format!(
+            "{context} derivative is non-finite"
+        )))
+    }
+}
+
+fn direction_derivative(
+    pose: Pose3,
+    local: Vector3<f64>,
+    context: &str,
+) -> Result<SMatrix<f64, 3, 6>, EvaluationError> {
+    pose.try_transform_vector(local)
+        .map_err(|error| geometry_error(context, error))?;
+    let rotation = pose.rotation().to_rotation_matrix();
+    let angular = -(rotation.matrix() * skew(local));
+    let mut derivative = SMatrix::<f64, 3, 6>::zeros();
+    derivative.fixed_view_mut::<3, 3>(0, 3).copy_from(&angular);
+    if derivative.iter().all(|value| value.is_finite()) {
+        Ok(derivative)
+    } else {
+        Err(EvaluationError::invalid_geometry(format!(
+            "{context} derivative is non-finite"
+        )))
+    }
+}
+
 fn push_point_rows(values: &mut Vec<f64>, derivative: &SMatrix<f64, 3, 6>, sign: f64) {
     for row in 0..3 {
         for column in 0..TANGENT_DIMENSION {
@@ -367,6 +968,10 @@ fn push_point_rows(values: &mut Vec<f64>, derivative: &SMatrix<f64, 3, 6>, sign:
 
 fn push_orientation_row(values: &mut Vec<f64>, angular: Vector3<f64>) {
     values.extend([0.0, 0.0, 0.0, angular.x, angular.y, angular.z]);
+}
+
+fn push_scalar_row(values: &mut Vec<f64>, row: [f64; TANGENT_DIMENSION]) {
+    values.extend(row);
 }
 
 fn checked_residual(values: Vec<f64>, context: &str) -> Result<Vec<f64>, EvaluationError> {
@@ -412,7 +1017,47 @@ fn validate_parity(parity_multiplier: f64) -> Result<(), EvaluationError> {
         Ok(())
     } else {
         Err(EvaluationError::invalid_geometry(
-            "spatial revolute parity multiplier must be exactly +1 or -1",
+            "spatial axis parity multiplier must be exactly +1 or -1",
+        ))
+    }
+}
+
+fn validate_positive_distance(distance: f64) -> Result<(), EvaluationError> {
+    if distance.is_finite() && distance > 0.0 {
+        Ok(())
+    } else {
+        Err(EvaluationError::out_of_domain(
+            "spatial point-distance target must be strictly positive and finite",
+        ))
+    }
+}
+
+fn validate_interior_angle(angle: f64) -> Result<(), EvaluationError> {
+    if angle.is_finite() && angle > 0.0 && angle < std::f64::consts::PI {
+        Ok(())
+    } else {
+        Err(EvaluationError::out_of_domain(
+            "spatial axis-angle target must be finite and strictly inside (0, PI)",
+        ))
+    }
+}
+
+fn validate_canonical_phase(phase: f64) -> Result<(), EvaluationError> {
+    if phase.is_finite() && (-std::f64::consts::PI..std::f64::consts::PI).contains(&phase) {
+        Ok(())
+    } else {
+        Err(EvaluationError::out_of_domain(
+            "spatial hinge target phase must be finite and canonical in [-PI, PI)",
+        ))
+    }
+}
+
+fn validate_finite_translation_target(target: f64) -> Result<(), EvaluationError> {
+    if target.is_finite() {
+        Ok(())
+    } else {
+        Err(EvaluationError::out_of_domain(
+            "spatial translation target must be finite",
         ))
     }
 }
@@ -425,6 +1070,10 @@ fn skew(vector: Vector3<f64>) -> Matrix3<f64> {
     Matrix3::new(
         0.0, -vector.z, vector.y, vector.z, 0.0, -vector.x, -vector.y, vector.x, 0.0,
     )
+}
+
+fn robust_norm(vector: Vector3<f64>) -> f64 {
+    vector.x.hypot(vector.y).hypot(vector.z)
 }
 
 #[cfg(test)]
@@ -455,19 +1104,71 @@ mod tests {
             Vector3::x(),
         )
         .unwrap();
-        let evaluators: [Box<dyn ResidualEvaluator>; 3] = [
+        let evaluators: [Box<dyn ResidualEvaluator>; 12] = [
             Box::new(SpatialBallResidual {
                 first_local: [0.2, -0.5, 0.7],
                 second_local: [-0.6, 0.1, 0.4],
+            }),
+            Box::new(SpatialPointDistanceResidual {
+                first_local: [0.2, -0.5, 0.7],
+                second_local: [-0.6, 0.1, 0.4],
+                distance: 1.7,
             }),
             Box::new(SpatialFixedFrameResidual {
                 first_local: first_frame,
                 second_local: second_frame,
             }),
+            Box::new(SpatialAxisAngleResidual {
+                first_local: first_frame,
+                second_local: second_frame,
+                angle: 0.8,
+            }),
+            Box::new(SpatialAxisAlignmentResidual {
+                first_local: first_frame,
+                second_local: second_frame,
+                parity_multiplier: -1.0,
+            }),
+            Box::new(SpatialHingePositionResidual {
+                first_local: first_frame,
+                second_local: second_frame,
+                parity_multiplier: -1.0,
+                target_principal_phase: -0.7,
+            }),
+            Box::new(SpatialTranslationPositionResidual {
+                first_local: first_frame,
+                second_local: second_frame,
+                first_local_axis: first_frame.z_axis(),
+                parity_multiplier: -1.0,
+                target: -1.3,
+            }),
             Box::new(SpatialRevoluteResidual {
                 first_local: first_frame,
                 second_local: second_frame,
                 parity_multiplier: -1.0,
+            }),
+            Box::new(SpatialRelationResidual {
+                first_local: first_frame,
+                second_local: second_frame,
+                parity_multiplier: -1.0,
+                kind: SpatialRelationKind::Prismatic,
+            }),
+            Box::new(SpatialRelationResidual {
+                first_local: first_frame,
+                second_local: second_frame,
+                parity_multiplier: -1.0,
+                kind: SpatialRelationKind::Cylindrical,
+            }),
+            Box::new(SpatialRelationResidual {
+                first_local: first_frame,
+                second_local: second_frame,
+                parity_multiplier: -1.0,
+                kind: SpatialRelationKind::Planar,
+            }),
+            Box::new(SpatialRelationResidual {
+                first_local: first_frame,
+                second_local: second_frame,
+                parity_multiplier: 1.0,
+                kind: SpatialRelationKind::Universal,
             }),
         ];
 
@@ -498,6 +1199,44 @@ mod tests {
         };
         assert!(revolute.evaluate(&[valid, valid]).is_err());
         assert!(revolute.jacobian(&[valid, valid]).is_err());
+
+        let relation = SpatialRelationResidual {
+            first_local: frame,
+            second_local: frame,
+            parity_multiplier: 0.0,
+            kind: SpatialRelationKind::Prismatic,
+        };
+        assert!(relation.evaluate(&[valid, valid]).is_err());
+        assert!(relation.jacobian(&[valid, valid]).is_err());
+        let relation = SpatialRelationResidual {
+            parity_multiplier: 1.0,
+            ..relation
+        };
+        assert!(relation.evaluate(&[valid]).is_err());
+        assert!(
+            relation
+                .jacobian(&[VariableValue::Vec3([0.0; 3]), valid])
+                .is_err()
+        );
+
+        let hinge = SpatialHingePositionResidual {
+            first_local: frame,
+            second_local: frame,
+            parity_multiplier: 1.0,
+            target_principal_phase: std::f64::consts::PI,
+        };
+        assert!(hinge.evaluate(&[valid, valid]).is_err());
+        assert!(hinge.jacobian(&[valid, valid]).is_err());
+
+        let translation = SpatialTranslationPositionResidual {
+            first_local: frame,
+            second_local: frame,
+            first_local_axis: frame.z_axis(),
+            parity_multiplier: 1.0,
+            target: f64::NAN,
+        };
+        assert!(translation.evaluate(&[valid, valid]).is_err());
+        assert!(translation.jacobian(&[valid, valid]).is_err());
     }
 
     fn assert_finite_difference(evaluator: &dyn ResidualEvaluator, variables: &[VariableValue; 2]) {
