@@ -616,6 +616,7 @@ dependencies = [
  "geosolve-geometry",
  "js-sys",
  "num-dual",
+ "proptest",
  "serde",
  "serde_json",
  "slotmap",

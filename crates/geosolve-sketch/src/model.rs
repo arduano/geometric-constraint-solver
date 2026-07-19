@@ -1,5 +1,9 @@
 use geosolve_core::CoreError;
-use geosolve_geometry::{ConicDefinitionError, ConicEvaluationError, Point2};
+use geosolve_geometry::{
+    BSplineDefinitionError, BSplineEvaluationError, BSplineSpanIndex, ConicDefinitionError,
+    ConicEvaluationError, CurveDifferentialError, NurbsDefinitionError, NurbsEvaluationError,
+    Point2,
+};
 use slotmap::{Key, SlotMap, new_key_type};
 use thiserror::Error;
 
@@ -21,6 +25,10 @@ new_key_type! {
     pub struct BezierId;
     /// Stable identity of any runtime conic family.
     pub struct ConicId;
+    /// Stable identity of a runtime non-rational B-spline.
+    pub struct BSplineId;
+    /// Stable identity of a runtime NURBS.
+    pub struct NurbsId;
     /// Stable identity of a geometric sketch constraint.
     pub struct SketchConstraintId;
     /// Stable identity of a driving or reference dimension.
@@ -56,6 +64,10 @@ pub enum SketchError {
     UnknownBezier(BezierId),
     #[error("unknown or stale conic ID {0:?}")]
     UnknownConic(ConicId),
+    #[error("unknown or stale B-spline ID {0:?}")]
+    UnknownBSpline(BSplineId),
+    #[error("unknown or stale NURBS ID {0:?}")]
+    UnknownNurbs(NurbsId),
     #[error("unknown or stale sketch constraint ID {0:?}")]
     UnknownConstraint(SketchConstraintId),
     #[error("unknown or stale sketch dimension ID {0:?}")]
@@ -72,6 +84,10 @@ pub enum SketchError {
     BezierInUse(BezierId),
     #[error("conic {0:?} is still referenced by a constraint")]
     ConicInUse(ConicId),
+    #[error("B-spline {0:?} is still referenced by a constraint")]
+    BSplineInUse(BSplineId),
+    #[error("NURBS {0:?} is still referenced by a constraint")]
+    NurbsInUse(NurbsId),
     #[error("invalid conic definition: {0}")]
     InvalidConic(ConicDefinitionError),
     #[error("invalid conic evaluation: {0}")]
@@ -80,6 +96,26 @@ pub enum SketchError {
     InvalidConicScalarRole(ConicId),
     #[error("conic {0:?} is not a hyperbola segment")]
     InvalidConicBranchRole(ConicId),
+    #[error("invalid B-spline definition: {0}")]
+    InvalidBSpline(BSplineDefinitionError),
+    #[error("invalid B-spline evaluation: {0}")]
+    InvalidBSplineEvaluation(BSplineEvaluationError),
+    #[error("B-spline control point {0:?} is repeated")]
+    RepeatedBSplineControl(PointId),
+    #[error("invalid NURBS definition: {0}")]
+    InvalidNurbs(NurbsDefinitionError),
+    #[error("invalid NURBS evaluation: {0}")]
+    InvalidNurbsEvaluation(NurbsEvaluationError),
+    #[error("NURBS control point {0:?} is repeated")]
+    RepeatedNurbsControl(PointId),
+    #[error("NURBS gauge index {gauge_index} is invalid or does not select an exact unit weight")]
+    InvalidNurbsGauge { gauge_index: usize },
+    #[error("NURBS {nurbs:?} has no weight at index {index}")]
+    InvalidNurbsWeightIndex { nurbs: NurbsId, index: usize },
+    #[error("NURBS weight {index} must be positive and finite, got {weight}")]
+    InvalidNurbsWeight { index: usize, weight: f64 },
+    #[error("the selected gauge weight of NURBS {0:?} cannot be edited directly")]
+    NurbsGaugeWeightEdit(NurbsId),
     #[error("a line segment requires two different, noncoincident points")]
     DegenerateSegment,
     #[error("retained segment {0:?} has zero-length or non-finite geometry")]
@@ -99,6 +135,12 @@ pub enum SketchError {
     },
     #[error("curve contact is invalid or degenerate: {0}")]
     InvalidCurveContact(&'static str),
+    #[error("invalid curve differential measurement: {0}")]
+    InvalidCurveDifferential(CurveDifferentialError),
+    #[error("parametric continuity rates must be positive and finite")]
+    InvalidContinuityRate,
+    #[error("endpoint continuity requires Start or End contact neighborhoods")]
+    InvalidContinuityEndpoint,
     #[error("a direction branch requires a finite nonzero direction")]
     InvalidDirectionBranch,
     #[error("internal tangency requires a positive containing-radius difference")]
@@ -280,6 +322,45 @@ pub enum CurveTangentOrientation {
     Opposed,
 }
 
+/// Directed normal side relative to a curve's increasing parameter tangent.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CurveNormalSide {
+    Left,
+    Right,
+}
+
+/// A line direction constrained against one curve differential location.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CurveDirectionRelation {
+    Tangent(CurveTangentOrientation),
+    Normal(CurveNormalSide),
+}
+
+/// Smooth signed equation selected for equal-curvature behavior.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CurveCurvatureRelation {
+    Signed,
+    MagnitudeSameSign,
+    MagnitudeOppositeSign,
+}
+
+/// Ordered endpoint continuity requested between an incoming and outgoing curve.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CurveContinuity {
+    G0,
+    G1,
+    G2,
+    ParametricC2 { first_rate: f64, second_rate: f64 },
+}
+
+/// Equation-free differential measurement requested at one curve contact.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CurveMeasurementKind {
+    SignedCurvature,
+    UnsignedCurvature,
+    OsculatingRadius,
+}
+
 /// Closed runtime curve reference used by geometry-generic contact constraints.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SketchCurve {
@@ -291,6 +372,14 @@ pub enum SketchCurve {
     Arc(ArcId),
     Bezier(BezierId),
     Conic(ConicId),
+    BSpline {
+        spline: BSplineId,
+        span: BSplineSpanIndex,
+    },
+    Nurbs {
+        nurbs: NurbsId,
+        span: BSplineSpanIndex,
+    },
 }
 
 /// Explicit selected neighborhood for a runtime curve contact.
@@ -425,6 +514,21 @@ pub enum SketchConstraintKind {
         second: SketchCurveContact,
         orientation: CurveTangentOrientation,
     },
+    CurveDirection {
+        line: SegmentId,
+        contact: SketchCurveContact,
+        relation: CurveDirectionRelation,
+    },
+    EqualCurvature {
+        first: SketchCurveContact,
+        second: SketchCurveContact,
+        relation: CurveCurvatureRelation,
+    },
+    EndpointContinuity {
+        first: SketchCurveContact,
+        second: SketchCurveContact,
+        kind: CurveContinuity,
+    },
 }
 
 /// One stable high-level geometric constraint.
@@ -530,6 +634,8 @@ pub struct Sketch {
     pub(crate) arcs: StableStore<ArcId, crate::curves::CircularArc>,
     pub(crate) beziers: StableStore<BezierId, crate::beziers::BezierCurve>,
     pub(crate) conics: StableStore<ConicId, crate::conics::ConicCurve>,
+    pub(crate) bsplines: StableStore<BSplineId, crate::bsplines::BSplineCurve>,
+    pub(crate) nurbs: StableStore<NurbsId, crate::nurbs::NurbsCurve>,
     pub(crate) constraints: StableStore<SketchConstraintId, SketchConstraint>,
     pub(crate) dimensions: StableStore<SketchDimensionId, SketchDimension>,
     pub(crate) source_order: Vec<PersistentSource>,
@@ -551,6 +657,8 @@ impl Sketch {
             arcs: StableStore::new(),
             beziers: StableStore::new(),
             conics: StableStore::new(),
+            bsplines: StableStore::new(),
+            nurbs: StableStore::new(),
             constraints: StableStore::new(),
             dimensions: StableStore::new(),
             source_order: Vec::new(),
@@ -648,6 +756,14 @@ impl Sketch {
                 .conics
                 .iter()
                 .any(|(_, curve)| curve.kind().references_point(point))
+            || self
+                .bsplines
+                .iter()
+                .any(|(_, curve)| curve.controls().contains(&point))
+            || self
+                .nurbs
+                .iter()
+                .any(|(_, curve)| curve.controls().contains(&point))
             || self
                 .constraints
                 .iter()
@@ -1299,8 +1415,16 @@ fn constraint_references_point(
                 .is_ok_and(|(start, end)| start == point || end == point)
                 || contact.curve.references_point(sketch, point)
         }
+        SketchConstraintKind::CurveDirection { line, contact, .. } => {
+            sketch
+                .segment_endpoints(line)
+                .is_ok_and(|(start, end)| start == point || end == point)
+                || contact.curve.references_point(sketch, point)
+        }
         SketchConstraintKind::CurveCurveContact { first, second }
-        | SketchConstraintKind::CurveCurveTangency { first, second, .. } => {
+        | SketchConstraintKind::CurveCurveTangency { first, second, .. }
+        | SketchConstraintKind::EqualCurvature { first, second, .. }
+        | SketchConstraintKind::EndpointContinuity { first, second, .. } => {
             first.curve.references_point(sketch, point)
                 || second.curve.references_point(sketch, point)
         }
@@ -1346,11 +1470,14 @@ fn constraint_references_segment(kind: SketchConstraintKind, segment: SegmentId)
         SketchConstraintKind::PointOnCurve { contact, .. } => {
             contact.curve.references_segment(segment)
         }
-        SketchConstraintKind::LineCurveTangency { line, contact, .. } => {
+        SketchConstraintKind::LineCurveTangency { line, contact, .. }
+        | SketchConstraintKind::CurveDirection { line, contact, .. } => {
             line == segment || contact.curve.references_segment(segment)
         }
         SketchConstraintKind::CurveCurveContact { first, second }
-        | SketchConstraintKind::CurveCurveTangency { first, second, .. } => {
+        | SketchConstraintKind::CurveCurveTangency { first, second, .. }
+        | SketchConstraintKind::EqualCurvature { first, second, .. }
+        | SketchConstraintKind::EndpointContinuity { first, second, .. } => {
             first.curve.references_segment(segment) || second.curve.references_segment(segment)
         }
         _ => false,
@@ -1379,6 +1506,14 @@ impl SketchCurve {
                 .conics
                 .get(conic)
                 .is_some_and(|value| value.kind().references_point(point)),
+            Self::BSpline { spline, .. } => sketch
+                .bsplines
+                .get(spline)
+                .is_some_and(|value| value.controls().contains(&point)),
+            Self::Nurbs { nurbs, .. } => sketch
+                .nurbs
+                .get(nurbs)
+                .is_some_and(|value| value.controls().contains(&point)),
         }
     }
 
@@ -1431,7 +1566,10 @@ pub(crate) fn validate_dimension_value(value: f64) -> Result<(), SketchError> {
     }
 }
 
-fn nonempty_label(label: impl Into<String>, kind: &'static str) -> Result<String, SketchError> {
+pub(crate) fn nonempty_label(
+    label: impl Into<String>,
+    kind: &'static str,
+) -> Result<String, SketchError> {
     let label = label.into();
     if label.trim().is_empty() {
         Err(SketchError::EmptyLabel(kind))

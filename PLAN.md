@@ -647,31 +647,72 @@ release Trunk build gates pass.
 
 Goal: add locally supported production spline geometry over the generic curve/contact architecture.
 
-- [ ] Add validated degree, control identity and nondecreasing knot vectors.
-- [ ] Add de Boor evaluation and jets through third derivative.
-- [ ] Add clamped and periodic curves.
-- [ ] Add stable semantic span identities and one-sided knot evaluation.
-- [ ] Restrict residual incidence to the active span's local control support.
-- [ ] Add knot insertion with geometry invariance.
-- [ ] Add continuity diagnostics from knot multiplicity.
+- [x] Add validated degree, control identity and nondecreasing knot vectors.
+- [x] Add de Boor evaluation and jets through third derivative.
+- [x] Add clamped and periodic curves.
+- [x] Add stable semantic span identities and one-sided knot evaluation.
+- [x] Restrict residual incidence to the active span's local control support.
+- [x] Add knot insertion with geometry invariance.
+- [x] Add continuity diagnostics from knot multiplicity.
 
 Gate: Bezier equivalence, affine covariance, partition of unity, knot insertion, local support and span-transition tests pass; malformed knots and insufficient continuity reject before success.
 
+Completion note (2026-07-18): immutable geometry now validates bounded degree,
+complete clamped knot vectors and canonical one-period periodic topology, and exposes
+span-local basis values plus jets through third derivative with explicit one-sided
+knot evaluation. Persistent curves retain ordered control identities, opaque semantic
+span IDs, winding and never-reused allocation high-water marks across insertion and
+divergent undo history. Generic point contact and tangency differentiate only the
+selected span's degree-plus-one controls and latent local parameter. Atomic knot
+insertion preserves parameterized geometry and prior control identities, migrates
+contacts and neighborhoods, and splits semantic span identity only for a new positive
+interval. Nine geometry and nine sketch acceptance tests cover Bezier equivalence,
+partition of unity, affine covariance, periodic seams, finite differences, local
+support, refinement, continuity, explicit transitions, persistence and rollback; the
+web consumer samples all public semantic spans without duplicating spline equations.
+Locked format/diff, warnings-denied workspace Clippy, full workspace tests, WASM
+check, warnings-denied rustdoc, core benchmark compilation and release Trunk build
+gates pass.
+
 ## M22: NURBS and advanced CAD constraints
+
+Status: complete as of 2026-07-19.
 
 Goal: complete Deliverable 1.
 
-- [ ] Add positive rational weights and homogeneous de Boor jets.
-- [ ] Add weight derivatives and an explicit weight-gauge policy.
-- [ ] Add rational-denominator and mixed-scale ambiguity diagnostics.
-- [ ] Add signed/unsigned curvature and osculating-radius measurements.
-- [ ] Add equal-curvature and G2 continuity constraints.
-- [ ] Add separately named parametric C2 continuity.
-- [ ] Add generic normal/tangent and endpoint continuity constraints.
-- [ ] Complete persistence for every curve, feature, dimension, contact, span and branch state.
-- [ ] Add sketch fuzz/property, differential-oracle and large sparse performance corpora.
+- [x] Add positive rational weights and homogeneous de Boor jets.
+- [x] Add weight derivatives and an explicit weight-gauge policy.
+- [x] Add rational-denominator and mixed-scale ambiguity diagnostics.
+- [x] Add signed/unsigned curvature and osculating-radius measurements.
+- [x] Add equal-curvature and G2 continuity constraints.
+- [x] Add separately named parametric C2 continuity.
+- [x] Add generic normal/tangent and endpoint continuity constraints.
+- [x] Complete persistence for every curve, feature, dimension, contact, span and branch state.
+- [x] Add sketch fuzz/property, differential-oracle and large sparse performance corpora.
 
 Gate: unit-weight NURBS reproduce B-splines, quadratic NURBS reproduce canonical conics, local support remains bounded by degree, curvature derivatives validate, and the complete 2D CAD acceptance matrix passes.
+
+Completion note (2026-07-19): immutable and editable clamped/periodic NURBS now
+share M21 basis/span topology, use homogeneous refinement, expose only
+degree-plus-one local control/weight incidence, and remove the projective weight
+null direction through one explicit persisted unit gauge. Reference-translated,
+pairwise rational quotient jets and compensated differential geometry reject every
+unrepresentable product, denominator, derivative or curvature without turning it
+into zero. Signed/unsigned curvature, finite osculating radius, tangent/sided-normal,
+signed or branch-explicit magnitude curvature, G0/G1/G2 and rate-explicit
+parametric C2 lower through generic differential rows with finite-difference tests,
+structured audit and independently recomputed immutable candidate rows.
+
+Persistent weights, gauge identity, semantic spans, winding, knot side,
+neighborhood, normal side, curvature relation, endpoint order and C2 rates round
+trip canonically; refinement, transition, re-gauging, deletion and solved-weight
+commits are atomic. Property/differential corpora include 48 generated cases,
+required scales, malformed and mixed-scale inputs, cancellation/underflow
+regressions and a 1,000-control/128-contact sparse-locality case. Thirteen geometry
+and seventeen public sketch M22 tests plus private candidate/AD and web sampling
+regressions pass. Locked format/diff, warnings-denied workspace Clippy, full
+workspace tests, WASM, rustdoc, core benchmark compilation and release Trunk
+gates pass.
 
 ---
 

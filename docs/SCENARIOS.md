@@ -269,6 +269,146 @@ Expected behavior:
 
 These examples are loadable interaction/audit stress labs, not additional canonical A1-A10 gates. They compose existing public document constraints and add no browser equations or new curve family.
 
+## M21 non-rational B-spline fixtures
+
+The B-spline corpus exercises immutable geometry and the persistent generic-curve
+path without adding a curve-pair equation.
+
+### M21-B1 - Clamped local-support cubic
+
+- degree `3`, seven distinct persistent controls and complete clamped knots
+  `[0,0,0,0, 0.25,0.6,0.8, 1,1,1,1]`;
+- every positive knot interval has a stable semantic span ID unrelated to its
+  knot-array index;
+- a point-on-curve and line-tangency source select the second span with local
+  parameter `0.37` and a strict local neighborhood;
+- only the selected span's four controls plus the latent parameter enter curve
+  incidence; controls outside that support enter neither residual incidence nor
+  its Jacobian;
+- controls are fixed and the point begins `0.15s` off the curve at model scales
+  `s = 1e-6, 1, 1e6`; recovery must be hard-valid with normalized residual
+  `<= 1e-9`, and local AD must agree with central differences to `<= 1e-6`;
+- distinct control identities at coincident positions are definition-valid, but
+  a selected zero-speed span rejects before a source or solve can succeed.
+
+### M21-B2 - Periodic topology and refinement
+
+- degree `2`, five unique cyclic controls and one-period knots
+  `[0,1,2,3,4,5]`; no seam control is duplicated in persistence;
+- all five semantic spans evaluate with local `[0,1]` coordinates, while winding
+  remains separate discrete contact state;
+- left and right seam jets satisfy the multiplicity-derived continuity guarantee,
+  and evaluating at parameters separated by an integer period gives identical
+  position and derivatives;
+- inserting native knot `2.4` splits only its selected semantic span: the left
+  child retains its ID, the right child receives one fresh never-reused ID, every
+  old control ID survives and one fresh control ID is allocated;
+- inserting at the existing seam `0` raises multiplicity without allocating a
+  span ID; dense pre/post samples preserve parameterized geometry;
+- contacts on a split span retain world position and migrate atomically to a child
+  span/local coordinate. An exact inserted-knot contact selects the retained left
+  span at local `1`.
+
+### M21-B3 - Explicit one-sided transition and continuity
+
+- a contact at one clamped span end transitions only through an explicit adjacent
+  span command and becomes the next span start at the same world point;
+- crossing the periodic last/first seam increments winding by one; the reverse
+  transition decrements it;
+- point contact may cross a `C0` knot, while a tangent-bearing contact requires a
+  guaranteed `C1` knot and rejects transactionally otherwise;
+- malformed degree/count/knot order/clamping/multiplicity/control/span identity,
+  unavailable endpoint side, escaped local parameter and insertion beyond maximum
+  connected multiplicity all return typed failures and retain accepted state;
+- canonical JSON, deterministic lowering, accepted-state projection, insertion
+  undo/redo and the public document sampler preserve control IDs, span IDs and
+  periodic winding.
+
+## M22 NURBS and advanced CAD fixtures
+
+The M22 corpus completes the reusable 2D CAD surface. Every success is checked
+both through compiled local AD and independently reconstructed immutable jets.
+
+### M22-N1 - Rational equivalence, gauge and local support
+
+- unit weights reproduce clamped and periodic M21 B-spline jets through third
+  order; canonical degree-two weights `[1, 1/sqrt(2), 1]` reproduce the rational
+  quarter circle and its curvature;
+- one explicit persisted weight is exactly one and absent from solver incidence;
+  every other active weight and exactly `degree + 1` controls enter a selected
+  span residual, while inactive controls/weights enter neither component nor
+  Jacobian;
+- explicit re-gauging divides every weight by the selected new gauge, preserves
+  parameterized geometry and makes the old gauge editable; direct selected-gauge
+  edits reject;
+- homogeneous knot insertion retains all old control/weight identities, creates
+  one fresh pair, preserves the gauge identity and parameterized geometry, and
+  normalizes only local refinement stencils;
+- raw and lifecycle-aware NURBS deletion remove all owned weights but retain
+  independently owned controls.
+
+### M22-N2 - Rational conditioning and cancellation
+
+- active normalized weights, pairwise weight products, weighted control
+  differences, homogeneous outputs, denominator condition scale and all returned
+  derivatives must be finite and representable or return a typed mixed-scale or
+  denominator failure;
+- controls translated near `1e15` with one-ULP separation retain the correct
+  positive rational tangent; weights `[1, 1e16]` retain the representable
+  `4e-16` derivative rather than cancellation-corrupting its sign;
+- a tiny basis value, weight `1e-12` and control `1e308` retain their representable
+  product by multiplying the weighted control difference before the basis term;
+- distant extreme weights cannot reject insertion on a locally conditioned
+  degree-one span; truly unrepresentable active ratios/products reject before
+  source success or commit;
+- all solved NURBS weights commit as one clone-and-swap transaction, never as an
+  invalid old/new hybrid, and failed candidates retain prior points and weights.
+
+### M22-D1 - Differential geometry and direction
+
+- circles, directed arcs and canonical NURBS report signed/unsigned curvature,
+  curvature vector and finite osculating radius at scales `1e-6`, `1` and `1e6`;
+  straight curves report zero curvature and typed undefined osculating radius;
+- parameter reversal flips tangent, left normal and signed curvature while
+  preserving unsigned curvature and curvature vector; reflection flips sign and
+  positive similarity divides curvature by scale;
+- compensated raw determinant, unscaled normal projection and scaled normal
+  projection regressions cover near-parallel cancellation, subnormal products,
+  overflowing tangential acceleration and representable mixed-scale curvature;
+- tangent and explicit left/right normal constraints use generic curve jets,
+  preserve their direction branch, pass central differences and independently
+  validate the normalized row rather than only its sign.
+
+### M22-D2 - Curvature and endpoint continuity
+
+- signed equal curvature uses `k1-k2`; magnitude equality stores explicit same- or
+  opposite-sign state and uses a smooth signed equation, with zero magnitude
+  treated as branch-ambiguous;
+- ordered endpoint G0 compares position, G1 adds aligned path tangent, and G2 adds
+  path-oriented signed curvature invariant under positive reparameterization;
+- separately named parametric C2 stores positive fixed rates and compares rate-
+  adjusted first and second derivatives using sequential scaling that avoids
+  premature rate-squared overflow/underflow;
+- candidate validation independently recomputes every normalized G0/G1/G2/C2,
+  direction and curvature row from immutable solved geometry at the effective
+  tolerance; branch-only agreement cannot produce success;
+- C2 consumers require guaranteed C2 span transitions, while one-sided endpoint
+  measurements remain valid without claiming cross-knot continuity.
+
+### M22-P1 - Persistence, properties and sparse locality
+
+- canonical JSON preserves weights, gauge, semantic spans, winding, knot side,
+  neighborhoods, normal side, curvature relation, endpoint order and C2 rates;
+- malformed IDs, gauges, weights, rates, endpoints and transition continuity
+  reject atomically through commands, history and import;
+- 48 generated valid/malformed cases cover refinement invariance, differential
+  oracles and retained-state failure behavior with reproducible seeds;
+- a deterministic 1,000-control NURBS with 128 contacts proves every residual
+  remains degree-local and does not create a global weight-gauge component;
+- the web consumer samples public spans only through document APIs; one failed
+  sample suppresses the complete span path and publishes a separate accessible
+  sampling diagnostic instead of connecting across missing geometry.
+
 ## M15 manifold and accepted-sensitivity fixtures
 
 The manifold regression corpus applies ADR 0006 directly rather than relying on

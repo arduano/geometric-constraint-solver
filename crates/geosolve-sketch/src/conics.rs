@@ -740,11 +740,12 @@ impl Sketch {
             let references = |curve| matches!(curve, crate::SketchCurve::Conic(id) if id == conic);
             match constraint.kind() {
                 SketchConstraintKind::PointOnCurve { contact, .. }
-                | SketchConstraintKind::LineCurveTangency { contact, .. } => {
-                    references(contact.curve)
-                }
+                | SketchConstraintKind::LineCurveTangency { contact, .. }
+                | SketchConstraintKind::CurveDirection { contact, .. } => references(contact.curve),
                 SketchConstraintKind::CurveCurveContact { first, second }
-                | SketchConstraintKind::CurveCurveTangency { first, second, .. } => {
+                | SketchConstraintKind::CurveCurveTangency { first, second, .. }
+                | SketchConstraintKind::EqualCurvature { first, second, .. }
+                | SketchConstraintKind::EndpointContinuity { first, second, .. } => {
                     references(first.curve) || references(second.curve)
                 }
                 _ => false,

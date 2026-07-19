@@ -2,6 +2,7 @@
 
 mod alpha_scenarios;
 mod beziers;
+mod bsplines;
 mod compiler;
 mod conics;
 mod curves;
@@ -10,6 +11,7 @@ mod document_lowering;
 mod document_session;
 mod generic_curves;
 mod model;
+mod nurbs;
 mod residuals;
 mod scenarios;
 mod session;
@@ -24,14 +26,16 @@ pub use alpha_scenarios::{
     alpha_performance_document, alpha_scenario,
 };
 pub use beziers::{BezierCurve, BezierEvaluationError, BezierKind};
+pub use bsplines::BSplineCurve;
 pub use compiler::{
     ArcRadiusVariableMapping, CircleRadiusVariableMapping, CompiledSketch, ConicScalarRole,
     ConicScalarVariableMapping, ConicVectorRole, ConicVectorVariableMapping, DragTarget,
     LatentVariableMapping, LatentVariableRole, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT,
-    MIN_REPRESENTABLE_RADIUS, PointVariableMapping, ReferenceDimensionValue,
-    SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, SketchBound, SketchBoundMapping, SketchGeometry,
-    SketchSolveRequest, SketchSolveResult, SketchSource, SketchSourceMapping, SolveRejection,
-    SolvedArc, SolvedCircle, SolvedConic, SolvedConicKind, SolvedPoint,
+    MIN_REPRESENTABLE_RADIUS, NurbsWeightVariableMapping, PointVariableMapping,
+    ReferenceDimensionValue, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, SketchBound, SketchBoundMapping,
+    SketchGeometry, SketchSolveRequest, SketchSolveResult, SketchSource, SketchSourceMapping,
+    SolveRejection, SolvedArc, SolvedCircle, SolvedConic, SolvedConicKind, SolvedNurbs,
+    SolvedPoint,
 };
 pub use conics::{ConicCurve, ConicGeometry, ConicKind};
 pub use curves::{
@@ -45,15 +49,19 @@ pub use document::{
     ContactDefinition, ContactDomain, ContactId, ContactNeighborhood, ContactSlot,
     ContactStateEdit, CurveDefinition, CurveId, CurveSpan, DesignCurve, DesignPoint, DesignPointId,
     DesignScalar, DesignScalarId, DocumentAngleOrientation, DocumentArcSweep,
-    DocumentArcTangencySide, DocumentCircleContainment, DocumentCircleTangencyMode,
+    DocumentArcTangencySide, DocumentBSplineForm, DocumentBSplineInsertion,
+    DocumentBSplineSpanDirection, DocumentCircleContainment, DocumentCircleTangencyMode,
     DocumentConicFeature, DocumentConicMeasurement, DocumentConicQueryError, DocumentConstraint,
     DocumentConstraintDefinition, DocumentConstraintId, DocumentCoordinateAxis,
-    DocumentCurveEvaluationError, DocumentDimension, DocumentDimensionDefinition,
-    DocumentDimensionId, DocumentDimensionMode, DocumentError, DocumentHyperbolaBranch, DocumentId,
-    DocumentLineSide, DocumentObjectId, DocumentSourceId, DocumentTrimProjection,
-    DocumentTrimProjectionError, FeatureEndpoint, FeatureRef, MAX_DOCUMENT_JSON_BYTES,
-    MAX_DOCUMENT_OBJECTS, MAX_LABEL_BYTES, MAX_POLYLINE_POINTS, PersistentId, RectangleIds,
-    SKETCH_DOCUMENT_VERSION, ScalarDomain, ScalarUnit, SketchDocument, TangentOrientation,
+    DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation,
+    DocumentCurveEvaluationError, DocumentCurveMeasurementError, DocumentCurveMeasurementKind,
+    DocumentCurveNormalSide, DocumentDimension, DocumentDimensionDefinition, DocumentDimensionId,
+    DocumentDimensionMode, DocumentError, DocumentHyperbolaBranch, DocumentId, DocumentLineSide,
+    DocumentNurbsInsertion, DocumentObjectId, DocumentSourceId, DocumentTrimProjection,
+    DocumentTrimProjectionError, FeatureEndpoint, FeatureRef, MAX_BSPLINE_CONTROLS,
+    MAX_DOCUMENT_JSON_BYTES, MAX_DOCUMENT_OBJECTS, MAX_LABEL_BYTES, MAX_POLYLINE_POINTS,
+    PersistentId, RectangleIds, SKETCH_DOCUMENT_VERSION, ScalarDomain, ScalarUnit, SketchDocument,
+    TangentOrientation,
 };
 pub use document_lowering::{
     ContactRuntimeMapping, CurveRuntimeMapping, DocumentContactRole, DocumentRuntimeMap,
@@ -66,15 +74,21 @@ pub use document_session::{
     DocumentTransactionOutcome, SketchDocumentSession,
 };
 pub use geosolve_geometry::{
-    ConicDefinitionError, ConicEvaluationError, DirectedParameterTrim, EllipseAxisObservability,
-    HyperbolaBranch, ProperConicKind,
+    BSplineBasis, BSplineContinuity, BSplineDefinitionError, BSplineEvaluationError, BSplineForm,
+    BSplineInsertionError, BSplineKnotSide, BSplineSpanIndex, ConicDefinitionError,
+    ConicEvaluationError, CurveDifferential2, CurveDifferentialError, DirectedParameterTrim,
+    EllipseAxisObservability, HyperbolaBranch, MAX_BSPLINE_DEGREE, NurbsDefinitionError,
+    NurbsEvaluationError, NurbsInsertionError, ProperConicKind,
 };
 pub use model::{
-    ArcId, BezierId, CircleId, ConicId, CoordinateAxis, CurveContactNeighborhood,
-    CurveTangentOrientation, DimensionKind, DimensionMode, LineSegment, PointId, SegmentBranch,
-    SegmentEndpoint, SegmentId, Sketch, SketchConstraint, SketchConstraintId, SketchConstraintKind,
-    SketchCurve, SketchCurveContact, SketchDimension, SketchDimensionId, SketchError, SketchPoint,
+    ArcId, BSplineId, BezierId, CircleId, ConicId, CoordinateAxis, CurveContactNeighborhood,
+    CurveContinuity, CurveCurvatureRelation, CurveDirectionRelation, CurveMeasurementKind,
+    CurveNormalSide, CurveTangentOrientation, DimensionKind, DimensionMode, LineSegment, NurbsId,
+    PointId, SegmentBranch, SegmentEndpoint, SegmentId, Sketch, SketchConstraint,
+    SketchConstraintId, SketchConstraintKind, SketchCurve, SketchCurveContact, SketchDimension,
+    SketchDimensionId, SketchError, SketchPoint,
 };
+pub use nurbs::NurbsCurve;
 pub use scenarios::{
     ConflictingRectangleIds, TangentCirclesIds, UnderconstrainedTriangleIds, conflicting_rectangle,
     redundant_rectangle, tangent_circles, underconstrained_triangle,

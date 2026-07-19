@@ -214,11 +214,14 @@ impl Sketch {
                     if bezier == id
             ) || match constraint.kind() {
                 SketchConstraintKind::PointOnCurve { contact, .. }
-                | SketchConstraintKind::LineCurveTangency { contact, .. } => {
+                | SketchConstraintKind::LineCurveTangency { contact, .. }
+                | SketchConstraintKind::CurveDirection { contact, .. } => {
                     matches!(contact.curve, crate::SketchCurve::Bezier(bezier) if bezier == id)
                 }
                 SketchConstraintKind::CurveCurveContact { first, second }
-                | SketchConstraintKind::CurveCurveTangency { first, second, .. } => [first, second]
+                | SketchConstraintKind::CurveCurveTangency { first, second, .. }
+                | SketchConstraintKind::EqualCurvature { first, second, .. }
+                | SketchConstraintKind::EndpointContinuity { first, second, .. } => [first, second]
                     .into_iter()
                     .any(|contact| matches!(contact.curve, crate::SketchCurve::Bezier(bezier) if bezier == id)),
                 _ => false,

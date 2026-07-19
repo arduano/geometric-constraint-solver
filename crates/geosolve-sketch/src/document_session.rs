@@ -6,11 +6,11 @@ use thiserror::Error;
 
 use crate::document::{
     ContactDefinition, ContactId, ContactStateEdit, CurveDefinition, CurveId, CurveSpan,
-    DesignPointId, DesignScalarId, DocumentArcSweep, DocumentCircleTangencyMode,
-    DocumentConstraintDefinition, DocumentConstraintId, DocumentDimensionDefinition,
-    DocumentDimensionId, DocumentDimensionMode, DocumentError, DocumentHyperbolaBranch,
-    DocumentObjectId, DocumentSourceId, PersistentId, RectangleIds, ScalarDomain, ScalarUnit,
-    SketchDocument,
+    DesignPointId, DesignScalarId, DocumentArcSweep, DocumentBSplineInsertion,
+    DocumentBSplineSpanDirection, DocumentCircleTangencyMode, DocumentConstraintDefinition,
+    DocumentConstraintId, DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode,
+    DocumentError, DocumentHyperbolaBranch, DocumentNurbsInsertion, DocumentObjectId,
+    DocumentSourceId, PersistentId, RectangleIds, ScalarDomain, ScalarUnit, SketchDocument,
 };
 use crate::document_lowering::{DocumentRuntimeMap, RuntimeSource};
 use crate::{
@@ -233,6 +233,26 @@ pub enum DocumentEdit {
         curve: CurveId,
         branch: DocumentHyperbolaBranch,
     },
+    InsertBSplineKnot {
+        curve: CurveId,
+        parameter: f64,
+    },
+    TransitionBSplineContact {
+        contact: ContactId,
+        direction: DocumentBSplineSpanDirection,
+    },
+    InsertNurbsKnot {
+        curve: CurveId,
+        parameter: f64,
+    },
+    TransitionNurbsContact {
+        contact: ContactId,
+        direction: DocumentBSplineSpanDirection,
+    },
+    SetNurbsWeightGauge {
+        curve: CurveId,
+        gauge_weight: DesignScalarId,
+    },
     SetContactStates {
         edits: Vec<ContactStateEdit>,
     },
@@ -287,6 +307,9 @@ pub enum DocumentCommandEffect {
     UpdatedCurve(CurveId),
     UpdatedConicWeightedMiddle(CurveId),
     UpdatedHyperbolaBranch(CurveId),
+    InsertedBSplineKnot(DocumentBSplineInsertion),
+    InsertedNurbsKnot(DocumentNurbsInsertion),
+    UpdatedNurbsWeightGauge(CurveId),
     UpdatedContacts(Vec<ContactId>),
     UpdatedConstraint(DocumentConstraintId),
     UpdatedDimension(DocumentDimensionId),
@@ -366,6 +389,7 @@ pub struct SketchDocumentSession {
     history: Vec<HistoryEntry>,
     history_cursor: usize,
     allocator_cursors: BTreeMap<crate::DocumentId, PersistentId>,
+    span_allocator_cursors: BTreeMap<crate::DocumentId, BTreeMap<CurveId, u32>>,
 }
 
 impl SketchDocumentSession {
@@ -386,6 +410,8 @@ impl SketchDocumentSession {
         let mut document = document;
         document.project_accepted_state(runtime.sketch(), &mappings)?;
         let allocator_cursors = BTreeMap::from([(document.id(), document.allocator_cursor())]);
+        let span_allocator_cursors =
+            BTreeMap::from([(document.id(), document.spline_span_allocator_cursors())]);
         Ok(Self {
             document,
             runtime,
@@ -396,6 +422,7 @@ impl SketchDocumentSession {
             history: Vec::new(),
             history_cursor: 0,
             allocator_cursors,
+            span_allocator_cursors,
         })
     }
 
@@ -783,6 +810,9 @@ impl SketchDocumentSession {
         if let Some(cursor) = self.allocator_cursors.get(&candidate.id()) {
             candidate.advance_allocator(*cursor);
         }
+        if let Some(cursors) = self.span_allocator_cursors.get(&candidate.id()) {
+            candidate.advance_spline_span_allocators(cursors);
+        }
     }
 
     fn record_allocator(&mut self, document: &SketchDocument) {
@@ -791,6 +821,16 @@ impl SketchDocumentSession {
             .entry(document.id())
             .and_modify(|retained| *retained = (*retained).max(cursor))
             .or_insert(cursor);
+        let retained = self
+            .span_allocator_cursors
+            .entry(document.id())
+            .or_default();
+        for (curve, cursor) in document.spline_span_allocator_cursors() {
+            retained
+                .entry(curve)
+                .and_modify(|value| *value = (*value).max(cursor))
+                .or_insert(cursor);
+        }
     }
 }
 
@@ -876,6 +916,7 @@ fn lower_request(
     Ok(runtime)
 }
 
+#[allow(clippy::too_many_lines)]
 fn apply_edit(
     document: &mut SketchDocument,
     edit: DocumentEdit,
@@ -940,6 +981,29 @@ fn apply_edit(
         DocumentEdit::SetHyperbolaBranch { curve, branch } => {
             document.set_hyperbola_branch(curve, branch)?;
             DocumentCommandEffect::UpdatedHyperbolaBranch(curve)
+        }
+        DocumentEdit::InsertBSplineKnot { curve, parameter } => {
+            DocumentCommandEffect::InsertedBSplineKnot(
+                document.insert_bspline_knot(curve, parameter)?,
+            )
+        }
+        DocumentEdit::TransitionBSplineContact { contact, direction } => {
+            document.transition_bspline_contact(contact, direction)?;
+            DocumentCommandEffect::UpdatedContacts(vec![contact])
+        }
+        DocumentEdit::InsertNurbsKnot { curve, parameter } => {
+            DocumentCommandEffect::InsertedNurbsKnot(document.insert_nurbs_knot(curve, parameter)?)
+        }
+        DocumentEdit::TransitionNurbsContact { contact, direction } => {
+            document.transition_nurbs_contact(contact, direction)?;
+            DocumentCommandEffect::UpdatedContacts(vec![contact])
+        }
+        DocumentEdit::SetNurbsWeightGauge {
+            curve,
+            gauge_weight,
+        } => {
+            document.set_nurbs_weight_gauge(curve, gauge_weight)?;
+            DocumentCommandEffect::UpdatedNurbsWeightGauge(curve)
         }
         DocumentEdit::SetContactStates { edits } => {
             let contacts = edits.iter().map(|edit| edit.contact).collect();

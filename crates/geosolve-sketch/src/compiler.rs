@@ -14,15 +14,16 @@ use crate::curves::{
 };
 use crate::model::{
     ArcId, CircleId, ConicId, CoordinateAxis, CurveContactNeighborhood, DimensionKind,
-    DimensionMode, PersistentSource, PointId, SegmentId, Sketch, SketchConstraintId,
+    DimensionMode, NurbsId, PersistentSource, PointId, SegmentId, Sketch, SketchConstraintId,
     SketchConstraintKind, SketchCurve, SketchCurveContact, SketchDimensionId, SketchError,
     validate_model_scale, validate_point,
 };
 use crate::residuals::{
     AxisDifferenceResidual, BezierIncidence, CircleArcTangencyResidual, CircleTangencyResidual,
     CoincidentResidual, CurveParameterIncidence, DistanceResidual, FixedCoordinateResidual,
-    GenericCurveIncidence, GenericCurvePairResidual, GenericPointOnCurveResidual,
-    LineBezierTangencyResidual, LineCircleTangencyResidual, MidpointResidual,
+    GenericCurveDirectionResidual, GenericCurveIncidence, GenericCurvePairResidual,
+    GenericEndpointContinuityResidual, GenericEqualCurvatureResidual, GenericPointOnCurveResidual,
+    LineBezierTangencyResidual, LineCircleTangencyResidual, MidpointResidual, NurbsWeightIncidence,
     OrientedAngleResidual, PointOnArcResidual, PointOnBezierResidual, PointOnCircleResidual,
     PointOnLineResidual, PointTargetResidual, ScalarEqualityResidual, ScalarTargetResidual,
     SegmentPairEquation, SegmentPairResidual, SymmetryResidual,
@@ -149,6 +150,14 @@ pub struct ConicVectorVariableMapping {
     pub variable_id: VariableId,
 }
 
+/// Exact non-gauge NURBS-weight-to-core-variable relationship.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct NurbsWeightVariableMapping {
+    pub nurbs_id: NurbsId,
+    pub control_index: usize,
+    pub variable_id: VariableId,
+}
+
 /// Semantic role of an ordinary scalar variable retained inside a source constraint.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LatentVariableRole {
@@ -177,6 +186,10 @@ pub enum SketchBound {
     ConicScalar {
         conic_id: ConicId,
         role: ConicScalarRole,
+    },
+    NurbsWeight {
+        nurbs_id: NurbsId,
+        control_index: usize,
     },
     Contact {
         constraint_id: SketchConstraintId,
@@ -219,6 +232,7 @@ pub struct CompiledSketch {
     arc_radius_variables: Vec<ArcRadiusVariableMapping>,
     conic_vector_variables: Vec<ConicVectorVariableMapping>,
     conic_scalar_variables: Vec<ConicScalarVariableMapping>,
+    nurbs_weight_variables: Vec<NurbsWeightVariableMapping>,
     latent_variables: Vec<LatentVariableMapping>,
     bound_mappings: Vec<SketchBoundMapping>,
     source_mappings: Vec<SketchSourceMapping>,
@@ -262,6 +276,11 @@ impl CompiledSketch {
     #[must_use]
     pub fn conic_vector_variables(&self) -> &[ConicVectorVariableMapping] {
         &self.conic_vector_variables
+    }
+
+    #[must_use]
+    pub fn nurbs_weight_variables(&self) -> &[NurbsWeightVariableMapping] {
+        &self.nurbs_weight_variables
     }
 
     #[must_use]
@@ -319,6 +338,18 @@ impl CompiledSketch {
     ) -> Option<VariableId> {
         self.conic_vector_variables.iter().find_map(|mapping| {
             (mapping.conic_id == conic && mapping.role == role).then_some(mapping.variable_id)
+        })
+    }
+
+    #[must_use]
+    pub fn variable_for_nurbs_weight(
+        &self,
+        nurbs: NurbsId,
+        control_index: usize,
+    ) -> Option<VariableId> {
+        self.nurbs_weight_variables.iter().find_map(|mapping| {
+            (mapping.nurbs_id == nurbs && mapping.control_index == control_index)
+                .then_some(mapping.variable_id)
         })
     }
 
@@ -458,6 +489,24 @@ impl CompiledSketch {
             };
             conics.push(SolvedConic { conic_id, kind });
         }
+        let mut nurbs = Vec::with_capacity(sketch.nurbs.iter().count());
+        for (nurbs_id, curve) in sketch.nurbs.iter() {
+            let mut weights = Vec::with_capacity(curve.weights().len());
+            for (control_index, retained) in curve.weights().iter().copied().enumerate() {
+                let weight = if control_index == curve.gauge_index() {
+                    retained
+                } else {
+                    nurbs_weight_value(
+                        problem,
+                        &self.nurbs_weight_variables,
+                        nurbs_id,
+                        control_index,
+                    )?
+                };
+                weights.push(weight);
+            }
+            nurbs.push(SolvedNurbs { nurbs_id, weights });
+        }
         let mut latents = Vec::with_capacity(self.latent_variables.len());
         for mapping in &self.latent_variables {
             latents.push(SolvedLatent {
@@ -472,6 +521,7 @@ impl CompiledSketch {
                 circles,
                 arcs,
                 conics,
+                nurbs,
             },
             latents,
         })
@@ -535,6 +585,7 @@ impl CompiledSketch {
                     &self.arc_radius_variables,
                     &self.conic_vector_variables,
                     &self.conic_scalar_variables,
+                    &self.nurbs_weight_variables,
                     &mut generated_latents,
                     &mut generated_bounds,
                     constraint_id,
@@ -906,6 +957,13 @@ impl SolvedConic {
     }
 }
 
+/// Solved positive weights for one runtime NURBS in control order.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SolvedNurbs {
+    pub nurbs_id: NurbsId,
+    pub weights: Vec<f64>,
+}
+
 /// Finite geometry returned for display or downstream queries.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SketchGeometry {
@@ -913,6 +971,7 @@ pub struct SketchGeometry {
     pub circles: Vec<SolvedCircle>,
     pub arcs: Vec<SolvedArc>,
     pub conics: Vec<SolvedConic>,
+    pub nurbs: Vec<SolvedNurbs>,
 }
 
 impl SketchGeometry {
@@ -936,6 +995,11 @@ impl SketchGeometry {
     #[must_use]
     pub fn conic(&self, conic: ConicId) -> Option<&SolvedConic> {
         self.conics.iter().find(|item| item.conic_id == conic)
+    }
+
+    #[must_use]
+    pub fn nurbs(&self, nurbs: NurbsId) -> Option<&SolvedNurbs> {
+        self.nurbs.iter().find(|item| item.nurbs_id == nurbs)
     }
 }
 
@@ -975,6 +1039,20 @@ pub enum SolveRejection {
     DegenerateSegment(SegmentId),
     DegenerateCurve(SketchConstraintId),
     InvalidConicEntity(ConicId),
+    InvalidNurbsEntity {
+        nurbs: NurbsId,
+        source: geosolve_geometry::NurbsDefinitionError,
+    },
+    NurbsEvaluation {
+        constraint: SketchConstraintId,
+        nurbs: NurbsId,
+        source: geosolve_geometry::NurbsEvaluationError,
+    },
+    IndependentConstraintResidual {
+        constraint: SketchConstraintId,
+        maximum: f64,
+        tolerance: f64,
+    },
     ContactParameterOutOfDomain(SketchConstraintId),
     AmbiguousContactNeighborhood(SketchConstraintId),
     LineSideFlipped(SketchConstraintId),
@@ -1154,6 +1232,35 @@ impl Sketch {
             });
         }
 
+        let mut nurbs_weight_variables = Vec::new();
+        for (nurbs_id, curve) in self.nurbs.iter() {
+            for (control_index, weight) in curve.weights().iter().copied().enumerate() {
+                if control_index == curve.gauge_index() {
+                    continue;
+                }
+                let variable_id = problem.add_variable(VariableBlock::scalar(weight, weight)?);
+                nurbs_weight_variables.push(NurbsWeightVariableMapping {
+                    nurbs_id,
+                    control_index,
+                    variable_id,
+                });
+                let bound_id = problem.add_bound(CoordinateBound::new(
+                    variable_id,
+                    0,
+                    Some(MIN_REPRESENTABLE_RADIUS),
+                    None,
+                    format!("positive weight {control_index} for {}", curve.label()),
+                )?)?;
+                bound_mappings.push(SketchBoundMapping {
+                    bound: SketchBound::NurbsWeight {
+                        nurbs_id,
+                        control_index,
+                    },
+                    bound_id,
+                });
+            }
+        }
+
         let mut source_mappings = Vec::new();
         let mut latent_variables = Vec::new();
         for source in &self.source_order {
@@ -1170,6 +1277,7 @@ impl Sketch {
                         &arc_radius_variables,
                         &conic_vector_variables,
                         &conic_scalar_variables,
+                        &nurbs_weight_variables,
                         &mut latent_variables,
                         &mut bound_mappings,
                         constraint_id,
@@ -1260,6 +1368,7 @@ impl Sketch {
             arc_radius_variables,
             conic_vector_variables,
             conic_scalar_variables,
+            nurbs_weight_variables,
             latent_variables,
             bound_mappings,
             source_mappings,
@@ -1306,13 +1415,20 @@ impl Sketch {
         }
 
         let core_hard_validity = core_report.hard_validity;
+        let candidate_validation =
+            self.validate_m7_candidate(&candidate, config.normalized_residual_tolerance);
+        let independent_advanced_max = match &candidate_validation {
+            Ok(maximum) => *maximum,
+            Err(rejection) => rejection_residual_max(rejection).unwrap_or(0.0),
+        };
         let candidate_domain_rejection = self
             .first_flipped_segment(&candidate.geometry)
             .map(SolveRejection::SegmentBranchFlipped)
-            .or_else(|| self.validate_m7_candidate(&candidate).err());
+            .or_else(|| candidate_validation.err());
         let domain_rejection = if core_hard_validity == HardValidity::Valid {
             match independent_hard_residual_metrics(&compiled.problem) {
                 Ok((maximum, _, _)) => {
+                    let maximum = maximum.max(independent_advanced_max);
                     acceptance_hard_residual_max = Some(maximum);
                     if maximum > config.normalized_residual_tolerance {
                         Some(SolveRejection::HardResidual {
@@ -1436,6 +1552,14 @@ impl Sketch {
                     solved_conic_from_runtime(self, conic_id, conic).ok()
                 })
                 .collect(),
+            nurbs: self
+                .nurbs
+                .iter()
+                .map(|(nurbs_id, curve)| SolvedNurbs {
+                    nurbs_id,
+                    weights: curve.weights().to_vec(),
+                })
+                .collect(),
         }
     }
 
@@ -1467,7 +1591,9 @@ impl Sketch {
     pub(crate) fn validate_m7_candidate(
         &self,
         candidate: &SolvedSketchState,
-    ) -> Result<(), SolveRejection> {
+        tolerance: f64,
+    ) -> Result<f64, SolveRejection> {
+        let mut independent_advanced_max: f64 = 0.0;
         for (segment_id, segment) in self.segments.iter() {
             let start = candidate.geometry.point(segment.start()).ok_or_else(|| {
                 SolveRejection::IndependentValidationFailed(
@@ -1497,6 +1623,14 @@ impl Sketch {
         for conic in &candidate.geometry.conics {
             validate_solved_conic_entity(*conic)
                 .map_err(|_| SolveRejection::InvalidConicEntity(conic.conic_id))?;
+        }
+        for solved in &candidate.geometry.nurbs {
+            candidate_nurbs_geometry(self, candidate, solved.nurbs_id).map_err(|source| {
+                SolveRejection::InvalidNurbsEntity {
+                    nurbs: solved.nurbs_id,
+                    source,
+                }
+            })?;
         }
         for (constraint_id, constraint) in self.constraints.iter() {
             match constraint.kind() {
@@ -1902,13 +2036,87 @@ impl Sketch {
                         },
                         0.0,
                     )
-                    .map_err(|()| SolveRejection::DegenerateCurve(constraint_id))?;
+                    .map_err(|error| candidate_curve_rejection(constraint_id, error))?;
                     validate_generic_orientation(
                         constraint_id,
                         line_jet.first_derivative,
                         curve_jet.first_derivative,
                         orientation,
                     )?;
+                }
+                SketchConstraintKind::CurveDirection {
+                    line,
+                    contact,
+                    relation,
+                } => {
+                    let parameter = latent_value(
+                        &candidate.latents,
+                        constraint_id,
+                        LatentVariableRole::CurveParameter,
+                    )?;
+                    let curve_jet = validate_generic_contact_candidate(
+                        self,
+                        candidate,
+                        constraint_id,
+                        contact,
+                        parameter,
+                    )?;
+                    let line_jet = candidate_curve_jet(
+                        self,
+                        candidate,
+                        SketchCurve::Line {
+                            segment: line,
+                            domain: crate::LineParameterDomain::BoundedSegment,
+                        },
+                        0.0,
+                    )
+                    .map_err(|error| candidate_curve_rejection(constraint_id, error))?;
+                    let line_unit = line_jet
+                        .differential()
+                        .map_err(|_| SolveRejection::DegenerateCurve(constraint_id))?
+                        .unit_tangent;
+                    let curve_unit = curve_jet
+                        .differential()
+                        .map_err(|_| SolveRejection::DegenerateCurve(constraint_id))?
+                        .unit_tangent;
+                    let row = match relation {
+                        crate::CurveDirectionRelation::Tangent(_) => {
+                            cross_2d(line_unit, curve_unit)
+                        }
+                        crate::CurveDirectionRelation::Normal(_) => line_unit.dot(&curve_unit),
+                    };
+                    independent_advanced_max = independent_advanced_max.max(
+                        validate_independent_constraint_rows(constraint_id, &[row], tolerance)?,
+                    );
+                    match relation {
+                        crate::CurveDirectionRelation::Tangent(orientation) => {
+                            validate_generic_orientation(
+                                constraint_id,
+                                line_jet.first_derivative,
+                                curve_jet.first_derivative,
+                                orientation,
+                            )?;
+                        }
+                        crate::CurveDirectionRelation::Normal(side) => {
+                            let left = Vector2::new(
+                                -curve_jet.first_derivative.y,
+                                curve_jet.first_derivative.x,
+                            );
+                            validate_generic_orientation(
+                                constraint_id,
+                                line_jet.first_derivative,
+                                left,
+                                match side {
+                                    crate::CurveNormalSide::Left => {
+                                        crate::CurveTangentOrientation::Aligned
+                                    }
+                                    crate::CurveNormalSide::Right => {
+                                        crate::CurveTangentOrientation::Opposed
+                                    }
+                                },
+                            )?;
+                        }
+                    }
                 }
                 SketchConstraintKind::CurveCurveContact { first, second }
                 | SketchConstraintKind::CurveCurveTangency {
@@ -1951,10 +2159,157 @@ impl Sketch {
                         )?;
                     }
                 }
+                SketchConstraintKind::EqualCurvature {
+                    first,
+                    second,
+                    relation,
+                } => {
+                    let first_parameter = latent_value(
+                        &candidate.latents,
+                        constraint_id,
+                        LatentVariableRole::FirstCurveParameter,
+                    )?;
+                    let second_parameter = latent_value(
+                        &candidate.latents,
+                        constraint_id,
+                        LatentVariableRole::SecondCurveParameter,
+                    )?;
+                    let first = validate_generic_contact_candidate(
+                        self,
+                        candidate,
+                        constraint_id,
+                        first,
+                        first_parameter,
+                    )?
+                    .differential()
+                    .map_err(|_| SolveRejection::DegenerateCurve(constraint_id))?;
+                    let second = validate_generic_contact_candidate(
+                        self,
+                        candidate,
+                        constraint_id,
+                        second,
+                        second_parameter,
+                    )?
+                    .differential()
+                    .map_err(|_| SolveRejection::DegenerateCurve(constraint_id))?;
+                    let signs_match = first.signed_curvature.is_sign_positive()
+                        == second.signed_curvature.is_sign_positive();
+                    let branch_valid = match relation {
+                        crate::CurveCurvatureRelation::Signed => true,
+                        crate::CurveCurvatureRelation::MagnitudeSameSign => {
+                            first.signed_curvature != 0.0
+                                && second.signed_curvature != 0.0
+                                && signs_match
+                        }
+                        crate::CurveCurvatureRelation::MagnitudeOppositeSign => {
+                            first.signed_curvature != 0.0
+                                && second.signed_curvature != 0.0
+                                && !signs_match
+                        }
+                    };
+                    if !branch_valid {
+                        return Err(SolveRejection::CenterDirectionFlipped(constraint_id));
+                    }
+                    let row = match relation {
+                        crate::CurveCurvatureRelation::Signed
+                        | crate::CurveCurvatureRelation::MagnitudeSameSign => {
+                            (first.signed_curvature - second.signed_curvature) * self.model_scale
+                        }
+                        crate::CurveCurvatureRelation::MagnitudeOppositeSign => {
+                            (first.signed_curvature + second.signed_curvature) * self.model_scale
+                        }
+                    };
+                    independent_advanced_max = independent_advanced_max.max(
+                        validate_independent_constraint_rows(constraint_id, &[row], tolerance)?,
+                    );
+                }
+                SketchConstraintKind::EndpointContinuity {
+                    first,
+                    second,
+                    kind,
+                } => {
+                    let first_jet = validate_generic_contact_candidate(
+                        self,
+                        candidate,
+                        constraint_id,
+                        first,
+                        first.parameter,
+                    )?;
+                    let second_jet = validate_generic_contact_candidate(
+                        self,
+                        candidate,
+                        constraint_id,
+                        second,
+                        second.parameter,
+                    )?;
+                    let first_sign = if first.neighborhood == CurveContactNeighborhood::Start {
+                        -1.0
+                    } else {
+                        1.0
+                    };
+                    let second_sign = if second.neighborhood == CurveContactNeighborhood::Start {
+                        1.0
+                    } else {
+                        -1.0
+                    };
+                    let mut rows = vec![
+                        (first_jet.position.x - second_jet.position.x) / self.model_scale,
+                        (first_jet.position.y - second_jet.position.y) / self.model_scale,
+                    ];
+                    if matches!(
+                        kind,
+                        crate::CurveContinuity::G1 | crate::CurveContinuity::G2
+                    ) {
+                        validate_generic_orientation(
+                            constraint_id,
+                            first_jet.first_derivative * first_sign,
+                            second_jet.first_derivative * second_sign,
+                            crate::CurveTangentOrientation::Aligned,
+                        )?;
+                        let first_differential = first_jet
+                            .differential()
+                            .map_err(|_| SolveRejection::DegenerateCurve(constraint_id))?;
+                        let second_differential = second_jet
+                            .differential()
+                            .map_err(|_| SolveRejection::DegenerateCurve(constraint_id))?;
+                        rows.push(cross_2d(
+                            first_differential.unit_tangent * first_sign,
+                            second_differential.unit_tangent * second_sign,
+                        ));
+                        if kind == crate::CurveContinuity::G2 {
+                            rows.push(
+                                (first_differential.signed_curvature * first_sign
+                                    - second_differential.signed_curvature * second_sign)
+                                    * self.model_scale,
+                            );
+                        }
+                    }
+                    if let crate::CurveContinuity::ParametricC2 {
+                        first_rate,
+                        second_rate,
+                    } = kind
+                    {
+                        let first_derivative = first_jet.first_derivative * first_rate * first_sign;
+                        let second_derivative =
+                            second_jet.first_derivative * second_rate * second_sign;
+                        let first_second = first_jet.second_derivative * first_rate * first_rate;
+                        let second_second =
+                            second_jet.second_derivative * second_rate * second_rate;
+                        rows.extend([
+                            (first_derivative.x - second_derivative.x) / self.model_scale,
+                            (first_derivative.y - second_derivative.y) / self.model_scale,
+                            (first_second.x - second_second.x) / self.model_scale,
+                            (first_second.y - second_second.y) / self.model_scale,
+                        ]);
+                    }
+                    independent_advanced_max = independent_advanced_max.max(
+                        validate_independent_constraint_rows(constraint_id, &rows, tolerance)?,
+                    );
+                }
                 _ => {}
             }
         }
-        Ok(())
+        Ok(independent_advanced_max)
     }
 
     #[allow(clippy::too_many_lines)]
@@ -2012,7 +2367,8 @@ impl Sketch {
                     }
                 }
                 SketchConstraintKind::PointOnCurve { contact, .. }
-                | SketchConstraintKind::LineCurveTangency { contact, .. } => {
+                | SketchConstraintKind::LineCurveTangency { contact, .. }
+                | SketchConstraintKind::CurveDirection { contact, .. } => {
                     normalize_generic_latent(
                         self,
                         &mut candidate.latents,
@@ -2023,7 +2379,9 @@ impl Sketch {
                     );
                 }
                 SketchConstraintKind::CurveCurveContact { first, second }
-                | SketchConstraintKind::CurveCurveTangency { first, second, .. } => {
+                | SketchConstraintKind::CurveCurveTangency { first, second, .. }
+                | SketchConstraintKind::EqualCurvature { first, second, .. }
+                | SketchConstraintKind::EndpointContinuity { first, second, .. } => {
                     normalize_generic_latent(
                         self,
                         &mut candidate.latents,
@@ -2238,6 +2596,11 @@ impl Sketch {
                 .conics
                 .iter()
                 .any(|conic| validate_solved_conic_entity(*conic).is_err())
+            || candidate
+                .geometry
+                .nurbs
+                .iter()
+                .any(|solved| candidate_nurbs_geometry(self, candidate, solved.nurbs_id).is_err())
     }
 
     fn commit_latents(&mut self, latents: &[SolvedLatent]) -> Result<(), SketchError> {
@@ -2287,17 +2650,22 @@ impl Sketch {
                 ) => *bezier_parameter = latent.value,
                 (
                     SketchConstraintKind::PointOnCurve { contact, .. }
-                    | SketchConstraintKind::LineCurveTangency { contact, .. },
+                    | SketchConstraintKind::LineCurveTangency { contact, .. }
+                    | SketchConstraintKind::CurveDirection { contact, .. },
                     LatentVariableRole::CurveParameter,
                 ) => contact.parameter = latent.value,
                 (
                     SketchConstraintKind::CurveCurveContact { first, .. }
-                    | SketchConstraintKind::CurveCurveTangency { first, .. },
+                    | SketchConstraintKind::CurveCurveTangency { first, .. }
+                    | SketchConstraintKind::EqualCurvature { first, .. }
+                    | SketchConstraintKind::EndpointContinuity { first, .. },
                     LatentVariableRole::FirstCurveParameter,
                 ) => first.parameter = latent.value,
                 (
                     SketchConstraintKind::CurveCurveContact { second, .. }
-                    | SketchConstraintKind::CurveCurveTangency { second, .. },
+                    | SketchConstraintKind::CurveCurveTangency { second, .. }
+                    | SketchConstraintKind::EqualCurvature { second, .. }
+                    | SketchConstraintKind::EndpointContinuity { second, .. },
                     LatentVariableRole::SecondCurveParameter,
                 ) => second.parameter = latent.value,
                 _ => return Err(SketchError::NoContactState(latent.constraint_id)),
@@ -2310,6 +2678,13 @@ impl Sketch {
         &mut self,
         candidate: &SolvedSketchState,
     ) -> Result<(), SketchError> {
+        let mut staged = self.clone();
+        staged.apply_solved_state(candidate)?;
+        *self = staged;
+        Ok(())
+    }
+
+    fn apply_solved_state(&mut self, candidate: &SolvedSketchState) -> Result<(), SketchError> {
         for point in &candidate.geometry.points {
             self.set_point_position(point.point_id, point.position)?;
         }
@@ -2341,6 +2716,9 @@ impl Sketch {
                 }
                 SolvedConicKind::ParabolaSegment { .. } => {}
             }
+        }
+        for solved in &candidate.geometry.nurbs {
+            self.replace_nurbs_weights(solved.nurbs_id, solved.weights.clone())?;
         }
         self.commit_latents(&candidate.latents)
     }
@@ -2533,6 +2911,14 @@ pub(crate) fn rejection_hard_validity(rejection: &SolveRejection) -> HardValidit
     }
 }
 
+pub(crate) fn rejection_residual_max(rejection: &SolveRejection) -> Option<f64> {
+    match rejection {
+        SolveRejection::HardResidual { maximum, .. }
+        | SolveRejection::IndependentConstraintResidual { maximum, .. } => Some(*maximum),
+        _ => None,
+    }
+}
+
 pub(crate) fn domain_hard_validity(
     core_hard_validity: HardValidity,
     rejection: Option<&SolveRejection>,
@@ -2553,6 +2939,7 @@ fn compile_constraint(
     arc_radius_variables: &[ArcRadiusVariableMapping],
     conic_vector_variables: &[ConicVectorVariableMapping],
     conic_scalar_variables: &[ConicScalarVariableMapping],
+    nurbs_weight_variables: &[NurbsWeightVariableMapping],
     latent_variables: &mut Vec<LatentVariableMapping>,
     bound_mappings: &mut Vec<SketchBoundMapping>,
     constraint_id: SketchConstraintId,
@@ -2696,6 +3083,7 @@ fn compile_constraint(
                 arc_radius_variables,
                 conic_vector_variables,
                 conic_scalar_variables,
+                nurbs_weight_variables,
                 latent_variables,
                 bound_mappings,
                 constraint_id,
@@ -2770,6 +3158,7 @@ fn compile_curve_constraint(
     arc_radius_variables: &[ArcRadiusVariableMapping],
     conic_vector_variables: &[ConicVectorVariableMapping],
     conic_scalar_variables: &[ConicScalarVariableMapping],
+    nurbs_weight_variables: &[NurbsWeightVariableMapping],
     latent_variables: &mut Vec<LatentVariableMapping>,
     bound_mappings: &mut Vec<SketchBoundMapping>,
     constraint_id: SketchConstraintId,
@@ -2989,6 +3378,7 @@ fn compile_curve_constraint(
                         arc_radius_variables,
                         conic_vector_variables,
                         conic_scalar_variables,
+                        nurbs_weight_variables,
                         &mut incidence,
                         contact.curve,
                         parameter,
@@ -3338,6 +3728,7 @@ fn compile_curve_constraint(
                 arc_radius_variables,
                 conic_vector_variables,
                 conic_scalar_variables,
+                nurbs_weight_variables,
                 &mut incidence,
                 contact.curve,
                 parameter,
@@ -3406,6 +3797,7 @@ fn compile_curve_constraint(
                 arc_radius_variables,
                 conic_vector_variables,
                 conic_scalar_variables,
+                nurbs_weight_variables,
                 &mut incidence,
                 first.curve,
                 first_parameter,
@@ -3419,6 +3811,7 @@ fn compile_curve_constraint(
                 arc_radius_variables,
                 conic_vector_variables,
                 conic_scalar_variables,
+                nurbs_weight_variables,
                 &mut incidence,
                 second.curve,
                 second_parameter,
@@ -3455,6 +3848,272 @@ fn compile_curve_constraint(
                     vec![scale, scale]
                 },
                 generic_curve_pair_audit_rows(bindings, tangency),
+                Box::new(evaluator),
+            )
+        }
+        SketchConstraintKind::CurveDirection {
+            line,
+            contact,
+            relation,
+        } => {
+            let (start, end, line_value) = segment_points(sketch, line)?;
+            let curve_label = generic_curve_label(sketch, contact.curve)?;
+            let parameter = add_curve_contact_latent(
+                sketch,
+                problem,
+                latent_variables,
+                bound_mappings,
+                constraint_id,
+                LatentVariableRole::CurveParameter,
+                contact,
+            )?;
+            let parameter = CurveParameterIncidence::Variable(incidence.add(parameter));
+            let curve = generic_curve_incidence(
+                sketch,
+                point_variables,
+                circle_radius_variables,
+                arc_radius_variables,
+                conic_vector_variables,
+                conic_scalar_variables,
+                nurbs_weight_variables,
+                &mut incidence,
+                contact.curve,
+                parameter,
+            )?;
+            let evaluator = GenericCurveDirectionResidual {
+                line: [
+                    incidence.add(point_variable(point_variables, start)?),
+                    incidence.add(point_variable(point_variables, end)?),
+                ],
+                curve,
+                relation,
+            };
+            let (name, equation) = match relation {
+                crate::CurveDirectionRelation::Tangent(_) => {
+                    ("tangent direction", "cross(unit(line), unit(curve'(t)))")
+                }
+                crate::CurveDirectionRelation::Normal(_) => {
+                    ("normal direction", "dot(unit(line), unit(curve'(t)))")
+                }
+            };
+            let bindings = vec![
+                AuditBinding::new("line", line_value.label()),
+                AuditBinding::new("curve", curve_label),
+                AuditBinding::new("relation", format!("{relation:?}")),
+                AuditBinding::new("neighborhood", format!("{:?}", contact.neighborhood)),
+            ];
+            (
+                format!(
+                    "constraint {}: {} follows {curve_label} {name}",
+                    constraint.ordinal(),
+                    line_value.label()
+                ),
+                1,
+                vec![1.0],
+                vec![audit_row_unit(equation.into(), bindings, "dimensionless")],
+                Box::new(evaluator),
+            )
+        }
+        SketchConstraintKind::EqualCurvature {
+            first,
+            second,
+            relation,
+        } => {
+            let first_label = generic_curve_label(sketch, first.curve)?;
+            let second_label = generic_curve_label(sketch, second.curve)?;
+            let first_parameter = add_curve_contact_latent(
+                sketch,
+                problem,
+                latent_variables,
+                bound_mappings,
+                constraint_id,
+                LatentVariableRole::FirstCurveParameter,
+                first,
+            )?;
+            let second_parameter = add_curve_contact_latent(
+                sketch,
+                problem,
+                latent_variables,
+                bound_mappings,
+                constraint_id,
+                LatentVariableRole::SecondCurveParameter,
+                second,
+            )?;
+            let first_parameter = CurveParameterIncidence::Variable(incidence.add(first_parameter));
+            let first_curve = generic_curve_incidence(
+                sketch,
+                point_variables,
+                circle_radius_variables,
+                arc_radius_variables,
+                conic_vector_variables,
+                conic_scalar_variables,
+                nurbs_weight_variables,
+                &mut incidence,
+                first.curve,
+                first_parameter,
+            )?;
+            let second_parameter =
+                CurveParameterIncidence::Variable(incidence.add(second_parameter));
+            let second_curve = generic_curve_incidence(
+                sketch,
+                point_variables,
+                circle_radius_variables,
+                arc_radius_variables,
+                conic_vector_variables,
+                conic_scalar_variables,
+                nurbs_weight_variables,
+                &mut incidence,
+                second.curve,
+                second_parameter,
+            )?;
+            let evaluator = GenericEqualCurvatureResidual {
+                first: first_curve,
+                second: second_curve,
+                relation,
+                model_scale: scale,
+            };
+            let bindings = vec![
+                AuditBinding::new("first curve", first_label),
+                AuditBinding::new("second curve", second_label),
+                AuditBinding::new("curvature relation", format!("{relation:?}")),
+                AuditBinding::new("first neighborhood", format!("{:?}", first.neighborhood)),
+                AuditBinding::new("second neighborhood", format!("{:?}", second.neighborhood)),
+            ];
+            (
+                format!(
+                    "constraint {}: {first_label} and {second_label} equal curvature",
+                    constraint.ordinal()
+                ),
+                1,
+                vec![1.0],
+                vec![audit_row_unit(
+                    "model_scale * selected_signed_curvature_difference".into(),
+                    bindings,
+                    "dimensionless",
+                )],
+                Box::new(evaluator),
+            )
+        }
+        SketchConstraintKind::EndpointContinuity {
+            first,
+            second,
+            kind,
+        } => {
+            let first_label = generic_curve_label(sketch, first.curve)?;
+            let second_label = generic_curve_label(sketch, second.curve)?;
+            let first_parameter = CurveParameterIncidence::Fixed(first.parameter);
+            let first_curve = generic_curve_incidence(
+                sketch,
+                point_variables,
+                circle_radius_variables,
+                arc_radius_variables,
+                conic_vector_variables,
+                conic_scalar_variables,
+                nurbs_weight_variables,
+                &mut incidence,
+                first.curve,
+                first_parameter,
+            )?;
+            let second_parameter = CurveParameterIncidence::Fixed(second.parameter);
+            let second_curve = generic_curve_incidence(
+                sketch,
+                point_variables,
+                circle_radius_variables,
+                arc_radius_variables,
+                conic_vector_variables,
+                conic_scalar_variables,
+                nurbs_weight_variables,
+                &mut incidence,
+                second.curve,
+                second_parameter,
+            )?;
+            let first_sign = match first.neighborhood {
+                CurveContactNeighborhood::Start => -1.0,
+                CurveContactNeighborhood::End => 1.0,
+                _ => return Err(SketchError::InvalidContinuityEndpoint),
+            };
+            let second_sign = match second.neighborhood {
+                CurveContactNeighborhood::Start => 1.0,
+                CurveContactNeighborhood::End => -1.0,
+                _ => return Err(SketchError::InvalidContinuityEndpoint),
+            };
+            let evaluator = GenericEndpointContinuityResidual {
+                first: first_curve,
+                second: second_curve,
+                first_sign,
+                second_sign,
+                kind,
+                model_scale: scale,
+            };
+            let bindings = vec![
+                AuditBinding::new("incoming curve", first_label),
+                AuditBinding::new("outgoing curve", second_label),
+                AuditBinding::new("continuity", format!("{kind:?}")),
+                AuditBinding::new("first endpoint", format!("{:?}", first.neighborhood)),
+                AuditBinding::new("second endpoint", format!("{:?}", second.neighborhood)),
+            ];
+            let mut rows = vec![
+                audit_row(
+                    "(incoming_endpoint.x - outgoing_endpoint.x) / model_scale".into(),
+                    bindings.clone(),
+                ),
+                audit_row(
+                    "(incoming_endpoint.y - outgoing_endpoint.y) / model_scale".into(),
+                    bindings.clone(),
+                ),
+            ];
+            let mut scales = vec![scale, scale];
+            match kind {
+                crate::CurveContinuity::G0 => {}
+                crate::CurveContinuity::G1 => {
+                    rows.push(audit_row_unit(
+                        "cross(unit(incoming_path_tangent), unit(outgoing_path_tangent))".into(),
+                        bindings,
+                        "dimensionless",
+                    ));
+                    scales.push(1.0);
+                }
+                crate::CurveContinuity::G2 => {
+                    rows.push(audit_row_unit(
+                        "cross(unit(incoming_path_tangent), unit(outgoing_path_tangent))".into(),
+                        bindings.clone(),
+                        "dimensionless",
+                    ));
+                    rows.push(audit_row_unit(
+                        "model_scale * (incoming_path_curvature - outgoing_path_curvature)".into(),
+                        bindings,
+                        "dimensionless",
+                    ));
+                    scales.extend([1.0, 1.0]);
+                }
+                crate::CurveContinuity::ParametricC2 { .. } => {
+                    for coordinate in ["x", "y"] {
+                        rows.push(audit_row(
+                            format!(
+                                "(q1*a1*incoming'.{coordinate} - q2*a2*outgoing'.{coordinate}) / model_scale"
+                            ),
+                            bindings.clone(),
+                        ));
+                    }
+                    for coordinate in ["x", "y"] {
+                        rows.push(audit_row(
+                            format!(
+                                "(a1^2*incoming''.{coordinate} - a2^2*outgoing''.{coordinate}) / model_scale"
+                            ),
+                            bindings.clone(),
+                        ));
+                    }
+                    scales.extend([scale; 4]);
+                }
+            }
+            (
+                format!(
+                    "constraint {}: {first_label} to {second_label} {kind:?}",
+                    constraint.ordinal()
+                ),
+                rows.len(),
+                scales,
+                rows,
                 Box::new(evaluator),
             )
         }
@@ -4168,6 +4827,7 @@ fn generic_curve_incidence(
     arc_radius_variables: &[ArcRadiusVariableMapping],
     conic_vector_variables: &[ConicVectorVariableMapping],
     conic_scalar_variables: &[ConicScalarVariableMapping],
+    nurbs_weight_variables: &[NurbsWeightVariableMapping],
     incidence: &mut IncidenceBuilder,
     curve: SketchCurve,
     parameter: CurveParameterIncidence,
@@ -4302,6 +4962,71 @@ fn generic_curve_incidence(
                 },
             })
         }
+        SketchCurve::BSpline { spline, span } => {
+            let value = sketch
+                .bspline(spline)
+                .ok_or(SketchError::UnknownBSpline(spline))?;
+            let active = value.basis().span(span).ok_or_else(|| {
+                SketchError::InvalidBSplineEvaluation(
+                    geosolve_geometry::BSplineEvaluationError::InvalidSpan {
+                        ordinal: span.ordinal(),
+                    },
+                )
+            })?;
+            let controls = active
+                .support()
+                .iter()
+                .map(|index| {
+                    let control = value.controls()[*index];
+                    Ok(incidence.add(point_variable(point_variables, control)?))
+                })
+                .collect::<Result<Vec<_>, SketchError>>()?;
+            Ok(GenericCurveIncidence::BSpline {
+                basis: value.basis().clone(),
+                span,
+                controls,
+                parameter,
+            })
+        }
+        SketchCurve::Nurbs { nurbs, span } => {
+            let value = sketch
+                .nurbs(nurbs)
+                .ok_or(SketchError::UnknownNurbs(nurbs))?;
+            let active = value.basis().span(span).ok_or_else(|| {
+                SketchError::InvalidNurbsEvaluation(geosolve_geometry::NurbsEvaluationError::Basis(
+                    geosolve_geometry::BSplineEvaluationError::InvalidSpan {
+                        ordinal: span.ordinal(),
+                    },
+                ))
+            })?;
+            let controls = active
+                .support()
+                .iter()
+                .map(|index| {
+                    Ok(incidence.add(point_variable(point_variables, value.controls()[*index])?))
+                })
+                .collect::<Result<Vec<_>, SketchError>>()?;
+            let weights = active
+                .support()
+                .iter()
+                .map(|index| {
+                    if *index == value.gauge_index() {
+                        Ok(NurbsWeightIncidence::Fixed(value.weights()[*index]))
+                    } else {
+                        Ok(NurbsWeightIncidence::Variable(incidence.add(
+                            nurbs_weight_variable(nurbs_weight_variables, nurbs, *index)?,
+                        )))
+                    }
+                })
+                .collect::<Result<Vec<_>, SketchError>>()?;
+            Ok(GenericCurveIncidence::Nurbs {
+                basis: value.basis().clone(),
+                span,
+                controls,
+                weights,
+                parameter,
+            })
+        }
     }
 }
 
@@ -4349,6 +5074,14 @@ fn generic_curve_label(sketch: &Sketch, curve: SketchCurve) -> Result<&str, Sket
             .map(crate::BezierCurve::label)
             .ok_or(SketchError::UnknownBezier(bezier)),
         SketchCurve::Conic(conic) => sketch.conic_value(conic).map(crate::ConicCurve::label),
+        SketchCurve::BSpline { spline, .. } => sketch
+            .bspline(spline)
+            .map(crate::BSplineCurve::label)
+            .ok_or(SketchError::UnknownBSpline(spline)),
+        SketchCurve::Nurbs { nurbs, .. } => sketch
+            .nurbs(nurbs)
+            .map(crate::NurbsCurve::label)
+            .ok_or(SketchError::UnknownNurbs(nurbs)),
     }
 }
 
@@ -4464,6 +5197,35 @@ fn conic_scalar_value(
     role: ConicScalarRole,
 ) -> Result<f64, SketchError> {
     scalar_variable(problem, conic_scalar_variable(mappings, conic, role)?)
+}
+
+fn nurbs_weight_variable(
+    mappings: &[NurbsWeightVariableMapping],
+    nurbs: NurbsId,
+    control_index: usize,
+) -> Result<VariableId, SketchError> {
+    mappings
+        .iter()
+        .find_map(|mapping| {
+            (mapping.nurbs_id == nurbs && mapping.control_index == control_index)
+                .then_some(mapping.variable_id)
+        })
+        .ok_or(SketchError::InvalidNurbsWeightIndex {
+            nurbs,
+            index: control_index,
+        })
+}
+
+fn nurbs_weight_value(
+    problem: &Problem,
+    mappings: &[NurbsWeightVariableMapping],
+    nurbs: NurbsId,
+    control_index: usize,
+) -> Result<f64, SketchError> {
+    scalar_variable(
+        problem,
+        nurbs_weight_variable(mappings, nurbs, control_index)?,
+    )
 }
 
 fn conic_vector_value(
@@ -4709,7 +5471,9 @@ fn generic_curve_is_bounded(sketch: &Sketch, curve: SketchCurve) -> bool {
             ..
         }
         | SketchCurve::Arc(_)
-        | SketchCurve::Bezier(_) => true,
+        | SketchCurve::Bezier(_)
+        | SketchCurve::BSpline { .. }
+        | SketchCurve::Nurbs { .. } => true,
         SketchCurve::Conic(conic) => sketch
             .conic(conic)
             .is_some_and(|value| !value.is_periodic()),
@@ -4741,7 +5505,11 @@ fn normalize_generic_latent(
             normalize_bounded_candidate(latent.value).unwrap_or(latent.value)
         }
         SketchCurve::Line { .. } => latent.value,
-        SketchCurve::Arc(_) | SketchCurve::Bezier(_) | SketchCurve::Conic(_) => unreachable!(),
+        SketchCurve::Arc(_)
+        | SketchCurve::Bezier(_)
+        | SketchCurve::Conic(_)
+        | SketchCurve::BSpline { .. }
+        | SketchCurve::Nurbs { .. } => unreachable!(),
     };
     *changed |= normalized.to_bits() != latent.value.to_bits();
     latent.value = normalized;
@@ -4776,7 +5544,28 @@ fn validate_generic_contact_candidate(
         return Err(SolveRejection::AmbiguousContactNeighborhood(constraint));
     }
     candidate_curve_jet(sketch, candidate, contact.curve, parameter)
-        .map_err(|()| SolveRejection::DegenerateCurve(constraint))
+        .map_err(|error| candidate_curve_rejection(constraint, error))
+}
+
+fn validate_independent_constraint_rows(
+    constraint: SketchConstraintId,
+    rows: &[f64],
+    tolerance: f64,
+) -> Result<f64, SolveRejection> {
+    let maximum = rows.iter().map(|value| value.abs()).fold(0.0, f64::max);
+    if !maximum.is_finite() || maximum > tolerance {
+        Err(SolveRejection::IndependentConstraintResidual {
+            constraint,
+            maximum,
+            tolerance,
+        })
+    } else {
+        Ok(maximum)
+    }
+}
+
+fn cross_2d(first: Vector2<f64>, second: Vector2<f64>) -> f64 {
+    first.x * second.y - first.y * second.x
 }
 
 fn validate_generic_orientation(
@@ -4806,17 +5595,83 @@ fn validate_generic_orientation(
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+enum CandidateCurveError {
+    Other,
+    InvalidNurbs {
+        nurbs: NurbsId,
+        source: geosolve_geometry::NurbsDefinitionError,
+    },
+    NurbsEvaluation {
+        nurbs: NurbsId,
+        source: geosolve_geometry::NurbsEvaluationError,
+    },
+}
+
+fn candidate_curve_rejection(
+    constraint: SketchConstraintId,
+    error: CandidateCurveError,
+) -> SolveRejection {
+    match error {
+        CandidateCurveError::Other => SolveRejection::DegenerateCurve(constraint),
+        CandidateCurveError::InvalidNurbs { nurbs, source } => {
+            SolveRejection::InvalidNurbsEntity { nurbs, source }
+        }
+        CandidateCurveError::NurbsEvaluation { nurbs, source } => SolveRejection::NurbsEvaluation {
+            constraint,
+            nurbs,
+            source,
+        },
+    }
+}
+
+fn candidate_nurbs_geometry(
+    sketch: &Sketch,
+    candidate: &SolvedSketchState,
+    nurbs: NurbsId,
+) -> Result<geosolve_geometry::NurbsCurve2, geosolve_geometry::NurbsDefinitionError> {
+    let curve = sketch
+        .nurbs(nurbs)
+        .expect("candidate NURBS has validated runtime identity");
+    let controls = curve
+        .controls()
+        .iter()
+        .map(|control| {
+            candidate
+                .geometry
+                .point(*control)
+                .expect("candidate NURBS has every compiled control")
+        })
+        .collect();
+    let weights = candidate
+        .geometry
+        .nurbs(nurbs)
+        .expect("candidate NURBS has compiled solved weights")
+        .weights
+        .clone();
+    geosolve_geometry::NurbsCurve2::try_new(curve.basis().clone(), controls, weights)
+}
+
 fn candidate_curve_jet(
     sketch: &Sketch,
     candidate: &SolvedSketchState,
     curve: SketchCurve,
     parameter: f64,
-) -> Result<geosolve_geometry::CurveJet2, ()> {
+) -> Result<geosolve_geometry::CurveJet2, CandidateCurveError> {
     match curve {
         SketchCurve::Line { segment, domain } => {
-            let segment = sketch.segments.get(segment).ok_or(())?;
-            let start = candidate.geometry.point(segment.start()).ok_or(())?;
-            let end = candidate.geometry.point(segment.end()).ok_or(())?;
+            let segment = sketch
+                .segments
+                .get(segment)
+                .ok_or(CandidateCurveError::Other)?;
+            let start = candidate
+                .geometry
+                .point(segment.start())
+                .ok_or(CandidateCurveError::Other)?;
+            let end = candidate
+                .geometry
+                .point(segment.end())
+                .ok_or(CandidateCurveError::Other)?;
             geosolve_geometry::line_jet(
                 start,
                 end,
@@ -4833,14 +5688,21 @@ fn candidate_curve_jet(
                 },
                 parameter,
             )
-            .map_err(|_| ())
+            .map_err(|_| CandidateCurveError::Other)
         }
         SketchCurve::Circle(circle) => {
-            let circle = candidate.geometry.circle(circle).ok_or(())?;
-            geosolve_geometry::circle_jet(circle.center, circle.radius, parameter).map_err(|_| ())
+            let circle = candidate
+                .geometry
+                .circle(circle)
+                .ok_or(CandidateCurveError::Other)?;
+            geosolve_geometry::circle_jet(circle.center, circle.radius, parameter)
+                .map_err(|_| CandidateCurveError::Other)
         }
         SketchCurve::Arc(arc) => {
-            let arc = candidate.geometry.arc(arc).ok_or(())?;
+            let arc = candidate
+                .geometry
+                .arc(arc)
+                .ok_or(CandidateCurveError::Other)?;
             geosolve_geometry::circular_arc_jet(
                 arc.center,
                 arc.radius,
@@ -4848,17 +5710,37 @@ fn candidate_curve_jet(
                 arc.signed_sweep,
                 parameter,
             )
-            .map_err(|_| ())
+            .map_err(|_| CandidateCurveError::Other)
         }
-        SketchCurve::Bezier(bezier) => {
-            candidate_bezier_jet(sketch, candidate, bezier, parameter).map_err(|_| ())
-        }
+        SketchCurve::Bezier(bezier) => candidate_bezier_jet(sketch, candidate, bezier, parameter)
+            .map_err(|_| CandidateCurveError::Other),
         SketchCurve::Conic(conic) => candidate
             .geometry
             .conic(conic)
-            .ok_or(())?
+            .ok_or(CandidateCurveError::Other)?
             .evaluate(parameter)
-            .map_err(|_| ()),
+            .map_err(|_| CandidateCurveError::Other),
+        SketchCurve::BSpline { spline, span } => {
+            let curve = sketch.bspline(spline).ok_or(CandidateCurveError::Other)?;
+            let controls = curve
+                .controls()
+                .iter()
+                .map(|control| {
+                    candidate
+                        .geometry
+                        .point(*control)
+                        .ok_or(CandidateCurveError::Other)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            geosolve_geometry::BSplineCurve2::try_new(curve.basis().clone(), controls)
+                .map_err(|_| CandidateCurveError::Other)?
+                .jet_on_span(span, parameter)
+                .map_err(|_| CandidateCurveError::Other)
+        }
+        SketchCurve::Nurbs { nurbs, span } => candidate_nurbs_geometry(sketch, candidate, nurbs)
+            .map_err(|source| CandidateCurveError::InvalidNurbs { nurbs, source })?
+            .jet_on_span(span, parameter)
+            .map_err(|source| CandidateCurveError::NurbsEvaluation { nurbs, source }),
     }
 }
 
@@ -4925,7 +5807,10 @@ mod tests {
     use std::f64::consts::TAU;
 
     use super::*;
-    use crate::{LineParameterDomain, LineSide};
+    use crate::{
+        CurveContactNeighborhood, CurveContinuity, CurveCurvatureRelation, CurveDirectionRelation,
+        CurveNormalSide, LineParameterDomain, LineSide, SketchCurve, SketchCurveContact,
+    };
 
     #[test]
     fn equivalent_periodic_candidates_are_unwrapped_to_the_retained_local_branch() {
@@ -5013,7 +5898,9 @@ mod tests {
             .latents
             .retain(|latent| latent.constraint_id != constraint);
 
-        let rejection = sketch.validate_m7_candidate(&candidate).unwrap_err();
+        let rejection = sketch
+            .validate_m7_candidate(&candidate, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE)
+            .unwrap_err();
         assert!(matches!(
             rejection,
             SolveRejection::IndependentValidationFailed(_)
@@ -5022,5 +5909,237 @@ mod tests {
 
         assert_eq!(report.hard_validity, HardValidity::NotEvaluated);
         assert!(report.hard_residuals_validated);
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn independent_candidate_validation_recomputes_advanced_rows() {
+        let tolerance = SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE;
+
+        let mut direction_sketch = Sketch::new(1.0).unwrap();
+        let line_start = direction_sketch.add_point(Point2::origin()).unwrap();
+        let line_end = direction_sketch.add_point(Point2::new(-1.0, 0.0)).unwrap();
+        let line = direction_sketch.add_segment(line_start, line_end).unwrap();
+        let center = direction_sketch.add_point(Point2::origin()).unwrap();
+        let circle = direction_sketch.add_circle(center, 1.0).unwrap();
+        let direction = direction_sketch
+            .add_curve_direction(
+                line,
+                SketchCurveContact {
+                    curve: SketchCurve::Circle(circle),
+                    parameter: 0.0,
+                    neighborhood: CurveContactNeighborhood::Interior,
+                },
+                CurveDirectionRelation::Normal(CurveNormalSide::Left),
+            )
+            .unwrap();
+        let compiled = direction_sketch
+            .compile(SketchSolveRequest::default())
+            .unwrap();
+        let mut candidate = compiled.solved_state(&direction_sketch).unwrap();
+        candidate
+            .geometry
+            .points
+            .iter_mut()
+            .find(|point| point.point_id == line_end)
+            .unwrap()
+            .position
+            .y = 0.1;
+        assert!(matches!(
+            direction_sketch.validate_m7_candidate(&candidate, tolerance),
+            Err(SolveRejection::IndependentConstraintResidual {
+                constraint,
+                ..
+            }) if constraint == direction
+        ));
+
+        let mut curvature_sketch = Sketch::new(1.0).unwrap();
+        let first_center = curvature_sketch.add_point(Point2::origin()).unwrap();
+        let second_center = curvature_sketch.add_point(Point2::new(4.0, 0.0)).unwrap();
+        let first = curvature_sketch.add_circle(first_center, 1.0).unwrap();
+        let second = curvature_sketch.add_circle(second_center, 2.0).unwrap();
+        let curvature = curvature_sketch
+            .add_equal_curvature(
+                SketchCurveContact {
+                    curve: SketchCurve::Circle(first),
+                    parameter: 0.0,
+                    neighborhood: CurveContactNeighborhood::Interior,
+                },
+                SketchCurveContact {
+                    curve: SketchCurve::Circle(second),
+                    parameter: 0.0,
+                    neighborhood: CurveContactNeighborhood::Interior,
+                },
+                CurveCurvatureRelation::Signed,
+            )
+            .unwrap();
+        let compiled = curvature_sketch
+            .compile(SketchSolveRequest::default())
+            .unwrap();
+        let candidate = compiled.solved_state(&curvature_sketch).unwrap();
+        assert!(matches!(
+            curvature_sketch.validate_m7_candidate(&candidate, tolerance),
+            Err(SolveRejection::IndependentConstraintResidual {
+                constraint,
+                ..
+            }) if constraint == curvature
+        ));
+
+        let mut continuity_sketch = Sketch::new(1.0).unwrap();
+        let first_start = continuity_sketch.add_point(Point2::new(-1.0, 0.0)).unwrap();
+        let seam = continuity_sketch.add_point(Point2::origin()).unwrap();
+        let second_end = continuity_sketch.add_point(Point2::new(2.0, 0.0)).unwrap();
+        let first_line = continuity_sketch.add_segment(first_start, seam).unwrap();
+        let second_line = continuity_sketch.add_segment(seam, second_end).unwrap();
+        let continuity = continuity_sketch
+            .add_endpoint_continuity(
+                SketchCurveContact {
+                    curve: SketchCurve::Line {
+                        segment: first_line,
+                        domain: LineParameterDomain::BoundedSegment,
+                    },
+                    parameter: 1.0,
+                    neighborhood: CurveContactNeighborhood::End,
+                },
+                SketchCurveContact {
+                    curve: SketchCurve::Line {
+                        segment: second_line,
+                        domain: LineParameterDomain::BoundedSegment,
+                    },
+                    parameter: 0.0,
+                    neighborhood: CurveContactNeighborhood::Start,
+                },
+                CurveContinuity::ParametricC2 {
+                    first_rate: 1.0,
+                    second_rate: 1.0,
+                },
+            )
+            .unwrap();
+        let compiled = continuity_sketch
+            .compile(SketchSolveRequest::default())
+            .unwrap();
+        let candidate = compiled.solved_state(&continuity_sketch).unwrap();
+        assert!(matches!(
+            continuity_sketch.validate_m7_candidate(&candidate, tolerance),
+            Err(SolveRejection::IndependentConstraintResidual {
+                constraint,
+                ..
+            }) if constraint == continuity
+        ));
+    }
+
+    #[test]
+    fn independent_candidate_validation_preserves_nurbs_conditioning_error() {
+        let mut sketch = Sketch::new(1.0).unwrap();
+        let controls = [
+            Point2::origin(),
+            Point2::new(0.5, 1.0),
+            Point2::new(1.0, 0.0),
+        ]
+        .map(|point| sketch.add_point(point).unwrap());
+        let nurbs = sketch
+            .add_named_nurbs(
+                "conditioned line",
+                geosolve_geometry::BSplineForm::Clamped,
+                2,
+                controls.to_vec(),
+                vec![1.0, 1.0, 1.0],
+                0,
+                vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+            )
+            .unwrap();
+        let mut compiled = sketch.compile(SketchSolveRequest::default()).unwrap();
+        for (index, value) in [(1, f64::from_bits(1)), (2, f64::MAX)] {
+            let variable = compiled
+                .nurbs_weight_variables
+                .iter()
+                .find(|mapping| mapping.nurbs_id == nurbs && mapping.control_index == index)
+                .unwrap()
+                .variable_id;
+            compiled
+                .problem
+                .set_variable_value(variable, VariableValue::Scalar(value))
+                .unwrap();
+        }
+        let candidate = compiled.solved_state(&sketch).unwrap();
+
+        assert!(matches!(
+            sketch.validate_m7_candidate(&candidate, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE),
+            Err(SolveRejection::InvalidNurbsEntity {
+                nurbs: rejected,
+                source: geosolve_geometry::NurbsDefinitionError::MixedWeightScale { .. },
+            }) if rejected == nurbs
+        ));
+
+        for (index, value) in [(1, -1.0), (2, 1.0)] {
+            let variable = compiled
+                .nurbs_weight_variables
+                .iter()
+                .find(|mapping| mapping.nurbs_id == nurbs && mapping.control_index == index)
+                .unwrap()
+                .variable_id;
+            compiled
+                .problem
+                .set_variable_value(variable, VariableValue::Scalar(value))
+                .unwrap();
+        }
+        let candidate = compiled.solved_state(&sketch).unwrap();
+        assert!(matches!(
+            sketch.validate_m7_candidate(&candidate, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE),
+            Err(SolveRejection::InvalidNurbsEntity {
+                nurbs: rejected,
+                source: geosolve_geometry::NurbsDefinitionError::InvalidWeight {
+                    index: 1,
+                    ..
+                },
+            }) if rejected == nurbs
+        ));
+    }
+
+    #[test]
+    fn solved_nurbs_weights_commit_as_one_transaction() {
+        let mut sketch = Sketch::new(1.0).unwrap();
+        let controls = [
+            Point2::origin(),
+            Point2::new(1.0, 0.0),
+            Point2::new(2.0, 0.0),
+        ]
+        .map(|point| sketch.add_point(point).unwrap());
+        let nurbs = sketch
+            .add_named_nurbs(
+                "locally scaled polyline",
+                geosolve_geometry::BSplineForm::Clamped,
+                1,
+                controls.to_vec(),
+                vec![1.0, 1.0, f64::MAX],
+                0,
+                vec![0.0, 0.0, 1.0, 2.0, 2.0],
+            )
+            .unwrap();
+        let mut candidate = SolvedSketchState {
+            geometry: sketch.geometry(),
+            latents: Vec::new(),
+        };
+        candidate.geometry.nurbs[0].weights = vec![1.0, 1.0e-200, 1.0e-200];
+        sketch.commit_solved_state(&candidate).unwrap();
+        assert_eq!(
+            sketch.nurbs(nurbs).unwrap().weights(),
+            [1.0, 1.0e-200, 1.0e-200]
+        );
+
+        let retained = sketch.point(controls[0]).unwrap().position();
+        let mut rejected = SolvedSketchState {
+            geometry: sketch.geometry(),
+            latents: Vec::new(),
+        };
+        rejected.geometry.points[0].position = Point2::new(9.0, 9.0);
+        rejected.geometry.nurbs[0].weights = vec![1.0, f64::from_bits(1), f64::MAX];
+        assert!(matches!(
+            sketch.commit_solved_state(&rejected),
+            Err(SketchError::InvalidNurbs(
+                geosolve_geometry::NurbsDefinitionError::MixedWeightScale { .. }
+            ))
+        ));
+        assert_eq!(sketch.point(controls[0]).unwrap().position(), retained);
     }
 }

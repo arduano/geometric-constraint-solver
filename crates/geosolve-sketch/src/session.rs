@@ -122,6 +122,7 @@ struct CompleteSketchCandidate {
     geometry: SketchGeometry,
     reference_values: Vec<ReferenceDimensionValue>,
     normalized_latents: Vec<SolvedLatent>,
+    independent_hard_residual_max: f64,
 }
 
 enum LatentSynchronization {
@@ -147,6 +148,7 @@ impl SketchSession {
         let mut core = SolveSession::new(compiled.problem().clone(), config)?;
         let complete = finalize_solved_candidate(&mut core, &compiled, &sketch, request)?
             .map_err(|(_, rejection)| SketchSessionError::InitialRejected(rejection))?;
+        let independent_hard_residual_max = complete.independent_hard_residual_max;
         sketch = complete.sketch;
         compiled.replace_problem(core.problem().clone());
         let mut audit_refresh = AcceptedAuditPatch::new(core.revisions());
@@ -169,7 +171,11 @@ impl SketchSession {
             bound_mappings: compiled.bound_mappings().to_vec(),
             core_report: report,
             rejection: None,
-            acceptance_hard_residual_max: Some(core.report().hard_residual_max),
+            acceptance_hard_residual_max: Some(
+                core.report()
+                    .hard_residual_max
+                    .max(independent_hard_residual_max),
+            ),
         };
         let preference_targets = preference_targets(&validation_sketch, &compiled);
         Ok(Self {
@@ -371,6 +377,7 @@ impl SketchSession {
         let validation_compiled = self.compiled.clone();
         let validation_template = candidate_sketch.clone();
         let mut candidate_core = self.core.clone();
+        let validation_tolerance = candidate_core.config().normalized_residual_tolerance;
         let (transaction, complete_candidate) =
             candidate_core.apply_with_output(core_patch, |problem, report| {
                 complete_candidate_for_problem(
@@ -379,6 +386,7 @@ impl SketchSession {
                     &validation_compiled,
                     &validation_template,
                     candidate_request,
+                    validation_tolerance,
                 )
             })?;
 
@@ -392,6 +400,8 @@ impl SketchSession {
             }
         });
         if let Some(rejection) = rejection {
+            let acceptance_max = crate::compiler::rejection_residual_max(&rejection)
+                .map(|maximum| maximum.max(transaction.report.hard_residual_max));
             return Ok(SketchSolveResult {
                 geometry: self.sketch.geometry(),
                 display_audit: self.accepted_result.display_audit.clone(),
@@ -400,7 +410,7 @@ impl SketchSession {
                 bound_mappings: self.accepted_result.bound_mappings.clone(),
                 core_report: transaction.report,
                 rejection: Some(rejection),
-                acceptance_hard_residual_max: None,
+                acceptance_hard_residual_max: acceptance_max,
             });
         }
 
@@ -413,6 +423,8 @@ impl SketchSession {
         )? {
             Ok(complete) => complete,
             Err((sync_report, rejection)) => {
+                let acceptance_max = crate::compiler::rejection_residual_max(&rejection)
+                    .map(|maximum| maximum.max(sync_report.hard_residual_max));
                 return Ok(SketchSolveResult {
                     geometry: self.sketch.geometry(),
                     display_audit: self.accepted_result.display_audit.clone(),
@@ -421,7 +433,7 @@ impl SketchSession {
                     bound_mappings: self.accepted_result.bound_mappings.clone(),
                     core_report: sync_report,
                     rejection: Some(rejection),
-                    acceptance_hard_residual_max: None,
+                    acceptance_hard_residual_max: acceptance_max,
                 });
             }
         };
@@ -449,7 +461,11 @@ impl SketchSession {
             reference_values: complete.reference_values,
             source_mappings: accepted_compiled.source_mappings().to_vec(),
             bound_mappings: accepted_compiled.bound_mappings().to_vec(),
-            acceptance_hard_residual_max: Some(report.hard_residual_max),
+            acceptance_hard_residual_max: Some(
+                report
+                    .hard_residual_max
+                    .max(complete.independent_hard_residual_max),
+            ),
             core_report: report,
             rejection: None,
         };
@@ -509,6 +525,7 @@ impl SketchSession {
         let validation_sketch = sketch.clone();
         let complete = finalize_solved_candidate(&mut candidate_core, &compiled, &sketch, request)?
             .map_err(|(_, rejection)| SketchSessionError::InitialRejected(rejection))?;
+        let independent_hard_residual_max = complete.independent_hard_residual_max;
         let accepted_sketch = complete.sketch;
         let reference_values = complete.reference_values;
         compiled.replace_problem(candidate_core.problem().clone());
@@ -532,7 +549,12 @@ impl SketchSession {
             bound_mappings: compiled.bound_mappings().to_vec(),
             core_report: report,
             rejection: None,
-            acceptance_hard_residual_max: Some(candidate_core.report().hard_residual_max),
+            acceptance_hard_residual_max: Some(
+                candidate_core
+                    .report()
+                    .hard_residual_max
+                    .max(independent_hard_residual_max),
+            ),
         };
         let preference_targets = preference_targets(&validation_sketch, &compiled);
         let rebuilt = Self {
@@ -575,6 +597,7 @@ fn complete_candidate_for_problem(
     compiled: &CompiledSketch,
     template: &Sketch,
     request: SketchSolveRequest,
+    tolerance: f64,
 ) -> Result<CompleteSketchCandidate, SessionDomainRejection<SolveRejection>> {
     let mut candidate = compiled
         .solved_state_for_problem(problem, template)
@@ -589,8 +612,8 @@ fn complete_candidate_for_problem(
             SolveRejection::SegmentBranchFlipped(segment),
         ));
     }
-    template
-        .validate_m7_candidate(&candidate)
+    let independent_hard_residual_max = template
+        .validate_m7_candidate(&candidate, tolerance)
         .map_err(session_domain_rejection)?;
     template
         .validate_drag_selected_span(request, &candidate)
@@ -616,6 +639,7 @@ fn complete_candidate_for_problem(
         sketch: complete,
         reference_values,
         normalized_latents: candidate.latents,
+        independent_hard_residual_max,
     })
 }
 
@@ -629,12 +653,14 @@ fn finalize_solved_candidate(
     SketchSessionError,
 > {
     for _ in 0..4 {
+        let tolerance = core.config().normalized_residual_tolerance;
         let complete = match complete_candidate_for_problem(
             core.problem(),
             core.report(),
             compiled,
             template,
             request,
+            tolerance,
         ) {
             Ok(complete) => complete,
             Err(rejection) => {

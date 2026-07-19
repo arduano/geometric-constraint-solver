@@ -1,6 +1,7 @@
 use crate::curves::{validate_bounded_parameter, validate_line_parameter};
 use crate::{
-    CurveContactNeighborhood, CurveTangentOrientation, PointId, SegmentEndpoint, SegmentId, Sketch,
+    CurveContactNeighborhood, CurveContinuity, CurveCurvatureRelation, CurveDirectionRelation,
+    CurveMeasurementKind, CurveTangentOrientation, PointId, SegmentEndpoint, SegmentId, Sketch,
     SketchConstraintId, SketchConstraintKind, SketchCurve, SketchCurveContact, SketchError,
 };
 
@@ -81,6 +82,117 @@ impl Sketch {
         )
     }
 
+    /// Adds a generic tangent or explicitly sided normal direction at one curve location.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for stale, degenerate, non-finite, or out-of-domain data.
+    pub fn add_curve_direction(
+        &mut self,
+        line: SegmentId,
+        contact: SketchCurveContact,
+        relation: CurveDirectionRelation,
+    ) -> Result<SketchConstraintId, SketchError> {
+        self.validate_segment_geometry(line)?;
+        self.validate_curve_contact(contact)?;
+        Ok(
+            self.insert_constraint(SketchConstraintKind::CurveDirection {
+                line,
+                contact,
+                relation,
+            }),
+        )
+    }
+
+    /// Adds equality of signed curvature or one explicit magnitude-sign branch.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for stale, degenerate, non-finite, or out-of-domain data.
+    pub fn add_equal_curvature(
+        &mut self,
+        first: SketchCurveContact,
+        second: SketchCurveContact,
+        relation: CurveCurvatureRelation,
+    ) -> Result<SketchConstraintId, SketchError> {
+        self.validate_curve_contact(first)?;
+        self.validate_curve_contact(second)?;
+        Ok(
+            self.insert_constraint(SketchConstraintKind::EqualCurvature {
+                first,
+                second,
+                relation,
+            }),
+        )
+    }
+
+    /// Adds ordered G0/G1/G2 or separately named parametric C2 endpoint continuity.
+    ///
+    /// # Errors
+    ///
+    /// Rejects non-endpoint contacts, invalid rates, stale geometry, and irregular jets.
+    pub fn add_endpoint_continuity(
+        &mut self,
+        first: SketchCurveContact,
+        second: SketchCurveContact,
+        kind: CurveContinuity,
+    ) -> Result<SketchConstraintId, SketchError> {
+        self.validate_curve_contact(first)?;
+        self.validate_curve_contact(second)?;
+        if !matches!(
+            first.neighborhood,
+            CurveContactNeighborhood::Start | CurveContactNeighborhood::End
+        ) || !matches!(
+            second.neighborhood,
+            CurveContactNeighborhood::Start | CurveContactNeighborhood::End
+        ) {
+            return Err(SketchError::InvalidContinuityEndpoint);
+        }
+        if let CurveContinuity::ParametricC2 {
+            first_rate,
+            second_rate,
+        } = kind
+            && (!first_rate.is_finite()
+                || first_rate <= 0.0
+                || !second_rate.is_finite()
+                || second_rate <= 0.0)
+        {
+            return Err(SketchError::InvalidContinuityRate);
+        }
+        Ok(
+            self.insert_constraint(SketchConstraintKind::EndpointContinuity {
+                first,
+                second,
+                kind,
+            }),
+        )
+    }
+
+    /// Measures signed/unsigned curvature or finite osculating radius at a curve contact.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale or irregular geometry, invalid contact state, and an osculating
+    /// radius at zero or unrepresentable curvature.
+    pub fn measure_curve(
+        &self,
+        contact: SketchCurveContact,
+        kind: CurveMeasurementKind,
+    ) -> Result<f64, SketchError> {
+        self.validate_curve_contact(contact)?;
+        let differential = self
+            .evaluate_curve_contact(contact)?
+            .differential()
+            .map_err(SketchError::InvalidCurveDifferential)?;
+        match kind {
+            CurveMeasurementKind::SignedCurvature => Ok(differential.signed_curvature),
+            CurveMeasurementKind::UnsignedCurvature => Ok(differential.unsigned_curvature()),
+            CurveMeasurementKind::OsculatingRadius => differential
+                .osculating_radius()
+                .map_err(SketchError::InvalidCurveDifferential),
+        }
+    }
+
     pub(crate) fn validate_curve_contact(
         &self,
         contact: SketchCurveContact,
@@ -119,6 +231,77 @@ impl Sketch {
                     contact.parameter,
                     contact.neighborhood,
                 )
+            }
+            SketchCurve::BSpline { spline, span } => {
+                self.evaluate_bspline(spline, span, contact.parameter)
+                    .map_err(|_| {
+                        SketchError::InvalidCurveContact("B-spline span jet is not regular")
+                    })?;
+                validate_neighborhood(true, contact.parameter, contact.neighborhood)
+            }
+            SketchCurve::Nurbs { nurbs, span } => {
+                self.evaluate_nurbs(nurbs, span, contact.parameter)?;
+                validate_neighborhood(true, contact.parameter, contact.neighborhood)
+            }
+        }
+    }
+
+    fn evaluate_curve_contact(
+        &self,
+        contact: SketchCurveContact,
+    ) -> Result<geosolve_geometry::CurveJet2, SketchError> {
+        match contact.curve {
+            SketchCurve::Line { segment, domain } => {
+                let (start, end) = self.segment_endpoints(segment)?;
+                geosolve_geometry::line_jet(
+                    self.point_position(start)?,
+                    self.point_position(end)?,
+                    match domain {
+                        crate::LineParameterDomain::SupportingLine => {
+                            geosolve_geometry::CurveParameterDomain::SupportingLine
+                        }
+                        crate::LineParameterDomain::BoundedSegment => {
+                            geosolve_geometry::CurveParameterDomain::Bounded {
+                                lower: 0.0,
+                                upper: 1.0,
+                            }
+                        }
+                    },
+                    contact.parameter,
+                )
+                .map_err(|_| SketchError::InvalidCurveContact("line jet is not regular"))
+            }
+            SketchCurve::Circle(circle) => {
+                let circle = self.circle_value(circle)?;
+                geosolve_geometry::circle_jet(
+                    self.point_position(circle.center())?,
+                    circle.radius(),
+                    contact.parameter,
+                )
+                .map_err(|_| SketchError::InvalidCurveContact("circle jet is not regular"))
+            }
+            SketchCurve::Arc(arc) => {
+                let arc = self.arc_value(arc)?;
+                geosolve_geometry::circular_arc_jet(
+                    self.point_position(arc.center())?,
+                    arc.radius(),
+                    arc.start_angle(),
+                    arc.signed_sweep(),
+                    contact.parameter,
+                )
+                .map_err(|_| SketchError::InvalidCurveContact("arc jet is not regular"))
+            }
+            SketchCurve::Bezier(bezier) => self
+                .evaluate_bezier(bezier, contact.parameter)
+                .map_err(|_| SketchError::InvalidCurveContact("Bezier jet is not regular")),
+            SketchCurve::Conic(conic) => self
+                .evaluate_conic(conic, contact.parameter)
+                .map_err(|_| SketchError::InvalidCurveContact("conic jet is not regular")),
+            SketchCurve::BSpline { spline, span } => {
+                self.evaluate_bspline(spline, span, contact.parameter)
+            }
+            SketchCurve::Nurbs { nurbs, span } => {
+                self.evaluate_nurbs(nurbs, span, contact.parameter)
             }
         }
     }

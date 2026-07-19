@@ -15,9 +15,9 @@ This is not a solid modeller, B-rep kernel, mesher, renderer, collision engine, 
 
 ## 2. Status of this document
 
-M0-M7 are the frozen domain baseline. M8 accepted the target contracts, M9 implemented component-local linearization, local AD, status and numerical-rank contracts, M10 implemented persistent sessions, bounds and the first sketch consumer, M11 implemented the persistent sketch document, commands/history and JSON/remapping layer, M12 implemented immutable curve jets, editable Beziers and generic curve contact/tangency plumbing, M13 implemented the disposable browser playground over those public APIs, M14 hardened its exact scenarios, failure recovery and performance gates, M15 implemented shared planar/spatial manifold state plus accepted hard sensitivity, M16 implemented sparse hard steps, structural matching, coupled hierarchy and robust planar continuation, M17 implemented persistent gauge-separated planar linkage sessions plus shared velocity linearization, M18 established the independently validated spatial slice, M19 added conics, and M20 completed the common spatial joint/mate and position-driver catalog. Statements are therefore marked as:
+M0-M7 are the frozen domain baseline. M8 accepted the target contracts, M9 implemented component-local linearization, local AD, status and numerical-rank contracts, M10 implemented persistent sessions, bounds and the first sketch consumer, M11 implemented the persistent sketch document, commands/history and JSON/remapping layer, M12 implemented immutable curve jets, editable Beziers and generic curve contact/tangency plumbing, M13 implemented the disposable browser playground over those public APIs, M14 hardened its exact scenarios, failure recovery and performance gates, M15 implemented shared planar/spatial manifold state plus accepted hard sensitivity, M16 implemented sparse hard steps, structural matching, coupled hierarchy and robust planar continuation, M17 implemented persistent gauge-separated planar linkage sessions plus shared velocity linearization, M18 established the independently validated spatial slice, M19 added conics, M20 completed the common spatial joint/mate and position-driver catalog, M21 added locally supported non-rational B-splines, and M22 completed gauge-separated NURBS plus advanced CAD differential constraints. Statements are therefore marked as:
 
-- **Baseline:** implemented behavior through M20, with M1-M7 domain behavior protected as the frozen regression baseline.
+- **Baseline:** implemented behavior through M22, with M1-M7 domain behavior protected as the frozen regression baseline.
 - **Target:** behavior required by the named M10-M24 milestone.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
@@ -31,7 +31,7 @@ A target statement must not be exposed as an implemented capability before its m
 Owns pure immutable numerical geometry:
 
 - 2D and 3D points, vectors and validated frames;
-- planar curve evaluation and regularity/domain metadata, exposed for embeddable sketch consumers starting at M12;
+- planar curve evaluation and regularity/domain metadata, including validated clamped and periodic B-splines/NURBS with local basis jets, homogeneous refinement and differential geometry;
 - `Pose2`, `Pose3`, `SE(2)` and `SE(3)` operations under ADR 0006;
 - angle wrapping/unwrapping, normalization and degeneracy-safe helpers.
 
@@ -67,9 +67,9 @@ Owns the 2D design graph:
 - compilation into core residuals, validators and commit mappings;
 - source-level audit and persistence mappings.
 
-The frozen baseline includes points, segments, circles, oriented arcs and the M5/M7 constraint corpus. M10 adds the session consumer; M11 now migrates baseline entities and editing into the persistent generic design graph with opaque document IDs, strict JSON, deterministic lowering, accepted-state projection and accepted-only command history; M12 adds editable quadratic/cubic Bezier curves and generic point/contact/tangency plumbing. The M10-M14 alpha geometry surface is point, line/polyline, rectangle command macro, circle, circular arc and quadratic/cubic Bezier. Its reusable constraint surface is fixed, coincident, horizontal, vertical, point-on-curve, parallel, perpendicular, equal length/radius, midpoint, symmetry, distance, length, radius, diameter, oriented angle, and generic line-curve/curve-curve contact and tangency, with driving/reference dimensions and explicit discrete branch state.
+The frozen baseline includes points, segments, circles, oriented arcs and the M5/M7 constraint corpus. M10 adds the session consumer; M11 now migrates baseline entities and editing into the persistent generic design graph with opaque document IDs, strict JSON, deterministic lowering, accepted-state projection and accepted-only command history; M12 adds editable quadratic/cubic Bezier curves and generic point/contact/tangency plumbing. The M10-M14 alpha geometry surface is point, line/polyline, rectangle command macro, circle, circular arc and quadratic/cubic Bezier. M19 adds conics, M21 adds clamped and periodic non-rational B-splines, and M22 adds gauge-separated NURBS with stable semantic spans, explicit knot sides/winding, local-support incidence and transactional homogeneous refinement. Its reusable constraint surface includes the baseline corpus plus generic contact/tangency, tangent and sided-normal direction, signed or branch-explicit magnitude curvature, and ordered endpoint G0/G1/G2/rate-explicit parametric C2 continuity, with driving/reference dimensions and explicit discrete branch state.
 
-B-spline/NURBS and curvature/G2/parametric-C2 production work remains explicitly deferred to M21 and M22. A rectangle is command expansion into ordinary geometry and constraints, not a new core residual primitive.
+M22 completes the production 2D CAD curve, constraint and persistence surface. A rectangle remains command expansion into ordinary geometry and constraints, not a new core residual primitive.
 
 ### `geosolve-linkage`
 
@@ -325,6 +325,6 @@ Persistence stores domain topology, continuous accepted state and every discrete
 - M13-M14: disposable browser playground, E2E/import/error/performance hardening and the alpha gate.
 - M15: completed manifold `Pose2`/`Pose3`, validated frames and accepted hard-equality sensitivity.
 - M16: completed sparse structure, matching, hierarchy and robust planar continuation.
-- M17-M20: completed persistent planar architecture, the first spatial slice, conics and the common spatial joint/mate catalog; M23 completes spatial kinematic product behavior.
-- M21-M22: add B-splines, NURBS and complete the production 2D CAD sketch product.
+- M17-M22: completed persistent planar architecture, the first spatial slice, conics, the common spatial joint/mate catalog, B-splines and NURBS/advanced CAD continuity; M23 completes spatial kinematic product behavior.
+- M22: completed NURBS and the production 2D CAD sketch product.
 - M24: stabilize public APIs, persistence, documentation and release gates for both deliverables.

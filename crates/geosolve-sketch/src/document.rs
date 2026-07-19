@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -14,6 +14,8 @@ pub const SKETCH_DOCUMENT_VERSION: u32 = 1;
 pub const MAX_DOCUMENT_OBJECTS: usize = 100_000;
 /// Defensive import limit for one polyline.
 pub const MAX_POLYLINE_POINTS: usize = 10_000;
+/// Defensive control-count limit for one B-spline.
+pub const MAX_BSPLINE_CONTROLS: usize = 10_000;
 /// Defensive import limit for labels.
 pub const MAX_LABEL_BYTES: usize = 1_024;
 /// Defensive byte limit applied before JSON deserialization.
@@ -156,6 +158,12 @@ pub enum DocumentError {
         #[source]
         source: geosolve_geometry::ConicEvaluationError,
     },
+    #[error("contact {contact} differential evaluation failure: {source}")]
+    ContactDifferential {
+        contact: ContactId,
+        #[source]
+        source: geosolve_geometry::CurveDifferentialError,
+    },
     #[error("curve {curve} has an invalid conic definition: {source}")]
     ConicDefinition {
         curve: CurveId,
@@ -167,6 +175,42 @@ pub enum DocumentError {
         curve: CurveId,
         #[source]
         source: geosolve_geometry::ConicEvaluationError,
+    },
+    #[error("curve {curve} has an invalid B-spline definition: {source}")]
+    BSplineDefinition {
+        curve: CurveId,
+        #[source]
+        source: geosolve_geometry::BSplineDefinitionError,
+    },
+    #[error("curve {curve} has an invalid B-spline evaluation: {source}")]
+    BSplineEvaluation {
+        curve: CurveId,
+        #[source]
+        source: geosolve_geometry::BSplineEvaluationError,
+    },
+    #[error("curve {curve} rejected B-spline knot insertion: {source}")]
+    BSplineInsertion {
+        curve: CurveId,
+        #[source]
+        source: geosolve_geometry::BSplineInsertionError,
+    },
+    #[error("curve {curve} has an invalid NURBS definition: {source}")]
+    NurbsDefinition {
+        curve: CurveId,
+        #[source]
+        source: geosolve_geometry::NurbsDefinitionError,
+    },
+    #[error("curve {curve} has an invalid NURBS evaluation: {source}")]
+    NurbsEvaluation {
+        curve: CurveId,
+        #[source]
+        source: geosolve_geometry::NurbsEvaluationError,
+    },
+    #[error("curve {curve} rejected NURBS knot insertion: {source}")]
+    NurbsInsertion {
+        curve: CurveId,
+        #[source]
+        source: geosolve_geometry::NurbsInsertionError,
     },
     #[error("document resource limit exceeded for {resource}: {actual} > {limit}")]
     ResourceLimit {
@@ -196,6 +240,24 @@ pub enum DocumentCurveEvaluationError {
     ConicDefinition(#[from] geosolve_geometry::ConicDefinitionError),
     #[error(transparent)]
     ConicEvaluation(#[from] geosolve_geometry::ConicEvaluationError),
+    #[error(transparent)]
+    BSplineDefinition(#[from] geosolve_geometry::BSplineDefinitionError),
+    #[error(transparent)]
+    BSplineEvaluation(#[from] geosolve_geometry::BSplineEvaluationError),
+    #[error(transparent)]
+    NurbsDefinition(#[from] geosolve_geometry::NurbsDefinitionError),
+    #[error(transparent)]
+    NurbsEvaluation(#[from] geosolve_geometry::NurbsEvaluationError),
+}
+
+/// Typed differential measurement failure from accepted persistent geometry.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum DocumentCurveMeasurementError {
+    #[error(transparent)]
+    Evaluation(#[from] DocumentCurveEvaluationError),
+    #[error(transparent)]
+    Differential(#[from] geosolve_geometry::CurveDifferentialError),
 }
 
 /// Immutable projection of one draggable curve-trim endpoint onto its owned scalar.
@@ -203,6 +265,25 @@ pub enum DocumentCurveEvaluationError {
 pub struct DocumentTrimProjection {
     pub scalar: DesignScalarId,
     pub value: f64,
+}
+
+/// Persistent identities changed by one accepted B-spline knot insertion.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DocumentBSplineInsertion {
+    pub curve: CurveId,
+    pub new_control: DesignPointId,
+    pub new_span_id: Option<u32>,
+    pub migrated_contacts: Vec<ContactId>,
+}
+
+/// Persistent identities changed by one accepted NURBS knot insertion.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DocumentNurbsInsertion {
+    pub curve: CurveId,
+    pub new_control: DesignPointId,
+    pub new_weight: DesignScalarId,
+    pub new_span_id: Option<u32>,
+    pub migrated_contacts: Vec<ContactId>,
 }
 
 /// Typed failure to project a world target onto a persistent curve-trim scalar.
@@ -282,6 +363,30 @@ pub enum DocumentHyperbolaBranch {
     Negative,
 }
 
+/// Serialized topology of a persistent non-rational B-spline.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DocumentBSplineForm {
+    Clamped,
+    Periodic,
+}
+
+/// Explicit adjacent B-spline span transition direction.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DocumentBSplineSpanDirection {
+    Previous,
+    Next,
+}
+
+impl From<DocumentBSplineForm> for geosolve_geometry::BSplineForm {
+    fn from(value: DocumentBSplineForm) -> Self {
+        match value {
+            DocumentBSplineForm::Clamped => Self::Clamped,
+            DocumentBSplineForm::Periodic => Self::Periodic,
+        }
+    }
+}
+
 /// Closed alpha curve-definition set.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -346,6 +451,24 @@ pub enum CurveDefinition {
         trim_start: DesignScalarId,
         trim_end: DesignScalarId,
     },
+    BSpline {
+        form: DocumentBSplineForm,
+        degree: u32,
+        controls: Vec<DesignPointId>,
+        knots: Vec<f64>,
+        span_ids: Vec<u32>,
+        next_span_id: u32,
+    },
+    Nurbs {
+        form: DocumentBSplineForm,
+        degree: u32,
+        controls: Vec<DesignPointId>,
+        weights: Vec<DesignScalarId>,
+        gauge_weight: DesignScalarId,
+        knots: Vec<f64>,
+        span_ids: Vec<u32>,
+        next_span_id: u32,
+    },
 }
 
 /// One persistent curve entity.
@@ -357,7 +480,7 @@ pub struct DesignCurve {
     pub definition: CurveDefinition,
 }
 
-/// Semantic selection of one directed segment within a line or polyline.
+/// Semantic selection of one directed segment or stable family-local curve span.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CurveSpan {
@@ -481,6 +604,50 @@ pub enum ContactNeighborhood {
 pub enum TangentOrientation {
     Aligned,
     Opposed,
+}
+
+/// Directed normal side relative to increasing curve parameter.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DocumentCurveNormalSide {
+    Left,
+    Right,
+}
+
+/// Explicit line-to-curve differential direction relation.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DocumentCurveDirectionRelation {
+    Tangent { orientation: TangentOrientation },
+    Normal { side: DocumentCurveNormalSide },
+}
+
+/// Explicit smooth signed equation used for equal-curvature behavior.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DocumentCurveCurvatureRelation {
+    Signed,
+    MagnitudeSameSign,
+    MagnitudeOppositeSign,
+}
+
+/// Ordered incoming/outgoing endpoint continuity policy.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DocumentCurveContinuity {
+    G0,
+    G1,
+    G2,
+    ParametricC2 { first_rate: f64, second_rate: f64 },
+}
+
+/// Equation-free differential measurement available at a persistent contact.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DocumentCurveMeasurementKind {
+    SignedCurvature,
+    UnsignedCurvature,
+    OsculatingRadius,
 }
 
 /// Persistent semantic contact with independent parameter identity.
@@ -640,6 +807,21 @@ pub enum DocumentConstraintDefinition {
     CurveCurveTangency {
         first_contact: ContactId,
         second_contact: ContactId,
+    },
+    CurveDirection {
+        line: CurveSpan,
+        curve_contact: ContactId,
+        relation: DocumentCurveDirectionRelation,
+    },
+    EqualCurvature {
+        first_contact: ContactId,
+        second_contact: ContactId,
+        relation: DocumentCurveCurvatureRelation,
+    },
+    EndpointContinuity {
+        first_contact: ContactId,
+        second_contact: ContactId,
+        continuity: DocumentCurveContinuity,
     },
 }
 
@@ -879,6 +1061,28 @@ impl SketchDocument {
         self.evaluate_curve_jet_in_domain(contact.curve, parameter, contact.domain)
     }
 
+    /// Measures differential geometry at one accepted persistent contact.
+    ///
+    /// This derives differential data from the independently reconstructed immutable
+    /// curve jet and adds no document or curve-family equation.
+    ///
+    /// # Errors
+    ///
+    /// Returns typed evaluation, zero-speed, unrepresentable-curvature, or undefined
+    /// osculating-radius failures.
+    pub fn measure_curve_contact(
+        &self,
+        contact: ContactId,
+        kind: DocumentCurveMeasurementKind,
+    ) -> Result<f64, DocumentCurveMeasurementError> {
+        let differential = self.evaluate_contact_jet(contact)?.differential()?;
+        Ok(match kind {
+            DocumentCurveMeasurementKind::SignedCurvature => differential.signed_curvature,
+            DocumentCurveMeasurementKind::UnsignedCurvature => differential.unsigned_curvature(),
+            DocumentCurveMeasurementKind::OsculatingRadius => differential.osculating_radius()?,
+        })
+    }
+
     /// Evaluates one accepted curve span at an arbitrary rendering/query parameter.
     ///
     /// Bounded curves use `[0, 1]`; circles and full ellipses use an unwrapped angle.
@@ -904,6 +1108,198 @@ impl SketchDocument {
             },
         };
         self.evaluate_curve_jet_in_domain(span, parameter, domain)
+    }
+
+    /// Returns every semantic span in curve order.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a missing curve or an unrepresentable segment ordinal.
+    pub fn curve_spans(&self, curve: CurveId) -> Result<Vec<CurveSpan>, DocumentError> {
+        let curve_value = self.curve(curve).ok_or_else(|| unknown("curve", curve.0))?;
+        match &curve_value.definition {
+            CurveDefinition::BSpline { span_ids, .. } | CurveDefinition::Nurbs { span_ids, .. } => {
+                Ok(span_ids
+                    .iter()
+                    .copied()
+                    .map(|segment| CurveSpan { curve, segment })
+                    .collect())
+            }
+            definition => (0..curve_segment_count(definition))
+                .map(|index| {
+                    Ok(CurveSpan {
+                        curve,
+                        segment: u32::try_from(index).map_err(|_| {
+                            DocumentError::ResourceLimit {
+                                resource: "curve span index",
+                                actual: index,
+                                limit: u32::MAX as usize,
+                            }
+                        })?,
+                    })
+                })
+                .collect(),
+        }
+    }
+
+    /// Reports guaranteed continuity at one native B-spline or NURBS knot.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a missing/non-spline curve, malformed topology, or invalid parameter.
+    pub fn bspline_continuity_at(
+        &self,
+        curve: CurveId,
+        parameter: f64,
+    ) -> Result<Option<geosolve_geometry::BSplineContinuity>, DocumentCurveEvaluationError> {
+        let definition = &self
+            .curve(curve)
+            .ok_or_else(|| unknown("curve", curve.0))?
+            .definition;
+        if !matches!(
+            definition,
+            CurveDefinition::BSpline { .. } | CurveDefinition::Nurbs { .. }
+        ) {
+            return Err(DocumentError::InvalidField {
+                field: "curve",
+                message: "expected a B-spline or NURBS curve".into(),
+            }
+            .into());
+        }
+        Ok(Self::spline_basis(definition)?.continuity_at(parameter)?)
+    }
+
+    fn spline_basis(
+        definition: &CurveDefinition,
+    ) -> Result<geosolve_geometry::BSplineBasis, DocumentCurveEvaluationError> {
+        let (CurveDefinition::BSpline {
+            form,
+            degree,
+            controls,
+            knots,
+            ..
+        }
+        | CurveDefinition::Nurbs {
+            form,
+            degree,
+            controls,
+            knots,
+            ..
+        }) = definition
+        else {
+            return Err(DocumentError::InvalidField {
+                field: "curve",
+                message: "expected a B-spline or NURBS curve".into(),
+            }
+            .into());
+        };
+        Ok(match form {
+            DocumentBSplineForm::Clamped => geosolve_geometry::BSplineBasis::try_clamped(
+                *degree,
+                controls.len(),
+                knots.clone(),
+            )?,
+            DocumentBSplineForm::Periodic => geosolve_geometry::BSplineBasis::try_periodic(
+                *degree,
+                controls.len(),
+                knots.clone(),
+            )?,
+        })
+    }
+
+    fn bspline_geometry(
+        &self,
+        definition: &CurveDefinition,
+    ) -> Result<geosolve_geometry::BSplineCurve2, DocumentCurveEvaluationError> {
+        let CurveDefinition::BSpline { controls, .. } = definition else {
+            return Err(DocumentError::InvalidField {
+                field: "curve",
+                message: "expected a B-spline curve".into(),
+            }
+            .into());
+        };
+        let points = controls
+            .iter()
+            .map(|control| {
+                let point = self.require_point(*control)?;
+                Ok(geosolve_geometry::Point2::new(
+                    point.position[0],
+                    point.position[1],
+                ))
+            })
+            .collect::<Result<Vec<_>, DocumentError>>()?;
+        Ok(geosolve_geometry::BSplineCurve2::try_new(
+            Self::spline_basis(definition)?,
+            points,
+        )?)
+    }
+
+    fn nurbs_geometry(
+        &self,
+        definition: &CurveDefinition,
+    ) -> Result<geosolve_geometry::NurbsCurve2, DocumentCurveEvaluationError> {
+        let CurveDefinition::Nurbs {
+            controls, weights, ..
+        } = definition
+        else {
+            return Err(DocumentError::InvalidField {
+                field: "curve",
+                message: "expected a NURBS curve".into(),
+            }
+            .into());
+        };
+        let points = controls
+            .iter()
+            .map(|control| {
+                let point = self.require_point(*control)?;
+                Ok(geosolve_geometry::Point2::new(
+                    point.position[0],
+                    point.position[1],
+                ))
+            })
+            .collect::<Result<Vec<_>, DocumentError>>()?;
+        let weights = weights
+            .iter()
+            .map(|weight| Ok(self.require_scalar(*weight)?.value))
+            .collect::<Result<Vec<_>, DocumentError>>()?;
+        Ok(geosolve_geometry::NurbsCurve2::try_new(
+            Self::spline_basis(definition)?,
+            points,
+            weights,
+        )?)
+    }
+
+    fn spline_span_index(
+        definition: &CurveDefinition,
+        semantic_id: u32,
+    ) -> Result<geosolve_geometry::BSplineSpanIndex, DocumentCurveEvaluationError> {
+        let (CurveDefinition::BSpline { span_ids, .. } | CurveDefinition::Nurbs { span_ids, .. }) =
+            definition
+        else {
+            return Err(DocumentError::InvalidField {
+                field: "curve",
+                message: "expected a B-spline or NURBS curve".into(),
+            }
+            .into());
+        };
+        let ordinal = span_ids
+            .iter()
+            .position(|candidate| *candidate == semantic_id)
+            .ok_or_else(|| DocumentError::InvalidField {
+                field: "curve span",
+                message: "semantic span ID is outside the B-spline".into(),
+            })?;
+        Self::spline_basis(definition)?
+            .spans()
+            .get(ordinal)
+            .map(geosolve_geometry::BSplineSpan::index)
+            .ok_or_else(|| {
+                DocumentError::InvalidField {
+                    field: "curve span",
+                    message: "semantic span mapping is inconsistent".into(),
+                }
+                .into()
+            })
     }
 
     /// Projects a world target onto one curve's existing start/end trim scalar.
@@ -1120,6 +1516,16 @@ impl SketchDocument {
                 ],
                 parameter,
             )?,
+            definition @ CurveDefinition::BSpline { .. } => {
+                let span_index = Self::spline_span_index(definition, span.segment)?;
+                self.bspline_geometry(definition)?
+                    .jet_on_span(span_index, parameter)?
+            }
+            definition @ CurveDefinition::Nurbs { .. } => {
+                let span_index = Self::spline_span_index(definition, span.segment)?;
+                self.nurbs_geometry(definition)?
+                    .jet_on_span(span_index, parameter)?
+            }
             definition @ (CurveDefinition::Ellipse { .. }
             | CurveDefinition::EllipticalArc { .. }
             | CurveDefinition::RationalQuadraticConic { .. }
@@ -1444,7 +1850,16 @@ impl SketchDocument {
                 let value = self.curve(curve).ok_or_else(|| unknown("curve", curve.0))?;
                 if matches!(
                     value.definition,
-                    CurveDefinition::Circle { .. } | CurveDefinition::Ellipse { .. }
+                    CurveDefinition::Circle { .. }
+                        | CurveDefinition::Ellipse { .. }
+                        | CurveDefinition::BSpline {
+                            form: DocumentBSplineForm::Periodic,
+                            ..
+                        }
+                        | CurveDefinition::Nurbs {
+                            form: DocumentBSplineForm::Periodic,
+                            ..
+                        }
                 ) {
                     return invalid("feature endpoint", "a periodic curve has no endpoint");
                 }
@@ -1487,7 +1902,9 @@ impl SketchDocument {
                     | CurveDefinition::EllipticalArc { .. }
                     | CurveDefinition::RationalQuadraticConic { .. }
                     | CurveDefinition::ParabolaSegment { .. }
-                    | CurveDefinition::HyperbolaSegment { .. } => 0,
+                    | CurveDefinition::HyperbolaSegment { .. }
+                    | CurveDefinition::BSpline { .. }
+                    | CurveDefinition::Nurbs { .. } => 0,
                     CurveDefinition::QuadraticBezier { .. } => 3,
                     CurveDefinition::CubicBezier { .. } => 4,
                 };
@@ -1599,6 +2016,810 @@ impl SketchDocument {
             return Err(error);
         }
         Ok(id)
+    }
+
+    /// Inserts one B-spline knot while preserving the parameterized curve.
+    ///
+    /// The edit retains every existing control point ID, allocates one new control
+    /// point, and remaps contacts on a split span atomically.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a missing/non-spline curve, invalid insertion, exhausted identity,
+    /// or a refined document that fails complete validation.
+    #[allow(clippy::too_many_lines)]
+    pub fn insert_bspline_knot(
+        &mut self,
+        curve: CurveId,
+        parameter: f64,
+    ) -> Result<DocumentBSplineInsertion, DocumentError> {
+        let mut candidate = self.clone();
+        let curve_value = candidate
+            .curve(curve)
+            .ok_or_else(|| unknown("curve", curve.0))?
+            .clone();
+        let CurveDefinition::BSpline {
+            controls: old_controls,
+            span_ids: old_span_ids,
+            next_span_id,
+            ..
+        } = &curve_value.definition
+        else {
+            return invalid("curve", "knot insertion requires a B-spline");
+        };
+        let geometry = candidate
+            .bspline_geometry(&curve_value.definition)
+            .map_err(|error| document_bspline_curve_error(curve, error))?;
+        let refinement = geometry
+            .insert_knot(parameter)
+            .map_err(|source| DocumentError::BSplineInsertion { curve, source })?;
+        let refined_positions = refinement.curve().controls().to_vec();
+        let stencils = refinement.control_stencils();
+
+        let mut output_ids = vec![None; stencils.len()];
+        let mut copied_controls = BTreeSet::new();
+        for (output, stencil) in stencils.iter().enumerate() {
+            if stencil.second_control.is_none() {
+                if !copied_controls.insert(stencil.first_control) {
+                    return invalid(
+                        "curve.controls",
+                        "refinement duplicated an exact control identity",
+                    );
+                }
+                output_ids[output] = Some(old_controls[stencil.first_control]);
+            }
+        }
+        let remaining_controls = (0..old_controls.len())
+            .filter(|control| !copied_controls.contains(control))
+            .collect::<Vec<_>>();
+        let blended_outputs = stencils
+            .iter()
+            .enumerate()
+            .filter_map(|(output, stencil)| stencil.second_control.map(|_| output))
+            .collect::<Vec<_>>();
+        if blended_outputs.len() != remaining_controls.len() + 1 {
+            return invalid(
+                "curve.controls",
+                "refinement control provenance is inconsistent",
+            );
+        }
+        for (output, old_control) in blended_outputs
+            .iter()
+            .copied()
+            .zip(remaining_controls.iter().copied())
+        {
+            output_ids[output] = Some(old_controls[old_control]);
+        }
+        let fresh_output = *blended_outputs
+            .last()
+            .ok_or_else(|| DocumentError::InvalidField {
+                field: "curve.controls",
+                message: "knot insertion did not create a control coefficient".into(),
+            })?;
+        let new_control = candidate.add_point(
+            format!("{} inserted control", curve_value.label),
+            [
+                refined_positions[fresh_output].x,
+                refined_positions[fresh_output].y,
+            ],
+        )?;
+        output_ids[fresh_output] = Some(new_control);
+        let output_ids = output_ids
+            .into_iter()
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| DocumentError::InvalidField {
+                field: "curve.controls",
+                message: "refinement left an unassigned control identity".into(),
+            })?;
+        for (control, position) in output_ids.iter().zip(&refined_positions) {
+            candidate
+                .point_mut(*control)
+                .ok_or_else(|| unknown("point", control.0))?
+                .position = [position.x, position.y];
+        }
+
+        let split_ordinal = refinement
+            .split_span()
+            .map(|span| usize::try_from(span.ordinal()))
+            .transpose()
+            .map_err(|_| DocumentError::InvalidField {
+                field: "curve.span_ids",
+                message: "split span ordinal is unrepresentable".into(),
+            })?;
+        let (new_span_id, retained_span, old_interval) = if let Some(ordinal) = split_ordinal {
+            let retained =
+                *old_span_ids
+                    .get(ordinal)
+                    .ok_or_else(|| DocumentError::InvalidField {
+                        field: "curve.span_ids",
+                        message: "split span has no semantic identity".into(),
+                    })?;
+            let interval = geometry
+                .basis()
+                .spans()
+                .get(ordinal)
+                .cloned()
+                .ok_or_else(|| DocumentError::InvalidField {
+                    field: "curve.span_ids",
+                    message: "split span has no numerical interval".into(),
+                })?;
+            (Some(*next_span_id), Some(retained), Some(interval))
+        } else {
+            (None, None, None)
+        };
+
+        let mut refined_span_ids = old_span_ids.clone();
+        let mut refined_next_span_id = *next_span_id;
+        if let (Some(ordinal), Some(allocated)) = (split_ordinal, new_span_id) {
+            refined_span_ids.insert(ordinal + 1, allocated);
+            refined_next_span_id = allocated.checked_add(1).ok_or(DocumentError::IdExhausted)?;
+        }
+        let CurveDefinition::BSpline {
+            controls,
+            knots,
+            span_ids,
+            next_span_id,
+            ..
+        } = &mut candidate
+            .curve_mut(curve)
+            .ok_or_else(|| unknown("curve", curve.0))?
+            .definition
+        else {
+            return invalid("curve", "knot insertion curve family changed");
+        };
+        *controls = output_ids;
+        *knots = refinement.curve().basis().knots().to_vec();
+        *span_ids = refined_span_ids;
+        *next_span_id = refined_next_span_id;
+
+        let normalized_insertion = match geometry.basis().parameter_domain() {
+            geosolve_geometry::CurveParameterDomain::Periodic { period } => {
+                parameter.rem_euclid(period)
+            }
+            geosolve_geometry::CurveParameterDomain::Bounded { .. } => parameter,
+            geosolve_geometry::CurveParameterDomain::SupportingLine => {
+                unreachable!("a B-spline never has a supporting-line domain")
+            }
+        };
+        let mut migrated_contacts = Vec::new();
+        if let (Some(retained), Some(right), Some(interval)) =
+            (retained_span, new_span_id, old_interval)
+        {
+            let contact_ids = candidate
+                .contacts
+                .iter()
+                .filter(|contact| contact.curve.curve == curve && contact.curve.segment == retained)
+                .map(|contact| contact.id)
+                .collect::<Vec<_>>();
+            for contact_id in contact_ids {
+                let contact = candidate.require_contact(contact_id)?.clone();
+                let local = candidate.require_scalar(contact.parameter)?.value;
+                let width = interval.upper() - interval.lower();
+                let native = if local.to_bits() == 0.0f64.to_bits() {
+                    interval.lower()
+                } else if local.to_bits() == 1.0f64.to_bits() {
+                    interval.upper()
+                } else {
+                    width.mul_add(local, interval.lower())
+                };
+                let left_child = native <= normalized_insertion;
+                let (semantic, remapped) = if left_child {
+                    (
+                        retained,
+                        (native - interval.lower()) / (normalized_insertion - interval.lower()),
+                    )
+                } else {
+                    (
+                        right,
+                        (native - normalized_insertion) / (interval.upper() - normalized_insertion),
+                    )
+                };
+                if !remapped.is_finite() {
+                    return invalid(
+                        "contact.parameter",
+                        "knot insertion produced a non-finite contact coordinate",
+                    );
+                }
+                let remapped = remapped.clamp(0.0, 1.0);
+                let neighborhood = remap_bspline_contact_neighborhood(
+                    contact.neighborhood,
+                    &interval,
+                    normalized_insertion,
+                    left_child,
+                    remapped,
+                )?;
+                candidate
+                    .scalar_mut(contact.parameter)
+                    .ok_or_else(|| unknown("scalar", contact.parameter.0))?
+                    .value = remapped;
+                let contact = candidate
+                    .contact_mut(contact_id)
+                    .ok_or_else(|| unknown("contact", contact_id.0))?;
+                contact.curve.segment = semantic;
+                contact.neighborhood = neighborhood;
+                migrated_contacts.push(contact_id);
+            }
+        }
+        candidate.validate()?;
+        *self = candidate;
+        Ok(DocumentBSplineInsertion {
+            curve,
+            new_control,
+            new_span_id,
+            migrated_contacts,
+        })
+    }
+
+    /// Inserts one NURBS knot by immutable homogeneous refinement.
+    ///
+    /// Every old control and weight identity survives, one fresh control/weight
+    /// pair is allocated, and the selected gauge identity is normalized back to
+    /// exact one before the candidate is validated.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a missing/non-NURBS curve, invalid homogeneous refinement,
+    /// exhausted identity, or an invalid refined document.
+    #[allow(clippy::too_many_lines)]
+    pub fn insert_nurbs_knot(
+        &mut self,
+        curve: CurveId,
+        parameter: f64,
+    ) -> Result<DocumentNurbsInsertion, DocumentError> {
+        let mut candidate = self.clone();
+        let curve_value = candidate
+            .curve(curve)
+            .ok_or_else(|| unknown("curve", curve.0))?
+            .clone();
+        let CurveDefinition::Nurbs {
+            controls: old_controls,
+            weights: old_weights,
+            gauge_weight,
+            span_ids: old_span_ids,
+            next_span_id,
+            ..
+        } = &curve_value.definition
+        else {
+            return invalid("curve", "knot insertion requires a NURBS curve");
+        };
+        let geometry = candidate
+            .nurbs_geometry(&curve_value.definition)
+            .map_err(|error| document_nurbs_curve_error(curve, error))?;
+        let refinement = geometry
+            .insert_knot(parameter)
+            .map_err(|source| DocumentError::NurbsInsertion { curve, source })?;
+        let refined_positions = refinement.curve().controls().to_vec();
+        let refined_weights = refinement.curve().weights().to_vec();
+        let provenance = refinement.control_provenance();
+
+        let mut output_ids = vec![None; provenance.len()];
+        let mut copied_controls = BTreeSet::new();
+        for (output, source) in provenance.iter().enumerate() {
+            if let geosolve_geometry::NurbsControlProvenance::Copy { control } = source {
+                if !copied_controls.insert(*control) {
+                    return invalid(
+                        "curve.controls",
+                        "refinement duplicated an exact NURBS control identity",
+                    );
+                }
+                output_ids[output] = Some((old_controls[*control], old_weights[*control]));
+            }
+        }
+        let remaining_controls = (0..old_controls.len())
+            .filter(|control| !copied_controls.contains(control))
+            .collect::<Vec<_>>();
+        let blended_outputs = provenance
+            .iter()
+            .enumerate()
+            .filter_map(|(output, source)| {
+                matches!(
+                    source,
+                    geosolve_geometry::NurbsControlProvenance::Blend { .. }
+                )
+                .then_some(output)
+            })
+            .collect::<Vec<_>>();
+        if blended_outputs.len() != remaining_controls.len() + 1 {
+            return invalid(
+                "curve.controls",
+                "NURBS refinement control provenance is inconsistent",
+            );
+        }
+        for (output, old_control) in blended_outputs
+            .iter()
+            .copied()
+            .zip(remaining_controls.iter().copied())
+        {
+            output_ids[output] = Some((old_controls[old_control], old_weights[old_control]));
+        }
+        let fresh_output = *blended_outputs
+            .last()
+            .ok_or_else(|| DocumentError::InvalidField {
+                field: "curve.controls",
+                message: "NURBS knot insertion did not create a control coefficient".into(),
+            })?;
+        let gauge_output = output_ids
+            .iter()
+            .position(|ids| ids.is_some_and(|(_, weight)| weight == *gauge_weight))
+            .ok_or_else(|| DocumentError::InvalidField {
+                field: "curve.gauge_weight",
+                message: "NURBS refinement lost the selected gauge identity".into(),
+            })?;
+        let gauge_scale = refined_weights[gauge_output];
+        finite_positive(gauge_scale, "refined NURBS gauge weight")?;
+        let normalized_weights = refined_weights
+            .iter()
+            .map(|weight| {
+                let normalized = weight / gauge_scale;
+                finite_positive(normalized, "refined NURBS weight")?;
+                Ok(normalized)
+            })
+            .collect::<Result<Vec<_>, DocumentError>>()?;
+
+        let new_control = candidate.add_point(
+            format!("{} inserted control", curve_value.label),
+            [
+                refined_positions[fresh_output].x,
+                refined_positions[fresh_output].y,
+            ],
+        )?;
+        let new_weight = candidate.add_scalar(
+            format!("{} inserted weight", curve_value.label),
+            normalized_weights[fresh_output],
+            ScalarUnit::Parameter,
+            ScalarDomain::Positive,
+        )?;
+        output_ids[fresh_output] = Some((new_control, new_weight));
+        let output_ids = output_ids
+            .into_iter()
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| DocumentError::InvalidField {
+                field: "curve.controls",
+                message: "NURBS refinement left an unassigned identity".into(),
+            })?;
+        for (((control, weight), position), value) in output_ids
+            .iter()
+            .zip(&refined_positions)
+            .zip(&normalized_weights)
+        {
+            candidate
+                .point_mut(*control)
+                .ok_or_else(|| unknown("point", control.0))?
+                .position = [position.x, position.y];
+            candidate
+                .scalar_mut(*weight)
+                .ok_or_else(|| unknown("scalar", weight.0))?
+                .value = if *weight == *gauge_weight {
+                1.0
+            } else {
+                *value
+            };
+        }
+
+        let split_ordinal = refinement
+            .split_span()
+            .map(|span| usize::try_from(span.ordinal()))
+            .transpose()
+            .map_err(|_| DocumentError::InvalidField {
+                field: "curve.span_ids",
+                message: "split span ordinal is unrepresentable".into(),
+            })?;
+        let (new_span_id, retained_span, old_interval) = if let Some(ordinal) = split_ordinal {
+            let retained =
+                *old_span_ids
+                    .get(ordinal)
+                    .ok_or_else(|| DocumentError::InvalidField {
+                        field: "curve.span_ids",
+                        message: "split span has no semantic identity".into(),
+                    })?;
+            let interval = geometry
+                .basis()
+                .spans()
+                .get(ordinal)
+                .cloned()
+                .ok_or_else(|| DocumentError::InvalidField {
+                    field: "curve.span_ids",
+                    message: "split span has no numerical interval".into(),
+                })?;
+            (Some(*next_span_id), Some(retained), Some(interval))
+        } else {
+            (None, None, None)
+        };
+        let mut refined_span_ids = old_span_ids.clone();
+        let mut refined_next_span_id = *next_span_id;
+        if let (Some(ordinal), Some(allocated)) = (split_ordinal, new_span_id) {
+            refined_span_ids.insert(ordinal + 1, allocated);
+            refined_next_span_id = allocated.checked_add(1).ok_or(DocumentError::IdExhausted)?;
+        }
+        let CurveDefinition::Nurbs {
+            controls,
+            weights,
+            knots,
+            span_ids,
+            next_span_id,
+            ..
+        } = &mut candidate
+            .curve_mut(curve)
+            .ok_or_else(|| unknown("curve", curve.0))?
+            .definition
+        else {
+            return invalid("curve", "knot insertion curve family changed");
+        };
+        *controls = output_ids.iter().map(|(control, _)| *control).collect();
+        *weights = output_ids.iter().map(|(_, weight)| *weight).collect();
+        *knots = refinement.curve().basis().knots().to_vec();
+        *span_ids = refined_span_ids;
+        *next_span_id = refined_next_span_id;
+
+        let normalized_insertion = match geometry.basis().parameter_domain() {
+            geosolve_geometry::CurveParameterDomain::Periodic { period } => {
+                parameter.rem_euclid(period)
+            }
+            geosolve_geometry::CurveParameterDomain::Bounded { .. } => parameter,
+            geosolve_geometry::CurveParameterDomain::SupportingLine => {
+                unreachable!("a NURBS never has a supporting-line domain")
+            }
+        };
+        let migrated_contacts = if let (Some(retained), Some(right), Some(interval)) =
+            (retained_span, new_span_id, old_interval)
+        {
+            candidate.migrate_split_spline_contacts(
+                curve,
+                retained,
+                right,
+                &interval,
+                normalized_insertion,
+            )?
+        } else {
+            Vec::new()
+        };
+        candidate.validate()?;
+        *self = candidate;
+        Ok(DocumentNurbsInsertion {
+            curve,
+            new_control,
+            new_weight,
+            new_span_id,
+            migrated_contacts,
+        })
+    }
+
+    fn migrate_split_spline_contacts(
+        &mut self,
+        curve: CurveId,
+        retained_span: u32,
+        right_span: u32,
+        old_interval: &geosolve_geometry::BSplineSpan,
+        inserted_knot: f64,
+    ) -> Result<Vec<ContactId>, DocumentError> {
+        let contact_ids = self
+            .contacts
+            .iter()
+            .filter(|contact| {
+                contact.curve.curve == curve && contact.curve.segment == retained_span
+            })
+            .map(|contact| contact.id)
+            .collect::<Vec<_>>();
+        let mut migrated = Vec::with_capacity(contact_ids.len());
+        for contact_id in contact_ids {
+            let contact = self.require_contact(contact_id)?.clone();
+            let local = self.require_scalar(contact.parameter)?.value;
+            let width = old_interval.upper() - old_interval.lower();
+            let native = if local.to_bits() == 0.0f64.to_bits() {
+                old_interval.lower()
+            } else if local.to_bits() == 1.0f64.to_bits() {
+                old_interval.upper()
+            } else {
+                width.mul_add(local, old_interval.lower())
+            };
+            let left_child = native <= inserted_knot;
+            let (semantic, remapped) = if left_child {
+                (
+                    retained_span,
+                    (native - old_interval.lower()) / (inserted_knot - old_interval.lower()),
+                )
+            } else {
+                (
+                    right_span,
+                    (native - inserted_knot) / (old_interval.upper() - inserted_knot),
+                )
+            };
+            if !remapped.is_finite() {
+                return invalid(
+                    "contact.parameter",
+                    "knot insertion produced a non-finite contact coordinate",
+                );
+            }
+            let remapped = remapped.clamp(0.0, 1.0);
+            let neighborhood = remap_bspline_contact_neighborhood(
+                contact.neighborhood,
+                old_interval,
+                inserted_knot,
+                left_child,
+                remapped,
+            )?;
+            self.scalar_mut(contact.parameter)
+                .ok_or_else(|| unknown("scalar", contact.parameter.0))?
+                .value = remapped;
+            let contact = self
+                .contact_mut(contact_id)
+                .ok_or_else(|| unknown("contact", contact_id.0))?;
+            contact.curve.segment = semantic;
+            contact.neighborhood = neighborhood;
+            migrated.push(contact_id);
+        }
+        Ok(migrated)
+    }
+
+    /// Moves an endpoint contact to the explicit adjacent B-spline span.
+    ///
+    /// Periodic seam transitions update winding by one. Tangent-bearing contacts
+    /// require topology to guarantee `C1` at the crossed knot.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a non-spline/non-endpoint contact, unavailable clamped neighbor,
+    /// insufficient continuity, winding overflow, or invalid resulting document.
+    #[allow(clippy::too_many_lines)]
+    pub fn transition_bspline_contact(
+        &mut self,
+        contact: ContactId,
+        direction: DocumentBSplineSpanDirection,
+    ) -> Result<(), DocumentError> {
+        let mut candidate = self.clone();
+        let contact_value = candidate.require_contact(contact)?.clone();
+        let curve_value = candidate
+            .curve(contact_value.curve.curve)
+            .ok_or_else(|| unknown("curve", contact_value.curve.curve.0))?
+            .clone();
+        let CurveDefinition::BSpline { form, span_ids, .. } = &curve_value.definition else {
+            return invalid("contact.curve", "span transition requires a B-spline");
+        };
+        let ordinal = span_ids
+            .iter()
+            .position(|span| *span == contact_value.curve.segment)
+            .ok_or_else(|| DocumentError::InvalidField {
+                field: "contact.curve",
+                message: "contact semantic span is stale".into(),
+            })?;
+        let scalar = candidate.require_scalar(contact_value.parameter)?.value;
+        let basis = Self::spline_basis(&curve_value.definition)
+            .map_err(|error| document_bspline_curve_error(contact_value.curve.curve, error))?;
+        let span = basis
+            .spans()
+            .get(ordinal)
+            .ok_or_else(|| DocumentError::InvalidField {
+                field: "contact.curve",
+                message: "contact semantic span mapping is inconsistent".into(),
+            })?;
+        let (target_ordinal, target_parameter, neighborhood, crossed_knot, winding_delta) =
+            match direction {
+                DocumentBSplineSpanDirection::Next => {
+                    if scalar.to_bits() != 1.0f64.to_bits()
+                        || contact_value.neighborhood != ContactNeighborhood::End
+                    {
+                        return invalid(
+                            "contact.neighborhood",
+                            "next-span transition requires the selected span end",
+                        );
+                    }
+                    if ordinal + 1 < span_ids.len() {
+                        (
+                            ordinal + 1,
+                            0.0,
+                            ContactNeighborhood::Start,
+                            span.upper(),
+                            0,
+                        )
+                    } else if *form == DocumentBSplineForm::Periodic {
+                        (0, 0.0, ContactNeighborhood::Start, span.upper(), 1)
+                    } else {
+                        return invalid("contact.curve", "clamped B-spline has no next span");
+                    }
+                }
+                DocumentBSplineSpanDirection::Previous => {
+                    if scalar.to_bits() != 0.0f64.to_bits()
+                        || contact_value.neighborhood != ContactNeighborhood::Start
+                    {
+                        return invalid(
+                            "contact.neighborhood",
+                            "previous-span transition requires the selected span start",
+                        );
+                    }
+                    if ordinal > 0 {
+                        (ordinal - 1, 1.0, ContactNeighborhood::End, span.lower(), 0)
+                    } else if *form == DocumentBSplineForm::Periodic {
+                        (
+                            span_ids.len() - 1,
+                            1.0,
+                            ContactNeighborhood::End,
+                            span.lower(),
+                            -1,
+                        )
+                    } else {
+                        return invalid("contact.curve", "clamped B-spline has no previous span");
+                    }
+                }
+            };
+        let required_continuity = candidate.required_contact_continuity(&contact_value);
+        basis
+            .require_continuity(crossed_knot, required_continuity)
+            .map_err(|source| DocumentError::BSplineEvaluation {
+                curve: contact_value.curve.curve,
+                source,
+            })?;
+        let winding = contact_value
+            .winding
+            .checked_add(winding_delta)
+            .ok_or_else(|| DocumentError::InvalidField {
+                field: "contact.winding",
+                message: "periodic span transition exceeds i32 winding range".into(),
+            })?;
+        candidate
+            .scalar_mut(contact_value.parameter)
+            .ok_or_else(|| unknown("scalar", contact_value.parameter.0))?
+            .value = target_parameter;
+        let target = candidate
+            .contact_mut(contact)
+            .ok_or_else(|| unknown("contact", contact.0))?;
+        target.curve.segment = span_ids[target_ordinal];
+        target.winding = winding;
+        target.neighborhood = neighborhood;
+        candidate.validate()?;
+        *self = candidate;
+        Ok(())
+    }
+
+    /// Moves an endpoint contact to the explicit adjacent NURBS span.
+    ///
+    /// Periodic seam transitions update winding by one. Tangent-bearing contacts
+    /// require topology to guarantee `C1` at the crossed knot.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a non-NURBS/non-endpoint contact, unavailable clamped neighbor,
+    /// insufficient continuity, winding overflow, or invalid resulting document.
+    #[allow(clippy::too_many_lines)]
+    pub fn transition_nurbs_contact(
+        &mut self,
+        contact: ContactId,
+        direction: DocumentBSplineSpanDirection,
+    ) -> Result<(), DocumentError> {
+        let mut candidate = self.clone();
+        let contact_value = candidate.require_contact(contact)?.clone();
+        let curve_value = candidate
+            .curve(contact_value.curve.curve)
+            .ok_or_else(|| unknown("curve", contact_value.curve.curve.0))?
+            .clone();
+        let CurveDefinition::Nurbs { form, span_ids, .. } = &curve_value.definition else {
+            return invalid("contact.curve", "span transition requires a NURBS curve");
+        };
+        let ordinal = span_ids
+            .iter()
+            .position(|span| *span == contact_value.curve.segment)
+            .ok_or_else(|| DocumentError::InvalidField {
+                field: "contact.curve",
+                message: "contact semantic span is stale".into(),
+            })?;
+        let scalar = candidate.require_scalar(contact_value.parameter)?.value;
+        let basis = Self::spline_basis(&curve_value.definition)
+            .map_err(|error| document_nurbs_curve_error(contact_value.curve.curve, error))?;
+        let span = basis
+            .spans()
+            .get(ordinal)
+            .ok_or_else(|| DocumentError::InvalidField {
+                field: "contact.curve",
+                message: "contact semantic span mapping is inconsistent".into(),
+            })?;
+        let (target_ordinal, target_parameter, neighborhood, crossed_knot, winding_delta) =
+            match direction {
+                DocumentBSplineSpanDirection::Next => {
+                    if scalar.to_bits() != 1.0f64.to_bits()
+                        || contact_value.neighborhood != ContactNeighborhood::End
+                    {
+                        return invalid(
+                            "contact.neighborhood",
+                            "next-span transition requires the selected span end",
+                        );
+                    }
+                    if ordinal + 1 < span_ids.len() {
+                        (
+                            ordinal + 1,
+                            0.0,
+                            ContactNeighborhood::Start,
+                            span.upper(),
+                            0,
+                        )
+                    } else if *form == DocumentBSplineForm::Periodic {
+                        (0, 0.0, ContactNeighborhood::Start, span.upper(), 1)
+                    } else {
+                        return invalid("contact.curve", "clamped NURBS has no next span");
+                    }
+                }
+                DocumentBSplineSpanDirection::Previous => {
+                    if scalar.to_bits() != 0.0f64.to_bits()
+                        || contact_value.neighborhood != ContactNeighborhood::Start
+                    {
+                        return invalid(
+                            "contact.neighborhood",
+                            "previous-span transition requires the selected span start",
+                        );
+                    }
+                    if ordinal > 0 {
+                        (ordinal - 1, 1.0, ContactNeighborhood::End, span.lower(), 0)
+                    } else if *form == DocumentBSplineForm::Periodic {
+                        (
+                            span_ids.len() - 1,
+                            1.0,
+                            ContactNeighborhood::End,
+                            span.lower(),
+                            -1,
+                        )
+                    } else {
+                        return invalid("contact.curve", "clamped NURBS has no previous span");
+                    }
+                }
+            };
+        let required_continuity = candidate.required_contact_continuity(&contact_value);
+        basis
+            .require_continuity(crossed_knot, required_continuity)
+            .map_err(|source| DocumentError::NurbsEvaluation {
+                curve: contact_value.curve.curve,
+                source: source.into(),
+            })?;
+        let winding = contact_value
+            .winding
+            .checked_add(winding_delta)
+            .ok_or_else(|| DocumentError::InvalidField {
+                field: "contact.winding",
+                message: "periodic span transition exceeds i32 winding range".into(),
+            })?;
+        candidate
+            .scalar_mut(contact_value.parameter)
+            .ok_or_else(|| unknown("scalar", contact_value.parameter.0))?
+            .value = target_parameter;
+        let target = candidate
+            .contact_mut(contact)
+            .ok_or_else(|| unknown("contact", contact.0))?;
+        target.curve.segment = span_ids[target_ordinal];
+        target.winding = winding;
+        target.neighborhood = neighborhood;
+        candidate.validate()?;
+        *self = candidate;
+        Ok(())
+    }
+
+    fn required_contact_continuity(&self, contact: &ContactSlot) -> u32 {
+        let mut required = u32::from(contact.tangent_orientation.is_some());
+        for constraint in &self.constraints {
+            let consumed = match &constraint.definition {
+                DocumentConstraintDefinition::CurveDirection { curve_contact, .. }
+                    if *curve_contact == contact.id =>
+                {
+                    1
+                }
+                DocumentConstraintDefinition::EqualCurvature {
+                    first_contact,
+                    second_contact,
+                    ..
+                } if *first_contact == contact.id || *second_contact == contact.id => 2,
+                DocumentConstraintDefinition::EndpointContinuity {
+                    first_contact,
+                    second_contact,
+                    continuity,
+                } if *first_contact == contact.id || *second_contact == contact.id => {
+                    match continuity {
+                        DocumentCurveContinuity::G0 => 0,
+                        DocumentCurveContinuity::G1 => 1,
+                        DocumentCurveContinuity::G2
+                        | DocumentCurveContinuity::ParametricC2 { .. } => 2,
+                    }
+                }
+                _ => 0,
+            };
+            required = required.max(consumed);
+        }
+        required
     }
 
     /// Adds a semantic contact slot.
@@ -1971,6 +3192,17 @@ impl SketchDocument {
                 "contact-owned scalars require an atomic contact-state edit",
             );
         }
+        if self.curves.iter().any(|curve| {
+            matches!(
+                &curve.definition,
+                CurveDefinition::Nurbs { gauge_weight, .. } if *gauge_weight == id
+            )
+        }) {
+            return invalid(
+                "scalar edit",
+                "the selected NURBS gauge weight requires an explicit gauge transaction",
+            );
+        }
         let mut candidate = self.clone();
         let scalar = candidate
             .scalars
@@ -1979,6 +3211,65 @@ impl SketchDocument {
             .ok_or_else(|| unknown("scalar", id.0))?;
         validate_scalar_value(value, scalar.domain)?;
         scalar.value = value;
+        candidate.validate()?;
+        *self = candidate;
+        Ok(())
+    }
+
+    /// Selects a new exact unit NURBS weight gauge without changing geometry.
+    ///
+    /// Every owned weight is divided by the selected weight's current value in one
+    /// validated transaction. Direct edits of the selected gauge remain forbidden.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a missing/non-NURBS curve, a foreign weight, or a non-finite
+    /// projective rescaling.
+    pub fn set_nurbs_weight_gauge(
+        &mut self,
+        curve: CurveId,
+        gauge_weight: DesignScalarId,
+    ) -> Result<(), DocumentError> {
+        let mut candidate = self.clone();
+        let weights = match &candidate
+            .curve(curve)
+            .ok_or_else(|| unknown("curve", curve.0))?
+            .definition
+        {
+            CurveDefinition::Nurbs { weights, .. } => weights.clone(),
+            _ => return invalid("curve", "weight gauge edit requires a NURBS curve"),
+        };
+        if !weights.contains(&gauge_weight) {
+            return invalid(
+                "curve.gauge_weight",
+                "new NURBS gauge must select one owned weight scalar",
+            );
+        }
+        let scale = candidate.require_scalar(gauge_weight)?.value;
+        finite_positive(scale, "NURBS gauge weight")?;
+        for weight in &weights {
+            let scalar = candidate
+                .scalar_mut(*weight)
+                .ok_or_else(|| unknown("scalar", weight.0))?;
+            let normalized = scalar.value / scale;
+            finite_positive(normalized, "normalized NURBS weight")?;
+            scalar.value = normalized;
+        }
+        candidate
+            .scalar_mut(gauge_weight)
+            .ok_or_else(|| unknown("scalar", gauge_weight.0))?
+            .value = 1.0;
+        let CurveDefinition::Nurbs {
+            gauge_weight: selected,
+            ..
+        } = &mut candidate
+            .curve_mut(curve)
+            .ok_or_else(|| unknown("curve", curve.0))?
+            .definition
+        else {
+            return invalid("curve", "weight gauge curve family changed");
+        };
+        *selected = gauge_weight;
         candidate.validate()?;
         *self = candidate;
         Ok(())
@@ -2351,9 +3642,18 @@ impl SketchDocument {
             DocumentObjectId::Scalar(id) => retain_remove(&mut candidate.scalars, |v| v.id == id)
                 .then_some(())
                 .ok_or_else(|| unknown("scalar", id.0))?,
-            DocumentObjectId::Curve(id) => retain_remove(&mut candidate.curves, |v| v.id == id)
-                .then_some(())
-                .ok_or_else(|| unknown("curve", id.0))?,
+            DocumentObjectId::Curve(id) => {
+                let owned_scalars = curve_owned_scalars(
+                    &candidate
+                        .curve(id)
+                        .ok_or_else(|| unknown("curve", id.0))?
+                        .definition,
+                );
+                retain_remove(&mut candidate.curves, |value| value.id == id);
+                candidate
+                    .scalars
+                    .retain(|value| !owned_scalars.contains(&value.id));
+            }
             DocumentObjectId::Contact(id) => retain_remove(&mut candidate.contacts, |v| v.id == id)
                 .then_some(())
                 .ok_or_else(|| unknown("contact", id.0))?,
@@ -2429,46 +3729,12 @@ impl SketchDocument {
                 let _ = candidate.remove(DocumentObjectId::Scalar(target));
             }
             DocumentObjectId::Curve(id) => {
-                let owned_scalars = match &candidate
-                    .curve(id)
-                    .ok_or_else(|| unknown("curve", id.0))?
-                    .definition
-                {
-                    CurveDefinition::Circle { radius, .. } => vec![*radius],
-                    CurveDefinition::CircularArc {
-                        radius,
-                        start_angle,
-                        end_angle,
-                        ..
-                    } => vec![*radius, *start_angle, *end_angle],
-                    CurveDefinition::Ellipse {
-                        minor_axis_ratio, ..
-                    } => vec![*minor_axis_ratio],
-                    CurveDefinition::EllipticalArc {
-                        minor_axis_ratio,
-                        start_angle,
-                        end_angle,
-                        ..
-                    } => vec![*minor_axis_ratio, *start_angle, *end_angle],
-                    CurveDefinition::RationalQuadraticConic { middle_weight, .. } => {
-                        vec![*middle_weight]
-                    }
-                    CurveDefinition::ParabolaSegment {
-                        trim_start,
-                        trim_end,
-                        ..
-                    } => vec![*trim_start, *trim_end],
-                    CurveDefinition::HyperbolaSegment {
-                        semi_conjugate,
-                        trim_start,
-                        trim_end,
-                        ..
-                    } => vec![*semi_conjugate, *trim_start, *trim_end],
-                    CurveDefinition::Line { .. }
-                    | CurveDefinition::Polyline { .. }
-                    | CurveDefinition::QuadraticBezier { .. }
-                    | CurveDefinition::CubicBezier { .. } => Vec::new(),
-                };
+                let owned_scalars = curve_owned_scalars(
+                    &candidate
+                        .curve(id)
+                        .ok_or_else(|| unknown("curve", id.0))?
+                        .definition,
+                );
                 candidate.remove(object)?;
                 for scalar in owned_scalars {
                     let _ = candidate.remove(DocumentObjectId::Scalar(scalar));
@@ -2587,6 +3853,8 @@ impl SketchDocument {
                 CurveDefinition::Polyline { points, .. } => points.len(),
                 CurveDefinition::QuadraticBezier { controls } => controls.len(),
                 CurveDefinition::CubicBezier { controls } => controls.len(),
+                CurveDefinition::BSpline { controls, .. }
+                | CurveDefinition::Nurbs { controls, .. } => controls.len(),
                 CurveDefinition::Ellipse { .. }
                 | CurveDefinition::EllipticalArc { .. }
                 | CurveDefinition::RationalQuadraticConic { .. }
@@ -2639,7 +3907,20 @@ impl SketchDocument {
             let scalar = self
                 .scalar(contact.parameter)
                 .ok_or_else(|| unknown("scalar", contact.parameter.0))?;
-            validate_contact(contact, scalar)?;
+            validate_contact(
+                contact,
+                scalar,
+                matches!(
+                    curve.definition,
+                    CurveDefinition::BSpline {
+                        form: DocumentBSplineForm::Periodic,
+                        ..
+                    } | CurveDefinition::Nurbs {
+                        form: DocumentBSplineForm::Periodic,
+                        ..
+                    }
+                ),
+            )?;
             validate_contact_curve(contact, scalar, curve)?;
             claim_scalar(&mut used_scalars, contact.parameter)?;
             if !contact_scalars.insert(contact.parameter) {
@@ -2756,9 +4037,36 @@ impl SketchDocument {
         self.next_id
     }
 
+    pub(crate) fn spline_span_allocator_cursors(&self) -> BTreeMap<CurveId, u32> {
+        self.curves
+            .iter()
+            .filter_map(|curve| {
+                let (CurveDefinition::BSpline { next_span_id, .. }
+                | CurveDefinition::Nurbs { next_span_id, .. }) = &curve.definition
+                else {
+                    return None;
+                };
+                Some((curve.id, *next_span_id))
+            })
+            .collect()
+    }
+
     pub(crate) fn advance_allocator(&mut self, cursor: PersistentId) {
         if cursor > self.next_id {
             self.next_id = cursor;
+        }
+    }
+
+    pub(crate) fn advance_spline_span_allocators(&mut self, cursors: &BTreeMap<CurveId, u32>) {
+        for curve in &mut self.curves {
+            let (CurveDefinition::BSpline { next_span_id, .. }
+            | CurveDefinition::Nurbs { next_span_id, .. }) = &mut curve.definition
+            else {
+                continue;
+            };
+            if let Some(retained) = cursors.get(&curve.id) {
+                *next_span_id = (*next_span_id).max(*retained);
+            }
         }
     }
 
@@ -2995,6 +4303,169 @@ impl SketchDocument {
             CurveDefinition::CubicBezier { controls } => {
                 for control in controls {
                     self.require_point(*control)?;
+                }
+            }
+            CurveDefinition::BSpline {
+                form,
+                degree,
+                controls,
+                knots,
+                span_ids,
+                next_span_id,
+            } => {
+                if controls.len() > MAX_BSPLINE_CONTROLS {
+                    return Err(DocumentError::ResourceLimit {
+                        resource: "B-spline controls",
+                        actual: controls.len(),
+                        limit: MAX_BSPLINE_CONTROLS,
+                    });
+                }
+                let mut unique_controls = BTreeSet::new();
+                for control in controls {
+                    self.require_point(*control)?;
+                    if !unique_controls.insert(*control) {
+                        return invalid(
+                            "curve.controls",
+                            "B-spline control identities must be distinct",
+                        );
+                    }
+                }
+                let basis = match form {
+                    DocumentBSplineForm::Clamped => geosolve_geometry::BSplineBasis::try_clamped(
+                        *degree,
+                        controls.len(),
+                        knots.clone(),
+                    ),
+                    DocumentBSplineForm::Periodic => geosolve_geometry::BSplineBasis::try_periodic(
+                        *degree,
+                        controls.len(),
+                        knots.clone(),
+                    ),
+                }
+                .map_err(|source| DocumentError::BSplineDefinition { curve, source })?;
+                if span_ids.len() != basis.spans().len() {
+                    return invalid(
+                        "curve.span_ids",
+                        "must contain one semantic ID per positive knot span",
+                    );
+                }
+                let unique_spans = span_ids.iter().copied().collect::<BTreeSet<_>>();
+                if unique_spans.len() != span_ids.len() {
+                    return invalid("curve.span_ids", "semantic span IDs must be unique");
+                }
+                let maximum = span_ids.iter().copied().max().unwrap_or(0);
+                if *next_span_id <= maximum {
+                    return invalid(
+                        "curve.next_span_id",
+                        "must be greater than every allocated semantic span ID",
+                    );
+                }
+            }
+            CurveDefinition::Nurbs {
+                form,
+                degree,
+                controls,
+                weights,
+                gauge_weight,
+                knots,
+                span_ids,
+                next_span_id,
+            } => {
+                if controls.len() > MAX_BSPLINE_CONTROLS {
+                    return Err(DocumentError::ResourceLimit {
+                        resource: "NURBS controls",
+                        actual: controls.len(),
+                        limit: MAX_BSPLINE_CONTROLS,
+                    });
+                }
+                if weights.len() != controls.len() {
+                    return invalid(
+                        "curve.weights",
+                        "NURBS requires one weight scalar per control",
+                    );
+                }
+                let mut unique_controls = BTreeSet::new();
+                let mut control_positions = Vec::with_capacity(controls.len());
+                for control in controls {
+                    let point = self.require_point(*control)?;
+                    if !unique_controls.insert(*control) {
+                        return invalid(
+                            "curve.controls",
+                            "NURBS control identities must be distinct",
+                        );
+                    }
+                    control_positions.push(geosolve_geometry::Point2::new(
+                        point.position[0],
+                        point.position[1],
+                    ));
+                }
+                let mut unique_weights = BTreeSet::new();
+                let mut weight_values = Vec::with_capacity(weights.len());
+                for weight in weights {
+                    let scalar = self.require_scalar(*weight)?;
+                    if !unique_weights.insert(*weight) {
+                        return invalid(
+                            "curve.weights",
+                            "NURBS weight identities must be distinct",
+                        );
+                    }
+                    require_scalar_role(
+                        scalar,
+                        ScalarUnit::Parameter,
+                        ScalarDomain::Positive,
+                        "NURBS weight",
+                    )?;
+                    finite_positive(scalar.value, "NURBS weight")?;
+                    weight_values.push(scalar.value);
+                }
+                if !unique_weights.contains(gauge_weight) {
+                    return invalid(
+                        "curve.gauge_weight",
+                        "NURBS gauge must select one owned weight scalar",
+                    );
+                }
+                let gauge = self.require_scalar(*gauge_weight)?;
+                if gauge.value.to_bits() != 1.0f64.to_bits() {
+                    return invalid(
+                        "curve.gauge_weight",
+                        "selected NURBS gauge weight must be exactly one",
+                    );
+                }
+                let basis = match form {
+                    DocumentBSplineForm::Clamped => geosolve_geometry::BSplineBasis::try_clamped(
+                        *degree,
+                        controls.len(),
+                        knots.clone(),
+                    ),
+                    DocumentBSplineForm::Periodic => geosolve_geometry::BSplineBasis::try_periodic(
+                        *degree,
+                        controls.len(),
+                        knots.clone(),
+                    ),
+                }
+                .map_err(|source| DocumentError::BSplineDefinition { curve, source })?;
+                geosolve_geometry::NurbsCurve2::try_new(
+                    basis.clone(),
+                    control_positions,
+                    weight_values,
+                )
+                .map_err(|source| DocumentError::NurbsDefinition { curve, source })?;
+                if span_ids.len() != basis.spans().len() {
+                    return invalid(
+                        "curve.span_ids",
+                        "must contain one semantic ID per positive knot span",
+                    );
+                }
+                let unique_spans = span_ids.iter().copied().collect::<BTreeSet<_>>();
+                if unique_spans.len() != span_ids.len() {
+                    return invalid("curve.span_ids", "semantic span IDs must be unique");
+                }
+                let maximum = span_ids.iter().copied().max().unwrap_or(0);
+                if *next_span_id <= maximum {
+                    return invalid(
+                        "curve.next_span_id",
+                        "must be greater than every allocated semantic span ID",
+                    );
                 }
             }
             CurveDefinition::Ellipse {
@@ -3297,6 +4768,105 @@ impl SketchDocument {
                 require_tangent_orientation(second)?;
                 self.validate_tangent_pair(first, second)?;
             }
+            C::CurveDirection {
+                line,
+                curve_contact,
+                relation,
+            } => {
+                self.validate_line_span(*line)?;
+                let contact = self.require_contact(*curve_contact)?;
+                let line_direction = self.line_span_tangent(*line)?;
+                let differential = self.contact_differential(contact)?;
+                let selected = match relation {
+                    DocumentCurveDirectionRelation::Tangent { orientation } => {
+                        let sign = match orientation {
+                            TangentOrientation::Aligned => 1.0,
+                            TangentOrientation::Opposed => -1.0,
+                        };
+                        [
+                            differential.unit_tangent.x * sign,
+                            differential.unit_tangent.y * sign,
+                        ]
+                    }
+                    DocumentCurveDirectionRelation::Normal { side } => {
+                        let sign = match side {
+                            DocumentCurveNormalSide::Left => 1.0,
+                            DocumentCurveNormalSide::Right => -1.0,
+                        };
+                        [
+                            differential.left_normal.x * sign,
+                            differential.left_normal.y * sign,
+                        ]
+                    }
+                };
+                if dot(line_direction, selected) <= 0.0 {
+                    return invalid(
+                        "constraint.relation",
+                        "selected curve direction disagrees with the directed line",
+                    );
+                }
+            }
+            C::EqualCurvature {
+                first_contact,
+                second_contact,
+                relation,
+            } => {
+                if first_contact == second_contact {
+                    return invalid("constraint contact", "curvature contacts must be distinct");
+                }
+                let first = self.contact_differential(self.require_contact(*first_contact)?)?;
+                let second = self.contact_differential(self.require_contact(*second_contact)?)?;
+                let signs_match = first.signed_curvature.is_sign_positive()
+                    == second.signed_curvature.is_sign_positive();
+                let branch_valid = match relation {
+                    DocumentCurveCurvatureRelation::Signed => true,
+                    DocumentCurveCurvatureRelation::MagnitudeSameSign => {
+                        first.signed_curvature != 0.0
+                            && second.signed_curvature != 0.0
+                            && signs_match
+                    }
+                    DocumentCurveCurvatureRelation::MagnitudeOppositeSign => {
+                        first.signed_curvature != 0.0
+                            && second.signed_curvature != 0.0
+                            && !signs_match
+                    }
+                };
+                if !branch_valid {
+                    return invalid(
+                        "constraint.relation",
+                        "current curvature signs disagree with the selected magnitude branch",
+                    );
+                }
+            }
+            C::EndpointContinuity {
+                first_contact,
+                second_contact,
+                continuity,
+            } => {
+                if first_contact == second_contact {
+                    return invalid("constraint contact", "continuity contacts must be distinct");
+                }
+                for contact in [first_contact, second_contact] {
+                    let contact = self.require_contact(*contact)?;
+                    if !matches!(
+                        contact.neighborhood,
+                        ContactNeighborhood::Start | ContactNeighborhood::End
+                    ) {
+                        return invalid(
+                            "constraint endpoint",
+                            "endpoint continuity requires explicit start/end contacts",
+                        );
+                    }
+                }
+                if let DocumentCurveContinuity::ParametricC2 {
+                    first_rate,
+                    second_rate,
+                } = continuity
+                {
+                    finite_positive(*first_rate, "parametric C2 first rate")?;
+                    finite_positive(*second_rate, "parametric C2 second rate")?;
+                }
+            }
         }
         Ok(())
     }
@@ -3350,9 +4920,18 @@ impl SketchDocument {
         let curve = self
             .curve(span.curve)
             .ok_or_else(|| unknown("curve", span.curve.0))?;
-        let count = curve_segment_count(&curve.definition);
-        if usize::try_from(span.segment).map_or(true, |index| index >= count) {
-            return invalid("curve span", "segment index is outside the curve");
+        match &curve.definition {
+            CurveDefinition::BSpline { span_ids, .. } | CurveDefinition::Nurbs { span_ids, .. } => {
+                if !span_ids.contains(&span.segment) {
+                    return invalid("curve span", "semantic span ID is outside the spline");
+                }
+            }
+            _ => {
+                let count = curve_segment_count(&curve.definition);
+                if usize::try_from(span.segment).map_or(true, |index| index >= count) {
+                    return invalid("curve span", "segment index is outside the curve");
+                }
+            }
         }
         Ok(curve)
     }
@@ -3503,6 +5082,21 @@ impl SketchDocument {
         Ok(tangent)
     }
 
+    fn contact_differential(
+        &self,
+        contact: &ContactSlot,
+    ) -> Result<geosolve_geometry::CurveDifferential2, DocumentError> {
+        self.evaluate_contact_jet(contact.id)
+            .map_err(|error| {
+                contact_document_evaluation_error(contact.id, contact.curve.curve, error)
+            })?
+            .differential()
+            .map_err(|source| DocumentError::ContactDifferential {
+                contact: contact.id,
+                source,
+            })
+    }
+
     fn line_span_tangent(&self, span: CurveSpan) -> Result<[f64; 2], DocumentError> {
         let curve = self.validate_line_span(span)?;
         let (start, end) = match &curve.definition {
@@ -3522,6 +5116,45 @@ impl SketchDocument {
             self.require_point(start)?.position,
             self.require_point(end)?.position,
         ))
+    }
+}
+
+fn curve_owned_scalars(definition: &CurveDefinition) -> Vec<DesignScalarId> {
+    match definition {
+        CurveDefinition::Circle { radius, .. } => vec![*radius],
+        CurveDefinition::CircularArc {
+            radius,
+            start_angle,
+            end_angle,
+            ..
+        } => vec![*radius, *start_angle, *end_angle],
+        CurveDefinition::Ellipse {
+            minor_axis_ratio, ..
+        } => vec![*minor_axis_ratio],
+        CurveDefinition::EllipticalArc {
+            minor_axis_ratio,
+            start_angle,
+            end_angle,
+            ..
+        } => vec![*minor_axis_ratio, *start_angle, *end_angle],
+        CurveDefinition::RationalQuadraticConic { middle_weight, .. } => vec![*middle_weight],
+        CurveDefinition::ParabolaSegment {
+            trim_start,
+            trim_end,
+            ..
+        } => vec![*trim_start, *trim_end],
+        CurveDefinition::HyperbolaSegment {
+            semi_conjugate,
+            trim_start,
+            trim_end,
+            ..
+        } => vec![*semi_conjugate, *trim_start, *trim_end],
+        CurveDefinition::Line { .. }
+        | CurveDefinition::Polyline { .. }
+        | CurveDefinition::QuadraticBezier { .. }
+        | CurveDefinition::CubicBezier { .. }
+        | CurveDefinition::BSpline { .. } => Vec::new(),
+        CurveDefinition::Nurbs { weights, .. } => weights.clone(),
     }
 }
 
@@ -3552,6 +5185,50 @@ fn document_curve_conic_geometry_error(
         DocumentConicGeometryError::Definition(error) => {
             DocumentCurveEvaluationError::ConicDefinition(error)
         }
+    }
+}
+
+fn document_bspline_curve_error(
+    curve: CurveId,
+    error: DocumentCurveEvaluationError,
+) -> DocumentError {
+    match error {
+        DocumentCurveEvaluationError::Document(error) => error,
+        DocumentCurveEvaluationError::BSplineDefinition(source) => {
+            DocumentError::BSplineDefinition { curve, source }
+        }
+        DocumentCurveEvaluationError::BSplineEvaluation(source) => {
+            DocumentError::BSplineEvaluation { curve, source }
+        }
+        other => DocumentError::InvalidField {
+            field: "curve",
+            message: other.to_string(),
+        },
+    }
+}
+
+fn document_nurbs_curve_error(
+    curve: CurveId,
+    error: DocumentCurveEvaluationError,
+) -> DocumentError {
+    match error {
+        DocumentCurveEvaluationError::Document(error) => error,
+        DocumentCurveEvaluationError::BSplineDefinition(source) => {
+            DocumentError::BSplineDefinition { curve, source }
+        }
+        DocumentCurveEvaluationError::BSplineEvaluation(source) => {
+            DocumentError::BSplineEvaluation { curve, source }
+        }
+        DocumentCurveEvaluationError::NurbsDefinition(source) => {
+            DocumentError::NurbsDefinition { curve, source }
+        }
+        DocumentCurveEvaluationError::NurbsEvaluation(source) => {
+            DocumentError::NurbsEvaluation { curve, source }
+        }
+        other => DocumentError::InvalidField {
+            field: "curve",
+            message: other.to_string(),
+        },
     }
 }
 
@@ -3674,7 +5351,11 @@ fn fresh_document_id() -> DocumentId {
     DocumentId(PersistentId(value.max(1)))
 }
 
-fn validate_contact(contact: &ContactSlot, scalar: &DesignScalar) -> Result<(), DocumentError> {
+fn validate_contact(
+    contact: &ContactSlot,
+    scalar: &DesignScalar,
+    bounded_winding_allowed: bool,
+) -> Result<(), DocumentError> {
     let value = scalar.value;
     match contact.domain {
         ContactDomain::SupportingLine => {
@@ -3694,7 +5375,7 @@ fn validate_contact(contact: &ContactSlot, scalar: &DesignScalar) -> Result<(), 
                     upper,
                 });
             }
-            if contact.winding != 0 {
+            if contact.winding != 0 && !bounded_winding_allowed {
                 return invalid("contact.winding", "bounded contact winding must be zero");
             }
         }
@@ -3709,6 +5390,49 @@ fn validate_contact(contact: &ContactSlot, scalar: &DesignScalar) -> Result<(), 
         }
     }
     Ok(())
+}
+
+fn remap_bspline_contact_neighborhood(
+    neighborhood: ContactNeighborhood,
+    old_span: &geosolve_geometry::BSplineSpan,
+    inserted_knot: f64,
+    left_child: bool,
+    parameter: f64,
+) -> Result<ContactNeighborhood, DocumentError> {
+    if parameter.to_bits() == 0.0f64.to_bits() {
+        return Ok(ContactNeighborhood::Start);
+    }
+    if parameter.to_bits() == 1.0f64.to_bits() {
+        return Ok(ContactNeighborhood::End);
+    }
+    match neighborhood {
+        ContactNeighborhood::Interior => Ok(ContactNeighborhood::Interior),
+        ContactNeighborhood::Local { lower, upper } => {
+            let old_width = old_span.upper() - old_span.lower();
+            let old_lower = old_width.mul_add(lower, old_span.lower());
+            let old_upper = old_width.mul_add(upper, old_span.lower());
+            let (child_lower, child_upper) = if left_child {
+                (old_span.lower(), inserted_knot)
+            } else {
+                (inserted_knot, old_span.upper())
+            };
+            let child_width = child_upper - child_lower;
+            let lower = ((old_lower - child_lower) / child_width).clamp(0.0, 1.0);
+            let upper = ((old_upper - child_lower) / child_width).clamp(0.0, 1.0);
+            if lower < parameter && parameter < upper {
+                Ok(ContactNeighborhood::Local { lower, upper })
+            } else {
+                invalid(
+                    "contact.neighborhood",
+                    "refined local neighborhood no longer contains its contact",
+                )
+            }
+        }
+        ContactNeighborhood::Start | ContactNeighborhood::End => invalid(
+            "contact.neighborhood",
+            "endpoint neighborhood remapped to an interior child coordinate",
+        ),
+    }
 }
 
 fn contact_document_evaluation_error(
@@ -3731,6 +5455,18 @@ fn contact_document_evaluation_error(
         }
         DocumentCurveEvaluationError::ConicEvaluation(source) => {
             DocumentError::ContactConicEvaluation { contact, source }
+        }
+        DocumentCurveEvaluationError::BSplineDefinition(source) => {
+            DocumentError::BSplineDefinition { curve, source }
+        }
+        DocumentCurveEvaluationError::BSplineEvaluation(source) => {
+            DocumentError::BSplineEvaluation { curve, source }
+        }
+        DocumentCurveEvaluationError::NurbsDefinition(source) => {
+            DocumentError::NurbsDefinition { curve, source }
+        }
+        DocumentCurveEvaluationError::NurbsEvaluation(source) => {
+            DocumentError::NurbsEvaluation { curve, source }
         }
         DocumentCurveEvaluationError::Curve(other) => DocumentError::InvalidField {
             field: "contact tangent",
@@ -3782,7 +5518,9 @@ fn validate_contact_curve(
             | CurveDefinition::EllipticalArc { .. }
             | CurveDefinition::RationalQuadraticConic { .. }
             | CurveDefinition::ParabolaSegment { .. }
-            | CurveDefinition::HyperbolaSegment { .. },
+            | CurveDefinition::HyperbolaSegment { .. }
+            | CurveDefinition::BSpline { .. }
+            | CurveDefinition::Nurbs { .. },
             ContactDomain::Bounded { lower, upper },
         ) if is_unit_interval(lower, upper) => {
             if scalar.unit != ScalarUnit::Parameter
@@ -3871,7 +5609,8 @@ fn constraint_contacts(definition: &DocumentConstraintDefinition) -> Vec<Contact
             arc_contact,
             ..
         } => vec![*circle_contact, *arc_contact],
-        DocumentConstraintDefinition::LineCurveTangency { curve_contact, .. } => {
+        DocumentConstraintDefinition::LineCurveTangency { curve_contact, .. }
+        | DocumentConstraintDefinition::CurveDirection { curve_contact, .. } => {
             vec![*curve_contact]
         }
         DocumentConstraintDefinition::CurveCurveContact {
@@ -3881,11 +5620,22 @@ fn constraint_contacts(definition: &DocumentConstraintDefinition) -> Vec<Contact
         | DocumentConstraintDefinition::CurveCurveTangency {
             first_contact,
             second_contact,
+        }
+        | DocumentConstraintDefinition::EqualCurvature {
+            first_contact,
+            second_contact,
+            ..
+        }
+        | DocumentConstraintDefinition::EndpointContinuity {
+            first_contact,
+            second_contact,
+            ..
         } => vec![*first_contact, *second_contact],
         _ => Vec::new(),
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn curve_references_object(definition: &CurveDefinition, object: DocumentObjectId) -> bool {
     match (definition, object) {
         (CurveDefinition::Line { start, end, .. }, DocumentObjectId::Point(point)) => {
@@ -3904,6 +5654,10 @@ fn curve_references_object(definition: &CurveDefinition, object: DocumentObjectI
         (CurveDefinition::CubicBezier { controls }, DocumentObjectId::Point(point)) => {
             controls.contains(&point)
         }
+        (
+            CurveDefinition::BSpline { controls, .. } | CurveDefinition::Nurbs { controls, .. },
+            DocumentObjectId::Point(point),
+        ) => controls.contains(&point),
         (
             CurveDefinition::Ellipse {
                 center,
@@ -3981,6 +5735,9 @@ fn curve_references_object(definition: &CurveDefinition, object: DocumentObjectI
             },
             DocumentObjectId::Scalar(scalar),
         ) => *semi_conjugate == scalar || *trim_start == scalar || *trim_end == scalar,
+        (CurveDefinition::Nurbs { weights, .. }, DocumentObjectId::Scalar(scalar)) => {
+            weights.contains(&scalar)
+        }
         _ => false,
     }
 }
@@ -4016,7 +5773,8 @@ fn constraint_references_object(
             | DocumentConstraintDefinition::Vertical { line }
             | DocumentConstraintDefinition::Midpoint { line, .. }
             | DocumentConstraintDefinition::SymmetricAboutLine { line, .. }
-            | DocumentConstraintDefinition::LineCurveTangency { line, .. },
+            | DocumentConstraintDefinition::LineCurveTangency { line, .. }
+            | DocumentConstraintDefinition::CurveDirection { line, .. },
             DocumentObjectId::Curve(selected),
         ) => line.curve == selected,
         (
@@ -4033,6 +5791,10 @@ fn constraint_references_object(
         (
             DocumentConstraintDefinition::PointOnCurve { contact, .. }
             | DocumentConstraintDefinition::LineCurveTangency {
+                curve_contact: contact,
+                ..
+            }
+            | DocumentConstraintDefinition::CurveDirection {
                 curve_contact: contact,
                 ..
             },
@@ -4062,6 +5824,16 @@ fn constraint_references_object(
             | DocumentConstraintDefinition::CurveCurveTangency {
                 first_contact,
                 second_contact,
+            }
+            | DocumentConstraintDefinition::EqualCurvature {
+                first_contact,
+                second_contact,
+                ..
+            }
+            | DocumentConstraintDefinition::EndpointContinuity {
+                first_contact,
+                second_contact,
+                ..
             },
             DocumentObjectId::Contact(selected),
         ) => *first_contact == selected || *second_contact == selected,
@@ -4143,6 +5915,9 @@ fn curve_segment_count(definition: &CurveDefinition) -> usize {
         | CurveDefinition::RationalQuadraticConic { .. }
         | CurveDefinition::ParabolaSegment { .. }
         | CurveDefinition::HyperbolaSegment { .. } => 1,
+        CurveDefinition::BSpline { span_ids, .. } | CurveDefinition::Nurbs { span_ids, .. } => {
+            span_ids.len()
+        }
     }
 }
 
@@ -4151,7 +5926,9 @@ fn curve_scalars(definition: &CurveDefinition) -> Vec<DesignScalarId> {
         CurveDefinition::Line { .. }
         | CurveDefinition::Polyline { .. }
         | CurveDefinition::QuadraticBezier { .. }
-        | CurveDefinition::CubicBezier { .. } => Vec::new(),
+        | CurveDefinition::CubicBezier { .. }
+        | CurveDefinition::BSpline { .. } => Vec::new(),
+        CurveDefinition::Nurbs { weights, .. } => weights.clone(),
         CurveDefinition::Circle { radius, .. } => vec![*radius],
         CurveDefinition::CircularArc {
             radius,

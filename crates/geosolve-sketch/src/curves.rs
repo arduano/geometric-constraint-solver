@@ -1578,9 +1578,12 @@ impl Sketch {
 fn generic_constraint_curves(kind: SketchConstraintKind) -> Vec<crate::SketchCurve> {
     match kind {
         SketchConstraintKind::PointOnCurve { contact, .. }
-        | SketchConstraintKind::LineCurveTangency { contact, .. } => vec![contact.curve],
+        | SketchConstraintKind::LineCurveTangency { contact, .. }
+        | SketchConstraintKind::CurveDirection { contact, .. } => vec![contact.curve],
         SketchConstraintKind::CurveCurveContact { first, second }
-        | SketchConstraintKind::CurveCurveTangency { first, second, .. } => {
+        | SketchConstraintKind::CurveCurveTangency { first, second, .. }
+        | SketchConstraintKind::EqualCurvature { first, second, .. }
+        | SketchConstraintKind::EndpointContinuity { first, second, .. } => {
             vec![first.curve, second.curve]
         }
         _ => Vec::new(),

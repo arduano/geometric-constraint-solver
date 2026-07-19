@@ -365,6 +365,17 @@ rank or physical audit rows.
 - Rational denominator and mixed-scale ambiguities reject truthfully.
 - Complete sketch persistence, fuzz/property, differential-oracle and sparse performance suites pass.
 
+Completion record (2026-07-19): clamped and periodic NURBS use one explicit
+persisted unit gauge, homogeneous refinement and degree-local control/weight AD.
+Reference-translated pairwise quotient jets and compensated normal-acceleration
+curvature reject unrepresentable mixed scales without false zero values. Generic
+tangent/sided-normal, signed or branch-explicit magnitude curvature, G0/G1/G2 and
+rate-explicit parametric C2 rows pass central differences and are independently
+recomputed from immutable candidate jets before commit. Canonical persistence,
+transactional gauge/refinement/transition/deletion, 48-case properties and the
+1,000-control/128-contact sparse corpus pass with the complete locked workspace,
+WASM, rustdoc, benchmark compilation and release Trunk gates.
+
 ## M23 acceptance: kinematic completion
 
 - Adaptive and pseudo-arclength continuation preserve explicit planar/spatial modes with branch-boundary events and hysteresis.

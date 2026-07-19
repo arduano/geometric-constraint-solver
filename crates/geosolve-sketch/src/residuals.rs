@@ -5,12 +5,21 @@ use crate::curves::{
     AngleOrientation, CONTACT_PARAMETER_ROUNDOFF_TOLERANCE, CircleContainment, CircleTangencyMode,
     CurveDegeneracy, CurveRef, LineParameterDomain, tangency_distance, unwrap_near,
 };
-use crate::{CurveTangentOrientation, SegmentEndpoint};
+use crate::{
+    CurveContinuity, CurveCurvatureRelation, CurveDirectionRelation, CurveNormalSide,
+    CurveTangentOrientation, SegmentEndpoint,
+};
 
 #[derive(Clone, Debug)]
 enum SketchAdValue {
     Scalar(DualDVec64),
     Point([DualDVec64; 2]),
+}
+
+struct AdCurveJet2 {
+    position: [DualDVec64; 2],
+    first: [DualDVec64; 2],
+    second: [DualDVec64; 2],
 }
 
 trait SketchAdFormula {
@@ -33,6 +42,12 @@ pub(crate) enum CurveParameterIncidence {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub(crate) enum NurbsWeightIncidence {
+    Variable(usize),
+    Fixed(f64),
+}
+
+#[derive(Clone, Debug)]
 pub(crate) enum GenericCurveIncidence {
     Line {
         points: [usize; 2],
@@ -94,19 +109,57 @@ pub(crate) enum GenericCurveIncidence {
         trim: geosolve_geometry::DirectedParameterTrim,
         parameter: CurveParameterIncidence,
     },
+    BSpline {
+        basis: geosolve_geometry::BSplineBasis,
+        span: geosolve_geometry::BSplineSpanIndex,
+        controls: Vec<usize>,
+        parameter: CurveParameterIncidence,
+    },
+    Nurbs {
+        basis: geosolve_geometry::BSplineBasis,
+        span: geosolve_geometry::BSplineSpanIndex,
+        controls: Vec<usize>,
+        weights: Vec<NurbsWeightIncidence>,
+        parameter: CurveParameterIncidence,
+    },
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct GenericPointOnCurveResidual {
     pub(crate) point: usize,
     pub(crate) curve: GenericCurveIncidence,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct GenericCurvePairResidual {
     pub(crate) first: GenericCurveIncidence,
     pub(crate) second: GenericCurveIncidence,
     pub(crate) orientation: Option<CurveTangentOrientation>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct GenericCurveDirectionResidual {
+    pub(crate) line: [usize; 2],
+    pub(crate) curve: GenericCurveIncidence,
+    pub(crate) relation: CurveDirectionRelation,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct GenericEqualCurvatureResidual {
+    pub(crate) first: GenericCurveIncidence,
+    pub(crate) second: GenericCurveIncidence,
+    pub(crate) relation: CurveCurvatureRelation,
+    pub(crate) model_scale: f64,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct GenericEndpointContinuityResidual {
+    pub(crate) first: GenericCurveIncidence,
+    pub(crate) second: GenericCurveIncidence,
+    pub(crate) first_sign: f64,
+    pub(crate) second_sign: f64,
+    pub(crate) kind: CurveContinuity,
+    pub(crate) model_scale: f64,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -143,9 +196,12 @@ impl SketchAdFormula for PointOnBezierResidual {
         let point = ad_point(variables, self.point, "point-on-Bezier")?;
         let parameter = ad_scalar(variables, self.parameter, "point-on-Bezier")?;
         validate_ad_parameter(parameter, "point-on-Bezier")?;
-        let (position, derivative) = evaluate_ad_bezier(variables, self.controls, parameter)?;
-        require_ad_speed(&derivative, "point-on-Bezier")?;
-        Ok(vec![&point[0] - &position[0], &point[1] - &position[1]])
+        let jet = evaluate_ad_bezier(variables, self.controls, parameter)?;
+        require_ad_speed(&jet.first, "point-on-Bezier")?;
+        Ok(vec![
+            &point[0] - &jet.position[0],
+            &point[1] - &jet.position[1],
+        ])
     }
 }
 
@@ -173,9 +229,9 @@ impl SketchAdFormula for LineBezierTangencyResidual {
             SegmentEndpoint::Start => start,
             SegmentEndpoint::End => end,
         };
-        let (position, derivative) = evaluate_ad_bezier(variables, self.controls, parameter)?;
+        let jet = evaluate_ad_bezier(variables, self.controls, parameter)?;
         let line_unit = ad_unit(&line_direction, "line-Bezier tangency line")?;
-        let curve_unit = ad_unit(&derivative, "line-Bezier tangency Bezier")?;
+        let curve_unit = ad_unit(&jet.first, "line-Bezier tangency Bezier")?;
         let orientation = (&line_unit[0] * &curve_unit[0] + &line_unit[1] * &curve_unit[1]).re;
         let orientation_valid = match self.orientation {
             CurveTangentOrientation::Aligned => orientation > 0.0,
@@ -187,8 +243,8 @@ impl SketchAdFormula for LineBezierTangencyResidual {
             ));
         }
         Ok(vec![
-            &endpoint[0] - &position[0],
-            &endpoint[1] - &position[1],
+            &endpoint[0] - &jet.position[0],
+            &endpoint[1] - &jet.position[1],
             &line_unit[0] * &curve_unit[1] - &line_unit[1] * &curve_unit[0],
         ])
     }
@@ -210,9 +266,12 @@ impl SketchAdFormula for GenericPointOnCurveResidual {
         variables: &[SketchAdValue],
     ) -> Result<Vec<DualDVec64>, EvaluationError> {
         let point = ad_point(variables, self.point, "point-on-curve")?;
-        let (position, derivative) = evaluate_ad_curve(variables, self.curve)?;
-        require_ad_speed(&derivative, "point-on-curve")?;
-        Ok(vec![&point[0] - &position[0], &point[1] - &position[1]])
+        let jet = evaluate_ad_curve(variables, &self.curve)?;
+        require_ad_speed(&jet.first, "point-on-curve")?;
+        Ok(vec![
+            &point[0] - &jet.position[0],
+            &point[1] - &jet.position[1],
+        ])
     }
 }
 
@@ -231,17 +290,17 @@ impl SketchAdFormula for GenericCurvePairResidual {
         &self,
         variables: &[SketchAdValue],
     ) -> Result<Vec<DualDVec64>, EvaluationError> {
-        let (first_position, first_derivative) = evaluate_ad_curve(variables, self.first)?;
-        let (second_position, second_derivative) = evaluate_ad_curve(variables, self.second)?;
-        require_ad_speed(&first_derivative, "first contact curve")?;
-        require_ad_speed(&second_derivative, "second contact curve")?;
+        let first = evaluate_ad_curve(variables, &self.first)?;
+        let second = evaluate_ad_curve(variables, &self.second)?;
+        require_ad_speed(&first.first, "first contact curve")?;
+        require_ad_speed(&second.first, "second contact curve")?;
         let mut values = vec![
-            &first_position[0] - &second_position[0],
-            &first_position[1] - &second_position[1],
+            &first.position[0] - &second.position[0],
+            &first.position[1] - &second.position[1],
         ];
         if let Some(orientation) = self.orientation {
-            let first_unit = ad_unit(&first_derivative, "first tangent curve")?;
-            let second_unit = ad_unit(&second_derivative, "second tangent curve")?;
+            let first_unit = ad_unit(&first.first, "first tangent curve")?;
+            let second_unit = ad_unit(&second.first, "second tangent curve")?;
             let cosine = (&first_unit[0] * &second_unit[0] + &first_unit[1] * &second_unit[1]).re;
             let orientation_valid = match orientation {
                 CurveTangentOrientation::Aligned => cosine > 0.0,
@@ -253,6 +312,181 @@ impl SketchAdFormula for GenericCurvePairResidual {
                 ));
             }
             values.push(&first_unit[0] * &second_unit[1] - &first_unit[1] * &second_unit[0]);
+        }
+        Ok(values)
+    }
+}
+
+impl ResidualEvaluator for GenericCurveDirectionResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, false).map(|(values, _)| values)
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, true).map(|(_, jacobians)| jacobians)
+    }
+}
+
+impl SketchAdFormula for GenericCurveDirectionResidual {
+    fn evaluate_dual(
+        &self,
+        variables: &[SketchAdValue],
+    ) -> Result<Vec<DualDVec64>, EvaluationError> {
+        let start = ad_point(variables, self.line[0], "curve direction line")?;
+        let end = ad_point(variables, self.line[1], "curve direction line")?;
+        let line = ad_unit(
+            &[&end[0] - &start[0], &end[1] - &start[1]],
+            "curve direction line",
+        )?;
+        let curve = evaluate_ad_curve(variables, &self.curve)?;
+        let tangent = ad_unit(&curve.first, "curve direction tangent")?;
+        match self.relation {
+            CurveDirectionRelation::Tangent(orientation) => {
+                let cosine = (&line[0] * &tangent[0] + &line[1] * &tangent[1]).re;
+                let valid = match orientation {
+                    CurveTangentOrientation::Aligned => cosine > 0.0,
+                    CurveTangentOrientation::Opposed => cosine < 0.0,
+                };
+                if !valid {
+                    return Err(EvaluationError::ambiguous(
+                        "curve tangent crossed its selected line orientation",
+                    ));
+                }
+                Ok(vec![&line[0] * &tangent[1] - &line[1] * &tangent[0]])
+            }
+            CurveDirectionRelation::Normal(side) => {
+                let left_normal = [-tangent[1].clone(), tangent[0].clone()];
+                let cosine = (&line[0] * &left_normal[0] + &line[1] * &left_normal[1]).re;
+                let valid = match side {
+                    CurveNormalSide::Left => cosine > 0.0,
+                    CurveNormalSide::Right => cosine < 0.0,
+                };
+                if !valid {
+                    return Err(EvaluationError::ambiguous(
+                        "curve normal crossed its selected side",
+                    ));
+                }
+                Ok(vec![&line[0] * &tangent[0] + &line[1] * &tangent[1]])
+            }
+        }
+    }
+}
+
+impl ResidualEvaluator for GenericEqualCurvatureResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, false).map(|(values, _)| values)
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, true).map(|(_, jacobians)| jacobians)
+    }
+}
+
+impl SketchAdFormula for GenericEqualCurvatureResidual {
+    fn evaluate_dual(
+        &self,
+        variables: &[SketchAdValue],
+    ) -> Result<Vec<DualDVec64>, EvaluationError> {
+        let first =
+            ad_signed_curvature(&evaluate_ad_curve(variables, &self.first)?, "first curve")?;
+        let second =
+            ad_signed_curvature(&evaluate_ad_curve(variables, &self.second)?, "second curve")?;
+        match self.relation {
+            CurveCurvatureRelation::Signed => Ok(vec![(first - second) * self.model_scale]),
+            CurveCurvatureRelation::MagnitudeSameSign => {
+                if first.re == 0.0
+                    || second.re == 0.0
+                    || first.re.is_sign_positive() != second.re.is_sign_positive()
+                {
+                    return Err(EvaluationError::ambiguous(
+                        "equal curvature left its selected same-sign magnitude branch",
+                    ));
+                }
+                Ok(vec![(first - second) * self.model_scale])
+            }
+            CurveCurvatureRelation::MagnitudeOppositeSign => {
+                if first.re == 0.0
+                    || second.re == 0.0
+                    || first.re.is_sign_positive() == second.re.is_sign_positive()
+                {
+                    return Err(EvaluationError::ambiguous(
+                        "equal curvature left its selected opposite-sign magnitude branch",
+                    ));
+                }
+                Ok(vec![(first + second) * self.model_scale])
+            }
+        }
+    }
+}
+
+impl ResidualEvaluator for GenericEndpointContinuityResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, false).map(|(values, _)| values)
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, true).map(|(_, jacobians)| jacobians)
+    }
+}
+
+impl SketchAdFormula for GenericEndpointContinuityResidual {
+    fn evaluate_dual(
+        &self,
+        variables: &[SketchAdValue],
+    ) -> Result<Vec<DualDVec64>, EvaluationError> {
+        let first = evaluate_ad_curve(variables, &self.first)?;
+        let second = evaluate_ad_curve(variables, &self.second)?;
+        let mut values = vec![
+            &first.position[0] - &second.position[0],
+            &first.position[1] - &second.position[1],
+        ];
+        match self.kind {
+            CurveContinuity::G0 => {}
+            CurveContinuity::G1 | CurveContinuity::G2 => {
+                let first_path = [
+                    first.first[0].clone() * self.first_sign,
+                    first.first[1].clone() * self.first_sign,
+                ];
+                let second_path = [
+                    second.first[0].clone() * self.second_sign,
+                    second.first[1].clone() * self.second_sign,
+                ];
+                let first_unit = ad_unit(&first_path, "first endpoint path tangent")?;
+                let second_unit = ad_unit(&second_path, "second endpoint path tangent")?;
+                let cosine =
+                    (&first_unit[0] * &second_unit[0] + &first_unit[1] * &second_unit[1]).re;
+                if cosine <= 0.0 {
+                    return Err(EvaluationError::ambiguous(
+                        "endpoint continuity crossed its ordered path tangent orientation",
+                    ));
+                }
+                values.push(&first_unit[0] * &second_unit[1] - &first_unit[1] * &second_unit[0]);
+                if self.kind == CurveContinuity::G2 {
+                    let first_curvature = ad_signed_curvature(&first, "first endpoint curve")?;
+                    let second_curvature = ad_signed_curvature(&second, "second endpoint curve")?;
+                    values.push(
+                        (first_curvature * self.first_sign - second_curvature * self.second_sign)
+                            * self.model_scale,
+                    );
+                }
+            }
+            CurveContinuity::ParametricC2 {
+                first_rate,
+                second_rate,
+            } => {
+                for coordinate in 0..2 {
+                    values.push(
+                        first.first[coordinate].clone() * (self.first_sign * first_rate)
+                            - second.first[coordinate].clone() * (self.second_sign * second_rate),
+                    );
+                }
+                for coordinate in 0..2 {
+                    values.push(
+                        first.second[coordinate].clone() * first_rate * first_rate
+                            - second.second[coordinate].clone() * second_rate * second_rate,
+                    );
+                }
+            }
         }
         Ok(values)
     }
@@ -377,7 +611,7 @@ fn evaluate_ad_bezier(
     variables: &[SketchAdValue],
     controls: BezierIncidence,
     parameter: &DualDVec64,
-) -> Result<([DualDVec64; 2], [DualDVec64; 2]), EvaluationError> {
+) -> Result<AdCurveJet2, EvaluationError> {
     match controls {
         BezierIncidence::Quadratic([first, second, third]) => {
             let first = ad_point(variables, first, "quadratic Bezier")?;
@@ -394,7 +628,14 @@ fn evaluate_ad_bezier(
                 &two * (&one_minus * (&second[coordinate] - &first[coordinate])
                     + parameter * (&third[coordinate] - &second[coordinate]))
             });
-            Ok((position, derivative))
+            let second_derivative = std::array::from_fn(|coordinate| {
+                &two * (&third[coordinate] - second[coordinate].clone() * 2.0 + &first[coordinate])
+            });
+            Ok(AdCurveJet2 {
+                position,
+                first: derivative,
+                second: second_derivative,
+            })
         }
         BezierIncidence::Cubic([first, second, third, fourth]) => {
             let first = ad_point(variables, first, "cubic Bezier")?;
@@ -415,7 +656,18 @@ fn evaluate_ad_bezier(
                     + &six * &one_minus * parameter * (&third[coordinate] - &second[coordinate])
                     + &three * parameter * parameter * (&fourth[coordinate] - &third[coordinate])
             });
-            Ok((position, derivative))
+            let second_derivative = std::array::from_fn(|coordinate| {
+                &six * (&one_minus
+                    * (&third[coordinate] - second[coordinate].clone() * 2.0 + &first[coordinate])
+                    + parameter
+                        * (&fourth[coordinate] - third[coordinate].clone() * 2.0
+                            + &second[coordinate]))
+            });
+            Ok(AdCurveJet2 {
+                position,
+                first: derivative,
+                second: second_derivative,
+            })
         }
     }
 }
@@ -423,43 +675,48 @@ fn evaluate_ad_bezier(
 #[allow(clippy::too_many_lines)]
 fn evaluate_ad_curve(
     variables: &[SketchAdValue],
-    curve: GenericCurveIncidence,
-) -> Result<([DualDVec64; 2], [DualDVec64; 2]), EvaluationError> {
+    curve: &GenericCurveIncidence,
+) -> Result<AdCurveJet2, EvaluationError> {
     match curve {
         GenericCurveIncidence::Line {
             points: [start, end],
             parameter,
             bounded,
         } => {
-            let start = ad_point(variables, start, "generic line")?;
-            let end = ad_point(variables, end, "generic line")?;
-            let parameter = curve_parameter(variables, parameter, bounded, "generic line")?;
+            let start = ad_point(variables, *start, "generic line")?;
+            let end = ad_point(variables, *end, "generic line")?;
+            let parameter = curve_parameter(variables, *parameter, *bounded, "generic line")?;
             let derivative = [&end[0] - &start[0], &end[1] - &start[1]];
             let position = [
                 &start[0] + &parameter * &derivative[0],
                 &start[1] + &parameter * &derivative[1],
             ];
-            Ok((position, derivative))
+            Ok(AdCurveJet2 {
+                position,
+                first: derivative,
+                second: std::array::from_fn(|_| DualDVec64::from_re(0.0)),
+            })
         }
         GenericCurveIncidence::Circle {
             center,
             radius,
             parameter,
         } => {
-            let center = ad_point(variables, center, "generic circle")?;
-            let radius = ad_scalar(variables, radius, "generic circle")?;
+            let center = ad_point(variables, *center, "generic circle")?;
+            let radius = ad_scalar(variables, *radius, "generic circle")?;
             if !radius.re.is_finite() || radius.re <= 0.0 {
                 return Err(EvaluationError::invalid_geometry(
                     "generic circle radius must be positive and finite",
                 ));
             }
-            let angle = curve_parameter(variables, parameter, false, "generic circle")?;
+            let angle = curve_parameter(variables, *parameter, false, "generic circle")?;
             let sine = angle.clone().sin();
             let cosine = angle.cos();
-            Ok((
-                [&center[0] + radius * &cosine, &center[1] + radius * &sine],
-                [-radius * sine, radius * cosine],
-            ))
+            Ok(AdCurveJet2 {
+                position: [&center[0] + radius * &cosine, &center[1] + radius * &sine],
+                first: [-radius * &sine, radius * &cosine],
+                second: [-radius * cosine, -radius * sine],
+            })
         }
         GenericCurveIncidence::Arc {
             center,
@@ -468,43 +725,43 @@ fn evaluate_ad_curve(
             signed_sweep,
             parameter,
         } => {
-            let center = ad_point(variables, center, "generic arc")?;
-            let radius = ad_scalar(variables, radius, "generic arc")?;
+            let center = ad_point(variables, *center, "generic arc")?;
+            let radius = ad_scalar(variables, *radius, "generic arc")?;
             if !radius.re.is_finite()
                 || radius.re <= 0.0
                 || !start_angle.is_finite()
                 || !signed_sweep.is_finite()
-                || signed_sweep == 0.0
+                || *signed_sweep == 0.0
             {
                 return Err(EvaluationError::invalid_geometry(
                     "generic arc definition must be finite and regular",
                 ));
             }
-            let parameter = curve_parameter(variables, parameter, true, "generic arc")?;
-            let angle = parameter * signed_sweep + start_angle;
+            let parameter = curve_parameter(variables, *parameter, true, "generic arc")?;
+            let angle = parameter * *signed_sweep + *start_angle;
             let sine = angle.clone().sin();
             let cosine = angle.cos();
-            Ok((
-                [&center[0] + radius * &cosine, &center[1] + radius * &sine],
-                [
-                    -(radius.clone() * signed_sweep) * sine,
-                    radius.clone() * signed_sweep * cosine,
-                ],
-            ))
+            let first_scale = radius.clone() * *signed_sweep;
+            let second_scale = radius.clone() * (*signed_sweep * *signed_sweep);
+            Ok(AdCurveJet2 {
+                position: [&center[0] + radius * &cosine, &center[1] + radius * &sine],
+                first: [-&first_scale * &sine, &first_scale * &cosine],
+                second: [-&second_scale * cosine, -&second_scale * sine],
+            })
         }
         GenericCurveIncidence::QuadraticBezier {
             controls,
             parameter,
         } => {
-            let parameter = curve_parameter(variables, parameter, true, "quadratic Bezier")?;
-            evaluate_ad_bezier(variables, BezierIncidence::Quadratic(controls), &parameter)
+            let parameter = curve_parameter(variables, *parameter, true, "quadratic Bezier")?;
+            evaluate_ad_bezier(variables, BezierIncidence::Quadratic(*controls), &parameter)
         }
         GenericCurveIncidence::CubicBezier {
             controls,
             parameter,
         } => {
-            let parameter = curve_parameter(variables, parameter, true, "cubic Bezier")?;
-            evaluate_ad_bezier(variables, BezierIncidence::Cubic(controls), &parameter)
+            let parameter = curve_parameter(variables, *parameter, true, "cubic Bezier")?;
+            evaluate_ad_bezier(variables, BezierIncidence::Cubic(*controls), &parameter)
         }
         GenericCurveIncidence::Ellipse {
             center,
@@ -512,11 +769,11 @@ fn evaluate_ad_curve(
             minor_axis_ratio,
             parameter,
         } => {
-            let center = ad_point(variables, center, "ellipse")?;
-            let axis_point = ad_point(variables, major_axis_point, "ellipse")?;
-            let ratio = ad_scalar(variables, minor_axis_ratio, "ellipse")?;
+            let center = ad_point(variables, *center, "ellipse")?;
+            let axis_point = ad_point(variables, *major_axis_point, "ellipse")?;
+            let ratio = ad_scalar(variables, *minor_axis_ratio, "ellipse")?;
             validate_ad_ellipse_ratio(ratio, "ellipse")?;
-            let angle = curve_parameter(variables, parameter, false, "ellipse")?;
+            let angle = curve_parameter(variables, *parameter, false, "ellipse")?;
             evaluate_ad_ellipse(center, axis_point, ratio, &angle, 1.0, "ellipse")
         }
         GenericCurveIncidence::EllipticalArc {
@@ -527,23 +784,23 @@ fn evaluate_ad_curve(
             signed_sweep,
             parameter,
         } => {
-            if !start_angle.is_finite() || !signed_sweep.is_finite() || signed_sweep == 0.0 {
+            if !start_angle.is_finite() || !signed_sweep.is_finite() || *signed_sweep == 0.0 {
                 return Err(EvaluationError::invalid_geometry(
                     "elliptical arc angles must be finite with nonzero sweep",
                 ));
             }
-            let center = ad_point(variables, center, "elliptical arc")?;
-            let axis_point = ad_point(variables, major_axis_point, "elliptical arc")?;
-            let ratio = ad_scalar(variables, minor_axis_ratio, "elliptical arc")?;
+            let center = ad_point(variables, *center, "elliptical arc")?;
+            let axis_point = ad_point(variables, *major_axis_point, "elliptical arc")?;
+            let ratio = ad_scalar(variables, *minor_axis_ratio, "elliptical arc")?;
             validate_ad_ellipse_ratio(ratio, "elliptical arc")?;
-            let parameter = curve_parameter(variables, parameter, true, "elliptical arc")?;
-            let angle = parameter * signed_sweep + start_angle;
+            let parameter = curve_parameter(variables, *parameter, true, "elliptical arc")?;
+            let angle = parameter * *signed_sweep + *start_angle;
             evaluate_ad_ellipse(
                 center,
                 axis_point,
                 ratio,
                 &angle,
-                signed_sweep,
+                *signed_sweep,
                 "elliptical arc",
             )
         }
@@ -554,20 +811,20 @@ fn evaluate_ad_curve(
             end,
             parameter,
         } => {
-            let start = ad_point(variables, start, "rational quadratic")?;
+            let start = ad_point(variables, *start, "rational quadratic")?;
             let weighted_middle = ad_point(
                 variables,
-                weighted_middle,
+                *weighted_middle,
                 "rational quadratic weighted middle",
             )?;
-            let end = ad_point(variables, end, "rational quadratic")?;
-            let weight = ad_scalar(variables, middle_weight, "rational quadratic")?;
+            let end = ad_point(variables, *end, "rational quadratic")?;
+            let weight = ad_scalar(variables, *middle_weight, "rational quadratic")?;
             if !weight.re.is_finite() || weight.re <= -1.0 {
                 return Err(EvaluationError::out_of_domain(
                     "rational quadratic middle weight must be finite and strictly greater than -1",
                 ));
             }
-            let parameter = curve_parameter(variables, parameter, true, "rational quadratic")?;
+            let parameter = curve_parameter(variables, *parameter, true, "rational quadratic")?;
             let one = DualDVec64::from_re(1.0);
             let two = DualDVec64::from_re(2.0);
             let one_minus = &one - &parameter;
@@ -589,6 +846,10 @@ fn evaluate_ad_curve(
             let b1_first = &two * (&one - &two * &parameter);
             let b2_first = &two * &parameter;
             let denominator_first = &b0_first + weight * &b1_first + &b2_first;
+            let b0_second = DualDVec64::from_re(2.0);
+            let b1_second = DualDVec64::from_re(-4.0);
+            let b2_second = DualDVec64::from_re(2.0);
+            let denominator_second = &b0_second + weight * &b1_second + &b2_second;
             let position = std::array::from_fn(|coordinate| {
                 (&b0 * &start[coordinate]
                     + &b1 * &weighted_middle[coordinate]
@@ -601,8 +862,26 @@ fn evaluate_ad_curve(
                     + &b2_first * &end[coordinate];
                 (numerator_first - &position[coordinate] * &denominator_first) / &denominator
             });
-            require_finite_ad_jet(&position, &derivative, "rational quadratic")?;
-            Ok((position, derivative))
+            let second_derivative = std::array::from_fn(|coordinate| {
+                let numerator_second = &b0_second * &start[coordinate]
+                    + &b1_second * &weighted_middle[coordinate]
+                    + &b2_second * &end[coordinate];
+                (numerator_second
+                    - &position[coordinate] * &denominator_second
+                    - &derivative[coordinate] * (denominator_first.clone() * 2.0))
+                    / &denominator
+            });
+            require_finite_ad_jet(
+                &position,
+                &derivative,
+                &second_derivative,
+                "rational quadratic",
+            )?;
+            Ok(AdCurveJet2 {
+                position,
+                first: derivative,
+                second: second_derivative,
+            })
         }
         GenericCurveIncidence::ParabolaSegment {
             vertex,
@@ -610,9 +889,9 @@ fn evaluate_ad_curve(
             trim,
             parameter,
         } => {
-            let vertex = ad_point(variables, vertex, "parabola")?;
-            let focus = ad_point(variables, focus, "parabola")?;
-            let parameter = curve_parameter(variables, parameter, true, "parabola")?;
+            let vertex = ad_point(variables, *vertex, "parabola")?;
+            let focus = ad_point(variables, *focus, "parabola")?;
+            let parameter = curve_parameter(variables, *parameter, true, "parabola")?;
             let native = parameter * trim.signed_rate() + trim.start();
             let direction = [&focus[0] - &vertex[0], &focus[1] - &vertex[1]];
             require_ad_axis(&direction, "parabola focus axis")?;
@@ -627,8 +906,15 @@ fn evaluate_ad_curve(
                 (&two * &direction[coordinate] * &native + &two * &normal[coordinate])
                     * trim.signed_rate()
             });
-            require_finite_ad_jet(&position, &derivative, "parabola")?;
-            Ok((position, derivative))
+            let second_derivative = std::array::from_fn(|coordinate| {
+                &two * &direction[coordinate] * (trim.signed_rate() * trim.signed_rate())
+            });
+            require_finite_ad_jet(&position, &derivative, &second_derivative, "parabola")?;
+            Ok(AdCurveJet2 {
+                position,
+                first: derivative,
+                second: second_derivative,
+            })
         }
         GenericCurveIncidence::HyperbolaSegment {
             center,
@@ -638,15 +924,15 @@ fn evaluate_ad_curve(
             trim,
             parameter,
         } => {
-            let center = ad_point(variables, center, "hyperbola")?;
-            let axis_point = ad_point(variables, transverse_axis_point, "hyperbola")?;
-            let semi_conjugate = ad_scalar(variables, semi_conjugate, "hyperbola")?;
+            let center = ad_point(variables, *center, "hyperbola")?;
+            let axis_point = ad_point(variables, *transverse_axis_point, "hyperbola")?;
+            let semi_conjugate = ad_scalar(variables, *semi_conjugate, "hyperbola")?;
             if !semi_conjugate.re.is_finite() || semi_conjugate.re <= 0.0 {
                 return Err(EvaluationError::out_of_domain(
                     "hyperbola semi-conjugate axis must be positive and finite",
                 ));
             }
-            let parameter = curve_parameter(variables, parameter, true, "hyperbola")?;
+            let parameter = curve_parameter(variables, *parameter, true, "hyperbola")?;
             let native = parameter * trim.signed_rate() + trim.start();
             let sine = native.clone().sinh();
             let cosine = native.cosh();
@@ -670,10 +956,217 @@ fn evaluate_ad_curve(
                     + &normal[coordinate] * semi_conjugate * &cosine)
                     * trim.signed_rate()
             });
-            require_finite_ad_jet(&position, &derivative, "hyperbola")?;
-            Ok((position, derivative))
+            let rate_squared = trim.signed_rate() * trim.signed_rate();
+            let second_derivative = std::array::from_fn(|coordinate| {
+                (direction[coordinate].clone() * branch * &cosine
+                    + &normal[coordinate] * semi_conjugate * &sine)
+                    * rate_squared
+            });
+            require_finite_ad_jet(&position, &derivative, &second_derivative, "hyperbola")?;
+            Ok(AdCurveJet2 {
+                position,
+                first: derivative,
+                second: second_derivative,
+            })
+        }
+        GenericCurveIncidence::BSpline {
+            basis,
+            span,
+            controls,
+            parameter,
+        } => {
+            let parameter = curve_parameter(variables, *parameter, true, "B-spline")?;
+            let basis_jet = basis
+                .basis_jet_on_span(*span, parameter.re)
+                .map_err(|error| {
+                    EvaluationError::invalid_geometry(format!(
+                        "B-spline basis evaluation failed: {error}"
+                    ))
+                })?;
+            if basis_jet.terms.len() != controls.len() {
+                return Err(EvaluationError::invalid_geometry(
+                    "B-spline active support does not match residual incidence",
+                ));
+            }
+            let parameter_real = parameter.re;
+            let delta = parameter - parameter_real;
+            let mut position = std::array::from_fn(|_| DualDVec64::from_re(0.0));
+            let mut derivative = std::array::from_fn(|_| DualDVec64::from_re(0.0));
+            let mut second_derivative = std::array::from_fn(|_| DualDVec64::from_re(0.0));
+            for (term, control) in basis_jet.terms.iter().zip(controls) {
+                let control = ad_point(variables, *control, "B-spline control")?;
+                let position_basis =
+                    DualDVec64::from_re(term.derivatives[0]) + delta.clone() * term.derivatives[1];
+                let derivative_basis =
+                    DualDVec64::from_re(term.derivatives[1]) + delta.clone() * term.derivatives[2];
+                let second_basis =
+                    DualDVec64::from_re(term.derivatives[2]) + delta.clone() * term.derivatives[3];
+                for coordinate in 0..2 {
+                    position[coordinate] += &control[coordinate] * &position_basis;
+                    derivative[coordinate] += &control[coordinate] * &derivative_basis;
+                    second_derivative[coordinate] += &control[coordinate] * &second_basis;
+                }
+            }
+            require_finite_ad_jet(&position, &derivative, &second_derivative, "B-spline")?;
+            Ok(AdCurveJet2 {
+                position,
+                first: derivative,
+                second: second_derivative,
+            })
+        }
+        GenericCurveIncidence::Nurbs {
+            basis,
+            span,
+            controls,
+            weights,
+            parameter,
+        } => {
+            let parameter = curve_parameter(variables, *parameter, true, "NURBS")?;
+            let basis_jet = basis
+                .basis_jet_on_span(*span, parameter.re)
+                .map_err(|error| {
+                    EvaluationError::invalid_geometry(format!(
+                        "NURBS basis evaluation failed: {error}"
+                    ))
+                })?;
+            if basis_jet.terms.len() != controls.len() || controls.len() != weights.len() {
+                return Err(EvaluationError::invalid_geometry(
+                    "NURBS active support does not match residual incidence",
+                ));
+            }
+            let resolved_weights = weights
+                .iter()
+                .map(|weight| match *weight {
+                    NurbsWeightIncidence::Variable(index) => {
+                        ad_scalar(variables, index, "NURBS weight").cloned()
+                    }
+                    NurbsWeightIncidence::Fixed(value) => Ok(DualDVec64::from_re(value)),
+                })
+                .collect::<Result<Vec<_>, EvaluationError>>()?;
+            if resolved_weights
+                .iter()
+                .any(|weight| !weight.re.is_finite() || weight.re <= 0.0)
+            {
+                return Err(EvaluationError::out_of_domain(
+                    "NURBS weights must be positive and finite",
+                ));
+            }
+            let maximum = resolved_weights
+                .iter()
+                .map(|weight| weight.re)
+                .fold(0.0_f64, f64::max);
+            let parameter_real = parameter.re;
+            let delta = parameter - parameter_real;
+            let resolved_controls = controls
+                .iter()
+                .map(|control| ad_point(variables, *control, "NURBS control").cloned())
+                .collect::<Result<Vec<_>, _>>()?;
+            let mut normalized_weights = Vec::with_capacity(resolved_weights.len());
+            let mut basis_values = Vec::with_capacity(basis_jet.terms.len());
+            let mut position_numerator: [DualDVec64; 2] =
+                std::array::from_fn(|_| DualDVec64::from_re(0.0));
+            let mut denominator = DualDVec64::from_re(0.0);
+            let mut denominator_first = DualDVec64::from_re(0.0);
+            let mut condition_scale = 0.0_f64;
+            for (index, (term, weight)) in basis_jet.terms.iter().zip(&resolved_weights).enumerate()
+            {
+                let normalized_weight = weight.clone() / maximum;
+                if normalized_weight.re == 0.0 {
+                    return Err(EvaluationError::ambiguous(
+                        "NURBS active weight ratio is not representable",
+                    ));
+                }
+                let position_basis =
+                    DualDVec64::from_re(term.derivatives[0]) + delta.clone() * term.derivatives[1];
+                let derivative_basis =
+                    DualDVec64::from_re(term.derivatives[1]) + delta.clone() * term.derivatives[2];
+                let second_basis =
+                    DualDVec64::from_re(term.derivatives[2]) + delta.clone() * term.derivatives[3];
+                let position_weight = &normalized_weight * &position_basis;
+                let derivative_weight = &normalized_weight * &derivative_basis;
+                condition_scale += position_weight.re.abs();
+                denominator += position_weight.clone();
+                denominator_first += derivative_weight.clone();
+                for coordinate in 0..2 {
+                    let difference =
+                        &resolved_controls[index][coordinate] - &resolved_controls[0][coordinate];
+                    position_numerator[coordinate] +=
+                        difference * &normalized_weight * &position_basis;
+                }
+                normalized_weights.push(normalized_weight);
+                basis_values.push([position_basis, derivative_basis, second_basis]);
+            }
+            if !condition_scale.is_finite()
+                || !denominator.re.is_finite()
+                || denominator.re <= 64.0 * f64::EPSILON * condition_scale
+            {
+                return Err(EvaluationError::ambiguous(
+                    "NURBS denominator is singular or ill-conditioned",
+                ));
+            }
+            let position = std::array::from_fn(|coordinate| {
+                &resolved_controls[0][coordinate] + &position_numerator[coordinate] / &denominator
+            });
+            let centered_first = ad_pairwise_rational_numerator(
+                &resolved_controls,
+                &normalized_weights,
+                &basis_values,
+                1,
+            )?;
+            let derivative = std::array::from_fn(|coordinate| {
+                &centered_first[coordinate] / &denominator / &denominator
+            });
+            let centered_second = ad_pairwise_rational_numerator(
+                &resolved_controls,
+                &normalized_weights,
+                &basis_values,
+                2,
+            )?;
+            let second_derivative = std::array::from_fn(|coordinate| {
+                (&centered_second[coordinate] / &denominator
+                    - &derivative[coordinate] * (denominator_first.clone() * 2.0))
+                    / &denominator
+            });
+            require_finite_ad_jet(&position, &derivative, &second_derivative, "NURBS")?;
+            Ok(AdCurveJet2 {
+                position,
+                first: derivative,
+                second: second_derivative,
+            })
         }
     }
+}
+
+fn ad_pairwise_rational_numerator(
+    controls: &[[DualDVec64; 2]],
+    weights: &[DualDVec64],
+    basis: &[[DualDVec64; 3]],
+    order: usize,
+) -> Result<[DualDVec64; 2], EvaluationError> {
+    let mut numerator = std::array::from_fn(|_| DualDVec64::from_re(0.0));
+    for first in 0..controls.len() {
+        for second in first + 1..controls.len() {
+            let weight_product = &weights[first] * &weights[second];
+            if weight_product.re == 0.0 {
+                return Err(EvaluationError::ambiguous(
+                    "NURBS active weight product is not representable",
+                ));
+            }
+            let basis_cross =
+                &basis[first][order] * &basis[second][0] - &basis[second][order] * &basis[first][0];
+            for coordinate in 0..2 {
+                let difference = &controls[first][coordinate] - &controls[second][coordinate];
+                let weighted = &difference * &weight_product;
+                if difference.re != 0.0 && weighted.re == 0.0 {
+                    return Err(EvaluationError::ambiguous(
+                        "NURBS weighted control difference is not representable",
+                    ));
+                }
+                numerator[coordinate] += weighted * &basis_cross;
+            }
+        }
+    }
+    Ok(numerator)
 }
 
 fn evaluate_ad_ellipse(
@@ -683,7 +1176,7 @@ fn evaluate_ad_ellipse(
     angle: &DualDVec64,
     angle_rate: f64,
     context: &str,
-) -> Result<([DualDVec64; 2], [DualDVec64; 2]), EvaluationError> {
+) -> Result<AdCurveJet2, EvaluationError> {
     let direction = [&axis_point[0] - &center[0], &axis_point[1] - &center[1]];
     require_ad_axis(&direction, context)?;
     let normal = [-direction[1].clone(), direction[0].clone()];
@@ -695,8 +1188,16 @@ fn evaluate_ad_ellipse(
     let derivative = std::array::from_fn(|coordinate| {
         (-&direction[coordinate] * &sine + ratio * &normal[coordinate] * &cosine) * angle_rate
     });
-    require_finite_ad_jet(&position, &derivative, context)?;
-    Ok((position, derivative))
+    let second_derivative = std::array::from_fn(|coordinate| {
+        (-&direction[coordinate] * &cosine - ratio * &normal[coordinate] * &sine)
+            * (angle_rate * angle_rate)
+    });
+    require_finite_ad_jet(&position, &derivative, &second_derivative, context)?;
+    Ok(AdCurveJet2 {
+        position,
+        first: derivative,
+        second: second_derivative,
+    })
 }
 
 fn validate_ad_ellipse_ratio(ratio: &DualDVec64, context: &str) -> Result<(), EvaluationError> {
@@ -723,16 +1224,22 @@ fn require_ad_axis(axis: &[DualDVec64; 2], context: &str) -> Result<(), Evaluati
 fn require_finite_ad_jet(
     position: &[DualDVec64; 2],
     derivative: &[DualDVec64; 2],
+    second_derivative: &[DualDVec64; 2],
     context: &str,
 ) -> Result<(), EvaluationError> {
-    if position.iter().chain(derivative).all(|value| {
-        value.re.is_finite()
-            && value
-                .eps
-                .0
-                .as_ref()
-                .is_none_or(|derivatives| derivatives.iter().all(|entry| entry.is_finite()))
-    }) {
+    if position
+        .iter()
+        .chain(derivative)
+        .chain(second_derivative)
+        .all(|value| {
+            value.re.is_finite()
+                && value
+                    .eps
+                    .0
+                    .as_ref()
+                    .is_none_or(|derivatives| derivatives.iter().all(|entry| entry.is_finite()))
+        })
+    {
         Ok(())
     } else {
         Err(EvaluationError::invalid_geometry(format!(
@@ -778,8 +1285,54 @@ fn ad_unit(
     context: &str,
 ) -> Result<[DualDVec64; 2], EvaluationError> {
     require_ad_speed(derivative, context)?;
-    let norm = (&derivative[0] * &derivative[0] + &derivative[1] * &derivative[1]).sqrt();
-    Ok([&derivative[0] / &norm, &derivative[1] / &norm])
+    let scale = derivative[0].re.abs().max(derivative[1].re.abs());
+    let scaled = [derivative[0].clone() / scale, derivative[1].clone() / scale];
+    let norm = (&scaled[0] * &scaled[0] + &scaled[1] * &scaled[1]).sqrt();
+    Ok([&scaled[0] / &norm, &scaled[1] / &norm])
+}
+
+fn ad_signed_curvature(jet: &AdCurveJet2, context: &str) -> Result<DualDVec64, EvaluationError> {
+    require_ad_speed(&jet.first, context)?;
+    let scale = jet.first[0].re.abs().max(jet.first[1].re.abs());
+    let scaled_first = [jet.first[0].clone() / scale, jet.first[1].clone() / scale];
+    let scaled_speed_squared =
+        &scaled_first[0] * &scaled_first[0] + &scaled_first[1] * &scaled_first[1];
+    let scaled_speed = scaled_speed_squared.clone().sqrt();
+    let unit_tangent = [
+        &scaled_first[0] / &scaled_speed,
+        &scaled_first[1] / &scaled_speed,
+    ];
+    let normal_acceleration =
+        -&unit_tangent[1] * &jet.second[0] + &unit_tangent[0] * &jet.second[1];
+    let mut curvature = normal_acceleration / scale / scale / scaled_speed_squared;
+    let immutable = geosolve_geometry::CurveJet2 {
+        position: geosolve_geometry::Point2::origin(),
+        first_derivative: geosolve_geometry::Vector2::new(jet.first[0].re, jet.first[1].re),
+        second_derivative: geosolve_geometry::Vector2::new(jet.second[0].re, jet.second[1].re),
+        third_derivative: geosolve_geometry::Vector2::zeros(),
+        domain: geosolve_geometry::CurveParameterDomain::SupportingLine,
+    }
+    .differential()
+    .map_err(|error| {
+        EvaluationError::ambiguous(format!(
+            "{context} curvature is not finitely resolvable: {error}"
+        ))
+    })?
+    .signed_curvature;
+    curvature.re = immutable;
+    if curvature.re.is_finite()
+        && curvature
+            .eps
+            .0
+            .as_ref()
+            .is_none_or(|derivatives| derivatives.iter().all(|entry| entry.is_finite()))
+    {
+        Ok(curvature)
+    } else {
+        Err(EvaluationError::ambiguous(format!(
+            "{context} curvature is not finitely resolvable"
+        )))
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -2098,5 +2651,44 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn private_nurbs_and_curvature_paths_retain_compensated_values() {
+        let basis =
+            geosolve_geometry::BSplineBasis::try_clamped(1, 2, vec![0.0, 0.0, 1.0, 1.0]).unwrap();
+        let span = basis.spans()[0].index();
+        let residual = GenericPointOnCurveResidual {
+            point: 0,
+            curve: GenericCurveIncidence::Nurbs {
+                basis,
+                span,
+                controls: vec![1, 2],
+                weights: vec![
+                    NurbsWeightIncidence::Fixed(1.0),
+                    NurbsWeightIncidence::Fixed(1.0e-12),
+                ],
+                parameter: CurveParameterIncidence::Fixed(1.0e-315),
+            },
+        };
+        let values = residual
+            .evaluate(&[
+                VariableValue::Vec2([0.0, 0.0]),
+                VariableValue::Vec2([0.0, 0.0]),
+                VariableValue::Vec2([1.0e308, 0.0]),
+            ])
+            .unwrap();
+        assert!(values[0] < 0.0);
+
+        let curvature = ad_signed_curvature(
+            &AdCurveJet2 {
+                position: std::array::from_fn(|_| DualDVec64::from_re(0.0)),
+                first: [DualDVec64::from_re(1.0e-100), DualDVec64::from_re(0.0)],
+                second: [DualDVec64::from_re(1.0e200), DualDVec64::from_re(1.0e-224)],
+            },
+            "mixed-scale curvature proof",
+        )
+        .unwrap();
+        assert!((curvature.re - 1.0e-24).abs() <= 1.0e-36);
     }
 }

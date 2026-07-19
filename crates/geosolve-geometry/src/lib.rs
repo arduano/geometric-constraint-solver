@@ -1,11 +1,19 @@
 //! Pure geometric value types shared by sketches and mechanisms.
 
+mod bsplines;
 mod conics;
 mod curves;
 mod frames;
+mod nurbs;
 mod pose;
 mod validation;
 
+pub use bsplines::{
+    BSplineBasis, BSplineBasisJet, BSplineBasisRefinement, BSplineBasisTerm, BSplineContinuity,
+    BSplineControlStencil, BSplineCurve2, BSplineDefinitionError, BSplineEvaluationError,
+    BSplineForm, BSplineInsertionError, BSplineKnotSide, BSplineRefinement2, BSplineSpan,
+    BSplineSpanIndex, MAX_BSPLINE_DEGREE,
+};
 pub use conics::{
     ConicDefinitionError, ConicEvaluationError, DirectedParameterTrim, Ellipse2,
     EllipseAxisObservability, EllipticalArc2, HyperbolaBranch, HyperbolaSegment2, ParabolaSegment2,
@@ -13,12 +21,16 @@ pub use conics::{
     elliptical_arc_jet, hyperbola_segment_jet, parabola_segment_jet, rational_quadratic_conic_jet,
 };
 pub use curves::{
-    CurveEvaluationError, CurveJet2, CurveParameterDomain, CurveParameterError,
-    CurveRegularityError, circle_jet, circular_arc_jet, cubic_bezier_jet, line_jet,
-    quadratic_bezier_jet,
+    CurveDifferential2, CurveDifferentialError, CurveEvaluationError, CurveJet2,
+    CurveParameterDomain, CurveParameterError, CurveRegularityError, circle_jet, circular_arc_jet,
+    cubic_bezier_jet, line_jet, quadratic_bezier_jet,
 };
 pub use frames::{FRAME_ORTHONORMAL_TOLERANCE, Frame3, PlaneFrame, Workplane};
 pub use nalgebra::{Matrix3, Point2, Point3, Rotation2, SMatrix, UnitQuaternion, Vector2, Vector3};
+pub use nurbs::{
+    NurbsControlProvenance, NurbsCurve2, NurbsDefinitionError, NurbsEvaluationError,
+    NurbsInsertionError, NurbsRefinement2,
+};
 pub use pose::{Pose2, Pose3, QUATERNION_NORM_TOLERANCE, QUATERNION_SIGN_TOLERANCE};
 pub use validation::{GeometryError, Vec3};
 

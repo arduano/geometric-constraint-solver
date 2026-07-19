@@ -885,7 +885,8 @@ impl PlaygroundState {
         if let Some((point, _)) = point_hit.take() {
             return Some(SelectionItem::Point(point));
         }
-        sampled_curves(self.document())
+        curve_sampling_report(self.document())
+            .samples
             .into_iter()
             .flat_map(|(span, samples)| {
                 samples
@@ -1327,7 +1328,8 @@ impl PlaygroundState {
                 self.selection.push(item);
             }
         }
-        let curves: Vec<_> = sampled_curves(self.document())
+        let curves: Vec<_> = curve_sampling_report(self.document())
+            .samples
             .into_iter()
             .filter_map(|(span, samples)| {
                 samples.iter().find_map(|(parameter, point)| {
@@ -2016,7 +2018,8 @@ impl PlaygroundState {
             .map(|point| point.position)
             .collect();
         positions.extend(
-            sampled_curves(self.session.document())
+            curve_sampling_report(self.session.document())
+                .samples
                 .into_iter()
                 .flat_map(|(_, samples)| samples.into_iter().map(|(_, point)| point)),
         );
@@ -2248,11 +2251,29 @@ impl PlaygroundState {
             return spatial_solve_status_markup(spatial);
         }
         let result = self.display_session().accepted_result();
-        Self::solve_status_markup_with_result(&result)
+        let mut markup = Self::solve_status_markup_with_result(&result);
+        let sampling = curve_sampling_report(self.document());
+        if !sampling.failures.is_empty() {
+            let messages = sampling
+                .failures
+                .iter()
+                .map(|failure| crate::escape_html(&failure.message))
+                .collect::<Vec<_>>()
+                .join("; ");
+            let _ = write!(
+                markup,
+                "<div class=\"sampling-warning\" role=\"alert\"><strong>Curve sampling failed</strong><br>{messages}</div>"
+            );
+        }
+        markup
     }
 
     fn solve_status_markup_with_result(result: &DocumentSolveResult) -> String {
         let report = &result.accepted_view().core_report;
+        let accepted_maximum = result
+            .accepted_view()
+            .acceptance_hard_residual_max
+            .unwrap_or(report.hard_residual_max);
         let (rank, left_nullity, equality_dof, bounded_dof) = if report.rank_is_valid {
             (
                 report.rank.to_string(),
@@ -2290,7 +2311,7 @@ impl PlaygroundState {
         format!(
             "<div class=\"status-grid\"><div><span>hard validity</span><strong>{:?}</strong></div><div><span>normalized max</span><strong>{}</strong></div><div><span>numerical rank</span><strong>{rank}</strong></div><div><span>numerical left nullity</span><strong>{left_nullity}</strong></div><div><span>equality DOF</span><strong>{equality_dof}</strong></div><div><span>bounded DOF</span><strong>{bounded_dof}</strong></div><div><span>one-sided motion</span><strong>{:?}</strong></div><div><span>structural class</span><strong>{:?}</strong></div><div><span>structural rank</span><strong>{}</strong></div><div><span>structural nullity</span><strong>{structural_nullity}</strong></div><div><span>hard components</span><strong>{}</strong></div><div><span>linear backend</span><strong>{backend}</strong></div></div>",
             report.hard_validity,
-            crate::format_metric(report.hard_residual_max),
+            crate::format_metric(accepted_maximum),
             report.one_sided_mobility,
             structural.structural_classification,
             structural.structural_rank,
@@ -2403,7 +2424,8 @@ impl PlaygroundState {
             active_configuration,
             &mut markup,
         );
-        for (span, samples) in sampled_curves(self.document()) {
+        let sampling = curve_sampling_report(self.document());
+        for (span, samples) in sampling.samples {
             if samples.len() < 2 {
                 continue;
             }
@@ -2436,6 +2458,7 @@ impl PlaygroundState {
                 )
             );
         }
+        render_sampling_failures(&mut markup, &sampling.failures);
         for point in self.document().points() {
             let svg = self.viewport.model_to_svg(point.position);
             let selected = self.selected(SelectionItem::Point(point.id));
@@ -2664,7 +2687,8 @@ impl PlaygroundState {
         }) else {
             return;
         };
-        let Some(samples) = sampled_curves(&candidate)
+        let Some(samples) = curve_sampling_report(&candidate)
+            .samples
             .into_iter()
             .find_map(|(span, samples)| (span.curve == curve).then_some(samples))
             .filter(|samples| {
@@ -3435,31 +3459,68 @@ fn dimension_target(definition: &DocumentDimensionDefinition) -> geosolve_sketch
 
 type CurveSamples = (CurveSpan, Vec<(f64, [f64; 2])>);
 
+#[derive(Clone, Debug, Default)]
+struct CurveSamplingReport {
+    samples: Vec<CurveSamples>,
+    failures: Vec<CurveSamplingFailure>,
+}
+
+#[derive(Clone, Debug)]
+struct CurveSamplingFailure {
+    message: String,
+}
+
 fn curve_is_periodic(definition: &CurveDefinition) -> bool {
+    matches!(
+        definition,
+        CurveDefinition::Circle { .. }
+            | CurveDefinition::Ellipse { .. }
+            | CurveDefinition::BSpline {
+                form: geosolve_sketch::DocumentBSplineForm::Periodic,
+                ..
+            }
+            | CurveDefinition::Nurbs {
+                form: geosolve_sketch::DocumentBSplineForm::Periodic,
+                ..
+            }
+    )
+}
+
+fn curve_uses_angular_parameter(definition: &CurveDefinition) -> bool {
     matches!(
         definition,
         CurveDefinition::Circle { .. } | CurveDefinition::Ellipse { .. }
     )
 }
 
-fn sampled_curves(document: &SketchDocument) -> Vec<CurveSamples> {
-    let mut output = Vec::new();
+fn first_curve_selection(
+    document: &SketchDocument,
+    curve: geosolve_sketch::CurveId,
+) -> Option<(CurveSpan, f64)> {
+    let definition = &document.curve(curve)?.definition;
+    let span = document.curve_spans(curve).ok()?.into_iter().next()?;
+    let parameter = if curve_uses_angular_parameter(definition) {
+        0.0
+    } else {
+        0.5
+    };
+    Some((span, parameter))
+}
+
+fn curve_sampling_report(document: &SketchDocument) -> CurveSamplingReport {
+    let mut report = CurveSamplingReport::default();
     for curve in document.curves() {
-        let segment_count = match &curve.definition {
-            CurveDefinition::Polyline { points, closed, .. } => {
-                points.len().saturating_sub(usize::from(!*closed))
-            }
-            _ => 1,
-        };
-        for segment in 0..segment_count {
-            let Ok(segment) = u32::try_from(segment) else {
+        let spans = match document.curve_spans(curve.id) {
+            Ok(spans) => spans,
+            Err(error) => {
+                report.failures.push(CurveSamplingFailure {
+                    message: format!("{}: {error}", curve.label),
+                });
                 continue;
-            };
-            let span = CurveSpan {
-                curve: curve.id,
-                segment,
-            };
-            let periodic = curve_is_periodic(&curve.definition);
+            }
+        };
+        for span in spans {
+            let angular = curve_uses_angular_parameter(&curve.definition);
             let sample_count = if matches!(
                 curve.definition,
                 CurveDefinition::Line { .. } | CurveDefinition::Polyline { .. }
@@ -3471,15 +3532,36 @@ fn sampled_curves(document: &SketchDocument) -> Vec<CurveSamples> {
             let mut samples = Vec::new();
             for index in 0..=sample_count {
                 let fraction = f64::from(index) / f64::from(sample_count);
-                let parameter = if periodic { fraction * TAU } else { fraction };
-                if let Ok(jet) = document.evaluate_curve_jet(span, parameter) {
-                    samples.push((parameter, [jet.position.x, jet.position.y]));
+                let parameter = if angular { fraction * TAU } else { fraction };
+                match document.evaluate_curve_jet(span, parameter) {
+                    Ok(jet) => samples.push((parameter, [jet.position.x, jet.position.y])),
+                    Err(error) => {
+                        report.failures.push(CurveSamplingFailure {
+                            message: format!(
+                                "{} span {} at parameter {parameter}: {error}",
+                                curve.label, span.segment
+                            ),
+                        });
+                        samples.clear();
+                        break;
+                    }
                 }
             }
-            output.push((span, samples));
+            report.samples.push((span, samples));
         }
     }
-    output
+    report
+}
+
+fn render_sampling_failures(markup: &mut String, failures: &[CurveSamplingFailure]) {
+    for (index, failure) in failures.iter().enumerate() {
+        let message = crate::escape_html(&failure.message);
+        let _ = write!(
+            markup,
+            "<text class=\"curve-sampling-warning\" role=\"alert\" aria-label=\"{message}\" x=\"16\" y=\"{}\">Curve sampling failed<title>{message}</title></text>",
+            24 + index * 18,
+        );
+    }
 }
 
 fn spatial_example_title(kind: SpatialExampleKind) -> &'static str {
@@ -4433,7 +4515,7 @@ mod tests {
                 _ => panic!("wrong definition for {tool:?}: {definition:?}"),
             }
             assert_eq!(
-                sampled_curves(state.document())[0].1.len(),
+                curve_sampling_report(state.document()).samples[0].1.len(),
                 CURVE_SAMPLES as usize + 1,
                 "{tool:?}",
             );
@@ -5146,7 +5228,7 @@ mod tests {
     #[test]
     fn straight_curves_use_only_their_exact_endpoints() {
         let state = PlaygroundState::example(AlphaScenarioKind::Corpus, 1.0).unwrap();
-        for (span, samples) in sampled_curves(state.document()) {
+        for (span, samples) in curve_sampling_report(state.document()).samples {
             let curve = state.document().curve(span.curve).unwrap();
             match curve.definition {
                 CurveDefinition::Line { .. } | CurveDefinition::Polyline { .. } => {
@@ -5162,7 +5244,9 @@ mod tests {
                 | CurveDefinition::EllipticalArc { .. }
                 | CurveDefinition::RationalQuadraticConic { .. }
                 | CurveDefinition::ParabolaSegment { .. }
-                | CurveDefinition::HyperbolaSegment { .. } => {
+                | CurveDefinition::HyperbolaSegment { .. }
+                | CurveDefinition::BSpline { .. }
+                | CurveDefinition::Nurbs { .. } => {
                     assert_eq!(samples.len(), CURVE_SAMPLES as usize + 1, "{}", curve.label);
                 }
             }
@@ -5198,7 +5282,8 @@ mod tests {
             )
             .unwrap();
 
-        let samples = sampled_curves(&document)
+        let samples = curve_sampling_report(&document)
+            .samples
             .into_iter()
             .find_map(|(span, samples)| (span.curve == ellipse).then_some(samples))
             .unwrap();
@@ -5215,6 +5300,104 @@ mod tests {
             samples
                 .iter()
                 .any(|(_, point)| distance(*point, [1.0, -1.0]) <= 1.0e-12)
+        );
+    }
+
+    #[test]
+    fn imported_bspline_samples_every_public_semantic_span() {
+        let mut document = SketchDocument::new(1.0).unwrap();
+        let controls = [[0.0, 0.0], [1.0, 2.0], [2.0, -1.0], [3.0, 1.5], [4.0, 0.0]]
+            .map(|position| document.add_point("spline control", position).unwrap());
+        let spline = document
+            .add_curve(
+                "imported B-spline",
+                CurveDefinition::BSpline {
+                    form: geosolve_sketch::DocumentBSplineForm::Clamped,
+                    degree: 3,
+                    controls: controls.to_vec(),
+                    knots: vec![0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0],
+                    span_ids: vec![41, 73],
+                    next_span_id: 100,
+                },
+            )
+            .unwrap();
+
+        let samples = curve_sampling_report(&document)
+            .samples
+            .into_iter()
+            .filter(|(span, _)| span.curve == spline)
+            .collect::<Vec<_>>();
+        assert_eq!(samples.len(), 2);
+        assert_eq!(
+            samples
+                .iter()
+                .map(|(span, _)| span.segment)
+                .collect::<Vec<_>>(),
+            vec![41, 73]
+        );
+        assert!(
+            samples
+                .iter()
+                .all(|(_, values)| values.len() == CURVE_SAMPLES as usize + 1)
+        );
+        assert!(distance(samples[0].1.last().unwrap().1, samples[1].1[0].1) <= 1.0e-12);
+    }
+
+    #[test]
+    fn failed_nurbs_sampling_is_not_connected_and_is_reported() {
+        let mut document = SketchDocument::new(1.0).unwrap();
+        let controls = [
+            document.add_point("first control", [0.0, 0.0]).unwrap(),
+            document.add_point("second control", [0.0, 0.0]).unwrap(),
+        ];
+        let weights = [
+            document
+                .add_scalar(
+                    "gauge weight",
+                    1.0,
+                    ScalarUnit::Parameter,
+                    ScalarDomain::Positive,
+                )
+                .unwrap(),
+            document
+                .add_scalar(
+                    "second weight",
+                    1.0,
+                    ScalarUnit::Parameter,
+                    ScalarDomain::Positive,
+                )
+                .unwrap(),
+        ];
+        document
+            .add_curve(
+                "collapsed NURBS",
+                CurveDefinition::Nurbs {
+                    form: geosolve_sketch::DocumentBSplineForm::Clamped,
+                    degree: 1,
+                    controls: controls.to_vec(),
+                    weights: weights.to_vec(),
+                    gauge_weight: weights[0],
+                    knots: vec![0.0, 0.0, 1.0, 1.0],
+                    span_ids: vec![7],
+                    next_span_id: 8,
+                },
+            )
+            .unwrap();
+
+        let sampling = curve_sampling_report(&document);
+        assert_eq!(sampling.samples.len(), 1);
+        assert!(sampling.samples[0].1.is_empty());
+        assert_eq!(sampling.failures.len(), 1);
+        assert!(sampling.failures[0].message.contains("zero speed"));
+
+        let state = PlaygroundState::from_document(document, false).unwrap();
+        let svg = state.render_svg();
+        assert!(svg.contains("curve-sampling-warning"));
+        assert!(!svg.contains("data-curve-id"));
+        assert!(
+            state
+                .solve_status_markup()
+                .contains("Curve sampling failed")
         );
     }
 
@@ -6229,13 +6412,9 @@ mod tests {
             .document()
             .curves()
             .iter()
-            .map(|curve| SelectionItem::Curve {
-                span: CurveSpan::line(curve.id),
-                parameter: if curve_is_periodic(&curve.definition) {
-                    0.0
-                } else {
-                    0.5
-                },
+            .filter_map(|curve| {
+                let (span, parameter) = first_curve_selection(state.document(), curve.id)?;
+                Some(SelectionItem::Curve { span, parameter })
             })
             .collect();
     }
@@ -6249,16 +6428,10 @@ mod tests {
             .take(point_count)
             .map(|point| SelectionItem::Point(point.id))
             .collect();
-        selection.extend(
-            state
-                .document()
-                .curves()
-                .iter()
-                .map(|curve| SelectionItem::Curve {
-                    span: CurveSpan::line(curve.id),
-                    parameter: 0.5,
-                }),
-        );
+        selection.extend(state.document().curves().iter().filter_map(|curve| {
+            let (span, parameter) = first_curve_selection(state.document(), curve.id)?;
+            Some(SelectionItem::Curve { span, parameter })
+        }));
         state.selection = selection;
     }
 }
@@ -6272,8 +6445,8 @@ pub(crate) mod wasm {
     };
 
     use geosolve_sketch::{
-        ContactId, CurveSpan, DesignPointId, DocumentConstraintId, DocumentDimensionId,
-        DocumentDimensionMode, DocumentObjectId, MAX_DOCUMENT_JSON_BYTES, PersistentId,
+        ContactId, DesignPointId, DocumentConstraintId, DocumentDimensionId, DocumentDimensionMode,
+        DocumentObjectId, MAX_DOCUMENT_JSON_BYTES, PersistentId,
     };
     use wasm_bindgen::{JsCast, JsValue, closure::Closure};
     use web_sys::{
@@ -6284,7 +6457,7 @@ pub(crate) mod wasm {
 
     use super::{
         CANVAS_HEIGHT, CANVAS_WIDTH, ConicDrawOptions, DrawTool, HIT_RADIUS_PX, PlaygroundState,
-        SelectionItem, Tool, curve_is_periodic, parse_finite_conic_option, sketch_example_kind,
+        SelectionItem, Tool, first_curve_selection, parse_finite_conic_option, sketch_example_kind,
         spatial_example_kind,
     };
 
@@ -7708,22 +7881,14 @@ pub(crate) mod wasm {
             "point" => SelectionItem::Point(DesignPointId(id)),
             "curve" => {
                 let curve = geosolve_sketch::CurveId(id);
-                let parameter =
-                    app.borrow()
-                        .session()
-                        .document()
-                        .curve(curve)
-                        .map_or(0.5, |curve| {
-                            if curve_is_periodic(&curve.definition) {
-                                0.0
-                            } else {
-                                0.5
-                            }
-                        });
-                SelectionItem::Curve {
-                    span: CurveSpan::line(curve),
-                    parameter,
-                }
+                let selection = {
+                    let state = app.borrow();
+                    first_curve_selection(state.session().document(), curve)
+                };
+                let Some((span, parameter)) = selection else {
+                    return;
+                };
+                SelectionItem::Curve { span, parameter }
             }
             "constraint" => SelectionItem::Constraint(DocumentConstraintId(id)),
             "contact" => {

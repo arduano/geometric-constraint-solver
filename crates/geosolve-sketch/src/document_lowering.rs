@@ -1,22 +1,26 @@
 use std::collections::BTreeMap;
 
-use geosolve_geometry::{DirectedParameterTrim, Point2, Vector2};
+use geosolve_geometry::{BSplineSpanIndex, DirectedParameterTrim, Point2, Vector2};
 
 use crate::document::{
     ContactDomain, ContactId, CurveDefinition, CurveId, CurveSpan, DesignPointId, DesignScalarId,
-    DocumentAngleOrientation, DocumentArcSweep, DocumentArcTangencySide, DocumentCircleContainment,
-    DocumentCircleTangencyMode, DocumentConstraint, DocumentConstraintDefinition,
-    DocumentConstraintId, DocumentCoordinateAxis, DocumentDimension, DocumentDimensionDefinition,
-    DocumentDimensionId, DocumentDimensionMode, DocumentError, DocumentLineSide, DocumentSourceId,
-    FeatureEndpoint, PersistentId, SketchDocument, TangentOrientation, document_arc_signed_sweep,
+    DocumentAngleOrientation, DocumentArcSweep, DocumentArcTangencySide, DocumentBSplineForm,
+    DocumentCircleContainment, DocumentCircleTangencyMode, DocumentConstraint,
+    DocumentConstraintDefinition, DocumentConstraintId, DocumentCoordinateAxis,
+    DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation,
+    DocumentCurveNormalSide, DocumentDimension, DocumentDimensionDefinition, DocumentDimensionId,
+    DocumentDimensionMode, DocumentError, DocumentLineSide, DocumentSourceId, FeatureEndpoint,
+    PersistentId, SketchDocument, TangentOrientation, document_arc_signed_sweep,
     document_hyperbola_branch,
 };
 use crate::{
-    AngleOrientation, ArcCircleTangencySide, ArcId, ArcSweep, CenterDirectionBranch,
+    AngleOrientation, ArcCircleTangencySide, ArcId, ArcSweep, BSplineId, CenterDirectionBranch,
     CircleContainment, CircleId, CircleTangencyMode, ConicId, ConicKind, ContactState,
-    CoordinateAxis, CurveContactNeighborhood, CurveTangentOrientation, DimensionMode,
-    LineParameterDomain, LineSide, PointId, SegmentBranch, SegmentEndpoint, SegmentId, Sketch,
-    SketchConstraintId, SketchCurve, SketchCurveContact, SketchDimensionId,
+    CoordinateAxis, CurveContactNeighborhood, CurveContinuity, CurveCurvatureRelation,
+    CurveDirectionRelation, CurveNormalSide, CurveTangentOrientation, DimensionMode,
+    LineParameterDomain, LineSide, NurbsId, PointId, SegmentBranch, SegmentEndpoint, SegmentId,
+    Sketch, SketchConstraintId, SketchConstraintKind, SketchCurve, SketchCurveContact,
+    SketchDimensionId,
 };
 
 /// Runtime entities generated for one persistent curve.
@@ -29,6 +33,14 @@ pub enum RuntimeCurve {
     QuadraticBezier(crate::BezierId),
     CubicBezier(crate::BezierId),
     Conic(ConicId),
+    BSpline {
+        spline: BSplineId,
+        spans: Vec<(u32, BSplineSpanIndex)>,
+    },
+    Nurbs {
+        nurbs: NurbsId,
+        spans: Vec<(u32, BSplineSpanIndex)>,
+    },
 }
 
 /// Persistent point to ephemeral runtime identity.
@@ -68,6 +80,9 @@ pub enum DocumentContactRole {
     ArcSpanParameter,
     BezierParameter,
     ConicParameter,
+    BSplineParameter,
+    NurbsParameter,
+    CurveParameter,
     FirstCurveParameter,
     SecondCurveParameter,
 }
@@ -140,7 +155,9 @@ impl DocumentRuntimeMap {
             | RuntimeCurve::CircularArc(_)
             | RuntimeCurve::QuadraticBezier(_)
             | RuntimeCurve::CubicBezier(_)
-            | RuntimeCurve::Conic(_) => None,
+            | RuntimeCurve::Conic(_)
+            | RuntimeCurve::BSpline { .. }
+            | RuntimeCurve::Nurbs { .. } => None,
         }
     }
 
@@ -165,6 +182,33 @@ impl DocumentRuntimeMap {
             RuntimeCurve::Conic(conic) => Some(*conic),
             _ => None,
         }
+    }
+
+    /// Returns the runtime NURBS generated for one persistent NURBS curve.
+    #[must_use]
+    pub fn runtime_nurbs(&self, id: CurveId) -> Option<NurbsId> {
+        match self.runtime_curve(id)? {
+            RuntimeCurve::Nurbs { nurbs, .. } => Some(*nurbs),
+            _ => None,
+        }
+    }
+
+    fn runtime_bspline_span(&self, span: CurveSpan) -> Option<(BSplineId, BSplineSpanIndex)> {
+        let RuntimeCurve::BSpline { spline, spans } = self.runtime_curve(span.curve)? else {
+            return None;
+        };
+        spans.iter().find_map(|(semantic, runtime)| {
+            (*semantic == span.segment).then_some((*spline, *runtime))
+        })
+    }
+
+    fn runtime_nurbs_span(&self, span: CurveSpan) -> Option<(NurbsId, BSplineSpanIndex)> {
+        let RuntimeCurve::Nurbs { nurbs, spans } = self.runtime_curve(span.curve)? else {
+            return None;
+        };
+        spans.iter().find_map(|(semantic, runtime)| {
+            (*semantic == span.segment).then_some((*nurbs, *runtime))
+        })
     }
 }
 
@@ -332,7 +376,12 @@ impl SketchDocument {
                 RuntimeCurve::Line(_)
                 | RuntimeCurve::Polyline(_)
                 | RuntimeCurve::QuadraticBezier(_)
-                | RuntimeCurve::CubicBezier(_) => continue,
+                | RuntimeCurve::CubicBezier(_)
+                | RuntimeCurve::BSpline { .. } => continue,
+                RuntimeCurve::Nurbs { nurbs, .. } => {
+                    project_nurbs_state(self, sketch, mapping.persistent, nurbs)?;
+                    continue;
+                }
                 RuntimeCurve::Conic(conic) => {
                     project_conic_state(self, sketch, mapping.persistent, conic)?;
                     continue;
@@ -343,64 +392,93 @@ impl SketchDocument {
                 .value = value;
         }
         for mapping in &mappings.contacts {
-            let state = sketch.contact_state(mapping.constraint)?;
-            let value = match (mapping.role, state) {
-                (DocumentContactRole::LineParameter, ContactState::PointOnLine { parameter }) => {
-                    parameter
-                }
+            let constraint = sketch
+                .constraint(mapping.constraint)
+                .ok_or_else(|| unknown_runtime("runtime constraint", mapping.persistent.0))?;
+            let advanced_value = match (mapping.role, constraint.kind()) {
                 (
-                    DocumentContactRole::LineParameter
-                    | DocumentContactRole::CircleAngle
-                    | DocumentContactRole::ArcSpanParameter
-                    | DocumentContactRole::BezierParameter
-                    | DocumentContactRole::ConicParameter,
-                    ContactState::PointOnCurve { parameter }
-                    | ContactState::LineCurveTangency { parameter },
-                )
-                | (
-                    DocumentContactRole::BezierParameter,
-                    ContactState::PointOnBezier { parameter }
-                    | ContactState::LineBezierTangency { parameter },
-                ) => parameter,
-                (DocumentContactRole::CircleAngle, ContactState::PointOnCircle { angle }) => angle,
-                (
-                    DocumentContactRole::ArcSpanParameter,
-                    ContactState::PointOnArc { span_parameter },
-                ) => span_parameter,
-                (
-                    DocumentContactRole::LineParameter,
-                    ContactState::LineCircleTangency { line_parameter, .. },
-                ) => line_parameter,
-                (
-                    DocumentContactRole::CircleAngle,
-                    ContactState::LineCircleTangency { circle_angle, .. }
-                    | ContactState::CircleArcTangency { circle_angle, .. },
-                ) => circle_angle,
-                (
-                    DocumentContactRole::ArcSpanParameter,
-                    ContactState::CircleArcTangency {
-                        arc_span_parameter, ..
-                    },
-                ) => arc_span_parameter,
+                    DocumentContactRole::CurveParameter,
+                    SketchConstraintKind::CurveDirection { contact, .. },
+                ) => Some(contact.parameter),
                 (
                     DocumentContactRole::FirstCurveParameter,
-                    ContactState::CurveCurveContact {
-                        first_parameter, ..
-                    }
-                    | ContactState::CurveCurveTangency {
-                        first_parameter, ..
-                    },
-                ) => first_parameter,
+                    SketchConstraintKind::EqualCurvature { first, .. }
+                    | SketchConstraintKind::EndpointContinuity { first, .. },
+                ) => Some(first.parameter),
                 (
                     DocumentContactRole::SecondCurveParameter,
-                    ContactState::CurveCurveContact {
-                        second_parameter, ..
+                    SketchConstraintKind::EqualCurvature { second, .. }
+                    | SketchConstraintKind::EndpointContinuity { second, .. },
+                ) => Some(second.parameter),
+                _ => None,
+            };
+            let value = if let Some(value) = advanced_value {
+                value
+            } else {
+                let state = sketch.contact_state(mapping.constraint)?;
+                match (mapping.role, state) {
+                    (
+                        DocumentContactRole::LineParameter,
+                        ContactState::PointOnLine { parameter },
+                    )
+                    | (
+                        DocumentContactRole::LineParameter
+                        | DocumentContactRole::CircleAngle
+                        | DocumentContactRole::ArcSpanParameter
+                        | DocumentContactRole::BezierParameter
+                        | DocumentContactRole::ConicParameter
+                        | DocumentContactRole::BSplineParameter
+                        | DocumentContactRole::NurbsParameter,
+                        ContactState::PointOnCurve { parameter }
+                        | ContactState::LineCurveTangency { parameter },
+                    )
+                    | (
+                        DocumentContactRole::BezierParameter,
+                        ContactState::PointOnBezier { parameter }
+                        | ContactState::LineBezierTangency { parameter },
+                    ) => parameter,
+                    (DocumentContactRole::CircleAngle, ContactState::PointOnCircle { angle }) => {
+                        angle
                     }
-                    | ContactState::CurveCurveTangency {
-                        second_parameter, ..
-                    },
-                ) => second_parameter,
-                _ => return invalid_runtime("contact role does not match runtime source"),
+                    (
+                        DocumentContactRole::ArcSpanParameter,
+                        ContactState::PointOnArc { span_parameter },
+                    ) => span_parameter,
+                    (
+                        DocumentContactRole::LineParameter,
+                        ContactState::LineCircleTangency { line_parameter, .. },
+                    ) => line_parameter,
+                    (
+                        DocumentContactRole::CircleAngle,
+                        ContactState::LineCircleTangency { circle_angle, .. }
+                        | ContactState::CircleArcTangency { circle_angle, .. },
+                    ) => circle_angle,
+                    (
+                        DocumentContactRole::ArcSpanParameter,
+                        ContactState::CircleArcTangency {
+                            arc_span_parameter, ..
+                        },
+                    ) => arc_span_parameter,
+                    (
+                        DocumentContactRole::FirstCurveParameter,
+                        ContactState::CurveCurveContact {
+                            first_parameter, ..
+                        }
+                        | ContactState::CurveCurveTangency {
+                            first_parameter, ..
+                        },
+                    ) => first_parameter,
+                    (
+                        DocumentContactRole::SecondCurveParameter,
+                        ContactState::CurveCurveContact {
+                            second_parameter, ..
+                        }
+                        | ContactState::CurveCurveTangency {
+                            second_parameter, ..
+                        },
+                    ) => second_parameter,
+                    _ => return invalid_runtime("contact role does not match runtime source"),
+                }
             };
             set_contact_value(self, mapping.persistent, value)?;
         }
@@ -581,6 +659,91 @@ fn lower_curve(
             document_hyperbola_branch(*branch),
             directed_trim(document, curve.id, *trim_start, *trim_end)?,
         )?),
+        CurveDefinition::BSpline {
+            form,
+            degree,
+            controls,
+            knots,
+            span_ids,
+            ..
+        } => {
+            let spline = sketch.add_named_bspline(
+                &curve.label,
+                match form {
+                    DocumentBSplineForm::Clamped => geosolve_geometry::BSplineForm::Clamped,
+                    DocumentBSplineForm::Periodic => geosolve_geometry::BSplineForm::Periodic,
+                },
+                *degree,
+                controls
+                    .iter()
+                    .map(|control| runtime_point(mappings, *control))
+                    .collect::<Result<Vec<_>, _>>()?,
+                knots.clone(),
+            )?;
+            let runtime = sketch
+                .bspline(spline)
+                .ok_or_else(|| unknown_runtime("runtime B-spline", curve.id.0))?;
+            let spans = span_ids
+                .iter()
+                .copied()
+                .zip(
+                    runtime
+                        .basis()
+                        .spans()
+                        .iter()
+                        .map(geosolve_geometry::BSplineSpan::index),
+                )
+                .collect();
+            RuntimeCurve::BSpline { spline, spans }
+        }
+        CurveDefinition::Nurbs {
+            form,
+            degree,
+            controls,
+            weights,
+            gauge_weight,
+            knots,
+            span_ids,
+            ..
+        } => {
+            let gauge_index = weights
+                .iter()
+                .position(|weight| weight == gauge_weight)
+                .ok_or_else(|| unknown_runtime("NURBS gauge weight", gauge_weight.0))?;
+            let nurbs = sketch.add_named_nurbs(
+                &curve.label,
+                match form {
+                    DocumentBSplineForm::Clamped => geosolve_geometry::BSplineForm::Clamped,
+                    DocumentBSplineForm::Periodic => geosolve_geometry::BSplineForm::Periodic,
+                },
+                *degree,
+                controls
+                    .iter()
+                    .map(|control| runtime_point(mappings, *control))
+                    .collect::<Result<Vec<_>, _>>()?,
+                weights
+                    .iter()
+                    .map(|weight| scalar_value(document, *weight))
+                    .collect::<Result<Vec<_>, _>>()?,
+                gauge_index,
+                knots.clone(),
+            )?;
+            let runtime = sketch
+                .nurbs(nurbs)
+                .ok_or_else(|| unknown_runtime("runtime NURBS", curve.id.0))?;
+            let spans = span_ids
+                .iter()
+                .copied()
+                .zip(
+                    runtime
+                        .basis()
+                        .spans()
+                        .iter()
+                        .map(geosolve_geometry::BSplineSpan::index),
+                )
+                .collect();
+            RuntimeCurve::Nurbs { nurbs, spans }
+        }
     };
     Ok(runtime)
 }
@@ -662,6 +825,45 @@ fn project_conic_state(
         }
         (CurveDefinition::ParabolaSegment { .. }, ConicKind::ParabolaSegment { .. }) => {}
         _ => return invalid_runtime("curve mapping kind changed"),
+    }
+    Ok(())
+}
+
+fn project_nurbs_state(
+    document: &mut SketchDocument,
+    sketch: &Sketch,
+    persistent: CurveId,
+    runtime: NurbsId,
+) -> Result<(), DocumentError> {
+    let (weight_ids, gauge_weight) = match &document
+        .curve(persistent)
+        .ok_or_else(|| unknown_runtime("curve", persistent.0))?
+        .definition
+    {
+        CurveDefinition::Nurbs {
+            weights,
+            gauge_weight,
+            ..
+        } => (weights.clone(), *gauge_weight),
+        _ => return invalid_runtime("curve mapping kind changed"),
+    };
+    let runtime = sketch
+        .nurbs(runtime)
+        .ok_or_else(|| unknown_runtime("runtime NURBS", persistent.0))?;
+    if runtime.weights().len() != weight_ids.len()
+        || weight_ids.get(runtime.gauge_index()) != Some(&gauge_weight)
+    {
+        return invalid_runtime("NURBS weight mapping changed");
+    }
+    for (index, (weight, value)) in weight_ids.iter().zip(runtime.weights()).enumerate() {
+        document
+            .scalar_mut(*weight)
+            .ok_or_else(|| unknown_runtime("scalar", weight.0))?
+            .value = if index == runtime.gauge_index() {
+            1.0
+        } else {
+            *value
+        };
     }
     Ok(())
 }
@@ -899,6 +1101,82 @@ fn lower_constraint(
                 ));
                 id
             }
+            C::CurveDirection {
+                line,
+                curve_contact,
+                relation,
+            } => {
+                let contact = document
+                    .contact(*curve_contact)
+                    .ok_or_else(|| unknown_runtime("contact", curve_contact.0))?;
+                let id = sketch.add_curve_direction(
+                    runtime_segment(mappings, *line)?,
+                    runtime_curve_contact(document, mappings, contact)?,
+                    runtime_curve_direction(*relation),
+                )?;
+                contacts.push(contact_mapping(
+                    *curve_contact,
+                    id,
+                    DocumentContactRole::CurveParameter,
+                ));
+                id
+            }
+            C::EqualCurvature {
+                first_contact,
+                second_contact,
+                relation,
+            } => {
+                let first = document
+                    .contact(*first_contact)
+                    .ok_or_else(|| unknown_runtime("contact", first_contact.0))?;
+                let second = document
+                    .contact(*second_contact)
+                    .ok_or_else(|| unknown_runtime("contact", second_contact.0))?;
+                let id = sketch.add_equal_curvature(
+                    runtime_curve_contact(document, mappings, first)?,
+                    runtime_curve_contact(document, mappings, second)?,
+                    runtime_curvature_relation(*relation),
+                )?;
+                contacts.push(contact_mapping(
+                    *first_contact,
+                    id,
+                    DocumentContactRole::FirstCurveParameter,
+                ));
+                contacts.push(contact_mapping(
+                    *second_contact,
+                    id,
+                    DocumentContactRole::SecondCurveParameter,
+                ));
+                id
+            }
+            C::EndpointContinuity {
+                first_contact,
+                second_contact,
+                continuity,
+            } => {
+                let first = document
+                    .contact(*first_contact)
+                    .ok_or_else(|| unknown_runtime("contact", first_contact.0))?;
+                let second = document
+                    .contact(*second_contact)
+                    .ok_or_else(|| unknown_runtime("contact", second_contact.0))?;
+                let id = sketch.add_endpoint_continuity(
+                    runtime_curve_contact(document, mappings, first)?,
+                    runtime_curve_contact(document, mappings, second)?,
+                    runtime_curve_continuity(*continuity),
+                )?;
+                contacts.push(contact_mapping(
+                    *first_contact,
+                    id,
+                    DocumentContactRole::FirstCurveParameter,
+                ));
+                contacts.push(contact_mapping(
+                    *second_contact,
+                    id,
+                    DocumentContactRole::SecondCurveParameter,
+                ));
+                id
+            }
         };
     Ok((runtime, contacts))
 }
@@ -1051,6 +1329,18 @@ fn runtime_curve_contact(
                 SketchCurve::Bezier(*bezier)
             }
             RuntimeCurve::Conic(conic) => SketchCurve::Conic(*conic),
+            RuntimeCurve::BSpline { .. } => {
+                let (spline, span) = mappings
+                    .runtime_bspline_span(contact.curve)
+                    .ok_or_else(|| unknown_runtime("B-spline span", contact.curve.curve.0))?;
+                SketchCurve::BSpline { spline, span }
+            }
+            RuntimeCurve::Nurbs { .. } => {
+                let (nurbs, span) = mappings
+                    .runtime_nurbs_span(contact.curve)
+                    .ok_or_else(|| unknown_runtime("NURBS span", contact.curve.curve.0))?;
+                SketchCurve::Nurbs { nurbs, span }
+            }
         },
         parameter: contact_value(document, contact)?,
         neighborhood: match contact.neighborhood {
@@ -1079,6 +1369,8 @@ fn contact_role(
             Ok(DocumentContactRole::BezierParameter)
         }
         RuntimeCurve::Conic(_) => Ok(DocumentContactRole::ConicParameter),
+        RuntimeCurve::BSpline { .. } => Ok(DocumentContactRole::BSplineParameter),
+        RuntimeCurve::Nurbs { .. } => Ok(DocumentContactRole::NurbsParameter),
     }
 }
 
@@ -1104,7 +1396,27 @@ fn set_contact_value(
             }
             (principal, winding as i32)
         }
-        ContactDomain::SupportingLine | ContactDomain::Bounded { .. } => (value, 0),
+        ContactDomain::SupportingLine => (value, 0),
+        ContactDomain::Bounded { .. } => {
+            let winding = if matches!(
+                document
+                    .curve(contact.curve.curve)
+                    .ok_or_else(|| unknown_runtime("curve", contact.curve.curve.0))?
+                    .definition,
+                CurveDefinition::BSpline {
+                    form: DocumentBSplineForm::Periodic,
+                    ..
+                } | CurveDefinition::Nurbs {
+                    form: DocumentBSplineForm::Periodic,
+                    ..
+                }
+            ) {
+                contact.winding
+            } else {
+                0
+            };
+            (value, winding)
+        }
     };
     document
         .scalar_mut(contact.parameter)
@@ -1141,6 +1453,54 @@ const fn circle_mode(mode: DocumentCircleTangencyMode) -> CircleTangencyMode {
             containment: DocumentCircleContainment::SecondContainsFirst,
         } => CircleTangencyMode::Internal {
             containment: CircleContainment::SecondContainsFirst,
+        },
+    }
+}
+
+const fn runtime_curve_direction(
+    relation: DocumentCurveDirectionRelation,
+) -> CurveDirectionRelation {
+    match relation {
+        DocumentCurveDirectionRelation::Tangent { orientation } => {
+            CurveDirectionRelation::Tangent(match orientation {
+                TangentOrientation::Aligned => CurveTangentOrientation::Aligned,
+                TangentOrientation::Opposed => CurveTangentOrientation::Opposed,
+            })
+        }
+        DocumentCurveDirectionRelation::Normal { side } => {
+            CurveDirectionRelation::Normal(match side {
+                DocumentCurveNormalSide::Left => CurveNormalSide::Left,
+                DocumentCurveNormalSide::Right => CurveNormalSide::Right,
+            })
+        }
+    }
+}
+
+const fn runtime_curvature_relation(
+    relation: DocumentCurveCurvatureRelation,
+) -> CurveCurvatureRelation {
+    match relation {
+        DocumentCurveCurvatureRelation::Signed => CurveCurvatureRelation::Signed,
+        DocumentCurveCurvatureRelation::MagnitudeSameSign => {
+            CurveCurvatureRelation::MagnitudeSameSign
+        }
+        DocumentCurveCurvatureRelation::MagnitudeOppositeSign => {
+            CurveCurvatureRelation::MagnitudeOppositeSign
+        }
+    }
+}
+
+const fn runtime_curve_continuity(kind: DocumentCurveContinuity) -> CurveContinuity {
+    match kind {
+        DocumentCurveContinuity::G0 => CurveContinuity::G0,
+        DocumentCurveContinuity::G1 => CurveContinuity::G1,
+        DocumentCurveContinuity::G2 => CurveContinuity::G2,
+        DocumentCurveContinuity::ParametricC2 {
+            first_rate,
+            second_rate,
+        } => CurveContinuity::ParametricC2 {
+            first_rate,
+            second_rate,
         },
     }
 }

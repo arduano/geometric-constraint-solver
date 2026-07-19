@@ -6,7 +6,7 @@ A GPL-3.0-or-later, pure-Rust geometric constraint solver for:
 - planar rigid-body mechanisms embedded in arbitrary 3D workplanes;
 - spatial rigid-body assembly and linkage kinematics.
 
-The validated baseline includes a nonlinear equality solver with strict residual validation, dense-authoritative rank/DOF and source diagnostics, indexed sparse hard steps, structural matching, cross-component strict priorities, adaptive natural and explicit pseudo-arclength planar linkage continuation, persistent gauge-separated planar linkage sessions and velocity queries, the common independently validated spatial joint/mate and position-driver catalog, 2D sketch constraints through conics and generic tangency, shared `SE(2)`/`SE(3)` manifold state, accepted hard-equality sensitivity, and the completed disposable 2D Sketch Playground Alpha over reusable Rust APIs. The roadmap now continues with B-splines, NURBS, advanced CAD constraints and complete 2D/3D kinematics. Physics, collision and a production rendering system are out of scope.
+The validated baseline includes a nonlinear equality solver with strict residual validation, dense-authoritative rank/DOF and source diagnostics, indexed sparse hard steps, structural matching, cross-component strict priorities, adaptive natural and explicit pseudo-arclength planar linkage continuation, persistent gauge-separated planar linkage sessions and velocity queries, the common independently validated spatial joint/mate and position-driver catalog, complete 2D sketch geometry through gauge-separated NURBS, generic tangency, curvature, G2 and separately named parametric C2 continuity, shared `SE(2)`/`SE(3)` manifold state, accepted hard-equality sensitivity, and the completed disposable 2D Sketch Playground Alpha over reusable Rust APIs. Deliverable 1 is complete; the roadmap continues with 2D/3D assembly completion and release hardening. Physics, collision and a production rendering system are out of scope.
 
 ## Start here
 
@@ -21,7 +21,7 @@ The validated baseline includes a nonlinear equality solver with strict residual
 
 - `geosolve-geometry` — immutable geometry, curve evaluation, validated frames/workplanes and `Pose2`/`Pose3` manifold operations; no solver state.
 - `geosolve-core` — variables, residual blocks, dense/sparse Jacobian paths, nonlinear solve, structural/numerical analysis, strict hierarchy, continuation primitives and revision-stamped accepted hard linearization/sensitivity.
-- `geosolve-sketch` — persistent sketch entities, conics, generic constraints and compilation into core residuals, with reusable document/session/command/history/serialization APIs.
+- `geosolve-sketch` — persistent sketch entities, conics, non-rational B-splines, generic constraints and compilation into core residuals, with reusable document/session/command/history/serialization APIs.
 - `geosolve-linkage` — persistent planar rigid bodies/features/sources, gauge-separated mobility, joints, drivers, velocity, assembly modes and continuation, plus spatial bodies, stable-clock features, common joints/mates, position drivers, mode monitors and six-DOF gauge-separated sessions; M23 retains spatial continuation, velocity and persistence completion.
 - `geosolve-demo-web` — separate disposable, desktop-first WASM/SVG diagnostic playground and audit consumer without equations or authoritative document semantics.
 
