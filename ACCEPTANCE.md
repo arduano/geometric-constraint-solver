@@ -69,7 +69,7 @@ The preceding desktop/mobile requirement records the completed M13-M14 gate. Pos
 
 ## Frozen M1-M7 regression baseline
 
-All existing M1-M7 tests and the advanced free-radius circle/arc tangency follow-up remain mandatory through M24.
+All existing M1-M7 tests and the advanced free-radius circle/arc tangency follow-up remain mandatory through M29.
 
 ### Core representation and solver
 
@@ -127,13 +127,13 @@ Baseline candidate vectors do not yet carry M8 completeness metadata. Until the 
 - Geometry and audit values always come from the same accepted state.
 - It displays termination, hard residual, rank/DOF, branch and candidate diagnostics, plus grouped source audit rows.
 - It preserves prior valid geometry visibly after failed edits.
-- Automated WASM and desktop browser diagnostic coverage remains through M24. M13-M14 added the disposable playground, including its historical mobile checks, as an alpha acceptance consumer without making it authoritative.
+- Automated WASM and desktop browser diagnostic coverage remains through M29. M13-M14 added the disposable playground, including its historical mobile checks, as an alpha acceptance consumer without making it authoritative.
 
 ## M8 acceptance: contract rebaseline and representative baselines
 
 M8 is ready for review only when every item below is objectively present. These checkboxes are acceptance criteria and do not mark `PLAN.md` complete.
 
-The checked wording below is the preserved M8 completion record. Its then-current M8-M22 allocations are historical; the user-approved M10+ execution numbering is now M10-M24.
+The checked wording below is the preserved M8 completion record. Its then-current M8-M22 allocations are historical; the user-approved M10+ execution numbering is now M10-M29.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -384,7 +384,83 @@ WASM, rustdoc, benchmark compilation and release Trunk gates.
 - Planar mechanisms embedded in 3D agree with planar oracles.
 - Complete linkage persistence, fuzz/property, differential-oracle and sparse performance suites pass.
 
-## M24 acceptance: release hardening
+Completion record (2026-07-19): spatial continuation and its mode-event
+follow-up are implemented under ADR 0016. Hinge and translation drivers use active
+scalar forms of their existing equations; private gauges, adaptive retry and
+ephemeral pseudo control feed only separately re-solved ordinary physical samples.
+Typed predictor/corrected endpoint events cover source false roots, explicit mode
+monitors and canonical hinge cuts with accepted enter/leave hysteresis. Explicit
+parity, side, orientation and principal-cut changes lower to one revision-checked
+clone/solve/validate/swap transaction. Grounded/floating shaft motion, an embedded
+spatial slider-crank and cut/side fixtures cover folds, required scales,
+common-left `SE(3)`, dense/sparse parity, rollback and no implicit winding change.
+Multi-driver spatial velocity additionally reuses executable parameter columns
+and accepted component rank thresholds, distinguishes determinate modulo gauge,
+underdetermined and inconsistent outcomes, and independently validates body,
+feature and coordinate fields plus optional physical nullspace bases under ADR
+0017. The displacement-driven L3 additionally matches compatibility and persistent
+planar position/velocity oracles at all required scales under an arbitrary static
+`SE(3)` embedding. A non-planar universal ring, macro/micro stage-tool stack and
+258-coordinate sparse fixed-frame chain add closed-chain chirality/mobility,
+required scale extremes and validated `SparseQr` step coverage without replacing
+dense rank authority. ADR 0018 adds canonical versioned spatial documents,
+persistent body/feature/source/coordinate/monitor IDs, complete accepted pose,
+driver/gauge/mode/hysteresis state, deterministic fresh runtime remapping and
+atomic failed-import rollback. Full-catalog and malformed persistence tests pass.
+Generated scale/common-left `SE(3)` and byte-mutation properties, a 36-case
+analytic position/velocity oracle and the explicit 256-moving-body release `Auto`
+crossover complete the final linkage corpus without weakening independent
+residual validation or dense rank authority. M23 acceptance is complete.
+
+## M24 acceptance: sketch extension and embedding foundation
+
+- Sketch JSON version 1 has a private frozen wire DTO and strict explicit version dispatch without canonical output changes.
+- Persistent element and source-owner APIs cover every document object and audit source without runtime/core identity joins.
+- `SketchAttributes<T>` remains document-scoped, typed, solver-independent and outside canonical sketch JSON.
+- Foreign/wrong-kind targets reject; dormant values survive document history until explicit cleanup.
+
+Completion record (2026-07-20): ADR 0019 freezes exact version-1 JSON behind a
+private DTO and explicit strict dispatch, adds typed persistent element/raw-ID and
+source-owner joins, and keeps generic application attributes in a document-bound
+sidecar with host-owned persistence/history. Complete A8 identity coverage,
+foreign/wrong-kind rejection, real delete/undo/redo dormancy, solver isolation and
+an exact golden payload pass with all locked native, WASM, rustdoc, benchmark and
+release Trunk gates. M24 acceptance is complete.
+
+## M25-M28 acceptance: advanced sketch constructions
+
+- Supporting-line and translated-segment offsets have separately truthful equations, rank and DOF.
+- Point-defined entity mirrors compose explicit ordinary constraints, and existing oriented angles remain branch-explicit.
+- Public line arrangements split crossings and publish visual-only bounded faces without persistent region semantics.
+- Fillets progress from an independently validated line-line vertical slice to common-jet generic curves and explicit parent trim views.
+- Every new row has audit, derivative, transformation, scale, persistence, malformed-input and rollback coverage.
+
+M25 acceptance is complete: separately named offsets publish independently
+validated rows and truthful mobility; point-defined mirrors remain ordinary
+constraint constructions through coordinated B-spline refinement; directed angles
+retain explicit branch state; and strict sketch v1 input migrates to canonical v2.
+
+M26 acceptance is complete: public read-only line/polyline arrangements use only
+explicit identity/coincidence topology, split crossings and T-junctions ephemerally,
+publish deterministic finite contours with exact source-span intervals, and create
+no persistent regions or equations. Overlap, uncertainty, inconsistent unsolved
+coincidences and overflow/resource limits fail closed with typed status. The
+pointer-transparent WASM overlay leaves selection, history, autosave and canonical
+JSON unchanged under desktop/mobile browser automation.
+
+M27 acceptance is complete: persistent line-line fillets solve four audited
+common-jet center/contact rows with explicit parent normal sides, endpoint order,
+sweep and driving/reference radius. Accepted arc endpoints are derived from solved
+strict-interior contacts and independently revalidated with center-normal,
+tangency, radius, side, order and sweep oracles before publication. Sketch JSON v3
+round-trips behind frozen v1/v2 input DTOs; parent edits, branch edits, suppression,
+history, explode/ownership behavior and failed-domain rollback retain truthful
+state. Every side/order/sweep combination passes under similarity transforms at
+scales `1e-6`, `1` and `1e6`; parallel, near-parallel, escaped, zero-radius and
+non-finite inputs reject without allocation or mutation. Parent trim views and
+generic curve-family incidence remain explicitly assigned to M28.
+
+## M29 acceptance: release hardening
 
 - Public APIs expose domain and audit behavior without accidental compiler/core internals.
 - Versioned serialization migrations, malformed-document tests and round trips pass.

@@ -260,6 +260,61 @@ impl ResidualEvaluator for SpatialHingePositionResidual {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub(crate) struct ParameterizedSpatialHingePositionResidual {
+    pub(crate) first_local: Frame3,
+    pub(crate) second_local: Frame3,
+    pub(crate) parity_multiplier: f64,
+}
+
+impl ResidualEvaluator for ParameterizedSpatialHingePositionResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        let (poses, target) = two_poses_and_scalar(variables, "spatial hinge position driver")?;
+        SpatialHingePositionResidual {
+            first_local: self.first_local,
+            second_local: self.second_local,
+            parity_multiplier: self.parity_multiplier,
+            target_principal_phase: target,
+        }
+        .evaluate(&poses)
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        let (poses, target) = two_poses_and_scalar(variables, "spatial hinge position driver")?;
+        let residual = SpatialHingePositionResidual {
+            first_local: self.first_local,
+            second_local: self.second_local,
+            parity_multiplier: self.parity_multiplier,
+            target_principal_phase: target,
+        };
+        let frames = frame_pair(
+            &poses,
+            self.first_local,
+            self.second_local,
+            "spatial hinge position driver",
+        )?;
+        let (target_sine, target_cosine) = target.sin_cos();
+        let parameter_derivative = -target_sine
+            * frames
+                .first_world
+                .y_axis()
+                .dot(&frames.second_world.x_axis())
+            - target_cosine
+                * frames
+                    .first_world
+                    .x_axis()
+                    .dot(&frames.second_world.x_axis());
+        if !parameter_derivative.is_finite() {
+            return Err(EvaluationError::invalid_geometry(
+                "spatial hinge position parameter derivative is non-finite",
+            ));
+        }
+        let mut jacobians = residual.jacobian(&poses)?;
+        jacobians.push(LocalJacobian::new(1, 1, vec![parameter_derivative]));
+        Ok(jacobians)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct SpatialTranslationPositionResidual {
     pub(crate) first_local: Frame3,
     pub(crate) second_local: Frame3,
@@ -309,6 +364,44 @@ impl ResidualEvaluator for SpatialTranslationPositionResidual {
             second.to_vec(),
             "spatial translation position driver",
         )
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ParameterizedSpatialTranslationPositionResidual {
+    pub(crate) first_local: Frame3,
+    pub(crate) second_local: Frame3,
+    pub(crate) first_local_axis: Vector3<f64>,
+    pub(crate) parity_multiplier: f64,
+}
+
+impl ResidualEvaluator for ParameterizedSpatialTranslationPositionResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        let (poses, target) =
+            two_poses_and_scalar(variables, "spatial translation position driver")?;
+        SpatialTranslationPositionResidual {
+            first_local: self.first_local,
+            second_local: self.second_local,
+            first_local_axis: self.first_local_axis,
+            parity_multiplier: self.parity_multiplier,
+            target,
+        }
+        .evaluate(&poses)
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        let (poses, target) =
+            two_poses_and_scalar(variables, "spatial translation position driver")?;
+        let mut jacobians = SpatialTranslationPositionResidual {
+            first_local: self.first_local,
+            second_local: self.second_local,
+            first_local_axis: self.first_local_axis,
+            parity_multiplier: self.parity_multiplier,
+            target,
+        }
+        .jacobian(&poses)?;
+        jacobians.push(LocalJacobian::new(1, 1, vec![-1.0]));
+        Ok(jacobians)
     }
 }
 
@@ -713,6 +806,28 @@ fn two_poses(
         Pose3::from_ambient(*second)
             .map_err(|error| geometry_error(&format!("{context} second pose"), error))?,
     ))
+}
+
+fn two_poses_and_scalar(
+    variables: &[VariableValue],
+    context: &str,
+) -> Result<([VariableValue; 2], f64), EvaluationError> {
+    let [
+        first @ VariableValue::Pose3(_),
+        second @ VariableValue::Pose3(_),
+        VariableValue::Scalar(parameter),
+    ] = variables
+    else {
+        return Err(EvaluationError::invalid_geometry(format!(
+            "{context} residual expected exactly two Pose3 variables and one scalar"
+        )));
+    };
+    if !parameter.is_finite() {
+        return Err(EvaluationError::out_of_domain(format!(
+            "{context} parameter must be finite"
+        )));
+    }
+    Ok(([*first, *second], *parameter))
 }
 
 fn frame_pair(
@@ -1178,6 +1293,53 @@ mod tests {
     }
 
     #[test]
+    fn parameterized_spatial_driver_jacobians_include_the_scalar_target() {
+        let first_pose = Pose3::exp([0.7, -0.4, 0.2, 0.3, -0.2, 0.5]).unwrap();
+        let second_pose = Pose3::exp([-0.3, 0.8, 0.6, -0.4, 0.1, 0.2]).unwrap();
+        let first_frame = Frame3::try_new(
+            Point3::new(0.2, -0.5, 0.7),
+            Vector3::x(),
+            Vector3::y(),
+            Vector3::z(),
+        )
+        .unwrap();
+        let second_frame = Frame3::try_new(
+            Point3::new(-0.6, 0.1, 0.4),
+            Vector3::y(),
+            Vector3::z(),
+            Vector3::x(),
+        )
+        .unwrap();
+        let hinge_variables = vec![
+            VariableValue::Pose3(first_pose.ambient()),
+            VariableValue::Pose3(second_pose.ambient()),
+            VariableValue::Scalar(-0.7),
+        ];
+        let translation_variables = vec![
+            VariableValue::Pose3(first_pose.ambient()),
+            VariableValue::Pose3(second_pose.ambient()),
+            VariableValue::Scalar(-1.3),
+        ];
+        assert_finite_difference(
+            &ParameterizedSpatialHingePositionResidual {
+                first_local: first_frame,
+                second_local: second_frame,
+                parity_multiplier: -1.0,
+            },
+            &hinge_variables,
+        );
+        assert_finite_difference(
+            &ParameterizedSpatialTranslationPositionResidual {
+                first_local: first_frame,
+                second_local: second_frame,
+                first_local_axis: first_frame.z_axis(),
+                parity_multiplier: -1.0,
+            },
+            &translation_variables,
+        );
+    }
+
+    #[test]
     fn spatial_residuals_reject_invalid_evaluator_inputs() {
         let valid = VariableValue::Pose3(Pose3::identity().ambient());
         let frame =
@@ -1239,24 +1401,29 @@ mod tests {
         assert!(translation.jacobian(&[valid, valid]).is_err());
     }
 
-    fn assert_finite_difference(evaluator: &dyn ResidualEvaluator, variables: &[VariableValue; 2]) {
+    fn assert_finite_difference(evaluator: &dyn ResidualEvaluator, variables: &[VariableValue]) {
         let residuals = evaluator.evaluate(variables).unwrap();
         let analytic = evaluator.jacobian(variables).unwrap();
-        assert_eq!(analytic.len(), 2);
-        for (body, block) in analytic.iter().enumerate() {
+        assert_eq!(analytic.len(), variables.len());
+        for (variable, block) in analytic.iter().enumerate() {
+            let tangent_dimension = match variables[variable] {
+                VariableValue::Scalar(_) => 1,
+                VariableValue::Pose3(_) => TANGENT_DIMENSION,
+                _ => unreachable!("test covers only Pose3 and scalar variables"),
+            };
             assert_eq!(block.rows(), residuals.len());
-            assert_eq!(block.columns(), TANGENT_DIMENSION);
-            for column in 0..TANGENT_DIMENSION {
-                let positive = perturbed(variables, body, column, DIFFERENCE_STEP);
-                let negative = perturbed(variables, body, column, -DIFFERENCE_STEP);
+            assert_eq!(block.columns(), tangent_dimension);
+            for column in 0..tangent_dimension {
+                let positive = perturbed(variables, variable, column, DIFFERENCE_STEP);
+                let negative = perturbed(variables, variable, column, -DIFFERENCE_STEP);
                 let positive = evaluator.evaluate(&positive).unwrap();
                 let negative = evaluator.evaluate(&negative).unwrap();
                 for row in 0..residuals.len() {
                     let numeric = (positive[row] - negative[row]) / (2.0 * DIFFERENCE_STEP);
-                    let expected = block.values()[row * TANGENT_DIMENSION + column];
+                    let expected = block.values()[row * tangent_dimension + column];
                     assert!(
                         (numeric - expected).abs() <= 1.0e-6 * (1.0 + numeric.abs()),
-                        "body {body}, row {row}, column {column}: analytic {expected}, numeric {numeric}"
+                        "variable {variable}, row {row}, column {column}: analytic {expected}, numeric {numeric}"
                     );
                 }
             }
@@ -1264,24 +1431,27 @@ mod tests {
     }
 
     fn perturbed(
-        variables: &[VariableValue; 2],
-        body: usize,
+        variables: &[VariableValue],
+        variable: usize,
         column: usize,
         amount: f64,
-    ) -> [VariableValue; 2] {
-        let mut perturbed = *variables;
-        let VariableValue::Pose3(ambient) = perturbed[body] else {
-            unreachable!();
+    ) -> Vec<VariableValue> {
+        let mut perturbed = variables.to_vec();
+        perturbed[variable] = match perturbed[variable] {
+            VariableValue::Pose3(ambient) => {
+                let mut tangent = [0.0; TANGENT_DIMENSION];
+                tangent[column] = amount;
+                VariableValue::Pose3(
+                    Pose3::from_ambient(ambient)
+                        .unwrap()
+                        .retract(tangent)
+                        .unwrap()
+                        .ambient(),
+                )
+            }
+            VariableValue::Scalar(value) => VariableValue::Scalar(value + amount),
+            _ => unreachable!("test covers only Pose3 and scalar variables"),
         };
-        let mut tangent = [0.0; TANGENT_DIMENSION];
-        tangent[column] = amount;
-        perturbed[body] = VariableValue::Pose3(
-            Pose3::from_ambient(ambient)
-                .unwrap()
-                .retract(tangent)
-                .unwrap()
-                .ambient(),
-        );
         perturbed
     }
 }

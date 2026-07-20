@@ -632,6 +632,45 @@ fn continuation_request_validation_and_zero_natural_move_are_deterministic() {
 }
 
 #[test]
+fn tiny_pseudo_requests_never_complete_without_a_representable_sample() {
+    let (mut representable, ids) = slider_crank_displacement_driven_with_scale(1.0).unwrap();
+    let result = representable
+        .continue_driver(
+            AdaptiveContinuationRequest {
+                driver_id: ids.driver,
+                mode: AdaptiveContinuationMode::PseudoArclength {
+                    path_length: 1.0e-15,
+                    initial_direction: ContinuationDirection::IncreasingParameter,
+                },
+                step_policy: policy(),
+            },
+            SolverConfig::default(),
+        )
+        .unwrap();
+    assert!(result.completed(), "{result:#?}");
+    assert!(!result.samples.is_empty());
+    assert!(result.accepted_path_length > 0.0);
+
+    let (mut unrepresentable, ids) = slider_crank_displacement_driven_with_scale(1.0).unwrap();
+    let result = unrepresentable
+        .continue_driver(
+            AdaptiveContinuationRequest {
+                driver_id: ids.driver,
+                mode: AdaptiveContinuationMode::PseudoArclength {
+                    path_length: f64::MIN_POSITIVE,
+                    initial_direction: ContinuationDirection::IncreasingParameter,
+                },
+                step_policy: policy(),
+            },
+            SolverConfig::default(),
+        )
+        .unwrap();
+    assert!(result.completed(), "{result:#?}");
+    assert!(!result.samples.is_empty());
+    assert!(result.accepted_path_length > 0.0);
+}
+
+#[test]
 fn zero_move_rejects_directly_injected_opposite_branch_without_false_completion() {
     let (mut open, open_ids) = four_bar_with_scale(FourBarAssemblyMode::Open, 1.0).unwrap();
     let (crossed, crossed_ids) = four_bar_with_scale(FourBarAssemblyMode::Crossed, 1.0).unwrap();

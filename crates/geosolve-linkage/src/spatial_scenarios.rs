@@ -1,3 +1,5 @@
+use std::f64::consts::FRAC_PI_2;
+
 use geosolve_geometry::{Frame3, Point3, Pose3, Vector3};
 
 use crate::{
@@ -79,6 +81,29 @@ pub struct SpatialExampleFixture {
     pub ids: SpatialExampleIds,
 }
 
+/// Stable identities for the embedded displacement-driven slider-crank fixture.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct EmbeddedSpatialSliderCrankIds {
+    /// Ground, crank, connecting rod, then slider.
+    pub bodies: [SpatialBodyId; 4],
+    /// Crank pin, rod crank pin, rod slider pin, then slider pin.
+    pub points: [SpatialPointFeatureId; 4],
+    /// Ground guide, slider guide, ground normal, rod transverse, then rod normal.
+    pub axes: [SpatialAxisFeatureId; 5],
+    pub driver: SpatialSourceId,
+    pub crank_hinge: SpatialCoordinateId,
+    pub slider_translation: SpatialCoordinateId,
+    /// Crank winding, rod normal parity, then positive-X slider side.
+    pub monitors: [SpatialModeMonitorId; 3],
+}
+
+/// Exact embedded spatial slider-crank assembly and its stable identities.
+#[derive(Clone, Debug, PartialEq)]
+pub struct EmbeddedSpatialSliderCrankFixture {
+    pub assembly: SpatialAssembly,
+    pub ids: EmbeddedSpatialSliderCrankIds,
+}
+
 /// Builds one exact driven spatial example at a uniform model scale.
 ///
 /// Every length is multiplied by `scale`; angle targets, winding, parity, and
@@ -95,6 +120,137 @@ pub fn spatial_example(
         SpatialExampleKind::ShaftBearing => shaft_bearing_example(scale),
         SpatialExampleKind::BlockBase => block_base_example(scale),
     }
+}
+
+/// Builds the M23 displacement-driven slider-crank under one static `SE(3)` embedding.
+///
+/// The mechanism has crank radius `1.25 * scale`, rod length `3.5 * scale`,
+/// positive-X assembly mode and a slider displacement position driver. The
+/// supplied crank phase must remain on winding zero's canonical interval.
+///
+/// # Errors
+///
+/// Returns a spatial construction error for invalid scale, pose, phase or any
+/// generated feature/source geometry.
+#[allow(clippy::too_many_lines)]
+pub fn embedded_spatial_slider_crank(
+    scale: f64,
+    embedding: Pose3,
+    crank_phase: f64,
+) -> Result<EmbeddedSpatialSliderCrankFixture, SpatialAssemblyError> {
+    let crank_length = 1.25 * scale;
+    let rod_length = 3.5 * scale;
+    let crank_pin = Point3::new(
+        crank_length * crank_phase.cos(),
+        crank_length * crank_phase.sin(),
+        0.0,
+    );
+    let squared_horizontal = rod_length * rod_length - crank_pin.y * crank_pin.y;
+    if !squared_horizontal.is_finite() || squared_horizontal <= 0.0 {
+        return Err(SpatialAssemblyError::InvalidField {
+            field: "embedded_slider_crank.crank_phase",
+            message: "crank phase does not produce a regular positive-X rod branch".to_owned(),
+        });
+    }
+    let horizontal = squared_horizontal.sqrt();
+    let slider_x = crank_pin.x + horizontal;
+    let rod_angle = (-crank_pin.y).atan2(horizontal);
+    let planar_pose = |translation: Vector3<f64>, angle: f64| {
+        let half = 0.5 * angle;
+        Pose3::try_new(translation, [half.cos(), 0.0, 0.0, half.sin()])
+    };
+    let transformed = |pose: Pose3| embedding.compose(&pose);
+    let identity = Frame3::try_new(Point3::origin(), Vector3::x(), Vector3::y(), Vector3::z())?;
+    let x_axis = Frame3::try_new(Point3::origin(), Vector3::y(), Vector3::z(), Vector3::x())?;
+    let y_axis = Frame3::try_new(Point3::origin(), Vector3::z(), Vector3::x(), Vector3::y())?;
+
+    let mut assembly = SpatialAssembly::new(scale)?;
+    let ground = assembly.add_body("ground", transformed(Pose3::identity())?)?;
+    let crank = assembly.add_body(
+        "crank",
+        transformed(planar_pose(Vector3::zeros(), crank_phase)?)?,
+    )?;
+    let rod = assembly.add_body(
+        "connecting rod",
+        transformed(planar_pose(crank_pin.coords, rod_angle)?)?,
+    )?;
+    let slider = assembly.add_body(
+        "slider",
+        transformed(planar_pose(Vector3::new(slider_x, 0.0, 0.0), 0.0)?)?,
+    )?;
+
+    let ground_hinge = assembly.add_frame_feature("ground crank hinge", ground, identity)?;
+    let crank_hinge_feature = assembly.add_frame_feature("crank hinge", crank, identity)?;
+    let crank_pin_feature =
+        assembly.add_point_feature("crank pin", crank, Point3::new(crank_length, 0.0, 0.0))?;
+    let rod_crank_pin = assembly.add_point_feature("rod crank pin", rod, Point3::origin())?;
+    let rod_slider_pin =
+        assembly.add_point_feature("rod slider pin", rod, Point3::new(rod_length, 0.0, 0.0))?;
+    let slider_pin = assembly.add_point_feature("slider pin", slider, Point3::origin())?;
+    let ground_guide = assembly.add_axis_feature("ground guide", ground, x_axis)?;
+    let slider_guide = assembly.add_axis_feature("slider guide", slider, x_axis)?;
+    let ground_normal = assembly.add_axis_feature("ground normal", ground, identity)?;
+    let rod_transverse = assembly.add_axis_feature("rod transverse", rod, y_axis)?;
+    let rod_normal = assembly.add_axis_feature("rod normal", rod, identity)?;
+    let positive_x_plane = assembly.add_plane_feature("positive X datum", ground, x_axis)?;
+
+    assembly.add_physical_ground("ground fixed", ground)?;
+    let revolute = assembly.add_revolute_joint(
+        "crank revolute",
+        ground_hinge,
+        crank_hinge_feature,
+        SpatialAxisParity::Aligned,
+    )?;
+    assembly.add_ball_joint("crank-rod ball", crank_pin_feature, rod_crank_pin)?;
+    assembly.add_ball_joint("rod-slider ball", rod_slider_pin, slider_pin)?;
+    let prismatic = assembly.add_prismatic_joint(
+        "slider prismatic",
+        ground_guide,
+        slider_guide,
+        SpatialAxisParity::Aligned,
+    )?;
+    assembly.add_axis_angle_mate("rod planar roll", ground_normal, rod_transverse, FRAC_PI_2)?;
+    let crank_coordinate = assembly.add_hinge_coordinate("crank phase", revolute, 0)?;
+    let translation =
+        assembly.add_axial_translation_coordinate("slider displacement", prismatic)?;
+    let driver = assembly.add_translation_position_driver(
+        "slider displacement driver",
+        translation,
+        slider_x,
+    )?;
+    let winding_monitor =
+        assembly.add_hinge_winding_monitor("crank winding zero", crank_coordinate, 0)?;
+    let normal_monitor = assembly.add_axis_parity_monitor(
+        "rod normal retained",
+        ground_normal,
+        rod_normal,
+        SpatialAxisParity::Aligned,
+    )?;
+    let side_monitor = assembly.add_plane_side_monitor(
+        "positive X slider branch",
+        positive_x_plane,
+        slider_pin,
+        SpatialModeSign::Positive,
+    )?;
+
+    Ok(EmbeddedSpatialSliderCrankFixture {
+        assembly,
+        ids: EmbeddedSpatialSliderCrankIds {
+            bodies: [ground, crank, rod, slider],
+            points: [crank_pin_feature, rod_crank_pin, rod_slider_pin, slider_pin],
+            axes: [
+                ground_guide,
+                slider_guide,
+                ground_normal,
+                rod_transverse,
+                rod_normal,
+            ],
+            driver,
+            crank_hinge: crank_coordinate,
+            slider_translation: translation,
+            monitors: [winding_monitor, normal_monitor, side_monitor],
+        },
+    })
 }
 
 #[allow(clippy::too_many_lines)]

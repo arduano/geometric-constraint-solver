@@ -602,6 +602,7 @@ dependencies = [
  "geosolve-core",
  "geosolve-geometry",
  "nalgebra",
+ "proptest",
  "serde",
  "serde_json",
  "slotmap",

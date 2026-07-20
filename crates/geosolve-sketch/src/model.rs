@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use crate::curves::{
     AngleOrientation, ArcCircleTangencySide, CenterDirectionBranch, CircleTangencyMode,
-    LineParameterDomain, LineSide,
+    LineOffsetOrientation, LineParameterDomain, LineSide,
 };
 
 new_key_type! {
@@ -361,6 +361,13 @@ pub enum CurveMeasurementKind {
     OsculatingRadius,
 }
 
+/// Explicit correspondence between the two parent contacts and arc traversal endpoints.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FilletEndpointOrder {
+    FirstThenSecond,
+    SecondThenFirst,
+}
+
 /// Closed runtime curve reference used by geometry-generic contact constraints.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SketchCurve {
@@ -529,6 +536,14 @@ pub enum SketchConstraintKind {
         second: SketchCurveContact,
         kind: CurveContinuity,
     },
+    LineLineFillet {
+        arc: ArcId,
+        first: SketchCurveContact,
+        first_side: CurveNormalSide,
+        second: SketchCurveContact,
+        second_side: CurveNormalSide,
+        endpoint_order: FilletEndpointOrder,
+    },
 }
 
 /// One stable high-level geometric constraint.
@@ -590,6 +605,20 @@ pub enum DimensionKind {
         second: SegmentId,
         target: f64,
         orientation: AngleOrientation,
+    },
+    SupportingLineOffset {
+        source: SegmentId,
+        target_segment: SegmentId,
+        target: f64,
+        side: LineSide,
+        orientation: LineOffsetOrientation,
+    },
+    ExactTranslatedSegmentOffset {
+        source: SegmentId,
+        target_segment: SegmentId,
+        target: f64,
+        side: LineSide,
+        orientation: LineOffsetOrientation,
     },
 }
 
@@ -900,7 +929,15 @@ impl Sketch {
                     DimensionKind::SegmentLength { segment: id, .. } if id == segment
                 )
         });
-        has_axis_constraint && has_driving_length
+        let has_sided_fillet = self.constraints.iter().any(|(_, constraint)| {
+            matches!(
+                constraint.kind,
+                SketchConstraintKind::LineLineFillet { first, second, .. }
+                    if first.curve.references_segment(segment)
+                        || second.curve.references_segment(segment)
+            )
+        });
+        has_sided_fillet || (has_axis_constraint && has_driving_length)
     }
 
     /// Explicitly selects the segment branch represented by its current direction.
@@ -1160,6 +1197,12 @@ impl Sketch {
             }
             | DimensionKind::OrientedAngle {
                 target: current, ..
+            }
+            | DimensionKind::SupportingLineOffset {
+                target: current, ..
+            }
+            | DimensionKind::ExactTranslatedSegmentOffset {
+                target: current, ..
             } => *current = target,
         }
         Ok(())
@@ -1253,6 +1296,32 @@ impl Sketch {
                 target,
                 orientation,
             } => self.oriented_angle_value(first, second, orientation, target)?,
+            DimensionKind::SupportingLineOffset {
+                source,
+                target_segment,
+                side,
+                orientation,
+                ..
+            }
+            | DimensionKind::ExactTranslatedSegmentOffset {
+                source,
+                target_segment,
+                side,
+                orientation,
+                ..
+            } => {
+                let (source_start, source_end) = self.segment_endpoints(source)?;
+                let (target_start, target_end) = self.segment_endpoints(target_segment)?;
+                let (target_start, _) = orientation.target_endpoints(target_start, target_end);
+                let source_start = self.point_position(source_start)?;
+                let source_direction = self.point_position(source_end)? - source_start;
+                let source_length = source_direction.norm();
+                let target_start = self.point_position(target_start)?;
+                side.sign()
+                    * (source_direction.x * (target_start.y - source_start.y)
+                        - source_direction.y * (target_start.x - source_start.x))
+                    / source_length
+            }
         };
         validate_finite(value, "reference dimension value")?;
         Ok(value)
@@ -1428,6 +1497,16 @@ fn constraint_references_point(
             first.curve.references_point(sketch, point)
                 || second.curve.references_point(sketch, point)
         }
+        SketchConstraintKind::LineLineFillet {
+            arc, first, second, ..
+        } => {
+            first.curve.references_point(sketch, point)
+                || second.curve.references_point(sketch, point)
+                || sketch
+                    .arcs
+                    .get(arc)
+                    .is_some_and(|value| value.center() == point)
+        }
     }
 }
 
@@ -1447,6 +1526,19 @@ fn dimension_references_point(kind: DimensionKind, point: PointId, sketch: &Sket
             .get(arc)
             .is_some_and(|arc| arc.center() == point),
         DimensionKind::OrientedAngle { first, second, .. } => [first, second]
+            .into_iter()
+            .filter_map(|segment| sketch.segment_endpoints(segment).ok())
+            .any(|(start, end)| start == point || end == point),
+        DimensionKind::SupportingLineOffset {
+            source,
+            target_segment,
+            ..
+        }
+        | DimensionKind::ExactTranslatedSegmentOffset {
+            source,
+            target_segment,
+            ..
+        } => [source, target_segment]
             .into_iter()
             .filter_map(|segment| sketch.segment_endpoints(segment).ok())
             .any(|(start, end)| start == point || end == point),
@@ -1477,7 +1569,8 @@ fn constraint_references_segment(kind: SketchConstraintKind, segment: SegmentId)
         SketchConstraintKind::CurveCurveContact { first, second }
         | SketchConstraintKind::CurveCurveTangency { first, second, .. }
         | SketchConstraintKind::EqualCurvature { first, second, .. }
-        | SketchConstraintKind::EndpointContinuity { first, second, .. } => {
+        | SketchConstraintKind::EndpointContinuity { first, second, .. }
+        | SketchConstraintKind::LineLineFillet { first, second, .. } => {
             first.curve.references_segment(segment) || second.curve.references_segment(segment)
         }
         _ => false,
@@ -1526,6 +1619,16 @@ fn dimension_references_segment(kind: DimensionKind, segment: SegmentId) -> bool
     match kind {
         DimensionKind::SegmentLength { segment: id, .. } => id == segment,
         DimensionKind::OrientedAngle { first, second, .. } => first == segment || second == segment,
+        DimensionKind::SupportingLineOffset {
+            source,
+            target_segment,
+            ..
+        }
+        | DimensionKind::ExactTranslatedSegmentOffset {
+            source,
+            target_segment,
+            ..
+        } => source == segment || target_segment == segment,
         _ => false,
     }
 }

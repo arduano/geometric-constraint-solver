@@ -11,18 +11,18 @@ The products share numerical machinery, not a domain object model. `geosolve-ske
 
 M10-M14 are the completed 2D Sketch Playground Alpha cut toward the first product. They establish reusable sketch editing APIs and exercise them through a disposable browser consumer. Alpha completion is not completion of the production 2D CAD deliverable.
 
-This is not a solid modeller, B-rep kernel, mesher, renderer, collision engine, statics solver, dynamics engine or global polynomial-root enumerator. Mass, inertia, force, reaction, friction, impact and time integration are outside M8-M24.
+This is not a solid modeller, B-rep kernel, mesher, renderer, collision engine, statics solver, dynamics engine or global polynomial-root enumerator. Mass, inertia, force, reaction, friction, impact and time integration are outside M8-M29.
 
 ## 2. Status of this document
 
 M0-M7 are the frozen domain baseline. M8 accepted the target contracts, M9 implemented component-local linearization, local AD, status and numerical-rank contracts, M10 implemented persistent sessions, bounds and the first sketch consumer, M11 implemented the persistent sketch document, commands/history and JSON/remapping layer, M12 implemented immutable curve jets, editable Beziers and generic curve contact/tangency plumbing, M13 implemented the disposable browser playground over those public APIs, M14 hardened its exact scenarios, failure recovery and performance gates, M15 implemented shared planar/spatial manifold state plus accepted hard sensitivity, M16 implemented sparse hard steps, structural matching, coupled hierarchy and robust planar continuation, M17 implemented persistent gauge-separated planar linkage sessions plus shared velocity linearization, M18 established the independently validated spatial slice, M19 added conics, M20 completed the common spatial joint/mate and position-driver catalog, M21 added locally supported non-rational B-splines, and M22 completed gauge-separated NURBS plus advanced CAD differential constraints. Statements are therefore marked as:
 
 - **Baseline:** implemented behavior through M22, with M1-M7 domain behavior protected as the frozen regression baseline.
-- **Target:** behavior required by the named M10-M24 milestone.
+- **Target:** behavior required by the named M10-M29 milestone.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
-`PLAN.md` owns current execution numbering. Milestone labels in the preserved M8 completion record and in ADRs accepted before the playground rebaseline describe the allocation at acceptance time; their architectural decisions remain accepted, but current ownership is M10-M24 as listed in section 15.
+`PLAN.md` owns current execution numbering. Milestone labels in the preserved M8 completion record and in ADRs accepted before the playground rebaseline describe the allocation at acceptance time; their architectural decisions remain accepted, but current ownership is M10-M29 as listed in section 15.
 
 ## 3. Crate responsibilities
 
@@ -67,9 +67,15 @@ Owns the 2D design graph:
 - compilation into core residuals, validators and commit mappings;
 - source-level audit and persistence mappings.
 
-The frozen baseline includes points, segments, circles, oriented arcs and the M5/M7 constraint corpus. M10 adds the session consumer; M11 now migrates baseline entities and editing into the persistent generic design graph with opaque document IDs, strict JSON, deterministic lowering, accepted-state projection and accepted-only command history; M12 adds editable quadratic/cubic Bezier curves and generic point/contact/tangency plumbing. The M10-M14 alpha geometry surface is point, line/polyline, rectangle command macro, circle, circular arc and quadratic/cubic Bezier. M19 adds conics, M21 adds clamped and periodic non-rational B-splines, and M22 adds gauge-separated NURBS with stable semantic spans, explicit knot sides/winding, local-support incidence and transactional homogeneous refinement. Its reusable constraint surface includes the baseline corpus plus generic contact/tangency, tangent and sided-normal direction, signed or branch-explicit magnitude curvature, and ordered endpoint G0/G1/G2/rate-explicit parametric C2 continuity, with driving/reference dimensions and explicit discrete branch state.
+The frozen baseline includes points, segments, circles, oriented arcs and the M5/M7 constraint corpus. M10 adds the session consumer; M11 now migrates baseline entities and editing into the persistent generic design graph with opaque document IDs, strict JSON, deterministic lowering, accepted-state projection and accepted-only command history; M12 adds editable quadratic/cubic Bezier curves and generic point/contact/tangency plumbing. The M10-M14 alpha geometry surface is point, line/polyline, rectangle command macro, circle, circular arc and quadratic/cubic Bezier. M19 adds conics, M21 adds clamped and periodic non-rational B-splines, and M22 adds gauge-separated NURBS with stable semantic spans, explicit knot sides/winding, local-support incidence and transactional homogeneous refinement. M25 adds separately named supporting-line and exact translated-segment offsets, ordinary-constraint point-defined mirrors and coordinated mirrored B-spline refinement under ADR 0020. Its reusable constraint surface includes the baseline corpus plus generic contact/tangency, tangent and sided-normal direction, signed or branch-explicit magnitude curvature, and ordered endpoint G0/G1/G2/rate-explicit parametric C2 continuity, with driving/reference dimensions and explicit discrete branch state.
 
-M22 completes the production 2D CAD curve, constraint and persistence surface. A rectangle remains command expansion into ordinary geometry and constraints, not a new core residual primitive.
+M22 completes the production 2D CAD curve and generic differential-constraint surface. M25 extends its construction and persistence layer without introducing a mirror residual: rectangles and mirrors remain command expansion into ordinary geometry and constraints.
+
+M26 adds a separate read-only visual line-profile layer under ADR 0021. It reads
+accepted line/polyline geometry and explicit coincidence topology, creates only
+ephemeral crossing fragments and publishes bounded contour provenance with typed
+completeness. Its output is not a sketch entity, region, solver source or
+persistence/history record.
 
 ### `geosolve-linkage`
 
@@ -80,7 +86,7 @@ Owns planar and spatial kinematic domain models:
 - branch-preserving continuation and velocity-level queries;
 - domain validation, source mapping and persistence.
 
-The frozen baseline is planar `Pose2` linkage kinematics. M17 migrated it to persistent topology/state/session, gauge-separated mobility and shared accepted-linearization velocity; M18 established the spatial slice and M20 added stable-clock axis/plane features, common joints/mates, position coordinates/drivers, explicit mode monitors and atomic assembly-mode transactions under ADR 0013. M23 completes spatial continuation, velocity and persistence. No linkage API implies physics.
+The frozen baseline is planar `Pose2` linkage kinematics. M17 migrated it to persistent topology/state/session, gauge-separated mobility and shared accepted-linearization velocity; M18 established the spatial slice and M20 added stable-clock axis/plane features, common joints/mates, position coordinates/drivers, explicit mode monitors and atomic position transactions under ADR 0013. M23 completes spatial kinematics with independently published natural/pseudo-arclength continuation, typed endpoint branch events, accepted-state hysteresis and atomic explicit mode changes under ADR 0016; multi-driver spatial velocity, concrete feature fields and optional accepted-rank physical motion bases under ADR 0017; and canonical versioned persistence with deterministic runtime remapping under ADR 0018. Embedded-planar, closed-chain, mixed-scale, generated differential/property and connected sparse/release-crossover gates pass. No linkage API implies physics.
 
 ### `geosolve-demo-web`
 
@@ -284,13 +290,13 @@ tangent alignment:    cross(unit(C1'(t1)), unit(C2'(t2))) = 0
 
 Design controls, weights and contact parameters that are active variables must all appear in residual incidence and derivatives. Parameter domains, spans, winding, contact neighborhoods and tangent orientation remain outside AD. Bounded endpoints use M10 bounds/active sets. Cusps, zero-speed jets, invalid knots, rational poles and ambiguous neighborhoods are explicit evaluation/domain outcomes and cannot converge through normalization.
 
-M11 migrates baseline entities, commands and persistence topology. M12 proves generic editable-curve differentiation with Bezier curves. M19 adds conics, M21 B-splines and M22 NURBS plus curvature/G2 and separately named parametric C2 continuity.
+M11 migrates baseline entities, commands and persistence topology. M12 proves generic editable-curve differentiation with Bezier curves. M19 adds conics, M21 B-splines and M22 NURBS plus curvature/G2 and separately named parametric C2 continuity. M27 composes ordinary line jets into an associative line-line fillet with explicit side/order/sweep state and derives its accepted ordinary-arc endpoints from solved strict-interior contacts. The parents remain untrimmed and executable incidence on that output arc is rejected until M28 can differentiate contact-derived trim state through the common curve-jet path.
 
 ## 12. Kinematic architecture
 
 Rigid bodies own local features; joints and mates relate features rather than reconstructing rigidity with sketch distance webs. Branch/assembly state is persistent domain state. Physical ground and numerical gauge are distinct under ADR 0009. Position and velocity queries use the same accepted-state reduced hard linearization and rank policy.
 
-M17 migrated planar linkage to shared persistent sessions, physical-ground/numerical-gauge certification and accepted-linearization velocity. M18 added a spatial vertical slice. M20 completed common spatial joints/mates, position drivers and assembly-mode transactions under ADR 0013. M23 completes continuation, multi-driver velocity queries and planar/spatial consistency. These milestones do not add forces, reactions or dynamics.
+M17 migrated planar linkage to shared persistent sessions, physical-ground/numerical-gauge certification and accepted-linearization velocity. M18 added a spatial vertical slice. M20 completed common spatial joints/mates, position drivers and assembly-mode transactions under ADR 0013. M23 completes natural and explicit pseudo-arclength continuation, typed branch-boundary hysteresis, multi-driver velocity, planar/spatial consistency and canonical spatial persistence under ADRs 0016-0018. Private gauges and augmented rows remain ephemeral, and only separately solved ordinary physical sessions are published. These milestones do not add forces, reactions or dynamics.
 
 ## 13. Equation audit and persistence
 
@@ -304,7 +310,12 @@ Every executable residual row has structured audit metadata generated with the e
 - elimination, active-bound, redundancy, conflict and singularity annotations;
 - diagnostic completeness links where candidate analysis is bounded.
 
-Persistence stores domain topology, continuous accepted state and every discrete branch/span/winding/gauge/assembly choice in a versioned envelope. Runtime slot-map keys are remapped deterministically and are never serialized as persistent identity. M11 establishes the alpha sketch document, M17 establishes the first planar linkage document and gauge schema, M22 and M23 complete each product schema, and M24 finalizes migration and public compatibility policy.
+Persistence stores domain topology, continuous accepted state and every discrete branch/span/winding/gauge/assembly choice in a versioned envelope. Runtime slot-map keys are remapped deterministically and are never serialized as persistent identity. M11 establishes the alpha sketch document, M17 establishes the first planar linkage document and gauge schema, M22 and M23 complete each product schema, M24 freezes the first sketch wire DTO and migration dispatch, M25 migrates strict sketch v1 input to canonical v2 for associative construction definitions, M27 freezes v1/v2 constraint DTOs and advances canonical sketch output to v3 for associative fillets, and M29 finalizes public compatibility policy.
+
+Application metadata is not solver or sketch equation state. Under ADR 0019,
+embedders join typed `SketchAttributes<T>` through persistent document-element and
+source-owner identities. Sidecars own their codec, migration and history policy;
+they do not enter canonical sketch JSON, runtime lowering or audit equations.
 
 ## 14. Linear algebra policy
 
@@ -327,4 +338,9 @@ Persistence stores domain topology, continuous accepted state and every discrete
 - M16: completed sparse structure, matching, hierarchy and robust planar continuation.
 - M17-M22: completed persistent planar architecture, the first spatial slice, conics, the common spatial joint/mate catalog, B-splines and NURBS/advanced CAD continuity; M23 completes spatial kinematic product behavior.
 - M22: completed NURBS and the production 2D CAD sketch product.
-- M24: stabilize public APIs, persistence, documentation and release gates for both deliverables.
+- M24: completed persistent element/source identity, typed application attributes and explicit sketch version dispatch.
+- M25: completed associative line offsets, point-defined mirrors, directed-angle workflows and sketch JSON v2 migration.
+- M26: completed visual-only line-profile detection with explicit topology, ambiguity and budgets.
+- M27: completed independently validated associative line-line fillets with derived ordinary-arc endpoints and explicit ownership/branch state.
+- M28: generalize fillet incidence across curve families and add explicit parent trim views.
+- M29: stabilize public APIs, persistence, documentation and release gates for both deliverables.

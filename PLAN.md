@@ -722,19 +722,255 @@ gates pass.
 
 Goal: complete Deliverable 2 without adding physics.
 
-- [ ] Generalize adaptive and pseudo-arclength continuation to spatial assemblies.
-- [ ] Add branch-boundary events, hysteresis and explicit mode-change APIs.
-- [ ] Add multiple-driver velocity-level kinematic queries.
-- [ ] Distinguish determinate, underdetermined and inconsistent velocity requests.
-- [ ] Return body and feature velocities plus optional motion/nullspace bases.
-- [ ] Add planar mechanisms embedded in 3D and compare them against planar oracles.
-- [ ] Add spatial closed-chain, mixed-scale and large sparse assembly scenarios.
-- [ ] Complete persistence for bodies, features, joints, mates, gauges, drivers and assembly modes.
-- [ ] Add linkage fuzz/property, differential-oracle and performance corpora.
+- [x] Generalize adaptive and pseudo-arclength continuation to spatial assemblies.
+- [x] Add branch-boundary events, hysteresis and explicit mode-change APIs.
+- [x] Add multiple-driver velocity-level kinematic queries.
+- [x] Distinguish determinate, underdetermined and inconsistent velocity requests.
+- [x] Return body and feature velocities plus optional motion/nullspace bases.
+- [x] Add planar mechanisms embedded in 3D and compare them against planar oracles.
+- [x] Add spatial closed-chain, mixed-scale and large sparse assembly scenarios.
+- [x] Complete persistence for bodies, features, joints, mates, gauges, drivers and assembly modes.
+- [x] Add linkage fuzz/property, differential-oracle and performance corpora.
+
+2026-07-19 spatial continuation slice: `SpatialAssemblySession` now provides
+revision-checked adaptive natural and explicit pseudo-arclength continuation for
+one selected hinge or translation position driver under ADR 0016. Active scalar
+drivers reuse the executable spatial equations and pass central differences;
+private `Pose3` gauges and pseudo control rows remain ephemeral, while every
+published sample is a separately solved and independently validated ordinary
+physical session. Monotone shaft/bearing motion, grounded and floating gauges,
+the embedded spatial slider-crank fold, reverse orientation, exact-fold rank,
+zero/tiny paths, nonlocal rollback, common-left `SE(3)` and forced dense/sparse
+parity pass at the required scales. Typed branch-boundary events, hysteresis and
+explicit mode changes remained the next ordered item and were not claimed by
+that first slice.
+
+2026-07-19 spatial branch-event slice: accepted spatial solves now publish typed
+finite clearances for source parity, prismatic clock, fixed/frame-offset
+half-turn roots, hinge driver/cut roots and explicit axis/side/volume monitors.
+Continuation uses normalized `2e-3` enter and `4e-3` leave thresholds, reports
+predictor versus corrected endpoints, retains hysteresis latches only through
+accepted ordinary solves and turns attempted canonical hinge-cut crossings into
+typed stops. Revision-checked mode transactions atomically change parity, side,
+orientation or hinge winding/cut state, require the changed branch to leave the
+band and roll back every accepted view on failure. Endpoint observation remains
+explicitly narrower than interval-global event tracing. Multi-driver spatial
+velocity is the next ordered item.
+
+2026-07-19 spatial velocity slice: `SpatialAssemblySession::velocity` and
+`velocity_with_options` accept revision-checked source-keyed hinge/translation
+rates, treat unlisted drivers as zero-rate rows and solve each accepted physical
+component with its existing dense-authoritative rank threshold. Executable
+parameterized driver columns preserve the configuration-dependent hinge
+derivative and translation scaling. Outcomes distinguish determinate modulo
+certified world gauge, underdetermined internal motion and inconsistent affine
+rates without publishing a least-squares body field. Gauge-selected body-origin
+world velocities, concrete point/frame/axis/plane derivatives and coordinate
+rates pass independent differentiated source validation and central position
+oracles. Optional deterministic normalized physical nullspace bases reuse the
+accepted rank, retain floating world actions and publish raw body/feature fields
+without private-gauge removal under ADR 0017. Embedded-planar oracle parity is
+the next ordered item.
+
+2026-07-19 embedded-planar parity slice: one reusable displacement-driven
+spatial slider-crank fixture now shares the exact L3 dimensions, positive-X mode,
+driver and fold geometry of the planar oracle under an arbitrary static `SE(3)`
+embedding. At scales `1e-6`, `1` and `1e6`, natural continuation endpoints agree
+after lifting every body pose and representative closure point. Spatial rank 18
+and planar rank 9 both have zero physical nullity/internal mobility at the driven
+regular endpoint. Compatibility and persistent planar velocity agree with
+spatial body-origin, angular, point, hinge and translation rates under the
+embedding basis, while every domain independently retains its `1e-9` validation.
+Spatial closed-chain, mixed-scale and large sparse scenarios are next.
+
+2026-07-19 spatial scenario slice: a non-planar four-universal closed ring runs at
+all required scales with explicit positive signed-volume chirality, rank `16`,
+right nullity/internal mobility `2` and rollback on a mirrored mode edit. A
+three-body planar-stage/tool stack combines `1e6s` and `2e-6s` coordinates plus a
+micro frame offset, remains finite/full-rank with retained winding/side modes and
+passes at `s=1e-6,1,1e6`. A 43-moving-body fixed-frame chain has 258 active
+coordinates/rows, structural nnz `3060`, accepted rank `258`, zero mobility and a
+real `SparseQr` step under `SparsePreferred`; dense SVD remains authoritative for
+rank. The exact connected-chain `Auto` density boundary is deferred to the
+explicit release performance corpus rather than adding a long dense-SVD debug
+test.
+
+2026-07-19 spatial persistence slice: ADR 0018 adds a version-1
+`SpatialAssemblyDocument` with canonical strict JSON, fixed persistent IDs,
+separate topology/accepted state, source-order preservation and deterministic
+fresh runtime remapping. Every body and concrete feature/source/coordinate/mode
+family, accepted pose, driver target, winding, gauge reference and boundary
+hysteresis latch round-trips. `SpatialAssemblyDocumentSession` captures accepted
+sessions, independently solves imports and atomically retains all prior views on
+failed replacement. Six persistence tests cover the full catalog, required scales,
+explicit gauges, hysteresis, malformed fields/references/state and rollback.
+
+2026-07-19 final linkage corpus slice: 32-case generated scale/common-left `SE(3)`
+and persistence properties plus 32 single-byte document mutations retain finite
+independently validated success only. A 36-case analytic slider-crank oracle checks
+body position, body/feature velocity and coordinate rates over six phases, two
+embeddings and all required scales. The normal performance corpus fixes 43/255/256
+moving-body shapes; the explicit release gate proves the true 256-moving-body,
+1536-active-column `Auto` density boundary selects `SparseQr`, preserves dense rank
+1536 and validates residuals within its 180-second budget. Locked format/diff,
+warnings-denied workspace Clippy, full workspace tests, WASM, rustdoc, core
+benchmark compilation and release Trunk gates pass.
 
 Gate: planar and spatial assemblies preserve explicit modes, report truthful mobility, validate every accepted configuration and velocity equation, and retain the last accepted state on all failures.
 
-## M24: public API and release hardening
+## M24: sketch extension and embedding foundation
+
+Goal: establish additive identity, metadata and serialization seams before adding
+new persisted advanced-sketch definitions.
+
+- [x] Freeze sketch JSON version 1 behind a private wire DTO and explicit version-dispatch boundary without changing canonical output.
+- [x] Add one persistent document-element identity enum covering the document, geometry, constraints, dimensions and audit sources.
+- [x] Add persistent source-owner/source lookup APIs so embedders do not join application state through runtime/core IDs.
+- [x] Add a generic `SketchAttributes<T>` sidecar bound to one document identity, with live/orphan inspection and explicit cleanup.
+- [x] Preserve dormant sidecar values across delete/undo/redo while rejecting foreign-document and wrong-kind targets.
+- [x] Keep application attributes outside sketch lowering, solver state, equation audit and canonical sketch JSON.
+- [x] Document application-owned attribute history/serialization and provide a native typed-attribute example.
+
+Gate: legacy version-1 JSON remains byte-canonical, migration dispatch is strict,
+typed sidecars require no generic solver/document/session propagation, metadata
+cannot dirty or change accepted geometry/audit, and native plus locked WASM public
+consumers compile.
+
+2026-07-20 completion: ADR 0019 separates the public in-memory sketch graph from
+its private frozen version-1 wire DTO and routes imports through explicit strict
+version dispatch without changing canonical bytes. `DocumentElementId`, raw-ID
+resolution and source-order `DocumentSourceRef`/`DocumentSourceOwner` views expose
+stable semantic joins without runtime/core IDs. Generic `SketchAttributes<T>` is
+bound to one `DocumentId`, rejects foreign/missing/wrong-kind targets, retains
+dormant values across real delete/undo/redo and requires explicit orphan cleanup;
+it has no serde, lowering, solver or audit coupling. Five M24 tests and the native
+`typed_attributes` example cover every element/source kind, history, exact v1 JSON
+and solver isolation. Locked format/diff, warnings-denied workspace Clippy, full
+workspace tests, WASM, rustdoc, core benchmark compilation and release Trunk gates
+pass.
+
+## M25: associative linear constructions
+
+Goal: add line offsets and point-defined entity mirroring by composing ordinary
+geometry, dimensions and explicit constraints.
+
+- [x] Add signed line-offset driving/reference dimensions with explicit side and endpoint orientation.
+- [x] Keep supporting-line offset and exact translated-segment offset as separately named modes with truthful remaining DOF.
+- [x] Add one accepted entity-mirror construction for lines, polylines, quadratic/cubic Beziers and non-rational B-splines over existing point symmetry equations.
+- [x] Make topology-changing mirrored spline refinement an explicit coordinated transaction rather than silently losing association.
+- [x] Complete public command/example/demo coverage for the existing oriented line-angle dimension without adding a duplicate equation.
+- [x] Add sketch document version 2 and deterministic version-1 migration for the new persisted definitions.
+- [x] Add audit, derivative, branch-cut, transformation, scale, persistence, history and rollback corpora.
+
+Gate: both offset modes report correct rank/DOF and independently validated rows;
+mirrored control geometry remains associative under accepted point edits; oriented
+angles preserve explicit direction; and all three workflows round-trip and roll
+back atomically at scales `1e-6`, `1` and `1e6`.
+
+2026-07-20 completion: ADR 0020 adds distinct `SupportingLineOffset` and
+`ExactTranslatedSegmentOffset` runtime/document dimensions with positive targets,
+explicit left/right side and same/reversed endpoint orientation. The supporting
+form contributes one normalized parallel row plus one signed-distance row and
+retains target axial-slide/length DOF; the exact form contributes four translated
+endpoint rows and preserves correspondence/length. Local-AD Jacobians, structured
+audit and independent candidate row/branch validation cover both. Point-defined
+line/polyline/quadratic/cubic/B-spline mirrors expand to reflected points, ordinary
+same-family geometry and existing `SymmetricAboutLine` constraints; branch vectors
+are reflected explicitly. Public document commands make mirror creation and
+coordinated paired B-spline knot insertion atomic and undoable. Canonical sketch
+JSON is v2, while a private dimension-specific v1 DTO migrates accepted legacy
+definitions deterministically and rejects v2 offset syntax labeled as v1. The
+existing oriented-angle equation is exercised through its public document command,
+playground tool and `associative_linear` native example, including branch-cut and
+wound-target history. Nine M25 tests cover derivative, audit, rank/DOF, invalid
+branch/input, all required scales, rigid transformations, v1/v2 persistence,
+associative edits, topology refinement, history and rollback. A generated M23
+property seed also exposed and now guards bitwise-idempotent accepted `Pose3`
+quaternion canonicalization. `cargo fmt --all -- --check`, `git diff --check`,
+warnings-denied locked workspace Clippy, full locked workspace tests, locked WASM,
+warnings-denied rustdoc, core benchmark compilation, the native example and release
+Trunk through `nix-shell ../../shell.nix` pass. Mirror construction intentionally
+excludes rational/conic families; generic visual profile analysis starts in M26.
+
+## M26: visual line-profile detection
+
+Goal: expose reusable read-only bounded-face analysis without creating usable CAD
+regions or implying solid/B-rep semantics.
+
+- [x] Analyze accepted line and polyline spans through public sketch APIs only.
+- [x] Weld shared point identities and active coincidence constraints without undocumented proximity snapping.
+- [x] Split proper crossings and T-junctions ephemerally, then extract deterministic bounded faces through a half-edge walk.
+- [x] Reject collinear overlaps and numerically ambiguous affected components instead of guessing topology.
+- [x] Publish source-span provenance, ordered contours, orientation, visual area and explicit `Complete`/`Truncated`/`Skipped` status.
+- [x] Enforce deterministic candidate/fragment budgets and never publish partial analysis as complete.
+- [x] Render pointer-transparent visual-only overlays in the WASM demo without IDs, selection, persistence, history or autosave state.
+- [x] Add exact loops, open chains, diagonals, crossings, T-junctions, bow-ties, nesting, ambiguity, transformation, scale and budget tests.
+
+Gate: accepted line arrangements produce deterministic finite visual faces, all
+unsupported/ambiguous cases are typed, canonical documents are unchanged by
+analysis, and no detected boundary becomes a sketch entity or solver equation.
+
+Completion record (2026-07-20): ADR 0021 adds read-only line/polyline arrangement
+analysis with explicit identity/coincidence topology, ephemeral crossing and
+T-junction splits, iterative bridge/half-edge face extraction, nesting, source
+interval provenance and typed completeness. Collinear overlap, uncertainty and
+unsolved inconsistent coincidence classes fail closed; overflow-safe candidate,
+fragment, containment and face budgets bound publication. Eleven M26 scenarios,
+three internal depth/count regressions and the pointer-through overlay browser
+check pass. Format/diff, warnings-denied locked workspace Clippy, full locked
+workspace tests, locked WASM, warnings-denied rustdoc, all benchmark compilation,
+release Trunk and desktop/mobile Chromium E2E pass.
+
+## M27: associative line fillet foundation
+
+Goal: establish one truthful line-line fillet vertical slice before broadening the
+generic curve matrix.
+
+- [x] Accept an ADR for fillet ownership, radius, parent contacts, normal sides, endpoint order, sweep and later trimming semantics.
+- [x] Add a persistent line-line fillet whose center/contact equations reuse ordinary line jets and explicit side state.
+- [x] Derive accepted arc endpoints from solved parent contacts rather than retaining stale fixed trim angles.
+- [x] Support driving/reference radius and explicit clockwise/counterclockwise sweep.
+- [x] Keep parent lines untrimmed in this foundation milestone and state that limitation in public APIs.
+- [x] Independently validate center-normal, contact, tangent, radius, side and sweep data before publication.
+- [x] Add finite-difference, recovery, convex/concave, invalid-domain, transform, scale, persistence and rollback tests.
+
+Gate: regular line-line fillets remain associative and independently valid through
+accepted edits while parallel, collinear, escaped, ambiguous, zero-radius and
+non-finite candidates never publish success or mutate retained state.
+
+Completion record (2026-07-20): ADR 0022 defines one persistent association over
+an ordinary output arc, two strict-interior line contacts, explicit normal sides,
+endpoint order, sweep and driving/reference radius. Four common local-AD line-jet
+rows solve the center and contacts; accepted endpoint angles are derived before
+independent center-normal, contact, tangent, radius, side, order and sweep
+validation. Sketch JSON v3 persists the construction behind frozen v1/v2 DTOs.
+Seven M27 scenarios plus a private sweep-corruption regression cover Jacobians,
+audit, every side/order/sweep combination at all required scales, similarity
+transforms, DOF, associative parent edits, persistence, history, suppression,
+explode/ownership behavior, rollback and invalid geometry. Format/diff,
+warnings-denied locked workspace Clippy, full locked workspace tests, locked WASM,
+warnings-denied rustdoc, all benchmark compilation, release Trunk and
+desktop/mobile Chromium E2E pass. Parent trim views and truthful executable
+incidence on associated output arcs remain M28 work.
+
+## M28: generic fillets and parent trimming
+
+Goal: generalize associative fillets over the existing immutable curve-jet seam
+and add explicit visible trim topology.
+
+- [ ] Add persistent trim views over underlying curve support instead of destructively approximating control geometry.
+- [ ] Make rendering, hit testing, contact validation, deletion, history and persistence respect visible trim intervals.
+- [ ] Generalize fillet incidence to regular line, circle/arc, ellipse/conic, Bezier, B-spline and NURBS spans without pair-specific residual equations.
+- [ ] Update both parent trim endpoints atomically from independently accepted fillet contacts.
+- [ ] Preserve explicit span, side, winding, endpoint-order and sweep state through edits and migrations.
+- [ ] Reject zero speed, cusps, poles, escaped spans, ambiguous roots and offset singularities such as `1 +/- r*kappa = 0`.
+- [ ] Add full family-pair derivative, transformation, scale, trimming, persistence, malformed-input and rollback corpora.
+
+Gate: every supported regular curve family produces finite branch-explicit fillets
+and trim views through common residual plumbing, no singular/ambiguous candidate
+becomes success-like, and the complete Deliverable 1 corpus remains unchanged.
+
+## M29: public API and release hardening
 
 Goal: make both deliverables ready for a stable library release.
 
@@ -747,11 +983,13 @@ Goal: make both deliverables ready for a stable library release.
 - [ ] Run malformed-document and degenerate-geometry fuzzing without panic or false success.
 - [ ] Keep the disposable WASM playground compiling as a non-authoritative consumer of public APIs.
 
-Gate: all acceptance suites, serialization round trips/migrations, fuzz corpora, documentation tests, performance baselines, native checks and locked WASM smoke builds pass.
+Gate: all acceptance suites, serialization round trips/migrations, fuzz corpora,
+documentation tests, performance baselines, native checks and locked WASM smoke
+builds pass.
 
 ## Explicit non-goals
 
-The following are not part of M8-M24:
+The following are not part of M8-M29:
 
 - solid modeling, B-rep booleans, meshing or a production rendering system;
 - global enumeration of every geometric root;

@@ -9,7 +9,8 @@ use crate::document::{
     DocumentConstraintDefinition, DocumentConstraintId, DocumentCoordinateAxis,
     DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation,
     DocumentCurveNormalSide, DocumentDimension, DocumentDimensionDefinition, DocumentDimensionId,
-    DocumentDimensionMode, DocumentError, DocumentLineSide, DocumentSourceId, FeatureEndpoint,
+    DocumentDimensionMode, DocumentError, DocumentFilletEndpointOrder,
+    DocumentLineOffsetOrientation, DocumentLineSide, DocumentSourceId, FeatureEndpoint,
     PersistentId, SketchDocument, TangentOrientation, document_arc_signed_sweep,
     document_hyperbola_branch,
 };
@@ -18,9 +19,9 @@ use crate::{
     CircleContainment, CircleId, CircleTangencyMode, ConicId, ConicKind, ContactState,
     CoordinateAxis, CurveContactNeighborhood, CurveContinuity, CurveCurvatureRelation,
     CurveDirectionRelation, CurveNormalSide, CurveTangentOrientation, DimensionMode,
-    LineParameterDomain, LineSide, NurbsId, PointId, SegmentBranch, SegmentEndpoint, SegmentId,
-    Sketch, SketchConstraintId, SketchConstraintKind, SketchCurve, SketchCurveContact,
-    SketchDimensionId,
+    FilletEndpointOrder, LineOffsetOrientation, LineParameterDomain, LineSide, NurbsId, PointId,
+    SegmentBranch, SegmentEndpoint, SegmentId, Sketch, SketchConstraintId, SketchConstraintKind,
+    SketchCurve, SketchCurveContact, SketchDimensionId,
 };
 
 /// Runtime entities generated for one persistent curve.
@@ -364,14 +365,29 @@ impl SketchDocument {
                     let persistent = self
                         .curve(mapping.persistent)
                         .ok_or_else(|| unknown_runtime("curve", mapping.persistent.0))?;
-                    let CurveDefinition::CircularArc { radius, .. } = persistent.definition else {
+                    let CurveDefinition::CircularArc {
+                        radius,
+                        start_angle,
+                        end_angle,
+                        ..
+                    } = persistent.definition
+                    else {
                         return invalid_runtime("curve mapping kind changed");
                     };
                     let value = sketch
                         .arc(arc)
                         .ok_or_else(|| unknown_runtime("runtime arc", mapping.persistent.0))?
-                        .radius();
-                    (radius, value)
+                        .clone();
+                    for (scalar, accepted) in [
+                        (radius, value.radius()),
+                        (start_angle, value.start_angle()),
+                        (end_angle, value.end_angle()),
+                    ] {
+                        self.scalar_mut(scalar)
+                            .ok_or_else(|| unknown_runtime("scalar", scalar.0))?
+                            .value = accepted;
+                    }
+                    continue;
                 }
                 RuntimeCurve::Line(_)
                 | RuntimeCurve::Polyline(_)
@@ -403,12 +419,14 @@ impl SketchDocument {
                 (
                     DocumentContactRole::FirstCurveParameter,
                     SketchConstraintKind::EqualCurvature { first, .. }
-                    | SketchConstraintKind::EndpointContinuity { first, .. },
+                    | SketchConstraintKind::EndpointContinuity { first, .. }
+                    | SketchConstraintKind::LineLineFillet { first, .. },
                 ) => Some(first.parameter),
                 (
                     DocumentContactRole::SecondCurveParameter,
                     SketchConstraintKind::EqualCurvature { second, .. }
-                    | SketchConstraintKind::EndpointContinuity { second, .. },
+                    | SketchConstraintKind::EndpointContinuity { second, .. }
+                    | SketchConstraintKind::LineLineFillet { second, .. },
                 ) => Some(second.parameter),
                 _ => None,
             };
@@ -466,6 +484,9 @@ impl SketchDocument {
                         }
                         | ContactState::CurveCurveTangency {
                             first_parameter, ..
+                        }
+                        | ContactState::LineLineFillet {
+                            first_parameter, ..
                         },
                     ) => first_parameter,
                     (
@@ -474,6 +495,9 @@ impl SketchDocument {
                             second_parameter, ..
                         }
                         | ContactState::CurveCurveTangency {
+                            second_parameter, ..
+                        }
+                        | ContactState::LineLineFillet {
                             second_parameter, ..
                         },
                     ) => second_parameter,
@@ -1177,6 +1201,47 @@ fn lower_constraint(
                 ));
                 id
             }
+            C::LineLineFillet {
+                arc,
+                first_contact,
+                first_side,
+                second_contact,
+                second_side,
+                endpoint_order,
+            } => {
+                let first = document
+                    .contact(*first_contact)
+                    .ok_or_else(|| unknown_runtime("contact", first_contact.0))?;
+                let second = document
+                    .contact(*second_contact)
+                    .ok_or_else(|| unknown_runtime("contact", second_contact.0))?;
+                let id = sketch.add_line_line_fillet(
+                    runtime_arc(mappings, *arc)?,
+                    runtime_curve_contact(document, mappings, first)?,
+                    runtime_curve_normal_side(*first_side),
+                    runtime_curve_contact(document, mappings, second)?,
+                    runtime_curve_normal_side(*second_side),
+                    match endpoint_order {
+                        DocumentFilletEndpointOrder::FirstThenSecond => {
+                            FilletEndpointOrder::FirstThenSecond
+                        }
+                        DocumentFilletEndpointOrder::SecondThenFirst => {
+                            FilletEndpointOrder::SecondThenFirst
+                        }
+                    },
+                )?;
+                contacts.push(contact_mapping(
+                    *first_contact,
+                    id,
+                    DocumentContactRole::FirstCurveParameter,
+                ));
+                contacts.push(contact_mapping(
+                    *second_contact,
+                    id,
+                    DocumentContactRole::SecondCurveParameter,
+                ));
+                id
+            }
         };
     Ok((runtime, contacts))
 }
@@ -1247,8 +1312,52 @@ fn lower_dimension(
             },
             mode,
         )?,
+        D::SupportingLineOffset {
+            source,
+            target_segment,
+            target,
+            side,
+            orientation,
+        } => sketch.add_supporting_line_offset(
+            runtime_segment(mappings, source)?,
+            runtime_segment(mappings, target_segment)?,
+            scalar_value(document, target)?,
+            document_line_side(side),
+            document_line_offset_orientation(orientation),
+            mode,
+        )?,
+        D::ExactTranslatedSegmentOffset {
+            source,
+            target_segment,
+            target,
+            side,
+            orientation,
+        } => sketch.add_exact_translated_segment_offset(
+            runtime_segment(mappings, source)?,
+            runtime_segment(mappings, target_segment)?,
+            scalar_value(document, target)?,
+            document_line_side(side),
+            document_line_offset_orientation(orientation),
+            mode,
+        )?,
     };
     Ok(runtime)
+}
+
+const fn document_line_offset_orientation(
+    orientation: DocumentLineOffsetOrientation,
+) -> LineOffsetOrientation {
+    match orientation {
+        DocumentLineOffsetOrientation::Same => LineOffsetOrientation::Same,
+        DocumentLineOffsetOrientation::Reversed => LineOffsetOrientation::Reversed,
+    }
+}
+
+const fn document_line_side(side: DocumentLineSide) -> LineSide {
+    match side {
+        DocumentLineSide::Left => LineSide::Left,
+        DocumentLineSide::Right => LineSide::Right,
+    }
 }
 
 fn runtime_point(
@@ -1473,6 +1582,13 @@ const fn runtime_curve_direction(
                 DocumentCurveNormalSide::Right => CurveNormalSide::Right,
             })
         }
+    }
+}
+
+const fn runtime_curve_normal_side(side: DocumentCurveNormalSide) -> CurveNormalSide {
+    match side {
+        DocumentCurveNormalSide::Left => CurveNormalSide::Left,
+        DocumentCurveNormalSide::Right => CurveNormalSide::Right,
     }
 }
 

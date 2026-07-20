@@ -329,6 +329,22 @@ fn quaternion_sign_is_canonical_and_invalid_quaternions_reject() {
 }
 
 #[test]
+fn accepted_quaternion_canonicalization_is_bitwise_idempotent() {
+    let ambient = [
+        1.0,
+        2.0,
+        3.0,
+        0.965_863_487_391_154_9,
+        -0.078_341_806_827_790_05,
+        -0.175_514_641_954_975_15,
+        0.173_680_440_715_040_44,
+    ];
+    let once = Pose3::from_ambient(ambient).unwrap().ambient();
+    let twice = Pose3::from_ambient(once).unwrap().ambient();
+    assert_same_bits(&once, &twice);
+}
+
+#[test]
 fn quaternion_norm_validation_accepts_the_band_and_rejects_beyond_it() {
     for norm in [
         (1.0 - QUATERNION_NORM_TOLERANCE).next_up(),

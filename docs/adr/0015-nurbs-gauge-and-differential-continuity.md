@@ -201,7 +201,8 @@ without claiming continuity across the knot.
 NURBS weights, gauge identity, semantic spans, winding, knot side, neighborhoods,
 normal side, curvature relation, endpoint order and parametric rates are explicit
 versioned document state. M22 extends the existing pre-1.0 document envelope;
-M24 remains responsible for the final migration and compatibility policy.
+M29 remains responsible for the final migration and compatibility policy; M24
+first freezes the version-1 wire boundary needed by M25-M28 extensions.
 
 All advanced constraints lower through one generic differential-curve row model
 and produce structured row-specific audit descriptors. No curve-family-pair

@@ -957,6 +957,28 @@ async function historySuite(page) {
   await page.click('[data-tool="rectangle"]');
   await page.pointerClick(await page.modelClient(0, 0));
   await page.pointerClick(await page.modelClient(4, 3));
+  const visualProfile = await page.evaluate(`(() => {
+    const overlay = document.querySelector('.visual-profile-overlay');
+    return overlay ? {
+      count: document.querySelectorAll('.visual-profile-overlay').length,
+      pointerEvents: getComputedStyle(overlay).pointerEvents,
+      dataAttributes: [...overlay.attributes].filter((attribute) => attribute.name.startsWith('data-')).length,
+    } : null;
+  })()`);
+  assert.deepEqual(visualProfile, { count: 1, pointerEvents: 'none', dataAttributes: 0 });
+  await page.click('[data-tool="select"]');
+  await page.pointerClick(await page.modelClient(-4, -3));
+  const profileClickBefore = {
+    json: await page.exportJson(),
+    state: await page.evaluate(`(() => { const root = document.querySelector('#playground-root'); return { history: root.dataset.historyCursor, selection: document.querySelector('#selection-summary').textContent }; })()`),
+  };
+  const profileCenter = await page.modelClient(2, 1.5);
+  assert.equal(await page.evaluate(`document.elementFromPoint(${profileCenter.x}, ${profileCenter.y}).classList.contains('visual-profile-overlay')`), false);
+  await page.pointerClick(profileCenter);
+  assert.deepEqual({
+    json: await page.exportJson(),
+    state: await page.evaluate(`(() => { const root = document.querySelector('#playground-root'); return { history: root.dataset.historyCursor, selection: document.querySelector('#selection-summary').textContent }; })()`),
+  }, profileClickBefore);
   assert.equal(
     await page.evaluate(`document.querySelector('#playground-root').dataset.historyCursor`),
     '1',
@@ -1402,7 +1424,7 @@ async function recoverySuite(page, name) {
   assert.deepEqual(retained, beforeNegative);
   const cases = [];
   cases.push('{not JSON');
-  cases.push(JSON.stringify({ ...acceptedData, version: 2 }));
+  cases.push(JSON.stringify({ ...acceptedData, version: 4 }));
   const duplicate = structuredClone(acceptedData);
   duplicate.points[1].id = duplicate.points[0].id;
   cases.push(JSON.stringify(duplicate));

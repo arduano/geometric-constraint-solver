@@ -29,8 +29,9 @@ pub use continuation::{
 };
 pub use error::{CoreError, SensitivityError};
 pub use linearization::{
-    AcceptedHardComponentLinearization, AcceptedHardLinearization, RawTangentBlock, ReducedHardRow,
-    ReducedTangentBlock, SensitivitySolution, SensitivityStatus,
+    AcceptedHardComponentLinearization, AcceptedHardLinearization, AcceptedNullspaceBasis,
+    AcceptedNullspaceVector, RawTangentBlock, ReducedHardRow, ReducedTangentBlock,
+    SensitivitySolution, SensitivityStatus,
 };
 pub use problem::{
     AuditAnnotations, AuditBoundAnnotation, AuditEvaluationStatus, AuditRowDescriptor,

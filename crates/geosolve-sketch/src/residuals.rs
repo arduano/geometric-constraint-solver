@@ -3,7 +3,8 @@ use num_dual::{DualDVec64, DualNum};
 
 use crate::curves::{
     AngleOrientation, CONTACT_PARAMETER_ROUNDOFF_TOLERANCE, CircleContainment, CircleTangencyMode,
-    CurveDegeneracy, CurveRef, LineParameterDomain, tangency_distance, unwrap_near,
+    CurveDegeneracy, CurveRef, LineOffsetOrientation, LineParameterDomain, LineSide,
+    tangency_distance, unwrap_near,
 };
 use crate::{
     CurveContinuity, CurveCurvatureRelation, CurveDirectionRelation, CurveNormalSide,
@@ -160,6 +161,16 @@ pub(crate) struct GenericEndpointContinuityResidual {
     pub(crate) second_sign: f64,
     pub(crate) kind: CurveContinuity,
     pub(crate) model_scale: f64,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct GenericLineFilletResidual {
+    pub(crate) center: usize,
+    pub(crate) radius: usize,
+    pub(crate) first: GenericCurveIncidence,
+    pub(crate) first_side: CurveNormalSide,
+    pub(crate) second: GenericCurveIncidence,
+    pub(crate) second_side: CurveNormalSide,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -489,6 +500,51 @@ impl SketchAdFormula for GenericEndpointContinuityResidual {
             }
         }
         Ok(values)
+    }
+}
+
+impl ResidualEvaluator for GenericLineFilletResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, false).map(|(values, _)| values)
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, true).map(|(_, jacobians)| jacobians)
+    }
+}
+
+impl SketchAdFormula for GenericLineFilletResidual {
+    fn evaluate_dual(
+        &self,
+        variables: &[SketchAdValue],
+    ) -> Result<Vec<DualDVec64>, EvaluationError> {
+        let center = ad_point(variables, self.center, "line fillet center")?;
+        let radius = ad_scalar(variables, self.radius, "line fillet radius")?;
+        if !radius.re.is_finite() || radius.re <= 0.0 {
+            return Err(EvaluationError::invalid_geometry(
+                "line fillet radius must be positive and finite",
+            ));
+        }
+        let first = evaluate_ad_curve(variables, &self.first)?;
+        let second = evaluate_ad_curve(variables, &self.second)?;
+        let first_tangent = ad_unit(&first.first, "first fillet parent")?;
+        let second_tangent = ad_unit(&second.first, "second fillet parent")?;
+        let first_sign = match self.first_side {
+            CurveNormalSide::Left => 1.0,
+            CurveNormalSide::Right => -1.0,
+        };
+        let second_sign = match self.second_side {
+            CurveNormalSide::Left => 1.0,
+            CurveNormalSide::Right => -1.0,
+        };
+        let first_normal = [-first_tangent[1].clone(), first_tangent[0].clone()];
+        let second_normal = [-second_tangent[1].clone(), second_tangent[0].clone()];
+        Ok(vec![
+            &center[0] - &first.position[0] - (radius * &first_normal[0]) * first_sign,
+            &center[1] - &first.position[1] - (radius * &first_normal[1]) * first_sign,
+            &center[0] - &second.position[0] - (radius * &second_normal[0]) * second_sign,
+            &center[1] - &second.position[1] - (radius * &second_normal[1]) * second_sign,
+        ])
     }
 }
 
@@ -1642,6 +1698,83 @@ pub(crate) struct SegmentPairResidual {
     pub(crate) first: [usize; 2],
     pub(crate) second: [usize; 2],
     pub(crate) equation: SegmentPairEquation,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum LineOffsetResidualMode {
+    SupportingLine,
+    ExactTranslatedSegment,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct LineOffsetResidual {
+    pub(crate) source: [usize; 2],
+    pub(crate) target_segment: [usize; 2],
+    pub(crate) target: f64,
+    pub(crate) side: LineSide,
+    pub(crate) orientation: LineOffsetOrientation,
+    pub(crate) mode: LineOffsetResidualMode,
+}
+
+impl ResidualEvaluator for LineOffsetResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, false).map(|(values, _)| values)
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, true).map(|(_, jacobians)| jacobians)
+    }
+}
+
+impl SketchAdFormula for LineOffsetResidual {
+    fn evaluate_dual(
+        &self,
+        variables: &[SketchAdValue],
+    ) -> Result<Vec<DualDVec64>, EvaluationError> {
+        let source_start = ad_point(variables, self.source[0], "line offset source start")?;
+        let source_end = ad_point(variables, self.source[1], "line offset source end")?;
+        let native_target_start = ad_point(
+            variables,
+            self.target_segment[0],
+            "line offset target start",
+        )?;
+        let native_target_end =
+            ad_point(variables, self.target_segment[1], "line offset target end")?;
+        let (target_start, target_end) = self
+            .orientation
+            .target_endpoints(native_target_start, native_target_end);
+        let source_direction = [
+            &source_end[0] - &source_start[0],
+            &source_end[1] - &source_start[1],
+        ];
+        let source_unit = ad_unit(&source_direction, "line offset source")?;
+        let normal = [-&source_unit[1], source_unit[0].clone()];
+        let signed_target = self.side.sign() * self.target;
+
+        match self.mode {
+            LineOffsetResidualMode::SupportingLine => {
+                let target_direction = [
+                    &target_end[0] - &target_start[0],
+                    &target_end[1] - &target_start[1],
+                ];
+                let target_unit = ad_unit(&target_direction, "line offset target")?;
+                let displacement = [
+                    &target_start[0] - &source_start[0],
+                    &target_start[1] - &source_start[1],
+                ];
+                Ok(vec![
+                    &source_unit[0] * &target_unit[1] - &source_unit[1] * &target_unit[0],
+                    &displacement[0] * &normal[0] + &displacement[1] * &normal[1] - signed_target,
+                ])
+            }
+            LineOffsetResidualMode::ExactTranslatedSegment => Ok(vec![
+                &target_start[0] - &source_start[0] - normal[0].clone() * signed_target,
+                &target_start[1] - &source_start[1] - normal[1].clone() * signed_target,
+                &target_end[0] - &source_end[0] - normal[0].clone() * signed_target,
+                &target_end[1] - &source_end[1] - normal[1].clone() * signed_target,
+            ]),
+        }
+    }
 }
 
 impl ResidualEvaluator for SegmentPairResidual {

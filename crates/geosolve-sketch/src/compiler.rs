@@ -9,8 +9,9 @@ use geosolve_geometry::{Point2, Vector2};
 use crate::curves::{
     CENTER_DIRECTION_COSINE_MARGIN, CIRCLE_ARC_TANGENCY_DIRECTION_TOLERANCE,
     CIRCLE_ARC_TANGENCY_RADIUS_RELATIVE_TOLERANCE,
-    CIRCLE_ARC_TANGENCY_SCALE_UNCERTAINTY_MULTIPLIER, normalize_bounded_candidate, segment_points,
-    tangency_distance, unwrap_near, validate_bounded_parameter, validate_radius,
+    CIRCLE_ARC_TANGENCY_SCALE_UNCERTAINTY_MULTIPLIER, arc_signed_sweep,
+    normalize_bounded_candidate, segment_points, tangency_distance, unwrap_near,
+    validate_bounded_parameter, validate_radius,
 };
 use crate::model::{
     ArcId, CircleId, ConicId, CoordinateAxis, CurveContactNeighborhood, DimensionKind,
@@ -22,8 +23,9 @@ use crate::residuals::{
     AxisDifferenceResidual, BezierIncidence, CircleArcTangencyResidual, CircleTangencyResidual,
     CoincidentResidual, CurveParameterIncidence, DistanceResidual, FixedCoordinateResidual,
     GenericCurveDirectionResidual, GenericCurveIncidence, GenericCurvePairResidual,
-    GenericEndpointContinuityResidual, GenericEqualCurvatureResidual, GenericPointOnCurveResidual,
-    LineBezierTangencyResidual, LineCircleTangencyResidual, MidpointResidual, NurbsWeightIncidence,
+    GenericEndpointContinuityResidual, GenericEqualCurvatureResidual, GenericLineFilletResidual,
+    GenericPointOnCurveResidual, LineBezierTangencyResidual, LineCircleTangencyResidual,
+    LineOffsetResidual, LineOffsetResidualMode, MidpointResidual, NurbsWeightIncidence,
     OrientedAngleResidual, PointOnArcResidual, PointOnBezierResidual, PointOnCircleResidual,
     PointOnLineResidual, PointTargetResidual, ScalarEqualityResidual, ScalarTargetResidual,
     SegmentPairEquation, SegmentPairResidual, SymmetryResidual,
@@ -1053,6 +1055,14 @@ pub enum SolveRejection {
         maximum: f64,
         tolerance: f64,
     },
+    IndependentDimensionResidual {
+        dimension: SketchDimensionId,
+        maximum: f64,
+        tolerance: f64,
+    },
+    LineOffsetBranchFlipped(SketchDimensionId),
+    InvalidFilletGeometry(SketchConstraintId),
+    FilletSideFlipped(SketchConstraintId),
     ContactParameterOutOfDomain(SketchConstraintId),
     AmbiguousContactNeighborhood(SketchConstraintId),
     LineSideFlipped(SketchConstraintId),
@@ -1392,15 +1402,22 @@ impl Sketch {
         let mut retained_audit = compiled.problem.audit_snapshot_partial();
         let mut core_report = compiled.problem.solve(config)?;
         let mut candidate = compiled.solved_state(self)?;
+        let mut candidate_preparation = self.derive_line_fillet_arcs(&mut candidate);
         let mut acceptance_hard_residual_max = None;
 
         if core_report_is_successful(&core_report, config) {
             let mut analysis_sketch = self.clone();
             for _ in 0..3 {
-                if self.candidate_has_invalid_primitive(&candidate) {
+                if candidate_preparation.is_err()
+                    || self.candidate_has_invalid_primitive(&candidate)
+                {
                     break;
                 }
                 let normalized = self.normalize_candidate_latents(&mut candidate);
+                candidate_preparation = self.derive_line_fillet_arcs(&mut candidate);
+                if candidate_preparation.is_err() {
+                    break;
+                }
                 if !normalized && !analysis_sketch.candidate_latents_differ(&candidate.latents) {
                     break;
                 }
@@ -1408,6 +1425,7 @@ impl Sketch {
                 compiled = analysis_sketch.compile(request)?;
                 core_report = compiled.problem.solve(config)?;
                 candidate = compiled.solved_state(&analysis_sketch)?;
+                candidate_preparation = self.derive_line_fillet_arcs(&mut candidate);
                 if !core_report_is_successful(&core_report, config) {
                     break;
                 }
@@ -1415,8 +1433,9 @@ impl Sketch {
         }
 
         let core_hard_validity = core_report.hard_validity;
-        let candidate_validation =
-            self.validate_m7_candidate(&candidate, config.normalized_residual_tolerance);
+        let candidate_validation = candidate_preparation.and_then(|()| {
+            self.validate_m7_candidate(&candidate, config.normalized_residual_tolerance)
+        });
         let independent_advanced_max = match &candidate_validation {
             Ok(maximum) => *maximum,
             Err(rejection) => rejection_residual_max(rejection).unwrap_or(0.0),
@@ -1585,6 +1604,86 @@ impl Sketch {
             let end = geometry.point(segment.end())?;
             (!segment.branch().is_preserved(start, end)).then_some(segment_id)
         })
+    }
+
+    pub(crate) fn derive_line_fillet_arcs(
+        &self,
+        candidate: &mut SolvedSketchState,
+    ) -> Result<(), SolveRejection> {
+        for (constraint_id, constraint) in self.constraints.iter() {
+            let SketchConstraintKind::LineLineFillet {
+                arc,
+                first,
+                second,
+                endpoint_order,
+                ..
+            } = constraint.kind()
+            else {
+                continue;
+            };
+            let first_parameter = latent_value(
+                &candidate.latents,
+                constraint_id,
+                LatentVariableRole::FirstCurveParameter,
+            )?;
+            let second_parameter = latent_value(
+                &candidate.latents,
+                constraint_id,
+                LatentVariableRole::SecondCurveParameter,
+            )?;
+            let first_contact = validate_generic_contact_candidate(
+                self,
+                candidate,
+                constraint_id,
+                first,
+                first_parameter,
+            )?
+            .position;
+            let second_contact = validate_generic_contact_candidate(
+                self,
+                candidate,
+                constraint_id,
+                second,
+                second_parameter,
+            )?
+            .position;
+            let retained = self.arc_value(arc).map_err(|_| {
+                SolveRejection::IndependentValidationFailed(
+                    "line fillet references a stale output arc".into(),
+                )
+            })?;
+            let solved = candidate
+                .geometry
+                .arcs
+                .iter_mut()
+                .find(|solved| solved.arc_id == arc)
+                .ok_or_else(|| {
+                    SolveRejection::IndependentValidationFailed(
+                        "line fillet output arc is missing from candidate geometry".into(),
+                    )
+                })?;
+            let (start, end) = match endpoint_order {
+                crate::FilletEndpointOrder::FirstThenSecond => (first_contact, second_contact),
+                crate::FilletEndpointOrder::SecondThenFirst => (second_contact, first_contact),
+            };
+            let start_offset = start - solved.center;
+            let end_offset = end - solved.center;
+            if start_offset.norm() == 0.0 || end_offset.norm() == 0.0 {
+                return Err(SolveRejection::InvalidFilletGeometry(constraint_id));
+            }
+            let start_angle =
+                unwrap_near(start_offset.y.atan2(start_offset.x), retained.start_angle());
+            let end_angle = unwrap_near(end_offset.y.atan2(end_offset.x), retained.end_angle());
+            let signed_sweep = arc_signed_sweep(start_angle, end_angle, solved.sweep)
+                .map_err(|_| SolveRejection::InvalidFilletGeometry(constraint_id))?;
+            if !start_angle.is_finite() || !end_angle.is_finite() || !signed_sweep.is_finite() {
+                return Err(SolveRejection::InvalidFilletGeometry(constraint_id));
+            }
+            solved.start_angle = start_angle;
+            solved.end_angle = end_angle;
+            solved.signed_sweep = signed_sweep;
+        }
+        Ok(())
     }
 
     #[allow(clippy::too_many_lines)]
@@ -2118,6 +2217,28 @@ impl Sketch {
                         }
                     }
                 }
+                SketchConstraintKind::LineLineFillet {
+                    arc,
+                    first,
+                    first_side,
+                    second,
+                    second_side,
+                    endpoint_order,
+                } => {
+                    independent_advanced_max =
+                        independent_advanced_max.max(validate_line_fillet_candidate(
+                            self,
+                            candidate,
+                            constraint_id,
+                            arc,
+                            first,
+                            first_side,
+                            second,
+                            second_side,
+                            endpoint_order,
+                            tolerance,
+                        )?);
+                }
                 SketchConstraintKind::CurveCurveContact { first, second }
                 | SketchConstraintKind::CurveCurveTangency {
                     first,
@@ -2309,6 +2430,25 @@ impl Sketch {
                 _ => {}
             }
         }
+        for (dimension_id, dimension) in self.dimensions.iter() {
+            if dimension.mode() != DimensionMode::Driving {
+                continue;
+            }
+            if matches!(
+                dimension.kind(),
+                DimensionKind::SupportingLineOffset { .. }
+                    | DimensionKind::ExactTranslatedSegmentOffset { .. }
+            ) {
+                independent_advanced_max =
+                    independent_advanced_max.max(validate_line_offset_candidate(
+                        self,
+                        candidate,
+                        dimension_id,
+                        dimension.kind(),
+                        tolerance,
+                    )?);
+            }
+        }
         Ok(independent_advanced_max)
     }
 
@@ -2381,7 +2521,8 @@ impl Sketch {
                 SketchConstraintKind::CurveCurveContact { first, second }
                 | SketchConstraintKind::CurveCurveTangency { first, second, .. }
                 | SketchConstraintKind::EqualCurvature { first, second, .. }
-                | SketchConstraintKind::EndpointContinuity { first, second, .. } => {
+                | SketchConstraintKind::EndpointContinuity { first, second, .. }
+                | SketchConstraintKind::LineLineFillet { first, second, .. } => {
                     normalize_generic_latent(
                         self,
                         &mut candidate.latents,
@@ -2490,7 +2631,8 @@ impl Sketch {
                         )
                         | (
                             SketchConstraintKind::CurveCurveContact { first: contact, .. }
-                            | SketchConstraintKind::CurveCurveTangency { first: contact, .. },
+                            | SketchConstraintKind::CurveCurveTangency { first: contact, .. }
+                            | SketchConstraintKind::LineLineFillet { first: contact, .. },
                             LatentVariableRole::FirstCurveParameter,
                         )
                         | (
@@ -2498,6 +2640,9 @@ impl Sketch {
                                 second: contact, ..
                             }
                             | SketchConstraintKind::CurveCurveTangency {
+                                second: contact, ..
+                            }
+                            | SketchConstraintKind::LineLineFillet {
                                 second: contact, ..
                             },
                             LatentVariableRole::SecondCurveParameter,
@@ -2553,6 +2698,9 @@ impl Sketch {
                         }
                         | crate::ContactState::CurveCurveTangency {
                             first_parameter, ..
+                        }
+                        | crate::ContactState::LineLineFillet {
+                            first_parameter, ..
                         },
                         LatentVariableRole::FirstCurveParameter,
                     ) => Some(first_parameter),
@@ -2561,6 +2709,9 @@ impl Sketch {
                             second_parameter, ..
                         }
                         | crate::ContactState::CurveCurveTangency {
+                            second_parameter, ..
+                        }
+                        | crate::ContactState::LineLineFillet {
                             second_parameter, ..
                         },
                         LatentVariableRole::SecondCurveParameter,
@@ -2658,14 +2809,16 @@ impl Sketch {
                     SketchConstraintKind::CurveCurveContact { first, .. }
                     | SketchConstraintKind::CurveCurveTangency { first, .. }
                     | SketchConstraintKind::EqualCurvature { first, .. }
-                    | SketchConstraintKind::EndpointContinuity { first, .. },
+                    | SketchConstraintKind::EndpointContinuity { first, .. }
+                    | SketchConstraintKind::LineLineFillet { first, .. },
                     LatentVariableRole::FirstCurveParameter,
                 ) => first.parameter = latent.value,
                 (
                     SketchConstraintKind::CurveCurveContact { second, .. }
                     | SketchConstraintKind::CurveCurveTangency { second, .. }
                     | SketchConstraintKind::EqualCurvature { second, .. }
-                    | SketchConstraintKind::EndpointContinuity { second, .. },
+                    | SketchConstraintKind::EndpointContinuity { second, .. }
+                    | SketchConstraintKind::LineLineFillet { second, .. },
                     LatentVariableRole::SecondCurveParameter,
                 ) => second.parameter = latent.value,
                 _ => return Err(SketchError::NoContactState(latent.constraint_id)),
@@ -2693,6 +2846,7 @@ impl Sketch {
         }
         for arc in &candidate.geometry.arcs {
             self.set_arc_radius(arc.arc_id, arc.radius)?;
+            self.set_arc_span(arc.arc_id, arc.start_angle, arc.end_angle)?;
         }
         for conic in &candidate.geometry.conics {
             match conic.kind {
@@ -2914,7 +3068,8 @@ pub(crate) fn rejection_hard_validity(rejection: &SolveRejection) -> HardValidit
 pub(crate) fn rejection_residual_max(rejection: &SolveRejection) -> Option<f64> {
     match rejection {
         SolveRejection::HardResidual { maximum, .. }
-        | SolveRejection::IndependentConstraintResidual { maximum, .. } => Some(*maximum),
+        | SolveRejection::IndependentConstraintResidual { maximum, .. }
+        | SolveRejection::IndependentDimensionResidual { maximum, .. } => Some(*maximum),
         _ => None,
     }
 }
@@ -4117,6 +4272,98 @@ fn compile_curve_constraint(
                 Box::new(evaluator),
             )
         }
+        SketchConstraintKind::LineLineFillet {
+            arc,
+            first,
+            first_side,
+            second,
+            second_side,
+            endpoint_order,
+        } => {
+            let arc_value = sketch.arc_value(arc)?;
+            let first_label = generic_curve_label(sketch, first.curve)?;
+            let second_label = generic_curve_label(sketch, second.curve)?;
+            let first_variable = add_curve_contact_latent(
+                sketch,
+                problem,
+                latent_variables,
+                bound_mappings,
+                constraint_id,
+                LatentVariableRole::FirstCurveParameter,
+                first,
+            )?;
+            let second_variable = add_curve_contact_latent(
+                sketch,
+                problem,
+                latent_variables,
+                bound_mappings,
+                constraint_id,
+                LatentVariableRole::SecondCurveParameter,
+                second,
+            )?;
+            let first_parameter = CurveParameterIncidence::Variable(incidence.add(first_variable));
+            let second_parameter =
+                CurveParameterIncidence::Variable(incidence.add(second_variable));
+            let evaluator = GenericLineFilletResidual {
+                center: incidence.add(point_variable(point_variables, arc_value.center())?),
+                radius: incidence.add(arc_radius_variable(arc_radius_variables, arc)?),
+                first: generic_curve_incidence(
+                    sketch,
+                    point_variables,
+                    circle_radius_variables,
+                    arc_radius_variables,
+                    conic_vector_variables,
+                    conic_scalar_variables,
+                    nurbs_weight_variables,
+                    &mut incidence,
+                    first.curve,
+                    first_parameter,
+                )?,
+                first_side,
+                second: generic_curve_incidence(
+                    sketch,
+                    point_variables,
+                    circle_radius_variables,
+                    arc_radius_variables,
+                    conic_vector_variables,
+                    conic_scalar_variables,
+                    nurbs_weight_variables,
+                    &mut incidence,
+                    second.curve,
+                    second_parameter,
+                )?,
+                second_side,
+            };
+            let bindings = vec![
+                AuditBinding::new("arc", arc_value.label()),
+                AuditBinding::new("first parent", first_label),
+                AuditBinding::new("first side", format!("{first_side:?}")),
+                AuditBinding::new("second parent", second_label),
+                AuditBinding::new("second side", format!("{second_side:?}")),
+                AuditBinding::new("endpoint order", format!("{endpoint_order:?}")),
+                AuditBinding::new("sweep", format!("{:?}", arc_value.sweep())),
+                AuditBinding::new("first warm-start parameter", first.parameter.to_string()),
+                AuditBinding::new("second warm-start parameter", second.parameter.to_string()),
+            ];
+            (
+                format!(
+                    "constraint {}: {first_label} to {second_label} associative line fillet",
+                    constraint.ordinal()
+                ),
+                4,
+                vec![scale; 4],
+                [
+                    "(center.x - first(t).x - first_side*radius*left_normal(first').x) / model_scale",
+                    "(center.y - first(t).y - first_side*radius*left_normal(first').y) / model_scale",
+                    "(center.x - second(t).x - second_side*radius*left_normal(second').x) / model_scale",
+                    "(center.y - second(t).y - second_side*radius*left_normal(second').y) / model_scale",
+                ]
+                .into_iter()
+                .map(|equation| audit_row(equation.into(), bindings.clone()))
+                .collect(),
+                Box::new(evaluator),
+            )
+        }
         SketchConstraintKind::CircleCircleTangency {
             first,
             second,
@@ -4283,6 +4530,21 @@ fn compile_dimension(
     dimension_id: SketchDimensionId,
     dimension: &crate::SketchDimension,
 ) -> Result<SketchSourceMapping, SketchError> {
+    let kind = dimension.kind();
+    if matches!(
+        kind,
+        DimensionKind::SupportingLineOffset { .. }
+            | DimensionKind::ExactTranslatedSegmentOffset { .. }
+    ) {
+        return compile_line_offset_dimension(
+            sketch,
+            problem,
+            point_variables,
+            dimension_id,
+            dimension,
+            kind,
+        );
+    }
     let (first, second, target, subject) = match dimension.kind() {
         DimensionKind::PointDistance {
             first,
@@ -4360,6 +4622,145 @@ fn compile_dimension(
             ],
         )],
         DistanceResidual { target },
+    )?)?;
+    Ok(equation_mapping(
+        SketchSource::Dimension(dimension_id),
+        label,
+        source_id,
+        residual_id,
+    ))
+}
+
+#[allow(clippy::too_many_lines)]
+fn compile_line_offset_dimension(
+    sketch: &Sketch,
+    problem: &mut Problem,
+    point_variables: &[PointVariableMapping],
+    dimension_id: SketchDimensionId,
+    dimension: &crate::SketchDimension,
+    kind: DimensionKind,
+) -> Result<SketchSourceMapping, SketchError> {
+    let (source, target_segment, target, side, orientation, mode, mode_label) = match kind {
+        DimensionKind::SupportingLineOffset {
+            source,
+            target_segment,
+            target,
+            side,
+            orientation,
+        } => (
+            source,
+            target_segment,
+            target,
+            side,
+            orientation,
+            LineOffsetResidualMode::SupportingLine,
+            "supporting-line offset",
+        ),
+        DimensionKind::ExactTranslatedSegmentOffset {
+            source,
+            target_segment,
+            target,
+            side,
+            orientation,
+        } => (
+            source,
+            target_segment,
+            target,
+            side,
+            orientation,
+            LineOffsetResidualMode::ExactTranslatedSegment,
+            "exact translated-segment offset",
+        ),
+        _ => unreachable!("non-offset dimension reached offset compiler"),
+    };
+    let (_, _, source_value) = segment_points(sketch, source)?;
+    let (_, _, target_value) = segment_points(sketch, target_segment)?;
+    let subject = format!(
+        "{mode_label} {} to {} ({side:?}, {orientation:?})",
+        source_value.label(),
+        target_value.label()
+    );
+    if dimension.mode() == DimensionMode::Reference {
+        return Ok(SketchSourceMapping {
+            source: SketchSource::Dimension(dimension_id),
+            source_label: format!(
+                "dimension {}: reference measurement of {subject}",
+                dimension.ordinal()
+            ),
+            core_source_id: None,
+            residual_ids: Vec::new(),
+        });
+    }
+
+    let label = format!(
+        "dimension {}: {subject} = {target} (driving)",
+        dimension.ordinal()
+    );
+    let source_id = problem.add_source(SourceConstraint::new(&label)?);
+    let mut incidence = IncidenceBuilder::default();
+    let source_indices = segment_incidence(sketch, point_variables, &mut incidence, source)?;
+    let target_indices =
+        segment_incidence(sketch, point_variables, &mut incidence, target_segment)?;
+    let bindings = || {
+        vec![
+            AuditBinding::new("source", source_value.label()),
+            AuditBinding::new("target_segment", target_value.label()),
+            AuditBinding::new("side", format!("{side:?}")),
+            AuditBinding::new("orientation", format!("{orientation:?}")),
+            AuditBinding::new("target", target.to_string()),
+        ]
+    };
+    let (row_count, scales, rows) = match mode {
+        LineOffsetResidualMode::SupportingLine => (
+            2,
+            vec![1.0, sketch.model_scale],
+            vec![
+                audit_row(
+                    "cross(unit(source), unit(oriented_target))".into(),
+                    bindings(),
+                ),
+                audit_row(
+                    "(dot(oriented_target.start - source.start, left_normal(unit(source))) - signed_target) / model_scale".into(),
+                    bindings(),
+                ),
+            ],
+        ),
+        LineOffsetResidualMode::ExactTranslatedSegment => (
+            4,
+            vec![sketch.model_scale; 4],
+            [
+                ("start.x", "x"),
+                ("start.y", "y"),
+                ("end.x", "x"),
+                ("end.y", "y"),
+            ]
+                .into_iter()
+                .map(|(endpoint_coordinate, normal_coordinate)| {
+                    audit_row(
+                        format!(
+                            "(oriented_target.{endpoint_coordinate} - source.{endpoint_coordinate} - signed_target_normal.{normal_coordinate}) / model_scale"
+                        ),
+                        bindings(),
+                    )
+                })
+                .collect(),
+        ),
+    };
+    let residual_id = problem.add_residual(ResidualBlock::new(
+        source_id,
+        ResidualCategory::Hard,
+        incidence.variables,
+        row_count,
+        scales,
+        rows,
+        LineOffsetResidual {
+            source: source_indices,
+            target_segment: target_indices,
+            target,
+            side,
+            orientation,
+            mode,
+        },
     )?)?;
     Ok(equation_mapping(
         SketchSource::Dimension(dimension_id),
@@ -5564,6 +5965,265 @@ fn validate_independent_constraint_rows(
     }
 }
 
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+fn validate_line_fillet_candidate(
+    sketch: &Sketch,
+    candidate: &SolvedSketchState,
+    constraint: SketchConstraintId,
+    arc: ArcId,
+    first: SketchCurveContact,
+    first_side: crate::CurveNormalSide,
+    second: SketchCurveContact,
+    second_side: crate::CurveNormalSide,
+    endpoint_order: crate::FilletEndpointOrder,
+    tolerance: f64,
+) -> Result<f64, SolveRejection> {
+    let first_parameter = latent_value(
+        &candidate.latents,
+        constraint,
+        LatentVariableRole::FirstCurveParameter,
+    )?;
+    let second_parameter = latent_value(
+        &candidate.latents,
+        constraint,
+        LatentVariableRole::SecondCurveParameter,
+    )?;
+    let first_jet =
+        validate_generic_contact_candidate(sketch, candidate, constraint, first, first_parameter)?;
+    let second_jet = validate_generic_contact_candidate(
+        sketch,
+        candidate,
+        constraint,
+        second,
+        second_parameter,
+    )?;
+    let first_tangent = first_jet
+        .differential()
+        .map_err(|_| SolveRejection::DegenerateCurve(constraint))?
+        .unit_tangent;
+    let second_tangent = second_jet
+        .differential()
+        .map_err(|_| SolveRejection::DegenerateCurve(constraint))?
+        .unit_tangent;
+    if cross_2d(first_tangent, second_tangent).abs() <= 1.0e-8 {
+        return Err(SolveRejection::InvalidFilletGeometry(constraint));
+    }
+    let solved_arc = candidate.geometry.arc(arc).ok_or_else(|| {
+        SolveRejection::IndependentValidationFailed(
+            "line fillet output arc is missing from candidate geometry".into(),
+        )
+    })?;
+    if !solved_arc.radius.is_finite() || solved_arc.radius <= 0.0 {
+        return Err(SolveRejection::NonPositiveArcRadius(arc));
+    }
+    let first_normal = Vector2::new(-first_tangent.y, first_tangent.x);
+    let second_normal = Vector2::new(-second_tangent.y, second_tangent.x);
+    let first_sign = fillet_side_sign(first_side);
+    let second_sign = fillet_side_sign(second_side);
+    let first_offset = solved_arc.center - first_jet.position;
+    let second_offset = solved_arc.center - second_jet.position;
+    if first_sign * first_offset.dot(&first_normal) <= 0.0
+        || second_sign * second_offset.dot(&second_normal) <= 0.0
+    {
+        return Err(SolveRejection::FilletSideFlipped(constraint));
+    }
+    let first_expected = first_normal * (first_sign * solved_arc.radius);
+    let second_expected = second_normal * (second_sign * solved_arc.radius);
+    let first_radial = first_jet.position - solved_arc.center;
+    let second_radial = second_jet.position - solved_arc.center;
+    let first_radial_norm = first_radial.norm();
+    let second_radial_norm = second_radial.norm();
+    if !first_radial_norm.is_finite()
+        || !second_radial_norm.is_finite()
+        || first_radial_norm == 0.0
+        || second_radial_norm == 0.0
+    {
+        return Err(SolveRejection::InvalidFilletGeometry(constraint));
+    }
+    let (expected_start, expected_end) = match endpoint_order {
+        crate::FilletEndpointOrder::FirstThenSecond => (first_jet.position, second_jet.position),
+        crate::FilletEndpointOrder::SecondThenFirst => (second_jet.position, first_jet.position),
+    };
+    let expected_start_offset = expected_start - solved_arc.center;
+    let expected_end_offset = expected_end - solved_arc.center;
+    let expected_start_angle = expected_start_offset.y.atan2(expected_start_offset.x);
+    let expected_end_angle = expected_end_offset.y.atan2(expected_end_offset.x);
+    let expected_signed_sweep =
+        arc_signed_sweep(expected_start_angle, expected_end_angle, solved_arc.sweep)
+            .map_err(|_| SolveRejection::InvalidFilletGeometry(constraint))?;
+    let stored_signed_sweep = arc_signed_sweep(
+        solved_arc.start_angle,
+        solved_arc.end_angle,
+        solved_arc.sweep,
+    )
+    .map_err(|_| SolveRejection::InvalidFilletGeometry(constraint))?;
+    let (actual_start, actual_end) = solved_arc
+        .endpoints()
+        .ok_or(SolveRejection::InvalidFilletGeometry(constraint))?;
+    let sweep_valid = match solved_arc.sweep {
+        crate::ArcSweep::CounterClockwise => solved_arc.signed_sweep > 0.0,
+        crate::ArcSweep::Clockwise => solved_arc.signed_sweep < 0.0,
+    };
+    if !sweep_valid
+        || !solved_arc.start_angle.is_finite()
+        || !solved_arc.end_angle.is_finite()
+        || !solved_arc.signed_sweep.is_finite()
+        || solved_arc.signed_sweep.abs() >= std::f64::consts::TAU
+    {
+        return Err(SolveRejection::InvalidFilletGeometry(constraint));
+    }
+    let first_center_error = first_offset - first_expected;
+    let second_center_error = second_offset - second_expected;
+    let start_error = actual_start - expected_start;
+    let end_error = actual_end - expected_end;
+    validate_independent_constraint_rows(
+        constraint,
+        &[
+            first_center_error.x / sketch.model_scale,
+            first_center_error.y / sketch.model_scale,
+            second_center_error.x / sketch.model_scale,
+            second_center_error.y / sketch.model_scale,
+            (first_radial_norm - solved_arc.radius) / sketch.model_scale,
+            (second_radial_norm - solved_arc.radius) / sketch.model_scale,
+            first_tangent.dot(&(first_radial / first_radial_norm)),
+            second_tangent.dot(&(second_radial / second_radial_norm)),
+            start_error.x / sketch.model_scale,
+            start_error.y / sketch.model_scale,
+            end_error.x / sketch.model_scale,
+            end_error.y / sketch.model_scale,
+            stored_signed_sweep - solved_arc.signed_sweep,
+            expected_signed_sweep - solved_arc.signed_sweep,
+        ],
+        tolerance,
+    )
+}
+
+const fn fillet_side_sign(side: crate::CurveNormalSide) -> f64 {
+    match side {
+        crate::CurveNormalSide::Left => 1.0,
+        crate::CurveNormalSide::Right => -1.0,
+    }
+}
+
+fn validate_line_offset_candidate(
+    sketch: &Sketch,
+    candidate: &SolvedSketchState,
+    dimension: SketchDimensionId,
+    kind: DimensionKind,
+    tolerance: f64,
+) -> Result<f64, SolveRejection> {
+    let (source, target_segment, target, side, orientation, exact) = match kind {
+        DimensionKind::SupportingLineOffset {
+            source,
+            target_segment,
+            target,
+            side,
+            orientation,
+        } => (source, target_segment, target, side, orientation, false),
+        DimensionKind::ExactTranslatedSegmentOffset {
+            source,
+            target_segment,
+            target,
+            side,
+            orientation,
+        } => (source, target_segment, target, side, orientation, true),
+        _ => unreachable!("non-offset dimension reached offset validator"),
+    };
+    let source_value = sketch.segments.get(source).ok_or_else(|| {
+        SolveRejection::IndependentValidationFailed(
+            "line offset references a stale source segment".into(),
+        )
+    })?;
+    let target_value = sketch.segments.get(target_segment).ok_or_else(|| {
+        SolveRejection::IndependentValidationFailed(
+            "line offset references a stale target segment".into(),
+        )
+    })?;
+    let source_start = candidate
+        .geometry
+        .point(source_value.start())
+        .ok_or_else(|| {
+            SolveRejection::IndependentValidationFailed(
+                "line offset source start is missing".into(),
+            )
+        })?;
+    let source_end = candidate
+        .geometry
+        .point(source_value.end())
+        .ok_or_else(|| {
+            SolveRejection::IndependentValidationFailed("line offset source end is missing".into())
+        })?;
+    let native_target_start = candidate
+        .geometry
+        .point(target_value.start())
+        .ok_or_else(|| {
+            SolveRejection::IndependentValidationFailed(
+                "line offset target start is missing".into(),
+            )
+        })?;
+    let native_target_end = candidate
+        .geometry
+        .point(target_value.end())
+        .ok_or_else(|| {
+            SolveRejection::IndependentValidationFailed("line offset target end is missing".into())
+        })?;
+    let (target_start, target_end) =
+        orientation.target_endpoints(native_target_start, native_target_end);
+    let source_direction = source_end - source_start;
+    let target_direction = target_end - target_start;
+    let source_length = source_direction.norm();
+    let target_length = target_direction.norm();
+    if !source_length.is_finite()
+        || !target_length.is_finite()
+        || source_length == 0.0
+        || target_length == 0.0
+    {
+        return Err(SolveRejection::LineOffsetBranchFlipped(dimension));
+    }
+    let source_unit = source_direction / source_length;
+    let target_unit = target_direction / target_length;
+    let displacement = target_start - source_start;
+    let signed_distance = cross_2d(source_unit, displacement);
+    if source_unit.dot(&target_unit) <= 0.0 || side.sign() * signed_distance <= 0.0 {
+        return Err(SolveRejection::LineOffsetBranchFlipped(dimension));
+    }
+    let signed_target = side.sign() * target;
+    let rows = if exact {
+        let normal = Vector2::new(-source_unit.y, source_unit.x) * signed_target;
+        let start_error = target_start - source_start - normal;
+        let end_error = target_end - source_end - normal;
+        vec![
+            start_error.x / sketch.model_scale,
+            start_error.y / sketch.model_scale,
+            end_error.x / sketch.model_scale,
+            end_error.y / sketch.model_scale,
+        ]
+    } else {
+        vec![
+            cross_2d(source_unit, target_unit),
+            (signed_distance - signed_target) / sketch.model_scale,
+        ]
+    };
+    validate_independent_dimension_rows(dimension, &rows, tolerance)
+}
+
+fn validate_independent_dimension_rows(
+    dimension: SketchDimensionId,
+    rows: &[f64],
+    tolerance: f64,
+) -> Result<f64, SolveRejection> {
+    let maximum = rows.iter().map(|value| value.abs()).fold(0.0, f64::max);
+    if !maximum.is_finite() || maximum > tolerance {
+        Err(SolveRejection::IndependentDimensionResidual {
+            dimension,
+            maximum,
+            tolerance,
+        })
+    } else {
+        Ok(maximum)
+    }
+}
+
 fn cross_2d(first: Vector2<f64>, second: Vector2<f64>) -> f64 {
     first.x * second.y - first.y * second.x
 }
@@ -6141,5 +6801,85 @@ mod tests {
             ))
         ));
         assert_eq!(sketch.point(controls[0]).unwrap().position(), retained);
+    }
+
+    #[test]
+    fn line_fillet_validation_recomputes_endpoint_and_sweep_state() {
+        let mut sketch = Sketch::new(1.0).unwrap();
+        let first_start = sketch.add_point(Point2::new(0.0, 0.0)).unwrap();
+        let corner = sketch.add_point(Point2::new(4.0, 0.0)).unwrap();
+        let second_end = sketch.add_point(Point2::new(4.0, 4.0)).unwrap();
+        let center = sketch.add_point(Point2::new(3.0, 1.0)).unwrap();
+        let first = sketch.add_segment(first_start, corner).unwrap();
+        let second = sketch.add_segment(corner, second_end).unwrap();
+        for point in [first_start, corner, second_end] {
+            sketch.add_fixed_point(point).unwrap();
+        }
+        let arc = sketch
+            .add_arc(
+                center,
+                1.0,
+                -std::f64::consts::FRAC_PI_2,
+                0.0,
+                crate::ArcSweep::CounterClockwise,
+            )
+            .unwrap();
+        let contact = |segment, parameter| SketchCurveContact {
+            curve: SketchCurve::Line {
+                segment,
+                domain: LineParameterDomain::BoundedSegment,
+            },
+            parameter,
+            neighborhood: CurveContactNeighborhood::Interior,
+        };
+        sketch
+            .add_line_line_fillet(
+                arc,
+                contact(first, 0.75),
+                CurveNormalSide::Left,
+                contact(second, 0.25),
+                CurveNormalSide::Left,
+                crate::FilletEndpointOrder::FirstThenSecond,
+            )
+            .unwrap();
+        sketch
+            .add_arc_radius(arc, 1.0, DimensionMode::Driving)
+            .unwrap();
+        let mut compiled = sketch.compile(SketchSolveRequest::default()).unwrap();
+        let report = compiled.problem.solve(SolverConfig::default()).unwrap();
+        assert_eq!(report.termination, SolveTermination::Converged);
+        let mut candidate = compiled.solved_state(&sketch).unwrap();
+        sketch.normalize_candidate_latents(&mut candidate);
+        sketch.derive_line_fillet_arcs(&mut candidate).unwrap();
+        assert!(
+            sketch
+                .validate_m7_candidate(&candidate, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE)
+                .is_ok()
+        );
+
+        let solved = candidate
+            .geometry
+            .arcs
+            .iter_mut()
+            .find(|value| value.arc_id == arc)
+            .unwrap();
+        let retained_end = solved.end_angle;
+        solved.end_angle += 0.25;
+        assert!(matches!(
+            sketch.validate_m7_candidate(&candidate, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE),
+            Err(SolveRejection::IndependentConstraintResidual { .. })
+        ));
+        let solved = candidate
+            .geometry
+            .arcs
+            .iter_mut()
+            .find(|value| value.arc_id == arc)
+            .unwrap();
+        solved.end_angle = retained_end;
+        solved.signed_sweep += TAU;
+        assert!(matches!(
+            sketch.validate_m7_candidate(&candidate, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE),
+            Err(SolveRejection::InvalidFilletGeometry(_))
+        ));
     }
 }

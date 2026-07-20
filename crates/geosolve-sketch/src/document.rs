@@ -9,7 +9,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
 /// Current on-disk sketch-document schema.
-pub const SKETCH_DOCUMENT_VERSION: u32 = 1;
+pub const SKETCH_DOCUMENT_VERSION: u32 = 3;
 /// Defensive import limit for all persistent objects combined.
 pub const MAX_DOCUMENT_OBJECTS: usize = 100_000;
 /// Defensive import limit for one polyline.
@@ -701,6 +701,22 @@ pub enum DocumentLineSide {
     Right,
 }
 
+/// Explicit correspondence between source and target line endpoints.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DocumentLineOffsetOrientation {
+    Same,
+    Reversed,
+}
+
+/// Explicit correspondence between line-parent contacts and fillet arc endpoints.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DocumentFilletEndpointOrder {
+    FirstThenSecond,
+    SecondThenFirst,
+}
+
 /// Internal circle-tangency containment branch.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -823,6 +839,14 @@ pub enum DocumentConstraintDefinition {
         second_contact: ContactId,
         continuity: DocumentCurveContinuity,
     },
+    LineLineFillet {
+        arc: CurveId,
+        first_contact: ContactId,
+        first_side: DocumentCurveNormalSide,
+        second_contact: ContactId,
+        second_side: DocumentCurveNormalSide,
+        endpoint_order: DocumentFilletEndpointOrder,
+    },
 }
 
 /// One persistent geometric source and its independent audit identity.
@@ -852,7 +876,7 @@ pub enum DocumentAngleOrientation {
     Clockwise,
 }
 
-/// Closed M11 dimension-definition set.
+/// Current persistent dimension-definition set.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum DocumentDimensionDefinition {
@@ -879,6 +903,20 @@ pub enum DocumentDimensionDefinition {
         target: DesignScalarId,
         orientation: DocumentAngleOrientation,
     },
+    SupportingLineOffset {
+        source: CurveSpan,
+        target_segment: CurveSpan,
+        target: DesignScalarId,
+        side: DocumentLineSide,
+        orientation: DocumentLineOffsetOrientation,
+    },
+    ExactTranslatedSegmentOffset {
+        source: CurveSpan,
+        target_segment: CurveSpan,
+        target: DesignScalarId,
+        side: DocumentLineSide,
+        orientation: DocumentLineOffsetOrientation,
+    },
 }
 
 /// One persistent dimension source.
@@ -904,6 +942,87 @@ pub enum DocumentObjectId {
     Dimension(DocumentDimensionId),
 }
 
+/// Any persistent sketch-document element that application state may reference.
+///
+/// This is a semantic identity seam only. It never lowers to a runtime or core ID.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[non_exhaustive]
+pub enum DocumentElementId {
+    Document(DocumentId),
+    Point(DesignPointId),
+    Scalar(DesignScalarId),
+    Curve(CurveId),
+    Contact(ContactId),
+    Constraint(DocumentConstraintId),
+    Dimension(DocumentDimensionId),
+    Source(DocumentSourceId),
+}
+
+impl DocumentElementId {
+    #[must_use]
+    pub const fn persistent_id(self) -> PersistentId {
+        match self {
+            Self::Document(id) => id.0,
+            Self::Point(id) => id.0,
+            Self::Scalar(id) => id.0,
+            Self::Curve(id) => id.0,
+            Self::Contact(id) => id.0,
+            Self::Constraint(id) => id.0,
+            Self::Dimension(id) => id.0,
+            Self::Source(id) => id.0,
+        }
+    }
+
+    #[must_use]
+    pub const fn kind(self) -> &'static str {
+        match self {
+            Self::Document(_) => "document",
+            Self::Point(_) => "point",
+            Self::Scalar(_) => "scalar",
+            Self::Curve(_) => "curve",
+            Self::Contact(_) => "contact",
+            Self::Constraint(_) => "constraint",
+            Self::Dimension(_) => "dimension",
+            Self::Source(_) => "source",
+        }
+    }
+}
+
+macro_rules! element_from_id {
+    ($id:ty, $variant:ident) => {
+        impl From<$id> for DocumentElementId {
+            fn from(value: $id) -> Self {
+                Self::$variant(value)
+            }
+        }
+    };
+}
+
+element_from_id!(DocumentId, Document);
+element_from_id!(DesignPointId, Point);
+element_from_id!(DesignScalarId, Scalar);
+element_from_id!(CurveId, Curve);
+element_from_id!(ContactId, Contact);
+element_from_id!(DocumentConstraintId, Constraint);
+element_from_id!(DocumentDimensionId, Dimension);
+element_from_id!(DocumentSourceId, Source);
+
+/// Persistent owner of one document source/audit identity.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum DocumentSourceOwner {
+    Constraint(DocumentConstraintId),
+    Dimension(DocumentDimensionId),
+}
+
+/// Read-only persistent source view independent of runtime lowering.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DocumentSourceRef<'a> {
+    pub id: DocumentSourceId,
+    pub owner: DocumentSourceOwner,
+    pub label: &'a str,
+    pub suppressed: bool,
+}
+
 /// IDs created by the rectangle command macro.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RectangleIds {
@@ -915,9 +1034,53 @@ pub struct RectangleIds {
     pub targets: [DesignScalarId; 2],
 }
 
+/// Persistent identities created by one point-defined curve mirror construction.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MirroredCurveIds {
+    pub source_curve: CurveId,
+    pub mirrored_curve: CurveId,
+    pub point_pairs: Vec<(DesignPointId, DesignPointId)>,
+    pub symmetry_constraints: Vec<DocumentConstraintId>,
+}
+
+/// Persistent identities changed by one coordinated mirrored B-spline refinement.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DocumentMirroredBSplineInsertion {
+    pub source: DocumentBSplineInsertion,
+    pub mirrored: DocumentBSplineInsertion,
+    pub symmetry_constraint: DocumentConstraintId,
+}
+
+/// Validated input for one atomic associative line-line fillet construction.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LineLineFilletRequest {
+    pub first: CurveSpan,
+    pub first_side: DocumentCurveNormalSide,
+    pub second: CurveSpan,
+    pub second_side: DocumentCurveNormalSide,
+    pub endpoint_order: DocumentFilletEndpointOrder,
+    pub sweep: DocumentArcSweep,
+    pub radius: f64,
+    pub radius_mode: DocumentDimensionMode,
+}
+
+/// Persistent identities created by one associative line-line fillet construction.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LineLineFilletIds {
+    pub constraint: DocumentConstraintId,
+    pub arc: CurveId,
+    pub center: DesignPointId,
+    pub radius: DesignScalarId,
+    pub start_angle: DesignScalarId,
+    pub end_angle: DesignScalarId,
+    pub contacts: [ContactId; 2],
+    pub contact_parameters: [DesignScalarId; 2],
+    pub radius_dimension: DocumentDimensionId,
+    pub radius_target: DesignScalarId,
+}
+
 /// Versioned persistent sketch graph. Runtime solver IDs never appear here.
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SketchDocument {
     version: u32,
     id: DocumentId,
@@ -932,13 +1095,470 @@ pub struct SketchDocument {
     source_order: Vec<DocumentSourceId>,
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct DocumentConstraintV2 {
+    id: DocumentConstraintId,
+    source_id: DocumentSourceId,
+    label: String,
+    suppressed: bool,
+    definition: DocumentConstraintDefinitionV2,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+enum DocumentConstraintDefinitionV2 {
+    FixedPoint {
+        point: DesignPointId,
+        target: [f64; 2],
+    },
+    FixedCoordinate {
+        point: DesignPointId,
+        axis: DocumentCoordinateAxis,
+        target: f64,
+    },
+    Coincident {
+        first: DesignPointId,
+        second: DesignPointId,
+    },
+    Horizontal {
+        line: CurveSpan,
+    },
+    Vertical {
+        line: CurveSpan,
+    },
+    PointOnCurve {
+        point: DesignPointId,
+        contact: ContactId,
+    },
+    Parallel {
+        first: CurveSpan,
+        second: CurveSpan,
+    },
+    Perpendicular {
+        first: CurveSpan,
+        second: CurveSpan,
+    },
+    EqualLength {
+        first: CurveSpan,
+        second: CurveSpan,
+    },
+    EqualRadius {
+        first: CurveId,
+        second: CurveId,
+    },
+    Midpoint {
+        point: DesignPointId,
+        line: CurveSpan,
+    },
+    SymmetricAboutLine {
+        first: DesignPointId,
+        second: DesignPointId,
+        line: CurveSpan,
+    },
+    LineCircleTangency {
+        line_contact: ContactId,
+        circle_contact: ContactId,
+        side: DocumentLineSide,
+    },
+    CircleCircleTangency {
+        first: CurveId,
+        second: CurveId,
+        mode: DocumentCircleTangencyMode,
+        center_direction: [f64; 2],
+    },
+    CircleArcTangency {
+        circle_contact: ContactId,
+        arc_contact: ContactId,
+        side: DocumentArcTangencySide,
+    },
+    LineCurveTangency {
+        line: CurveSpan,
+        endpoint: FeatureEndpoint,
+        curve_contact: ContactId,
+    },
+    CurveCurveContact {
+        first_contact: ContactId,
+        second_contact: ContactId,
+    },
+    CurveCurveTangency {
+        first_contact: ContactId,
+        second_contact: ContactId,
+    },
+    CurveDirection {
+        line: CurveSpan,
+        curve_contact: ContactId,
+        relation: DocumentCurveDirectionRelation,
+    },
+    EqualCurvature {
+        first_contact: ContactId,
+        second_contact: ContactId,
+        relation: DocumentCurveCurvatureRelation,
+    },
+    EndpointContinuity {
+        first_contact: ContactId,
+        second_contact: ContactId,
+        continuity: DocumentCurveContinuity,
+    },
+}
+
+impl From<DocumentConstraintV2> for DocumentConstraint {
+    fn from(constraint: DocumentConstraintV2) -> Self {
+        Self {
+            id: constraint.id,
+            source_id: constraint.source_id,
+            label: constraint.label,
+            suppressed: constraint.suppressed,
+            definition: constraint.definition.into(),
+        }
+    }
+}
+
+impl From<DocumentConstraintDefinitionV2> for DocumentConstraintDefinition {
+    #[allow(clippy::too_many_lines)]
+    fn from(definition: DocumentConstraintDefinitionV2) -> Self {
+        use DocumentConstraintDefinitionV2 as V;
+        match definition {
+            V::FixedPoint { point, target } => Self::FixedPoint { point, target },
+            V::FixedCoordinate {
+                point,
+                axis,
+                target,
+            } => Self::FixedCoordinate {
+                point,
+                axis,
+                target,
+            },
+            V::Coincident { first, second } => Self::Coincident { first, second },
+            V::Horizontal { line } => Self::Horizontal { line },
+            V::Vertical { line } => Self::Vertical { line },
+            V::PointOnCurve { point, contact } => Self::PointOnCurve { point, contact },
+            V::Parallel { first, second } => Self::Parallel { first, second },
+            V::Perpendicular { first, second } => Self::Perpendicular { first, second },
+            V::EqualLength { first, second } => Self::EqualLength { first, second },
+            V::EqualRadius { first, second } => Self::EqualRadius { first, second },
+            V::Midpoint { point, line } => Self::Midpoint { point, line },
+            V::SymmetricAboutLine {
+                first,
+                second,
+                line,
+            } => Self::SymmetricAboutLine {
+                first,
+                second,
+                line,
+            },
+            V::LineCircleTangency {
+                line_contact,
+                circle_contact,
+                side,
+            } => Self::LineCircleTangency {
+                line_contact,
+                circle_contact,
+                side,
+            },
+            V::CircleCircleTangency {
+                first,
+                second,
+                mode,
+                center_direction,
+            } => Self::CircleCircleTangency {
+                first,
+                second,
+                mode,
+                center_direction,
+            },
+            V::CircleArcTangency {
+                circle_contact,
+                arc_contact,
+                side,
+            } => Self::CircleArcTangency {
+                circle_contact,
+                arc_contact,
+                side,
+            },
+            V::LineCurveTangency {
+                line,
+                endpoint,
+                curve_contact,
+            } => Self::LineCurveTangency {
+                line,
+                endpoint,
+                curve_contact,
+            },
+            V::CurveCurveContact {
+                first_contact,
+                second_contact,
+            } => Self::CurveCurveContact {
+                first_contact,
+                second_contact,
+            },
+            V::CurveCurveTangency {
+                first_contact,
+                second_contact,
+            } => Self::CurveCurveTangency {
+                first_contact,
+                second_contact,
+            },
+            V::CurveDirection {
+                line,
+                curve_contact,
+                relation,
+            } => Self::CurveDirection {
+                line,
+                curve_contact,
+                relation,
+            },
+            V::EqualCurvature {
+                first_contact,
+                second_contact,
+                relation,
+            } => Self::EqualCurvature {
+                first_contact,
+                second_contact,
+                relation,
+            },
+            V::EndpointContinuity {
+                first_contact,
+                second_contact,
+                continuity,
+            } => Self::EndpointContinuity {
+                first_contact,
+                second_contact,
+                continuity,
+            },
+        }
+    }
+}
+
+/// Frozen version-one wire representation. The in-memory document is deliberately
+/// separate so future versions migrate explicitly instead of mutating this schema.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct SketchDocumentV1 {
+    version: u32,
+    id: DocumentId,
+    next_id: PersistentId,
+    model_scale: f64,
+    points: Vec<DesignPoint>,
+    scalars: Vec<DesignScalar>,
+    curves: Vec<DesignCurve>,
+    contacts: Vec<ContactSlot>,
+    constraints: Vec<DocumentConstraintV2>,
+    dimensions: Vec<DocumentDimensionV1>,
+    source_order: Vec<DocumentSourceId>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct DocumentDimensionV1 {
+    id: DocumentDimensionId,
+    source_id: DocumentSourceId,
+    label: String,
+    mode: DocumentDimensionMode,
+    suppressed: bool,
+    definition: DocumentDimensionDefinitionV1,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+enum DocumentDimensionDefinitionV1 {
+    PointDistance {
+        first: DesignPointId,
+        second: DesignPointId,
+        target: DesignScalarId,
+    },
+    CurveLength {
+        curve: CurveSpan,
+        target: DesignScalarId,
+    },
+    Radius {
+        curve: CurveId,
+        target: DesignScalarId,
+    },
+    Diameter {
+        curve: CurveId,
+        target: DesignScalarId,
+    },
+    OrientedAngle {
+        first: CurveSpan,
+        second: CurveSpan,
+        target: DesignScalarId,
+        orientation: DocumentAngleOrientation,
+    },
+}
+
+impl From<SketchDocumentV1> for SketchDocument {
+    fn from(document: SketchDocumentV1) -> Self {
+        Self {
+            version: SKETCH_DOCUMENT_VERSION,
+            id: document.id,
+            next_id: document.next_id,
+            model_scale: document.model_scale,
+            points: document.points,
+            scalars: document.scalars,
+            curves: document.curves,
+            contacts: document.contacts,
+            constraints: document
+                .constraints
+                .into_iter()
+                .map(DocumentConstraint::from)
+                .collect(),
+            dimensions: document
+                .dimensions
+                .into_iter()
+                .map(DocumentDimension::from)
+                .collect(),
+            source_order: document.source_order,
+        }
+    }
+}
+
+impl From<DocumentDimensionV1> for DocumentDimension {
+    fn from(dimension: DocumentDimensionV1) -> Self {
+        Self {
+            id: dimension.id,
+            source_id: dimension.source_id,
+            label: dimension.label,
+            mode: dimension.mode,
+            suppressed: dimension.suppressed,
+            definition: dimension.definition.into(),
+        }
+    }
+}
+
+impl From<DocumentDimensionDefinitionV1> for DocumentDimensionDefinition {
+    fn from(definition: DocumentDimensionDefinitionV1) -> Self {
+        match definition {
+            DocumentDimensionDefinitionV1::PointDistance {
+                first,
+                second,
+                target,
+            } => Self::PointDistance {
+                first,
+                second,
+                target,
+            },
+            DocumentDimensionDefinitionV1::CurveLength { curve, target } => {
+                Self::CurveLength { curve, target }
+            }
+            DocumentDimensionDefinitionV1::Radius { curve, target } => {
+                Self::Radius { curve, target }
+            }
+            DocumentDimensionDefinitionV1::Diameter { curve, target } => {
+                Self::Diameter { curve, target }
+            }
+            DocumentDimensionDefinitionV1::OrientedAngle {
+                first,
+                second,
+                target,
+                orientation,
+            } => Self::OrientedAngle {
+                first,
+                second,
+                target,
+                orientation,
+            },
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct SketchDocumentV2 {
+    version: u32,
+    id: DocumentId,
+    next_id: PersistentId,
+    model_scale: f64,
+    points: Vec<DesignPoint>,
+    scalars: Vec<DesignScalar>,
+    curves: Vec<DesignCurve>,
+    contacts: Vec<ContactSlot>,
+    constraints: Vec<DocumentConstraintV2>,
+    dimensions: Vec<DocumentDimension>,
+    source_order: Vec<DocumentSourceId>,
+}
+
+impl From<SketchDocumentV2> for SketchDocument {
+    fn from(document: SketchDocumentV2) -> Self {
+        Self {
+            version: SKETCH_DOCUMENT_VERSION,
+            id: document.id,
+            next_id: document.next_id,
+            model_scale: document.model_scale,
+            points: document.points,
+            scalars: document.scalars,
+            curves: document.curves,
+            contacts: document.contacts,
+            constraints: document
+                .constraints
+                .into_iter()
+                .map(DocumentConstraint::from)
+                .collect(),
+            dimensions: document.dimensions,
+            source_order: document.source_order,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct SketchDocumentV3 {
+    version: u32,
+    id: DocumentId,
+    next_id: PersistentId,
+    model_scale: f64,
+    points: Vec<DesignPoint>,
+    scalars: Vec<DesignScalar>,
+    curves: Vec<DesignCurve>,
+    contacts: Vec<ContactSlot>,
+    constraints: Vec<DocumentConstraint>,
+    dimensions: Vec<DocumentDimension>,
+    source_order: Vec<DocumentSourceId>,
+}
+
+impl From<&SketchDocument> for SketchDocumentV3 {
+    fn from(document: &SketchDocument) -> Self {
+        Self {
+            version: document.version,
+            id: document.id,
+            next_id: document.next_id,
+            model_scale: document.model_scale,
+            points: document.points.clone(),
+            scalars: document.scalars.clone(),
+            curves: document.curves.clone(),
+            contacts: document.contacts.clone(),
+            constraints: document.constraints.clone(),
+            dimensions: document.dimensions.clone(),
+            source_order: document.source_order.clone(),
+        }
+    }
+}
+
+impl From<SketchDocumentV3> for SketchDocument {
+    fn from(document: SketchDocumentV3) -> Self {
+        Self {
+            version: document.version,
+            id: document.id,
+            next_id: document.next_id,
+            model_scale: document.model_scale,
+            points: document.points,
+            scalars: document.scalars,
+            curves: document.curves,
+            contacts: document.contacts,
+            constraints: document.constraints,
+            dimensions: document.dimensions,
+            source_order: document.source_order,
+        }
+    }
+}
+
 #[derive(Deserialize)]
 struct DocumentHeader {
     version: u32,
 }
 
 impl SketchDocument {
-    /// Creates an empty version-one document.
+    /// Creates an empty current-version document.
     ///
     /// # Errors
     ///
@@ -1017,6 +1637,23 @@ impl SketchDocument {
         &self.constraints
     }
 
+    /// Returns the active association that derives one circular arc's fillet endpoints.
+    #[must_use]
+    pub fn line_line_fillet_for_arc(&self, arc: CurveId) -> Option<&DocumentConstraint> {
+        self.line_line_fillet_owner_for_arc(arc)
+            .filter(|constraint| !constraint.suppressed)
+    }
+
+    fn line_line_fillet_owner_for_arc(&self, arc: CurveId) -> Option<&DocumentConstraint> {
+        self.constraints.iter().find(|constraint| {
+            matches!(
+                constraint.definition,
+                DocumentConstraintDefinition::LineLineFillet { arc: output, .. }
+                    if output == arc
+            )
+        })
+    }
+
     #[must_use]
     pub fn dimensions(&self) -> &[DocumentDimension] {
         &self.dimensions
@@ -1025,6 +1662,95 @@ impl SketchDocument {
     #[must_use]
     pub fn source_order(&self) -> &[DocumentSourceId] {
         &self.source_order
+    }
+
+    /// Resolves one persistent audit source to its domain owner.
+    #[must_use]
+    pub fn source(&self, id: DocumentSourceId) -> Option<DocumentSourceRef<'_>> {
+        if let Some(constraint) = self
+            .constraints
+            .iter()
+            .find(|constraint| constraint.source_id == id)
+        {
+            return Some(DocumentSourceRef {
+                id,
+                owner: DocumentSourceOwner::Constraint(constraint.id),
+                label: &constraint.label,
+                suppressed: constraint.suppressed,
+            });
+        }
+        self.dimensions
+            .iter()
+            .find(|dimension| dimension.source_id == id)
+            .map(|dimension| DocumentSourceRef {
+                id,
+                owner: DocumentSourceOwner::Dimension(dimension.id),
+                label: &dimension.label,
+                suppressed: dimension.suppressed,
+            })
+    }
+
+    /// Iterates persistent sources in semantic equation/audit order.
+    pub fn sources(&self) -> impl Iterator<Item = DocumentSourceRef<'_>> + '_ {
+        self.source_order
+            .iter()
+            .filter_map(|source| self.source(*source))
+    }
+
+    /// Returns whether one typed persistent element currently belongs to the document.
+    #[must_use]
+    pub fn contains_element(&self, element: DocumentElementId) -> bool {
+        match element {
+            DocumentElementId::Document(id) => self.id == id,
+            DocumentElementId::Point(id) => self.point(id).is_some(),
+            DocumentElementId::Scalar(id) => self.scalar(id).is_some(),
+            DocumentElementId::Curve(id) => self.curve(id).is_some(),
+            DocumentElementId::Contact(id) => self.contact(id).is_some(),
+            DocumentElementId::Constraint(id) => self.constraint(id).is_some(),
+            DocumentElementId::Dimension(id) => self.dimension(id).is_some(),
+            DocumentElementId::Source(id) => self.source(id).is_some(),
+        }
+    }
+
+    /// Resolves a raw persistent identity to its unique typed document element.
+    #[must_use]
+    pub fn element(&self, id: PersistentId) -> Option<DocumentElementId> {
+        if self.id.0 == id {
+            return Some(DocumentElementId::Document(self.id));
+        }
+        self.points
+            .iter()
+            .find_map(|value| (value.id.0 == id).then_some(DocumentElementId::Point(value.id)))
+            .or_else(|| {
+                self.scalars.iter().find_map(|value| {
+                    (value.id.0 == id).then_some(DocumentElementId::Scalar(value.id))
+                })
+            })
+            .or_else(|| {
+                self.curves.iter().find_map(|value| {
+                    (value.id.0 == id).then_some(DocumentElementId::Curve(value.id))
+                })
+            })
+            .or_else(|| {
+                self.contacts.iter().find_map(|value| {
+                    (value.id.0 == id).then_some(DocumentElementId::Contact(value.id))
+                })
+            })
+            .or_else(|| {
+                self.constraints.iter().find_map(|value| {
+                    (value.id.0 == id).then_some(DocumentElementId::Constraint(value.id))
+                })
+            })
+            .or_else(|| {
+                self.dimensions.iter().find_map(|value| {
+                    (value.id.0 == id).then_some(DocumentElementId::Dimension(value.id))
+                })
+            })
+            .or_else(|| {
+                self.source_order.iter().find_map(|source| {
+                    (source.0 == id).then_some(DocumentElementId::Source(*source))
+                })
+            })
     }
 
     #[must_use]
@@ -1324,6 +2050,15 @@ impl SketchDocument {
             .curve(curve)
             .ok_or_else(|| unknown("curve", curve.0))?
             .definition;
+        if self.constraints.iter().any(|constraint| {
+            !constraint.suppressed
+                && matches!(
+                    constraint.definition,
+                    DocumentConstraintDefinition::LineLineFillet { arc, .. } if arc == curve
+                )
+        }) {
+            return Err(DocumentTrimProjectionError::UnsupportedCurve { curve });
+        }
         if !matches!(
             definition,
             CurveDefinition::CircularArc { .. }
@@ -3153,6 +3888,471 @@ impl SketchDocument {
         })
     }
 
+    /// Creates one associative circular fillet between two bounded directed line spans.
+    ///
+    /// Parent curves remain untrimmed. Deleting the returned association constraint removes its
+    /// contacts and leaves the last accepted arc as ordinary geometry.
+    ///
+    /// # Errors
+    ///
+    /// Rejects parallel/unresolved parents, escaped contacts, invalid radius/labels, or any
+    /// expanded document that fails complete validation.
+    pub fn add_line_line_fillet(
+        &mut self,
+        label: &str,
+        request: LineLineFilletRequest,
+    ) -> Result<LineLineFilletIds, DocumentError> {
+        validate_label(label, "line fillet label")?;
+        finite_positive(request.radius, "line fillet radius")?;
+        self.validate_line_span(request.first)?;
+        self.validate_line_span(request.second)?;
+        if request.first == request.second {
+            return invalid("line fillet parent", "line spans must be distinct");
+        }
+        let before = self.clone();
+        let result = self.add_line_line_fillet_inner(label, request);
+        if result.is_err() {
+            let next_id = self.next_id;
+            *self = before;
+            self.next_id = next_id;
+        }
+        result
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn add_line_line_fillet_inner(
+        &mut self,
+        label: &str,
+        request: LineLineFilletRequest,
+    ) -> Result<LineLineFilletIds, DocumentError> {
+        let (first_start_id, first_end_id) = self.line_span_endpoint_ids(request.first)?;
+        let (second_start_id, second_end_id) = self.line_span_endpoint_ids(request.second)?;
+        let first_start = self.require_point(first_start_id)?.position;
+        let first_end = self.require_point(first_end_id)?.position;
+        let second_start = self.require_point(second_start_id)?.position;
+        let second_end = self.require_point(second_end_id)?.position;
+        let first_delta = [first_end[0] - first_start[0], first_end[1] - first_start[1]];
+        let second_delta = [
+            second_end[0] - second_start[0],
+            second_end[1] - second_start[1],
+        ];
+        let first_length = first_delta[0].hypot(first_delta[1]);
+        let second_length = second_delta[0].hypot(second_delta[1]);
+        if !first_length.is_finite()
+            || !second_length.is_finite()
+            || first_length == 0.0
+            || second_length == 0.0
+        {
+            return invalid("line fillet parent", "line span is degenerate");
+        }
+        let first_direction = [first_delta[0] / first_length, first_delta[1] / first_length];
+        let second_direction = [
+            second_delta[0] / second_length,
+            second_delta[1] / second_length,
+        ];
+        let determinant = cross(first_direction, second_direction);
+        if !determinant.is_finite() || determinant.abs() <= 1.0e-8 {
+            return invalid(
+                "line fillet parent",
+                "line directions are parallel or numerically unresolved",
+            );
+        }
+        let first_side = match request.first_side {
+            DocumentCurveNormalSide::Left => 1.0,
+            DocumentCurveNormalSide::Right => -1.0,
+        };
+        let second_side = match request.second_side {
+            DocumentCurveNormalSide::Left => 1.0,
+            DocumentCurveNormalSide::Right => -1.0,
+        };
+        let first_normal = [-first_direction[1], first_direction[0]];
+        let second_normal = [-second_direction[1], second_direction[0]];
+        let first_offset_origin = [
+            first_start[0] + first_side * request.radius * first_normal[0],
+            first_start[1] + first_side * request.radius * first_normal[1],
+        ];
+        let second_offset_origin = [
+            second_start[0] + second_side * request.radius * second_normal[0],
+            second_start[1] + second_side * request.radius * second_normal[1],
+        ];
+        let offset_difference = [
+            second_offset_origin[0] - first_offset_origin[0],
+            second_offset_origin[1] - first_offset_origin[1],
+        ];
+        let first_distance = cross(offset_difference, second_direction) / determinant;
+        let center_position = [
+            first_offset_origin[0] + first_distance * first_direction[0],
+            first_offset_origin[1] + first_distance * first_direction[1],
+        ];
+        finite_pair(center_position, "line fillet center")?;
+        let first_contact_position = [
+            center_position[0] - first_side * request.radius * first_normal[0],
+            center_position[1] - first_side * request.radius * first_normal[1],
+        ];
+        let second_contact_position = [
+            center_position[0] - second_side * request.radius * second_normal[0],
+            center_position[1] - second_side * request.radius * second_normal[1],
+        ];
+        let first_parameter = dot(
+            [
+                first_contact_position[0] - first_start[0],
+                first_contact_position[1] - first_start[1],
+            ],
+            first_direction,
+        ) / first_length;
+        let second_parameter = dot(
+            [
+                second_contact_position[0] - second_start[0],
+                second_contact_position[1] - second_start[1],
+            ],
+            second_direction,
+        ) / second_length;
+        if !first_parameter.is_finite()
+            || !second_parameter.is_finite()
+            || first_parameter <= 0.0
+            || first_parameter >= 1.0
+            || second_parameter <= 0.0
+            || second_parameter >= 1.0
+        {
+            return invalid(
+                "line fillet contact",
+                "selected radius/side root escapes a strict parent interior",
+            );
+        }
+        let first_angle = (first_contact_position[1] - center_position[1])
+            .atan2(first_contact_position[0] - center_position[0]);
+        let second_angle = (second_contact_position[1] - center_position[1])
+            .atan2(second_contact_position[0] - center_position[0]);
+        let (start_value, end_value) = match request.endpoint_order {
+            DocumentFilletEndpointOrder::FirstThenSecond => (first_angle, second_angle),
+            DocumentFilletEndpointOrder::SecondThenFirst => (second_angle, first_angle),
+        };
+        document_arc_signed_sweep(start_value, end_value, request.sweep)?;
+
+        let center = self.add_named_point(format!("{label}.center"), center_position)?;
+        let radius = self.add_scalar(
+            format!("{label}.radius"),
+            request.radius,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )?;
+        let start_angle = self.add_scalar(
+            format!("{label}.start_angle"),
+            start_value,
+            ScalarUnit::Angle,
+            ScalarDomain::Finite,
+        )?;
+        let end_angle = self.add_scalar(
+            format!("{label}.end_angle"),
+            end_value,
+            ScalarUnit::Angle,
+            ScalarDomain::Finite,
+        )?;
+        let arc = self.add_curve(
+            format!("{label}.arc"),
+            CurveDefinition::CircularArc {
+                center,
+                radius,
+                start_angle,
+                end_angle,
+                sweep: request.sweep,
+            },
+        )?;
+        let contact_parameters = [
+            self.add_scalar(
+                format!("{label}.first_parameter"),
+                first_parameter,
+                ScalarUnit::Parameter,
+                ScalarDomain::Bounded {
+                    lower: 0.0,
+                    upper: 1.0,
+                },
+            )?,
+            self.add_scalar(
+                format!("{label}.second_parameter"),
+                second_parameter,
+                ScalarUnit::Parameter,
+                ScalarDomain::Bounded {
+                    lower: 0.0,
+                    upper: 1.0,
+                },
+            )?,
+        ];
+        let contacts = [
+            self.add_contact(
+                format!("{label}.first_contact"),
+                ContactDefinition {
+                    curve: request.first,
+                    parameter: contact_parameters[0],
+                    domain: ContactDomain::Bounded {
+                        lower: 0.0,
+                        upper: 1.0,
+                    },
+                    winding: 0,
+                    neighborhood: ContactNeighborhood::Interior,
+                    tangent_orientation: None,
+                },
+            )?,
+            self.add_contact(
+                format!("{label}.second_contact"),
+                ContactDefinition {
+                    curve: request.second,
+                    parameter: contact_parameters[1],
+                    domain: ContactDomain::Bounded {
+                        lower: 0.0,
+                        upper: 1.0,
+                    },
+                    winding: 0,
+                    neighborhood: ContactNeighborhood::Interior,
+                    tangent_orientation: None,
+                },
+            )?,
+        ];
+        let constraint = self.add_constraint(
+            format!("{label}.association"),
+            DocumentConstraintDefinition::LineLineFillet {
+                arc,
+                first_contact: contacts[0],
+                first_side: request.first_side,
+                second_contact: contacts[1],
+                second_side: request.second_side,
+                endpoint_order: request.endpoint_order,
+            },
+        )?;
+        let radius_target = self.add_scalar(
+            format!("{label}.radius_target"),
+            request.radius,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )?;
+        let radius_dimension = self.add_dimension(
+            format!("{label}.radius_dimension"),
+            DocumentDimensionDefinition::Radius {
+                curve: arc,
+                target: radius_target,
+            },
+            request.radius_mode,
+        )?;
+        Ok(LineLineFilletIds {
+            constraint,
+            arc,
+            center,
+            radius,
+            start_angle,
+            end_angle,
+            contacts,
+            contact_parameters,
+            radius_dimension,
+            radius_target,
+        })
+    }
+
+    /// Mirrors one point-defined curve about a directed line span.
+    ///
+    /// The result is ordinary geometry associated by one ordinary point-symmetry constraint per
+    /// control point. Supported sources are lines, polylines, quadratic/cubic Beziers, and
+    /// non-rational B-splines.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an invalid axis, unsupported source, or failed atomic expanded edit.
+    pub fn add_mirrored_curve(
+        &mut self,
+        label: &str,
+        source_curve: CurveId,
+        axis: CurveSpan,
+    ) -> Result<MirroredCurveIds, DocumentError> {
+        validate_label(label, "mirrored curve label")?;
+        self.validate_line_span(axis)?;
+        let before = self.clone();
+        let result = self.add_mirrored_curve_inner(label, source_curve, axis);
+        if result.is_err() {
+            let next_id = self.next_id;
+            *self = before;
+            self.next_id = next_id;
+        }
+        result
+    }
+
+    fn add_mirrored_curve_inner(
+        &mut self,
+        label: &str,
+        source_curve: CurveId,
+        axis: CurveSpan,
+    ) -> Result<MirroredCurveIds, DocumentError> {
+        let source = self
+            .curve(source_curve)
+            .ok_or_else(|| unknown("curve", source_curve.0))?
+            .clone();
+        let controls = point_defined_curve_controls(&source.definition).ok_or_else(|| {
+            DocumentError::InvalidField {
+                field: "mirror source",
+                message: "expected a line, polyline, Bezier, or non-rational B-spline".into(),
+            }
+        })?;
+        let (axis_start, _) = self.line_span_endpoint_ids(axis)?;
+        let axis_origin = self.require_point(axis_start)?.position;
+        let axis_direction = self.current_curve_span_direction(axis)?;
+        let mut point_pairs = Vec::with_capacity(controls.len());
+        for (index, source_point) in controls.iter().copied().enumerate() {
+            let position = self.require_point(source_point)?.position;
+            let mirrored = reflect_point_about_line(position, axis_origin, axis_direction)?;
+            let mirrored_point =
+                self.add_named_point(format!("{label}.point_{}", index + 1), mirrored)?;
+            point_pairs.push((source_point, mirrored_point));
+        }
+        let mirrored_controls = point_pairs
+            .iter()
+            .map(|(_, mirrored)| *mirrored)
+            .collect::<Vec<_>>();
+        let mirrored_definition =
+            mirror_curve_definition(source.definition, &mirrored_controls, axis_direction)?;
+        let mirrored_curve = self.add_curve(format!("{label}.curve"), mirrored_definition)?;
+        let symmetry_constraints = point_pairs
+            .iter()
+            .enumerate()
+            .map(|(index, (source_point, mirrored_point))| {
+                self.add_constraint(
+                    format!("{label}.symmetry_{}", index + 1),
+                    DocumentConstraintDefinition::SymmetricAboutLine {
+                        first: *source_point,
+                        second: *mirrored_point,
+                        line: axis,
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>, DocumentError>>()?;
+        Ok(MirroredCurveIds {
+            source_curve,
+            mirrored_curve,
+            point_pairs,
+            symmetry_constraints,
+        })
+    }
+
+    /// Inserts the same knot into an associated mirrored B-spline pair.
+    ///
+    /// Both topology edits and the new control-point symmetry constraint are accepted atomically.
+    /// The pair must have identical basis topology and an active symmetry constraint for every
+    /// corresponding pre-refinement control pair.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an invalid association, insertion, or refined document.
+    pub fn insert_mirrored_bspline_knot(
+        &mut self,
+        label: &str,
+        source_curve: CurveId,
+        mirrored_curve: CurveId,
+        axis: CurveSpan,
+        parameter: f64,
+    ) -> Result<DocumentMirroredBSplineInsertion, DocumentError> {
+        validate_label(label, "mirrored B-spline insertion label")?;
+        self.validate_mirrored_bspline_pair(source_curve, mirrored_curve, axis)?;
+        let before = self.clone();
+        let result = (|| {
+            let source = self.insert_bspline_knot(source_curve, parameter)?;
+            let mirrored = self.insert_bspline_knot(mirrored_curve, parameter)?;
+            let symmetry_constraint = self.add_constraint(
+                format!("{label}.new_control_symmetry"),
+                DocumentConstraintDefinition::SymmetricAboutLine {
+                    first: source.new_control,
+                    second: mirrored.new_control,
+                    line: axis,
+                },
+            )?;
+            Ok(DocumentMirroredBSplineInsertion {
+                source,
+                mirrored,
+                symmetry_constraint,
+            })
+        })();
+        if result.is_err() {
+            let next_id = self.next_id;
+            let span_cursors = self.spline_span_allocator_cursors();
+            *self = before;
+            self.next_id = next_id;
+            self.advance_spline_span_allocators(&span_cursors);
+        }
+        result
+    }
+
+    fn validate_mirrored_bspline_pair(
+        &self,
+        source_curve: CurveId,
+        mirrored_curve: CurveId,
+        axis: CurveSpan,
+    ) -> Result<(), DocumentError> {
+        self.validate_line_span(axis)?;
+        if source_curve == mirrored_curve {
+            return invalid("mirrored B-spline pair", "curves must be distinct");
+        }
+        let source = self
+            .curve(source_curve)
+            .ok_or_else(|| unknown("curve", source_curve.0))?;
+        let mirrored = self
+            .curve(mirrored_curve)
+            .ok_or_else(|| unknown("curve", mirrored_curve.0))?;
+        let (
+            CurveDefinition::BSpline {
+                form: source_form,
+                degree: source_degree,
+                controls: source_controls,
+                knots: source_knots,
+                span_ids: source_spans,
+                ..
+            },
+            CurveDefinition::BSpline {
+                form: mirrored_form,
+                degree: mirrored_degree,
+                controls: mirrored_controls,
+                knots: mirrored_knots,
+                span_ids: mirrored_spans,
+                ..
+            },
+        ) = (&source.definition, &mirrored.definition)
+        else {
+            return invalid("mirrored B-spline pair", "expected two B-splines");
+        };
+        if source_form != mirrored_form
+            || source_degree != mirrored_degree
+            || source_knots != mirrored_knots
+            || source_spans.len() != mirrored_spans.len()
+            || source_controls.len() != mirrored_controls.len()
+        {
+            return invalid(
+                "mirrored B-spline pair",
+                "curves must have identical basis topology",
+            );
+        }
+        let all_associated =
+            source_controls
+                .iter()
+                .zip(mirrored_controls)
+                .all(|(first, second)| {
+                    self.constraints.iter().any(|constraint| {
+                    !constraint.suppressed
+                        && matches!(
+                            constraint.definition,
+                            DocumentConstraintDefinition::SymmetricAboutLine {
+                                first: constraint_first,
+                                second: constraint_second,
+                                line,
+                            } if line == axis
+                                && ((constraint_first == *first && constraint_second == *second)
+                                    || (constraint_first == *second && constraint_second == *first))
+                        )
+                })
+                });
+        if !all_associated {
+            return invalid(
+                "mirrored B-spline pair",
+                "every corresponding control pair requires an active symmetry constraint",
+            );
+        }
+        Ok(())
+    }
+
     /// Replaces one point position after validating the complete candidate graph.
     ///
     /// # Errors
@@ -3190,6 +4390,30 @@ impl SketchDocument {
             return invalid(
                 "scalar edit",
                 "contact-owned scalars require an atomic contact-state edit",
+            );
+        }
+        if self.curves.iter().any(|curve| {
+            let CurveDefinition::CircularArc {
+                start_angle,
+                end_angle,
+                ..
+            } = &curve.definition
+            else {
+                return false;
+            };
+            (*start_angle == id || *end_angle == id)
+                && self.constraints.iter().any(|constraint| {
+                    !constraint.suppressed
+                        && matches!(
+                            constraint.definition,
+                            DocumentConstraintDefinition::LineLineFillet { arc, .. }
+                                if arc == curve.id
+                        )
+                })
+        }) {
+            return invalid(
+                "scalar edit",
+                "active line-fillet endpoint angles are derived from parent contacts",
             );
         }
         if self.curves.iter().any(|curve| {
@@ -3414,6 +4638,89 @@ impl SketchDocument {
         | CurveDefinition::EllipticalArc { sweep: current, .. }) = &mut value.definition
         else {
             return invalid("curve", "sweep edit requires a circular or elliptical arc");
+        };
+        *current = sweep;
+        candidate.validate()?;
+        *self = candidate;
+        Ok(())
+    }
+
+    /// Atomically changes both normal sides, endpoint order, and sweep of one line fillet.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a missing/non-fillet source or invalid resulting document state.
+    pub fn set_line_line_fillet_branch(
+        &mut self,
+        constraint: DocumentConstraintId,
+        first_side: DocumentCurveNormalSide,
+        second_side: DocumentCurveNormalSide,
+        endpoint_order: DocumentFilletEndpointOrder,
+        sweep: DocumentArcSweep,
+    ) -> Result<(), DocumentError> {
+        let mut candidate = self.clone();
+        let (arc, old_order) = {
+            let source = candidate
+                .constraints
+                .iter()
+                .find(|source| source.id == constraint)
+                .ok_or_else(|| unknown("constraint", constraint.0))?;
+            let DocumentConstraintDefinition::LineLineFillet {
+                arc,
+                endpoint_order,
+                ..
+            } = source.definition
+            else {
+                return invalid("constraint", "branch edit requires a line fillet");
+            };
+            (arc, endpoint_order)
+        };
+        if endpoint_order != old_order {
+            let (start, end) = match &candidate
+                .curve(arc)
+                .ok_or_else(|| unknown("curve", arc.0))?
+                .definition
+            {
+                CurveDefinition::CircularArc {
+                    start_angle,
+                    end_angle,
+                    ..
+                } => (*start_angle, *end_angle),
+                _ => return invalid("line fillet arc", "output must remain a circular arc"),
+            };
+            let start_value = candidate.require_scalar(start)?.value;
+            let end_value = candidate.require_scalar(end)?.value;
+            candidate
+                .scalar_mut(start)
+                .ok_or_else(|| unknown("scalar", start.0))?
+                .value = end_value;
+            candidate
+                .scalar_mut(end)
+                .ok_or_else(|| unknown("scalar", end.0))?
+                .value = start_value;
+        }
+        let source = candidate
+            .constraints
+            .iter_mut()
+            .find(|source| source.id == constraint)
+            .ok_or_else(|| unknown("constraint", constraint.0))?;
+        let DocumentConstraintDefinition::LineLineFillet {
+            first_side: current_first,
+            second_side: current_second,
+            endpoint_order: current_order,
+            ..
+        } = &mut source.definition
+        else {
+            return invalid("constraint", "branch edit requires a line fillet");
+        };
+        *current_first = first_side;
+        *current_second = second_side;
+        *current_order = endpoint_order;
+        let output = candidate
+            .curve_mut(arc)
+            .ok_or_else(|| unknown("curve", arc.0))?;
+        let CurveDefinition::CircularArc { sweep: current, .. } = &mut output.definition else {
+            return invalid("line fillet arc", "output must remain a circular arc");
         };
         *current = sweep;
         candidate.validate()?;
@@ -3811,6 +5118,17 @@ impl SketchDocument {
                 break;
             }
         }
+        if let Some(arc) = self.constraints.iter().find_map(|constraint| {
+            let DocumentConstraintDefinition::LineLineFillet { arc, .. } = constraint.definition
+            else {
+                return None;
+            };
+            removal
+                .contains(&DocumentObjectId::Curve(arc))
+                .then_some(arc)
+        }) {
+            return Err(DocumentError::ObjectInUse(arc.0));
+        }
 
         let mut removal = removal.into_iter().collect::<Vec<_>>();
         removal.sort_by_key(|object| match object {
@@ -3932,12 +5250,21 @@ impl SketchDocument {
         }
         let mut sources = BTreeSet::new();
         let mut used_contacts = BTreeSet::new();
+        let mut fillet_arcs = BTreeSet::new();
         for constraint in &self.constraints {
             insert_unique(&mut ids, constraint.id.0)?;
             insert_unique(&mut ids, constraint.source_id.0)?;
             sources.insert(constraint.source_id);
             validate_label(&constraint.label, "constraint label")?;
             self.validate_constraint_definition(&constraint.definition)?;
+            if let DocumentConstraintDefinition::LineLineFillet { arc, .. } = constraint.definition
+                && !fillet_arcs.insert(arc)
+            {
+                return invalid(
+                    "line fillet arc",
+                    "one output arc may belong to only one fillet association",
+                );
+            }
             for contact in constraint_contacts(&constraint.definition) {
                 if !used_contacts.insert(contact) {
                     return invalid(
@@ -3945,6 +5272,24 @@ impl SketchDocument {
                         "a contact slot may belong to only one constraint source",
                     );
                 }
+            }
+        }
+        for constraint in &self.constraints {
+            if matches!(
+                constraint.definition,
+                DocumentConstraintDefinition::LineLineFillet { .. }
+            ) {
+                continue;
+            }
+            if constraint_contacts(&constraint.definition)
+                .into_iter()
+                .filter_map(|contact| self.contact(contact))
+                .any(|contact| fillet_arcs.contains(&contact.curve.curve))
+            {
+                return invalid(
+                    "line fillet arc",
+                    "derived output arcs cannot own executable contacts before M28",
+                );
             }
         }
         for dimension in &self.dimensions {
@@ -3977,13 +5322,8 @@ impl SketchDocument {
     pub fn to_canonical_json(&self) -> Result<String, DocumentError> {
         self.validate()?;
         let mut canonical = self.clone();
-        canonical.points.sort_by_key(|value| value.id);
-        canonical.scalars.sort_by_key(|value| value.id);
-        canonical.curves.sort_by_key(|value| value.id);
-        canonical.contacts.sort_by_key(|value| value.id);
-        canonical.constraints.sort_by_key(|value| value.id);
-        canonical.dimensions.sort_by_key(|value| value.id);
-        Ok(serde_json::to_string(&canonical)?)
+        canonical.canonicalize();
+        Ok(serde_json::to_string(&SketchDocumentV3::from(&canonical))?)
     }
 
     /// Parses and strictly validates a versioned JSON document.
@@ -4000,21 +5340,29 @@ impl SketchDocument {
             });
         }
         let header: DocumentHeader = serde_json::from_str(json)?;
-        if header.version != SKETCH_DOCUMENT_VERSION {
-            return Err(DocumentError::UnsupportedVersion {
-                actual: header.version,
-                expected: SKETCH_DOCUMENT_VERSION,
-            });
-        }
-        let mut document: Self = serde_json::from_str(json)?;
+        let mut document = match header.version {
+            1 => Self::from(serde_json::from_str::<SketchDocumentV1>(json)?),
+            2 => Self::from(serde_json::from_str::<SketchDocumentV2>(json)?),
+            3 => Self::from(serde_json::from_str::<SketchDocumentV3>(json)?),
+            actual => {
+                return Err(DocumentError::UnsupportedVersion {
+                    actual,
+                    expected: SKETCH_DOCUMENT_VERSION,
+                });
+            }
+        };
         document.validate()?;
-        document.points.sort_by_key(|value| value.id);
-        document.scalars.sort_by_key(|value| value.id);
-        document.curves.sort_by_key(|value| value.id);
-        document.contacts.sort_by_key(|value| value.id);
-        document.constraints.sort_by_key(|value| value.id);
-        document.dimensions.sort_by_key(|value| value.id);
+        document.canonicalize();
         Ok(document)
+    }
+
+    fn canonicalize(&mut self) {
+        self.points.sort_by_key(|value| value.id);
+        self.scalars.sort_by_key(|value| value.id);
+        self.curves.sort_by_key(|value| value.id);
+        self.contacts.sort_by_key(|value| value.id);
+        self.constraints.sort_by_key(|value| value.id);
+        self.dimensions.sort_by_key(|value| value.id);
     }
 
     pub(crate) fn point_mut(&mut self, id: DesignPointId) -> Option<&mut DesignPoint> {
@@ -4095,17 +5443,35 @@ impl SketchDocument {
                     DocumentDimensionDefinition::CurveLength { curve, .. } if curve == span
                 )
             });
-        has_axis_constraint && has_driving_length
+        let has_sided_fillet = self
+            .constraints
+            .iter()
+            .filter(|constraint| !constraint.suppressed)
+            .any(|constraint| {
+                let DocumentConstraintDefinition::LineLineFillet {
+                    first_contact,
+                    second_contact,
+                    ..
+                } = constraint.definition
+                else {
+                    return false;
+                };
+                [first_contact, second_contact]
+                    .into_iter()
+                    .filter_map(|contact| self.contact(contact))
+                    .any(|contact| contact.curve == span)
+            });
+        has_sided_fillet || (has_axis_constraint && has_driving_length)
     }
 
-    pub(crate) fn current_curve_span_direction(
+    fn line_span_endpoint_ids(
         &self,
         span: CurveSpan,
-    ) -> Result<[f64; 2], DocumentError> {
+    ) -> Result<(DesignPointId, DesignPointId), DocumentError> {
         let curve = self
             .curve(span.curve)
             .ok_or_else(|| unknown("curve", span.curve.0))?;
-        let (start, end) = match &curve.definition {
+        let endpoints = match &curve.definition {
             CurveDefinition::Line { start, end, .. } if span.segment == 0 => (*start, *end),
             CurveDefinition::Polyline { points, closed, .. } => {
                 let start =
@@ -4133,6 +5499,14 @@ impl SketchDocument {
             }
             _ => return invalid("curve span", "branch direction requires a line segment"),
         };
+        Ok(endpoints)
+    }
+
+    pub(crate) fn current_curve_span_direction(
+        &self,
+        span: CurveSpan,
+    ) -> Result<[f64; 2], DocumentError> {
+        let (start, end) = self.line_span_endpoint_ids(span)?;
         normalized_direction(
             self.require_point(start)?.position,
             self.require_point(end)?.position,
@@ -4867,6 +6241,82 @@ impl SketchDocument {
                     finite_positive(*second_rate, "parametric C2 second rate")?;
                 }
             }
+            C::LineLineFillet {
+                arc,
+                first_contact,
+                second_contact,
+                ..
+            } => {
+                if first_contact == second_contact {
+                    return invalid("fillet contact", "parent contacts must be distinct");
+                }
+                let first = self.require_line_contact(*first_contact)?;
+                let second = self.require_line_contact(*second_contact)?;
+                if first.curve == second.curve {
+                    return invalid("fillet parent", "line spans must be distinct");
+                }
+                for contact in [first, second] {
+                    if contact.domain
+                        != (ContactDomain::Bounded {
+                            lower: 0.0,
+                            upper: 1.0,
+                        })
+                        || contact.neighborhood != ContactNeighborhood::Interior
+                        || contact.tangent_orientation.is_some()
+                    {
+                        return invalid(
+                            "fillet contact",
+                            "parents require unoriented strict-interior bounded [0, 1] contacts",
+                        );
+                    }
+                }
+                let output = self.require_radial_curve(*arc)?;
+                if !matches!(output.definition, CurveDefinition::CircularArc { .. }) {
+                    return invalid("line fillet arc", "output must be a circular arc");
+                }
+                let first_jet = self.evaluate_contact_jet(*first_contact).map_err(|error| {
+                    contact_document_evaluation_error(*first_contact, first.curve.curve, error)
+                })?;
+                let second_jet = self
+                    .evaluate_contact_jet(*second_contact)
+                    .map_err(|error| {
+                        contact_document_evaluation_error(
+                            *second_contact,
+                            second.curve.curve,
+                            error,
+                        )
+                    })?;
+                let first_differential = first_jet.differential().map_err(|source| {
+                    DocumentError::ContactDifferential {
+                        contact: *first_contact,
+                        source,
+                    }
+                })?;
+                let second_differential = second_jet.differential().map_err(|source| {
+                    DocumentError::ContactDifferential {
+                        contact: *second_contact,
+                        source,
+                    }
+                })?;
+                if cross(
+                    [
+                        first_differential.unit_tangent.x,
+                        first_differential.unit_tangent.y,
+                    ],
+                    [
+                        second_differential.unit_tangent.x,
+                        second_differential.unit_tangent.y,
+                    ],
+                )
+                .abs()
+                    <= 1.0e-8
+                {
+                    return invalid(
+                        "fillet parent",
+                        "line directions are parallel or numerically unresolved",
+                    );
+                }
+            }
         }
         Ok(())
     }
@@ -4903,6 +6353,25 @@ impl SketchDocument {
                 self.validate_line_span(*second)?;
                 if first == second {
                     return invalid("dimension.definition", "angle spans must be distinct");
+                }
+                *target
+            }
+            D::SupportingLineOffset {
+                source,
+                target_segment,
+                target,
+                ..
+            }
+            | D::ExactTranslatedSegmentOffset {
+                source,
+                target_segment,
+                target,
+                ..
+            } => {
+                self.validate_line_span(*source)?;
+                self.validate_line_span(*target_segment)?;
+                if source == target_segment {
+                    return invalid("dimension.definition", "offset spans must be distinct");
                 }
                 *target
             }
@@ -5630,6 +7099,11 @@ fn constraint_contacts(definition: &DocumentConstraintDefinition) -> Vec<Contact
             first_contact,
             second_contact,
             ..
+        }
+        | DocumentConstraintDefinition::LineLineFillet {
+            first_contact,
+            second_contact,
+            ..
         } => vec![*first_contact, *second_contact],
         _ => Vec::new(),
     }
@@ -5789,6 +7263,10 @@ fn constraint_references_object(
             DocumentObjectId::Curve(selected),
         ) => *first == selected || *second == selected,
         (
+            DocumentConstraintDefinition::LineLineFillet { arc, .. },
+            DocumentObjectId::Curve(selected),
+        ) => *arc == selected,
+        (
             DocumentConstraintDefinition::PointOnCurve { contact, .. }
             | DocumentConstraintDefinition::LineCurveTangency {
                 curve_contact: contact,
@@ -5834,6 +7312,11 @@ fn constraint_references_object(
                 first_contact,
                 second_contact,
                 ..
+            }
+            | DocumentConstraintDefinition::LineLineFillet {
+                first_contact,
+                second_contact,
+                ..
             },
             DocumentObjectId::Contact(selected),
         ) => *first_contact == selected || *second_contact == selected,
@@ -5863,6 +7346,19 @@ fn dimension_references_object(
             DocumentDimensionDefinition::OrientedAngle { first, second, .. },
             DocumentObjectId::Curve(selected),
         ) => first.curve == selected || second.curve == selected,
+        (
+            DocumentDimensionDefinition::SupportingLineOffset {
+                source,
+                target_segment,
+                ..
+            }
+            | DocumentDimensionDefinition::ExactTranslatedSegmentOffset {
+                source,
+                target_segment,
+                ..
+            },
+            DocumentObjectId::Curve(selected),
+        ) => source.curve == selected || target_segment.curve == selected,
         (definition, DocumentObjectId::Scalar(scalar)) => dimension_target(definition) == scalar,
         _ => false,
     }
@@ -5921,6 +7417,113 @@ fn curve_segment_count(definition: &CurveDefinition) -> usize {
     }
 }
 
+fn point_defined_curve_controls(definition: &CurveDefinition) -> Option<Vec<DesignPointId>> {
+    match definition {
+        CurveDefinition::Line { start, end, .. } => Some(vec![*start, *end]),
+        CurveDefinition::Polyline { points, .. } => Some(points.clone()),
+        CurveDefinition::QuadraticBezier { controls } => Some(controls.to_vec()),
+        CurveDefinition::CubicBezier { controls } => Some(controls.to_vec()),
+        CurveDefinition::BSpline { controls, .. } => Some(controls.clone()),
+        _ => None,
+    }
+}
+
+fn mirror_curve_definition(
+    definition: CurveDefinition,
+    controls: &[DesignPointId],
+    axis_direction: [f64; 2],
+) -> Result<CurveDefinition, DocumentError> {
+    match definition {
+        CurveDefinition::Line {
+            branch_direction, ..
+        } => {
+            let [start, end] = controls else {
+                return invalid("mirrored curve", "line requires two mirrored points");
+            };
+            Ok(CurveDefinition::Line {
+                start: *start,
+                end: *end,
+                branch_direction: reflect_direction_about_axis(branch_direction, axis_direction)?,
+            })
+        }
+        CurveDefinition::Polyline {
+            closed,
+            branch_directions,
+            ..
+        } => Ok(CurveDefinition::Polyline {
+            points: controls.to_vec(),
+            closed,
+            branch_directions: branch_directions
+                .into_iter()
+                .map(|direction| reflect_direction_about_axis(direction, axis_direction))
+                .collect::<Result<Vec<_>, _>>()?,
+        }),
+        CurveDefinition::QuadraticBezier { .. } => Ok(CurveDefinition::QuadraticBezier {
+            controls: controls
+                .try_into()
+                .map_err(|_| DocumentError::InvalidField {
+                    field: "mirrored curve",
+                    message: "quadratic Bezier requires three mirrored points".into(),
+                })?,
+        }),
+        CurveDefinition::CubicBezier { .. } => Ok(CurveDefinition::CubicBezier {
+            controls: controls
+                .try_into()
+                .map_err(|_| DocumentError::InvalidField {
+                    field: "mirrored curve",
+                    message: "cubic Bezier requires four mirrored points".into(),
+                })?,
+        }),
+        CurveDefinition::BSpline {
+            form,
+            degree,
+            knots,
+            span_ids,
+            next_span_id,
+            ..
+        } => Ok(CurveDefinition::BSpline {
+            form,
+            degree,
+            controls: controls.to_vec(),
+            knots,
+            span_ids,
+            next_span_id,
+        }),
+        _ => invalid(
+            "mirror source",
+            "expected a line, polyline, Bezier, or non-rational B-spline",
+        ),
+    }
+}
+
+fn reflect_point_about_line(
+    point: [f64; 2],
+    axis_origin: [f64; 2],
+    axis_direction: [f64; 2],
+) -> Result<[f64; 2], DocumentError> {
+    let offset = [point[0] - axis_origin[0], point[1] - axis_origin[1]];
+    let projection = offset[0] * axis_direction[0] + offset[1] * axis_direction[1];
+    let reflected = [
+        axis_origin[0] + 2.0 * projection * axis_direction[0] - offset[0],
+        axis_origin[1] + 2.0 * projection * axis_direction[1] - offset[1],
+    ];
+    finite_pair(reflected, "mirrored point")?;
+    Ok(reflected)
+}
+
+fn reflect_direction_about_axis(
+    direction: [f64; 2],
+    axis_direction: [f64; 2],
+) -> Result<[f64; 2], DocumentError> {
+    let projection = direction[0] * axis_direction[0] + direction[1] * axis_direction[1];
+    let reflected = [
+        2.0 * projection * axis_direction[0] - direction[0],
+        2.0 * projection * axis_direction[1] - direction[1],
+    ];
+    finite_pair(reflected, "mirrored branch direction")?;
+    Ok(reflected)
+}
+
 fn curve_scalars(definition: &CurveDefinition) -> Vec<DesignScalarId> {
     match definition {
         CurveDefinition::Line { .. }
@@ -5966,7 +7569,9 @@ const fn dimension_target(definition: &DocumentDimensionDefinition) -> DesignSca
         | DocumentDimensionDefinition::CurveLength { target, .. }
         | DocumentDimensionDefinition::Radius { target, .. }
         | DocumentDimensionDefinition::Diameter { target, .. }
-        | DocumentDimensionDefinition::OrientedAngle { target, .. } => *target,
+        | DocumentDimensionDefinition::OrientedAngle { target, .. }
+        | DocumentDimensionDefinition::SupportingLineOffset { target, .. }
+        | DocumentDimensionDefinition::ExactTranslatedSegmentOffset { target, .. } => *target,
     }
 }
 
@@ -6102,6 +7707,10 @@ fn normalized_direction(first: [f64; 2], second: [f64; 2]) -> Result<[f64; 2], D
 
 fn dot(first: [f64; 2], second: [f64; 2]) -> f64 {
     first[0] * second[0] + first[1] * second[1]
+}
+
+fn cross(first: [f64; 2], second: [f64; 2]) -> f64 {
+    first[0] * second[1] - first[1] * second[0]
 }
 
 fn insert_unique(ids: &mut BTreeSet<PersistentId>, id: PersistentId) -> Result<(), DocumentError> {

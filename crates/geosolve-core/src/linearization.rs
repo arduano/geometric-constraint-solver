@@ -72,6 +72,28 @@ pub struct SensitivitySolution {
     pub equation_residual_l2: f64,
 }
 
+/// One deterministic accepted-rank physical right-nullspace direction.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AcceptedNullspaceVector {
+    /// Unit vector in accepted normalized tangent coordinates.
+    pub normalized_tangent: DVector<f64>,
+    /// The same direction in raw right/body-local tangent coordinates.
+    pub raw_tangent_blocks: Vec<RawTangentBlock>,
+    pub equation_residual_max: f64,
+}
+
+/// Deterministic basis of one accepted component's physical right nullspace.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AcceptedNullspaceBasis {
+    pub revisions: SessionRevisions,
+    pub component_index: usize,
+    pub rank: usize,
+    pub right_nullity: usize,
+    pub rank_threshold: f64,
+    pub vectors: Vec<AcceptedNullspaceVector>,
+    pub equation_residual_max: f64,
+}
+
 /// Immutable accepted-state reduced hard linearization for one component.
 #[derive(Clone, Debug, PartialEq)]
 pub struct AcceptedHardComponentLinearization {
@@ -412,6 +434,155 @@ impl AcceptedHardComponentLinearization {
             raw_tangent_blocks,
             equation_residual_max,
             equation_residual_l2,
+        })
+    }
+
+    /// Constructs a deterministic basis of the accepted physical right nullspace.
+    ///
+    /// The basis is orthonormal only in normalized tangent coordinates. It uses
+    /// this component's already accepted rank and threshold, canonicalizes the
+    /// nullspace projector against deterministic coordinate order, and validates
+    /// every recovered raw direction against the hard Jacobian.
+    ///
+    /// # Errors
+    ///
+    /// Rejects non-finite/mismatched SVD evidence, failure to recover the accepted
+    /// nullity, raw scaling loss, or a direction that fails equation validation.
+    #[allow(clippy::too_many_lines)]
+    pub fn right_nullspace_basis(&self) -> Result<AcceptedNullspaceBasis, SensitivityError> {
+        let rows = self.normalized_jacobian.nrows();
+        let columns = self.normalized_jacobian.ncols();
+        if self.right_nullity == 0 {
+            return Ok(AcceptedNullspaceBasis {
+                revisions: self.revisions,
+                component_index: self.component_index,
+                rank: self.rank,
+                right_nullity: 0,
+                rank_threshold: self.rank_threshold,
+                vectors: Vec::new(),
+                equation_residual_max: 0.0,
+            });
+        }
+        let decomposition_rows = rows.max(columns);
+        let mut padded = DMatrix::zeros(decomposition_rows, columns);
+        padded
+            .view_mut((0, 0), self.normalized_jacobian.shape())
+            .copy_from(&self.normalized_jacobian);
+        let decomposition = padded.svd(false, true);
+        if decomposition
+            .singular_values
+            .iter()
+            .any(|value| !value.is_finite())
+            || decomposition
+                .singular_values
+                .iter()
+                .filter(|&&value| value > self.rank_threshold)
+                .count()
+                != self.rank
+        {
+            return Err(SensitivityError::NumericalFailure {
+                context: "nullspace SVD rank does not match the accepted component rank",
+            });
+        }
+        let right_vectors = decomposition
+            .v_t
+            .ok_or(SensitivityError::NumericalFailure {
+                context: "nullspace SVD omitted right vectors",
+            })?;
+        if right_vectors.nrows() != columns || right_vectors.ncols() != columns {
+            return Err(SensitivityError::NumericalFailure {
+                context: "nullspace SVD returned malformed right vectors",
+            });
+        }
+        let mut arbitrary_basis = DMatrix::zeros(columns, self.right_nullity);
+        for index in 0..self.right_nullity {
+            arbitrary_basis
+                .column_mut(index)
+                .copy_from(&right_vectors.row(self.rank + index).transpose());
+        }
+        if arbitrary_basis.iter().any(|value| !value.is_finite()) {
+            return Err(SensitivityError::NumericalFailure {
+                context: "accepted right-nullspace basis is non-finite",
+            });
+        }
+        let projector = &arbitrary_basis * arbitrary_basis.transpose();
+        let basis_tolerance = 1024.0 * f64::EPSILON;
+        let mut normalized_basis: Vec<DVector<f64>> = Vec::with_capacity(self.right_nullity);
+        for coordinate in 0..columns {
+            let mut candidate = projector.column(coordinate).into_owned();
+            for _ in 0..2 {
+                for retained in &normalized_basis {
+                    candidate -= retained * retained.dot(&candidate);
+                }
+            }
+            let norm = candidate
+                .iter()
+                .fold(0.0_f64, |accumulator, value| accumulator.hypot(*value));
+            if !norm.is_finite() {
+                return Err(SensitivityError::NumericalFailure {
+                    context: "canonical nullspace candidate norm is non-finite",
+                });
+            }
+            if norm <= basis_tolerance {
+                continue;
+            }
+            candidate /= norm;
+            let Some(first_material) = candidate.iter().find(|value| value.abs() > basis_tolerance)
+            else {
+                continue;
+            };
+            if *first_material < 0.0 {
+                candidate *= -1.0;
+            }
+            normalized_basis.push(candidate);
+            if normalized_basis.len() == self.right_nullity {
+                break;
+            }
+        }
+        if normalized_basis.len() != self.right_nullity {
+            return Err(SensitivityError::NumericalFailure {
+                context: "canonical nullspace construction did not recover accepted nullity",
+            });
+        }
+
+        let mut vectors = Vec::with_capacity(self.right_nullity);
+        let mut equation_residual_max = 0.0_f64;
+        for (index, normalized_tangent) in normalized_basis.iter().enumerate() {
+            for previous in &normalized_basis[..index] {
+                if previous.dot(normalized_tangent).abs() > 32.0 * basis_tolerance {
+                    return Err(SensitivityError::NumericalFailure {
+                        context: "canonical nullspace basis is not orthogonal",
+                    });
+                }
+            }
+            let raw_tangent_blocks = self.raw_tangent_blocks(normalized_tangent)?;
+            let recovered = self.recover_normalized_tangent(&raw_tangent_blocks)?;
+            let residual = &self.normalized_jacobian * recovered;
+            let (maximum, _) = finite_norms(residual.iter().copied()).ok_or(
+                SensitivityError::NumericalFailure {
+                    context: "canonical nullspace validation residual is non-finite",
+                },
+            )?;
+            if maximum > self.normalized_residual_tolerance {
+                return Err(SensitivityError::NumericalFailure {
+                    context: "canonical nullspace direction violates accepted hard equations",
+                });
+            }
+            equation_residual_max = equation_residual_max.max(maximum);
+            vectors.push(AcceptedNullspaceVector {
+                normalized_tangent: normalized_tangent.clone(),
+                raw_tangent_blocks,
+                equation_residual_max: maximum,
+            });
+        }
+        Ok(AcceptedNullspaceBasis {
+            revisions: self.revisions,
+            component_index: self.component_index,
+            rank: self.rank,
+            right_nullity: self.right_nullity,
+            rank_threshold: self.rank_threshold,
+            vectors,
+            equation_residual_max,
         })
     }
 

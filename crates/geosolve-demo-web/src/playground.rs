@@ -16,8 +16,8 @@ use geosolve_sketch::{
     DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode, DocumentEdit,
     DocumentHyperbolaBranch, DocumentObjectId, DocumentSolveRequest, DocumentSolveResult,
     FeatureEndpoint, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PersistentId, ScalarDomain, ScalarUnit,
-    SketchDocument, SketchDocumentSession, TangentOrientation, alpha_performance_document,
-    alpha_scenario,
+    SketchDocument, SketchDocumentSession, TangentOrientation, VisualProfileOptions,
+    alpha_performance_document, alpha_scenario,
 };
 
 const CANVAS_WIDTH: f64 = 1000.0;
@@ -2408,12 +2408,14 @@ impl PlaygroundState {
         result.accepted_view().core_report.hard_validity == HardValidity::Valid
     }
 
+    #[allow(clippy::too_many_lines)]
     pub(crate) fn render_svg(&self) -> String {
         if let Some(spatial) = self.spatial_view() {
             return render_spatial_svg(spatial, self.viewport);
         }
         let mut markup = String::new();
         render_grid(&mut markup, self.viewport);
+        render_visual_profiles(self.document(), self.viewport, &mut markup);
         let active_configuration = match self.gesture.as_ref() {
             Some(PointerGesture::DragCurveConfiguration { handle, .. }) => Some(*handle),
             _ => None,
@@ -3104,7 +3106,9 @@ fn curve_configuration_handles(document: &SketchDocument) -> Vec<CurveConfigurat
             CurveDefinition::CircularArc { .. }
             | CurveDefinition::EllipticalArc { .. }
             | CurveDefinition::ParabolaSegment { .. }
-            | CurveDefinition::HyperbolaSegment { .. } => {
+            | CurveDefinition::HyperbolaSegment { .. }
+                if document.line_line_fillet_for_arc(curve.id).is_none() =>
+            {
                 for (endpoint, parameter, role, short_label) in [
                     (FeatureEndpoint::Start, 0.0, "trim start", "S / trim start"),
                     (FeatureEndpoint::End, 1.0, "trim end", "E / trim end"),
@@ -3453,7 +3457,9 @@ fn dimension_target(definition: &DocumentDimensionDefinition) -> geosolve_sketch
         | DocumentDimensionDefinition::CurveLength { target, .. }
         | DocumentDimensionDefinition::Radius { target, .. }
         | DocumentDimensionDefinition::Diameter { target, .. }
-        | DocumentDimensionDefinition::OrientedAngle { target, .. } => *target,
+        | DocumentDimensionDefinition::OrientedAngle { target, .. }
+        | DocumentDimensionDefinition::SupportingLineOffset { target, .. }
+        | DocumentDimensionDefinition::ExactTranslatedSegmentOffset { target, .. } => *target,
     }
 }
 
@@ -4071,6 +4077,29 @@ fn render_grid(markup: &mut String, viewport: Viewport) {
     }
 }
 
+fn render_visual_profiles(document: &SketchDocument, viewport: Viewport, markup: &mut String) {
+    let analysis = document.analyze_visual_profiles(VisualProfileOptions::default());
+    for face in analysis.faces {
+        let mut path = String::new();
+        for contour in face.contours {
+            let Some(first) = contour.edges.first() else {
+                continue;
+            };
+            let start = viewport.model_to_svg(first.start);
+            let _ = write!(path, "M {:.3} {:.3}", start[0], start[1]);
+            for edge in contour.edges {
+                let end = viewport.model_to_svg(edge.end);
+                let _ = write!(path, " L {:.3} {:.3}", end[0], end[1]);
+            }
+            path.push_str(" Z ");
+        }
+        let _ = write!(
+            markup,
+            "<path class=\"visual-profile-overlay\" fill-rule=\"evenodd\" d=\"{path}\" />"
+        );
+    }
+}
+
 fn object_row(markup: &mut String, kind: &str, id: PersistentId, label: &str, state: &str) {
     let _ = write!(
         markup,
@@ -4676,6 +4705,50 @@ mod tests {
         assert_eq!(rational.export_json().unwrap(), before);
         assert_eq!(rational.session().history_len(), history);
         assert!(rational.last_attempt.contains("failed"));
+    }
+
+    #[test]
+    fn associative_line_fillet_arc_has_no_direct_trim_handles() {
+        let mut document = SketchDocument::new(1.0).unwrap();
+        let points = [[-4.0, 0.0], [4.0, 0.0], [0.0, -4.0], [0.0, 4.0]]
+            .map(|position| document.add_point("fillet parent", position).unwrap());
+        let first = document
+            .add_curve(
+                "first parent",
+                CurveDefinition::Line {
+                    start: points[0],
+                    end: points[1],
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .unwrap();
+        let second = document
+            .add_curve(
+                "second parent",
+                CurveDefinition::Line {
+                    start: points[2],
+                    end: points[3],
+                    branch_direction: [0.0, 1.0],
+                },
+            )
+            .unwrap();
+        let ids = document
+            .add_line_line_fillet(
+                "fillet",
+                geosolve_sketch::LineLineFilletRequest {
+                    first: CurveSpan::line(first),
+                    first_side: geosolve_sketch::DocumentCurveNormalSide::Left,
+                    second: CurveSpan::line(second),
+                    second_side: geosolve_sketch::DocumentCurveNormalSide::Left,
+                    endpoint_order: geosolve_sketch::DocumentFilletEndpointOrder::FirstThenSecond,
+                    sweep: DocumentArcSweep::CounterClockwise,
+                    radius: 1.0,
+                    radius_mode: DocumentDimensionMode::Driving,
+                },
+            )
+            .unwrap();
+        assert!(document.line_line_fillet_for_arc(ids.arc).is_some());
+        assert!(curve_configuration_handles(&document).is_empty());
     }
 
     #[test]
@@ -6382,6 +6455,23 @@ mod tests {
             );
             assert!(state.accepted_is_valid(), "kind={kind}");
         }
+    }
+
+    #[test]
+    fn visual_profile_overlay_is_read_only_and_has_no_interaction_identity() {
+        let mut state = PlaygroundState::empty().unwrap();
+        draw(&mut state, DrawTool::Rectangle, &[[0.0, 0.0], [4.0, 3.0]]);
+        let before = state.export_json().unwrap();
+        let selection = state.selection.clone();
+        let markup = state.render_svg();
+        let overlay = markup
+            .split('<')
+            .find(|tag| tag.starts_with("path class=\"visual-profile-overlay\""))
+            .expect("rectangle should render one visual profile");
+        assert!(overlay.contains("fill-rule=\"evenodd\""));
+        assert!(!overlay.contains("data-"));
+        assert_eq!(state.export_json().unwrap(), before);
+        assert_eq!(state.selection, selection);
     }
 
     #[test]

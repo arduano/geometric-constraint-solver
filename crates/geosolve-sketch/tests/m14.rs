@@ -1328,7 +1328,7 @@ fn a6_a7_a9_conflict_history_and_import_failures_are_atomic() {
             conflict.accepted_result().accepted_view().clone(),
         );
         let malformed_payload = "{not JSON".to_owned();
-        let version_payload = baseline.0.replacen("\"version\":1", "\"version\":2", 1);
+        let version_payload = baseline.0.replacen("\"version\":3", "\"version\":4", 1);
         let value: serde_json::Value = serde_json::from_str(&baseline.0).unwrap();
         let nonfinite_payload = baseline.0.replacen(
             &format!("\"model_scale\":{}", value["model_scale"]),
@@ -1371,8 +1371,8 @@ fn a6_a7_a9_conflict_history_and_import_failures_are_atomic() {
         assert!(matches!(
             version,
             DocumentSessionError::Document(DocumentError::UnsupportedVersion {
-                actual: 2,
-                expected: 1
+                actual: 4,
+                expected: 3
             })
         ));
         assert!(matches!(

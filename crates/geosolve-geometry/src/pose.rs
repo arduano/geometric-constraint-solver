@@ -643,9 +643,14 @@ fn validated_rotation(quaternion: [f64; 4]) -> Result<UnitQuaternion<f64>, Geome
     if norm == 0.0 || !norm.is_finite() || (norm - 1.0).abs() > QUATERNION_NORM_TOLERANCE {
         return Err(GeometryError::InvalidQuaternionNorm { norm });
     }
-    let normalized = quaternion.map(|component| component / norm);
-    let canonical = canonical_quaternion(normalized);
-    Ok(UnitQuaternion::new_normalize(Quaternion::new(
+    let normalized = UnitQuaternion::new_normalize(Quaternion::new(
+        quaternion[0],
+        quaternion[1],
+        quaternion[2],
+        quaternion[3],
+    ));
+    let canonical = canonical_quaternion(quaternion_components(normalized));
+    Ok(UnitQuaternion::new_unchecked(Quaternion::new(
         canonical[0],
         canonical[1],
         canonical[2],

@@ -234,7 +234,7 @@ impl Linkage {
                 }
                 AdaptiveContinuationMode::PseudoArclength { path_length, .. } => {
                     let remaining = path_length - accepted_path_length;
-                    if remaining <= 64.0 * f64::EPSILON * path_length.max(1.0) {
+                    if remaining <= 64.0 * f64::EPSILON * path_length {
                         break AdaptiveContinuationStatus::Completed;
                     }
                     remaining
@@ -289,6 +289,23 @@ impl Linkage {
                     context: "predicted continuation parameter",
                     value: predicted_parameter,
                 });
+            }
+            let predictor_changed = !matches!(
+                predicted_parameter.partial_cmp(&current_target),
+                Some(std::cmp::Ordering::Equal)
+            ) || predicted_bodies.iter().any(|predicted| {
+                self.bodies.get(predicted.body_id).is_some_and(|body| {
+                    body.pose()
+                        .local_difference(&predicted.pose)
+                        .is_ok_and(|difference| {
+                            difference
+                                .iter()
+                                .any(|value| value.classify() != std::num::FpCategory::Zero)
+                        })
+                })
+            });
+            if !predictor_changed {
+                break AdaptiveContinuationStatus::MinimumStep;
             }
 
             if matches!(request.mode, AdaptiveContinuationMode::Natural { .. })

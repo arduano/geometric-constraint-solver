@@ -8,9 +8,11 @@ use crate::document::{
     ContactDefinition, ContactId, ContactStateEdit, CurveDefinition, CurveId, CurveSpan,
     DesignPointId, DesignScalarId, DocumentArcSweep, DocumentBSplineInsertion,
     DocumentBSplineSpanDirection, DocumentCircleTangencyMode, DocumentConstraintDefinition,
-    DocumentConstraintId, DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode,
-    DocumentError, DocumentHyperbolaBranch, DocumentNurbsInsertion, DocumentObjectId,
-    DocumentSourceId, PersistentId, RectangleIds, ScalarDomain, ScalarUnit, SketchDocument,
+    DocumentConstraintId, DocumentCurveNormalSide, DocumentDimensionDefinition,
+    DocumentDimensionId, DocumentDimensionMode, DocumentError, DocumentFilletEndpointOrder,
+    DocumentHyperbolaBranch, DocumentMirroredBSplineInsertion, DocumentNurbsInsertion,
+    DocumentObjectId, DocumentSourceId, LineLineFilletIds, LineLineFilletRequest, MirroredCurveIds,
+    PersistentId, RectangleIds, ScalarDomain, ScalarUnit, SketchDocument,
 };
 use crate::document_lowering::{DocumentRuntimeMap, RuntimeSource};
 use crate::{
@@ -209,6 +211,15 @@ pub enum DocumentEdit {
         width: f64,
         height: f64,
     },
+    CreateMirroredCurve {
+        label: String,
+        source_curve: CurveId,
+        axis: CurveSpan,
+    },
+    CreateLineLineFillet {
+        label: String,
+        request: LineLineFilletRequest,
+    },
     SetPointPosition {
         point: DesignPointId,
         position: [f64; 2],
@@ -225,6 +236,13 @@ pub enum DocumentEdit {
         curve: CurveId,
         sweep: DocumentArcSweep,
     },
+    SetLineLineFilletBranch {
+        constraint: DocumentConstraintId,
+        first_side: DocumentCurveNormalSide,
+        second_side: DocumentCurveNormalSide,
+        endpoint_order: DocumentFilletEndpointOrder,
+        sweep: DocumentArcSweep,
+    },
     SetConicWeightedMiddle {
         curve: CurveId,
         weighted_middle: [f64; 2],
@@ -235,6 +253,13 @@ pub enum DocumentEdit {
     },
     InsertBSplineKnot {
         curve: CurveId,
+        parameter: f64,
+    },
+    InsertMirroredBSplineKnot {
+        label: String,
+        source_curve: CurveId,
+        mirrored_curve: CurveId,
+        axis: CurveSpan,
         parameter: f64,
     },
     TransitionBSplineContact {
@@ -302,12 +327,15 @@ pub enum DocumentCommandEffect {
     CreatedConstraint(DocumentConstraintId),
     CreatedDimension(DocumentDimensionId),
     CreatedRectangle(Box<RectangleIds>),
+    CreatedMirroredCurve(Box<MirroredCurveIds>),
+    CreatedLineLineFillet(Box<LineLineFilletIds>),
     UpdatedPoint(DesignPointId),
     UpdatedScalar(DesignScalarId),
     UpdatedCurve(CurveId),
     UpdatedConicWeightedMiddle(CurveId),
     UpdatedHyperbolaBranch(CurveId),
     InsertedBSplineKnot(DocumentBSplineInsertion),
+    InsertedMirroredBSplineKnot(Box<DocumentMirroredBSplineInsertion>),
     InsertedNurbsKnot(DocumentNurbsInsertion),
     UpdatedNurbsWeightGauge(CurveId),
     UpdatedContacts(Vec<ContactId>),
@@ -955,6 +983,20 @@ fn apply_edit(
         } => DocumentCommandEffect::CreatedRectangle(Box::new(
             document.add_rectangle(&label, origin, width, height)?,
         )),
+        DocumentEdit::CreateMirroredCurve {
+            label,
+            source_curve,
+            axis,
+        } => DocumentCommandEffect::CreatedMirroredCurve(Box::new(document.add_mirrored_curve(
+            &label,
+            source_curve,
+            axis,
+        )?)),
+        DocumentEdit::CreateLineLineFillet { label, request } => {
+            DocumentCommandEffect::CreatedLineLineFillet(Box::new(
+                document.add_line_line_fillet(&label, request)?,
+            ))
+        }
         DocumentEdit::SetPointPosition { point, position } => {
             document.set_point_position(point, position)?;
             DocumentCommandEffect::UpdatedPoint(point)
@@ -970,6 +1012,22 @@ fn apply_edit(
         DocumentEdit::SetArcSweep { curve, sweep } => {
             document.set_arc_sweep(curve, sweep)?;
             DocumentCommandEffect::UpdatedCurve(curve)
+        }
+        DocumentEdit::SetLineLineFilletBranch {
+            constraint,
+            first_side,
+            second_side,
+            endpoint_order,
+            sweep,
+        } => {
+            document.set_line_line_fillet_branch(
+                constraint,
+                first_side,
+                second_side,
+                endpoint_order,
+                sweep,
+            )?;
+            DocumentCommandEffect::UpdatedConstraint(constraint)
         }
         DocumentEdit::SetConicWeightedMiddle {
             curve,
@@ -987,6 +1045,21 @@ fn apply_edit(
                 document.insert_bspline_knot(curve, parameter)?,
             )
         }
+        DocumentEdit::InsertMirroredBSplineKnot {
+            label,
+            source_curve,
+            mirrored_curve,
+            axis,
+            parameter,
+        } => DocumentCommandEffect::InsertedMirroredBSplineKnot(Box::new(
+            document.insert_mirrored_bspline_knot(
+                &label,
+                source_curve,
+                mirrored_curve,
+                axis,
+                parameter,
+            )?,
+        )),
         DocumentEdit::TransitionBSplineContact { contact, direction } => {
             document.transition_bspline_contact(contact, direction)?;
             DocumentCommandEffect::UpdatedContacts(vec![contact])

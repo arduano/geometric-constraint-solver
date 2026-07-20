@@ -203,6 +203,13 @@ select:focus-visible {
   stroke-linejoin: round;
 }
 
+.visual-profile-overlay {
+  fill: rgba(84, 211, 158, 0.14);
+  stroke: rgba(84, 211, 158, 0.42);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
 .conflict-width-cue {
   fill: none;
   stroke: #f6c768;

@@ -1299,7 +1299,7 @@ fn malformed_json_variants_domains_finiteness_and_references_reject() {
     let (document, _) = rectangle_document();
     let json = document.to_canonical_json().unwrap();
     assert!(matches!(
-        SketchDocument::from_json(&json.replace("\"version\":1", "\"version\":2")),
+        SketchDocument::from_json(&json.replace("\"version\":3", "\"version\":4")),
         Err(geosolve_sketch::DocumentError::UnsupportedVersion { .. })
     ));
     assert!(
@@ -1320,7 +1320,7 @@ fn malformed_json_variants_domains_finiteness_and_references_reject() {
     invalid_domain["scalars"][0]["value"] = serde_json::json!(-1.0);
     assert!(SketchDocument::from_json(&serde_json::to_string(&invalid_domain).unwrap()).is_err());
 
-    let with_unknown_field = json.replacen("\"version\":1", "\"version\":1,\"future\":true", 1);
+    let with_unknown_field = json.replacen("\"version\":3", "\"version\":3,\"future\":true", 1);
     assert!(SketchDocument::from_json(&with_unknown_field).is_err());
 
     let mut wrong_unit: serde_json::Value = serde_json::from_str(&json).unwrap();

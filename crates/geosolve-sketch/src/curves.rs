@@ -102,6 +102,24 @@ impl LineSide {
     }
 }
 
+/// Explicit correspondence between the source and target line endpoints.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LineOffsetOrientation {
+    /// The target start corresponds to the source start.
+    Same,
+    /// The target end corresponds to the source start.
+    Reversed,
+}
+
+impl LineOffsetOrientation {
+    pub(crate) const fn target_endpoints<T: Copy>(self, start: T, end: T) -> (T, T) {
+        match self {
+            Self::Same => (start, end),
+            Self::Reversed => (end, start),
+        }
+    }
+}
+
 /// Which circle contains the other for an internal circle-circle tangency.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CircleContainment {
@@ -254,6 +272,10 @@ pub enum ContactState {
         second_parameter: f64,
     },
     CurveCurveTangency {
+        first_parameter: f64,
+        second_parameter: f64,
+    },
+    LineLineFillet {
         first_parameter: f64,
         second_parameter: f64,
     },
@@ -745,6 +767,19 @@ impl Sketch {
         Ok(())
     }
 
+    pub(crate) fn set_arc_span(
+        &mut self,
+        arc: ArcId,
+        start_angle: f64,
+        end_angle: f64,
+    ) -> Result<(), SketchError> {
+        let value = self.arcs.get_mut(arc).ok_or(SketchError::UnknownArc(arc))?;
+        value.signed_sweep = arc_signed_sweep(start_angle, end_angle, value.sweep)?;
+        value.start_angle = start_angle;
+        value.end_angle = end_angle;
+        Ok(())
+    }
+
     /// Evaluates an accepted arc over its bounded `[0, 1]` span.
     ///
     /// # Errors
@@ -828,6 +863,13 @@ impl Sketch {
     ) -> Result<SketchConstraintId, SketchError> {
         self.point_position(point)?;
         self.arc_value(arc)?;
+        if self.constraints.iter().any(|(_, constraint)| {
+            matches!(constraint.kind(), SketchConstraintKind::LineLineFillet { arc: output, .. } if output == arc)
+        }) {
+            return Err(SketchError::InvalidCurveContact(
+                "associated line fillet arcs cannot own executable contacts before M28",
+            ));
+        }
         validate_bounded_parameter(span_parameter, "bounded-arc span [0, 1]")?;
         Ok(self.insert_constraint(SketchConstraintKind::PointOnArc {
             point,
@@ -1007,6 +1049,13 @@ impl Sketch {
     ) -> Result<SketchConstraintId, SketchError> {
         let circle_value = self.circle_value(circle)?;
         let arc_value = self.arc_value(arc)?;
+        if self.constraints.iter().any(|(_, constraint)| {
+            matches!(constraint.kind(), SketchConstraintKind::LineLineFillet { arc: output, .. } if output == arc)
+        }) {
+            return Err(SketchError::InvalidCurveContact(
+                "associated line fillet arcs cannot own executable contacts before M28",
+            ));
+        }
         validate_radius(circle_value.radius())?;
         validate_radius(arc_value.radius())?;
         validate_bounded_parameter(arc_span_parameter, "bounded-arc span [0, 1]")?;
@@ -1107,6 +1156,12 @@ impl Sketch {
                     second_parameter: second.parameter,
                 })
             }
+            SketchConstraintKind::LineLineFillet { first, second, .. } => {
+                Ok(ContactState::LineLineFillet {
+                    first_parameter: first.parameter,
+                    second_parameter: second.parameter,
+                })
+            }
             _ => Err(SketchError::NoContactState(constraint)),
         }
     }
@@ -1156,6 +1211,17 @@ impl Sketch {
                     ..
                 },
                 ContactState::CurveCurveTangency {
+                    first_parameter,
+                    second_parameter,
+                },
+            )
+            | (
+                SketchConstraintKind::LineLineFillet {
+                    mut first,
+                    mut second,
+                    ..
+                },
+                ContactState::LineLineFillet {
                     first_parameter,
                     second_parameter,
                 },
@@ -1269,6 +1335,13 @@ impl Sketch {
             | (
                 SketchConstraintKind::CurveCurveTangency { first, second, .. },
                 ContactState::CurveCurveTangency {
+                    first_parameter,
+                    second_parameter,
+                },
+            )
+            | (
+                SketchConstraintKind::LineLineFillet { first, second, .. },
+                ContactState::LineLineFillet {
                     first_parameter,
                     second_parameter,
                 },
@@ -1448,6 +1521,68 @@ impl Sketch {
         ))
     }
 
+    /// Adds a signed offset between two supporting lines.
+    ///
+    /// The target segment remains free to slide along the source line direction and to change
+    /// length. `orientation` selects which target endpoint corresponds to the source start.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for stale/repeated or degenerate segments, or an invalid target.
+    pub fn add_supporting_line_offset(
+        &mut self,
+        source: SegmentId,
+        target_segment: SegmentId,
+        target: f64,
+        side: LineSide,
+        orientation: LineOffsetOrientation,
+        mode: DimensionMode,
+    ) -> Result<SketchDimensionId, SketchError> {
+        self.validate_segment_pair(source, target_segment)?;
+        validate_dimension_value(target)?;
+        Ok(self.insert_dimension(
+            DimensionKind::SupportingLineOffset {
+                source,
+                target_segment,
+                target,
+                side,
+                orientation,
+            },
+            mode,
+        ))
+    }
+
+    /// Adds an exact signed translation between two segments.
+    ///
+    /// Both target endpoints are the corresponding source endpoints translated by the selected
+    /// normal offset, so this mode preserves segment length and endpoint correspondence.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for stale/repeated or degenerate segments, or an invalid target.
+    pub fn add_exact_translated_segment_offset(
+        &mut self,
+        source: SegmentId,
+        target_segment: SegmentId,
+        target: f64,
+        side: LineSide,
+        orientation: LineOffsetOrientation,
+        mode: DimensionMode,
+    ) -> Result<SketchDimensionId, SketchError> {
+        self.validate_segment_pair(source, target_segment)?;
+        validate_dimension_value(target)?;
+        Ok(self.insert_dimension(
+            DimensionKind::ExactTranslatedSegmentOffset {
+                source,
+                target_segment,
+                target,
+                side,
+                orientation,
+            },
+            mode,
+        ))
+    }
+
     pub(crate) fn oriented_angle_value(
         &self,
         first: SegmentId,
@@ -1556,6 +1691,7 @@ impl Sketch {
                 constraint.kind(),
                 SketchConstraintKind::PointOnArc { arc: id, .. }
                     | SketchConstraintKind::CircleArcTangency { arc: id, .. }
+                    | SketchConstraintKind::LineLineFillet { arc: id, .. }
                     if id == arc
             ) || generic_constraint_curves(constraint.kind())
                 .iter()
@@ -1583,7 +1719,8 @@ fn generic_constraint_curves(kind: SketchConstraintKind) -> Vec<crate::SketchCur
         SketchConstraintKind::CurveCurveContact { first, second }
         | SketchConstraintKind::CurveCurveTangency { first, second, .. }
         | SketchConstraintKind::EqualCurvature { first, second, .. }
-        | SketchConstraintKind::EndpointContinuity { first, second, .. } => {
+        | SketchConstraintKind::EndpointContinuity { first, second, .. }
+        | SketchConstraintKind::LineLineFillet { first, second, .. } => {
             vec![first.curve, second.curve]
         }
         _ => Vec::new(),
@@ -1666,7 +1803,11 @@ pub(crate) fn validate_angle(target: f64) -> Result<(), SketchError> {
     }
 }
 
-fn arc_signed_sweep(start_angle: f64, end_angle: f64, sweep: ArcSweep) -> Result<f64, SketchError> {
+pub(crate) fn arc_signed_sweep(
+    start_angle: f64,
+    end_angle: f64,
+    sweep: ArcSweep,
+) -> Result<f64, SketchError> {
     if !start_angle.is_finite() || !end_angle.is_finite() {
         return Err(SketchError::InvalidArcSweep);
     }

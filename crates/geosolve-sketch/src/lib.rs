@@ -1,6 +1,7 @@
 //! A small, stable-ID CAD sketch model compiled into `geosolve-core`.
 
 mod alpha_scenarios;
+mod attributes;
 mod beziers;
 mod bsplines;
 mod compiler;
@@ -12,6 +13,7 @@ mod document_session;
 mod generic_curves;
 mod model;
 mod nurbs;
+mod profiles;
 mod residuals;
 mod scenarios;
 mod session;
@@ -25,6 +27,7 @@ pub use alpha_scenarios::{
     MotionScotchYokeIds, MotionTrammelIds, StressBridgeIds, StressCompassIds,
     alpha_performance_document, alpha_scenario,
 };
+pub use attributes::{SketchAttributeError, SketchAttributes};
 pub use beziers::{BezierCurve, BezierEvaluationError, BezierKind};
 pub use bsplines::BSplineCurve;
 pub use compiler::{
@@ -43,7 +46,7 @@ pub use curves::{
     CIRCLE_ARC_TANGENCY_DIRECTION_TOLERANCE, CIRCLE_ARC_TANGENCY_RADIUS_RELATIVE_TOLERANCE,
     CIRCLE_ARC_TANGENCY_SCALE_UNCERTAINTY_MULTIPLIER, CONTACT_PARAMETER_ROUNDOFF_TOLERANCE,
     CenterDirectionBranch, Circle, CircleContainment, CircleTangencyMode, CircularArc,
-    ContactState, LineParameterDomain, LineSide,
+    ContactState, LineOffsetOrientation, LineParameterDomain, LineSide,
 };
 pub use document::{
     ContactDefinition, ContactDomain, ContactId, ContactNeighborhood, ContactSlot,
@@ -56,12 +59,14 @@ pub use document::{
     DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation,
     DocumentCurveEvaluationError, DocumentCurveMeasurementError, DocumentCurveMeasurementKind,
     DocumentCurveNormalSide, DocumentDimension, DocumentDimensionDefinition, DocumentDimensionId,
-    DocumentDimensionMode, DocumentError, DocumentHyperbolaBranch, DocumentId, DocumentLineSide,
-    DocumentNurbsInsertion, DocumentObjectId, DocumentSourceId, DocumentTrimProjection,
-    DocumentTrimProjectionError, FeatureEndpoint, FeatureRef, MAX_BSPLINE_CONTROLS,
+    DocumentDimensionMode, DocumentElementId, DocumentError, DocumentFilletEndpointOrder,
+    DocumentHyperbolaBranch, DocumentId, DocumentLineOffsetOrientation, DocumentLineSide,
+    DocumentMirroredBSplineInsertion, DocumentNurbsInsertion, DocumentObjectId, DocumentSourceId,
+    DocumentSourceOwner, DocumentSourceRef, DocumentTrimProjection, DocumentTrimProjectionError,
+    FeatureEndpoint, FeatureRef, LineLineFilletIds, LineLineFilletRequest, MAX_BSPLINE_CONTROLS,
     MAX_DOCUMENT_JSON_BYTES, MAX_DOCUMENT_OBJECTS, MAX_LABEL_BYTES, MAX_POLYLINE_POINTS,
-    PersistentId, RectangleIds, SKETCH_DOCUMENT_VERSION, ScalarDomain, ScalarUnit, SketchDocument,
-    TangentOrientation,
+    MirroredCurveIds, PersistentId, RectangleIds, SKETCH_DOCUMENT_VERSION, ScalarDomain,
+    ScalarUnit, SketchDocument, TangentOrientation,
 };
 pub use document_lowering::{
     ContactRuntimeMapping, CurveRuntimeMapping, DocumentContactRole, DocumentRuntimeMap,
@@ -83,12 +88,17 @@ pub use geosolve_geometry::{
 pub use model::{
     ArcId, BSplineId, BezierId, CircleId, ConicId, CoordinateAxis, CurveContactNeighborhood,
     CurveContinuity, CurveCurvatureRelation, CurveDirectionRelation, CurveMeasurementKind,
-    CurveNormalSide, CurveTangentOrientation, DimensionKind, DimensionMode, LineSegment, NurbsId,
-    PointId, SegmentBranch, SegmentEndpoint, SegmentId, Sketch, SketchConstraint,
-    SketchConstraintId, SketchConstraintKind, SketchCurve, SketchCurveContact, SketchDimension,
-    SketchDimensionId, SketchError, SketchPoint,
+    CurveNormalSide, CurveTangentOrientation, DimensionKind, DimensionMode, FilletEndpointOrder,
+    LineSegment, NurbsId, PointId, SegmentBranch, SegmentEndpoint, SegmentId, Sketch,
+    SketchConstraint, SketchConstraintId, SketchConstraintKind, SketchCurve, SketchCurveContact,
+    SketchDimension, SketchDimensionId, SketchError, SketchPoint,
 };
 pub use nurbs::NurbsCurve;
+pub use profiles::{
+    VisualProfileAnalysis, VisualProfileContour, VisualProfileEdge, VisualProfileFace,
+    VisualProfileIssue, VisualProfileIssueKind, VisualProfileOptions, VisualProfileOrientation,
+    VisualProfileStatus,
+};
 pub use scenarios::{
     ConflictingRectangleIds, TangentCirclesIds, UnderconstrainedTriangleIds, conflicting_rectangle,
     redundant_rectangle, tangent_circles, underconstrained_triangle,

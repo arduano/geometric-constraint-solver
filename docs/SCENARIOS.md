@@ -716,7 +716,365 @@ transaction use return typed `Unknown*` rather than aliasing a local object;
 `as_u64` and deterministic audit text remain local-ordinal compatible.
 
 Position transactions only are in M20. Spatial continuation, event hysteresis,
-multi-driver velocity and complete spatial persistence remain M23 work.
+multi-driver velocity and complete spatial persistence were assigned to M23 and
+are covered below.
+
+## M23 spatial continuation fixtures
+
+The first M23 slice applies ADR 0011 continuation semantics to the M20 spatial
+position-driver and gauge architecture under ADR 0016. Every accepted sample is
+an ordinary fixed-driver `SpatialAssemblySession`; active parameters, private
+gauges and pseudo-arclength rows are absent from its source mappings, audit and
+physical rank.
+
+### M23-C1 - Shaft/bearing natural paths
+
+- use the M20 `A-SB` grounded cylindrical shaft/bearing at scales `1e-6`, `1`
+  and `1e6`;
+- natural axial continuation moves `1.9s` to `2.4s` while retaining hinge phase
+  `0.48`, winding `2`, aligned parity and positive translation side;
+- natural hinge continuation moves phase `0.48` to `0.82` while retaining axial
+  translation `1.9s` and winding `2`;
+- the same coordinate equations run on a floating cylindrical pair with one
+  private six-DOF gauge; public gauge/internal mobility remains `6/0`, and no
+  private source is published;
+- a zero-distance request performs fresh ordinary validation, publishes no
+  sample and consumes no revision. Tiny positive pseudo paths either publish a
+  representably changed physical sample or stop without success.
+
+### M23-C2 - Embedded spatial slider-crank fold
+
+Use four `Pose3` bodies constrained to one embedded mechanism plane:
+
+- crank radius `1.25s`, connecting-rod length `3.5s`, initial crank phase
+  `0.05`, and initial positive-X slider displacement
+  `4.747880210234948s`;
+- ground/crank use one aligned revolute, each rod end uses a ball joint, the
+  slider uses one aligned prismatic, and a regular `pi/2` axis-angle row fixes
+  rod roll without redundant planar closure rows;
+- one winding-zero hinge coordinate measures crank phase, while the selected
+  axial translation driver measures slider displacement;
+- winding zero, aligned rod normal and positive-X slider side are explicit mode
+  monitors.
+
+The analytic fold is crank phase `0` and displacement `4.75s`. Natural
+continuation toward `4.751s` retains a positive-phase accepted prefix and stops
+with `PseudoArclengthRequired`. Explicit increasing-parameter pseudo-arclength
+for normalized path length `0.2` crosses to negative crank phase; a second
+explicitly oriented path crosses back, while decreasing orientation moves away
+from the maximum. The corpus runs at all required scales, under a common-left
+`SE(3)` transform and forced dense/sparse correctors. Physical endpoint geometry,
+rank/nullity, structural class, gauge split and retained modes agree within the
+documented normalized tolerances.
+
+Correctors outside either locality limit retry without mutation. Monitor-only
+connections that leave mobility outside the selected physical hard component
+reject independently of numerical gauge reference. A fixed-driver null direction
+inside the selected component is left to the augmented SVD test, rather than
+being rejected from ordinary nullity alone.
+
+### M23-C3 - Typed boundary events and mode changes
+
+- every accepted spatial solve evaluates source parity, prismatic clock,
+  fixed/frame-offset half-turn, hinge-driver/cut and explicit monitor boundaries;
+- normalized clearances enter at `2e-3` and leave at `4e-3`; an accepted sample in
+  the deadband inherits its prior latch without a duplicate event;
+- a one-revolute fixture approaches the positive principal cut from a clear
+  endpoint, accepts exactly one corrected `Entered` event, moves within the
+  deadband without chatter and emits one `Left` event after clearing it;
+- a coarse predictor that reaches the strict `1e-3` margin stops with a typed
+  predictor event and publishes no invalid endpoint;
+- pseudo-arclength prediction through the canonical cut reports
+  `CrossingAttempted` rather than wrapping the hinge or changing winding;
+- an explicit positive-to-negative cut updates coordinate, driver and winding
+  monitor once, while the wrong direction rolls back all accepted state;
+- a plane-side mode change plus its translation seed commits once, while an
+  incompatible parity change rolls back.
+
+These fixtures observe predictor endpoints, ordinary corrected endpoints and the
+known scalar hinge cut. They do not claim interval-global boundary tracing.
+
+### M23-V1 - Multi-driver spatial velocity and fields
+
+- grounded shaft/bearing fixtures at scales `1e-6`, `1` and `1e6` prescribe
+  simultaneous hinge and axial rates in both request orders and compare body and
+  point fields against central ordinary-position transactions;
+- all prescribed coordinates reproduce their raw rates while unlisted position
+  drivers have zero rate; executable active parameter columns retain the hinge
+  trigonometric derivative and translation model scale;
+- a fully driven floating cylinder is determinate modulo its certified six-DOF
+  world gauge and leaves the selected reference stationary; changing reference
+  changes the representative by exactly one common world twist;
+- one driven coordinate on a grounded cylinder reports one remaining internal
+  motion; equal duplicate translation rates are consistent, unequal or omitted
+  duplicate rates are an inconsistent outcome with no body field;
+- block/base simultaneous hinge, plane-X and plane-Y rates publish every body,
+  point, frame, clocked axis, clocked plane and topology-coordinate derivative;
+- a static common-left `SE(3)` transform rotates body-origin, angular and feature
+  velocities without a translation lever-arm term;
+- optional motion bases have exactly accepted physical right-nullity vectors,
+  are deterministic and normalized in accepted tangent coordinates, satisfy all
+  independently differentiated source rows and retain all six floating world
+  actions rather than leaking the private gauge.
+
+### M23-P1 - Embedded-planar L3 oracle parity
+
+At scales `1e-6`, `1` and `1e6`, place the displacement-driven L3 in a static
+non-axis-aligned `SE(3)` frame with scale-proportional translation. The planar
+workplane and spatial assembly use the same frame and exact crank `1.25s`, rod
+`3.5s`, initial phase `0.05`, positive-X mode and displacement target.
+
+- natural continuation away from the fold to `4.70s` completes in both domains;
+- lifted planar ground/crank/rod/slider poses and four representative closure
+  points match the independently accepted spatial geometry;
+- the driven regular endpoint has planar rank `9`, spatial rank `18`, zero right
+  nullity and zero internal mobility in both domains;
+- compatibility and persistent planar velocity agree exactly after remapping;
+- the embedding basis maps planar body-origin linear and scalar angular rates to
+  spatial body/point fields, while spatial hinge and translation coordinate rates
+  match the planar relative crank and driver rates;
+- each domain independently retains hard residual validation at `1e-9`; parity
+  tolerances do not substitute for either acceptance check.
+
+### M23-SC1 - Non-planar universal closed ring
+
+Four bodies form a non-coplanar ring through four universal joints, with one
+physical ground and one positive signed-volume monitor over four joint witnesses.
+At `s=1e-6,1,1e6` it has 16 active rows, rank `16`, left nullity `0`, right
+nullity/internal mobility `2`, structural nnz `144` and no numerical gauge. The
+chirality metric remains above `0.2`; selecting its mirrored sign rejects and
+retains every accepted view. One scale-1 fixture also rechecks all existing
+universal residual Jacobians by central differences.
+
+### M23-MS1 - Macro/micro stage and rigid tool
+
+A grounded base and driven planar stage use phase `0.41`, winding `-2`, plane-X
+translation `1e6s` and plane-Y translation `2e-6s`. A third tool body is attached
+by a frame-offset mate with translation `(3e-6,-4e-6,5e-6)s` and a regular
+three-axis rotation. Winding and positive-side monitors are row-free. At every
+required scale the 12 active coordinates/rows have rank `12`, no nullity or
+gauge, structural nnz `108`, finite audit data and independent residual at most
+`1e-9`.
+
+### M23-LS1 - Connected sparse fixed-frame chain
+
+One ground plus 43 moving `Pose3` bodies form a connected chain of 43 fixed-frame
+sources. The reduced hard system has 258 rows/coordinates, rank `258`, no
+nullity, structural nnz `3060` and no gauge. A finite perturbation of the final
+body converges with `SparseQr` and no fallback under `SparsePreferred`; the final
+ordinary report remains independently valid and dense SVD remains authoritative
+for rank. This bounded debug fixture completes the large connected scenario gate.
+The exact fixed-frame-chain `Auto` density boundary belongs to the explicit
+release performance corpus because its authoritative debug SVD is intentionally
+too expensive for normal correctness tests.
+
+### M23-PS1 - Spatial document persistence
+
+Shaft/bearing documents round-trip at `s=1e-6,1,1e6`; block/base covers hinge and
+both planar translation coordinates. One combined fixture covers every ground,
+joint and mate variant plus signed-volume state. Canonical JSON preserves fixed
+document-local IDs, semantic source order, accepted poses, targets, winding,
+parity/side/orientation, explicit gauge references and boundary hysteresis while
+fresh lowering changes every runtime namespace. Unsupported versions, unknown
+fields/references, duplicate IDs, wrong driver target kinds and incomplete
+boundary state reject. Failed replacement retains document, mapping, accepted
+geometry, audit and revision.
+
+### M23-PR1 - Generated and differential corpora
+
+- 32 generated slider-crank cases span required scale exponents, safe positive
+  and negative phases and arbitrary static common-left `SE(3)` transforms;
+  accepted position, velocity, mode and canonical persistence remain equivariant;
+- saved transformed slider-crank seeds require accepted `Pose3` quaternion
+  canonicalization to be bitwise idempotent, so a private velocity snapshot cannot
+  diverge by one ULP merely by reconstructing an already accepted pose;
+- 32 single-byte mutations of accepted JSON may reject at parse, structural or
+  solve validation, but cannot panic or publish non-finite/unvalidated success;
+- 36 analytic slider-crank cases span six phases, two embeddings and all required
+  scales, independently checking body poses, crank/rod/slider velocities, one
+  feature velocity and hinge/translation coordinate rates;
+- normal performance tests fix 43, 255 and 256 moving-body compile shapes. The
+  explicit release-only 256-moving-body chain has 1536 active columns, selects
+  `SparseQr` under `Auto`, preserves dense-authoritative rank 1536 and validates
+  ordinary hard residuals within a 180-second reference budget.
+
+## M24 sketch extension and embedding fixtures
+
+### M24-E1 - Persistent element and source joins
+
+The complete A8 document enumerates its document, point, scalar, curve, contact,
+constraint, dimension and source identities through `DocumentElementId`. Resolving
+each raw persistent ID returns the same typed element. `DocumentSourceRef` follows
+semantic source order and maps every source to its exact constraint/dimension
+owner, label and suppression state without runtime/core IDs.
+
+### M24-A1 - Typed host attributes
+
+A non-serializable host attribute type attaches to accepted geometry and sources
+through `SketchAttributes<T>`. A foreign document, missing target or same raw ID
+with the wrong semantic kind rejects. Deleting an attributed dimension and source
+makes both values dormant; undo restores liveness, redo returns dormancy and only
+explicit cleanup destroys them. Attribute changes leave accepted geometry,
+runtime state, revision, audit and canonical JSON byte-identical.
+
+### M24-J1 - Frozen version-one JSON
+
+At the M24 boundary an empty fixed-ID document had one exact golden version-1
+payload. Export used the private frozen DTO, import dispatched explicitly by
+version and reproduced the same bytes. Unknown versions and injected metadata
+fields rejected; application attributes required an application-owned workspace
+envelope. M25-J1 supersedes current export behavior with canonical v2 while
+retaining that strict frozen v1 input language.
+
+## M25 associative linear construction fixtures
+
+### M25-O1 - Supporting-line offset
+
+A fixed source segment and a same- or reverse-oriented target segment use an
+explicit left/right offset at scales `1e-6`, `1` and `1e6`. The two analytic rows
+match finite differences, independent validation retains the selected side and
+orientation, and the target reports exactly two local DOF: axial slide and
+length. An algebraically parallel antiparallel root is rejected by the explicit
+orientation branch.
+
+### M25-O2 - Exact translated-segment offset
+
+The same source and branch matrix uses four endpoint-translation rows. With the
+source fixed, rank is four and local DOF is zero. Same/reversed endpoint
+correspondence and left/right side round-trip through sketch JSON v2. Reference
+mode has no core source or residual and reports the selected signed distance.
+
+### M25-M1 - Point-defined mirrors
+
+Line, open polyline, quadratic/cubic Bezier and clamped non-rational B-spline
+sources are reflected across a directed line. Every mirrored control has an
+ordinary `SymmetricAboutLine` source with finite-difference-checked Jacobians;
+line/polyline branch directions are reflected too. An accepted source-point edit
+moves its associated mirror point, and construction undo/redo restores the same
+persistent IDs.
+
+### M25-M2 - Coordinated mirrored B-spline refinement
+
+Two equal-topology clamped B-splines with active control-pair symmetry sources
+receive the same interior knot. Both gain one control and compatible span
+topology, and the new pair gains one ordinary symmetry source in a single
+accepted command. Undo removes both controls and the new source; redo restores
+the accepted refined JSON. Missing pair associations reject before mutation.
+
+### M25-A1 - Directed angle branch cut
+
+Two fixed directed lines straddle `-pi`/`pi` under rotation, translation and all
+three required scales. Their counterclockwise angle is `2 degrees`; editing the
+target to `2*pi + 2 degrees` remains on the same explicit unwrapped branch.
+Persistence and undo/redo preserve it, while an incompatible fixed `pi/2` edit
+rejects and retains document/history state.
+
+### M25-J1 - Frozen v1 migration to v2
+
+A nonempty v1 document containing a legacy curve-length dimension parses through
+the private v1 dimension DTO and re-emits deterministic canonical v2. The same
+version relabel applied to a v2 offset payload rejects, proving that the frozen
+v1 dimension language did not silently expand.
+
+## M26 visual line-profile fixtures
+
+### M26-L1 - Exact loops and explicit topology
+
+A shared-identity square publishes one complete counterclockwise contour with
+area `16`. Four coordinate-equal but identity-distinct line endpoints publish no
+face until four active `Coincident` constraints explicitly weld the corners.
+Moving one endpoint without solving makes its coincidence class exceed the
+default hard-residual tolerance and returns `InconsistentCoincidence` with no
+faces rather than silently teleporting the endpoint.
+Open chains publish a complete empty result. Analysis leaves canonical JSON
+byte-identical.
+
+### M26-X1 - Diagonals, crossings and T-junctions
+
+A square diagonal produces two area-`2` faces. A line whose distinct endpoints
+lie exactly in the interiors of opposite square edges creates two ephemeral
+T-junctions and the same two faces. A closed bow-tie splits its proper crossing
+ephemerally and publishes two area-`1` lobes. Every contour edge retains its
+source span and parameter interval.
+
+### M26-N1 - Nested contours
+
+A disconnected area-`4` square inside an area-`16` square publishes an area-`12`
+annulus with one clockwise hole plus the independent area-`4` inner face. No
+overlapping area-`16` face is published.
+
+### M26-A1 - Overlap and numerical ambiguity
+
+Two positively overlapping collinear segments skip their connected component
+with `CollinearOverlap`; a disconnected clean square still publishes under
+overall `Truncated` status. Near-collinear spans inside the determinant uncertainty
+band skip with `NumericalAmbiguity` rather than being snapped or intersected.
+
+### M26-B1 - Deterministic budgets and transforms
+
+Candidate, fragment and cross-component containment limits return `Skipped` with
+no partial faces; candidate counts divide before multiplication and fail closed
+on `usize` overflow. Two large separated face components are bounded by component
+boxes instead of entering all cycle-pair polygon tests. A one-face
+limit over a two-face arrangement returns one deterministic face with `Truncated`
+status. Rotated/translated square-diagonal arrangements at scales `1e-6`, `1` and
+`1e6` preserve normalized area and reproduce exactly after canonical JSON
+round-trip.
+
+### M26-W1 - Pointer-transparent overlay
+
+The browser renders accepted rectangle faces as even-odd SVG paths. The paths
+have `pointer-events: none`, no data/object identity attributes and no effect on
+selection, command history or exported JSON when the filled interior is clicked.
+
+## M27 associative line-fillet fixtures
+
+### M27-F1 - Audited line-jet equations and derived arc
+
+Two fixed perpendicular bounded lines and a perturbed ordinary circular arc use
+two explicit left-side strict-interior contacts, first-then-second endpoint order
+and counterclockwise sweep. The four center/contact rows match finite differences
+within `2e-6`, publish four structured `left_normal` audit rows and recover center
+`(3, 1)`, radius `1` and contacts `(3, 0)`/`(4, 1)` with zero local DOF. The
+accepted arc endpoints are derived from those contacts, and equation-free
+curvature remains measurable. A pre-used or already-associated output arc and a
+new executable consumer on an active output arc reject.
+
+### M27-F2 - Explicit branch matrix and radius mobility
+
+At scales `1e-6`, `1` and `1e6`, rotated and translated perpendicular parents run
+all two-by-two normal-side, two endpoint-order and two sweep combinations. Every
+driving-radius case retains its explicit branch, has zero local DOF and matches
+the transformed analytic contacts. Replacing the driving dimension with a
+reference radius adds no equation, leaves exactly one local DOF and reports the
+accepted radius through the ordinary reference-dimension API.
+
+### M27-F3 - Association, history and ownership
+
+Editing a parent endpoint re-solves both contacts and re-derives the output arc
+while both parents remain ordinary untrimmed lines. Atomic creation and branch
+edits survive undo/redo with stable persistent IDs. Active derived angle scalars
+and trim handles reject direct edits; suppression freezes the ordinary arc and
+permits angle editing but retains output ownership. Direct, cascading and
+indirect output deletion returns `ObjectInUse`, including while suppressed.
+Deleting the association explicitly explodes it: owned contacts disappear and
+the last accepted ordinary arc remains; undo/redo restores the same semantics.
+
+### M27-J1 - Frozen v1/v2 migration to v3
+
+Canonical version-3 JSON persists the association, two contacts, ordinary arc,
+normal sides, endpoint order, sweep and radius dimension, and round-trips
+byte-identically. Relabeling that payload as version 1 or 2 rejects, proving that
+neither frozen older constraint language silently accepts fillet syntax.
+
+### M27-I1 - Invalid geometry and transactional rollback
+
+An accepted radius edit whose strict-interior contacts would escape rejects and
+leaves canonical JSON and command history unchanged. Construction with an escaped
+radius, exact or numerically unresolved near-parallel parents, zero radius, NaN or
+infinity rejects before allocating persistent objects. Independent validation
+also recomputes endpoint-order and canonical sweep data, so corrupted derived arc
+state cannot become success-like.
 
 ## Frozen near-singular fixtures
 

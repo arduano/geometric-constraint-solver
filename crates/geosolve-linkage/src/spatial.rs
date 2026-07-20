@@ -3,23 +3,52 @@ use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use geosolve_core::{
-    AuditBinding, AuditEvaluationStatus, AuditSnapshot, CoreError, HardValidity, Problem,
-    ResidualBlock, ResidualCategory, ResidualId, ResidualRowAudit, SessionError, SolveReport,
-    SolveSession, SolverConfig, SourceConstraint, SourceConstraintId, VariableBlock, VariableId,
-    VariableKind, VariableValue,
+    AuditBinding, AuditEvaluationStatus, AuditSnapshot, ContinuationError, CoreError, HardValidity,
+    LinearSolveBackend, Problem, ResidualBlock, ResidualCategory, ResidualId, ResidualRowAudit,
+    SessionError, SolveReport, SolveSession, SolverConfig, SourceConstraint, SourceConstraintId,
+    SparseFallbackReason, VariableBlock, VariableId, VariableKind, VariableValue,
 };
 use geosolve_geometry::{Frame3, GeometryError, Point3, Pose3, Vector3};
 use thiserror::Error;
 
 use crate::spatial_residuals::{
+    ParameterizedSpatialHingePositionResidual, ParameterizedSpatialTranslationPositionResidual,
     SpatialAxisAlignmentResidual, SpatialAxisAngleResidual, SpatialBallResidual,
     SpatialFixedFrameResidual, SpatialHingePositionResidual, SpatialPointDistanceResidual,
     SpatialRelationKind, SpatialRelationResidual, SpatialRevoluteResidual,
     SpatialTranslationPositionResidual,
 };
 
-const ORIENTATION_BRANCH_MARGIN: f64 = 1.0e-3;
+#[path = "spatial_continuation.rs"]
+mod continuation;
+#[path = "spatial_document.rs"]
+mod document;
+#[path = "spatial_velocity.rs"]
+mod velocity;
+
+pub use continuation::{
+    SpatialAdaptiveContinuationRequest, SpatialAdaptiveContinuationResult,
+    SpatialAdaptiveContinuationSample, SpatialAdaptiveContinuationStatus,
+};
+pub use document::{
+    SPATIAL_ASSEMBLY_DOCUMENT_VERSION, SpatialAssemblyDocument, SpatialAssemblyDocumentSession,
+    SpatialAssemblyRuntimeMap, SpatialDocumentError, SpatialDocumentId, SpatialPersistentId,
+    SpatialRuntimeFeature,
+};
+pub use velocity::{
+    SpatialAxisVelocity, SpatialBodyVelocity, SpatialCoordinateRate, SpatialCoordinateRateKind,
+    SpatialDriverRate, SpatialFrameVelocity, SpatialMotionBasisVector,
+    SpatialNormalizedBodyTangent, SpatialPlaneVelocity, SpatialPointVelocity,
+    SpatialVelocityInconsistency, SpatialVelocityOptions, SpatialVelocityOutcome,
+    SpatialVelocitySolution,
+};
+
+pub(crate) const ORIENTATION_BRANCH_MARGIN: f64 = 1.0e-3;
 const SPATIAL_ACCEPTANCE_TOLERANCE: f64 = 1.0e-9;
+/// Clearance at or below which a retained spatial branch enters the event band.
+pub const SPATIAL_BOUNDARY_ENTER_CLEARANCE: f64 = 2.0e-3;
+/// Clearance at or above which a near-boundary spatial branch becomes clear again.
+pub const SPATIAL_BOUNDARY_LEAVE_CLEARANCE: f64 = 4.0e-3;
 static NEXT_SPATIAL_ASSEMBLY_NAMESPACE: AtomicU64 = AtomicU64::new(1);
 
 trait SpatialIdValue: Copy {
@@ -183,6 +212,8 @@ pub enum SpatialAssemblyError {
     IndependentValidation(String),
     #[error("initial spatial assembly was rejected: {0}")]
     InitialRejected(String),
+    #[error(transparent)]
+    Continuation(#[from] ContinuationError),
     #[error(transparent)]
     Core(#[from] CoreError),
     #[error(transparent)]
@@ -388,6 +419,97 @@ pub struct SpatialModeEvaluation {
     pub involved_features: Vec<SpatialModeFeature>,
     pub coordinate: Option<SpatialCoordinateId>,
     pub winding: Option<i64>,
+}
+
+/// Accepted hysteresis latch for one finite spatial branch-boundary metric.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SpatialBoundaryHysteresisState {
+    Clear,
+    Near,
+}
+
+/// One local frame axis used to identify an orientation false-root boundary.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SpatialFrameAxis {
+    X,
+    Y,
+    Z,
+}
+
+/// Typed spatial branch or false-root boundary monitored without adding equations.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SpatialBranchBoundary {
+    FixedFrameDiagonal {
+        source: SpatialSourceId,
+        axis: SpatialFrameAxis,
+    },
+    FrameOffsetDiagonal {
+        source: SpatialSourceId,
+        axis: SpatialFrameAxis,
+    },
+    SourceAxisParity {
+        source: SpatialSourceId,
+        parity: SpatialAxisParity,
+    },
+    PrismaticClockRoot {
+        source: SpatialSourceId,
+    },
+    HingeDriverPositiveRoot {
+        source: SpatialSourceId,
+        coordinate: SpatialCoordinateId,
+    },
+    HingePrincipalCut {
+        coordinate: SpatialCoordinateId,
+        winding: i64,
+    },
+    MonitorAxisParity {
+        monitor: SpatialModeMonitorId,
+        parity: SpatialAxisParity,
+    },
+    MonitorPlaneSide {
+        monitor: SpatialModeMonitorId,
+        side: SpatialModeSign,
+    },
+    MonitorSignedVolume {
+        monitor: SpatialModeMonitorId,
+        orientation: SpatialModeSign,
+    },
+}
+
+/// One finite accepted boundary metric and its retained hysteresis latch.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SpatialBranchBoundaryEvaluation {
+    pub boundary: SpatialBranchBoundary,
+    pub raw_metric: f64,
+    pub clearance: f64,
+    pub hysteresis_state: SpatialBoundaryHysteresisState,
+}
+
+/// Kind of one spatial branch-boundary event.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SpatialBoundaryTransition {
+    Entered,
+    Left,
+    /// A predictor attempted to cross a known periodic cut without a mode change.
+    CrossingAttempted,
+}
+
+/// Endpoint at which one spatial boundary transition was observed.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SpatialBoundaryObservation {
+    PredictorEndpoint,
+    CorrectedPhysicalEndpoint,
+}
+
+/// One typed finite boundary event emitted by spatial continuation.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SpatialBranchBoundaryEvent {
+    pub boundary: SpatialBranchBoundary,
+    pub transition: SpatialBoundaryTransition,
+    pub observation: SpatialBoundaryObservation,
+    pub previous_clearance: f64,
+    pub clearance: f64,
+    pub raw_metric: f64,
 }
 
 /// Numerical coordinate policy, separate from physical grounding.
@@ -1499,8 +1621,52 @@ impl SpatialAssembly {
         self.compile_validated()
     }
 
-    #[allow(clippy::too_many_lines)]
+    fn compile_with_parameterized_driver(
+        &self,
+        driver: SpatialSourceId,
+        parameter: f64,
+    ) -> Result<(CompiledSpatialAssembly, VariableId), SpatialAssemblyError> {
+        self.validate_structure()?;
+        let source = self.require_source(driver)?;
+        match source.kind {
+            SpatialSourceKind::HingePositionDriver { .. } => {
+                validate_hinge_target(SpatialHingeTarget {
+                    principal_phase: parameter,
+                    winding: 0,
+                })?;
+            }
+            SpatialSourceKind::TranslationPositionDriver { .. } => {
+                validate_translation_target(parameter)?;
+            }
+            _ => {
+                return Err(SpatialAssemblyError::WrongSourceKind {
+                    source_id: driver,
+                    expected: "a position driver",
+                });
+            }
+        }
+        let (compiled, parameter_variable) =
+            self.compile_validated_internal(Some((driver, parameter)))?;
+        Ok((
+            compiled,
+            parameter_variable.ok_or_else(|| {
+                SpatialAssemblyError::IndependentValidation(
+                    "parameterized spatial compilation omitted its scalar variable".to_owned(),
+                )
+            })?,
+        ))
+    }
+
     fn compile_validated(&self) -> Result<CompiledSpatialAssembly, SpatialAssemblyError> {
+        self.compile_validated_internal(None)
+            .map(|(compiled, _)| compiled)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn compile_validated_internal(
+        &self,
+        parameterized_driver: Option<(SpatialSourceId, f64)>,
+    ) -> Result<(CompiledSpatialAssembly, Option<VariableId>), SpatialAssemblyError> {
         let mut problem = Problem::new();
         let mut body_variables = Vec::with_capacity(self.bodies.len());
         let mut variables = HashMap::with_capacity(self.bodies.len());
@@ -1523,6 +1689,22 @@ impl SpatialAssembly {
             });
             variables.insert(body.id, variable_id);
         }
+        let parameter_variable = if let Some((driver, parameter)) = parameterized_driver {
+            let source = self.require_source(driver)?;
+            let scale = match source.kind {
+                SpatialSourceKind::HingePositionDriver { .. } => 1.0,
+                SpatialSourceKind::TranslationPositionDriver { .. } => self.model_scale,
+                _ => {
+                    return Err(SpatialAssemblyError::WrongSourceKind {
+                        source_id: driver,
+                        expected: "a position driver",
+                    });
+                }
+            };
+            Some(problem.add_variable(VariableBlock::scalar(parameter, scale)?))
+        } else {
+            None
+        };
 
         let mut source_mappings = Vec::with_capacity(self.sources.len());
         for source in &self.sources {
@@ -1905,57 +2087,119 @@ impl SpatialAssembly {
                     let coordinate_definition = self.require_coordinate(coordinate)?;
                     let resolved =
                         resolve_hinge_coordinate_definition(self, coordinate_definition)?;
-                    problem.add_residual(ResidualBlock::new(
-                        core_source_id,
-                        ResidualCategory::Hard,
-                        vec![
-                            variable_for_body(&variables, resolved.first_body)?,
-                            variable_for_body(&variables, resolved.second_body)?,
-                        ],
-                        1,
-                        vec![1.0],
-                        vec![hinge_driver_audit_row(
-                            coordinate_definition,
-                            resolved,
-                            target,
-                        )],
-                        SpatialHingePositionResidual {
-                            first_local: resolved.first_local,
-                            second_local: resolved.second_local,
-                            parity_multiplier: resolved.parity.multiplier(),
-                            target_principal_phase: target.principal_phase,
-                        },
-                    )?)?
+                    if parameterized_driver.is_some_and(|(selected, _)| selected == source.id) {
+                        let parameter_variable = parameter_variable.ok_or_else(|| {
+                            SpatialAssemblyError::IndependentValidation(
+                                "parameterized hinge driver omitted its scalar variable".to_owned(),
+                            )
+                        })?;
+                        problem.add_residual(ResidualBlock::new(
+                            core_source_id,
+                            ResidualCategory::Hard,
+                            vec![
+                                variable_for_body(&variables, resolved.first_body)?,
+                                variable_for_body(&variables, resolved.second_body)?,
+                                parameter_variable,
+                            ],
+                            1,
+                            vec![1.0],
+                            vec![parameterized_hinge_driver_audit_row(
+                                coordinate_definition,
+                                resolved,
+                                target.winding,
+                            )],
+                            ParameterizedSpatialHingePositionResidual {
+                                first_local: resolved.first_local,
+                                second_local: resolved.second_local,
+                                parity_multiplier: resolved.parity.multiplier(),
+                            },
+                        )?)?
+                    } else {
+                        problem.add_residual(ResidualBlock::new(
+                            core_source_id,
+                            ResidualCategory::Hard,
+                            vec![
+                                variable_for_body(&variables, resolved.first_body)?,
+                                variable_for_body(&variables, resolved.second_body)?,
+                            ],
+                            1,
+                            vec![1.0],
+                            vec![hinge_driver_audit_row(
+                                coordinate_definition,
+                                resolved,
+                                target,
+                            )],
+                            SpatialHingePositionResidual {
+                                first_local: resolved.first_local,
+                                second_local: resolved.second_local,
+                                parity_multiplier: resolved.parity.multiplier(),
+                                target_principal_phase: target.principal_phase,
+                            },
+                        )?)?
+                    }
                 }
                 SpatialSourceKind::TranslationPositionDriver { coordinate, target } => {
                     let coordinate_definition = self.require_coordinate(coordinate)?;
                     let resolved =
                         resolve_translation_coordinate_definition(self, coordinate_definition)?;
-                    problem.add_residual(ResidualBlock::new(
-                        core_source_id,
-                        ResidualCategory::Hard,
-                        vec![
-                            variable_for_body(&variables, resolved.first_body)?,
-                            variable_for_body(&variables, resolved.second_body)?,
-                        ],
-                        1,
-                        vec![self.model_scale],
-                        vec![translation_driver_audit_row(
-                            coordinate_definition,
-                            resolved,
-                            target,
-                        )],
-                        SpatialTranslationPositionResidual {
-                            first_local: resolved.first_local,
-                            second_local: resolved.second_local,
-                            first_local_axis: translation_local_axis(
+                    if parameterized_driver.is_some_and(|(selected, _)| selected == source.id) {
+                        let parameter_variable = parameter_variable.ok_or_else(|| {
+                            SpatialAssemblyError::IndependentValidation(
+                                "parameterized translation driver omitted its scalar variable"
+                                    .to_owned(),
+                            )
+                        })?;
+                        problem.add_residual(ResidualBlock::new(
+                            core_source_id,
+                            ResidualCategory::Hard,
+                            vec![
+                                variable_for_body(&variables, resolved.first_body)?,
+                                variable_for_body(&variables, resolved.second_body)?,
+                                parameter_variable,
+                            ],
+                            1,
+                            vec![self.model_scale],
+                            vec![parameterized_translation_driver_audit_row(
                                 coordinate_definition,
                                 resolved,
-                            )?,
-                            parity_multiplier: resolved.parity.multiplier(),
-                            target,
-                        },
-                    )?)?
+                            )],
+                            ParameterizedSpatialTranslationPositionResidual {
+                                first_local: resolved.first_local,
+                                second_local: resolved.second_local,
+                                first_local_axis: translation_local_axis(
+                                    coordinate_definition,
+                                    resolved,
+                                )?,
+                                parity_multiplier: resolved.parity.multiplier(),
+                            },
+                        )?)?
+                    } else {
+                        problem.add_residual(ResidualBlock::new(
+                            core_source_id,
+                            ResidualCategory::Hard,
+                            vec![
+                                variable_for_body(&variables, resolved.first_body)?,
+                                variable_for_body(&variables, resolved.second_body)?,
+                            ],
+                            1,
+                            vec![self.model_scale],
+                            vec![translation_driver_audit_row(
+                                coordinate_definition,
+                                resolved,
+                                target,
+                            )],
+                            SpatialTranslationPositionResidual {
+                                first_local: resolved.first_local,
+                                second_local: resolved.second_local,
+                                first_local_axis: translation_local_axis(
+                                    coordinate_definition,
+                                    resolved,
+                                )?,
+                                parity_multiplier: resolved.parity.multiplier(),
+                                target,
+                            },
+                        )?)?
+                    }
                 }
             };
             source_mappings.push(SpatialSourceMapping {
@@ -1966,15 +2210,18 @@ impl SpatialAssembly {
             });
         }
 
-        Ok(CompiledSpatialAssembly {
-            problem,
-            body_variables,
-            source_mappings,
-            point_features: self.point_features.clone(),
-            frame_features: self.frame_features.clone(),
-            axis_features: self.axis_features.clone(),
-            plane_features: self.plane_features.clone(),
-        })
+        Ok((
+            CompiledSpatialAssembly {
+                problem,
+                body_variables,
+                source_mappings,
+                point_features: self.point_features.clone(),
+                frame_features: self.frame_features.clone(),
+                axis_features: self.axis_features.clone(),
+                plane_features: self.plane_features.clone(),
+            },
+            parameter_variable,
+        ))
     }
 
     #[allow(clippy::too_many_lines)]
@@ -2264,6 +2511,14 @@ impl SpatialAssembly {
     ) -> Result<&SpatialCoordinate, SpatialAssemblyError> {
         self.coordinate(id)
             .ok_or(SpatialAssemblyError::UnknownCoordinate(id))
+    }
+
+    fn require_mode_monitor(
+        &self,
+        id: SpatialModeMonitorId,
+    ) -> Result<&SpatialModeMonitor, SpatialAssemblyError> {
+        self.mode_monitor(id)
+            .ok_or(SpatialAssemblyError::UnknownModeMonitor(id))
     }
 }
 
@@ -2886,6 +3141,7 @@ pub struct SpatialSolveResult {
     pub geometry: SpatialGeometry,
     pub coordinate_values: Vec<SpatialCoordinateValue>,
     pub mode_evaluations: Vec<SpatialModeEvaluation>,
+    pub branch_boundary_evaluations: Vec<SpatialBranchBoundaryEvaluation>,
     pub display_audit: AuditSnapshot,
     pub source_mappings: Vec<SpatialSourceMapping>,
     pub core_report: SolveReport,
@@ -3017,6 +3273,47 @@ pub struct SpatialAssemblyTransaction {
     pub edits: Vec<SpatialAssemblyEdit>,
 }
 
+/// Explicit direction of a periodic hinge principal-phase transition.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SpatialPrincipalCutDirection {
+    PositiveToNegative,
+    NegativeToPositive,
+}
+
+/// One high-level explicit spatial assembly-mode change.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SpatialAssemblyModeChange {
+    SourceAxisParity {
+        source: SpatialSourceId,
+        parity: SpatialAxisParity,
+    },
+    MonitorAxisParity {
+        monitor: SpatialModeMonitorId,
+        parity: SpatialAxisParity,
+    },
+    MonitorPlaneSide {
+        monitor: SpatialModeMonitorId,
+        side: SpatialModeSign,
+    },
+    MonitorSignedVolume {
+        monitor: SpatialModeMonitorId,
+        orientation: SpatialModeSign,
+    },
+    HingePrincipalCut {
+        coordinate: SpatialCoordinateId,
+        direction: SpatialPrincipalCutDirection,
+        new_principal_phase: f64,
+    },
+}
+
+/// One revision-checked atomic mode change plus optional pose/driver seeds.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SpatialModeChangeTransaction {
+    pub expected_revision: u64,
+    pub changes: Vec<SpatialAssemblyModeChange>,
+    pub companion_edits: Vec<SpatialAssemblyEdit>,
+}
+
 impl SpatialAssemblyTransaction {
     #[must_use]
     pub const fn new(expected_revision: u64, edits: Vec<SpatialAssemblyEdit>) -> Self {
@@ -3051,6 +3348,13 @@ enum SpatialAssemblyEditKey {
     ModeMonitor(SpatialModeMonitorId),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct SpatialScratchSolveSummary {
+    iterations: usize,
+    backend: Option<LinearSolveBackend>,
+    sparse_fallback_reason: Option<SparseFallbackReason>,
+}
+
 /// Accepted spatial assembly plus its authoritative ungauged physical core session.
 #[derive(Clone, Debug)]
 pub struct SpatialAssemblySession {
@@ -3060,6 +3364,7 @@ pub struct SpatialAssemblySession {
     source_mappings: Vec<SpatialSourceMapping>,
     accepted_result: SpatialSolveResult,
     gauge_report: SpatialGaugeReport,
+    scratch_solve: SpatialScratchSolveSummary,
     config: SolverConfig,
 }
 
@@ -3071,6 +3376,7 @@ impl SpatialAssemblySession {
     ///
     /// Rejects invalid assembly/gauge data, unsuccessful core solves, invalid
     /// rank, non-finite geometry/audit, excessive residuals, or branch failures.
+    #[allow(clippy::too_many_lines)]
     pub fn new(
         mut assembly: SpatialAssembly,
         config: SolverConfig,
@@ -3094,6 +3400,11 @@ impl SpatialAssemblySession {
             plane_features,
         } = scratch;
         let scratch_session = accepted_session(problem, config, "private-gauge scratch solve")?;
+        let scratch_solve = SpatialScratchSolveSummary {
+            iterations: scratch_session.report().iterations,
+            backend: scratch_session.report().actual_backend,
+            sparse_fallback_reason: scratch_session.report().sparse_fallback_reason,
+        };
         let scratch_geometry = solved_geometry_from_problem(
             scratch_session.problem(),
             &body_variables,
@@ -3141,6 +3452,8 @@ impl SpatialAssemblySession {
             &source_mappings,
             config,
         )?;
+        let branch_boundary_evaluations =
+            initial_spatial_boundary_evaluations(&assembly, &geometry)?;
         project_geometry(&mut assembly, &geometry)?;
         let gauge_report = build_gauge_report(
             &assembly,
@@ -3155,6 +3468,7 @@ impl SpatialAssemblySession {
             geometry,
             coordinate_values,
             mode_evaluations,
+            branch_boundary_evaluations,
             display_audit: core_report.audit.clone(),
             source_mappings: source_mappings.clone(),
             core_report,
@@ -3167,6 +3481,7 @@ impl SpatialAssemblySession {
             source_mappings,
             accepted_result,
             gauge_report,
+            scratch_solve,
             config,
         })
     }
@@ -3226,6 +3541,11 @@ impl SpatialAssemblySession {
     }
 
     #[must_use]
+    pub fn branch_boundary_evaluations(&self) -> &[SpatialBranchBoundaryEvaluation] {
+        &self.accepted_result.branch_boundary_evaluations
+    }
+
+    #[must_use]
     pub fn body_variables(&self) -> &[SpatialBodyVariableMapping] {
         &self.body_variables
     }
@@ -3257,8 +3577,201 @@ impl SpatialAssemblySession {
             .expected_revision
             .checked_add(1)
             .ok_or(SpatialAssemblyError::RevisionExhausted)?;
-        let replacement = Self::new(candidate, self.config)?;
+        let mut replacement = Self::new(candidate, self.config)?;
+        update_spatial_boundary_hysteresis(
+            &self.accepted_result.branch_boundary_evaluations,
+            &mut replacement.accepted_result.branch_boundary_evaluations,
+            SpatialBoundaryObservation::CorrectedPhysicalEndpoint,
+        );
         *self = replacement;
+        Ok(&self.accepted_result)
+    }
+
+    /// Applies explicit parity, side, orientation, or hinge-cut mode changes atomically.
+    ///
+    /// Hinge-cut changes expand to the coordinate, every associated driver, and
+    /// every associated winding monitor. The solved replacement must leave each
+    /// changed boundary beyond the hysteresis leave threshold before one revision
+    /// is committed.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale revisions, wrong-kind IDs, duplicate lowered edits, invalid
+    /// cut direction/phase, insufficient post-change clearance, or any failed
+    /// solve while retaining every accepted view.
+    #[allow(clippy::too_many_lines)]
+    pub fn change_modes(
+        &mut self,
+        transaction: SpatialModeChangeTransaction,
+    ) -> Result<&SpatialSolveResult, SpatialAssemblyError> {
+        self.require_revision(transaction.expected_revision)?;
+        if transaction.changes.is_empty() {
+            return invalid_field(
+                "spatial_mode_change.changes",
+                "at least one explicit mode change is required",
+            );
+        }
+        let mut edits = transaction.companion_edits;
+        let mut expected_boundaries = Vec::new();
+        for change in transaction.changes {
+            match change {
+                SpatialAssemblyModeChange::SourceAxisParity { source, parity } => {
+                    self.assembly.require_source(source)?;
+                    edits.push(SpatialAssemblyEdit::SourceAxisParity { source, parity });
+                    expected_boundaries
+                        .push(SpatialBranchBoundary::SourceAxisParity { source, parity });
+                }
+                SpatialAssemblyModeChange::MonitorAxisParity { monitor, parity } => {
+                    self.assembly.require_mode_monitor(monitor)?;
+                    edits.push(SpatialAssemblyEdit::MonitorAxisParity { monitor, parity });
+                    expected_boundaries
+                        .push(SpatialBranchBoundary::MonitorAxisParity { monitor, parity });
+                }
+                SpatialAssemblyModeChange::MonitorPlaneSide { monitor, side } => {
+                    self.assembly.require_mode_monitor(monitor)?;
+                    edits.push(SpatialAssemblyEdit::MonitorPlaneSide { monitor, side });
+                    expected_boundaries
+                        .push(SpatialBranchBoundary::MonitorPlaneSide { monitor, side });
+                }
+                SpatialAssemblyModeChange::MonitorSignedVolume {
+                    monitor,
+                    orientation,
+                } => {
+                    self.assembly.require_mode_monitor(monitor)?;
+                    edits.push(SpatialAssemblyEdit::MonitorSignedVolumeOrientation {
+                        monitor,
+                        orientation,
+                    });
+                    expected_boundaries.push(SpatialBranchBoundary::MonitorSignedVolume {
+                        monitor,
+                        orientation,
+                    });
+                }
+                SpatialAssemblyModeChange::HingePrincipalCut {
+                    coordinate,
+                    direction,
+                    new_principal_phase,
+                } => {
+                    validate_hinge_target(SpatialHingeTarget {
+                        principal_phase: new_principal_phase,
+                        winding: 0,
+                    })?;
+                    let accepted = self
+                        .coordinate_value(coordinate)
+                        .ok_or(SpatialAssemblyError::UnknownCoordinate(coordinate))?;
+                    let SpatialCoordinateValueKind::Hinge(accepted) = accepted.value else {
+                        return Err(SpatialAssemblyError::WrongCoordinateKind {
+                            coordinate,
+                            expected: "hinge",
+                        });
+                    };
+                    let old_clearance = std::f64::consts::PI - accepted.principal_phase.abs();
+                    if old_clearance > SPATIAL_BOUNDARY_ENTER_CLEARANCE {
+                        return invalid_field(
+                            "spatial_mode_change.hinge_principal_cut",
+                            "accepted hinge phase is not in the boundary event band",
+                        );
+                    }
+                    let new_clearance = std::f64::consts::PI - new_principal_phase.abs();
+                    if new_clearance < SPATIAL_BOUNDARY_LEAVE_CLEARANCE {
+                        return invalid_field(
+                            "spatial_mode_change.hinge_principal_cut",
+                            "new hinge phase must leave the hysteresis band",
+                        );
+                    }
+                    let new_winding = match direction {
+                        SpatialPrincipalCutDirection::PositiveToNegative
+                            if accepted.principal_phase >= 0.0 && new_principal_phase < 0.0 =>
+                        {
+                            accepted.winding.checked_add(1).ok_or_else(|| {
+                                SpatialAssemblyError::InvalidField {
+                                    field: "spatial_mode_change.hinge_winding",
+                                    message: "hinge winding overflowed".to_owned(),
+                                }
+                            })?
+                        }
+                        SpatialPrincipalCutDirection::NegativeToPositive
+                            if accepted.principal_phase < 0.0 && new_principal_phase >= 0.0 =>
+                        {
+                            accepted.winding.checked_sub(1).ok_or_else(|| {
+                                SpatialAssemblyError::InvalidField {
+                                    field: "spatial_mode_change.hinge_winding",
+                                    message: "hinge winding underflowed".to_owned(),
+                                }
+                            })?
+                        }
+                        _ => {
+                            return invalid_field(
+                                "spatial_mode_change.hinge_principal_cut",
+                                "cut direction does not match old and new principal phases",
+                            );
+                        }
+                    };
+                    edits.push(SpatialAssemblyEdit::HingeWinding {
+                        coordinate,
+                        winding: new_winding,
+                    });
+                    for source in &self.assembly.sources {
+                        if matches!(
+                            source.kind,
+                            SpatialSourceKind::HingePositionDriver {
+                                coordinate: candidate,
+                                ..
+                            } if candidate == coordinate
+                        ) {
+                            edits.push(SpatialAssemblyEdit::HingeDriverTarget {
+                                source: source.id,
+                                target: SpatialHingeTarget {
+                                    principal_phase: new_principal_phase,
+                                    winding: new_winding,
+                                },
+                            });
+                        }
+                    }
+                    for monitor in &self.assembly.mode_monitors {
+                        if matches!(
+                            monitor.kind,
+                            SpatialModeMonitorKind::HingeWinding {
+                                coordinate: candidate,
+                                ..
+                            } if candidate == coordinate
+                        ) {
+                            edits.push(SpatialAssemblyEdit::MonitorHingeWinding {
+                                monitor: monitor.id,
+                                winding: new_winding,
+                            });
+                        }
+                    }
+                    expected_boundaries.push(SpatialBranchBoundary::HingePrincipalCut {
+                        coordinate,
+                        winding: new_winding,
+                    });
+                }
+            }
+        }
+        let mut candidate = self.clone();
+        candidate.apply_transaction(SpatialAssemblyTransaction::new(
+            transaction.expected_revision,
+            edits,
+        ))?;
+        for boundary in expected_boundaries {
+            let evaluation = candidate
+                .branch_boundary_evaluations()
+                .iter()
+                .find(|evaluation| evaluation.boundary == boundary)
+                .ok_or_else(|| {
+                    SpatialAssemblyError::IndependentValidation(format!(
+                        "changed spatial boundary {boundary:?} is absent"
+                    ))
+                })?;
+            if evaluation.clearance < SPATIAL_BOUNDARY_LEAVE_CLEARANCE {
+                return independent(format!(
+                    "changed spatial boundary {boundary:?} clearance {} is below leave threshold {}",
+                    evaluation.clearance, SPATIAL_BOUNDARY_LEAVE_CLEARANCE
+                ));
+            }
+        }
+        *self = candidate;
         Ok(&self.accepted_result)
     }
 
@@ -3295,7 +3808,12 @@ impl SpatialAssemblySession {
         candidate.revision = expected_revision
             .checked_add(1)
             .ok_or(SpatialAssemblyError::RevisionExhausted)?;
-        let replacement = Self::new(candidate, self.config)?;
+        let mut replacement = Self::new(candidate, self.config)?;
+        update_spatial_boundary_hysteresis(
+            &self.accepted_result.branch_boundary_evaluations,
+            &mut replacement.accepted_result.branch_boundary_evaluations,
+            SpatialBoundaryObservation::CorrectedPhysicalEndpoint,
+        );
         *self = replacement;
         Ok(&self.accepted_result)
     }
@@ -4373,6 +4891,392 @@ fn evaluate_mode_monitors(
         .collect()
 }
 
+fn initial_spatial_boundary_evaluations(
+    assembly: &SpatialAssembly,
+    geometry: &SpatialGeometry,
+) -> Result<Vec<SpatialBranchBoundaryEvaluation>, SpatialAssemblyError> {
+    spatial_branch_boundaries(assembly)
+        .into_iter()
+        .map(|boundary| {
+            let (raw_metric, clearance) =
+                evaluate_spatial_branch_boundary(assembly, geometry, boundary)?;
+            Ok(SpatialBranchBoundaryEvaluation {
+                boundary,
+                raw_metric,
+                clearance,
+                hysteresis_state: initial_spatial_hysteresis(clearance)?,
+            })
+        })
+        .collect()
+}
+
+fn spatial_branch_boundaries(assembly: &SpatialAssembly) -> Vec<SpatialBranchBoundary> {
+    let mut boundaries = Vec::new();
+    for source in &assembly.sources {
+        match source.kind {
+            SpatialSourceKind::FixedFrame { .. } => {
+                for axis in [
+                    SpatialFrameAxis::X,
+                    SpatialFrameAxis::Y,
+                    SpatialFrameAxis::Z,
+                ] {
+                    boundaries.push(SpatialBranchBoundary::FixedFrameDiagonal {
+                        source: source.id,
+                        axis,
+                    });
+                }
+            }
+            SpatialSourceKind::FrameOffsetMate { .. } => {
+                for axis in [
+                    SpatialFrameAxis::X,
+                    SpatialFrameAxis::Y,
+                    SpatialFrameAxis::Z,
+                ] {
+                    boundaries.push(SpatialBranchBoundary::FrameOffsetDiagonal {
+                        source: source.id,
+                        axis,
+                    });
+                }
+            }
+            SpatialSourceKind::RevoluteJoint { parity, .. }
+            | SpatialSourceKind::PrismaticJoint { parity, .. }
+            | SpatialSourceKind::CylindricalJoint { parity, .. }
+            | SpatialSourceKind::PlanarJoint { parity, .. }
+            | SpatialSourceKind::AxisAlignmentMate { parity, .. } => {
+                boundaries.push(SpatialBranchBoundary::SourceAxisParity {
+                    source: source.id,
+                    parity,
+                });
+                if matches!(source.kind, SpatialSourceKind::PrismaticJoint { .. }) {
+                    boundaries
+                        .push(SpatialBranchBoundary::PrismaticClockRoot { source: source.id });
+                }
+            }
+            SpatialSourceKind::HingePositionDriver { coordinate, .. } => {
+                boundaries.push(SpatialBranchBoundary::HingeDriverPositiveRoot {
+                    source: source.id,
+                    coordinate,
+                });
+            }
+            _ => {}
+        }
+    }
+    for coordinate in &assembly.coordinates {
+        if let SpatialCoordinateKind::Hinge { winding, .. } = coordinate.kind {
+            boundaries.push(SpatialBranchBoundary::HingePrincipalCut {
+                coordinate: coordinate.id,
+                winding,
+            });
+        }
+    }
+    for monitor in &assembly.mode_monitors {
+        let boundary = match monitor.kind {
+            SpatialModeMonitorKind::AxisParity { parity, .. } => {
+                Some(SpatialBranchBoundary::MonitorAxisParity {
+                    monitor: monitor.id,
+                    parity,
+                })
+            }
+            SpatialModeMonitorKind::PlaneSide { side, .. } => {
+                Some(SpatialBranchBoundary::MonitorPlaneSide {
+                    monitor: monitor.id,
+                    side,
+                })
+            }
+            SpatialModeMonitorKind::SignedVolume { orientation, .. } => {
+                Some(SpatialBranchBoundary::MonitorSignedVolume {
+                    monitor: monitor.id,
+                    orientation,
+                })
+            }
+            SpatialModeMonitorKind::HingeWinding { .. } => None,
+        };
+        boundaries.extend(boundary);
+    }
+    boundaries
+}
+
+#[allow(clippy::too_many_lines)]
+fn evaluate_spatial_branch_boundary(
+    assembly: &SpatialAssembly,
+    geometry: &SpatialGeometry,
+    boundary: SpatialBranchBoundary,
+) -> Result<(f64, f64), SpatialAssemblyError> {
+    let (raw_metric, multiplier) = match boundary {
+        SpatialBranchBoundary::FixedFrameDiagonal { source, axis } => {
+            let source_definition = assembly.require_source(source)?;
+            let SpatialSourceKind::FixedFrame { first, second } = source_definition.kind else {
+                return independent("fixed-frame boundary source changed kind");
+            };
+            let first = geometry
+                .world_frame(first)
+                .ok_or(SpatialAssemblyError::UnknownFrameFeature(first))?;
+            let second = geometry
+                .world_frame(second)
+                .ok_or(SpatialAssemblyError::UnknownFrameFeature(second))?;
+            (frame_axis(first, axis).dot(&frame_axis(second, axis)), 1.0)
+        }
+        SpatialBranchBoundary::FrameOffsetDiagonal { source, axis } => {
+            let source_definition = assembly.require_source(source)?;
+            let SpatialSourceKind::FrameOffsetMate {
+                first,
+                second,
+                offset,
+            } = source_definition.kind
+            else {
+                return independent("frame-offset boundary source changed kind");
+            };
+            let first = geometry
+                .world_frame(first)
+                .ok_or(SpatialAssemblyError::UnknownFrameFeature(first))?;
+            let expected = compose_frames(first, offset)?;
+            let second = geometry
+                .world_frame(second)
+                .ok_or(SpatialAssemblyError::UnknownFrameFeature(second))?;
+            (
+                frame_axis(expected, axis).dot(&frame_axis(second, axis)),
+                1.0,
+            )
+        }
+        SpatialBranchBoundary::SourceAxisParity { source, parity } => {
+            let source_definition = assembly.require_source(source)?;
+            let raw = match source_definition.kind {
+                SpatialSourceKind::RevoluteJoint { first, second, .. } => {
+                    let first = geometry
+                        .world_frame(first)
+                        .ok_or(SpatialAssemblyError::UnknownFrameFeature(first))?;
+                    let second = geometry
+                        .world_frame(second)
+                        .ok_or(SpatialAssemblyError::UnknownFrameFeature(second))?;
+                    first.z_axis().dot(&second.z_axis())
+                }
+                SpatialSourceKind::PrismaticJoint { first, second, .. }
+                | SpatialSourceKind::CylindricalJoint { first, second, .. }
+                | SpatialSourceKind::AxisAlignmentMate { first, second, .. } => {
+                    let first = geometry
+                        .world_axis_frame(first)
+                        .ok_or(SpatialAssemblyError::UnknownAxisFeature(first))?;
+                    let second = geometry
+                        .world_axis_frame(second)
+                        .ok_or(SpatialAssemblyError::UnknownAxisFeature(second))?;
+                    first.z_axis().dot(&second.z_axis())
+                }
+                SpatialSourceKind::PlanarJoint { first, second, .. } => {
+                    let first = geometry
+                        .world_plane_frame(first)
+                        .ok_or(SpatialAssemblyError::UnknownPlaneFeature(first))?;
+                    let second = geometry
+                        .world_plane_frame(second)
+                        .ok_or(SpatialAssemblyError::UnknownPlaneFeature(second))?;
+                    first.z_axis().dot(&second.z_axis())
+                }
+                _ => return independent("axis-parity boundary source changed kind"),
+            };
+            (raw, parity.multiplier())
+        }
+        SpatialBranchBoundary::PrismaticClockRoot { source } => {
+            let source_definition = assembly.require_source(source)?;
+            let SpatialSourceKind::PrismaticJoint { first, second, .. } = source_definition.kind
+            else {
+                return independent("prismatic-clock boundary source changed kind");
+            };
+            let first = geometry
+                .world_axis_frame(first)
+                .ok_or(SpatialAssemblyError::UnknownAxisFeature(first))?;
+            let second = geometry
+                .world_axis_frame(second)
+                .ok_or(SpatialAssemblyError::UnknownAxisFeature(second))?;
+            (first.x_axis().dot(&second.x_axis()), 1.0)
+        }
+        SpatialBranchBoundary::HingeDriverPositiveRoot { source, coordinate } => {
+            let source_definition = assembly.require_source(source)?;
+            let SpatialSourceKind::HingePositionDriver {
+                coordinate: source_coordinate,
+                target,
+            } = source_definition.kind
+            else {
+                return independent("hinge-driver boundary source changed kind");
+            };
+            if source_coordinate != coordinate {
+                return independent("hinge-driver boundary coordinate changed");
+            }
+            let principal_phase = measured_hinge_principal_phase(assembly, geometry, coordinate)?;
+            (
+                canonical_phase(principal_phase - target.principal_phase)?.cos(),
+                1.0,
+            )
+        }
+        SpatialBranchBoundary::HingePrincipalCut {
+            coordinate,
+            winding,
+        } => {
+            let coordinate_definition = assembly.require_coordinate(coordinate)?;
+            let SpatialCoordinateKind::Hinge {
+                winding: coordinate_winding,
+                ..
+            } = coordinate_definition.kind
+            else {
+                return Err(SpatialAssemblyError::WrongCoordinateKind {
+                    coordinate,
+                    expected: "hinge",
+                });
+            };
+            require_matching_winding(coordinate, coordinate_winding, winding)?;
+            let principal_phase = measured_hinge_principal_phase(assembly, geometry, coordinate)?;
+            let clearance = std::f64::consts::PI - principal_phase.abs();
+            if !clearance.is_finite() {
+                return independent("hinge principal-cut clearance is non-finite");
+            }
+            return Ok((principal_phase, clearance));
+        }
+        SpatialBranchBoundary::MonitorAxisParity { monitor, parity } => {
+            let monitor_definition = assembly.require_mode_monitor(monitor)?;
+            let SpatialModeMonitorKind::AxisParity { first, second, .. } = monitor_definition.kind
+            else {
+                return independent("axis-parity boundary monitor changed kind");
+            };
+            let first = geometry
+                .world_axis_frame(first)
+                .ok_or(SpatialAssemblyError::UnknownAxisFeature(first))?;
+            let second = geometry
+                .world_axis_frame(second)
+                .ok_or(SpatialAssemblyError::UnknownAxisFeature(second))?;
+            (first.z_axis().dot(&second.z_axis()), parity.multiplier())
+        }
+        SpatialBranchBoundary::MonitorPlaneSide { monitor, side } => {
+            let monitor_definition = assembly.require_mode_monitor(monitor)?;
+            let SpatialModeMonitorKind::PlaneSide { plane, point, .. } = monitor_definition.kind
+            else {
+                return independent("plane-side boundary monitor changed kind");
+            };
+            let plane = geometry
+                .world_plane_frame(plane)
+                .ok_or(SpatialAssemblyError::UnknownPlaneFeature(plane))?;
+            let point = geometry
+                .world_point(point)
+                .ok_or(SpatialAssemblyError::UnknownPointFeature(point))?;
+            (
+                plane.z_axis().dot(&(point - plane.origin())),
+                side.multiplier() / assembly.model_scale,
+            )
+        }
+        SpatialBranchBoundary::MonitorSignedVolume {
+            monitor,
+            orientation,
+        } => {
+            let monitor_definition = assembly.require_mode_monitor(monitor)?;
+            let SpatialModeMonitorKind::SignedVolume { points, .. } = monitor_definition.kind
+            else {
+                return independent("signed-volume boundary monitor changed kind");
+            };
+            require_distinct_volume_points(points)?;
+            let [a, b, c, d] = points.map(|point| {
+                geometry
+                    .world_point(point)
+                    .ok_or(SpatialAssemblyError::UnknownPointFeature(point))
+            });
+            let [a, b, c, d] = [a?, b?, c?, d?];
+            let ab = finite_unit_edge(b - a, monitor, "B-A")?;
+            let ac = finite_unit_edge(c - a, monitor, "C-A")?;
+            let ad = finite_unit_edge(d - a, monitor, "D-A")?;
+            (ab.cross(&ac).dot(&ad), orientation.multiplier())
+        }
+    };
+    let clearance = raw_metric * multiplier;
+    if !raw_metric.is_finite() || !clearance.is_finite() {
+        return independent("spatial branch-boundary metric is non-finite");
+    }
+    Ok((raw_metric, clearance))
+}
+
+fn frame_axis(frame: Frame3, axis: SpatialFrameAxis) -> Vector3<f64> {
+    match axis {
+        SpatialFrameAxis::X => frame.x_axis(),
+        SpatialFrameAxis::Y => frame.y_axis(),
+        SpatialFrameAxis::Z => frame.z_axis(),
+    }
+}
+
+fn measured_hinge_principal_phase(
+    assembly: &SpatialAssembly,
+    geometry: &SpatialGeometry,
+    coordinate: SpatialCoordinateId,
+) -> Result<f64, SpatialAssemblyError> {
+    let coordinate_definition = assembly.require_coordinate(coordinate)?;
+    let resolved = resolve_hinge_coordinate_definition(assembly, coordinate_definition)?;
+    let (first, second) = resolved_coordinate_world_frames(geometry, resolved)?;
+    let sine = first.y_axis().dot(&second.x_axis());
+    let cosine = first.x_axis().dot(&second.x_axis());
+    let projection = sine.hypot(cosine);
+    if !sine.is_finite() || !cosine.is_finite() || !projection.is_finite() || projection == 0.0 {
+        return independent(format!(
+            "hinge coordinate {coordinate} has an invalid boundary clock projection"
+        ));
+    }
+    canonical_phase(sine.atan2(cosine))
+}
+
+fn initial_spatial_hysteresis(
+    clearance: f64,
+) -> Result<SpatialBoundaryHysteresisState, SpatialAssemblyError> {
+    if !clearance.is_finite() {
+        independent("spatial branch-boundary clearance is non-finite")
+    } else if clearance >= SPATIAL_BOUNDARY_LEAVE_CLEARANCE {
+        Ok(SpatialBoundaryHysteresisState::Clear)
+    } else {
+        Ok(SpatialBoundaryHysteresisState::Near)
+    }
+}
+
+pub(crate) fn update_spatial_boundary_hysteresis(
+    previous: &[SpatialBranchBoundaryEvaluation],
+    current: &mut [SpatialBranchBoundaryEvaluation],
+    observation: SpatialBoundaryObservation,
+) -> Vec<SpatialBranchBoundaryEvent> {
+    let mut events = Vec::new();
+    for evaluation in current {
+        let Some(retained) = previous
+            .iter()
+            .find(|candidate| candidate.boundary == evaluation.boundary)
+        else {
+            continue;
+        };
+        let transition = match retained.hysteresis_state {
+            SpatialBoundaryHysteresisState::Clear
+                if evaluation.clearance <= SPATIAL_BOUNDARY_ENTER_CLEARANCE =>
+            {
+                Some((
+                    SpatialBoundaryTransition::Entered,
+                    SpatialBoundaryHysteresisState::Near,
+                ))
+            }
+            SpatialBoundaryHysteresisState::Near
+                if evaluation.clearance >= SPATIAL_BOUNDARY_LEAVE_CLEARANCE =>
+            {
+                Some((
+                    SpatialBoundaryTransition::Left,
+                    SpatialBoundaryHysteresisState::Clear,
+                ))
+            }
+            _ => None,
+        };
+        if let Some((transition, state)) = transition {
+            evaluation.hysteresis_state = state;
+            events.push(SpatialBranchBoundaryEvent {
+                boundary: evaluation.boundary,
+                transition,
+                observation,
+                previous_clearance: retained.clearance,
+                clearance: evaluation.clearance,
+                raw_metric: evaluation.raw_metric,
+            });
+        } else {
+            evaluation.hysteresis_state = retained.hysteresis_state;
+        }
+    }
+    events
+}
+
 fn hinge_monitor_features(
     assembly: &SpatialAssembly,
     coordinate: &SpatialCoordinate,
@@ -5363,6 +6267,24 @@ fn hinge_driver_audit_row(
     )
 }
 
+fn parameterized_hinge_driver_audit_row(
+    coordinate: &SpatialCoordinate,
+    resolved: ResolvedSpatialCoordinateDefinition,
+    winding: i64,
+) -> ResidualRowAudit {
+    let mut bindings = coordinate_driver_bindings(coordinate, resolved);
+    bindings.push(AuditBinding::new(
+        "active_parameter",
+        "ephemeral spatial continuation scalar",
+    ));
+    bindings.push(AuditBinding::new("retained_winding", winding.to_string()));
+    ResidualRowAudit::new(
+        "hinge position driver cos(active continuation parameter) * (y1 dot x2) - sin(active continuation parameter) * (x1 dot x2)",
+        bindings,
+        "dimensionless",
+    )
+}
+
 fn translation_driver_audit_row(
     coordinate: &SpatialCoordinate,
     resolved: ResolvedSpatialCoordinateDefinition,
@@ -5382,6 +6304,36 @@ fn translation_driver_audit_row(
             axis: SpatialPlanarTranslationAxis::Y,
             ..
         } => "translation position driver first y dot (second origin - first origin) - target",
+        SpatialCoordinateKind::Hinge { .. } => unreachable!("validated translation coordinate"),
+    };
+    ResidualRowAudit::new(template, bindings, "model-unit")
+}
+
+fn parameterized_translation_driver_audit_row(
+    coordinate: &SpatialCoordinate,
+    resolved: ResolvedSpatialCoordinateDefinition,
+) -> ResidualRowAudit {
+    let mut bindings = coordinate_driver_bindings(coordinate, resolved);
+    bindings.push(AuditBinding::new(
+        "active_parameter",
+        "ephemeral spatial continuation scalar",
+    ));
+    let template = match coordinate.kind {
+        SpatialCoordinateKind::AxialTranslation { .. } => {
+            "translation position driver first z dot (second origin - first origin) - active continuation parameter"
+        }
+        SpatialCoordinateKind::PlanarTranslation {
+            axis: SpatialPlanarTranslationAxis::X,
+            ..
+        } => {
+            "translation position driver first x dot (second origin - first origin) - active continuation parameter"
+        }
+        SpatialCoordinateKind::PlanarTranslation {
+            axis: SpatialPlanarTranslationAxis::Y,
+            ..
+        } => {
+            "translation position driver first y dot (second origin - first origin) - active continuation parameter"
+        }
         SpatialCoordinateKind::Hinge { .. } => unreachable!("validated translation coordinate"),
     };
     ResidualRowAudit::new(template, bindings, "model-unit")
@@ -5720,4 +6672,44 @@ fn invalid_field<T>(
 
 fn independent<T>(message: impl Into<String>) -> Result<T, SpatialAssemblyError> {
     Err(SpatialAssemblyError::IndependentValidation(message.into()))
+}
+
+#[cfg(test)]
+mod continuation_audit_tests {
+    use crate::spatial_scenarios::{SpatialExampleIds, SpatialExampleKind, spatial_example};
+
+    #[test]
+    fn parameterized_spatial_drivers_audit_the_active_scalar_incidence() {
+        let fixture = spatial_example(SpatialExampleKind::ShaftBearing, 1.0).unwrap();
+        let SpatialExampleIds::ShaftBearing(ids) = fixture.ids else {
+            unreachable!();
+        };
+        for (driver, parameter) in [(ids.drivers[0], 0.48), (ids.drivers[1], 1.9)] {
+            let (compiled, parameter_variable) = fixture
+                .assembly
+                .compile_with_parameterized_driver(driver, parameter)
+                .unwrap();
+            let mapping = compiled.source_mapping(driver).unwrap();
+            let [residual_id] = mapping.residual_ids.as_slice() else {
+                panic!("parameterized driver must have one residual block");
+            };
+            let residual = compiled.problem.residual(*residual_id).unwrap();
+            assert_eq!(residual.incident_variables().len(), 3);
+            assert_eq!(
+                residual.incident_variables().last(),
+                Some(&parameter_variable)
+            );
+            let [audit] = residual.audit_rows() else {
+                panic!("parameterized driver must have one audit row");
+            };
+            assert!(audit.template.contains("active continuation parameter"));
+            assert!(audit.bindings.iter().any(|binding| {
+                binding.name == "active_parameter"
+                    && binding.value == "ephemeral spatial continuation scalar"
+            }));
+            assert!(audit.bindings.iter().all(|binding| {
+                binding.name != "target_principal_phase_rad" && binding.name != "target_translation"
+            }));
+        }
+    }
 }
