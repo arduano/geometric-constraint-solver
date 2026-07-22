@@ -23,9 +23,9 @@ M23-M31 subsequently complete spatial kinematics, sketch embedding identities,
 advanced constructions, generic fillets and persistent trim views, interactive
 construction/NURBS UAT and certified all-family visual profiles.
 
-- **Baseline:** implemented behavior through M32 plus the completed M33 contract and representative baselines, with M1-M7 domain behavior protected as the frozen regression baseline.
-- **Active target:** M34 retained design, attempted candidate and accepted solved state.
-- **Planned target:** M34-M55 production sketch embedding, CAD-like desktop consumer, companion operations/topology and release qualification. Planned statements are not implemented capabilities.
+- **Baseline:** implemented behavior through M34, including the completed M33 contract/baselines and retained-design lifecycle, with M1-M7 domain behavior protected as the frozen regression baseline.
+- **Active target:** M35 cancellation and operation control.
+- **Planned target:** M35-M55 production sketch embedding, CAD-like desktop consumer, companion operations/topology and release qualification. Planned statements are not implemented capabilities.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
@@ -113,10 +113,10 @@ order, area sign and containment decision is resolved within explicit budgets.
 Sampling is rendering only and cannot prove arrangement topology.
 
 M33 accepts the production-embedding identity, host-input, operation-control and
-companion-boundary contracts without adding target behavior. M34-M48 are the planned
-implementation transition. They add a standard planar relation/dimension surface,
-retained design intent separate from accepted solved
-state, typed construction/activation semantics, host-supplied parameter values,
+companion-boundary contracts without adding target behavior. M34 implements retained
+design intent, attempted candidates and accepted solved state as separate typed views.
+M35-M48 continue the implementation transition with a standard planar
+relation/dimension surface, typed construction/activation semantics, host-supplied parameter values,
 immutable external 2D snapshots, cancellation, stable persistent-ID diagnostics,
 revision-checked prepared jobs and incremental solving. Host expressions, projection
 and application history remain outside this crate. One solve attempt consumes
@@ -203,10 +203,14 @@ The logical target pipeline is:
 
 Baseline `Problem::solve_decomposed` has component caching but relies on caller-supplied edited variable IDs. M10 replaces that hint-based lifecycle with the persistent `SolveSession` and revision/dirty tracking in ADR 0007, with `SketchSession` as the first domain consumer. M11 layers `SketchDocumentSession` over that validated boundary: document commands lower persistent semantic IDs deterministically to fresh runtime IDs, solve through existing sketch equations, project only independently accepted continuous/contact state back to persistent IDs, and clone-and-swap the document/history atomically. Rejected full-document attempts expose retained accepted geometry/mappings separately from attempted diagnostic mappings. Clean components may reuse zero nonlinear iterations, but all hard and secondary rows, Jacobian/derivative statuses, audit snapshots, rank and bounded diagnostics are freshly evaluated at every returned state. Residual evaluators are behavior-pure; interior mutable telemetry cannot affect equations. M16 adds sparse storage, structural matching, bounded symbolic cache reuse and the continuation contract in ADR 0011. Natural continuation stops before a parameter reversal. Pseudo-arclength parameter/control rows are ephemeral, and only a separately re-solved, independently validated ordinary physical problem may be committed or published. No benchmark or performance policy may bypass independent validation.
 
-M34 plans three explicit sketch views: structurally valid design intent, an optional
-finite attempted candidate and the last independently accepted solved state. Design
-may remain unsolved after a conflict or unavailable host input, but neither design nor
-attempted geometry gains an accepted revision or success-like status. M43-M47 extend
+M34 implements three explicit sketch views through `RetainedSketchDocumentSession`:
+structurally valid design intent, an optional finite attempted candidate and the last
+independently accepted solved state. Design may remain unsolved after a conflict or
+unavailable input, but neither design nor attempted geometry gains an accepted
+revision or authoritative audit. The older `SketchDocumentSession` remains an
+accepted-only command/history workflow. Frozen v1-v4 graphs persist design and
+accepted views separately; revision high-water metadata is host-owned until the M53
+wire freeze. M43-M47 extend
 attempt identity with immutable parameter/external/activation revisions and require a
 compare-and-swap commit for prepared work.
 

@@ -31,9 +31,9 @@ not a physics engine.
 
 ## Current state
 
-M0-M33 and the advanced free-radius circle/arc tangency follow-up are complete. M0-M7 form the frozen domain baseline; M8-M32 establish the production contracts, representative benchmarks, component-local linearization, local AD, numerical status/rank policy, persistent sessions, first-class bounds, persistent sketch and linkage documents, immutable curve jets, editable Beziers, geometry-generic curve constraints, explicit analytic and homogeneous rational conics, locally supported clamped and periodic B-splines/NURBS, differential geometry and advanced CAD continuity, the hardened document-backed 2D Sketch Playground Alpha, shared planar/spatial manifold state, sparse hard steps, structural matching, coupled hierarchy, robust planar/spatial continuation, gauge-separated planar/spatial linkage sessions, multi-driver spatial velocity, completed assembly persistence/oracle/performance, typed host-attribute extension seams, associative line offsets and point-defined mirrors, strict sketch-v1-to-v4 migrations, bounded visual-only all-family profile analysis, common-jet generic fillets, differentiable associated output arcs, persistent visible parent trim intervals, deterministic diagnostic capsules, M32 mutation/performance evidence, and the versioned `0.2.0` release contract and gates. M33 freezes the production-embedding decisions, complete CAD capability matrix and deterministic representative workload boundaries without adding target-only behavior.
+M0-M34 and the advanced free-radius circle/arc tangency follow-up are complete. M0-M7 form the frozen domain baseline; M8-M32 establish the production contracts, representative benchmarks, component-local linearization, local AD, numerical status/rank policy, persistent sessions, first-class bounds, persistent sketch and linkage documents, immutable curve jets, editable Beziers, geometry-generic curve constraints, explicit analytic and homogeneous rational conics, locally supported clamped and periodic B-splines/NURBS, differential geometry and advanced CAD continuity, the hardened document-backed 2D Sketch Playground Alpha, shared planar/spatial manifold state, sparse hard steps, structural matching, coupled hierarchy, robust planar/spatial continuation, gauge-separated planar/spatial linkage sessions, multi-driver spatial velocity, completed assembly persistence/oracle/performance, typed host-attribute extension seams, associative line offsets and point-defined mirrors, strict sketch-v1-to-v4 migrations, bounded visual-only all-family profile analysis, common-jet generic fillets, differentiable associated output arcs, persistent visible parent trim intervals, deterministic diagnostic capsules, M32 mutation/performance evidence, and the versioned `0.2.0` release contract and gates. M33 freezes the production-embedding decisions, capability matrix and representative workloads; M34 implements separate retained-design, attempted-candidate and accepted-solved identities/views without changing sketch v1-v4.
 
-The active milestone is **M34: retained design and accepted solved state**.
+The active milestone is **M35: cancellation and operation control**.
 
 After M32, the approved M33-M55 north-star roadmap turns the broad mathematical
 preview into a host-usable planar engine. It adds retained unsolved design intent,
@@ -49,8 +49,9 @@ Continue in `PLAN.md` order. M30 proves offsets, mirrors, directed angles, fille
 and NURBS through movable accepted scenes and focused public-API controls. M31
 broadens the M26 line-only visual analysis to every built-in curve under ADR 0024;
 browser tessellation is never topology evidence. M32 closes the `0.2.0` release
-hardening, M33 freezes the production-embedding contracts and baselines, and M34 now
-implements the separate retained-design, attempted-candidate and accepted-solved views.
+hardening, M33 freezes the production-embedding contracts and baselines, M34 implements
+the separate retained-design, attempted-candidate and accepted-solved views, and M35
+now adds cooperative cancellation and deterministic operation control.
 Registry publication remains outside the automated gate.
 
 M8 is a contract and benchmark-baseline milestone. Its preserved completion notes and

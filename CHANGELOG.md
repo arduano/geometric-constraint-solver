@@ -5,6 +5,12 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 
 ## [Unreleased]
 
+### Added
+
+- Typed retained-design, solve-attempt and accepted-state identities/views for
+  repairable unsolved sketch intent, optional finite candidate geometry and separate
+  v1-v4 design/accepted persistence with host-owned revision high-water metadata.
+
 ### Changed
 
 - Adopted the M33-M55 production-embedding roadmap for the planar sketch engine,

@@ -2,9 +2,10 @@
 //!
 //! [`SketchDocument`] stores stable external IDs, editable analytic and parametric
 //! curves, constraints, dimensions, explicit branch state and canonical JSON.
-//! [`SketchDocumentSession`] is the recommended application entry point: commands
-//! clone, solve, independently validate and atomically publish one accepted document,
-//! while rejection retains the previous finite geometry and history.
+//! [`RetainedSketchDocumentSession`] is the production lifecycle entry point for
+//! separate retained design intent, non-authoritative attempts and independently
+//! accepted solved state. [`SketchDocumentSession`] remains the accepted-only
+//! command/history workflow used by the preview playground and compatibility clients.
 //!
 //! The supported curve surface includes lines, circles/arcs, conics, Beziers,
 //! clamped/periodic B-splines and NURBS. Generic contact, tangency, curvature,
@@ -103,7 +104,11 @@ pub use document_lowering::{
 pub use document_session::{
     DocumentCommand, DocumentCommandEffect, DocumentCommandOutcome, DocumentDragTarget,
     DocumentEdit, DocumentSessionError, DocumentSolveRequest, DocumentSolveResult,
-    DocumentTransactionOutcome, SketchDocumentSession,
+    DocumentTransactionOutcome, RetainedDocumentTransactionOutcome, RetainedSketchDocumentSession,
+    SketchAcceptedDocumentState, SketchAcceptedRevision, SketchAcceptedStateIdentity,
+    SketchAttemptFailure, SketchAttemptFailureKind, SketchAttemptIdentity, SketchAttemptInput,
+    SketchAttemptRevision, SketchDesignIdentity, SketchDesignRevision, SketchDocumentAttempt,
+    SketchDocumentSession, SketchLifecycleRevisionHighWater,
 };
 pub use geosolve_geometry::{
     BSplineBasis, BSplineContinuity, BSplineDefinitionError, BSplineEvaluationError, BSplineForm,

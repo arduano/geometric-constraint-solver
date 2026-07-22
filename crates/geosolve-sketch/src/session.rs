@@ -163,8 +163,10 @@ impl SketchSession {
         core.refresh_accepted_audit(audit_refresh)?;
         compiled.replace_problem(core.problem().clone());
         let report = core.report().clone();
+        let geometry = sketch.geometry();
         let accepted_result = SketchSolveResult {
-            geometry: sketch.geometry(),
+            attempted_geometry: Some(geometry.clone()),
+            geometry,
             display_audit: report.audit.clone(),
             reference_values: sketch.reference_values()?,
             source_mappings: compiled.source_mappings().to_vec(),
@@ -404,6 +406,7 @@ impl SketchSession {
                 .map(|maximum| maximum.max(transaction.report.hard_residual_max));
             return Ok(SketchSolveResult {
                 geometry: self.sketch.geometry(),
+                attempted_geometry: None,
                 display_audit: self.accepted_result.display_audit.clone(),
                 reference_values: self.accepted_result.reference_values.clone(),
                 source_mappings: self.accepted_result.source_mappings.clone(),
@@ -427,6 +430,7 @@ impl SketchSession {
                     .map(|maximum| maximum.max(sync_report.hard_residual_max));
                 return Ok(SketchSolveResult {
                     geometry: self.sketch.geometry(),
+                    attempted_geometry: None,
                     display_audit: self.accepted_result.display_audit.clone(),
                     reference_values: self.accepted_result.reference_values.clone(),
                     source_mappings: self.accepted_result.source_mappings.clone(),
@@ -456,6 +460,7 @@ impl SketchSession {
         domain_source_changed |= audit_changed;
         let report = candidate_core.report().clone();
         let result = SketchSolveResult {
+            attempted_geometry: Some(complete.geometry.clone()),
             geometry: complete.geometry,
             display_audit: report.audit.clone(),
             reference_values: complete.reference_values,
@@ -541,8 +546,10 @@ impl SketchSession {
         candidate_core.refresh_accepted_audit(audit_refresh)?;
         compiled.replace_problem(candidate_core.problem().clone());
         let report = candidate_core.report().clone();
+        let geometry = accepted_sketch.geometry();
         let accepted_result = SketchSolveResult {
-            geometry: accepted_sketch.geometry(),
+            attempted_geometry: Some(geometry.clone()),
+            geometry,
             display_audit: report.audit.clone(),
             reference_values,
             source_mappings: compiled.source_mappings().to_vec(),

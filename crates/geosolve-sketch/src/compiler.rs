@@ -1142,6 +1142,11 @@ pub enum SolveRejection {
 #[derive(Clone, Debug, PartialEq)]
 pub struct SketchSolveResult {
     pub geometry: SketchGeometry,
+    /// Complete finite geometry produced by this attempt, when available.
+    ///
+    /// This geometry is diagnostic and non-authoritative. On an accepted solve it is
+    /// identical to `geometry`; on rejection only `geometry` remains retained.
+    pub attempted_geometry: Option<SketchGeometry>,
     /// Audit evaluated at exactly `geometry`, suitable for display.
     pub display_audit: AuditSnapshot,
     pub reference_values: Vec<ReferenceDimensionValue>,
@@ -1600,6 +1605,9 @@ impl Sketch {
             core_report.termination = SolveTermination::Stalled;
         }
 
+        // `solved_state_for_problem` constructs every geometry family in retained
+        // order and rejects any non-finite variable before returning the candidate.
+        let attempted_geometry = Some(candidate.geometry.clone());
         if rejection.is_none() {
             self.commit_solved_state(&candidate)?;
         }
@@ -1617,6 +1625,7 @@ impl Sketch {
 
         Ok(SketchSolveResult {
             geometry: self.geometry(),
+            attempted_geometry,
             display_audit,
             reference_values: self.reference_values()?,
             source_mappings: compiled.source_mappings,

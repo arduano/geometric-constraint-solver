@@ -608,6 +608,18 @@ M33 acceptance is complete.
 - Structurally valid unsolved intent is repairable and persistable without changing the last independently validated accepted state.
 - Malformed or non-finite design never enters retained intent, and attempted geometry is never labeled accepted.
 
+Completion record (2026-07-23): the additive `RetainedSketchDocumentSession`
+publishes typed design, attempt and accepted identities, exact implemented attempt
+inputs, separate attempt/accepted runtime mappings and optional finite candidate
+geometry. Conflicting and failed-unsuppression revisions remain editable and repair
+through ordinary transactions while older accepted document/geometry/audit bytes stay
+unchanged. Invalid design transactions allocate no revision. Separate canonical v4
+design/accepted graphs plus host-owned revision high-water metadata restore without
+freezing draft v5 or reusing identity. Initial conflict, all-family candidates,
+topology divergence, underconstrained parent warm starts, persistence and repair
+regressions pass with the complete locked workspace, WASM, rustdoc, Trunk and release
+gates. M34 acceptance is complete.
+
 ## M35 acceptance: cancellation and operation control
 
 - Cancellation and deterministic work exhaustion are distinct from solve/profile failure and convergence.

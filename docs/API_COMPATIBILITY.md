@@ -13,7 +13,7 @@ soundness issue, false success, invalid accepted geometry or a security defect.
 After `1.0`, Rust API compatibility follows Cargo SemVer.
 
 M33 completes the production-embedding contract and baseline freeze without adding
-target APIs. M34-M55 are the planned implementation transition. M53 freezes the next
+target APIs. M34 adds the retained-design lifecycle; M35-M55 continue the planned implementation transition. M53 freezes the next
 release-candidate API and sketch v5 language only after the ordinary, host-state and
 advanced workbench phases pass automated acceptance and their M40/M45/M52 human UAT
 gates. M54 then ratifies the integrated candidate. Until M53 passes, any draft-v5
@@ -27,7 +27,8 @@ before `1.0`, a major release after `1.0`, and a changelog entry.
 
 The supported domain entry points are:
 
-- `SketchDocument` and `SketchDocumentSession` for persistent sketches;
+- `SketchDocument` and accepted-only `SketchDocumentSession` for persistent sketches;
+- `RetainedSketchDocumentSession` for separate retained design, attempt and accepted views;
 - `PlanarLinkageDocument` and `PlanarLinkageSession` for planar kinematics;
 - `SpatialAssemblyDocument` and `SpatialAssemblyDocumentSession` for spatial
   kinematics;

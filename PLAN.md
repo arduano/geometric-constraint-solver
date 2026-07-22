@@ -1271,17 +1271,39 @@ M1-M32 behavior and frozen wire languages remain unchanged.
 
 ## M34: retained design and accepted solved state
 
-Status: active.
+Status: complete as of 2026-07-23.
 
 Goal: retain structurally valid unsolved intent without ever presenting it as
 accepted geometry.
 
-- [ ] Separate design, attempted-candidate and independently accepted solved views with distinct revisions.
-- [ ] Retain structurally valid conflicts, unavailable references and failed unsuppression in design intent.
-- [ ] Continue rejecting malformed, non-finite, resource-invalid or referentially invalid design transactions entirely.
-- [ ] Publish optional finite attempted geometry as non-authoritative evidence only.
-- [ ] Preserve the last accepted state across topology-changing unsolved edits and identify which design revision it solved.
-- [ ] Define persistence and host display rules for design elements that have no accepted solved counterpart yet.
+- [x] Separate design, attempted-candidate and independently accepted solved views with distinct revisions.
+- [x] Retain structurally valid conflicts, unavailable references and failed unsuppression in design intent.
+- [x] Continue rejecting malformed, non-finite, resource-invalid or referentially invalid design transactions entirely.
+- [x] Publish optional finite attempted geometry as non-authoritative evidence only.
+- [x] Preserve the last accepted state across topology-changing unsolved edits and identify which design revision it solved.
+- [x] Define persistence and host display rules for design elements that have no accepted solved counterpart yet.
+
+Completion record (2026-07-23): `RetainedSketchDocumentSession` adds typed,
+non-interchangeable design, attempt and accepted-state identities above the unchanged
+accepted-only `SketchDocumentSession`. Valid conflicting and failed-unsuppression edits
+advance retained design and attempt revisions, ordinary follow-up edits repair that
+same graph, and malformed/non-finite/referential/resource-invalid input advances
+nothing. Attempts record exact candidate/publication requests and effective solver
+policy, use persistent-ID parent warm starts, carry attempt-local mappings and expose
+only complete finite optional candidate geometry. Accepted document, runtime, audit,
+measurements and mappings remain one coherent older view until fresh independent
+validation publishes a new accepted revision.
+
+Frozen sketch v1-v4 remains unchanged: design and accepted graphs serialize
+separately, while three integer revision high-water values belong to a host-owned
+sidecar and prevent identity reuse on restore. Design-only and accepted-only elements
+join only by persistent identity; no draft-v5 language, host input, cancellation or
+prepared-job behavior was introduced. Thirteen focused M34 regressions cover initial
+conflict, all-family finite candidates, conflict/repair, failed unsuppression,
+topology-separated mappings, invalid-input atomicity, underconstrained parents, exact
+attempt inputs and persistence/high-water restoration. The locked workspace tests,
+warnings-denied Clippy/rustdoc, locked WASM check, release Trunk build and complete
+release gate pass.
 
 Gate: no unsolved or attempted state can produce a success-like status, accepted
 revision or authoritative audit; retained design can be repaired through ordinary
@@ -1289,7 +1311,7 @@ transactions.
 
 ## M35: cancellation and operation control
 
-Status: planned.
+Status: active.
 
 Goal: make every potentially expensive sketch operation safely interruptible by an
 interactive host.
