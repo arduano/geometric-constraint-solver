@@ -330,18 +330,36 @@ fn quaternion_sign_is_canonical_and_invalid_quaternions_reject() {
 
 #[test]
 fn accepted_quaternion_canonicalization_is_bitwise_idempotent() {
-    let ambient = [
-        1.0,
-        2.0,
-        3.0,
-        0.965_863_487_391_154_9,
-        -0.078_341_806_827_790_05,
-        -0.175_514_641_954_975_15,
-        0.173_680_440_715_040_44,
-    ];
-    let once = Pose3::from_ambient(ambient).unwrap().ambient();
-    let twice = Pose3::from_ambient(once).unwrap().ambient();
-    assert_same_bits(&once, &twice);
+    for ambient in [
+        [
+            1.0,
+            2.0,
+            3.0,
+            0.965_863_487_391_154_9,
+            -0.078_341_806_827_790_05,
+            -0.175_514_641_954_975_15,
+            0.173_680_440_715_040_44,
+        ],
+        Pose3::exp([0.0, 0.0, 0.0, -0.007, 0.448, 0.268])
+            .unwrap()
+            .ambient(),
+        [
+            0.0,
+            0.0,
+            0.0,
+            0.735_840_097_656_656,
+            0.118_379_834_352_157_49,
+            0.187_202_454_715_019_2,
+            0.639_906_873_262_094_4,
+        ],
+    ] {
+        let canonical = Pose3::from_ambient(ambient).unwrap().ambient();
+        let mut reconstructed = canonical;
+        for _ in 0..16 {
+            reconstructed = Pose3::from_ambient(reconstructed).unwrap().ambient();
+            assert_same_bits(&canonical, &reconstructed);
+        }
+    }
 }
 
 #[test]

@@ -1021,6 +1021,36 @@ fn spatial_slider_crank_at(
     (fixture.assembly, fixture.ids)
 }
 
+#[test]
+fn transformed_slider_crank_zero_distance_retains_the_bitwise_snapshot() {
+    let scale = 1.0;
+    let phase = 1.159;
+    let embedding = Pose3::exp([0.0, 0.0, 0.0, -0.007, 0.448, 0.268]).unwrap();
+    let fixture = embedded_spatial_slider_crank(scale, embedding, phase).unwrap();
+    let crank_y = 1.25 * phase.sin();
+    let target = 1.25 * phase.cos() + (3.5 * 3.5 - crank_y * crank_y).sqrt();
+    let mut session =
+        SpatialAssemblySession::new(fixture.assembly, SolverConfig::default()).unwrap();
+    let revision = session.revision();
+    let accepted = session.accepted_result().clone();
+
+    let result = session
+        .continue_driver(
+            revision,
+            SpatialAdaptiveContinuationRequest {
+                driver_source: fixture.ids.driver,
+                mode: AdaptiveContinuationMode::Natural { target },
+                step_policy: policy(),
+            },
+        )
+        .unwrap();
+
+    assert_eq!(result.status, SpatialAdaptiveContinuationStatus::Completed);
+    assert!(result.samples.is_empty());
+    assert_eq!(session.revision(), revision);
+    assert_eq!(session.accepted_result(), &accepted);
+}
+
 fn planar_pose(translation: Vector3<f64>, angle: f64) -> Pose3 {
     let half = 0.5 * angle;
     Pose3::try_new(translation, [half.cos(), 0.0, 0.0, half.sin()]).unwrap()

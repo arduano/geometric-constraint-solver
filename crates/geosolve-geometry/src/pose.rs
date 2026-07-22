@@ -13,6 +13,10 @@ pub const QUATERNION_NORM_TOLERANCE: f64 = 1.0e-6;
 /// Components this close to zero use the quaternion vector part as the sign tie-breaker.
 pub const QUATERNION_SIGN_TOLERANCE: f64 = 32.0 * f64::EPSILON;
 
+// Preserve already normalized storage across reconstruction while keeping the
+// materially larger public import-validation band separate.
+const QUATERNION_UNIT_ROUNDOFF_TOLERANCE: f64 = 16.0 * f64::EPSILON;
+
 /// A two-dimensional body-to-world rigid transform.
 ///
 /// The ambient representation is `[t_x, t_y, angle]`. Tangents are body-local
@@ -636,26 +640,37 @@ fn validated_rotation(quaternion: [f64; 4]) -> Result<UnitQuaternion<f64>, Geome
     if !quaternion.iter().all(|value| value.is_finite()) {
         return Err(GeometryError::NonFiniteQuaternion);
     }
-    let norm = quaternion[0]
-        .hypot(quaternion[1])
-        .hypot(quaternion[2])
-        .hypot(quaternion[3]);
+    let norm = quaternion_norm(quaternion);
     if norm == 0.0 || !norm.is_finite() || (norm - 1.0).abs() > QUATERNION_NORM_TOLERANCE {
         return Err(GeometryError::InvalidQuaternionNorm { norm });
     }
-    let normalized = UnitQuaternion::new_normalize(Quaternion::new(
-        quaternion[0],
-        quaternion[1],
-        quaternion[2],
-        quaternion[3],
-    ));
-    let canonical = canonical_quaternion(quaternion_components(normalized));
+    let normalized = if (norm - 1.0).abs() <= QUATERNION_UNIT_ROUNDOFF_TOLERANCE {
+        quaternion
+    } else {
+        quaternion.map(|component| component / norm)
+    };
+    let normalized_norm = quaternion_norm(normalized);
+    if !normalized_norm.is_finite()
+        || (normalized_norm - 1.0).abs() > QUATERNION_UNIT_ROUNDOFF_TOLERANCE
+    {
+        return Err(GeometryError::InvalidQuaternionNorm {
+            norm: normalized_norm,
+        });
+    }
+    let canonical = canonical_quaternion(normalized);
     Ok(UnitQuaternion::new_unchecked(Quaternion::new(
         canonical[0],
         canonical[1],
         canonical[2],
         canonical[3],
     )))
+}
+
+fn quaternion_norm(quaternion: [f64; 4]) -> f64 {
+    quaternion[0]
+        .hypot(quaternion[1])
+        .hypot(quaternion[2])
+        .hypot(quaternion[3])
 }
 
 fn canonical_quaternion(mut quaternion: [f64; 4]) -> [f64; 4] {
