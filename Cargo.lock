@@ -613,6 +613,7 @@ dependencies = [
 name = "geosolve-sketch"
 version = "0.2.0"
 dependencies = [
+ "criterion",
  "geosolve-core",
  "geosolve-geometry",
  "js-sys",
