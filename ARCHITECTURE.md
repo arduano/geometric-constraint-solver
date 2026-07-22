@@ -23,8 +23,8 @@ M23-M31 subsequently complete spatial kinematics, sketch embedding identities,
 advanced constructions, generic fillets and persistent trim views, interactive
 construction/NURBS UAT and certified all-family visual profiles.
 
-- **Baseline:** implemented behavior through M31, with M1-M7 domain behavior protected as the frozen regression baseline.
-- **Active target:** behavior required by M32 post-expansion release hardening.
+- **Baseline:** implemented behavior through M32, with M1-M7 domain behavior protected as the frozen regression baseline.
+- **Active target:** M33 CAD engine contracts and representative baselines.
 - **Planned target:** M33-M55 production sketch embedding, CAD-like desktop consumer, companion operations/topology and release qualification. Planned statements are not implemented capabilities.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
@@ -424,7 +424,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   deliverables.
 - M30: completed interactive construction, fillet and NURBS UAT over public document APIs.
 - M31: completed certified all-family visual profile intersections, curved topology and bounded area/containment.
-- M32: post-expansion UAT, fuzz, performance and release hardening.
+- M32: completed post-expansion UAT, mutation, performance and `0.2.0` release hardening.
 - M33-M38: production contract, retained design/accepted-state separation, cancellation, semantic operands and the standard relation/dimension catalog.
 - M39-M40: CAD-like core workbench foundation and first human core-interaction gate.
 - M41-M45: construction/activation, typed parameters, immutable external references, host-state workbench integration and second human gate.

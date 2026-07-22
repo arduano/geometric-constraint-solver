@@ -31,9 +31,9 @@ not a physics engine.
 
 ## Current state
 
-M0-M31 and the advanced free-radius circle/arc tangency follow-up are complete. M0-M7 form the frozen domain baseline; M8-M31 establish the production contracts, representative benchmarks, component-local linearization, local AD, numerical status/rank policy, persistent sessions, first-class bounds, persistent sketch and linkage documents, immutable curve jets, editable Beziers, geometry-generic curve constraints, explicit analytic and homogeneous rational conics, locally supported clamped and periodic B-splines/NURBS, differential geometry and advanced CAD continuity, the hardened document-backed 2D Sketch Playground Alpha, shared planar/spatial manifold state, sparse hard steps, structural matching, coupled hierarchy, robust planar/spatial continuation, gauge-separated planar/spatial linkage sessions, multi-driver spatial velocity, completed assembly persistence/oracle/performance, typed host-attribute extension seams, associative line offsets and point-defined mirrors, strict sketch-v1-to-v4 migrations, bounded visual-only all-family profile analysis, common-jet generic fillets, differentiable associated output arcs, persistent visible parent trim intervals, and the versioned `0.1.0` release contract and gates.
+M0-M32 and the advanced free-radius circle/arc tangency follow-up are complete. M0-M7 form the frozen domain baseline; M8-M32 establish the production contracts, representative benchmarks, component-local linearization, local AD, numerical status/rank policy, persistent sessions, first-class bounds, persistent sketch and linkage documents, immutable curve jets, editable Beziers, geometry-generic curve constraints, explicit analytic and homogeneous rational conics, locally supported clamped and periodic B-splines/NURBS, differential geometry and advanced CAD continuity, the hardened document-backed 2D Sketch Playground Alpha, shared planar/spatial manifold state, sparse hard steps, structural matching, coupled hierarchy, robust planar/spatial continuation, gauge-separated planar/spatial linkage sessions, multi-driver spatial velocity, completed assembly persistence/oracle/performance, typed host-attribute extension seams, associative line offsets and point-defined mirrors, strict sketch-v1-to-v4 migrations, bounded visual-only all-family profile analysis, common-jet generic fillets, differentiable associated output arcs, persistent visible parent trim intervals, deterministic diagnostic capsules, M32 mutation/performance evidence, and the versioned `0.2.0` release contract and gates.
 
-The active milestone is **M32: post-expansion UAT and release hardening**.
+The active milestone is **M33: CAD engine contract and baselines**.
 
 After M32, the approved M33-M55 north-star roadmap turns the broad mathematical
 preview into a host-usable planar engine. It adds retained unsolved design intent,
@@ -48,9 +48,9 @@ M10 proves the persistent lifecycle through `SketchSession`. M11 adds the implem
 Continue in `PLAN.md` order. M30 proves offsets, mirrors, directed angles, fillets
 and NURBS through movable accepted scenes and focused public-API controls. M31
 broadens the M26 line-only visual analysis to every built-in curve under ADR 0024;
-browser tessellation is never topology evidence. M32 now re-runs release hardening;
-do not begin M33 before its gate passes. Registry publication remains outside the
-automated gate.
+browser tessellation is never topology evidence. M32 closes the `0.2.0` release
+hardening and M33 now freezes the production-embedding contracts before implementation.
+Registry publication remains outside the automated gate.
 
 M8 is a contract and benchmark-baseline milestone. Its preserved completion notes and
 pre-rebaseline M10+ labels in older ADRs and `REFERENCES.md` record the allocation

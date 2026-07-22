@@ -576,6 +576,16 @@ M31 acceptance is complete.
 - Updated scale/performance envelopes pass without weakening correctness or completeness policy.
 - One release-gate command passes all native, documentation, package/licence, locked WASM and desktop browser suites.
 
+Completion record (2026-07-22): `0.2.0` consolidates all M30/M31 UAT metadata,
+deterministic scene capsules, exact retained-state desktop failure coverage, a two-test
+command/profile mutation corpus and the native/browser envelope in
+`docs/M32_SCALE_PERFORMANCE.md`. Clean candidate `8d6f648` passed the complete
+`scripts/release-gate.sh` command: format/diff, warnings-denied Clippy/rustdoc, full
+locked workspace tests, locked WASM, benchmark compilation, explicit mutation and
+timing gates, the 1,536-coordinate spatial release case, licences, package contents,
+release Trunk and full Chromium on the first invocation. The completion-status commit
+is re-gated cleanly before M33 implementation. M32 acceptance is complete.
+
 ## M33 acceptance: CAD engine contract
 
 - Accepted ADRs define design/accepted state, immutable host inputs, cancellation/concurrency, companion boundaries and draft-v5 policy.

@@ -57,8 +57,7 @@ Representative document resources from the run were:
 ## Reference environment
 
 - date: 2026-07-22;
-- tree: dirty concurrent M30-M32 development tree based on
-  `4d2b74ba7c851f1584ea1d6988771a9d15f62c36`;
+- tree: clean M32 release candidate `8d6f648`;
 - OS: NixOS Linux x86-64, kernel `7.1.1`;
 - CPU: Intel Core i5-14400F, 10 cores / 16 logical CPUs, maximum 4.7 GHz;
 - native toolchain: `rustc 1.97.1 (8bab26f4f 2026-07-14)`,
@@ -67,12 +66,11 @@ Representative document resources from the run were:
 - browser runtime: Chromium `149.0.7827.196`, headless with GPU disabled, at the
   desktop `1440x1000` CSS-pixel viewport;
 - browser harness: Node.js `24.16.0`, Trunk `0.21.14`, release WASM bundle;
-- process peak resident set: 9,436 KiB from Linux `VmHWM`, observational and
+- process peak resident set: 9,348 KiB from Linux `VmHWM`, observational and
   process-wide rather than a per-workload allocation measurement.
 
-Because the tree was dirty with concurrent milestone work, these are development
-measurements. A final release record must identify the clean candidate commit and
-rerun the command in its release environment.
+The complete clean release gate reran these measurements on the same candidate before
+M32 completion.
 
 ## Native measurements
 
@@ -80,12 +78,12 @@ The 2026-07-22 run produced:
 
 | Measurement | Median | p95 | Conservative gate |
 | --- | ---: | ---: | ---: |
-| Supporting-offset load/solve | 0.091 ms | 0.105 ms | 1,000 ms |
-| Supporting-offset edit/solve | 0.464 ms | 0.472 ms | 1,000 ms |
-| Local-support NURBS load/solve | 0.120 ms | 0.157 ms | 2,000 ms |
-| Local-support NURBS knot insert/solve | 0.234 ms | 0.248 ms | 2,000 ms |
-| All-family profile analysis | 23.476 ms | 24.501 ms | 10,000 ms |
-| NURBS self-profile analysis | 16.335 ms | 17.973 ms | 5,000 ms |
+| Supporting-offset load/solve | 0.104 ms | 0.113 ms | 1,000 ms |
+| Supporting-offset edit/solve | 0.483 ms | 0.506 ms | 1,000 ms |
+| Local-support NURBS load/solve | 0.205 ms | 0.318 ms | 2,000 ms |
+| Local-support NURBS knot insert/solve | 0.256 ms | 0.340 ms | 2,000 ms |
+| All-family profile analysis | 23.232 ms | 24.796 ms | 10,000 ms |
+| NURBS self-profile analysis | 15.812 ms | 16.486 ms | 5,000 ms |
 
 The ceilings are release fail-fast limits, not optimization targets. They are
 deliberately well above the reference observations to tolerate shared CI and
@@ -138,10 +136,10 @@ The 2026-07-22 focused release run produced:
 
 | Scene load/solve/profile/render | Median | p95 | Conservative gate |
 | --- | ---: | ---: | ---: |
-| `construction-supporting-offset` | 2.300 ms | 3.300 ms | 1,000 ms |
-| `nurbs-local-support` | 3.000 ms | 4.800 ms | 2,000 ms |
-| `profile-all-families` | 64.000 ms | 68.500 ms | 10,000 ms |
-| `profile-nurbs-self-intersection` | 28.700 ms | 31.800 ms | 5,000 ms |
+| `construction-supporting-offset` | 2.050 ms | 4.300 ms | 1,000 ms |
+| `nurbs-local-support` | 3.500 ms | 6.200 ms | 2,000 ms |
+| `profile-all-families` | 64.600 ms | 81.400 ms | 10,000 ms |
+| `profile-nurbs-self-intersection` | 29.000 ms | 35.300 ms | 5,000 ms |
 
 The browser ceilings match the conservative native fail-fast classes and are not
 optimization targets. They tolerate shared headless-CI and browser scheduling noise

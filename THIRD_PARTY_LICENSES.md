@@ -1,8 +1,9 @@
 # Third-party licences and attribution
 
 GeoSolve is licensed under `GPL-3.0-or-later`; see `LICENSE`. Its locked native and
-WASM dependency graphs were audited on 2026-07-21 with `cargo-license`. No declared
-dependency licence is incompatible with GPLv3.
+WASM dependency graphs were audited on 2026-07-21 with `cargo-license` and rechecked
+on 2026-07-22 with `cargo-deny`. No declared dependency licence is incompatible with
+GPLv3.
 
 ## Declared dependency licences
 

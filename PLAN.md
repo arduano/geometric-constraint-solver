@@ -1178,17 +1178,17 @@ desktop/mobile Chromium E2E pass.
 
 ## M32: post-expansion UAT and release hardening
 
-Status: active.
+Status: complete as of 2026-07-22.
 
 Goal: re-run the release discipline after M30-M31 broaden the public browser and
 analysis surfaces.
 
-- [ ] Consolidate construction, NURBS, fillet and all-family profile UAT instructions in the browser.
-- [ ] Add desktop E2E for every new interaction and retained-state failure path.
-- [ ] Extend malformed/extreme-value mutation coverage to the new commands and profile analysis.
-- [ ] Record updated native/browser performance and resource envelopes.
-- [ ] Re-run package, licence, documentation, native, locked WASM and browser release gates.
-- [ ] Update compatibility, changelog and public release records for the next preview.
+- [x] Consolidate construction, NURBS, fillet and all-family profile UAT instructions in the browser.
+- [x] Add desktop E2E for every new interaction and retained-state failure path.
+- [x] Extend malformed/extreme-value mutation coverage to the new commands and profile analysis.
+- [x] Record updated native/browser performance and resource envelopes.
+- [x] Re-run package, licence, documentation, native, locked WASM and browser release gates.
+- [x] Update compatibility, changelog and public release records for the next preview.
 
 2026-07-21 UAT handoff slice: the browser can copy a deterministic
 `GEOSOLVE_SCENE_V1` capsule containing canonical sketch JSON, exact profile budgets,
@@ -1203,12 +1203,34 @@ explicit desktop grid area and enforces usable solver/profile/audit/release heig
 long bodies scroll locally instead of collapsing sibling rows, while narrow screens
 retain the natural stacked document flow.
 
+Completion record (2026-07-22): `0.2.0` is the post-expansion supported preview.
+The desktop M32 suite covers reset, both offset constructors, previous NURBS span,
+generic-fillet branch/radius, NURBS weight/knot edits and exact retained state for
+invalid operations plus corrupt, oversized and over-budget capsules. The two-test
+M32 mutation corpus exercises new command payloads and every profile family/option
+under panic guards while requiring finite independently valid accepted output and
+bounded fail-closed analysis.
+
+`docs/M32_SCALE_PERFORMANCE.md` records six native and four browser timing/resource
+classes. On clean candidate `8d6f648`, native p95 was at most `0.506 ms` for the
+construction edit, `0.340 ms` for NURBS knot insertion, `24.796 ms` for all-family
+profiles and `16.486 ms` for NURBS self-analysis; browser p95 was `4.3/6.2/81.4/35.3
+ms` for the corresponding scene classes. Deterministic profile work remained 1,445
+candidate pairs/31 roots/113 fragments/30 faces and 1/1/4/1 respectively.
+
+The clean `scripts/release-gate.sh` run at `8d6f648` passed formatting/diff,
+warnings-denied Clippy/rustdoc, full locked workspace tests, locked WASM, benchmark
+compilation, M29/M32 mutation suites, M14/M32 timing gates, the 1,536-coordinate
+spatial release case in `87.56 s`, dependency licences, package contents, release
+Trunk and the complete Chromium suite on its first invocation. The completion-status
+commit containing this record must pass the same clean command before M33 work begins.
+
 Gate: all M1-M31 acceptance, mutation, documentation, package, native, WASM,
 performance and browser suites pass from one release-gate command.
 
 ## M33: CAD engine contract and baselines
 
-Status: planned.
+Status: active.
 
 Goal: freeze the product and ownership decisions for a host-usable planar sketch
 engine before changing persistence or public state semantics.
