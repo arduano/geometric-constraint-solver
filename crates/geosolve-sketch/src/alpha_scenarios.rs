@@ -2,13 +2,17 @@ use std::f64::consts::PI;
 
 use crate::{
     ContactId, ContactNeighborhood, CurveDefinition, CurveId, CurveSpan, DesignPointId,
-    DesignScalarId, DocumentArcSweep, DocumentArcTangencySide, DocumentConstraintDefinition,
-    DocumentConstraintId, DocumentCoordinateAxis, DocumentDimensionDefinition, DocumentDimensionId,
-    DocumentDimensionMode, DocumentError, DocumentHyperbolaBranch, DocumentId, DocumentLineSide,
-    DocumentSolveRequest, FeatureEndpoint, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT,
-    MIN_REPRESENTABLE_RADIUS, PersistentId, RectangleIds, ScalarDomain, ScalarUnit, SketchDocument,
-    TangentOrientation,
+    DesignScalarId, DocumentArcSweep, DocumentArcTangencySide, DocumentBSplineForm,
+    DocumentConstraintDefinition, DocumentConstraintId, DocumentCoordinateAxis,
+    DocumentCurveContinuity, DocumentCurveNormalSide, DocumentDimensionDefinition,
+    DocumentDimensionId, DocumentDimensionMode, DocumentError, DocumentFilletEndpointOrder,
+    DocumentFilletTrimEndpoint, DocumentHyperbolaBranch, DocumentId, DocumentLineOffsetOrientation,
+    DocumentLineSide, DocumentSolveRequest, DocumentTrimParameter, FeatureEndpoint,
+    LineLineFilletIds, LineLineFilletRequest, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT,
+    MIN_REPRESENTABLE_RADIUS, MirroredCurveIds, PersistentId, RectangleIds, ScalarDomain,
+    ScalarUnit, SketchDocument, TangentOrientation, VisualProfileOptions, VisualProfileStatus,
 };
+use crate::{CurveCurveFilletIds, CurveCurveFilletRequest, CurveFilletParentRequest};
 
 /// Canonical playground-alpha scenarios shared by native tests and browser examples.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -36,6 +40,25 @@ pub enum AlphaScenarioKind {
     ConicGallery,
     ConicTangency,
     ConicCircleLimit,
+    M28TrimmedFillet,
+    SupportingOffset,
+    ExactTranslatedOffset,
+    EntityMirror,
+    DirectedAngle,
+    M27ReferenceFillet,
+    FilletLineCircle,
+    FilletLineBezier,
+    FilletNurbsLine,
+    NurbsQuarterCircle,
+    NurbsLocalSupport,
+    NurbsPeriodic,
+    NurbsDifferential,
+    ProfileAllFamilies,
+    ProfileCurvedTopology,
+    ProfileFilletTrim,
+    ProfileNurbsSelfIntersection,
+    ProfileIncomplete,
+    ProfileBudget,
 }
 
 /// Deterministic workload sizes used by the M14 interaction budgets.
@@ -43,6 +66,16 @@ pub enum AlphaScenarioKind {
 pub enum AlphaPerformanceSize {
     Small,
     Medium,
+}
+
+/// Concise interaction contract shown by the browser for one focused UAT lab.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct AlphaScenarioUat {
+    pub title: &'static str,
+    pub instructions: &'static str,
+    pub expected_equality_dof: usize,
+    pub expected_bounded_dof: usize,
+    pub primary_drag: &'static str,
 }
 
 impl AlphaScenarioKind {
@@ -72,8 +105,204 @@ impl AlphaScenarioKind {
             Self::ConicGallery => "conic-gallery",
             Self::ConicTangency => "conic-tangency",
             Self::ConicCircleLimit => "conic-circle-limit",
+            Self::M28TrimmedFillet => "m28-trimmed-fillet",
+            Self::SupportingOffset => "construction-supporting-offset",
+            Self::ExactTranslatedOffset => "construction-exact-offset",
+            Self::EntityMirror => "construction-entity-mirror",
+            Self::DirectedAngle => "construction-directed-angle",
+            Self::M27ReferenceFillet => "fillet-line-line-reference",
+            Self::FilletLineCircle => "fillet-line-circle",
+            Self::FilletLineBezier => "fillet-line-bezier",
+            Self::FilletNurbsLine => "fillet-nurbs-line",
+            Self::NurbsQuarterCircle => "nurbs-quarter-circle",
+            Self::NurbsLocalSupport => "nurbs-local-support",
+            Self::NurbsPeriodic => "nurbs-periodic",
+            Self::NurbsDifferential => "nurbs-differential",
+            Self::ProfileAllFamilies => "profile-all-families",
+            Self::ProfileCurvedTopology => "profile-curved-topology",
+            Self::ProfileFilletTrim => "profile-fillet-trim",
+            Self::ProfileNurbsSelfIntersection => "profile-nurbs-self-intersection",
+            Self::ProfileIncomplete => "profile-incomplete",
+            Self::ProfileBudget => "profile-budget",
         }
     }
+
+    /// Returns the focused UAT contract for interactive M25-M28 and NURBS labs.
+    #[must_use]
+    pub const fn uat(self) -> Option<AlphaScenarioUat> {
+        let uat = match self {
+            Self::SupportingOffset => AlphaScenarioUat {
+                title: "Supporting-line offset",
+                instructions: "Drag either target endpoint. The target stays parallel and two units left of the fixed source while axial position and length remain free.",
+                expected_equality_dof: 2,
+                expected_bounded_dof: 2,
+                primary_drag: "Supporting offset draggable target end",
+            },
+            Self::ExactTranslatedOffset => AlphaScenarioUat {
+                title: "Exact translated-segment offset",
+                instructions: "Drag the source end around its anchor. The associated target must rotate with identical endpoint correspondence and offset.",
+                expected_equality_dof: 1,
+                expected_bounded_dof: 1,
+                primary_drag: "Exact offset draggable source end",
+            },
+            Self::EntityMirror => AlphaScenarioUat {
+                title: "Entity mirror",
+                instructions: "Drag the source or reflected endpoint. Ordinary symmetry rows project the counterpart across the fixed axis.",
+                expected_equality_dof: 1,
+                expected_bounded_dof: 1,
+                primary_drag: "Mirror source draggable end",
+            },
+            Self::DirectedAngle => AlphaScenarioUat {
+                title: "Directed-angle branch cut",
+                instructions: "Drag the moving tip through the negative-X cut while the angle is reference, then select the angle dimension and switch it to driving or edit target/orientation.",
+                expected_equality_dof: 1,
+                expected_bounded_dof: 1,
+                primary_drag: "Directed angle draggable branch-cut tip",
+            },
+            Self::M27ReferenceFillet => AlphaScenarioUat {
+                title: "M27 untrimmed line-line fillet",
+                instructions: "Drag the fillet center to change its reference radius and contacts. Both complete parent lines remain visibly untrimmed.",
+                expected_equality_dof: 1,
+                expected_bounded_dof: 1,
+                primary_drag: "M27 reference-radius untrimmed fillet.center",
+            },
+            Self::FilletLineCircle => AlphaScenarioUat {
+                title: "Generic line-circle fillet",
+                instructions: "Drag the fillet center. The reference radius, output arc, both contacts, and visible parent boundaries move together.",
+                expected_equality_dof: 1,
+                expected_bounded_dof: 1,
+                primary_drag: "Interactive line-circle fillet.center",
+            },
+            Self::FilletLineBezier => AlphaScenarioUat {
+                title: "Generic line-Bezier fillet",
+                instructions: "Drag the fillet center along the regular family and inspect both moving trim markers and the associated output arc.",
+                expected_equality_dof: 1,
+                expected_bounded_dof: 1,
+                primary_drag: "Interactive line-Bezier fillet.center",
+            },
+            Self::FilletNurbsLine => AlphaScenarioUat {
+                title: "Generic NURBS-line fillet",
+                instructions: "Drag the output center or edit a non-gauge NURBS weight. Contacts, output, and NURBS/line trim state stay associated.",
+                expected_equality_dof: 3,
+                expected_bounded_dof: 3,
+                primary_drag: "Interactive NURBS-line fillet.center",
+            },
+            Self::NurbsQuarterCircle => AlphaScenarioUat {
+                title: "NURBS quarter-circle and weight",
+                instructions: "Drag the middle control or select the curve and edit its non-gauge middle weight. Re-gauging must preserve the curve exactly.",
+                expected_equality_dof: 4,
+                expected_bounded_dof: 4,
+                primary_drag: "NURBS quarter-circle weight lab control 2",
+            },
+            Self::NurbsLocalSupport => AlphaScenarioUat {
+                title: "NURBS local support and insertion",
+                instructions: "Drag a middle control to see local span support, then select the curve and insert a knot; geometry must remain unchanged while topology gains one control/weight pair.",
+                expected_equality_dof: 13,
+                expected_bounded_dof: 13,
+                primary_drag: "Local-support NURBS control 3",
+            },
+            Self::NurbsPeriodic => AlphaScenarioUat {
+                title: "Periodic NURBS span and winding",
+                instructions: "Drag a periodic control, then select the seam contact and use Next/Previous span. The world point stays fixed while semantic span and winding change explicitly.",
+                expected_equality_dof: 13,
+                expected_bounded_dof: 12,
+                primary_drag: "Periodic NURBS control 4",
+            },
+            Self::NurbsDifferential => AlphaScenarioUat {
+                title: "NURBS differential and C2 continuity",
+                instructions: "Drag the shared seam or an adjacent handle. The rate-explicit parametric C2 source keeps position, first derivative, and second derivative associated.",
+                expected_equality_dof: 10,
+                expected_bounded_dof: 10,
+                primary_drag: "NURBS C2 draggable seam",
+            },
+            _ => return None,
+        };
+        Some(uat)
+    }
+
+    /// Returns the visual-profile inspection contract for M31 profile scenes.
+    #[must_use]
+    pub const fn profile_uat(self) -> Option<AlphaProfileScenarioUat> {
+        let uat = match self {
+            Self::ProfileAllFamilies => AlphaProfileScenarioUat {
+                title: "All-family profile gallery",
+                instructions: "Inspect all 15 curve-family roles, their closed finite faces, and the certified splitter intersections.",
+                expected_status: VisualProfileStatus::Complete,
+                expected_family_count: 15,
+                expected_minimum_face_count: 15,
+                options: DEFAULT_PROFILE_OPTIONS,
+            },
+            Self::ProfileCurvedTopology => AlphaProfileScenarioUat {
+                title: "Curved intersections and holes",
+                instructions: "Inspect transverse circle/ellipse roots and the separate nested curved face with an inner hole contour.",
+                expected_status: VisualProfileStatus::Complete,
+                expected_family_count: 2,
+                expected_minimum_face_count: 5,
+                options: DEFAULT_PROFILE_OPTIONS,
+            },
+            Self::ProfileFilletTrim => AlphaProfileScenarioUat {
+                title: "Fillet-owned visible trim joins",
+                instructions: "Inspect the closed contour whose traversal welds the trimmed parent circle and line to the associated output arc through explicit M28 ownership joins.",
+                expected_status: VisualProfileStatus::Complete,
+                expected_family_count: 3,
+                expected_minimum_face_count: 1,
+                options: DEFAULT_PROFILE_OPTIONS,
+            },
+            Self::ProfileNurbsSelfIntersection => AlphaProfileScenarioUat {
+                title: "Editable NURBS self-intersection",
+                instructions: "Select the NURBS, edit exact control coordinates or a non-gauge weight, and inspect whether the native analyzer certifies a transverse self-root and bounded lobe or reports a typed incomplete result.",
+                expected_status: VisualProfileStatus::Complete,
+                expected_family_count: 1,
+                expected_minimum_face_count: 1,
+                options: DEFAULT_PROFILE_OPTIONS,
+            },
+            Self::ProfileIncomplete => AlphaProfileScenarioUat {
+                title: "Retained face beside tangency",
+                instructions: "Inspect the clean standalone curved face retained beside a typed unresolved tangent pair.",
+                expected_status: VisualProfileStatus::Truncated,
+                expected_family_count: 1,
+                expected_minimum_face_count: 1,
+                options: DEFAULT_PROFILE_OPTIONS,
+            },
+            Self::ProfileBudget => AlphaProfileScenarioUat {
+                title: "Deterministic profile budget stop",
+                instructions: "Inspect the valid curved document with its intersection-root budget reduced to zero; no face may be published.",
+                expected_status: VisualProfileStatus::Skipped,
+                expected_family_count: 2,
+                expected_minimum_face_count: 0,
+                options: ROOT_BUDGET_PROFILE_OPTIONS,
+            },
+            _ => return None,
+        };
+        Some(uat)
+    }
+}
+
+const DEFAULT_PROFILE_OPTIONS: VisualProfileOptions = VisualProfileOptions {
+    max_candidate_pairs: 100_000,
+    max_intersection_subdivisions: 500_000,
+    max_intersection_depth: 64,
+    max_intersection_roots: 100_000,
+    max_fragments: 100_000,
+    max_integration_subdivisions: 500_000,
+    max_containment_tests: 100_000,
+    max_faces: 10_000,
+};
+
+const ROOT_BUDGET_PROFILE_OPTIONS: VisualProfileOptions = VisualProfileOptions {
+    max_intersection_roots: 0,
+    ..DEFAULT_PROFILE_OPTIONS
+};
+
+/// Concise analysis contract shown by consumers for one visual-profile UAT scene.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct AlphaProfileScenarioUat {
+    pub title: &'static str,
+    pub instructions: &'static str,
+    pub expected_status: VisualProfileStatus,
+    pub expected_family_count: usize,
+    pub expected_minimum_face_count: usize,
+    pub options: VisualProfileOptions,
 }
 
 /// Persistent roles in A1.
@@ -294,6 +523,93 @@ pub struct ConicCircleLimitIds {
     pub arc_endpoint_contacts: [ContactId; 2],
 }
 
+/// Persistent roles in the M28 line-circle fillet with explicit parent trim views.
+#[derive(Clone, Debug, PartialEq)]
+pub struct M28TrimmedFilletIds {
+    pub circle: CurveId,
+    pub line: CurveId,
+    pub fillet: CurveCurveFilletIds,
+}
+
+/// Persistent curve roles sufficient to inspect one visual-profile UAT scene.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProfileScenarioIds {
+    pub curves: Vec<CurveId>,
+}
+
+/// Persistent roles in the supporting-line offset interaction lab.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SupportingOffsetIds {
+    pub source: CurveId,
+    pub target: CurveId,
+    pub target_points: [DesignPointId; 2],
+    pub dimension: DocumentDimensionId,
+}
+
+/// Persistent roles in the exact translated-segment offset interaction lab.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ExactTranslatedOffsetIds {
+    pub source: CurveId,
+    pub source_end: DesignPointId,
+    pub target: CurveId,
+    pub target_points: [DesignPointId; 2],
+    pub dimension: DocumentDimensionId,
+}
+
+/// Persistent roles in the point-defined entity-mirror interaction lab.
+#[derive(Clone, Debug, PartialEq)]
+pub struct EntityMirrorIds {
+    pub axis: CurveId,
+    pub source_end: DesignPointId,
+    pub mirrored_end: DesignPointId,
+    pub mirror: MirroredCurveIds,
+}
+
+/// Persistent roles in the directed-angle branch-cut interaction lab.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DirectedAngleIds {
+    pub first: CurveId,
+    pub second: CurveId,
+    pub moving_tip: DesignPointId,
+    pub dimension: DocumentDimensionId,
+    pub target: DesignScalarId,
+}
+
+/// Persistent roles in the M27 visibly-untrimmed reference-radius fillet lab.
+#[derive(Clone, Debug, PartialEq)]
+pub struct M27ReferenceFilletIds {
+    pub parents: [CurveId; 2],
+    pub fillet: LineLineFilletIds,
+}
+
+/// Persistent roles shared by the M28 generic fillet interaction labs.
+#[derive(Clone, Debug, PartialEq)]
+pub struct GenericFilletLabIds {
+    pub parents: [CurveId; 2],
+    pub fillet: CurveCurveFilletIds,
+}
+
+/// Persistent roles shared by the NURBS object-inspector labs.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NurbsLabIds {
+    pub curve: CurveId,
+    pub controls: Vec<DesignPointId>,
+    pub weights: Vec<DesignScalarId>,
+    pub primary_control: DesignPointId,
+    pub contact: Option<ContactId>,
+}
+
+/// Persistent roles in the NURBS differential/continuity lab.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NurbsDifferentialIds {
+    pub curves: [CurveId; 2],
+    pub seam: DesignPointId,
+    pub controls: Vec<DesignPointId>,
+    pub weights: Vec<DesignScalarId>,
+    pub contacts: [ContactId; 2],
+    pub continuity: DocumentConstraintId,
+}
+
 /// Scenario-specific persistent roles.
 #[derive(Clone, Debug, PartialEq)]
 pub enum AlphaScenarioIds {
@@ -320,6 +636,25 @@ pub enum AlphaScenarioIds {
     ConicGallery(ConicGalleryIds),
     ConicTangency(ConicTangencyIds),
     ConicCircleLimit(ConicCircleLimitIds),
+    M28TrimmedFillet(M28TrimmedFilletIds),
+    SupportingOffset(SupportingOffsetIds),
+    ExactTranslatedOffset(ExactTranslatedOffsetIds),
+    EntityMirror(EntityMirrorIds),
+    DirectedAngle(DirectedAngleIds),
+    M27ReferenceFillet(M27ReferenceFilletIds),
+    FilletLineCircle(GenericFilletLabIds),
+    FilletLineBezier(GenericFilletLabIds),
+    FilletNurbsLine(GenericFilletLabIds),
+    NurbsQuarterCircle(NurbsLabIds),
+    NurbsLocalSupport(NurbsLabIds),
+    NurbsPeriodic(NurbsLabIds),
+    NurbsDifferential(NurbsDifferentialIds),
+    ProfileAllFamilies(ProfileScenarioIds),
+    ProfileCurvedTopology(ProfileScenarioIds),
+    ProfileFilletTrim(M28TrimmedFilletIds),
+    ProfileNurbsSelfIntersection(NurbsLabIds),
+    ProfileIncomplete(ProfileScenarioIds),
+    ProfileBudget(ProfileScenarioIds),
 }
 
 /// One deterministic document and initial solve request for an alpha scenario.
@@ -373,6 +708,25 @@ pub fn alpha_scenario(
         AlphaScenarioKind::ConicGallery => 0xe1_0000,
         AlphaScenarioKind::ConicTangency => 0xe2_0000,
         AlphaScenarioKind::ConicCircleLimit => 0xe3_0000,
+        AlphaScenarioKind::M28TrimmedFillet => 0xf1_0000,
+        AlphaScenarioKind::SupportingOffset => 0xf2_0000,
+        AlphaScenarioKind::ExactTranslatedOffset => 0xf3_0000,
+        AlphaScenarioKind::EntityMirror => 0xf4_0000,
+        AlphaScenarioKind::DirectedAngle => 0xf5_0000,
+        AlphaScenarioKind::M27ReferenceFillet => 0xf6_0000,
+        AlphaScenarioKind::FilletLineCircle => 0xf7_0000,
+        AlphaScenarioKind::FilletLineBezier => 0xf8_0000,
+        AlphaScenarioKind::FilletNurbsLine => 0xf9_0000,
+        AlphaScenarioKind::NurbsQuarterCircle => 0xfa_0000,
+        AlphaScenarioKind::NurbsLocalSupport => 0xfb_0000,
+        AlphaScenarioKind::NurbsPeriodic => 0xfc_0000,
+        AlphaScenarioKind::NurbsDifferential => 0xfd_0000,
+        AlphaScenarioKind::ProfileAllFamilies => 0xfe_0000,
+        AlphaScenarioKind::ProfileCurvedTopology => 0xff_0000,
+        AlphaScenarioKind::ProfileFilletTrim => 0x100_0000,
+        AlphaScenarioKind::ProfileNurbsSelfIntersection => 0x103_0000,
+        AlphaScenarioKind::ProfileIncomplete => 0x101_0000,
+        AlphaScenarioKind::ProfileBudget => 0x102_0000,
     };
     let mut document =
         SketchDocument::with_id(10.0 * scale, DocumentId(PersistentId::from_u128(namespace)))?;
@@ -483,6 +837,91 @@ pub fn alpha_scenario(
         AlphaScenarioKind::ConicCircleLimit => (
             AlphaScenarioIds::ConicCircleLimit(add_conic_circle_limit(&mut document, scale)?),
             DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::M28TrimmedFillet => (
+            AlphaScenarioIds::M28TrimmedFillet(add_m28_trimmed_fillet(&mut document, scale)?),
+            DocumentSolveRequest::default(),
+        ),
+        AlphaScenarioKind::SupportingOffset => (
+            AlphaScenarioIds::SupportingOffset(add_supporting_offset(&mut document, scale)?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::ExactTranslatedOffset => (
+            AlphaScenarioIds::ExactTranslatedOffset(add_exact_translated_offset(
+                &mut document,
+                scale,
+            )?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::EntityMirror => (
+            AlphaScenarioIds::EntityMirror(add_entity_mirror(&mut document, scale)?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::DirectedAngle => (
+            AlphaScenarioIds::DirectedAngle(add_directed_angle(&mut document, scale)?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::M27ReferenceFillet => (
+            AlphaScenarioIds::M27ReferenceFillet(add_m27_reference_fillet(&mut document, scale)?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::FilletLineCircle => (
+            AlphaScenarioIds::FilletLineCircle(add_line_circle_fillet(&mut document, scale)?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::FilletLineBezier => (
+            AlphaScenarioIds::FilletLineBezier(add_line_bezier_fillet(&mut document, scale)?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::FilletNurbsLine => (
+            AlphaScenarioIds::FilletNurbsLine(add_nurbs_line_fillet(&mut document, scale)?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::NurbsQuarterCircle => (
+            AlphaScenarioIds::NurbsQuarterCircle(add_nurbs_quarter_circle(&mut document, scale)?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::NurbsLocalSupport => (
+            AlphaScenarioIds::NurbsLocalSupport(add_nurbs_local_support(&mut document, scale)?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::NurbsPeriodic => (
+            AlphaScenarioIds::NurbsPeriodic(add_periodic_nurbs(&mut document, scale)?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::NurbsDifferential => (
+            AlphaScenarioIds::NurbsDifferential(add_nurbs_differential(&mut document, scale)?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::ProfileAllFamilies => (
+            AlphaScenarioIds::ProfileAllFamilies(add_profile_all_families(&mut document, scale)?),
+            DocumentSolveRequest::default(),
+        ),
+        AlphaScenarioKind::ProfileCurvedTopology => (
+            AlphaScenarioIds::ProfileCurvedTopology(add_profile_curved_topology(
+                &mut document,
+                scale,
+            )?),
+            DocumentSolveRequest::default(),
+        ),
+        AlphaScenarioKind::ProfileFilletTrim => (
+            AlphaScenarioIds::ProfileFilletTrim(add_profile_fillet_trim(&mut document, scale)?),
+            DocumentSolveRequest::default(),
+        ),
+        AlphaScenarioKind::ProfileNurbsSelfIntersection => (
+            AlphaScenarioIds::ProfileNurbsSelfIntersection(add_profile_nurbs_self_intersection(
+                &mut document,
+                scale,
+            )?),
+            DocumentSolveRequest::default(),
+        ),
+        AlphaScenarioKind::ProfileIncomplete => (
+            AlphaScenarioIds::ProfileIncomplete(add_profile_incomplete(&mut document, scale)?),
+            DocumentSolveRequest::default(),
+        ),
+        AlphaScenarioKind::ProfileBudget => (
+            AlphaScenarioIds::ProfileBudget(add_profile_curved_topology(&mut document, scale)?),
+            DocumentSolveRequest::default(),
         ),
     };
     Ok(AlphaScenarioFixture {
@@ -893,6 +1332,1501 @@ fn add_a5(
         bezier,
         bezier_contact,
         tangency,
+    })
+}
+
+fn add_m28_trimmed_fillet(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<M28TrimmedFilletIds, DocumentError> {
+    let circle_center = document.add_point("M28 circle center", [0.0, 0.0])?;
+    let line_start = document.add_point("M28 hidden line endpoint", [0.0, scale])?;
+    let line_end = document.add_point("M28 visible line endpoint", [6.0 * scale, scale])?;
+    let circle_radius = document.add_scalar(
+        "M28 parent circle radius",
+        2.0 * scale,
+        ScalarUnit::Length,
+        ScalarDomain::Positive,
+    )?;
+    let circle = document.add_curve(
+        "M28 trimmed circle parent",
+        CurveDefinition::Circle {
+            center: circle_center,
+            radius: circle_radius,
+        },
+    )?;
+    let line = add_line(document, "M28 trimmed line parent", line_start, line_end)?;
+    fix_point(document, "M28 circle center fixed", circle_center)?;
+    fix_point(document, "M28 line start fixed", line_start)?;
+    fix_point(document, "M28 line end fixed", line_end)?;
+    add_radius_dimension(
+        document,
+        "M28 parent circle radius fixed",
+        circle,
+        2.0 * scale,
+    )?;
+    let fillet = document.add_curve_curve_fillet(
+        "M28 trimmed line-circle fillet",
+        CurveCurveFilletRequest {
+            first: CurveFilletParentRequest {
+                curve: CurveSpan::line(circle),
+                parameter: 0.0,
+                winding: 0,
+                neighborhood: ContactNeighborhood::Local {
+                    lower: -0.4,
+                    upper: 0.4,
+                },
+                side: DocumentCurveNormalSide::Right,
+                trim_endpoint: DocumentFilletTrimEndpoint::End,
+                periodic_anchor: Some(DocumentTrimParameter {
+                    parameter: PI,
+                    winding: -1,
+                }),
+            },
+            second: CurveFilletParentRequest {
+                curve: CurveSpan::line(line),
+                parameter: 0.5,
+                winding: 0,
+                neighborhood: ContactNeighborhood::Interior,
+                side: DocumentCurveNormalSide::Right,
+                trim_endpoint: DocumentFilletTrimEndpoint::Start,
+                periodic_anchor: None,
+            },
+            endpoint_order: DocumentFilletEndpointOrder::SecondThenFirst,
+            sweep: DocumentArcSweep::CounterClockwise,
+            radius: scale,
+            radius_mode: DocumentDimensionMode::Driving,
+        },
+    )?;
+    Ok(M28TrimmedFilletIds {
+        circle,
+        line,
+        fillet,
+    })
+}
+
+fn add_profile_fillet_trim(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<M28TrimmedFilletIds, DocumentError> {
+    let ids = add_m28_trimmed_fillet(document, scale)?;
+    let CurveDefinition::Line { end: line_end, .. } = document
+        .curve(ids.line)
+        .ok_or(DocumentError::UnknownId {
+            kind: "curve",
+            id: ids.line.0,
+        })?
+        .definition
+    else {
+        return Err(DocumentError::InvalidField {
+            field: "profile fillet closure",
+            message: "trimmed line parent must remain ordinary line geometry".into(),
+        });
+    };
+    let diagonal = std::f64::consts::SQRT_2 * scale;
+    let circle_start =
+        document.add_point("Profile fillet circle closure", [diagonal, -diagonal])?;
+    add_line(
+        document,
+        "Profile fillet ordinary closure",
+        line_end,
+        circle_start,
+    )?;
+    let contact = document.add_curve_contact(
+        "Profile fillet circle closure contact",
+        CurveSpan::line(ids.circle),
+        1.75 * PI,
+        -1,
+        ContactNeighborhood::Local {
+            lower: -0.25 * PI - 0.1,
+            upper: -0.25 * PI + 0.1,
+        },
+        None,
+    )?;
+    document.add_constraint(
+        "Profile fillet circle closure join",
+        DocumentConstraintDefinition::PointOnCurve {
+            point: circle_start,
+            contact,
+        },
+    )?;
+    Ok(ids)
+}
+
+fn add_profile_nurbs_self_intersection(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<NurbsLabIds, DocumentError> {
+    let controls = [[0.0, 0.0], [2.0, 3.0], [-2.0, 3.0], [84.0 / 79.0, 0.0]]
+        .into_iter()
+        .enumerate()
+        .map(|(index, point)| {
+            document.add_point(
+                format!("Profile self-intersecting NURBS control {}", index + 1),
+                [point[0] * scale, point[1] * scale],
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let weights = add_nurbs_weights(
+        document,
+        "Profile self-intersecting NURBS",
+        &[1.0, 0.9, 1.1, 0.95],
+    )?;
+    let curve = document.add_curve(
+        "Profile self-intersecting NURBS",
+        CurveDefinition::Nurbs {
+            form: DocumentBSplineForm::Clamped,
+            degree: 3,
+            controls: controls.clone(),
+            weights: weights.clone(),
+            gauge_weight: weights[0],
+            knots: vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+            span_ids: vec![103],
+            next_span_id: 104,
+        },
+    )?;
+    Ok(NurbsLabIds {
+        curve,
+        primary_control: controls[1],
+        controls,
+        weights,
+        contact: None,
+    })
+}
+
+fn add_profile_circle(
+    document: &mut SketchDocument,
+    label: &str,
+    center_position: [f64; 2],
+    radius_value: f64,
+) -> Result<CurveId, DocumentError> {
+    let center = document.add_point(format!("{label} center"), center_position)?;
+    let radius = document.add_scalar(
+        format!("{label} radius"),
+        radius_value,
+        ScalarUnit::Length,
+        ScalarDomain::Positive,
+    )?;
+    document.add_curve(label, CurveDefinition::Circle { center, radius })
+}
+
+fn add_profile_ellipse(
+    document: &mut SketchDocument,
+    label: &str,
+    center_position: [f64; 2],
+    axis_position: [f64; 2],
+    ratio_value: f64,
+) -> Result<CurveId, DocumentError> {
+    let center = document.add_point(format!("{label} center"), center_position)?;
+    let major_axis_point = document.add_point(format!("{label} axis"), axis_position)?;
+    let minor_axis_ratio = document.add_scalar(
+        format!("{label} ratio"),
+        ratio_value,
+        ScalarUnit::Parameter,
+        ScalarDomain::Bounded {
+            lower: f64::from_bits(1),
+            upper: 1.0,
+        },
+    )?;
+    document.add_curve(
+        label,
+        CurveDefinition::Ellipse {
+            center,
+            major_axis_point,
+            minor_axis_ratio,
+        },
+    )
+}
+
+fn join_profile_endpoint(
+    document: &mut SketchDocument,
+    label: &str,
+    point: DesignPointId,
+    curve: CurveId,
+    parameter: f64,
+    neighborhood: ContactNeighborhood,
+) -> Result<(), DocumentError> {
+    let contact = document.add_curve_contact(
+        format!("{label} contact"),
+        CurveSpan::line(curve),
+        parameter,
+        0,
+        neighborhood,
+        None,
+    )?;
+    document.add_constraint(
+        format!("{label} join"),
+        DocumentConstraintDefinition::PointOnCurve { point, contact },
+    )?;
+    Ok(())
+}
+
+fn close_profile_curve(
+    document: &mut SketchDocument,
+    label: &str,
+    curve: CurveId,
+) -> Result<CurveId, DocumentError> {
+    let span = CurveSpan::line(curve);
+    let endpoint = |parameter| {
+        document
+            .evaluate_curve_jet(span, parameter)
+            .map(|jet| [jet.position.x, jet.position.y])
+            .map_err(|error| DocumentError::InvalidField {
+                field: "profile curve closure",
+                message: error.to_string(),
+            })
+    };
+    let first_position = endpoint(0.0)?;
+    let second_position = endpoint(1.0)?;
+    let first = document.add_point(format!("{label} first endpoint"), first_position)?;
+    let second = document.add_point(format!("{label} second endpoint"), second_position)?;
+    let closure = add_line(document, &format!("{label} closure"), second, first)?;
+    join_profile_endpoint(
+        document,
+        &format!("{label} first"),
+        first,
+        curve,
+        0.0,
+        ContactNeighborhood::Start,
+    )?;
+    join_profile_endpoint(
+        document,
+        &format!("{label} second"),
+        second,
+        curve,
+        1.0,
+        ContactNeighborhood::End,
+    )?;
+    Ok(closure)
+}
+
+#[allow(clippy::too_many_lines)]
+fn add_profile_all_families(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<ProfileScenarioIds, DocumentError> {
+    let point = |x: f64, y: f64| [x * scale, y * scale];
+
+    let polyline_points = [point(0.0, 0.0), point(2.0, 0.0), point(1.0, 2.0)]
+        .map(|position| document.add_point("Profile polyline point", position))
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
+    let diagonal = 5.0_f64.sqrt();
+    let polyline = document.add_curve(
+        "Profile closed polyline",
+        CurveDefinition::Polyline {
+            points: polyline_points,
+            closed: true,
+            branch_directions: vec![
+                [1.0, 0.0],
+                [-1.0 / diagonal, 2.0 / diagonal],
+                [-1.0 / diagonal, -2.0 / diagonal],
+            ],
+        },
+    )?;
+
+    let line_points = [
+        point(10.0, 0.0),
+        point(12.0, 0.0),
+        point(12.0, 2.0),
+        point(10.0, 2.0),
+    ]
+    .map(|position| document.add_point("Profile line point", position))
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()?;
+    let mut square_lines = Vec::with_capacity(4);
+    for index in 0..4 {
+        square_lines.push(add_line(
+            document,
+            "Profile line square edge",
+            line_points[index],
+            line_points[(index + 1) % 4],
+        )?);
+    }
+    let line_family = square_lines[0];
+
+    let circle = add_profile_circle(document, "Profile circle", point(21.0, 1.0), scale)?;
+    let ellipse = add_profile_ellipse(
+        document,
+        "Profile ellipse",
+        point(31.0, 1.0),
+        point(33.0, 1.0),
+        0.5,
+    )?;
+
+    let quadratic_controls = [point(40.0, 0.0), point(41.0, 3.0), point(42.0, 0.0)]
+        .map(|position| document.add_point("Profile quadratic control", position))
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
+    let quadratic_controls: [DesignPointId; 3] = quadratic_controls
+        .try_into()
+        .expect("three quadratic controls");
+    let quadratic = document.add_curve(
+        "Profile quadratic Bezier",
+        CurveDefinition::QuadraticBezier {
+            controls: quadratic_controls,
+        },
+    )?;
+    add_line(
+        document,
+        "Profile quadratic closure",
+        quadratic_controls[2],
+        quadratic_controls[0],
+    )?;
+
+    let cubic_controls = [
+        point(50.0, 0.0),
+        point(50.5, 3.0),
+        point(51.5, 3.0),
+        point(52.0, 0.0),
+    ]
+    .map(|position| document.add_point("Profile cubic control", position))
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()?;
+    let cubic_controls: [DesignPointId; 4] =
+        cubic_controls.try_into().expect("four cubic controls");
+    let cubic = document.add_curve(
+        "Profile cubic Bezier",
+        CurveDefinition::CubicBezier {
+            controls: cubic_controls,
+        },
+    )?;
+    add_line(
+        document,
+        "Profile cubic closure",
+        cubic_controls[3],
+        cubic_controls[0],
+    )?;
+
+    let rational_start = document.add_point("Profile rational start", point(60.0, 0.0))?;
+    let rational_end = document.add_point("Profile rational end", point(62.0, 0.0))?;
+    let rational_weight = document.add_scalar(
+        "Profile rational weight",
+        0.75,
+        ScalarUnit::Parameter,
+        ScalarDomain::Bounded {
+            lower: MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT,
+            upper: f64::MAX,
+        },
+    )?;
+    let rational = document.add_curve(
+        "Profile rational quadratic conic",
+        CurveDefinition::RationalQuadraticConic {
+            start: rational_start,
+            weighted_middle: point(45.75, 2.25),
+            middle_weight: rational_weight,
+            end: rational_end,
+        },
+    )?;
+    add_line(
+        document,
+        "Profile rational closure",
+        rational_end,
+        rational_start,
+    )?;
+
+    let circular_center = document.add_point("Profile circular arc center", point(71.0, 0.0))?;
+    let circular_radius = document.add_scalar(
+        "Profile circular arc radius",
+        2.0 * scale,
+        ScalarUnit::Length,
+        ScalarDomain::Positive,
+    )?;
+    let circular_start = document.add_scalar(
+        "Profile circular arc start",
+        0.0,
+        ScalarUnit::Angle,
+        ScalarDomain::Finite,
+    )?;
+    let circular_end = document.add_scalar(
+        "Profile circular arc end",
+        PI,
+        ScalarUnit::Angle,
+        ScalarDomain::Finite,
+    )?;
+    let circular_arc = document.add_curve(
+        "Profile circular arc",
+        CurveDefinition::CircularArc {
+            center: circular_center,
+            radius: circular_radius,
+            start_angle: circular_start,
+            end_angle: circular_end,
+            sweep: DocumentArcSweep::CounterClockwise,
+        },
+    )?;
+    close_profile_curve(document, "Profile circular arc", circular_arc)?;
+
+    let elliptical_center =
+        document.add_point("Profile elliptical arc center", point(81.0, 0.0))?;
+    let elliptical_axis = document.add_point("Profile elliptical arc axis", point(83.0, 0.0))?;
+    let elliptical_ratio = document.add_scalar(
+        "Profile elliptical arc ratio",
+        0.5,
+        ScalarUnit::Parameter,
+        ScalarDomain::Bounded {
+            lower: f64::from_bits(1),
+            upper: 1.0,
+        },
+    )?;
+    let elliptical_start = document.add_scalar(
+        "Profile elliptical arc start",
+        0.0,
+        ScalarUnit::Angle,
+        ScalarDomain::Finite,
+    )?;
+    let elliptical_end = document.add_scalar(
+        "Profile elliptical arc end",
+        PI,
+        ScalarUnit::Angle,
+        ScalarDomain::Finite,
+    )?;
+    let elliptical_arc = document.add_curve(
+        "Profile elliptical arc",
+        CurveDefinition::EllipticalArc {
+            center: elliptical_center,
+            major_axis_point: elliptical_axis,
+            minor_axis_ratio: elliptical_ratio,
+            start_angle: elliptical_start,
+            end_angle: elliptical_end,
+            sweep: DocumentArcSweep::CounterClockwise,
+        },
+    )?;
+    close_profile_curve(document, "Profile elliptical arc", elliptical_arc)?;
+
+    let parabola_vertex = document.add_point("Profile parabola vertex", point(91.0, 0.0))?;
+    let parabola_focus = document.add_point("Profile parabola focus", point(91.0, 0.5))?;
+    let parabola_start = document.add_scalar(
+        "Profile parabola start",
+        -2.0,
+        ScalarUnit::Parameter,
+        ScalarDomain::Finite,
+    )?;
+    let parabola_end = document.add_scalar(
+        "Profile parabola end",
+        2.0,
+        ScalarUnit::Parameter,
+        ScalarDomain::Finite,
+    )?;
+    let parabola = document.add_curve(
+        "Profile parabola",
+        CurveDefinition::ParabolaSegment {
+            vertex: parabola_vertex,
+            focus: parabola_focus,
+            trim_start: parabola_start,
+            trim_end: parabola_end,
+        },
+    )?;
+    close_profile_curve(document, "Profile parabola", parabola)?;
+
+    let hyperbola_center = document.add_point("Profile hyperbola center", point(101.0, 0.0))?;
+    let hyperbola_axis = document.add_point("Profile hyperbola axis", point(102.0, 0.0))?;
+    let hyperbola_conjugate = document.add_scalar(
+        "Profile hyperbola conjugate",
+        scale,
+        ScalarUnit::Length,
+        ScalarDomain::Positive,
+    )?;
+    let hyperbola_start = document.add_scalar(
+        "Profile hyperbola start",
+        -1.0,
+        ScalarUnit::Parameter,
+        ScalarDomain::Finite,
+    )?;
+    let hyperbola_end = document.add_scalar(
+        "Profile hyperbola end",
+        1.0,
+        ScalarUnit::Parameter,
+        ScalarDomain::Finite,
+    )?;
+    let hyperbola = document.add_curve(
+        "Profile hyperbola",
+        CurveDefinition::HyperbolaSegment {
+            center: hyperbola_center,
+            transverse_axis_point: hyperbola_axis,
+            semi_conjugate: hyperbola_conjugate,
+            branch: DocumentHyperbolaBranch::Positive,
+            trim_start: hyperbola_start,
+            trim_end: hyperbola_end,
+        },
+    )?;
+    close_profile_curve(document, "Profile hyperbola", hyperbola)?;
+
+    let mut spline_curves = Vec::with_capacity(4);
+    for (offset, form, rational_spline) in [
+        (110.0, DocumentBSplineForm::Clamped, false),
+        (120.0, DocumentBSplineForm::Periodic, false),
+        (130.0, DocumentBSplineForm::Clamped, true),
+        (140.0, DocumentBSplineForm::Periodic, true),
+    ] {
+        let coordinates = if form == DocumentBSplineForm::Clamped {
+            vec![
+                point(offset, 0.0),
+                point(offset + 1.0, 3.0),
+                point(offset + 2.0, 0.0),
+            ]
+        } else {
+            vec![
+                point(offset, 0.0),
+                point(offset + 1.0, -1.0),
+                point(offset + 2.0, 0.0),
+                point(offset + 1.5, 2.0),
+                point(offset + 0.5, 2.0),
+            ]
+        };
+        let controls = coordinates
+            .into_iter()
+            .map(|position| document.add_point("Profile spline control", position))
+            .collect::<Result<Vec<_>, _>>()?;
+        let (knots, span_ids) = if form == DocumentBSplineForm::Clamped {
+            (vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0], vec![0])
+        } else {
+            (vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0], vec![0, 1, 2, 3, 4])
+        };
+        let next_span_id = u32::try_from(span_ids.len()).expect("bounded profile span count");
+        let curve = if rational_spline {
+            let weights = controls
+                .iter()
+                .enumerate()
+                .map(|(index, _)| {
+                    document.add_scalar(
+                        "Profile spline weight",
+                        if form == DocumentBSplineForm::Clamped && index == 1 {
+                            0.8
+                        } else {
+                            1.0
+                        },
+                        ScalarUnit::Parameter,
+                        ScalarDomain::Positive,
+                    )
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            document.add_curve(
+                "Profile NURBS",
+                CurveDefinition::Nurbs {
+                    form,
+                    degree: 2,
+                    controls: controls.clone(),
+                    gauge_weight: weights[0],
+                    weights,
+                    knots,
+                    span_ids,
+                    next_span_id,
+                },
+            )?
+        } else {
+            document.add_curve(
+                "Profile B-spline",
+                CurveDefinition::BSpline {
+                    form,
+                    degree: 2,
+                    controls: controls.clone(),
+                    knots,
+                    span_ids,
+                    next_span_id,
+                },
+            )?
+        };
+        if form == DocumentBSplineForm::Clamped {
+            add_line(document, "Profile spline closure", controls[2], controls[0])?;
+        }
+        spline_curves.push(curve);
+    }
+
+    for x in [
+        1.0, 11.0, 21.0, 31.0, 41.0, 51.0, 61.0, 71.0, 81.0, 91.0, 111.0, 121.2, 131.0, 141.2,
+    ] {
+        let start = document.add_point("Profile splitter start", point(x, -4.0))?;
+        let end = document.add_point("Profile splitter end", point(x, 4.0))?;
+        add_line(document, "Profile vertical splitter", start, end)?;
+    }
+    let hyperbola_splitter_start =
+        document.add_point("Profile hyperbola splitter start", point(99.0, 0.0))?;
+    let hyperbola_splitter_end =
+        document.add_point("Profile hyperbola splitter end", point(105.0, 0.0))?;
+    add_line(
+        document,
+        "Profile hyperbola horizontal splitter",
+        hyperbola_splitter_start,
+        hyperbola_splitter_end,
+    )?;
+
+    Ok(ProfileScenarioIds {
+        curves: vec![
+            line_family,
+            polyline,
+            circle,
+            circular_arc,
+            ellipse,
+            elliptical_arc,
+            rational,
+            parabola,
+            hyperbola,
+            quadratic,
+            cubic,
+            spline_curves[0],
+            spline_curves[1],
+            spline_curves[2],
+            spline_curves[3],
+        ],
+    })
+}
+
+fn add_profile_curved_topology(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<ProfileScenarioIds, DocumentError> {
+    let crossing_circle = add_profile_circle(
+        document,
+        "Profile transverse circle",
+        [0.0, 0.0],
+        2.0 * scale,
+    )?;
+    let crossing_ellipse = add_profile_ellipse(
+        document,
+        "Profile transverse ellipse",
+        [0.0, 0.0],
+        [3.0 * scale, 0.0],
+        0.5,
+    )?;
+    let nested_circle = add_profile_circle(
+        document,
+        "Profile nested outer circle",
+        [8.0 * scale, 0.0],
+        3.0 * scale,
+    )?;
+    let nested_ellipse = add_profile_ellipse(
+        document,
+        "Profile nested inner ellipse",
+        [8.0 * scale, 0.0],
+        [9.5 * scale, 0.0],
+        0.5,
+    )?;
+    Ok(ProfileScenarioIds {
+        curves: vec![
+            crossing_circle,
+            crossing_ellipse,
+            nested_circle,
+            nested_ellipse,
+        ],
+    })
+}
+
+fn add_profile_incomplete(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<ProfileScenarioIds, DocumentError> {
+    let clean = add_profile_circle(
+        document,
+        "Profile retained clean circle",
+        [10.0 * scale, 0.0],
+        scale,
+    )?;
+    let first_tangent =
+        add_profile_circle(document, "Profile tangent circle A", [0.0, 0.0], scale)?;
+    let second_tangent = add_profile_circle(
+        document,
+        "Profile tangent circle B",
+        [2.0 * scale, 0.0],
+        scale,
+    )?;
+    Ok(ProfileScenarioIds {
+        curves: vec![clean, first_tangent, second_tangent],
+    })
+}
+
+fn add_supporting_offset(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<SupportingOffsetIds, DocumentError> {
+    let source_points = [
+        document.add_point(
+            "Supporting offset fixed source start",
+            [-4.0 * scale, -2.0 * scale],
+        )?,
+        document.add_point(
+            "Supporting offset fixed source end",
+            [4.0 * scale, -2.0 * scale],
+        )?,
+    ];
+    let target_points = [
+        document.add_point(
+            "Supporting offset draggable target start",
+            [-3.0 * scale, 0.0],
+        )?,
+        document.add_point("Supporting offset draggable target end", [2.0 * scale, 0.0])?,
+    ];
+    let source = add_line(
+        document,
+        "Supporting offset source",
+        source_points[0],
+        source_points[1],
+    )?;
+    let target = add_line(
+        document,
+        "Supporting offset target",
+        target_points[0],
+        target_points[1],
+    )?;
+    for (index, point) in source_points.into_iter().enumerate() {
+        fix_point(
+            document,
+            &format!("Supporting offset source fixed {index}"),
+            point,
+        )?;
+    }
+    let offset = document.add_scalar(
+        "Supporting offset distance",
+        2.0 * scale,
+        ScalarUnit::Length,
+        ScalarDomain::Positive,
+    )?;
+    let dimension = document.add_dimension(
+        "Supporting-line offset / 2 DOF",
+        DocumentDimensionDefinition::SupportingLineOffset {
+            source: CurveSpan::line(source),
+            target_segment: CurveSpan::line(target),
+            target: offset,
+            side: DocumentLineSide::Left,
+            orientation: DocumentLineOffsetOrientation::Same,
+        },
+        DocumentDimensionMode::Driving,
+    )?;
+    Ok(SupportingOffsetIds {
+        source,
+        target,
+        target_points,
+        dimension,
+    })
+}
+
+fn add_exact_translated_offset(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<ExactTranslatedOffsetIds, DocumentError> {
+    let source_start =
+        document.add_point("Exact offset anchored source start", [-3.0 * scale, -scale])?;
+    let source_end = document.add_point("Exact offset draggable source end", [scale, -scale])?;
+    let target_points = [
+        document.add_point(
+            "Exact offset associated target start",
+            [-3.0 * scale, scale],
+        )?,
+        document.add_point("Exact offset associated target end", [scale, scale])?,
+    ];
+    let source = add_line(
+        document,
+        "Exact offset rotating source",
+        source_start,
+        source_end,
+    )?;
+    let target = add_line(
+        document,
+        "Exact offset translated target",
+        target_points[0],
+        target_points[1],
+    )?;
+    fix_point(document, "Exact offset source anchor fixed", source_start)?;
+    add_length_dimension(
+        document,
+        "Exact offset source length 4",
+        CurveSpan::line(source),
+        4.0 * scale,
+        DocumentDimensionMode::Driving,
+    )?;
+    let offset = document.add_scalar(
+        "Exact translated offset distance",
+        2.0 * scale,
+        ScalarUnit::Length,
+        ScalarDomain::Positive,
+    )?;
+    let dimension = document.add_dimension(
+        "Exact translated-segment offset / 1 rotational DOF",
+        DocumentDimensionDefinition::ExactTranslatedSegmentOffset {
+            source: CurveSpan::line(source),
+            target_segment: CurveSpan::line(target),
+            target: offset,
+            side: DocumentLineSide::Left,
+            orientation: DocumentLineOffsetOrientation::Same,
+        },
+        DocumentDimensionMode::Driving,
+    )?;
+    Ok(ExactTranslatedOffsetIds {
+        source,
+        source_end,
+        target,
+        target_points,
+        dimension,
+    })
+}
+
+fn add_entity_mirror(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<EntityMirrorIds, DocumentError> {
+    let axis_points = [
+        document.add_point("Mirror axis fixed start", [-5.0 * scale, 0.0])?,
+        document.add_point("Mirror axis fixed end", [5.0 * scale, 0.0])?,
+    ];
+    let axis = add_line(
+        document,
+        "Mirror construction axis",
+        axis_points[0],
+        axis_points[1],
+    )?;
+    for (index, point) in axis_points.into_iter().enumerate() {
+        fix_point(document, &format!("Mirror axis fixed {index}"), point)?;
+    }
+    let source_start = document.add_point("Mirror source anchored start", [-2.0 * scale, scale])?;
+    let source_end = document.add_point("Mirror source draggable end", [scale, 2.0 * scale])?;
+    let source = add_line(document, "Mirror source line", source_start, source_end)?;
+    fix_point(document, "Mirror source start fixed", source_start)?;
+    add_length_dimension(
+        document,
+        "Mirror source length sqrt(10)",
+        CurveSpan::line(source),
+        10.0_f64.sqrt() * scale,
+        DocumentDimensionMode::Driving,
+    )?;
+    let mirror =
+        document.add_mirrored_curve("Associative entity mirror", source, CurveSpan::line(axis))?;
+    let mirrored_end = mirror
+        .point_pairs
+        .iter()
+        .find_map(|(source, mirrored)| (*source == source_end).then_some(*mirrored))
+        .expect("mirrored source endpoint");
+    Ok(EntityMirrorIds {
+        axis,
+        source_end,
+        mirrored_end,
+        mirror,
+    })
+}
+
+fn add_directed_angle(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<DirectedAngleIds, DocumentError> {
+    let first_angle = 175.0_f64.to_radians();
+    let second_angle = -175.0_f64.to_radians();
+    let origin = document.add_point("Directed angle fixed vertex", [0.0, 0.0])?;
+    let first_tip = document.add_point(
+        "Directed angle fixed reference tip",
+        [
+            4.0 * scale * first_angle.cos(),
+            4.0 * scale * first_angle.sin(),
+        ],
+    )?;
+    let moving_tip = document.add_point(
+        "Directed angle draggable branch-cut tip",
+        [
+            3.0 * scale * second_angle.cos(),
+            3.0 * scale * second_angle.sin(),
+        ],
+    )?;
+    let first = add_line(document, "Directed angle reference ray", origin, first_tip)?;
+    let second = add_line(document, "Directed angle moving ray", origin, moving_tip)?;
+    fix_point(document, "Directed angle vertex fixed", origin)?;
+    fix_point(document, "Directed angle reference tip fixed", first_tip)?;
+    add_length_dimension(
+        document,
+        "Directed angle moving radius 3",
+        CurveSpan::line(second),
+        3.0 * scale,
+        DocumentDimensionMode::Driving,
+    )?;
+    let target = document.add_scalar(
+        "Directed angle editable target",
+        10.0_f64.to_radians(),
+        ScalarUnit::Angle,
+        ScalarDomain::Positive,
+    )?;
+    let dimension = document.add_dimension(
+        "Directed angle reference / branch cut",
+        DocumentDimensionDefinition::OrientedAngle {
+            first: CurveSpan::line(first),
+            second: CurveSpan::line(second),
+            target,
+            orientation: crate::DocumentAngleOrientation::CounterClockwise,
+        },
+        DocumentDimensionMode::Reference,
+    )?;
+    Ok(DirectedAngleIds {
+        first,
+        second,
+        moving_tip,
+        dimension,
+        target,
+    })
+}
+
+fn add_fixed_crossing_lines(
+    document: &mut SketchDocument,
+    scale: f64,
+    prefix: &str,
+) -> Result<[CurveId; 2], DocumentError> {
+    let points = [
+        document.add_point(format!("{prefix} horizontal start"), [-4.0 * scale, 0.0])?,
+        document.add_point(format!("{prefix} horizontal end"), [4.0 * scale, 0.0])?,
+        document.add_point(format!("{prefix} vertical start"), [0.0, -4.0 * scale])?,
+        document.add_point(format!("{prefix} vertical end"), [0.0, 4.0 * scale])?,
+    ];
+    let curves = [
+        add_line(
+            document,
+            &format!("{prefix} horizontal parent"),
+            points[0],
+            points[1],
+        )?,
+        add_line(
+            document,
+            &format!("{prefix} vertical parent"),
+            points[2],
+            points[3],
+        )?,
+    ];
+    for (index, point) in points.into_iter().enumerate() {
+        fix_point(
+            document,
+            &format!("{prefix} parent point {index} fixed"),
+            point,
+        )?;
+    }
+    Ok(curves)
+}
+
+fn add_m27_reference_fillet(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<M27ReferenceFilletIds, DocumentError> {
+    let parents = add_fixed_crossing_lines(document, scale, "M27 untrimmed")?;
+    let fillet = document.add_line_line_fillet(
+        "M27 reference-radius untrimmed fillet",
+        LineLineFilletRequest {
+            first: CurveSpan::line(parents[0]),
+            first_side: DocumentCurveNormalSide::Left,
+            second: CurveSpan::line(parents[1]),
+            second_side: DocumentCurveNormalSide::Left,
+            endpoint_order: DocumentFilletEndpointOrder::FirstThenSecond,
+            sweep: DocumentArcSweep::CounterClockwise,
+            radius: scale,
+            radius_mode: DocumentDimensionMode::Reference,
+        },
+    )?;
+    Ok(M27ReferenceFilletIds { parents, fillet })
+}
+
+fn generic_fillet_parent(
+    curve: CurveSpan,
+    parameter: f64,
+    side: DocumentCurveNormalSide,
+    trim_endpoint: DocumentFilletTrimEndpoint,
+    periodic_anchor: Option<DocumentTrimParameter>,
+) -> CurveFilletParentRequest {
+    CurveFilletParentRequest {
+        curve,
+        parameter,
+        winding: 0,
+        neighborhood: ContactNeighborhood::Local {
+            lower: parameter - 0.3,
+            upper: parameter + 0.3,
+        },
+        side,
+        trim_endpoint,
+        periodic_anchor,
+    }
+}
+
+fn add_line_circle_fillet(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<GenericFilletLabIds, DocumentError> {
+    let circle_center = document.add_point("Line-circle parent center fixed", [0.0, 0.0])?;
+    let line_points = [
+        document.add_point("Line-circle parent line start fixed", [0.0, scale])?,
+        document.add_point("Line-circle parent line end fixed", [6.0 * scale, scale])?,
+    ];
+    let radius = document.add_scalar(
+        "Line-circle parent radius",
+        2.0 * scale,
+        ScalarUnit::Length,
+        ScalarDomain::Positive,
+    )?;
+    let circle = document.add_curve(
+        "Interactive fillet circle parent",
+        CurveDefinition::Circle {
+            center: circle_center,
+            radius,
+        },
+    )?;
+    let line = add_line(
+        document,
+        "Interactive fillet line parent",
+        line_points[0],
+        line_points[1],
+    )?;
+    for (label, point) in [
+        ("Line-circle center fixed", circle_center),
+        ("Line-circle line start fixed", line_points[0]),
+        ("Line-circle line end fixed", line_points[1]),
+    ] {
+        fix_point(document, label, point)?;
+    }
+    add_radius_dimension(document, "Line-circle parent radius 2", circle, 2.0 * scale)?;
+    let fillet = document.add_curve_curve_fillet(
+        "Interactive line-circle fillet",
+        CurveCurveFilletRequest {
+            first: generic_fillet_parent(
+                CurveSpan::line(circle),
+                0.0,
+                DocumentCurveNormalSide::Right,
+                DocumentFilletTrimEndpoint::End,
+                Some(DocumentTrimParameter {
+                    parameter: PI,
+                    winding: -1,
+                }),
+            ),
+            second: generic_fillet_parent(
+                CurveSpan::line(line),
+                0.5,
+                DocumentCurveNormalSide::Right,
+                DocumentFilletTrimEndpoint::Start,
+                None,
+            ),
+            endpoint_order: DocumentFilletEndpointOrder::SecondThenFirst,
+            sweep: DocumentArcSweep::CounterClockwise,
+            radius: scale,
+            radius_mode: DocumentDimensionMode::Reference,
+        },
+    )?;
+    Ok(GenericFilletLabIds {
+        parents: [line, circle],
+        fillet,
+    })
+}
+
+fn add_line_bezier_fillet(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<GenericFilletLabIds, DocumentError> {
+    let line_points = [
+        document.add_point("Line-Bezier line start fixed", [-2.0 * scale, -scale])?,
+        document.add_point("Line-Bezier line end fixed", [2.0 * scale, -scale])?,
+    ];
+    let line = add_line(
+        document,
+        "Interactive line-Bezier line parent",
+        line_points[0],
+        line_points[1],
+    )?;
+    let controls = [
+        [2.5 * scale, -1.5 * scale],
+        [0.5 * scale, -0.5 * scale],
+        [0.5 * scale, 0.5 * scale],
+        [2.5 * scale, 1.5 * scale],
+    ]
+    .map(|position| document.add_point("Line-Bezier cubic control fixed", position))
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()?;
+    let controls: [DesignPointId; 4] = controls.try_into().expect("four cubic controls");
+    let bezier = document.add_curve(
+        "Interactive line-Bezier cubic parent",
+        CurveDefinition::CubicBezier { controls },
+    )?;
+    for (index, point) in line_points.into_iter().chain(controls).enumerate() {
+        fix_point(
+            document,
+            &format!("Line-Bezier support {index} fixed"),
+            point,
+        )?;
+    }
+    let fillet = document.add_curve_curve_fillet(
+        "Interactive line-Bezier fillet",
+        CurveCurveFilletRequest {
+            first: generic_fillet_parent(
+                CurveSpan::line(line),
+                0.5,
+                DocumentCurveNormalSide::Left,
+                DocumentFilletTrimEndpoint::End,
+                None,
+            ),
+            second: generic_fillet_parent(
+                CurveSpan::line(bezier),
+                0.5,
+                DocumentCurveNormalSide::Left,
+                DocumentFilletTrimEndpoint::Start,
+                None,
+            ),
+            endpoint_order: DocumentFilletEndpointOrder::FirstThenSecond,
+            sweep: DocumentArcSweep::CounterClockwise,
+            radius: scale,
+            radius_mode: DocumentDimensionMode::Reference,
+        },
+    )?;
+    Ok(GenericFilletLabIds {
+        parents: [line, bezier],
+        fillet,
+    })
+}
+
+fn add_nurbs_weights(
+    document: &mut SketchDocument,
+    label: &str,
+    values: &[f64],
+) -> Result<Vec<DesignScalarId>, DocumentError> {
+    values
+        .iter()
+        .enumerate()
+        .map(|(index, value)| {
+            document.add_scalar(
+                format!("{label} weight {}", index + 1),
+                *value,
+                ScalarUnit::Parameter,
+                ScalarDomain::Positive,
+            )
+        })
+        .collect()
+}
+
+fn add_quarter_circle_nurbs(
+    document: &mut SketchDocument,
+    label: &str,
+    scale: f64,
+    span_id: u32,
+) -> Result<(CurveId, Vec<DesignPointId>, Vec<DesignScalarId>), DocumentError> {
+    let controls = [[2.0, 0.0], [2.0, 2.0], [0.0, 2.0]]
+        .into_iter()
+        .enumerate()
+        .map(|(index, point)| {
+            document.add_point(
+                format!("{label} control {}", index + 1),
+                [point[0] * scale, point[1] * scale],
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let weights = add_nurbs_weights(
+        document,
+        label,
+        &[1.0, std::f64::consts::FRAC_1_SQRT_2, 1.0],
+    )?;
+    let curve = document.add_curve(
+        label,
+        CurveDefinition::Nurbs {
+            form: DocumentBSplineForm::Clamped,
+            degree: 2,
+            controls: controls.clone(),
+            weights: weights.clone(),
+            gauge_weight: weights[0],
+            knots: vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+            span_ids: vec![span_id],
+            next_span_id: span_id + 1,
+        },
+    )?;
+    Ok((curve, controls, weights))
+}
+
+fn add_nurbs_line_fillet(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<GenericFilletLabIds, DocumentError> {
+    let (nurbs, controls, _) =
+        add_quarter_circle_nurbs(document, "Interactive NURBS fillet parent", scale, 71)?;
+    let span = CurveSpan {
+        curve: nurbs,
+        segment: 71,
+    };
+    let jet =
+        document
+            .evaluate_curve_jet(span, 0.5)
+            .map_err(|error| DocumentError::InvalidField {
+                field: "NURBS fillet fixture",
+                message: error.to_string(),
+            })?;
+    let differential = jet
+        .differential()
+        .map_err(|error| DocumentError::InvalidField {
+            field: "NURBS fillet fixture",
+            message: error.to_string(),
+        })?;
+    let tangent = differential.unit_tangent;
+    let line_tangent = differential.left_normal;
+    let center = jet.position + differential.left_normal * scale;
+    let line_normal = geosolve_geometry::Vector2::new(-line_tangent.y, line_tangent.x);
+    let line_contact = center - line_normal * scale;
+    let line_points = [
+        line_contact - line_tangent * (2.0 * scale),
+        line_contact + line_tangent * (2.0 * scale),
+    ]
+    .map(|point| document.add_point("NURBS-line parent line point fixed", [point.x, point.y]))
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()?;
+    let line = document.add_curve(
+        "Interactive NURBS-line line parent",
+        CurveDefinition::Line {
+            start: line_points[0],
+            end: line_points[1],
+            branch_direction: [line_tangent.x, line_tangent.y],
+        },
+    )?;
+    for (index, point) in controls.into_iter().chain(line_points).enumerate() {
+        fix_point(
+            document,
+            &format!("NURBS-line support {index} fixed"),
+            point,
+        )?;
+    }
+    let fillet = document.add_curve_curve_fillet(
+        "Interactive NURBS-line fillet",
+        CurveCurveFilletRequest {
+            first: generic_fillet_parent(
+                span,
+                0.5,
+                DocumentCurveNormalSide::Left,
+                DocumentFilletTrimEndpoint::End,
+                None,
+            ),
+            second: generic_fillet_parent(
+                CurveSpan::line(line),
+                0.5,
+                DocumentCurveNormalSide::Left,
+                DocumentFilletTrimEndpoint::Start,
+                None,
+            ),
+            endpoint_order: DocumentFilletEndpointOrder::FirstThenSecond,
+            sweep: DocumentArcSweep::CounterClockwise,
+            radius: scale,
+            radius_mode: DocumentDimensionMode::Reference,
+        },
+    )?;
+    let _ = tangent;
+    Ok(GenericFilletLabIds {
+        parents: [nurbs, line],
+        fillet,
+    })
+}
+
+fn add_nurbs_quarter_circle(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<NurbsLabIds, DocumentError> {
+    let (curve, controls, weights) =
+        add_quarter_circle_nurbs(document, "NURBS quarter-circle weight lab", scale, 7)?;
+    fix_point(document, "Quarter-circle start fixed", controls[0])?;
+    fix_point(document, "Quarter-circle end fixed", controls[2])?;
+    Ok(NurbsLabIds {
+        curve,
+        primary_control: controls[1],
+        controls,
+        weights,
+        contact: None,
+    })
+}
+
+fn add_nurbs_local_support(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<NurbsLabIds, DocumentError> {
+    let controls = [
+        [-4.0, 0.0],
+        [-3.0, 2.0],
+        [-1.5, -1.0],
+        [0.5, 1.5],
+        [2.5, -1.0],
+        [4.0, 0.5],
+    ]
+    .into_iter()
+    .enumerate()
+    .map(|(index, point)| {
+        document.add_point(
+            format!("Local-support NURBS control {}", index + 1),
+            [point[0] * scale, point[1] * scale],
+        )
+    })
+    .collect::<Result<Vec<_>, _>>()?;
+    let weights = add_nurbs_weights(
+        document,
+        "Local-support NURBS",
+        &[0.8, 1.0, 1.3, 0.7, 1.15, 0.9],
+    )?;
+    let curve = document.add_curve(
+        "NURBS local-support and knot-insertion lab",
+        CurveDefinition::Nurbs {
+            form: DocumentBSplineForm::Clamped,
+            degree: 3,
+            controls: controls.clone(),
+            weights: weights.clone(),
+            gauge_weight: weights[1],
+            knots: vec![0.0, 0.0, 0.0, 0.0, 0.34, 0.67, 1.0, 1.0, 1.0, 1.0],
+            span_ids: vec![41, 73, 89],
+            next_span_id: 90,
+        },
+    )?;
+    fix_point(document, "Local-support first endpoint fixed", controls[0])?;
+    fix_point(document, "Local-support last endpoint fixed", controls[5])?;
+    Ok(NurbsLabIds {
+        curve,
+        primary_control: controls[2],
+        controls,
+        weights,
+        contact: None,
+    })
+}
+
+fn add_periodic_nurbs(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<NurbsLabIds, DocumentError> {
+    let controls = [[0.0, 0.0], [1.5, -0.2], [2.0, 1.4], [0.5, 2.2], [-0.8, 1.0]]
+        .into_iter()
+        .enumerate()
+        .map(|(index, point)| {
+            document.add_point(
+                format!("Periodic NURBS control {}", index + 1),
+                [point[0] * scale, point[1] * scale],
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let weights = add_nurbs_weights(document, "Periodic NURBS", &[0.75, 1.0, 1.4, 0.9, 1.2])?;
+    let curve = document.add_curve(
+        "Periodic NURBS span and winding lab",
+        CurveDefinition::Nurbs {
+            form: DocumentBSplineForm::Periodic,
+            degree: 2,
+            controls: controls.clone(),
+            weights: weights.clone(),
+            gauge_weight: weights[1],
+            knots: vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+            span_ids: vec![11, 17, 23, 29, 31],
+            next_span_id: 32,
+        },
+    )?;
+    fix_point(document, "Periodic NURBS anchor fixed", controls[0])?;
+    let contact = document.add_curve_contact(
+        "Periodic NURBS explicit seam contact",
+        CurveSpan { curve, segment: 31 },
+        1.0,
+        2,
+        ContactNeighborhood::End,
+        None,
+    )?;
+    let seam =
+        document
+            .evaluate_contact_jet(contact)
+            .map_err(|error| DocumentError::InvalidField {
+                field: "periodic NURBS seam",
+                message: error.to_string(),
+            })?;
+    let witness = document.add_point(
+        "Periodic NURBS seam witness",
+        [seam.position.x, seam.position.y],
+    )?;
+    document.add_constraint(
+        "Periodic NURBS witness on explicit span",
+        DocumentConstraintDefinition::PointOnCurve {
+            point: witness,
+            contact,
+        },
+    )?;
+    Ok(NurbsLabIds {
+        curve,
+        primary_control: controls[3],
+        controls,
+        weights,
+        contact: Some(contact),
+    })
+}
+
+fn add_nurbs_differential(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<NurbsDifferentialIds, DocumentError> {
+    let seam = document.add_point("NURBS C2 draggable seam", [0.0, 0.0])?;
+    let first_controls = vec![
+        document.add_point("NURBS C2 incoming outer", [-scale, scale])?,
+        document.add_point("NURBS C2 incoming handle", [-0.5 * scale, 0.0])?,
+        seam,
+    ];
+    let second_controls = vec![
+        seam,
+        document.add_point("NURBS C2 outgoing handle", [scale, 0.0])?,
+        document.add_point("NURBS C2 outgoing outer", [2.0 * scale, 4.0 * scale])?,
+    ];
+    let first_weights = add_nurbs_weights(document, "NURBS C2 incoming", &[1.0, 1.0, 1.0])?;
+    let second_weights = add_nurbs_weights(document, "NURBS C2 outgoing", &[1.0, 1.0, 1.0])?;
+    let curves = [
+        document.add_curve(
+            "NURBS C2 incoming curve",
+            CurveDefinition::Nurbs {
+                form: DocumentBSplineForm::Clamped,
+                degree: 2,
+                controls: first_controls.clone(),
+                weights: first_weights.clone(),
+                gauge_weight: first_weights[0],
+                knots: vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                span_ids: vec![10],
+                next_span_id: 11,
+            },
+        )?,
+        document.add_curve(
+            "NURBS C2 outgoing curve",
+            CurveDefinition::Nurbs {
+                form: DocumentBSplineForm::Clamped,
+                degree: 2,
+                controls: second_controls.clone(),
+                weights: second_weights.clone(),
+                gauge_weight: second_weights[0],
+                knots: vec![0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                span_ids: vec![20],
+                next_span_id: 21,
+            },
+        )?,
+    ];
+    let contacts = [
+        document.add_curve_contact(
+            "NURBS C2 incoming end",
+            CurveSpan {
+                curve: curves[0],
+                segment: 10,
+            },
+            1.0,
+            0,
+            ContactNeighborhood::End,
+            None,
+        )?,
+        document.add_curve_contact(
+            "NURBS C2 outgoing start",
+            CurveSpan {
+                curve: curves[1],
+                segment: 20,
+            },
+            0.0,
+            0,
+            ContactNeighborhood::Start,
+            None,
+        )?,
+    ];
+    let continuity = document.add_constraint(
+        "NURBS rate-explicit parametric C2 continuity",
+        DocumentConstraintDefinition::EndpointContinuity {
+            first_contact: contacts[0],
+            second_contact: contacts[1],
+            continuity: DocumentCurveContinuity::ParametricC2 {
+                first_rate: 2.0,
+                second_rate: 1.0,
+            },
+        },
+    )?;
+    let controls = first_controls
+        .into_iter()
+        .chain(second_controls.into_iter().skip(1))
+        .collect();
+    let weights = first_weights.into_iter().chain(second_weights).collect();
+    Ok(NurbsDifferentialIds {
+        curves,
+        seam,
+        controls,
+        weights,
+        contacts,
+        continuity,
     })
 }
 

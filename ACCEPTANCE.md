@@ -49,7 +49,19 @@ Starting at M10, active-bound mobility and one-sided feasible motion are mandato
 
 ### Deliverable 1: 2D CAD sketches
 
-Completion at M22 requires independently editable points, lines/segments, circles/arcs, ellipses/conics, Bezier curves, B-splines and NURBS; generic contact and tangency; explicit orientation/span/winding/branch state; curvature, G2 and separately named parametric C2 behavior; driving/reference dimensions; truthful diagnostics; and versioned persistence.
+M22 completed the built-in curve and generic differential-constraint surface:
+independently editable points, lines/segments, circles/arcs, ellipses/conics, Bezier
+curves, B-splines and NURBS; generic contact and tangency; explicit
+orientation/span/winding/branch state; curvature, G2 and separately named parametric
+C2 behavior; driving/reference dimensions; truthful diagnostics; and versioned
+persistence. It did not complete the production host-embedding contract.
+
+Completion of Deliverable 1 at M55 additionally requires the ordinary planar CAD
+constraint/dimension catalog, retained unsolved design intent separated from accepted
+geometry, construction/activation semantics, typed host parameters, immutable
+external 2D references, cancellation, stable persistent-ID diagnostics, stale-work
+protection, documented production scale, companion drafting operations and complete
+production wire/profile output.
 
 The complete matrix must include exact, perturbed, invalid-domain, derivative, transformation, scale, branch-retention, active-bound, persistence and large sparse fixtures. A zero-speed curve jet, invalid knot vector, rational pole, escaped domain or ambiguous branch cannot produce a success-like result.
 
@@ -65,11 +77,14 @@ M14 completes an alpha cut toward Deliverable 1, not Deliverable 1 itself. Its l
 
 `SketchDocument`, `SketchSession`, commands, history, versioned serialization, curve evaluation and constraints must be reusable Rust APIs. Selection, hit testing, tool state, rendering and `localStorage` must remain web-only, and the web crate must contain no equations. Desktop and mobile must support select/box-select, compatible multi-select constraints, draw, solver-projected drag, dimension edit, delete/suppress, pan/zoom, undo/redo, JSON import/export/local autosave, confirmed prospective coincident/horizontal/vertical inference, diagnostics/conflict/DOF and retained geometry on failure.
 
-The preceding desktop/mobile requirement records the completed M13-M14 gate. Post-alpha, the playground is a desktop-first diagnostic instrument rather than a production UI: it must remain effective for inspecting accepted geometry, audit, rank, branch and failure claims, while mobile compatibility is best-effort and non-gating.
+The preceding desktop/mobile requirement records the completed M13-M14 historical
+gate. Post-alpha mobile behavior is not a future acceptance target. M39-M51 replace
+the playground with a desktop-only CAD-like sketch consumer; no responsive, tablet
+or phone implementation is required.
 
 ## Frozen M1-M7 regression baseline
 
-All existing M1-M7 tests and the advanced free-radius circle/arc tangency follow-up remain mandatory through M29.
+All existing M1-M7 tests and the advanced free-radius circle/arc tangency follow-up remain mandatory through M55.
 
 ### Core representation and solver
 
@@ -127,13 +142,13 @@ Baseline candidate vectors do not yet carry M8 completeness metadata. Until the 
 - Geometry and audit values always come from the same accepted state.
 - It displays termination, hard residual, rank/DOF, branch and candidate diagnostics, plus grouped source audit rows.
 - It preserves prior valid geometry visibly after failed edits.
-- Automated WASM and desktop browser diagnostic coverage remains through M29. M13-M14 added the disposable playground, including its historical mobile checks, as an alpha acceptance consumer without making it authoritative.
+- Automated WASM and desktop browser diagnostic coverage remains through M55. M13-M14 added the disposable playground, including its historical mobile checks, as an alpha acceptance consumer without making it authoritative; those mobile checks do not extend to the post-M32 workbench.
 
 ## M8 acceptance: contract rebaseline and representative baselines
 
 M8 is ready for review only when every item below is objectively present. These checkboxes are acceptance criteria and do not mark `PLAN.md` complete.
 
-The checked wording below is the preserved M8 completion record. Its then-current M8-M22 allocations are historical; the user-approved M10+ execution numbering is now M10-M29.
+The checked wording below is the preserved M8 completion record. Its then-current M8-M22 allocations are historical; `PLAN.md` now governs the ordered M10-M55 program.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -460,6 +475,21 @@ scales `1e-6`, `1` and `1e6`; parallel, near-parallel, escaped, zero-radius and
 non-finite inputs reject without allocation or mutation. Parent trim views and
 generic curve-family incidence remain explicitly assigned to M28.
 
+M28 acceptance is complete: canonical JSON v4 adds one equation-free persistent
+visible interval per stable support span and common-jet `CurveCurveFillet`
+associations over every regular line, circle/arc, ellipse/conic, Bezier, B-spline
+and NURBS family. Four offset rows plus two output-radial rows pass finite
+differences across all 105 unordered family pairs; associated output-arc point,
+contact, tangency, curvature and continuity incidence differentiates both endpoint
+angles. Independent validation rejects zero speed, poles, escaped or ambiguous
+local roots, unresolved `1 - side*radius*curvature`, parallel offset intersections
+and malformed ownership. Periodic winding, required scales/transforms, persistent
+trim motion, suppression, explosion, history, migration and rollback pass. Frozen
+v1-v3 languages reject v4 syntax, while legacy v3 fillets migrate visibly
+untrimmed. Public visible intervals drive the separate WASM renderer, hit testing,
+selection and profile analysis; desktop/mobile browser gates pass without adding
+equations to the web crate. Arbitrary multi-fragment trimming is not claimed.
+
 ## M29 acceptance: release hardening
 
 - Public APIs expose domain and audit behavior without accidental compiler/core internals.
@@ -469,6 +499,221 @@ generic curve-family incidence remain explicitly assigned to M28.
 - Supported scale/performance envelopes are recorded from reproducible benchmarks.
 - Fuzzing finds no panic, non-finite accepted state or false success.
 - Native, locked WASM smoke and all prior acceptance suites pass.
+
+Completion record (2026-07-21): the `0.1.0` compatibility policy classifies
+persistent domain workflows, legacy compatibility facades and explicitly unstable
+advanced compiler/runtime diagnostics; defines lockstep SemVer, Rust `1.89` MSRV,
+deprecation and schema-retention rules; and freezes sketch v1-v4 plus planar/spatial
+v1 support. Crate guides and runnable sketch/planar/spatial examples cover accepted
+solve, audit, edit, velocity and canonical restore workflows. Package archives carry
+the GPL text and README, dependency licences pass `cargo-deny`, and faer's bundled
+MPL/BSD notices are recorded separately.
+
+The M29 mutation corpus applies more than 2,000 deterministic byte/extreme-value
+cases across all persisted domains under panic guards; any surviving session must
+be canonical, finite, independently `HardValidity::Valid` and within `1e-9`.
+The documented release runner passes full native acceptance, warnings-denied docs,
+locked WASM, package contents, native/browser performance, the 1,536-coordinate
+spatial release fixture and desktop/mobile Chromium. The browser exposes the M28
+trimmed-fillet UAT scenario plus the release/schema/scale/legal contract without
+owning equations or document semantics. M29 acceptance is complete.
+
+## M30 acceptance: interactive construction and NURBS UAT
+
+- Supporting-line offset starts with two equality DOF; target endpoint drag changes accepted axial position or length while retaining signed offset and direction state.
+- Exact translated offset starts with one rotational DOF; source drag preserves exact endpoint translation on the target.
+- Entity-mirror drag moves its ordinary reflected counterpart through public symmetry rows and survives history/persistence.
+- Directed-angle drag crosses the principal cut without changing explicit orientation; target/orientation/mode edits are transactional.
+- M27 and M28 fillet labs start with documented free-radius motion and atomically update contacts, output arc and M28 visible intervals.
+- NURBS labs expose controls, non-gauge weights, gauge selection, knot insertion, local support, periodic span/winding and differential continuity through public APIs.
+- Every lab publishes finite independently valid geometry at normalized hard residual `<= 1e-9`; rejected edits retain the accepted scene.
+- Desktop E2E proves accepted geometry movement and focused editor transactions; mobile smoke loads every scene without overflow.
+
+Completion record (2026-07-21): twelve public scenarios publish exact expected DOF,
+focused instructions and primary drag identities. Seven native lifecycle tests and
+the focused desktop/mobile Chromium suite prove actual accepted movement for offsets,
+mirror, angle, M27/M28 fillets and NURBS controls plus persistence/history/rollback.
+All browser operations remain public document transactions and M30 acceptance is
+complete.
+
+## M31 acceptance: all-family visual profiles
+
+- Every built-in planar curve family can contribute bounded visible intervals to the arrangement without shape inference.
+- Pair and self intersections are isolated with bounded family-specific methods; a root is published only when its parameter enclosure and transverse local topology are resolved.
+- Tangency, positive-length overlap, poles, zero speed, unresolved multiple roots and exhausted work produce typed `Truncated` or `Skipped` evidence rather than false `Complete`.
+- Directed curved half-edges use actual source tangents, preserve traversal-ordered source parameters and never weld unrelated coordinate-equal endpoints by proximity.
+- Area and containment use analytic or interval-enclosed curve integrals/tests; orientation and visual area publish only when their uncertainty excludes ambiguity.
+- Explicit fillet ownership may weld trim/output endpoints after fresh position validation; suppression/explosion semantics remain truthful.
+- All-family pair/self, required-scale, transform, large-translation, nesting, budget and malformed-geometry fixtures pass with canonical JSON unchanged.
+- Browser overlays evaluate public returned source intervals, remain pointer-transparent and display scope/status/issues/budget evidence.
+
+Completion record (2026-07-21): ADR 0024 is implemented with bounded linear,
+circular, analytic-conic, polynomial and homogeneous rational pieces plus pure-Rust
+outward interval arithmetic, certified transcendental/angle bounds and
+interval-Newton/Krawczyk root isolation. Exact source parameters, periodic winding,
+endpoint identities and fillet ownership drive topology; tangency, overlap, poles,
+zero speed, unresolved roots, ambiguous tangent/containment decisions and exhausted
+budgets fail closed. Area signs and containment publish only from resolved analytic
+or interval enclosures, and ambiguous components cannot contaminate disjoint clean
+faces.
+
+Thirty-one M31 tests cover all 120 family pairs, self-intersections, required
+scales/transforms, periodic seams, nesting, malformed geometry, ownership,
+persistence neutrality and budgets. Post-completion UAT adds accepted-residual
+endpoint/contact splits, certified artificial-boundary root retries, proof-based
+duplicate root merging and NURBS refinement regressions. Six reusable browser scenes
+pass focused desktop/mobile Chromium checks for public-source rendering, movable
+fillet closure, exact NURBS control authoring, self-root enclosures, metadata,
+pointer transparency and responsive layout. Format/diff, warnings-denied locked
+workspace Clippy, full locked workspace tests, locked WASM and release Trunk pass.
+M31 acceptance is complete.
+
+## M32 acceptance: post-expansion release
+
+- The complete construction/NURBS/profile UAT catalog is discoverable and has concise expected-motion instructions.
+- A copied text capsule reproduces canonical geometry and profile budgets, while corrupt or oversized capsule input is rejected atomically.
+- Mutation tests cover new command payloads and all profile families without panic, non-finite publication or false success/completeness.
+- Updated scale/performance envelopes pass without weakening correctness or completeness policy.
+- One release-gate command passes all native, documentation, package/licence, locked WASM and desktop browser suites.
+
+## M33 acceptance: CAD engine contract
+
+- Accepted ADRs define design/accepted state, immutable host inputs, cancellation/concurrency, companion boundaries and draft-v5 policy.
+- The complete feature/relation/dimension applicability matrix and representative production workloads are deterministic and reviewable.
+- No target-only concept is exposed as implemented behavior and all frozen M1-M32 contracts remain green.
+
+## M34 acceptance: retained design and accepted state
+
+- Design, attempted candidate and accepted solved state have separate identities and revisions.
+- Structurally valid unsolved intent is repairable and persistable without changing the last independently validated accepted state.
+- Malformed or non-finite design never enters retained intent, and attempted geometry is never labeled accepted.
+
+## M35 acceptance: cancellation and operation control
+
+- Cancellation and deterministic work exhaustion are distinct from solve/profile failure and convergence.
+- Cancellation at every documented checkpoint commits nothing and retains accepted state bitwise.
+- Native and single-threaded WASM consumers observe the same operation outcome semantics.
+
+## M36 acceptance: semantic features and scalars
+
+- Typed point, direction, support, curve and scalar references validate and persist through stable domain IDs.
+- Composite relations retain one semantic source and complete structured audit evidence.
+- No coordinate proximity or public plugin callback selects operand or branch meaning.
+
+## M37 acceptance: standard constraint catalog
+
+- Concentric, collinear, point-pair horizontal/vertical, block/fix, point symmetry and broadened equal/symmetry relations cover the frozen applicability matrix.
+- Every multi-root relation carries explicit side/orientation/containment state.
+- Every new residual passes finite differences, transformations, required scales, persistence, cancellation and rollback.
+
+## M38 acceptance: dimensions and measurements
+
+- Relative coordinates, datum coordinates, point/line and line/line spacing, angle, sweep, arc length and conic dimensions have consistent driving/reference measurements.
+- Persistent measurements carry typed units, provenance and finite independently evaluated values.
+- Generic path length cannot succeed when value, derivative or work bounds are incomplete.
+
+## M39 acceptance: CAD workbench foundation
+
+- The desktop shell provides core authoring, selection, sketch tree, inspector, glyphs, dimensions, status and problems through public sketch APIs.
+- Accepted, unsolved, solving, solved-preview and rejected views are explicit and synchronized.
+- Automated desktop E2E passes; mobile and responsive behavior are not tested or claimed.
+
+## M40 acceptance: human UAT 1
+
+- All objective core drafting workflows pass automation before review.
+- The supervising human completes the prepared 30-45 minute core interaction scorecard.
+- No unresolved correctness, data-loss, misleading-state or basic interaction blocker remains; objective findings have automated regressions.
+
+## M41 acceptance: construction roles and activation
+
+- Construction geometry participates in solving but is excluded from production profiles under the default declared scope.
+- Effective activation and every inactivity reason are explicit and dependency-safe.
+- Inactive branch/contact/topology state survives reactivation without coordinate inference.
+
+## M42 acceptance: typed host parameters
+
+- Immutable revisioned parameter batches can drive several targets without adding solver variables.
+- Inputs and output proposals have typed units, persistent identity, provenance and stale-commit protection.
+- GeoSolve owns no formula parser, host dependency graph or configuration evaluator.
+
+## M43 acceptance: external references
+
+- Solving consumes one immutable finite 2D snapshot set with exact revision and digest evidence and no host callback.
+- Missing, stale, malformed or topology-incompatible references retain unsolved intent and accepted geometry truthfully.
+- Rebinding and topology transitions are explicit; proximity never repairs identity.
+
+## M44 acceptance: host-state workbench
+
+- Construction, activation, parameter, external-reference and dual-state workflows are available through the desktop consumer.
+- Browser state identifies all design/input/accepted revisions and never exposes internal scalars as user parameters accidentally.
+- Fresh-profile automated E2E proves every advertised state and recovery path before UAT 2.
+
+## M45 acceptance: human UAT 2
+
+- The supervising human completes the prepared 30-45 minute host-semantics scorecard after full automated qualification.
+- Construction, suppression, parameters, external references and unsolved-state recovery are understandable and trustworthy.
+- No unresolved ownership, stale-data, recovery or state-trust blocker remains; objective findings have regressions.
+
+## M46 acceptance: stable diagnostics
+
+- Hosts can consume solve, source, component, dependency, activation, parameter and external-reference diagnostics through stable domain DTOs and persistent IDs.
+- Structural/numerical rank, equality/bounded/one-sided mobility and diagnostic completeness remain separate.
+- Machine-readable repair suggestions never mutate state automatically or claim globally minimal conflict proof.
+
+## M47 acceptance: prepared jobs and concurrency
+
+- Prepared jobs capture every relevant input revision and cannot mutate a session until compare-and-swap commit.
+- Stale or cancelled work cannot overwrite a newer accepted state.
+- The documented safe Rust ownership contract works for host-managed native workers and single-threaded WASM without `unsafe` code.
+
+## M48 acceptance: incremental solving and scale
+
+- Incremental and full-rebuild paths agree on geometry, validation, rank, branch and diagnostics.
+- Parameter, reference, activation and local geometry edits dirty only their dependency closures without skipping fresh acceptance evidence.
+- Published cold/warm/profile/memory/cancellation envelopes pass, and rank authority is either proved sparse or bounded honestly by a supported connected-component limit.
+
+## M49 acceptance: sketch operations companion
+
+- The companion owns no residual equations and emits deterministic public sketch transactions with identity-preserving mappings.
+- Split, trim, extend, mirror, chamfer and baseline macro/pattern operations are transactional and dependency-aware.
+- Multiple visible intervals never rewrite immutable support definitions or infer topology by proximity.
+
+## M50 acceptance: production topology companion
+
+- Complete output publishes revision-stamped wires, nesting, holes, orientation and exact source provenance for the declared scope.
+- Tangency, overlap, touching, T-junction and self-intersection policies are explicit and bounded.
+- Stale, cancelled, truncated or ambiguous output cannot be consumed as a production profile and never changes solver state.
+
+## M51 acceptance: advanced workbench and qualification
+
+- The CAD-like desktop consumer covers advanced curves, branches, operations, diagnostics, production profiles, persistence and cancellation without private equations.
+- The old playground, hidden legacy application and obsolete styling are removed after automated parity.
+- Isolated fresh-profile browser suites and the generated UAT evidence package pass without retries; no mobile behavior is claimed.
+
+## M52 acceptance: human UAT 3
+
+- The supervising human completes the prepared 45-60 minute advanced geometry/topology scorecard.
+- Advanced controls, branch transitions, associated operations, topology claims and representative interaction performance are understandable and trustworthy.
+- No unresolved wrong-branch, misleading-profile, advanced-interaction or responsiveness blocker remains.
+
+## M53 acceptance: release-candidate freeze
+
+- Sketch v5, parameter/snapshot/workspace envelopes and the supported Rust/WASM API are frozen with deterministic migration and compatibility tests.
+- The exact candidate passes SemVer, schema, package, native, WASM, browser, fuzz, mutation, performance, documentation and licence gates.
+- Any material API/schema/workflow change revokes the candidate and requires full requalification.
+
+## M54 acceptance: human UAT 4
+
+- The supervising human completes and signs the 45-60 minute integrated candidate workflow plus exploratory authoring.
+- Normal work, failure recovery, persistence, profiles and advanced diagnostics form one coherent and trustworthy experience.
+- Every objective finding has a regression; only targeted human rechecks remain unless the candidate changes materially.
+
+## M55 acceptance: production embedding release
+
+- A mock CAD host owns expressions, external keys, application metadata/history and worker scheduling while consuming only stable public GeoSolve APIs.
+- Retained intent, immutable inputs, activation, cancellation, stale work, diagnostics and production topology pass end to end.
+- Coverage-guided fuzzing, resource controls, packaged examples and Linux/Windows/macOS/WASM Rust consumers pass without a C ABI.
+- One release command proves all automated M1-M54 gates and records the four required human approvals without false success, false complete topology or stale commit.
 
 ## Regression and oracle policy
 

@@ -8,7 +8,7 @@ use crate::curves::{
 };
 use crate::{
     CurveContinuity, CurveCurvatureRelation, CurveDirectionRelation, CurveNormalSide,
-    CurveTangentOrientation, SegmentEndpoint,
+    CurveTangentOrientation, FilletEndpointOrder, SegmentEndpoint,
 };
 
 #[derive(Clone, Debug)]
@@ -63,8 +63,10 @@ pub(crate) enum GenericCurveIncidence {
     Arc {
         center: usize,
         radius: usize,
-        start_angle: f64,
-        signed_sweep: f64,
+        start_angle: CurveParameterIncidence,
+        end_angle: CurveParameterIncidence,
+        turn_offset: i32,
+        sweep: crate::ArcSweep,
         parameter: CurveParameterIncidence,
     },
     QuadraticBezier {
@@ -164,13 +166,16 @@ pub(crate) struct GenericEndpointContinuityResidual {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct GenericLineFilletResidual {
+pub(crate) struct GenericCurveFilletResidual {
     pub(crate) center: usize,
     pub(crate) radius: usize,
+    pub(crate) start_angle: usize,
+    pub(crate) end_angle: usize,
     pub(crate) first: GenericCurveIncidence,
     pub(crate) first_side: CurveNormalSide,
     pub(crate) second: GenericCurveIncidence,
     pub(crate) second_side: CurveNormalSide,
+    pub(crate) endpoint_order: FilletEndpointOrder,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -503,7 +508,7 @@ impl SketchAdFormula for GenericEndpointContinuityResidual {
     }
 }
 
-impl ResidualEvaluator for GenericLineFilletResidual {
+impl ResidualEvaluator for GenericCurveFilletResidual {
     fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
         evaluate_sketch_ad(self, variables, false).map(|(values, _)| values)
     }
@@ -513,16 +518,16 @@ impl ResidualEvaluator for GenericLineFilletResidual {
     }
 }
 
-impl SketchAdFormula for GenericLineFilletResidual {
+impl SketchAdFormula for GenericCurveFilletResidual {
     fn evaluate_dual(
         &self,
         variables: &[SketchAdValue],
     ) -> Result<Vec<DualDVec64>, EvaluationError> {
-        let center = ad_point(variables, self.center, "line fillet center")?;
-        let radius = ad_scalar(variables, self.radius, "line fillet radius")?;
+        let center = ad_point(variables, self.center, "curve fillet center")?;
+        let radius = ad_scalar(variables, self.radius, "curve fillet radius")?;
         if !radius.re.is_finite() || radius.re <= 0.0 {
             return Err(EvaluationError::invalid_geometry(
-                "line fillet radius must be positive and finite",
+                "curve fillet radius must be positive and finite",
             ));
         }
         let first = evaluate_ad_curve(variables, &self.first)?;
@@ -539,11 +544,41 @@ impl SketchAdFormula for GenericLineFilletResidual {
         };
         let first_normal = [-first_tangent[1].clone(), first_tangent[0].clone()];
         let second_normal = [-second_tangent[1].clone(), second_tangent[0].clone()];
+        let first_radial = [
+            &first.position[0] - &center[0],
+            &first.position[1] - &center[1],
+        ];
+        let second_radial = [
+            &second.position[0] - &center[0],
+            &second.position[1] - &center[1],
+        ];
+        let first_radial = ad_unit(&first_radial, "first fillet parent radial")?;
+        let second_radial = ad_unit(&second_radial, "second fillet parent radial")?;
+        let (start_parent_radial, end_parent_radial) = match self.endpoint_order {
+            FilletEndpointOrder::FirstThenSecond => (&first_radial, &second_radial),
+            FilletEndpointOrder::SecondThenFirst => (&second_radial, &first_radial),
+        };
+        let start_angle = ad_scalar(variables, self.start_angle, "fillet start angle")?;
+        let end_angle = ad_scalar(variables, self.end_angle, "fillet end angle")?;
+        let start_sine = start_angle.clone().sin();
+        let start_cosine = start_angle.clone().cos();
+        let end_sine = end_angle.clone().sin();
+        let end_cosine = end_angle.clone().cos();
+        let start_dot =
+            (&start_cosine * &start_parent_radial[0] + &start_sine * &start_parent_radial[1]).re;
+        let end_dot = (&end_cosine * &end_parent_radial[0] + &end_sine * &end_parent_radial[1]).re;
+        if !start_dot.is_finite() || !end_dot.is_finite() || start_dot <= 0.0 || end_dot <= 0.0 {
+            return Err(EvaluationError::ambiguous(
+                "curve fillet output radial direction crossed its ordered endpoint branch",
+            ));
+        }
         Ok(vec![
             &center[0] - &first.position[0] - (radius * &first_normal[0]) * first_sign,
             &center[1] - &first.position[1] - (radius * &first_normal[1]) * first_sign,
             &center[0] - &second.position[0] - (radius * &second_normal[0]) * second_sign,
             &center[1] - &second.position[1] - (radius * &second_normal[1]) * second_sign,
+            &start_cosine * &start_parent_radial[1] - &start_sine * &start_parent_radial[0],
+            &end_cosine * &end_parent_radial[1] - &end_sine * &end_parent_radial[0],
         ])
     }
 }
@@ -778,32 +813,45 @@ fn evaluate_ad_curve(
             center,
             radius,
             start_angle,
-            signed_sweep,
+            end_angle,
+            turn_offset,
+            sweep,
             parameter,
         } => {
             let center = ad_point(variables, *center, "generic arc")?;
             let radius = ad_scalar(variables, *radius, "generic arc")?;
+            let start_angle = curve_parameter(variables, *start_angle, false, "generic arc start")?;
+            let end_angle = curve_parameter(variables, *end_angle, false, "generic arc end")?;
+            let signed_sweep =
+                &end_angle - &start_angle + f64::from(*turn_offset) * std::f64::consts::TAU;
+            let sweep_valid = match sweep {
+                crate::ArcSweep::CounterClockwise => signed_sweep.re > 0.0,
+                crate::ArcSweep::Clockwise => signed_sweep.re < 0.0,
+            };
             if !radius.re.is_finite()
                 || radius.re <= 0.0
-                || !start_angle.is_finite()
-                || !signed_sweep.is_finite()
-                || *signed_sweep == 0.0
+                || !signed_sweep.re.is_finite()
+                || signed_sweep.re == 0.0
+                || signed_sweep.re.abs() >= std::f64::consts::TAU
+                || !sweep_valid
             {
                 return Err(EvaluationError::invalid_geometry(
                     "generic arc definition must be finite and regular",
                 ));
             }
             let parameter = curve_parameter(variables, *parameter, true, "generic arc")?;
-            let angle = parameter * *signed_sweep + *start_angle;
+            let angle = &start_angle + &parameter * &signed_sweep;
             let sine = angle.clone().sin();
             let cosine = angle.cos();
-            let first_scale = radius.clone() * *signed_sweep;
-            let second_scale = radius.clone() * (*signed_sweep * *signed_sweep);
-            Ok(AdCurveJet2 {
+            let first_scale = radius.clone() * &signed_sweep;
+            let second_scale = radius.clone() * &signed_sweep * &signed_sweep;
+            let jet = AdCurveJet2 {
                 position: [&center[0] + radius * &cosine, &center[1] + radius * &sine],
                 first: [-&first_scale * &sine, &first_scale * &cosine],
                 second: [-&second_scale * cosine, -&second_scale * sine],
-            })
+            };
+            require_finite_ad_jet(&jet.position, &jet.first, &jet.second, "generic arc")?;
+            Ok(jet)
         }
         GenericCurveIncidence::QuadraticBezier {
             controls,
@@ -1325,6 +1373,45 @@ fn curve_parameter(
     Ok(value)
 }
 
+fn ad_curve_unit_tangent(
+    variables: &[SketchAdValue],
+    curve: &GenericCurveIncidence,
+    jet: &AdCurveJet2,
+    context: &str,
+) -> Result<[DualDVec64; 2], EvaluationError> {
+    require_ad_speed(&jet.first, context)?;
+    match curve {
+        GenericCurveIncidence::Circle { parameter, .. } => {
+            let angle = curve_parameter(variables, *parameter, false, context)?;
+            let sine = angle.clone().sin();
+            let cosine = angle.cos();
+            Ok([-sine, cosine])
+        }
+        GenericCurveIncidence::Arc {
+            start_angle,
+            end_angle,
+            turn_offset,
+            sweep,
+            parameter,
+            ..
+        } => {
+            let start = curve_parameter(variables, *start_angle, false, context)?;
+            let end = curve_parameter(variables, *end_angle, false, context)?;
+            let parameter = curve_parameter(variables, *parameter, true, context)?;
+            let signed_sweep = &end - &start + f64::from(*turn_offset) * std::f64::consts::TAU;
+            let angle = start + parameter * signed_sweep;
+            let sine = angle.clone().sin();
+            let cosine = angle.cos();
+            let sign = match sweep {
+                crate::ArcSweep::CounterClockwise => 1.0,
+                crate::ArcSweep::Clockwise => -1.0,
+            };
+            Ok([-sine * sign, cosine * sign])
+        }
+        _ => ad_unit(&jet.first, context),
+    }
+}
+
 fn require_ad_speed(derivative: &[DualDVec64; 2], context: &str) -> Result<(), EvaluationError> {
     let speed = derivative[0].re.hypot(derivative[1].re);
     if speed.is_finite() && speed > 0.0 {
@@ -1618,71 +1705,6 @@ impl PointOnCircleResidual {
         let radius = scalar_at(variables, self.radius, "point-on-circle")?;
         let angle = scalar_at(variables, self.angle, "point-on-circle")?;
         Ok((point, CurveRef::Circle { center, radius }.evaluate(angle)))
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct PointOnArcResidual {
-    pub(crate) point: usize,
-    pub(crate) center: usize,
-    pub(crate) radius: usize,
-    pub(crate) parameter: usize,
-    pub(crate) start_angle: f64,
-    pub(crate) signed_sweep: f64,
-}
-
-impl ResidualEvaluator for PointOnArcResidual {
-    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
-        let (point, evaluation, _) = self.values(variables)?;
-        Ok(vec![
-            point[0] - evaluation.position[0],
-            point[1] - evaluation.position[1],
-        ])
-    }
-
-    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
-        let (_, evaluation, parameter) = self.values(variables)?;
-        require_regular(evaluation.degeneracy, "point-on-arc")?;
-        let angle = self.start_angle + self.signed_sweep * parameter;
-        let (cosine, sine) = (angle.cos(), angle.sin());
-        let mut blocks = zero_blocks(variables, 2)?;
-        add_point_matrix(&mut blocks, self.point, [[1.0, 0.0], [0.0, 1.0]])?;
-        add_point_matrix(&mut blocks, self.center, [[-1.0, 0.0], [0.0, -1.0]])?;
-        add_scalar_column(&mut blocks, self.radius, &[-cosine, -sine])?;
-        add_scalar_column(
-            &mut blocks,
-            self.parameter,
-            &[
-                -evaluation.first_derivative[0],
-                -evaluation.first_derivative[1],
-            ],
-        )?;
-        Ok(finish_blocks(blocks, 2))
-    }
-}
-
-impl PointOnArcResidual {
-    fn values(
-        self,
-        variables: &[VariableValue],
-    ) -> Result<([f64; 2], crate::curves::CurveEvaluation, f64), EvaluationError> {
-        let point = point_at(variables, self.point, "point-on-arc")?;
-        let center = point_at(variables, self.center, "point-on-arc")?;
-        let radius = scalar_at(variables, self.radius, "point-on-arc")?;
-        let parameter = scalar_at(variables, self.parameter, "point-on-arc")?;
-        if !bounded_parameter_is_evaluable(parameter) {
-            return Err(EvaluationError::out_of_domain(
-                "point-on-arc parameter escaped bounded span [0, 1]",
-            ));
-        }
-        let evaluation = CurveRef::Arc {
-            center,
-            radius,
-            start_angle: self.start_angle,
-            signed_sweep: self.signed_sweep,
-        }
-        .evaluate(parameter);
-        Ok((point, evaluation, parameter))
     }
 }
 
@@ -2107,132 +2129,42 @@ pub(crate) struct CircleTangencyResidual {
     pub(crate) mode: CircleTangencyMode,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct CircleArcTangencyResidual {
-    pub(crate) circle_center: usize,
-    pub(crate) circle_radius: usize,
-    pub(crate) arc_center: usize,
-    pub(crate) arc_radius: usize,
-    pub(crate) circle_angle: usize,
-    pub(crate) arc_parameter: usize,
-    pub(crate) arc_start_angle: f64,
-    pub(crate) arc_signed_sweep: f64,
+    pub(crate) circle: GenericCurveIncidence,
+    pub(crate) arc: GenericCurveIncidence,
 }
 
 impl ResidualEvaluator for CircleArcTangencyResidual {
     fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
-        let values = self.values(variables)?;
-        require_regular(values.circle.degeneracy, "circle-arc tangency circle")?;
-        require_regular(values.arc.degeneracy, "circle-arc tangency arc")?;
-        let circle_tangent = canonical_unit(values.circle.first_derivative).ok_or_else(|| {
-            EvaluationError::degenerate("circle-arc tangency circle has a zero derivative")
-        })?;
-        let arc_tangent = canonical_unit(values.arc.first_derivative).ok_or_else(|| {
-            EvaluationError::degenerate("circle-arc tangency arc has a zero derivative")
-        })?;
-        Ok(vec![
-            values.circle.position[0] - values.arc.position[0],
-            values.circle.position[1] - values.arc.position[1],
-            cross(circle_tangent, arc_tangent),
-        ])
+        evaluate_sketch_ad(self, variables, false).map(|(values, _)| values)
     }
 
     fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
-        let values = self.values(variables)?;
-        require_regular(values.circle.degeneracy, "circle-arc tangency circle")?;
-        require_regular(values.arc.degeneracy, "circle-arc tangency arc")?;
-        unit(values.circle.first_derivative).ok_or_else(|| {
-            EvaluationError::degenerate("circle-arc tangency circle has a zero derivative")
-        })?;
-        unit(values.arc.first_derivative).ok_or_else(|| {
-            EvaluationError::degenerate("circle-arc tangency arc has a zero derivative")
-        })?;
-        let circle_angle = values.circle_angle;
-        let arc_angle = self.arc_start_angle + self.arc_signed_sweep * values.arc_parameter;
-        let angle_difference = arc_angle - circle_angle;
-        let circle_angle_derivative = -self.arc_signed_sweep.signum() * angle_difference.cos();
-        let arc_parameter_derivative = self.arc_signed_sweep.abs() * angle_difference.cos();
-        let (circle_cosine, circle_sine) = (circle_angle.cos(), circle_angle.sin());
-        let (arc_cosine, arc_sine) = (arc_angle.cos(), arc_angle.sin());
-
-        let mut blocks = zero_blocks(variables, 3)?;
-        add_point_rows(
-            &mut blocks,
-            self.circle_center,
-            [[1.0, 0.0], [0.0, 1.0], [0.0, 0.0]],
-        )?;
-        add_scalar_column(
-            &mut blocks,
-            self.circle_radius,
-            &[circle_cosine, circle_sine, 0.0],
-        )?;
-        add_point_rows(
-            &mut blocks,
-            self.arc_center,
-            [[-1.0, 0.0], [0.0, -1.0], [0.0, 0.0]],
-        )?;
-        add_scalar_column(&mut blocks, self.arc_radius, &[-arc_cosine, -arc_sine, 0.0])?;
-        add_scalar_column(
-            &mut blocks,
-            self.circle_angle,
-            &[
-                values.circle.first_derivative[0],
-                values.circle.first_derivative[1],
-                circle_angle_derivative,
-            ],
-        )?;
-        add_scalar_column(
-            &mut blocks,
-            self.arc_parameter,
-            &[
-                -values.arc.first_derivative[0],
-                -values.arc.first_derivative[1],
-                arc_parameter_derivative,
-            ],
-        )?;
-        Ok(finish_blocks(blocks, 3))
+        evaluate_sketch_ad(self, variables, true).map(|(_, jacobians)| jacobians)
     }
 }
 
-struct CircleArcTangencyValues {
-    circle: crate::curves::CurveEvaluation,
-    arc: crate::curves::CurveEvaluation,
-    circle_angle: f64,
-    arc_parameter: f64,
-}
-
-impl CircleArcTangencyResidual {
-    fn values(
-        self,
-        variables: &[VariableValue],
-    ) -> Result<CircleArcTangencyValues, EvaluationError> {
-        let circle_center = point_at(variables, self.circle_center, "circle-arc tangency")?;
-        let circle_radius = scalar_at(variables, self.circle_radius, "circle-arc tangency")?;
-        let arc_center = point_at(variables, self.arc_center, "circle-arc tangency")?;
-        let arc_radius = scalar_at(variables, self.arc_radius, "circle-arc tangency")?;
-        let circle_angle = scalar_at(variables, self.circle_angle, "circle-arc tangency")?;
-        let arc_parameter = scalar_at(variables, self.arc_parameter, "circle-arc tangency")?;
-        if !bounded_parameter_is_evaluable(arc_parameter) {
-            return Err(EvaluationError::out_of_domain(
-                "circle-arc tangency parameter escaped bounded span [0, 1]",
-            ));
-        }
-        Ok(CircleArcTangencyValues {
-            circle: CurveRef::Circle {
-                center: circle_center,
-                radius: circle_radius,
-            }
-            .evaluate(circle_angle),
-            arc: CurveRef::Arc {
-                center: arc_center,
-                radius: arc_radius,
-                start_angle: self.arc_start_angle,
-                signed_sweep: self.arc_signed_sweep,
-            }
-            .evaluate(arc_parameter),
-            circle_angle,
-            arc_parameter,
-        })
+impl SketchAdFormula for CircleArcTangencyResidual {
+    fn evaluate_dual(
+        &self,
+        variables: &[SketchAdValue],
+    ) -> Result<Vec<DualDVec64>, EvaluationError> {
+        let circle = evaluate_ad_curve(variables, &self.circle)?;
+        let arc = evaluate_ad_curve(variables, &self.arc)?;
+        let circle_tangent = ad_curve_unit_tangent(
+            variables,
+            &self.circle,
+            &circle,
+            "circle-arc tangency circle",
+        )?;
+        let arc_tangent =
+            ad_curve_unit_tangent(variables, &self.arc, &arc, "circle-arc tangency arc")?;
+        Ok(vec![
+            &circle.position[0] - &arc.position[0],
+            &circle.position[1] - &arc.position[1],
+            &circle_tangent[0] * &arc_tangent[1] - &circle_tangent[1] * &arc_tangent[0],
+        ])
     }
 }
 
@@ -2452,12 +2384,6 @@ fn norm(value: [f64; 2]) -> f64 {
 fn unit(value: [f64; 2]) -> Option<([f64; 2], f64)> {
     let length = norm(value);
     (length.is_finite() && length > 0.0).then_some(([value[0] / length, value[1] / length], length))
-}
-
-fn canonical_unit(value: [f64; 2]) -> Option<[f64; 2]> {
-    let (normalized, _) = unit(value)?;
-    let angle = normalized[1].atan2(normalized[0]);
-    Some([angle.cos(), angle.sin()])
 }
 
 fn left_normal(unit_direction: [f64; 2]) -> [f64; 2] {

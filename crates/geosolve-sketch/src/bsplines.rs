@@ -135,7 +135,8 @@ fn constraint_references_bspline(kind: SketchConstraintKind, spline: BSplineId) 
         SketchConstraintKind::CurveCurveContact { first, second }
         | SketchConstraintKind::CurveCurveTangency { first, second, .. }
         | SketchConstraintKind::EqualCurvature { first, second, .. }
-        | SketchConstraintKind::EndpointContinuity { first, second, .. } => {
+        | SketchConstraintKind::EndpointContinuity { first, second, .. }
+        | SketchConstraintKind::CurveCurveFillet { first, second, .. } => {
             references(first.curve) || references(second.curve)
         }
         _ => false,

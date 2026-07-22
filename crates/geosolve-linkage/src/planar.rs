@@ -108,6 +108,7 @@ persistent_id!(
 
 /// Persistence, validation, lowering, or session error for the planar architecture.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum PlanarLinkageError {
     #[error("unsupported planar-linkage document version {0}")]
     UnsupportedVersion(u32),

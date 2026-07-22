@@ -7,6 +7,10 @@
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%230d1215' d='M0 0h32v32H0z'/%3E%3Cpath fill='none' stroke='%236fd7e5' stroke-width='3' d='M6 24 16 6l10 18Z'/%3E%3C/svg%3E" />
     <link data-trunk rel="css" href="styles.css" />
     <link data-trunk rel="rust" data-wasm-opt="z" />
+    <link data-trunk rel="copy-file" href="../../LICENSE" />
+    <link data-trunk rel="copy-file" href="../../THIRD_PARTY_LICENSES.md" />
+    <link data-trunk rel="copy-file" href="../../docs/API_COMPATIBILITY.md" />
+    <link data-trunk rel="copy-file" href="../../docs/M32_SCALE_PERFORMANCE.md" />
   </head>
   <body>
     <main class="playground" id="playground-root" data-example-mode="sketch">
@@ -48,6 +52,33 @@
             <option value="shaft-bearing">Driven shaft in bearing</option>
             <option value="block-base">Driven block on base</option>
           </optgroup>
+          <optgroup label="M28 / visible parent trims">
+            <option value="m28-trimmed-fillet">Trimmed line-circle fillet</option>
+          </optgroup>
+          <optgroup label="M30 / interactive constructions">
+            <option value="construction-supporting-offset">Offset / supporting line, 2 DOF</option>
+            <option value="construction-exact-offset">Offset / exact translated pair, 1 DOF</option>
+            <option value="construction-entity-mirror">Mirror / associated entity pair</option>
+            <option value="construction-directed-angle">Angle / directed branch-cut lab</option>
+            <option value="fillet-line-line-reference">Fillet / M27 untrimmed reference radius</option>
+            <option value="fillet-line-circle">Fillet / interactive line-circle</option>
+            <option value="fillet-line-bezier">Fillet / interactive line-Bezier</option>
+            <option value="fillet-nurbs-line">Fillet / interactive NURBS-line</option>
+          </optgroup>
+          <optgroup label="M30 / NURBS UAT">
+            <option value="nurbs-quarter-circle">NURBS / quarter-circle and weight</option>
+            <option value="nurbs-local-support">NURBS / local support and insertion</option>
+            <option value="nurbs-periodic">NURBS / periodic span and winding</option>
+            <option value="nurbs-differential">NURBS / differential C2 continuity</option>
+          </optgroup>
+          <optgroup label="M31 / all-family visual profiles">
+            <option value="profile-all-families">Profiles / all 15 family roles</option>
+            <option value="profile-curved-topology">Profiles / intersections and holes</option>
+            <option value="profile-fillet-trim">Profiles / fillet-owned trim joins</option>
+            <option value="profile-nurbs-self-intersection">Profiles / editable NURBS self-intersection</option>
+            <option value="profile-incomplete">Profiles / retained face beside issue</option>
+            <option value="profile-budget">Profiles / deterministic budget stop</option>
+          </optgroup>
           <optgroup label="Motion and constraint stress">
             <option value="stress-compass">Stress / symmetric drafting compass</option>
             <option value="stress-bridge">Stress / cubic C1 bridge</option>
@@ -68,6 +99,13 @@
         <label for="alpha-scale">Scale</label>
         <select id="alpha-scale"><option value="0.000001">1e-6</option><option value="1" selected>1</option><option value="1000000">1e6</option></select>
         <button type="button" data-action="load-example">Load accepted example</button>
+      </section>
+
+      <section id="uat-panel" class="uat-panel" aria-label="Current example UAT" hidden>
+        <div><span class="page-kicker">Focused UAT</span><strong id="uat-title"></strong></div>
+        <p id="uat-instructions"></p>
+        <dl><div><dt id="uat-metric-label">Expected DOF</dt><dd id="uat-dof"></dd></div><div><dt id="uat-action-label">Primary drag</dt><dd id="uat-primary-drag"></dd></div></dl>
+        <button type="button" data-action="reload-example">Reset / reload example</button>
       </section>
 
       <nav class="tool-rail" aria-label="Sketch tools">
@@ -174,16 +212,54 @@
           </section>
 
           <section class="inspector-section sketch-edit-only">
-            <div class="section-heading"><span>Dimension</span></div>
-            <div class="field-row"><select id="dimension-kind"><option>Distance</option><option>Length</option><option>Radius</option><option>Diameter</option><option>Angle</option></select><select id="dimension-mode"><option>Driving</option><option>Reference</option></select></div>
+            <div class="section-heading"><span>Dimension / directed angle</span></div>
+            <div class="field-row"><select id="dimension-kind"><option>Distance</option><option>Length</option><option>Radius</option><option>Diameter</option><option>Angle</option><option>Supporting offset</option><option>Exact translated offset</option></select><select id="dimension-mode"><option>Driving</option><option>Reference</option></select></div>
             <label class="field-label" for="angle-orientation">Angle orientation</label>
             <select id="angle-orientation"><option>Counterclockwise</option><option>Clockwise</option></select>
+            <div class="field-row">
+              <label class="field-label" for="offset-side">Offset side<select id="offset-side"><option>Left</option><option>Right</option></select></label>
+              <label class="field-label" for="offset-orientation">Endpoint orientation<select id="offset-orientation"><option>Same</option><option>Reversed</option></select></label>
+            </div>
             <label class="field-label" for="dimension-value">Target</label>
             <input id="dimension-value" type="number" value="1" step="any" inputmode="decimal" />
             <label class="field-label" for="dimension-label">New dimension label</label>
             <input id="dimension-label" type="text" value="dimension" />
             <button type="button" class="primary-action" data-action="apply-dimension">Create / update dimension</button>
           </section>
+
+          <section class="inspector-section sketch-edit-only">
+            <div class="section-heading"><span>Construction</span></div>
+            <p class="control-help">Offsets use two selected line spans in source/target order. Mirror uses a selected point-defined source curve followed by a selected line axis.</p>
+            <button type="button" class="primary-action" data-action="create-mirror">Mirror selected source about axis</button>
+          </section>
+
+          <details id="fillet-controls" class="inspector-section inspector-disclosure sketch-edit-only" hidden>
+            <summary>Selected fillet branch and radius</summary>
+            <div class="inspector-disclosure-body">
+              <div class="field-row"><label class="field-label" for="fillet-first-side">First side<select id="fillet-first-side"><option>Left</option><option>Right</option></select></label><label class="field-label" for="fillet-second-side">Second side<select id="fillet-second-side"><option>Left</option><option>Right</option></select></label></div>
+              <div class="field-row"><label class="field-label" for="fillet-first-trim">First trim<select id="fillet-first-trim"><option>End</option><option>Start</option></select></label><label class="field-label" for="fillet-second-trim">Second trim<select id="fillet-second-trim"><option>Start</option><option>End</option></select></label></div>
+              <label class="field-label" for="fillet-order">Arc endpoint order</label><select id="fillet-order"><option>First then second</option><option>Second then first</option></select>
+              <label class="field-label" for="fillet-sweep">Output sweep</label><select id="fillet-sweep"><option>Counterclockwise</option><option>Clockwise</option></select>
+              <div class="field-row"><label class="field-label" for="fillet-radius">Radius<input id="fillet-radius" type="number" value="1" min="5e-324" step="any" inputmode="decimal" /></label><label class="field-label" for="fillet-radius-mode">Mode<select id="fillet-radius-mode"><option>Driving</option><option>Reference</option></select></label></div>
+              <button type="button" class="primary-action" data-action="apply-fillet">Apply fillet branch / radius</button>
+            </div>
+          </details>
+
+          <details id="nurbs-controls" class="inspector-section inspector-disclosure sketch-edit-only" hidden open>
+            <summary>NURBS object inspector</summary>
+            <div class="inspector-disclosure-body">
+              <p id="nurbs-state" class="control-help"></p>
+              <label class="field-label" for="nurbs-control">Ordered control point</label><select id="nurbs-control"></select>
+              <div class="field-row"><label class="field-label" for="nurbs-control-x">Target X<input id="nurbs-control-x" type="number" value="0" step="any" inputmode="decimal" /></label><label class="field-label" for="nurbs-control-y">Target Y<input id="nurbs-control-y" type="number" value="0" step="any" inputmode="decimal" /></label></div>
+              <button type="button" class="primary-action" data-action="set-nurbs-control">Move / project control exactly</button>
+              <label class="field-label" for="nurbs-weight">Owned weight</label><select id="nurbs-weight"></select>
+              <label class="field-label" for="nurbs-weight-value">Positive non-gauge value</label><input id="nurbs-weight-value" type="number" value="1" min="5e-324" step="any" inputmode="decimal" />
+              <div class="field-row"><button type="button" data-action="set-nurbs-weight">Set weight</button><button type="button" data-action="set-nurbs-gauge">Use as gauge</button></div>
+              <label class="field-label" for="nurbs-knot">Native knot parameter</label><input id="nurbs-knot" type="number" value="0.5" step="any" inputmode="decimal" />
+              <button type="button" data-action="insert-nurbs-knot">Insert knot transactionally</button>
+              <div class="field-row"><button type="button" data-action="previous-nurbs-span">Previous span</button><button type="button" data-action="next-nurbs-span">Next span</button></div>
+            </div>
+          </details>
 
           <details class="inspector-section inspector-disclosure sketch-edit-only">
             <summary>Explicit branch state</summary>
@@ -228,6 +304,10 @@
             <div id="playground-solve-status" class="solve-status"></div>
             <div id="last-attempt" class="attempt-notice"></div>
           </section>
+          <section id="profile-analysis-section" class="inspector-section profile-analysis-section">
+            <div class="section-heading"><span>Profile analysis</span><span>native topology / web render</span></div>
+            <div id="profile-analysis"></div>
+          </section>
           <section class="inspector-section audit-section">
             <div class="section-heading"><span>Residual audit</span></div>
             <div id="playground-audit"></div>
@@ -236,11 +316,35 @@
             <summary>JSON and autosave</summary>
             <textarea id="document-json" spellcheck="false" aria-label="Sketch document JSON"></textarea>
             <div class="field-row"><button type="button" data-action="export-json">Export to text</button><button type="button" data-action="import-json">Import text</button></div>
+            <button type="button" class="primary-action" data-action="copy-scene-capsule">Copy compressed scene capsule</button>
+            <p class="control-help">Capsules include canonical JSON, active profile budgets, status metadata and a checksum. Paste one here and use Import text to reproduce it.</p>
             <div class="field-row"><button type="button" data-action="download-json">Download JSON</button><label class="file-action" for="document-file">Upload JSON<input id="document-file" type="file" accept="application/json,.json" /></label></div>
             <p id="storage-status">Accepted revisions autosave locally.</p>
           </details>
+          <details id="release-contract" class="inspector-section release-contract" open>
+            <summary>0.2 release contract and UAT</summary>
+            <dl>
+              <div><dt>Library</dt><dd>0.2.0 supported preview</dd></div>
+              <div><dt>Sketch persistence</dt><dd>reads v1-v4, writes canonical v4</dd></div>
+              <div><dt>Linkage persistence</dt><dd>planar v1 and spatial v1</dd></div>
+              <div><dt>Tested scale points</dt><dd>1e-6, 1, 1e6</dd></div>
+              <div><dt>Acceptance</dt><dd>independent normalized residual at most 1e-9</dd></div>
+            </dl>
+            <p><strong>Construction and NURBS:</strong> choose an M30 lab, follow the focused UAT card, perform its named primary drag, then reset before changing branch, dimension, weight, gauge or knot state.</p>
+            <p><strong>Visual profiles:</strong> choose an M31 lab and compare the expected status/family/face card with the published roots, issues and consumed budgets. Rendering samples are never topology evidence.</p>
+            <p><strong>Failure handoff:</strong> copy a compressed scene capsule, paste it into the JSON field and import it. Corrupt, oversized or over-budget capsules must retain the accepted scene.</p>
+            <div class="release-links">
+              <a href="API_COMPATIBILITY.md">API and schema policy</a>
+              <a href="M32_SCALE_PERFORMANCE.md">Scale and performance envelope</a>
+            </div>
+          </details>
         </aside>
       </section>
+      <footer class="legal-footer">
+        GeoSolve 0.2.0 diagnostic build. GPL-3.0-or-later, without warranty.
+        <a href="LICENSE">Licence and corresponding source terms</a>
+        <a href="THIRD_PARTY_LICENSES.md">Third-party notices</a>
+      </footer>
     </main>
 
     <section hidden aria-hidden="true">

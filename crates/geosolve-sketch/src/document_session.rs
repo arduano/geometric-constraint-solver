@@ -5,11 +5,12 @@ use geosolve_geometry::Point2;
 use thiserror::Error;
 
 use crate::document::{
-    ContactDefinition, ContactId, ContactStateEdit, CurveDefinition, CurveId, CurveSpan,
-    DesignPointId, DesignScalarId, DocumentArcSweep, DocumentBSplineInsertion,
-    DocumentBSplineSpanDirection, DocumentCircleTangencyMode, DocumentConstraintDefinition,
-    DocumentConstraintId, DocumentCurveNormalSide, DocumentDimensionDefinition,
-    DocumentDimensionId, DocumentDimensionMode, DocumentError, DocumentFilletEndpointOrder,
+    ContactDefinition, ContactId, ContactStateEdit, CurveCurveFilletIds, CurveCurveFilletRequest,
+    CurveDefinition, CurveId, CurveSpan, DesignPointId, DesignScalarId, DocumentAngleOrientation,
+    DocumentArcSweep, DocumentBSplineInsertion, DocumentBSplineSpanDirection,
+    DocumentCircleTangencyMode, DocumentConstraintDefinition, DocumentConstraintId,
+    DocumentCurveNormalSide, DocumentDimensionDefinition, DocumentDimensionId,
+    DocumentDimensionMode, DocumentError, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint,
     DocumentHyperbolaBranch, DocumentMirroredBSplineInsertion, DocumentNurbsInsertion,
     DocumentObjectId, DocumentSourceId, LineLineFilletIds, LineLineFilletRequest, MirroredCurveIds,
     PersistentId, RectangleIds, ScalarDomain, ScalarUnit, SketchDocument,
@@ -220,6 +221,10 @@ pub enum DocumentEdit {
         label: String,
         request: LineLineFilletRequest,
     },
+    CreateCurveCurveFillet {
+        label: String,
+        request: CurveCurveFilletRequest,
+    },
     SetPointPosition {
         point: DesignPointId,
         position: [f64; 2],
@@ -240,6 +245,15 @@ pub enum DocumentEdit {
         constraint: DocumentConstraintId,
         first_side: DocumentCurveNormalSide,
         second_side: DocumentCurveNormalSide,
+        endpoint_order: DocumentFilletEndpointOrder,
+        sweep: DocumentArcSweep,
+    },
+    SetCurveCurveFilletBranch {
+        constraint: DocumentConstraintId,
+        first_side: DocumentCurveNormalSide,
+        first_trim_endpoint: DocumentFilletTrimEndpoint,
+        second_side: DocumentCurveNormalSide,
+        second_trim_endpoint: DocumentFilletTrimEndpoint,
         endpoint_order: DocumentFilletEndpointOrder,
         sweep: DocumentArcSweep,
     },
@@ -290,6 +304,10 @@ pub enum DocumentEdit {
         dimension: DocumentDimensionId,
         mode: DocumentDimensionMode,
     },
+    SetOrientedAngleOrientation {
+        dimension: DocumentDimensionId,
+        orientation: DocumentAngleOrientation,
+    },
     SetSourceSuppressed {
         source: DocumentSourceId,
         suppressed: bool,
@@ -329,6 +347,7 @@ pub enum DocumentCommandEffect {
     CreatedRectangle(Box<RectangleIds>),
     CreatedMirroredCurve(Box<MirroredCurveIds>),
     CreatedLineLineFillet(Box<LineLineFilletIds>),
+    CreatedCurveCurveFillet(Box<CurveCurveFilletIds>),
     UpdatedPoint(DesignPointId),
     UpdatedScalar(DesignScalarId),
     UpdatedCurve(CurveId),
@@ -997,6 +1016,11 @@ fn apply_edit(
                 document.add_line_line_fillet(&label, request)?,
             ))
         }
+        DocumentEdit::CreateCurveCurveFillet { label, request } => {
+            DocumentCommandEffect::CreatedCurveCurveFillet(Box::new(
+                document.add_curve_curve_fillet(&label, request)?,
+            ))
+        }
         DocumentEdit::SetPointPosition { point, position } => {
             document.set_point_position(point, position)?;
             DocumentCommandEffect::UpdatedPoint(point)
@@ -1024,6 +1048,26 @@ fn apply_edit(
                 constraint,
                 first_side,
                 second_side,
+                endpoint_order,
+                sweep,
+            )?;
+            DocumentCommandEffect::UpdatedConstraint(constraint)
+        }
+        DocumentEdit::SetCurveCurveFilletBranch {
+            constraint,
+            first_side,
+            first_trim_endpoint,
+            second_side,
+            second_trim_endpoint,
+            endpoint_order,
+            sweep,
+        } => {
+            document.set_curve_curve_fillet_branch(
+                constraint,
+                first_side,
+                first_trim_endpoint,
+                second_side,
+                second_trim_endpoint,
                 endpoint_order,
                 sweep,
             )?;
@@ -1093,6 +1137,13 @@ fn apply_edit(
         }
         DocumentEdit::SetDimensionMode { dimension, mode } => {
             document.set_dimension_mode(dimension, mode)?;
+            DocumentCommandEffect::UpdatedDimension(dimension)
+        }
+        DocumentEdit::SetOrientedAngleOrientation {
+            dimension,
+            orientation,
+        } => {
+            document.set_oriented_angle_orientation(dimension, orientation)?;
             DocumentCommandEffect::UpdatedDimension(dimension)
         }
         DocumentEdit::SetSourceSuppressed { source, suppressed } => {

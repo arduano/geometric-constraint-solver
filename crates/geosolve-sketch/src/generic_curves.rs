@@ -169,14 +169,17 @@ impl Sketch {
         )
     }
 
-    /// Associates one circular arc with two strict-interior bounded line contacts.
+    /// Associates one circular arc with two distinct regular curve contacts.
     ///
-    /// Parent spans remain untrimmed; accepted arc endpoint angles are derived from the contacts.
+    /// Parent curves remain untrimmed; accepted arc endpoint angles are derived from the contacts.
+    /// Independent solve validation rejects tangent intersections and offset-regularity factors
+    /// that are unresolved within the dimensionless `1e-8` fillet regularity margin.
     ///
     /// # Errors
     ///
-    /// Rejects stale/non-line geometry, duplicate parents, non-interior contacts, or an invalid arc.
-    pub fn add_line_line_fillet(
+    /// Rejects stale or irregular geometry, duplicate parents, endpoint contacts, an output arc
+    /// used by another executable source, or an invalid output arc.
+    pub fn add_curve_curve_fillet(
         &mut self,
         arc: ArcId,
         first: SketchCurveContact,
@@ -192,11 +195,70 @@ impl Sketch {
             .any(|(_, constraint)| constraint_uses_arc(constraint.kind(), arc))
         {
             return Err(SketchError::InvalidCurveContact(
-                "line fillet output arc is already used by an executable constraint",
+                "curve fillet output arc is already used by an executable constraint",
             ));
         }
         self.validate_curve_contact(first)?;
         self.validate_curve_contact(second)?;
+        if first.curve == second.curve {
+            return Err(SketchError::InvalidCurveContact(
+                "curve fillet parent curves must be distinct",
+            ));
+        }
+        if [first, second].into_iter().any(|contact| {
+            matches!(
+                contact.neighborhood,
+                CurveContactNeighborhood::Start | CurveContactNeighborhood::End
+            )
+        }) {
+            return Err(SketchError::InvalidCurveContact(
+                "curve fillet contacts require strict-interior or finite local neighborhoods",
+            ));
+        }
+        if [first, second]
+            .into_iter()
+            .any(|contact| matches!(contact.curve, SketchCurve::Arc(parent) if parent == arc))
+        {
+            return Err(SketchError::InvalidCurveContact(
+                "curve fillet output arc cannot also be a parent curve",
+            ));
+        }
+        for contact in [first, second] {
+            self.evaluate_curve_contact(contact)?
+                .differential()
+                .map_err(|_| {
+                    SketchError::InvalidCurveContact("fillet parent jet is not regular")
+                })?;
+        }
+        Ok(
+            self.insert_constraint(SketchConstraintKind::CurveCurveFillet {
+                arc,
+                first,
+                first_side,
+                second,
+                second_side,
+                endpoint_order,
+            }),
+        )
+    }
+
+    /// Associates one circular arc with two strict-interior bounded line contacts.
+    ///
+    /// This is the line-only convenience API retained from M27. It delegates to the common
+    /// curve-curve fillet equations after enforcing the original bounded-line contract.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale/non-line geometry, duplicate parents, non-interior contacts, or an invalid arc.
+    pub fn add_line_line_fillet(
+        &mut self,
+        arc: ArcId,
+        first: SketchCurveContact,
+        first_side: CurveNormalSide,
+        second: SketchCurveContact,
+        second_side: CurveNormalSide,
+        endpoint_order: FilletEndpointOrder,
+    ) -> Result<SketchConstraintId, SketchError> {
         let (
             SketchCurve::Line {
                 segment: first_segment,
@@ -220,16 +282,7 @@ impl Sketch {
                 "line fillet requires distinct strict-interior parent spans",
             ));
         }
-        Ok(
-            self.insert_constraint(SketchConstraintKind::LineLineFillet {
-                arc,
-                first,
-                first_side,
-                second,
-                second_side,
-                endpoint_order,
-            }),
-        )
+        self.add_curve_curve_fillet(arc, first, first_side, second, second_side, endpoint_order)
     }
 
     /// Measures signed/unsigned curvature or finite osculating radius at a curve contact.
@@ -243,7 +296,7 @@ impl Sketch {
         contact: SketchCurveContact,
         kind: CurveMeasurementKind,
     ) -> Result<f64, SketchError> {
-        self.validate_curve_contact_inner(contact, false)?;
+        self.validate_curve_contact_inner(contact)?;
         let differential = self
             .evaluate_curve_contact(contact)?
             .differential()
@@ -261,14 +314,10 @@ impl Sketch {
         &self,
         contact: SketchCurveContact,
     ) -> Result<(), SketchError> {
-        self.validate_curve_contact_inner(contact, true)
+        self.validate_curve_contact_inner(contact)
     }
 
-    fn validate_curve_contact_inner(
-        &self,
-        contact: SketchCurveContact,
-        executable: bool,
-    ) -> Result<(), SketchError> {
+    fn validate_curve_contact_inner(&self, contact: SketchCurveContact) -> Result<(), SketchError> {
         match contact.curve {
             SketchCurve::Line { segment, domain } => {
                 self.validate_segment_geometry(segment)?;
@@ -282,19 +331,10 @@ impl Sketch {
             SketchCurve::Circle(circle) => {
                 self.circle_value(circle)?;
                 crate::model::validate_finite(contact.parameter, "circle contact angle")?;
-                validate_unbounded_neighborhood(contact.neighborhood)
+                validate_unbounded_neighborhood(contact.parameter, contact.neighborhood)
             }
             SketchCurve::Arc(arc) => {
                 self.arc_value(arc)?;
-                if executable
-                    && self.constraints.iter().any(|(_, constraint)| {
-                        matches!(constraint.kind(), SketchConstraintKind::LineLineFillet { arc: output, .. } if output == arc)
-                    })
-                {
-                    return Err(SketchError::InvalidCurveContact(
-                        "associated line fillet arcs cannot own executable contacts before M28",
-                    ));
-                }
                 validate_bounded_parameter(contact.parameter, "bounded-arc span [0, 1]")?;
                 validate_neighborhood(true, contact.parameter, contact.neighborhood)
             }
@@ -392,8 +432,13 @@ fn constraint_uses_arc(kind: SketchConstraintKind, arc: ArcId) -> bool {
     let contact_uses_arc = |contact: SketchCurveContact| matches!(contact.curve, SketchCurve::Arc(candidate) if candidate == arc);
     match kind {
         SketchConstraintKind::PointOnArc { arc: candidate, .. }
-        | SketchConstraintKind::CircleArcTangency { arc: candidate, .. }
-        | SketchConstraintKind::LineLineFillet { arc: candidate, .. } => candidate == arc,
+        | SketchConstraintKind::CircleArcTangency { arc: candidate, .. } => candidate == arc,
+        SketchConstraintKind::CurveCurveFillet {
+            arc: candidate,
+            first,
+            second,
+            ..
+        } => candidate == arc || contact_uses_arc(first) || contact_uses_arc(second),
         SketchConstraintKind::PointOnCurve { contact, .. }
         | SketchConstraintKind::LineCurveTangency { contact, .. }
         | SketchConstraintKind::CurveDirection { contact, .. } => contact_uses_arc(contact),
@@ -408,14 +453,24 @@ fn constraint_uses_arc(kind: SketchConstraintKind, arc: ArcId) -> bool {
 }
 
 fn validate_unbounded_neighborhood(
+    parameter: f64,
     neighborhood: CurveContactNeighborhood,
 ) -> Result<(), SketchError> {
-    if neighborhood == CurveContactNeighborhood::Interior {
+    if neighborhood == CurveContactNeighborhood::Interior
+        || matches!(
+            neighborhood,
+            CurveContactNeighborhood::Local { lower, upper }
+                if lower.is_finite()
+                    && upper.is_finite()
+                    && lower < parameter
+                    && parameter < upper
+        )
+    {
         Ok(())
     } else {
         Err(SketchError::ParameterOutOfDomain {
-            parameter: f64::NAN,
-            domain: "an unbounded or periodic curve has only an interior neighborhood",
+            parameter,
+            domain: "the selected unbounded or periodic contact neighborhood",
         })
     }
 }
@@ -426,7 +481,7 @@ fn validate_neighborhood(
     neighborhood: CurveContactNeighborhood,
 ) -> Result<(), SketchError> {
     if !bounded {
-        return validate_unbounded_neighborhood(neighborhood);
+        return validate_unbounded_neighborhood(parameter, neighborhood);
     }
     let valid = match neighborhood {
         CurveContactNeighborhood::Start => parameter.to_bits() == 0.0f64.to_bits(),

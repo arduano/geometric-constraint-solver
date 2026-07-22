@@ -275,7 +275,7 @@ pub enum ContactState {
         first_parameter: f64,
         second_parameter: f64,
     },
-    LineLineFillet {
+    CurveCurveFillet {
         first_parameter: f64,
         second_parameter: f64,
     },
@@ -407,7 +407,6 @@ pub(crate) enum CurveParameterDomain {
     SupportingLine,
     BoundedSegment,
     PeriodicCircle,
-    BoundedArc,
     #[cfg(test)]
     BoundedProofCurve,
 }
@@ -440,12 +439,6 @@ pub(crate) enum CurveRef {
     Circle {
         center: [f64; 2],
         radius: f64,
-    },
-    Arc {
-        center: [f64; 2],
-        radius: f64,
-        start_angle: f64,
-        signed_sweep: f64,
     },
     #[cfg(test)]
     QuadraticBezier {
@@ -487,18 +480,6 @@ impl CurveRef {
                 parameter,
                 1.0,
                 CurveParameterDomain::PeriodicCircle,
-            ),
-            Self::Arc {
-                center,
-                radius,
-                start_angle,
-                signed_sweep,
-            } => radial_evaluation(
-                center,
-                radius,
-                start_angle + signed_sweep * parameter,
-                signed_sweep,
-                CurveParameterDomain::BoundedArc,
             ),
             #[cfg(test)]
             Self::QuadraticBezier { control } => quadratic_bezier_evaluation(control, parameter),
@@ -863,13 +844,6 @@ impl Sketch {
     ) -> Result<SketchConstraintId, SketchError> {
         self.point_position(point)?;
         self.arc_value(arc)?;
-        if self.constraints.iter().any(|(_, constraint)| {
-            matches!(constraint.kind(), SketchConstraintKind::LineLineFillet { arc: output, .. } if output == arc)
-        }) {
-            return Err(SketchError::InvalidCurveContact(
-                "associated line fillet arcs cannot own executable contacts before M28",
-            ));
-        }
         validate_bounded_parameter(span_parameter, "bounded-arc span [0, 1]")?;
         Ok(self.insert_constraint(SketchConstraintKind::PointOnArc {
             point,
@@ -1049,13 +1023,6 @@ impl Sketch {
     ) -> Result<SketchConstraintId, SketchError> {
         let circle_value = self.circle_value(circle)?;
         let arc_value = self.arc_value(arc)?;
-        if self.constraints.iter().any(|(_, constraint)| {
-            matches!(constraint.kind(), SketchConstraintKind::LineLineFillet { arc: output, .. } if output == arc)
-        }) {
-            return Err(SketchError::InvalidCurveContact(
-                "associated line fillet arcs cannot own executable contacts before M28",
-            ));
-        }
         validate_radius(circle_value.radius())?;
         validate_radius(arc_value.radius())?;
         validate_bounded_parameter(arc_span_parameter, "bounded-arc span [0, 1]")?;
@@ -1156,8 +1123,8 @@ impl Sketch {
                     second_parameter: second.parameter,
                 })
             }
-            SketchConstraintKind::LineLineFillet { first, second, .. } => {
-                Ok(ContactState::LineLineFillet {
+            SketchConstraintKind::CurveCurveFillet { first, second, .. } => {
+                Ok(ContactState::CurveCurveFillet {
                     first_parameter: first.parameter,
                     second_parameter: second.parameter,
                 })
@@ -1216,12 +1183,12 @@ impl Sketch {
                 },
             )
             | (
-                SketchConstraintKind::LineLineFillet {
+                SketchConstraintKind::CurveCurveFillet {
                     mut first,
                     mut second,
                     ..
                 },
-                ContactState::LineLineFillet {
+                ContactState::CurveCurveFillet {
                     first_parameter,
                     second_parameter,
                 },
@@ -1340,8 +1307,8 @@ impl Sketch {
                 },
             )
             | (
-                SketchConstraintKind::LineLineFillet { first, second, .. },
-                ContactState::LineLineFillet {
+                SketchConstraintKind::CurveCurveFillet { first, second, .. },
+                ContactState::CurveCurveFillet {
                     first_parameter,
                     second_parameter,
                 },
@@ -1691,7 +1658,7 @@ impl Sketch {
                 constraint.kind(),
                 SketchConstraintKind::PointOnArc { arc: id, .. }
                     | SketchConstraintKind::CircleArcTangency { arc: id, .. }
-                    | SketchConstraintKind::LineLineFillet { arc: id, .. }
+                    | SketchConstraintKind::CurveCurveFillet { arc: id, .. }
                     if id == arc
             ) || generic_constraint_curves(constraint.kind())
                 .iter()
@@ -1720,7 +1687,7 @@ fn generic_constraint_curves(kind: SketchConstraintKind) -> Vec<crate::SketchCur
         | SketchConstraintKind::CurveCurveTangency { first, second, .. }
         | SketchConstraintKind::EqualCurvature { first, second, .. }
         | SketchConstraintKind::EndpointContinuity { first, second, .. }
-        | SketchConstraintKind::LineLineFillet { first, second, .. } => {
+        | SketchConstraintKind::CurveCurveFillet { first, second, .. } => {
             vec![first.curve, second.curve]
         }
         _ => Vec::new(),

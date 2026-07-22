@@ -37,6 +37,7 @@ new_key_type! {
 
 /// Errors produced while editing, compiling, or solving a sketch.
 #[derive(Clone, Debug, Error, PartialEq)]
+#[non_exhaustive]
 pub enum SketchError {
     #[error("model scale must be positive and finite, got {0}")]
     InvalidModelScale(f64),
@@ -389,7 +390,7 @@ pub enum SketchCurve {
     },
 }
 
-/// Explicit selected neighborhood for a runtime curve contact.
+/// Explicit selected endpoint, interior, or finite local neighborhood for a runtime curve contact.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CurveContactNeighborhood {
     Interior,
@@ -398,7 +399,7 @@ pub enum CurveContactNeighborhood {
     End,
 }
 
-/// One parameterized runtime curve location with explicit bounded neighborhood state.
+/// One parameterized runtime curve location with explicit neighborhood state.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SketchCurveContact {
     pub curve: SketchCurve,
@@ -536,7 +537,7 @@ pub enum SketchConstraintKind {
         second: SketchCurveContact,
         kind: CurveContinuity,
     },
-    LineLineFillet {
+    CurveCurveFillet {
         arc: ArcId,
         first: SketchCurveContact,
         first_side: CurveNormalSide,
@@ -932,7 +933,7 @@ impl Sketch {
         let has_sided_fillet = self.constraints.iter().any(|(_, constraint)| {
             matches!(
                 constraint.kind,
-                SketchConstraintKind::LineLineFillet { first, second, .. }
+                SketchConstraintKind::CurveCurveFillet { first, second, .. }
                     if first.curve.references_segment(segment)
                         || second.curve.references_segment(segment)
             )
@@ -1497,7 +1498,7 @@ fn constraint_references_point(
             first.curve.references_point(sketch, point)
                 || second.curve.references_point(sketch, point)
         }
-        SketchConstraintKind::LineLineFillet {
+        SketchConstraintKind::CurveCurveFillet {
             arc, first, second, ..
         } => {
             first.curve.references_point(sketch, point)
@@ -1570,7 +1571,7 @@ fn constraint_references_segment(kind: SketchConstraintKind, segment: SegmentId)
         | SketchConstraintKind::CurveCurveTangency { first, second, .. }
         | SketchConstraintKind::EqualCurvature { first, second, .. }
         | SketchConstraintKind::EndpointContinuity { first, second, .. }
-        | SketchConstraintKind::LineLineFillet { first, second, .. } => {
+        | SketchConstraintKind::CurveCurveFillet { first, second, .. } => {
             first.curve.references_segment(segment) || second.curve.references_segment(segment)
         }
         _ => false,

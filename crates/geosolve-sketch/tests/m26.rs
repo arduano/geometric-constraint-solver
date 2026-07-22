@@ -358,7 +358,7 @@ fn analysis_is_similarity_invariant_and_deterministic_after_json_round_trip() {
 }
 
 #[test]
-fn near_parallel_components_skip_instead_of_guessing_and_limits_never_claim_complete() {
+fn certified_near_parallel_disjoint_components_and_limits_are_truthful() {
     let mut ambiguous = SketchDocument::new(1.0).unwrap();
     let a = ambiguous.add_point("a", [0.0, 0.0]).unwrap();
     let b = ambiguous.add_point("b", [1.0, 0.0]).unwrap();
@@ -367,12 +367,9 @@ fn near_parallel_components_skip_instead_of_guessing_and_limits_never_claim_comp
     add_line(&mut ambiguous, "first", a, b);
     add_line(&mut ambiguous, "second", c, d);
     let analysis = ambiguous.analyze_visual_profiles(VisualProfileOptions::default());
-    assert_eq!(analysis.status, VisualProfileStatus::Skipped);
+    assert_eq!(analysis.status, VisualProfileStatus::Complete);
     assert!(analysis.faces.is_empty());
-    assert!(matches!(
-        analysis.issues[0].kind,
-        VisualProfileIssueKind::NumericalAmbiguity { .. }
-    ));
+    assert!(analysis.issues.is_empty());
 
     let mut split = SketchDocument::new(2.0).unwrap();
     let points = [[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]]
@@ -469,14 +466,16 @@ fn uncertainty_band_closed_walk_is_skipped_not_silently_complete() {
     let analysis = document.analyze_visual_profiles(VisualProfileOptions::default());
     assert_eq!(analysis.status, VisualProfileStatus::Skipped);
     assert!(analysis.faces.is_empty());
-    assert!(analysis.issues.iter().any(|issue| matches!(
-        issue.kind,
-        VisualProfileIssueKind::NumericalAmbiguity { .. }
-    )));
+    assert!(
+        analysis
+            .issues
+            .iter()
+            .any(|issue| matches!(issue.kind, VisualProfileIssueKind::AreaUncertainty { .. }))
+    );
 }
 
 #[test]
-fn duplicate_t_split_is_charged_once_and_uncertain_divergence_is_not_overlap() {
+fn duplicate_t_split_is_charged_once_and_certified_divergence_is_not_overlap() {
     let mut duplicate = SketchDocument::new(2.0).unwrap();
     let left = duplicate.add_point("left", [0.0, 0.0]).unwrap();
     let junction = duplicate.add_point("junction", [1.0, 0.0]).unwrap();
@@ -504,11 +503,8 @@ fn duplicate_t_split_is_charged_once_and_uncertain_divergence_is_not_overlap() {
     add_line(&mut divergence, "straight", shared, straight);
     add_line(&mut divergence, "tilted", shared, tilted);
     let analysis = divergence.analyze_visual_profiles(VisualProfileOptions::default());
-    assert_eq!(analysis.status, VisualProfileStatus::Skipped);
-    assert!(analysis.issues.iter().any(|issue| matches!(
-        issue.kind,
-        VisualProfileIssueKind::NumericalAmbiguity { .. }
-    )));
+    assert_eq!(analysis.status, VisualProfileStatus::Complete);
+    assert!(analysis.issues.is_empty());
     assert!(
         !analysis
             .issues

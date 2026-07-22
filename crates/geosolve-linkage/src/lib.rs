@@ -1,4 +1,26 @@
-//! Planar and spatial rigid-body kinematics compiled into the shared constraint solver.
+//! Persistent planar and spatial rigid-body kinematics.
+//!
+//! The crate models bodies with body-local point, axis, plane and frame features;
+//! joints, mates and drivers; explicit assembly modes; gauge-separated mobility;
+//! branch-preserving continuation; and independently validated velocity queries. It
+//! does not model mass, force, collision or dynamics.
+//!
+//! [`PlanarLinkageDocument`] with [`PlanarLinkageSession`] is the persistent planar
+//! workflow. [`SpatialAssemblyDocument`] with [`SpatialAssemblyDocumentSession`] is
+//! the persistent spatial workflow. Both retain accepted finite state on rejected
+//! construction, import, solve or mode changes. Physical grounding and private
+//! numerical gauges remain distinct in all public mobility reports.
+//!
+//! Runnable examples cover both domains:
+//!
+//! ```text
+//! cargo run --locked -p geosolve-linkage --example planar_linkage
+//! cargo run --locked -p geosolve-linkage --example spatial_assembly
+//! ```
+//!
+//! Direct [`Linkage`] and [`SpatialAssembly`] builders remain compatibility APIs for
+//! programmatic construction. Compiler products and runtime maps are advanced
+//! diagnostics during the `0.1` preview and must never be persisted as identity.
 
 mod compiler;
 mod continuation;
@@ -74,11 +96,3 @@ pub use spatial_scenarios::{
     embedded_spatial_slider_crank, spatial_example,
 };
 pub use velocity::{BodyVelocity, VelocityResult};
-
-/// Hardcoded scenarios required by native tests and the browser demonstration.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum LinkageScenario {
-    FourBarOpen,
-    FourBarCrossed,
-    SliderCrank,
-}

@@ -23,6 +23,7 @@ new_key_type! {
 
 /// Errors produced while constructing, compiling, solving, or differentiating a linkage.
 #[derive(Clone, Debug, Error, PartialEq)]
+#[non_exhaustive]
 pub enum LinkageError {
     #[error("model scale must be positive and finite, got {0}")]
     InvalidModelScale(f64),

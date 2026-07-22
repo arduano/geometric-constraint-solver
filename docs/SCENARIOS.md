@@ -1076,6 +1076,196 @@ infinity rejects before allocating persistent objects. Independent validation
 also recomputes endpoint-order and canonical sweep data, so corrupted derived arc
 state cannot become success-like.
 
+## M28 generic-fillet and persistent-trim fixtures
+
+### M28-F1 - Common family matrix and differentiable output arc
+
+Fourteen regular support roles cover line/polyline, circle and arc, ellipse and
+elliptical arc, rational conics, quadratic/cubic Beziers, and clamped/periodic
+B-spline and NURBS spans. All 105 unordered pairs lower through one six-row
+generic fillet residual: four center/normal-offset rows and two radial endpoint
+alignment rows. Local AD includes only active spline controls/weights, excludes
+the NURBS gauge and agrees with central differences under the documented mixed
+relative/absolute policy. Point, curve-contact, tangency, curvature and continuity
+consumers on the associated ordinary arc include both solved endpoint angles.
+
+### M28-T1 - Persistent visible intervals and associative edits
+
+A line-circle fixture owns one visible endpoint on each parent while preserving
+immutable support geometry. The bounded line retains its explicit opposite native
+endpoint; the full circle uses an explicit fixed periodic anchor and winding.
+Editing a parent re-solves both contacts and atomically updates both visible
+intervals and the output arc. Rendering, hit testing, selection and line-profile
+analysis consume public interval queries, so hidden support cannot be selected or
+used as a new contact seed. Contact-derived markers are pointer-transparent.
+
+### M28-B1 - Branches, scales and periodic winding
+
+Every normal-side, parent-order and sweep code runs under rotations/translations
+at scales `1e-6`, `1` and `1e6`. Span, local neighborhood, endpoint ownership,
+periodic winding and fixed-anchor winding remain explicit. A periodic B-spline
+contact with nonzero winding round-trips and projects accepted trim boundaries
+without being collapsed to its principal period.
+
+### M28-L1 - Suppression, explosion and spline lifecycle
+
+Suppression disables the six association rows, freezes both contacts, the ordinary
+arc and visible intervals, and retains output ownership. Deleting the association
+explicitly explodes it: owned contacts disappear, contact-derived boundaries become
+fixed at their last accepted parameters, and the ordinary arc plus visible parent
+views remain. Undo/redo restores IDs and branch state. Refinement of a spline span
+with a trim view rejects unless an atomic semantic-span remap exists; an unowned
+fixed view can be cleared explicitly.
+
+### M28-J1 - Version-4 persistence and frozen migrations
+
+Canonical version-4 JSON persists generic parents, trim endpoint ownership,
+periodic anchors, winding, neighborhoods, sides, endpoint order and sweep and
+round-trips byte-identically. Frozen versions 1 through 3 reject version-4 syntax.
+Version-3 `LineLineFillet` migrates as an explicitly untrimmed legacy association
+because its wire format contains no retained parent-side choice.
+
+### M28-I1 - Invalid roots, singular offsets and rollback
+
+Zero-speed jets, cusps, rational poles, escaped spans, non-finite seeds, ambiguous
+local roots, parallel offset intersections and non-finite or unresolved
+`1 - side*radius*curvature` reject before success or partial state. A second view,
+conflicting owner, missing fixed opposite boundary or malformed boundary winding
+rejects atomically. Accepted edits that escape their local root retain canonical
+JSON, visible intervals, geometry, history and audit.
+
+## M30 interactive construction and NURBS UAT fixtures
+
+Every focused lab starts accepted, publishes its expected equality/bounded DOF and
+names one primary projected drag. The browser reset action reconstructs the same
+canonical public scenario rather than restoring private UI geometry.
+
+### M30-C1 - Offsets, mirror and directed angle
+
+- `construction-supporting-offset` fixes the source support and leaves target axial position and length free. Dragging either target endpoint preserves a left/same-direction distance of two and reports equality/bounded DOF `2/2`.
+- `construction-exact-offset` anchors one source endpoint and fixes source length. Dragging the free source endpoint rotates both segments while exact endpoint translation remains equal; DOF is `1/1`.
+- `construction-entity-mirror` creates the reflected line through `add_mirrored_curve`. Dragging either free endpoint projects its ordinary symmetry counterpart across the fixed axis; DOF is `1/1`.
+- `construction-directed-angle` begins as a reference angle with one rotational DOF. Dragging crosses the principal cut without changing explicit orientation; editing orientation/target and switching to driving locks the intended branch transactionally.
+
+### M30-F1 - Interactive line and generic fillets
+
+- `fillet-line-line-reference` retains M27's visibly untrimmed parents and one reference-radius DOF.
+- `fillet-line-circle`, `fillet-line-bezier` and `fillet-nurbs-line` expose M28 parent trim views and movable accepted contact/output state.
+- Primary drags must move the ordinary output arc and accepted parent contacts; M28 views update atomically. A rejected aggressive root escape retains the previous arc, intervals, history and audit.
+
+### M30-N1 - NURBS interaction labs
+
+- `nurbs-quarter-circle` exposes a positive non-gauge weight, explicit unit gauge and draggable controls while preserving a finite rational arc.
+- `nurbs-local-support` shows the selected semantic span and supports transactional homogeneous knot insertion with stable old IDs and contact migration.
+- `nurbs-periodic` exposes explicit previous/next span transition, winding and knot-side state; crossing the seam changes winding only through the command.
+- `nurbs-differential` exposes the existing tangent/normal/curvature and endpoint continuity audit on movable NURBS geometry.
+
+Focused controls submit only public `SketchDocumentSession` commands. Browser tests
+must compare accepted geometry before/after every advertised drag or editor action;
+loading an example without motion is not M30 acceptance.
+
+## M31 all-family visual-profile fixtures
+
+The M31 corpus applies ADR 0024 to every accepted visible curve interval. It includes
+standalone circular/elliptic disks, arc-line caps, overlapping circular/conic lenses,
+Bezier loops, mixed analytic/polynomial contours, periodic B-spline/NURBS contours,
+fillet-owned joins, nested curved holes and a clean component beside each typed
+tangent/overlap/pole/budget ambiguity.
+
+The focused `profile-fillet-trim` lifecycle moves its explicit circle-interior
+closure contact across the accepted local neighborhood and requires a complete
+line/circle/output-arc face after every accepted preview and release. The analyzer
+splits the contacted source from active contact identity and fresh validation, never
+from coordinate proximity.
+
+The `profile-nurbs-self-intersection` lab exposes one deterministic rational cubic
+loop, ordered control-point X/Y targets, non-gauge weights, knot insertion and
+certified self-root parameter/position enclosures. Native regressions cover roots on
+recursive partition boundaries under required scales, reflection and translation,
+plus geometry-preserving knot insertion away from the root. A root placed exactly on
+an inserted semantic knot boundary must remain typed incomplete until a one-sided
+cross-span certificate is available; it must never disappear under `Complete`.
+
+A captured diagnostic-capsule regression sweeps nearby positions of one local NURBS
+control and requires four certified self-roots, eleven fragments, four faces and
+matching endpoint topology throughout. Cycle-area integration apportions the
+unchanged scale-relative display uncertainty target across its directed fragments,
+then independently checks the summed interval against that original target. This
+removes a shape-sensitive work-allocation failure without relaxing publication.
+
+All supported family pairs and eligible self-pairs require deterministic parameter-
+interval provenance, resolved outgoing tangent order and independently bounded area
+sign before `Complete`. Required scales, rotations, reflections and large translations
+preserve topology and scale area by `s^2`. Canonical JSON, history and selection remain
+unchanged by analysis and pointer-transparent rendering.
+
+### Text failure-case handoff
+
+The JSON/autosave disclosure provides **Copy compressed scene capsule**. The emitted
+`GEOSOLVE_SCENE_V1` text contains the canonical v4 sketch document, exact active
+profile budgets, example/model/status metadata, original byte count and checksum in
+a deterministic pure-Rust LZSS/base64url envelope. Paste the complete block into the
+same text area and choose **Import text** to reproduce it. Import independently solves
+and validates the document before replacing accepted state. Invalid encoding,
+checksum, declared size, profile limits or document contents retain the previous
+accepted scene. This is a disposable diagnostic interchange format, not a new
+persistent sketch schema or equation source.
+
+## Post-M32 CAD embedding and human UAT scenarios
+
+M33-M55 add production embedding fixtures without replacing the frozen scenarios
+above. Every new fixture must name its exact design, parameter, external-snapshot,
+activation and accepted-state revisions. The browser remains a desktop-only public-
+API consumer; no mobile scenario is required.
+
+Objective geometry, residual, derivative, rank, branch, persistence, migration,
+resource, cancellation and topology assertions are always automated. Human review is
+limited to four prepared checkpoints after their complete automated qualification.
+
+### UAT-C1 - Core sketch interaction at M40
+
+One ordinary mechanical profile covers geometry creation, canvas/tree/inspector
+selection, standard constraints, driving/reference dimensions, projected drag,
+redundancy, conflict, deletion and history. The prepared 30-45 minute review judges
+discoverability, manipulation intent and whether accepted, solved-preview, unsolved
+and rejected states are unmistakable. Automation proves all numerical facts.
+
+### UAT-C2 - CAD host semantics at M45
+
+One host-state workspace covers construction-role conversion, suppression and
+reactivation, one parameter driving several dimensions, invalid parameter recovery,
+an immutable external reference becoming stale/missing/valid and retained unsolved
+design over prior accepted geometry. The prepared 30-45 minute review judges state,
+ownership and recovery clarity; revisions, digests and atomicity remain automated.
+
+### UAT-C3 - Advanced geometry and topology at M52
+
+Prepared advanced scenes cover conics, Bezier/B-spline/NURBS controls, weights,
+knots, periodic transitions, explicit branch edits, fillet/trim/mirror/pattern
+operations, complete profiles, holes, self-intersections and intentionally incomplete
+topology. One medium sketch exercises rapid edit and cancellation. The 45-60 minute
+review judges local predictability, branch clarity, coherent associated motion,
+topology trust and perceived responsiveness.
+
+### UAT-C4 - Integrated release candidate at M54
+
+The frozen candidate starts from an empty workspace and proceeds through ordinary
+and construction geometry, constraints, host parameters, an external reference, an
+advanced curve, one associative operation, conflict repair, production profile,
+save/reload/history/capsule recovery and short exploratory authoring. The 45-60 minute
+review judges end-to-end trust and coherence rather than repeating an exhaustive
+matrix.
+
+### UAT evidence and recheck policy
+
+Each checkpoint provides one URL, deterministic resets, concise instructions and
+checksummed capsules. Findings automatically capture the candidate revision,
+workspace input, action transcript, screenshot and accepted/attempted diagnostics.
+Objective defects receive native and browser regressions. A targeted human recheck is
+preferred; a full checkpoint repeats only after a material API, schema or primary-
+workflow change. M40, M45, M52 and M54 cannot close without explicit supervising-
+human sign-off.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:

@@ -22,13 +22,13 @@ use crate::model::{
 use crate::residuals::{
     AxisDifferenceResidual, BezierIncidence, CircleArcTangencyResidual, CircleTangencyResidual,
     CoincidentResidual, CurveParameterIncidence, DistanceResidual, FixedCoordinateResidual,
-    GenericCurveDirectionResidual, GenericCurveIncidence, GenericCurvePairResidual,
-    GenericEndpointContinuityResidual, GenericEqualCurvatureResidual, GenericLineFilletResidual,
+    GenericCurveDirectionResidual, GenericCurveFilletResidual, GenericCurveIncidence,
+    GenericCurvePairResidual, GenericEndpointContinuityResidual, GenericEqualCurvatureResidual,
     GenericPointOnCurveResidual, LineBezierTangencyResidual, LineCircleTangencyResidual,
     LineOffsetResidual, LineOffsetResidualMode, MidpointResidual, NurbsWeightIncidence,
-    OrientedAngleResidual, PointOnArcResidual, PointOnBezierResidual, PointOnCircleResidual,
-    PointOnLineResidual, PointTargetResidual, ScalarEqualityResidual, ScalarTargetResidual,
-    SegmentPairEquation, SegmentPairResidual, SymmetryResidual,
+    OrientedAngleResidual, PointOnBezierResidual, PointOnCircleResidual, PointOnLineResidual,
+    PointTargetResidual, ScalarEqualityResidual, ScalarTargetResidual, SegmentPairEquation,
+    SegmentPairResidual, SymmetryResidual,
 };
 
 /// Temporary point target supplied for one solve only.
@@ -119,6 +119,21 @@ pub struct CircleRadiusVariableMapping {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ArcRadiusVariableMapping {
     pub arc_id: ArcId,
+    pub variable_id: VariableId,
+}
+
+/// Solver-coordinate role for an active associated output arc endpoint angle.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ArcAngleRole {
+    Start,
+    End,
+}
+
+/// Exact associated-arc-angle-to-core-variable relationship in source order.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ArcAngleVariableMapping {
+    pub arc_id: ArcId,
+    pub role: ArcAngleRole,
     pub variable_id: VariableId,
 }
 
@@ -216,6 +231,10 @@ pub const MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT: f64 = -1.0 + f64::EPSILON;
 /// Mandatory sketch-domain acceptance ceiling for normalized hard residuals.
 pub const SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE: f64 = 1.0e-9;
 
+/// Unitless margin below which fillet tangent intersections and offset derivatives are
+/// considered numerically unresolved.
+const CURVE_FILLET_REGULARITY_THRESHOLD: f64 = 1.0e-8;
+
 pub(crate) fn acceptance_solver_config(mut config: SolverConfig) -> SolverConfig {
     if config.normalized_residual_tolerance.is_finite()
         && config.normalized_residual_tolerance > SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE
@@ -232,6 +251,7 @@ pub struct CompiledSketch {
     point_variables: Vec<PointVariableMapping>,
     circle_radius_variables: Vec<CircleRadiusVariableMapping>,
     arc_radius_variables: Vec<ArcRadiusVariableMapping>,
+    arc_angle_variables: Vec<ArcAngleVariableMapping>,
     conic_vector_variables: Vec<ConicVectorVariableMapping>,
     conic_scalar_variables: Vec<ConicScalarVariableMapping>,
     nurbs_weight_variables: Vec<NurbsWeightVariableMapping>,
@@ -268,6 +288,11 @@ impl CompiledSketch {
     #[must_use]
     pub fn arc_radius_variables(&self) -> &[ArcRadiusVariableMapping] {
         &self.arc_radius_variables
+    }
+
+    #[must_use]
+    pub fn arc_angle_variables(&self) -> &[ArcAngleVariableMapping] {
+        &self.arc_angle_variables
     }
 
     #[must_use]
@@ -319,6 +344,13 @@ impl CompiledSketch {
         self.arc_radius_variables
             .iter()
             .find_map(|mapping| (mapping.arc_id == arc).then_some(mapping.variable_id))
+    }
+
+    #[must_use]
+    pub fn variable_for_arc_angle(&self, arc: ArcId, role: ArcAngleRole) -> Option<VariableId> {
+        self.arc_angle_variables.iter().find_map(|mapping| {
+            (mapping.arc_id == arc && mapping.role == role).then_some(mapping.variable_id)
+        })
     }
 
     #[must_use]
@@ -398,13 +430,42 @@ impl CompiledSketch {
         for mapping in &self.arc_radius_variables {
             let arc = sketch.arc_value(mapping.arc_id)?;
             let radius = scalar_variable(problem, mapping.variable_id)?;
+            let start_variable = arc_angle_variable_optional(
+                &self.arc_angle_variables,
+                mapping.arc_id,
+                ArcAngleRole::Start,
+            );
+            let end_variable = arc_angle_variable_optional(
+                &self.arc_angle_variables,
+                mapping.arc_id,
+                ArcAngleRole::End,
+            );
+            let (start_angle, end_angle, signed_sweep) = match (start_variable, end_variable) {
+                (None, None) => (arc.start_angle(), arc.end_angle(), arc.signed_sweep()),
+                (Some(start), Some(end)) => {
+                    let start_angle = scalar_variable(problem, start)?;
+                    let end_angle = scalar_variable(problem, end)?;
+                    let turn_offset = retained_arc_turn_offset(arc)?;
+                    let signed_sweep =
+                        end_angle - start_angle + f64::from(turn_offset) * std::f64::consts::TAU;
+                    validate_incident_arc_sweep(signed_sweep, arc.sweep())?;
+                    (start_angle, end_angle, signed_sweep)
+                }
+                _ => {
+                    return Err(geosolve_core::CoreError::InvalidSolverConfig {
+                        field: "associated arc angle mapping",
+                        message: "associated output arc must map both endpoint angles",
+                    }
+                    .into());
+                }
+            };
             arcs.push(SolvedArc {
                 arc_id: mapping.arc_id,
                 center: solved_point(&points, arc.center())?,
                 radius,
-                start_angle: arc.start_angle(),
-                end_angle: arc.end_angle(),
-                signed_sweep: arc.signed_sweep(),
+                start_angle,
+                end_angle,
+                signed_sweep,
                 sweep: arc.sweep(),
             });
         }
@@ -585,6 +646,7 @@ impl CompiledSketch {
                     &self.point_variables,
                     &self.circle_radius_variables,
                     &self.arc_radius_variables,
+                    &self.arc_angle_variables,
                     &self.conic_vector_variables,
                     &self.conic_scalar_variables,
                     &self.nurbs_weight_variables,
@@ -799,7 +861,7 @@ impl SolvedCircle {
     }
 }
 
-/// One solved circular arc with fixed M7 span state.
+/// One solved circular arc. Ordinary endpoints remain fixed; active fillet endpoints are solved.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SolvedArc {
     pub arc_id: ArcId,
@@ -1171,6 +1233,39 @@ impl Sketch {
                 bound_id,
             });
         }
+        let mut arc_angle_variables = Vec::new();
+        for source in &self.source_order {
+            let PersistentSource::Constraint(constraint_id) = *source else {
+                continue;
+            };
+            let Some(constraint) = self.constraints.get(constraint_id) else {
+                continue;
+            };
+            let SketchConstraintKind::CurveCurveFillet { arc, .. } = constraint.kind() else {
+                continue;
+            };
+            if arc_angle_variable_optional(&arc_angle_variables, arc, ArcAngleRole::Start).is_some()
+            {
+                return Err(geosolve_core::CoreError::InvalidSolverConfig {
+                    field: "associated arc angle mapping",
+                    message: "an output arc has more than one active fillet association",
+                }
+                .into());
+            }
+            let arc_value = self.arc_value(arc)?;
+            retained_arc_turn_offset(arc_value)?;
+            for (role, value) in [
+                (ArcAngleRole::Start, arc_value.start_angle()),
+                (ArcAngleRole::End, arc_value.end_angle()),
+            ] {
+                let variable_id = problem.add_variable(VariableBlock::scalar(value, 1.0)?);
+                arc_angle_variables.push(ArcAngleVariableMapping {
+                    arc_id: arc,
+                    role,
+                    variable_id,
+                });
+            }
+        }
         let mut conic_vector_variables = Vec::new();
         for (conic_id, conic) in self.conics.iter() {
             let crate::ConicKind::RationalQuadratic {
@@ -1285,6 +1380,7 @@ impl Sketch {
                         &point_variables,
                         &circle_radius_variables,
                         &arc_radius_variables,
+                        &arc_angle_variables,
                         &conic_vector_variables,
                         &conic_scalar_variables,
                         &nurbs_weight_variables,
@@ -1376,6 +1472,7 @@ impl Sketch {
             point_variables,
             circle_radius_variables,
             arc_radius_variables,
+            arc_angle_variables,
             conic_vector_variables,
             conic_scalar_variables,
             nurbs_weight_variables,
@@ -1402,7 +1499,8 @@ impl Sketch {
         let mut retained_audit = compiled.problem.audit_snapshot_partial();
         let mut core_report = compiled.problem.solve(config)?;
         let mut candidate = compiled.solved_state(self)?;
-        let mut candidate_preparation = self.derive_line_fillet_arcs(&mut candidate);
+        let mut candidate_preparation =
+            self.derive_curve_fillet_arcs(&mut candidate, config.normalized_residual_tolerance);
         let mut acceptance_hard_residual_max = None;
 
         if core_report_is_successful(&core_report, config) {
@@ -1414,7 +1512,8 @@ impl Sketch {
                     break;
                 }
                 let normalized = self.normalize_candidate_latents(&mut candidate);
-                candidate_preparation = self.derive_line_fillet_arcs(&mut candidate);
+                candidate_preparation = self
+                    .derive_curve_fillet_arcs(&mut candidate, config.normalized_residual_tolerance);
                 if candidate_preparation.is_err() {
                     break;
                 }
@@ -1425,7 +1524,8 @@ impl Sketch {
                 compiled = analysis_sketch.compile(request)?;
                 core_report = compiled.problem.solve(config)?;
                 candidate = compiled.solved_state(&analysis_sketch)?;
-                candidate_preparation = self.derive_line_fillet_arcs(&mut candidate);
+                candidate_preparation = self
+                    .derive_curve_fillet_arcs(&mut candidate, config.normalized_residual_tolerance);
                 if !core_report_is_successful(&core_report, config) {
                     break;
                 }
@@ -1606,12 +1706,14 @@ impl Sketch {
         })
     }
 
-    pub(crate) fn derive_line_fillet_arcs(
+    #[allow(clippy::too_many_lines)]
+    pub(crate) fn derive_curve_fillet_arcs(
         &self,
         candidate: &mut SolvedSketchState,
+        tolerance: f64,
     ) -> Result<(), SolveRejection> {
         for (constraint_id, constraint) in self.constraints.iter() {
-            let SketchConstraintKind::LineLineFillet {
+            let SketchConstraintKind::CurveCurveFillet {
                 arc,
                 first,
                 second,
@@ -1649,7 +1751,7 @@ impl Sketch {
             .position;
             let retained = self.arc_value(arc).map_err(|_| {
                 SolveRejection::IndependentValidationFailed(
-                    "line fillet references a stale output arc".into(),
+                    "curve fillet references a stale output arc".into(),
                 )
             })?;
             let solved = candidate
@@ -1659,7 +1761,7 @@ impl Sketch {
                 .find(|solved| solved.arc_id == arc)
                 .ok_or_else(|| {
                     SolveRejection::IndependentValidationFailed(
-                        "line fillet output arc is missing from candidate geometry".into(),
+                        "curve fillet output arc is missing from candidate geometry".into(),
                     )
                 })?;
             let (start, end) = match endpoint_order {
@@ -1668,17 +1770,46 @@ impl Sketch {
             };
             let start_offset = start - solved.center;
             let end_offset = end - solved.center;
-            if start_offset.norm() == 0.0 || end_offset.norm() == 0.0 {
+            let start_norm = start_offset.norm();
+            let end_norm = end_offset.norm();
+            if !start_norm.is_finite()
+                || !end_norm.is_finite()
+                || start_norm == 0.0
+                || end_norm == 0.0
+            {
                 return Err(SolveRejection::InvalidFilletGeometry(constraint_id));
             }
-            let start_angle =
-                unwrap_near(start_offset.y.atan2(start_offset.x), retained.start_angle());
-            let end_angle = unwrap_near(end_offset.y.atan2(end_offset.x), retained.end_angle());
+            let start_angle = unwrap_near(start_offset.y.atan2(start_offset.x), solved.start_angle);
+            let end_angle = unwrap_near(end_offset.y.atan2(end_offset.x), solved.end_angle);
             let signed_sweep = arc_signed_sweep(start_angle, end_angle, solved.sweep)
                 .map_err(|_| SolveRejection::InvalidFilletGeometry(constraint_id))?;
             if !start_angle.is_finite() || !end_angle.is_finite() || !signed_sweep.is_finite() {
                 return Err(SolveRejection::InvalidFilletGeometry(constraint_id));
             }
+            let start_radial = start_offset / start_norm;
+            let end_radial = end_offset / end_norm;
+            let core_start_radial =
+                Vector2::new(solved.start_angle.cos(), solved.start_angle.sin());
+            let core_end_radial = Vector2::new(solved.end_angle.cos(), solved.end_angle.sin());
+            let start_dot = core_start_radial.dot(&start_radial);
+            let end_dot = core_end_radial.dot(&end_radial);
+            if !start_dot.is_finite() || !end_dot.is_finite() || start_dot <= 0.0 || end_dot <= 0.0
+            {
+                return Err(SolveRejection::InvalidFilletGeometry(constraint_id));
+            }
+            let turn_offset = retained_arc_turn_offset(retained)
+                .map_err(|_| SolveRejection::InvalidFilletGeometry(constraint_id))?;
+            let core_signed_sweep = solved.end_angle - solved.start_angle
+                + f64::from(turn_offset) * std::f64::consts::TAU;
+            validate_independent_constraint_rows(
+                constraint_id,
+                &[
+                    start_angle - solved.start_angle,
+                    end_angle - solved.end_angle,
+                    signed_sweep - core_signed_sweep,
+                ],
+                tolerance,
+            )?;
             solved.start_angle = start_angle;
             solved.end_angle = end_angle;
             solved.signed_sweep = signed_sweep;
@@ -2217,7 +2348,7 @@ impl Sketch {
                         }
                     }
                 }
-                SketchConstraintKind::LineLineFillet {
+                SketchConstraintKind::CurveCurveFillet {
                     arc,
                     first,
                     first_side,
@@ -2226,7 +2357,7 @@ impl Sketch {
                     endpoint_order,
                 } => {
                     independent_advanced_max =
-                        independent_advanced_max.max(validate_line_fillet_candidate(
+                        independent_advanced_max.max(validate_curve_fillet_candidate(
                             self,
                             candidate,
                             constraint_id,
@@ -2522,7 +2653,7 @@ impl Sketch {
                 | SketchConstraintKind::CurveCurveTangency { first, second, .. }
                 | SketchConstraintKind::EqualCurvature { first, second, .. }
                 | SketchConstraintKind::EndpointContinuity { first, second, .. }
-                | SketchConstraintKind::LineLineFillet { first, second, .. } => {
+                | SketchConstraintKind::CurveCurveFillet { first, second, .. } => {
                     normalize_generic_latent(
                         self,
                         &mut candidate.latents,
@@ -2632,7 +2763,7 @@ impl Sketch {
                         | (
                             SketchConstraintKind::CurveCurveContact { first: contact, .. }
                             | SketchConstraintKind::CurveCurveTangency { first: contact, .. }
-                            | SketchConstraintKind::LineLineFillet { first: contact, .. },
+                            | SketchConstraintKind::CurveCurveFillet { first: contact, .. },
                             LatentVariableRole::FirstCurveParameter,
                         )
                         | (
@@ -2642,7 +2773,7 @@ impl Sketch {
                             | SketchConstraintKind::CurveCurveTangency {
                                 second: contact, ..
                             }
-                            | SketchConstraintKind::LineLineFillet {
+                            | SketchConstraintKind::CurveCurveFillet {
                                 second: contact, ..
                             },
                             LatentVariableRole::SecondCurveParameter,
@@ -2699,7 +2830,7 @@ impl Sketch {
                         | crate::ContactState::CurveCurveTangency {
                             first_parameter, ..
                         }
-                        | crate::ContactState::LineLineFillet {
+                        | crate::ContactState::CurveCurveFillet {
                             first_parameter, ..
                         },
                         LatentVariableRole::FirstCurveParameter,
@@ -2711,7 +2842,7 @@ impl Sketch {
                         | crate::ContactState::CurveCurveTangency {
                             second_parameter, ..
                         }
-                        | crate::ContactState::LineLineFillet {
+                        | crate::ContactState::CurveCurveFillet {
                             second_parameter, ..
                         },
                         LatentVariableRole::SecondCurveParameter,
@@ -2810,7 +2941,7 @@ impl Sketch {
                     | SketchConstraintKind::CurveCurveTangency { first, .. }
                     | SketchConstraintKind::EqualCurvature { first, .. }
                     | SketchConstraintKind::EndpointContinuity { first, .. }
-                    | SketchConstraintKind::LineLineFillet { first, .. },
+                    | SketchConstraintKind::CurveCurveFillet { first, .. },
                     LatentVariableRole::FirstCurveParameter,
                 ) => first.parameter = latent.value,
                 (
@@ -2818,7 +2949,7 @@ impl Sketch {
                     | SketchConstraintKind::CurveCurveTangency { second, .. }
                     | SketchConstraintKind::EqualCurvature { second, .. }
                     | SketchConstraintKind::EndpointContinuity { second, .. }
-                    | SketchConstraintKind::LineLineFillet { second, .. },
+                    | SketchConstraintKind::CurveCurveFillet { second, .. },
                     LatentVariableRole::SecondCurveParameter,
                 ) => second.parameter = latent.value,
                 _ => return Err(SketchError::NoContactState(latent.constraint_id)),
@@ -3092,6 +3223,7 @@ fn compile_constraint(
     point_variables: &[PointVariableMapping],
     circle_radius_variables: &[CircleRadiusVariableMapping],
     arc_radius_variables: &[ArcRadiusVariableMapping],
+    arc_angle_variables: &[ArcAngleVariableMapping],
     conic_vector_variables: &[ConicVectorVariableMapping],
     conic_scalar_variables: &[ConicScalarVariableMapping],
     nurbs_weight_variables: &[NurbsWeightVariableMapping],
@@ -3236,6 +3368,7 @@ fn compile_constraint(
                 point_variables,
                 circle_radius_variables,
                 arc_radius_variables,
+                arc_angle_variables,
                 conic_vector_variables,
                 conic_scalar_variables,
                 nurbs_weight_variables,
@@ -3311,6 +3444,7 @@ fn compile_curve_constraint(
     point_variables: &[PointVariableMapping],
     circle_radius_variables: &[CircleRadiusVariableMapping],
     arc_radius_variables: &[ArcRadiusVariableMapping],
+    arc_angle_variables: &[ArcAngleVariableMapping],
     conic_vector_variables: &[ConicVectorVariableMapping],
     conic_scalar_variables: &[ConicScalarVariableMapping],
     nurbs_weight_variables: &[NurbsWeightVariableMapping],
@@ -3436,13 +3570,25 @@ fn compile_curve_constraint(
                 Some((0.0, 1.0)),
                 bound_mappings,
             )?;
-            let evaluator = PointOnArcResidual {
-                point: incidence.add(point_variable(point_variables, point)?),
-                center: incidence.add(point_variable(point_variables, arc_value.center())?),
-                radius: incidence.add(arc_radius_variable(arc_radius_variables, arc)?),
-                parameter: incidence.add(parameter_variable),
-                start_angle: arc_value.start_angle(),
-                signed_sweep: arc_value.signed_sweep(),
+            let point = incidence.add(point_variable(point_variables, point)?);
+            incidence.add(point_variable(point_variables, arc_value.center())?);
+            incidence.add(arc_radius_variable(arc_radius_variables, arc)?);
+            let parameter = CurveParameterIncidence::Variable(incidence.add(parameter_variable));
+            let evaluator = GenericPointOnCurveResidual {
+                point,
+                curve: generic_curve_incidence(
+                    sketch,
+                    point_variables,
+                    circle_radius_variables,
+                    arc_radius_variables,
+                    arc_angle_variables,
+                    conic_vector_variables,
+                    conic_scalar_variables,
+                    nurbs_weight_variables,
+                    &mut incidence,
+                    SketchCurve::Arc(arc),
+                    parameter,
+                )?,
             };
             let bindings = vec![
                 AuditBinding::new("point", point_name),
@@ -3531,6 +3677,7 @@ fn compile_curve_constraint(
                         point_variables,
                         circle_radius_variables,
                         arc_radius_variables,
+                        arc_angle_variables,
                         conic_vector_variables,
                         conic_scalar_variables,
                         nurbs_weight_variables,
@@ -3881,6 +4028,7 @@ fn compile_curve_constraint(
                 point_variables,
                 circle_radius_variables,
                 arc_radius_variables,
+                arc_angle_variables,
                 conic_vector_variables,
                 conic_scalar_variables,
                 nurbs_weight_variables,
@@ -3950,6 +4098,7 @@ fn compile_curve_constraint(
                 point_variables,
                 circle_radius_variables,
                 arc_radius_variables,
+                arc_angle_variables,
                 conic_vector_variables,
                 conic_scalar_variables,
                 nurbs_weight_variables,
@@ -3964,6 +4113,7 @@ fn compile_curve_constraint(
                 point_variables,
                 circle_radius_variables,
                 arc_radius_variables,
+                arc_angle_variables,
                 conic_vector_variables,
                 conic_scalar_variables,
                 nurbs_weight_variables,
@@ -4028,6 +4178,7 @@ fn compile_curve_constraint(
                 point_variables,
                 circle_radius_variables,
                 arc_radius_variables,
+                arc_angle_variables,
                 conic_vector_variables,
                 conic_scalar_variables,
                 nurbs_weight_variables,
@@ -4100,6 +4251,7 @@ fn compile_curve_constraint(
                 point_variables,
                 circle_radius_variables,
                 arc_radius_variables,
+                arc_angle_variables,
                 conic_vector_variables,
                 conic_scalar_variables,
                 nurbs_weight_variables,
@@ -4114,6 +4266,7 @@ fn compile_curve_constraint(
                 point_variables,
                 circle_radius_variables,
                 arc_radius_variables,
+                arc_angle_variables,
                 conic_vector_variables,
                 conic_scalar_variables,
                 nurbs_weight_variables,
@@ -4162,6 +4315,7 @@ fn compile_curve_constraint(
                 point_variables,
                 circle_radius_variables,
                 arc_radius_variables,
+                arc_angle_variables,
                 conic_vector_variables,
                 conic_scalar_variables,
                 nurbs_weight_variables,
@@ -4175,6 +4329,7 @@ fn compile_curve_constraint(
                 point_variables,
                 circle_radius_variables,
                 arc_radius_variables,
+                arc_angle_variables,
                 conic_vector_variables,
                 conic_scalar_variables,
                 nurbs_weight_variables,
@@ -4272,7 +4427,7 @@ fn compile_curve_constraint(
                 Box::new(evaluator),
             )
         }
-        SketchConstraintKind::LineLineFillet {
+        SketchConstraintKind::CurveCurveFillet {
             arc,
             first,
             first_side,
@@ -4304,14 +4459,25 @@ fn compile_curve_constraint(
             let first_parameter = CurveParameterIncidence::Variable(incidence.add(first_variable));
             let second_parameter =
                 CurveParameterIncidence::Variable(incidence.add(second_variable));
-            let evaluator = GenericLineFilletResidual {
+            let evaluator = GenericCurveFilletResidual {
                 center: incidence.add(point_variable(point_variables, arc_value.center())?),
                 radius: incidence.add(arc_radius_variable(arc_radius_variables, arc)?),
+                start_angle: incidence.add(arc_angle_variable(
+                    arc_angle_variables,
+                    arc,
+                    ArcAngleRole::Start,
+                )?),
+                end_angle: incidence.add(arc_angle_variable(
+                    arc_angle_variables,
+                    arc,
+                    ArcAngleRole::End,
+                )?),
                 first: generic_curve_incidence(
                     sketch,
                     point_variables,
                     circle_radius_variables,
                     arc_radius_variables,
+                    arc_angle_variables,
                     conic_vector_variables,
                     conic_scalar_variables,
                     nurbs_weight_variables,
@@ -4325,6 +4491,7 @@ fn compile_curve_constraint(
                     point_variables,
                     circle_radius_variables,
                     arc_radius_variables,
+                    arc_angle_variables,
                     conic_vector_variables,
                     conic_scalar_variables,
                     nurbs_weight_variables,
@@ -4333,6 +4500,7 @@ fn compile_curve_constraint(
                     second_parameter,
                 )?,
                 second_side,
+                endpoint_order,
             };
             let bindings = vec![
                 AuditBinding::new("arc", arc_value.label()),
@@ -4345,22 +4513,33 @@ fn compile_curve_constraint(
                 AuditBinding::new("first warm-start parameter", first.parameter.to_string()),
                 AuditBinding::new("second warm-start parameter", second.parameter.to_string()),
             ];
+            let mut rows = [
+                "(center.x - first(t).x - first_side*radius*left_normal(first').x) / model_scale",
+                "(center.y - first(t).y - first_side*radius*left_normal(first').y) / model_scale",
+                "(center.x - second(t).x - second_side*radius*left_normal(second').x) / model_scale",
+                "(center.y - second(t).y - second_side*radius*left_normal(second').y) / model_scale",
+            ]
+            .into_iter()
+            .map(|equation| audit_row(equation.into(), bindings.clone()))
+            .collect::<Vec<_>>();
+            for equation in [
+                "cross(output_radial(start_angle), unit(ordered_start_parent_contact - center))",
+                "cross(output_radial(end_angle), unit(ordered_end_parent_contact - center))",
+            ] {
+                rows.push(audit_row_unit(
+                    equation.into(),
+                    bindings.clone(),
+                    "dimensionless",
+                ));
+            }
             (
                 format!(
-                    "constraint {}: {first_label} to {second_label} associative line fillet",
+                    "constraint {}: {first_label} to {second_label} associative curve fillet",
                     constraint.ordinal()
                 ),
-                4,
-                vec![scale; 4],
-                [
-                    "(center.x - first(t).x - first_side*radius*left_normal(first').x) / model_scale",
-                    "(center.y - first(t).y - first_side*radius*left_normal(first').y) / model_scale",
-                    "(center.x - second(t).x - second_side*radius*left_normal(second').x) / model_scale",
-                    "(center.y - second(t).y - second_side*radius*left_normal(second').y) / model_scale",
-                ]
-                .into_iter()
-                .map(|equation| audit_row(equation.into(), bindings.clone()))
-                .collect(),
+                6,
+                vec![scale, scale, scale, scale, 1.0, 1.0],
+                rows,
                 Box::new(evaluator),
             )
         }
@@ -4433,17 +4612,40 @@ fn compile_curve_constraint(
                 Some((0.0, 1.0)),
                 bound_mappings,
             )?;
+            incidence.add(point_variable(point_variables, circle_value.center())?);
+            incidence.add(circle_radius_variable(circle_radius_variables, circle)?);
+            incidence.add(point_variable(point_variables, arc_value.center())?);
+            incidence.add(arc_radius_variable(arc_radius_variables, arc)?);
+            let circle_parameter =
+                CurveParameterIncidence::Variable(incidence.add(circle_variable));
+            let arc_parameter = CurveParameterIncidence::Variable(incidence.add(arc_variable));
             let evaluator = CircleArcTangencyResidual {
-                circle_center: incidence
-                    .add(point_variable(point_variables, circle_value.center())?),
-                circle_radius: incidence
-                    .add(circle_radius_variable(circle_radius_variables, circle)?),
-                arc_center: incidence.add(point_variable(point_variables, arc_value.center())?),
-                arc_radius: incidence.add(arc_radius_variable(arc_radius_variables, arc)?),
-                circle_angle: incidence.add(circle_variable),
-                arc_parameter: incidence.add(arc_variable),
-                arc_start_angle: arc_value.start_angle(),
-                arc_signed_sweep: arc_value.signed_sweep(),
+                circle: generic_curve_incidence(
+                    sketch,
+                    point_variables,
+                    circle_radius_variables,
+                    arc_radius_variables,
+                    arc_angle_variables,
+                    conic_vector_variables,
+                    conic_scalar_variables,
+                    nurbs_weight_variables,
+                    &mut incidence,
+                    SketchCurve::Circle(circle),
+                    circle_parameter,
+                )?,
+                arc: generic_curve_incidence(
+                    sketch,
+                    point_variables,
+                    circle_radius_variables,
+                    arc_radius_variables,
+                    arc_angle_variables,
+                    conic_vector_variables,
+                    conic_scalar_variables,
+                    nurbs_weight_variables,
+                    &mut incidence,
+                    SketchCurve::Arc(arc),
+                    arc_parameter,
+                )?,
             };
             let bindings = vec![
                 AuditBinding::new("circle", circle_value.label()),
@@ -5226,6 +5428,7 @@ fn generic_curve_incidence(
     point_variables: &[PointVariableMapping],
     circle_radius_variables: &[CircleRadiusVariableMapping],
     arc_radius_variables: &[ArcRadiusVariableMapping],
+    arc_angle_variables: &[ArcAngleVariableMapping],
     conic_vector_variables: &[ConicVectorVariableMapping],
     conic_scalar_variables: &[ConicScalarVariableMapping],
     nurbs_weight_variables: &[NurbsWeightVariableMapping],
@@ -5255,11 +5458,32 @@ fn generic_curve_incidence(
         }
         SketchCurve::Arc(arc) => {
             let value = sketch.arc_value(arc)?;
+            let start_angle =
+                arc_angle_variable_optional(arc_angle_variables, arc, ArcAngleRole::Start).map_or(
+                    CurveParameterIncidence::Fixed(value.start_angle()),
+                    |variable| CurveParameterIncidence::Variable(incidence.add(variable)),
+                );
+            let end_angle =
+                arc_angle_variable_optional(arc_angle_variables, arc, ArcAngleRole::End).map_or(
+                    CurveParameterIncidence::Fixed(value.end_angle()),
+                    |variable| CurveParameterIncidence::Variable(incidence.add(variable)),
+                );
+            if matches!(start_angle, CurveParameterIncidence::Variable(_))
+                != matches!(end_angle, CurveParameterIncidence::Variable(_))
+            {
+                return Err(geosolve_core::CoreError::InvalidSolverConfig {
+                    field: "associated arc angle incidence",
+                    message: "associated output arc must include both endpoint angles",
+                }
+                .into());
+            }
             Ok(GenericCurveIncidence::Arc {
                 center: incidence.add(point_variable(point_variables, value.center())?),
                 radius: incidence.add(arc_radius_variable(arc_radius_variables, arc)?),
-                start_angle: value.start_angle(),
-                signed_sweep: value.signed_sweep(),
+                start_angle,
+                end_angle,
+                turn_offset: retained_arc_turn_offset(value)?,
+                sweep: value.sweep(),
                 parameter,
             })
         }
@@ -5441,15 +5665,15 @@ fn add_curve_contact_latent(
     contact: SketchCurveContact,
 ) -> Result<VariableId, SketchError> {
     let bounded = generic_curve_is_bounded(sketch, contact.curve);
-    let bounds = if bounded {
-        Some(match contact.neighborhood {
+    let bounds = match contact.neighborhood {
+        CurveContactNeighborhood::Local { lower, upper } => Some((lower, upper)),
+        _ if bounded => Some(match contact.neighborhood {
             CurveContactNeighborhood::Start => (0.0, 0.0),
             CurveContactNeighborhood::End => (1.0, 1.0),
             CurveContactNeighborhood::Interior => (0.0, 1.0),
-            CurveContactNeighborhood::Local { lower, upper } => (lower, upper),
-        })
-    } else {
-        None
+            CurveContactNeighborhood::Local { .. } => unreachable!(),
+        }),
+        _ => None,
     };
     add_latent(
         problem,
@@ -5563,6 +5787,71 @@ fn arc_radius_variable(
         .iter()
         .find_map(|mapping| (mapping.arc_id == arc).then_some(mapping.variable_id))
         .ok_or(SketchError::UnknownArc(arc))
+}
+
+fn arc_angle_variable_optional(
+    mappings: &[ArcAngleVariableMapping],
+    arc: ArcId,
+    role: ArcAngleRole,
+) -> Option<VariableId> {
+    mappings.iter().find_map(|mapping| {
+        (mapping.arc_id == arc && mapping.role == role).then_some(mapping.variable_id)
+    })
+}
+
+fn arc_angle_variable(
+    mappings: &[ArcAngleVariableMapping],
+    arc: ArcId,
+    role: ArcAngleRole,
+) -> Result<VariableId, SketchError> {
+    arc_angle_variable_optional(mappings, arc, role).ok_or_else(|| {
+        geosolve_core::CoreError::InvalidSolverConfig {
+            field: "associated arc angle mapping",
+            message: "active fillet output arc has no endpoint angle coordinate",
+        }
+        .into()
+    })
+}
+
+#[allow(clippy::cast_possible_truncation)]
+fn retained_arc_turn_offset(arc: &crate::CircularArc) -> Result<i32, SketchError> {
+    validate_incident_arc_sweep(arc.signed_sweep(), arc.sweep())?;
+    let direct = arc.end_angle() - arc.start_angle();
+    let turns = (arc.signed_sweep() - direct) / std::f64::consts::TAU;
+    if !direct.is_finite()
+        || !turns.is_finite()
+        || turns < f64::from(i32::MIN)
+        || turns > f64::from(i32::MAX)
+    {
+        return Err(SketchError::InvalidArcSweep);
+    }
+    let integer_turns = turns.round() as i32;
+    let reconstructed = direct + f64::from(integer_turns) * std::f64::consts::TAU;
+    let tolerance = 64.0 * f64::EPSILON * arc.signed_sweep().abs().max(1.0);
+    if !reconstructed.is_finite() || (reconstructed - arc.signed_sweep()).abs() > tolerance {
+        return Err(SketchError::InvalidArcSweep);
+    }
+    validate_incident_arc_sweep(reconstructed, arc.sweep())?;
+    Ok(integer_turns)
+}
+
+fn validate_incident_arc_sweep(
+    signed_sweep: f64,
+    sweep: crate::ArcSweep,
+) -> Result<(), SketchError> {
+    let direction_valid = match sweep {
+        crate::ArcSweep::CounterClockwise => signed_sweep > 0.0,
+        crate::ArcSweep::Clockwise => signed_sweep < 0.0,
+    };
+    if signed_sweep.is_finite()
+        && signed_sweep != 0.0
+        && signed_sweep.abs() < std::f64::consts::TAU
+        && direction_valid
+    {
+        Ok(())
+    } else {
+        Err(SketchError::InvalidArcSweep)
+    }
 }
 
 fn conic_scalar_variable(
@@ -5926,7 +6215,8 @@ fn validate_generic_contact_candidate(
     if !parameter.is_finite() {
         return Err(SolveRejection::ContactParameterOutOfDomain(constraint));
     }
-    if generic_curve_is_bounded(sketch, contact.curve) {
+    let bounded = generic_curve_is_bounded(sketch, contact.curve);
+    if bounded {
         let Some(normalized) = normalize_bounded_candidate(parameter) else {
             return Err(SolveRejection::ContactParameterOutOfDomain(constraint));
         };
@@ -5941,8 +6231,17 @@ fn validate_generic_contact_candidate(
         if !neighborhood_valid {
             return Err(SolveRejection::AmbiguousContactNeighborhood(constraint));
         }
-    } else if contact.neighborhood != CurveContactNeighborhood::Interior {
-        return Err(SolveRejection::AmbiguousContactNeighborhood(constraint));
+    } else {
+        let neighborhood_valid = match contact.neighborhood {
+            CurveContactNeighborhood::Interior => true,
+            CurveContactNeighborhood::Local { lower, upper } => {
+                lower.is_finite() && upper.is_finite() && parameter > lower && parameter < upper
+            }
+            CurveContactNeighborhood::Start | CurveContactNeighborhood::End => false,
+        };
+        if !neighborhood_valid {
+            return Err(SolveRejection::AmbiguousContactNeighborhood(constraint));
+        }
     }
     candidate_curve_jet(sketch, candidate, contact.curve, parameter)
         .map_err(|error| candidate_curve_rejection(constraint, error))
@@ -5966,7 +6265,7 @@ fn validate_independent_constraint_rows(
 }
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
-fn validate_line_fillet_candidate(
+fn validate_curve_fillet_candidate(
     sketch: &Sketch,
     candidate: &SolvedSketchState,
     constraint: SketchConstraintId,
@@ -5997,20 +6296,21 @@ fn validate_line_fillet_candidate(
         second,
         second_parameter,
     )?;
-    let first_tangent = first_jet
+    let first_differential = first_jet
         .differential()
-        .map_err(|_| SolveRejection::DegenerateCurve(constraint))?
-        .unit_tangent;
-    let second_tangent = second_jet
+        .map_err(|_| SolveRejection::DegenerateCurve(constraint))?;
+    let second_differential = second_jet
         .differential()
-        .map_err(|_| SolveRejection::DegenerateCurve(constraint))?
-        .unit_tangent;
-    if cross_2d(first_tangent, second_tangent).abs() <= 1.0e-8 {
+        .map_err(|_| SolveRejection::DegenerateCurve(constraint))?;
+    let first_tangent = first_differential.unit_tangent;
+    let second_tangent = second_differential.unit_tangent;
+    let tangent_cross = cross_2d(first_tangent, second_tangent);
+    if !tangent_cross.is_finite() || tangent_cross.abs() <= CURVE_FILLET_REGULARITY_THRESHOLD {
         return Err(SolveRejection::InvalidFilletGeometry(constraint));
     }
     let solved_arc = candidate.geometry.arc(arc).ok_or_else(|| {
         SolveRejection::IndependentValidationFailed(
-            "line fillet output arc is missing from candidate geometry".into(),
+            "curve fillet output arc is missing from candidate geometry".into(),
         )
     })?;
     if !solved_arc.radius.is_finite() || solved_arc.radius <= 0.0 {
@@ -6020,6 +6320,17 @@ fn validate_line_fillet_candidate(
     let second_normal = Vector2::new(-second_tangent.y, second_tangent.x);
     let first_sign = fillet_side_sign(first_side);
     let second_sign = fillet_side_sign(second_side);
+    let first_offset_regularity =
+        1.0 - first_sign * solved_arc.radius * first_differential.signed_curvature;
+    let second_offset_regularity =
+        1.0 - second_sign * solved_arc.radius * second_differential.signed_curvature;
+    if !first_offset_regularity.is_finite()
+        || !second_offset_regularity.is_finite()
+        || first_offset_regularity.abs() <= CURVE_FILLET_REGULARITY_THRESHOLD
+        || second_offset_regularity.abs() <= CURVE_FILLET_REGULARITY_THRESHOLD
+    {
+        return Err(SolveRejection::InvalidFilletGeometry(constraint));
+    }
     let first_offset = solved_arc.center - first_jet.position;
     let second_offset = solved_arc.center - second_jet.position;
     if first_sign * first_offset.dot(&first_normal) <= 0.0
@@ -6046,6 +6357,25 @@ fn validate_line_fillet_candidate(
     };
     let expected_start_offset = expected_start - solved_arc.center;
     let expected_end_offset = expected_end - solved_arc.center;
+    let expected_start_norm = expected_start_offset.norm();
+    let expected_end_norm = expected_end_offset.norm();
+    if !expected_start_norm.is_finite()
+        || !expected_end_norm.is_finite()
+        || expected_start_norm == 0.0
+        || expected_end_norm == 0.0
+    {
+        return Err(SolveRejection::InvalidFilletGeometry(constraint));
+    }
+    let expected_start_radial = expected_start_offset / expected_start_norm;
+    let expected_end_radial = expected_end_offset / expected_end_norm;
+    let output_start_radial =
+        Vector2::new(solved_arc.start_angle.cos(), solved_arc.start_angle.sin());
+    let output_end_radial = Vector2::new(solved_arc.end_angle.cos(), solved_arc.end_angle.sin());
+    if output_start_radial.dot(&expected_start_radial) <= 0.0
+        || output_end_radial.dot(&expected_end_radial) <= 0.0
+    {
+        return Err(SolveRejection::InvalidFilletGeometry(constraint));
+    }
     let expected_start_angle = expected_start_offset.y.atan2(expected_start_offset.x);
     let expected_end_angle = expected_end_offset.y.atan2(expected_end_offset.x);
     let expected_signed_sweep =
@@ -6091,6 +6421,8 @@ fn validate_line_fillet_candidate(
             start_error.y / sketch.model_scale,
             end_error.x / sketch.model_scale,
             end_error.y / sketch.model_scale,
+            cross_2d(output_start_radial, expected_start_radial),
+            cross_2d(output_end_radial, expected_end_radial),
             stored_signed_sweep - solved_arc.signed_sweep,
             expected_signed_sweep - solved_arc.signed_sweep,
         ],
@@ -6804,7 +7136,7 @@ mod tests {
     }
 
     #[test]
-    fn line_fillet_validation_recomputes_endpoint_and_sweep_state() {
+    fn curve_fillet_validation_recomputes_endpoint_and_sweep_state() {
         let mut sketch = Sketch::new(1.0).unwrap();
         let first_start = sketch.add_point(Point2::new(0.0, 0.0)).unwrap();
         let corner = sketch.add_point(Point2::new(4.0, 0.0)).unwrap();
@@ -6850,7 +7182,9 @@ mod tests {
         assert_eq!(report.termination, SolveTermination::Converged);
         let mut candidate = compiled.solved_state(&sketch).unwrap();
         sketch.normalize_candidate_latents(&mut candidate);
-        sketch.derive_line_fillet_arcs(&mut candidate).unwrap();
+        sketch
+            .derive_curve_fillet_arcs(&mut candidate, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE)
+            .unwrap();
         assert!(
             sketch
                 .validate_m7_candidate(&candidate, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE)

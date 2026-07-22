@@ -3,8 +3,14 @@ name = "geosolve-geometry"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+license-file.workspace = true
+readme.workspace = true
 rust-version.workspace = true
 authors.workspace = true
+description = "Validated geometry and manifold primitives for GeoSolve"
+documentation = "https://docs.rs/geosolve-geometry/0.2.0"
+keywords = ["cad", "geometry", "kinematics", "splines"]
+categories = ["algorithms", "mathematics", "science"]
 
 [dependencies]
 nalgebra.workspace = true

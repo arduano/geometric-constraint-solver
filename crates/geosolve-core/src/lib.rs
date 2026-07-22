@@ -1,4 +1,15 @@
 //! Domain-independent nonlinear constraint-system infrastructure.
+//!
+//! This crate owns normalized residual/Jacobian assembly, strict priority levels,
+//! nonlinear solving, bounds, component decomposition, sparse hard steps, numerical
+//! and structural rank, diagnostics, continuation primitives and persistent solve
+//! sessions. It contains no CAD entities or linkage joints.
+//!
+//! Most applications should use `geosolve-sketch` or `geosolve-linkage`. Direct
+//! use is intended for custom domains that can provide complete residual incidence,
+//! scales, derivatives, audit descriptors and independent returned-state validation.
+//! A solver termination alone is never proof of valid geometry; inspect
+//! [`HardValidity`] and the complete report.
 
 use slotmap::new_key_type;
 

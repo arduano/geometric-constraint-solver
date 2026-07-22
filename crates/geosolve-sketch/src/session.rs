@@ -608,7 +608,7 @@ fn complete_candidate_for_problem(
         })?;
     template.normalize_candidate_latents(&mut candidate);
     template
-        .derive_line_fillet_arcs(&mut candidate)
+        .derive_curve_fillet_arcs(&mut candidate, tolerance)
         .map_err(session_domain_rejection)?;
     if let Some(segment) = template.first_flipped_segment(&candidate.geometry) {
         return Err(session_domain_rejection(

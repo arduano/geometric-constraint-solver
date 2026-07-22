@@ -420,13 +420,13 @@ impl SketchDocument {
                     DocumentContactRole::FirstCurveParameter,
                     SketchConstraintKind::EqualCurvature { first, .. }
                     | SketchConstraintKind::EndpointContinuity { first, .. }
-                    | SketchConstraintKind::LineLineFillet { first, .. },
+                    | SketchConstraintKind::CurveCurveFillet { first, .. },
                 ) => Some(first.parameter),
                 (
                     DocumentContactRole::SecondCurveParameter,
                     SketchConstraintKind::EqualCurvature { second, .. }
                     | SketchConstraintKind::EndpointContinuity { second, .. }
-                    | SketchConstraintKind::LineLineFillet { second, .. },
+                    | SketchConstraintKind::CurveCurveFillet { second, .. },
                 ) => Some(second.parameter),
                 _ => None,
             };
@@ -485,7 +485,7 @@ impl SketchDocument {
                         | ContactState::CurveCurveTangency {
                             first_parameter, ..
                         }
-                        | ContactState::LineLineFillet {
+                        | ContactState::CurveCurveFillet {
                             first_parameter, ..
                         },
                     ) => first_parameter,
@@ -497,7 +497,7 @@ impl SketchDocument {
                         | ContactState::CurveCurveTangency {
                             second_parameter, ..
                         }
-                        | ContactState::LineLineFillet {
+                        | ContactState::CurveCurveFillet {
                             second_parameter, ..
                         },
                     ) => second_parameter,
@@ -1242,6 +1242,41 @@ fn lower_constraint(
                 ));
                 id
             }
+            C::CurveCurveFillet {
+                arc,
+                first_contact,
+                first_side,
+                second_contact,
+                second_side,
+                endpoint_order,
+                ..
+            } => {
+                let first = document
+                    .contact(*first_contact)
+                    .ok_or_else(|| unknown_runtime("contact", first_contact.0))?;
+                let second = document
+                    .contact(*second_contact)
+                    .ok_or_else(|| unknown_runtime("contact", second_contact.0))?;
+                let id = sketch.add_curve_curve_fillet(
+                    runtime_arc(mappings, *arc)?,
+                    runtime_curve_contact(document, mappings, first)?,
+                    runtime_curve_normal_side(*first_side),
+                    runtime_curve_contact(document, mappings, second)?,
+                    runtime_curve_normal_side(*second_side),
+                    runtime_fillet_endpoint_order(*endpoint_order),
+                )?;
+                contacts.push(contact_mapping(
+                    *first_contact,
+                    id,
+                    DocumentContactRole::FirstCurveParameter,
+                ));
+                contacts.push(contact_mapping(
+                    *second_contact,
+                    id,
+                    DocumentContactRole::SecondCurveParameter,
+                ));
+                id
+            }
         };
     Ok((runtime, contacts))
 }
@@ -1589,6 +1624,13 @@ const fn runtime_curve_normal_side(side: DocumentCurveNormalSide) -> CurveNormal
     match side {
         DocumentCurveNormalSide::Left => CurveNormalSide::Left,
         DocumentCurveNormalSide::Right => CurveNormalSide::Right,
+    }
+}
+
+const fn runtime_fillet_endpoint_order(order: DocumentFilletEndpointOrder) -> FilletEndpointOrder {
+    match order {
+        DocumentFilletEndpointOrder::FirstThenSecond => FilletEndpointOrder::FirstThenSecond,
+        DocumentFilletEndpointOrder::SecondThenFirst => FilletEndpointOrder::SecondThenFirst,
     }
 }
 

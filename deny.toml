@@ -1,0 +1,22 @@
+[advisories]
+ignore = []
+
+[bans]
+multiple-versions = "allow"
+wildcards = "allow"
+
+[licenses]
+allow = [
+    "Apache-2.0",
+    "GPL-3.0-or-later",
+    "MIT",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+confidence-threshold = 0.8
+
+[sources]
+allow-git = []
+unknown-git = "deny"
+unknown-registry = "deny"

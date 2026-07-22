@@ -34,7 +34,7 @@ fn main() {
             "medium",
             Budgets {
                 import: Duration::from_millis(150),
-                first_solve: Duration::from_millis(4_000),
+                first_solve: Duration::from_secs(4),
                 edit_solve: Duration::from_millis(1_500),
             },
         ),

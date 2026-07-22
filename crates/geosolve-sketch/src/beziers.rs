@@ -221,7 +221,8 @@ impl Sketch {
                 SketchConstraintKind::CurveCurveContact { first, second }
                 | SketchConstraintKind::CurveCurveTangency { first, second, .. }
                 | SketchConstraintKind::EqualCurvature { first, second, .. }
-                | SketchConstraintKind::EndpointContinuity { first, second, .. } => [first, second]
+                | SketchConstraintKind::EndpointContinuity { first, second, .. }
+                | SketchConstraintKind::CurveCurveFillet { first, second, .. } => [first, second]
                     .into_iter()
                     .any(|contact| matches!(contact.curve, crate::SketchCurve::Bezier(bezier) if bezier == id)),
                 _ => false,

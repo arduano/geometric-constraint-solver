@@ -3,12 +3,18 @@ name = "geosolve-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+license-file.workspace = true
+readme.workspace = true
 rust-version.workspace = true
 authors.workspace = true
+description = "Validated numerical kernel for the GeoSolve geometric constraint solver"
+documentation = "https://docs.rs/geosolve-core/0.2.0"
+keywords = ["cad", "constraints", "kinematics", "solver"]
+categories = ["algorithms", "mathematics", "science"]
 
 [dependencies]
 faer.workspace = true
-geosolve-geometry = { path = "../geosolve-geometry" }
+geosolve-geometry = { version = "0.2.0", path = "../geosolve-geometry" }
 indexmap.workspace = true
 nalgebra.workspace = true
 num-dual.workspace = true

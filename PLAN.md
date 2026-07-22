@@ -20,9 +20,21 @@ The library must support independently editable 2D sketch geometry, including:
 - curvature, osculating radius, G2 continuity and separately named parametric C2 continuity;
 - driving and reference dimensions;
 - truthful rank, mobility, redundancy, conflict and invalid-geometry diagnostics;
-- versioned persistence of topology, geometry, constraints and discrete state.
+- versioned persistence of topology, geometry, constraints and discrete state;
+- the standard planar CAD relation, dimension and measurement catalog;
+- separate retained design intent, attempted candidates and independently accepted
+  solved state;
+- construction geometry, source activation, typed host parameters and immutable
+  external 2D references;
+- cancellation, stale-work rejection, stable host diagnostics and a documented
+  production-scale envelope;
+- companion sketch-operation and production wire/profile APIs suitable for a CAD
+  host without importing B-rep or UI concerns into solver state.
 
-This deliverable does not include a solid B-rep kernel, meshing or 3D sketch curves.
+M22 completed the built-in curve and generic differential-constraint surface, not
+the complete production embedding contract. M33-M55 close the ordinary CAD
+catalog, host integration, interaction-consumer and release gaps. This deliverable
+does not include a solid B-rep kernel, meshing or 3D sketch curves.
 
 ### Deliverable 2: 2D and 3D rigid-body kinematics
 
@@ -64,7 +76,31 @@ The playground interaction scope is select, box-select, multi-select compatible 
 
 Reusable Rust APIs own `SketchDocument`, `SketchSession`, commands, history, versioned serialization, curve evaluation and all constraints/equations. Selection, hit testing, tool state, rendering and browser `localStorage` remain web-only. The web crate is non-authoritative, contains no solver or geometry equations and may be replaced without changing document semantics.
 
-Post-alpha browser policy: the playground is a robust sanity-checking instrument for the supervising user to inspect claims and expose defects, not a production application. Desktop interaction density and layout freedom take priority. Existing mobile behavior may remain, but mobile compatibility is best-effort and is not a gate for future numerical or domain milestones.
+Post-alpha browser policy: the playground is a robust sanity-checking instrument for
+the supervising user to inspect claims and expose defects, not a production
+application. M39, M44 and M51 replace it with a desktop-only CAD-like sketch
+workbench that remains a non-authoritative public-API consumer. Future mobile or
+responsive behavior is explicitly outside acceptance and must not consume roadmap
+time.
+
+### Production embedding north star
+
+The post-M32 sketch program turns the mathematically broad preview into a planar
+engine that a real CAD host can use. The accepted personality is:
+
+- structurally valid but unsolved design intent is retained separately from the
+  latest independently validated accepted geometry;
+- external CAD geometry is consumed only as immutable revisioned 2D snapshots;
+- the host owns formulas, unit conversion, parameter dependency graphs and
+  configurations, while GeoSolve consumes typed finite values;
+- ordinary user constraints remain hard, compatible redundancy is diagnosed, and
+  branch changes remain explicit;
+- sketch operations and production topology are companion APIs rather than solver
+  equations or B-rep features;
+- supported embedding targets are Rust and WASM only through M55;
+- the reusable library remains `GPL-3.0-or-later`;
+- the web consumer is a desktop demo of sketch-constraint workflows, not a mobile
+  product or solid modeller.
 
 ## Architectural boundaries
 
@@ -76,6 +112,13 @@ Post-alpha browser policy: the playground is a robust sanity-checking instrument
 - Use local forward automatic differentiation where it reduces fragile analytic code; retain central finite differences as an independent oracle for every residual.
 - Preserve pure Rust, GPL-3.0-or-later licensing and the workspace `unsafe_code = "forbid"` policy.
 - Keep `geosolve-demo-web` as a separate public-API consumer. M13-M14 may shape embeddable sketch workflows, but web-only interaction and rendering concerns must not enter reusable Rust document/session APIs.
+- Do not call host code during residual evaluation. Host parameters and external
+  geometry enter one attempt as immutable revisioned values.
+- Keep cross-system expressions, B-rep projection, topological naming, feature
+  history and application undo outside the sketch solver contract.
+- Keep future human acceptance limited to M40, M45, M52 and M54. Every objective
+  correctness, persistence, compatibility and browser assertion must pass
+  automatically before a human checkpoint begins.
 
 ## Frozen baseline: M0-M7
 
@@ -111,7 +154,8 @@ Every implementation milestone must:
 5. preserve the previous accepted finite state on rejection;
 6. keep every discrete branch/domain choice explicit;
 7. run formatting, warnings-denied Clippy, workspace tests and relevant locked WASM build checks;
-8. update this file with checked items and concise completion notes.
+8. keep the desktop web consumer compiling when a supported sketch API changes;
+9. update this file with checked items and concise completion notes.
 
 Performance measurements never weaken correctness thresholds.
 
@@ -955,47 +999,639 @@ incidence on associated output arcs remain M28 work.
 
 ## M28: generic fillets and parent trimming
 
+Status: complete as of 2026-07-21.
+
 Goal: generalize associative fillets over the existing immutable curve-jet seam
 and add explicit visible trim topology.
 
-- [ ] Add persistent trim views over underlying curve support instead of destructively approximating control geometry.
-- [ ] Make rendering, hit testing, contact validation, deletion, history and persistence respect visible trim intervals.
-- [ ] Generalize fillet incidence to regular line, circle/arc, ellipse/conic, Bezier, B-spline and NURBS spans without pair-specific residual equations.
-- [ ] Update both parent trim endpoints atomically from independently accepted fillet contacts.
-- [ ] Preserve explicit span, side, winding, endpoint-order and sweep state through edits and migrations.
-- [ ] Reject zero speed, cusps, poles, escaped spans, ambiguous roots and offset singularities such as `1 +/- r*kappa = 0`.
-- [ ] Add full family-pair derivative, transformation, scale, trimming, persistence, malformed-input and rollback corpora.
+- [x] Add persistent trim views over underlying curve support instead of destructively approximating control geometry.
+- [x] Make rendering, hit testing, contact validation, deletion, history and persistence respect visible trim intervals.
+- [x] Generalize fillet incidence to regular line, circle/arc, ellipse/conic, Bezier, B-spline and NURBS spans without pair-specific residual equations.
+- [x] Update both parent trim endpoints atomically from independently accepted fillet contacts.
+- [x] Preserve explicit span, side, winding, endpoint-order and sweep state through edits and migrations.
+- [x] Reject zero speed, cusps, poles, escaped spans, ambiguous roots and offset singularities such as `1 +/- r*kappa = 0`.
+- [x] Add full family-pair derivative, transformation, scale, trimming, persistence, malformed-input and rollback corpora.
 
 Gate: every supported regular curve family produces finite branch-explicit fillets
 and trim views through common residual plumbing, no singular/ambiguous candidate
 becomes success-like, and the complete Deliverable 1 corpus remains unchanged.
 
+Completion record (2026-07-21): ADR 0023 keeps immutable support geometry and
+adds one equation-free persistent visible interval per stable curve span. Generic
+version-4 fillets use six common local-AD rows: four center/normal-offset rows and
+two radial endpoint-alignment rows. Their ordinary output-arc endpoint angles are
+solver coordinates, so point, contact, tangency, curvature and continuity consumers
+retain complete incidence. Accepted contacts atomically update owned boundaries;
+suppression freezes them, while explosion converts them to fixed boundaries and
+retains the ordinary arc. Frozen v1-v3 DTOs migrate deterministically, with legacy
+v3 line fillets remaining visibly untrimmed.
+
+The 14-family, 105-unordered-pair corpus covers finite differences, every branch
+code, required scales and transforms, active spline/NURBS support, persistence,
+periodic winding, malformed ownership, singular offsets, root escape, suppression,
+history and rollback. Public visible-interval APIs drive rendering, hit testing,
+selection and line-profile analysis; desktop/mobile browser automation covers
+trim interaction, persistence and explosion. Format/diff, warnings-denied locked
+workspace Clippy, full locked workspace tests, release WASM, warnings-denied
+rustdoc, all benchmark compilation, release Trunk and Chromium E2E pass. M28
+intentionally supports one visible interval per support span rather than arbitrary
+multi-fragment trim topology.
+
 ## M29: public API and release hardening
+
+Status: complete as of 2026-07-21.
 
 Goal: make both deliverables ready for a stable library release.
 
-- [ ] Review public APIs and remove accidental exposure of compiler/core internals.
-- [ ] Finalize versioned serialization and migration policy.
-- [ ] Add crate-level documentation and complete examples for both deliverables.
-- [ ] Define semantic versioning, changelog and deprecation policy.
-- [ ] Complete GPL/licence and attribution audit.
-- [ ] Record supported scale/performance envelopes and benchmark baselines.
-- [ ] Run malformed-document and degenerate-geometry fuzzing without panic or false success.
-- [ ] Keep the disposable WASM playground compiling as a non-authoritative consumer of public APIs.
+- [x] Review public APIs and remove accidental exposure of compiler/core internals.
+- [x] Finalize versioned serialization and migration policy.
+- [x] Add crate-level documentation and complete examples for both deliverables.
+- [x] Define semantic versioning, changelog and deprecation policy.
+- [x] Complete GPL/licence and attribution audit.
+- [x] Record supported scale/performance envelopes and benchmark baselines.
+- [x] Run malformed-document and degenerate-geometry fuzzing without panic or false success.
+- [x] Keep the disposable WASM playground compiling as a non-authoritative consumer of public APIs.
 
 Gate: all acceptance suites, serialization round trips/migrations, fuzz corpora,
 documentation tests, performance baselines, native checks and locked WASM smoke
 builds pass.
 
+Completion record (2026-07-21): version `0.1.0` is the first supported preview.
+`docs/API_COMPATIBILITY.md` defines lockstep crate SemVer, MSRV, API tiers,
+deprecation, schema retention and dependency-order publication. Sketch reads v1-v4
+and writes v4; planar and spatial linkage retain frozen v1 languages. Public API
+review removed unused scenario enums, made evolving domain errors non-exhaustive
+and explicitly classifies retained compiler/runtime/core report views as unstable
+advanced diagnostics rather than persisted application identity.
+
+All library crates now carry package descriptions, registry-versioned internal
+dependencies, docs.rs metadata, packaged README/GPL files and expanded crate guides.
+Complete persistent sketch, planar linkage and spatial assembly examples compile and
+run. `CHANGELOG.md`, `THIRD_PARTY_LICENSES.md`, `deny.toml` and the M29 scale and
+performance envelope establish release, attribution and rebaseline policy; the WASM
+distribution includes visible legal/schema/performance links and an E2E-checked M28
+UAT guide. Deterministic mutation tests exercise sketch v1-v4 plus planar/spatial v1
+under panic guards and require every surviving solve to be finite, canonical,
+independently hard-valid and at most `1e-9` normalized residual.
+
+`scripts/release-gate.sh` enforces format/diff, warnings-denied Clippy/rustdoc, full
+locked workspace tests, locked WASM, benchmark compilation, mutation tests, package
+contents, dependency licences, native interaction budgets, the ignored 1,536-
+coordinate spatial release case, release Trunk and desktop/mobile Chromium. The
+M29 run recorded small/medium first-solve p95 `1.849/51.550ms`, incremental p95
+`4.558/111.778ms`, browser p95 `9.300/61.400ms`, and spatial release `88.29s`, all
+inside their gates. Registry publication remains a separate maintainer action after
+a repository URL, clean release commit and tag exist.
+
+## M30: interactive construction and NURBS UAT
+
+Status: complete as of 2026-07-21.
+
+Goal: expose the completed M25-M28 construction and NURBS behavior through
+genuinely movable public-document browser labs and focused authoring controls.
+
+- [x] Add separate supporting-line and exact translated-segment offset labs with their truthful two-DOF and one-DOF motion.
+- [x] Add an entity-mirror lab that exercises the public mirror macro rather than only a point-symmetry residual.
+- [x] Add a directed-angle branch-cut lab with editable orientation, target and driving/reference mode.
+- [x] Add interactive M27 line-line and M28 line-circle, line-Bezier and NURBS-line fillet labs.
+- [x] Add NURBS weight/gauge, local-support/knot-insertion, periodic span/winding and differential-continuity labs.
+- [x] Add focused offset, mirror, angle, fillet and NURBS browser controls using only public document/session transactions.
+- [x] Give every normal lab at least one documented initial DOF, one named primary drag and a reset action.
+- [x] Prove projected drags change accepted associated geometry, not merely that examples render.
+- [x] Add native persistence/history/rollback tests plus desktop interaction and mobile-load browser coverage.
+
+Gate: every advertised lab starts independently hard-valid, reports its documented
+DOF, changes accepted geometry through its primary interaction, retains explicit
+branch state and canonical persistence, and contains no browser equation.
+
+Completion record (2026-07-21): twelve reusable public scenarios cover supporting
+and exact offsets, entity mirror, directed angle, M27/M28 line/circle/Bezier/NURBS
+fillets and four NURBS interaction families. `AlphaScenarioUat` publishes expected
+equality/bounded DOF, instructions and a named primary drag. Focused browser controls
+create offsets/mirrors and edit angle orientation, fillet branch/radius, NURBS
+weights/gauge/knots and periodic transitions through public document transactions.
+
+Seven M30 native tests prove exact initial DOF, geometry-changing projected drags,
+association motion, canonical persistence, history and invalid-edit retention.
+All 81 native web tests pass. Release Trunk plus focused Chromium proves desktop
+construction/fillet/NURBS interactions and responsive loading of all twelve labs on
+mobile. Format/diff and warnings-denied focused Clippy pass. Aggressive one-step
+NURBS-line fillet drags may truthfully reject at iteration limit; documented smaller
+continuation moves remain accepted and no failed drag republishes geometry.
+
+## M31: all-family visual profile analysis
+
+Status: complete as of 2026-07-21.
+
+Goal: make visual-only boundary detection truthful for every built-in planar curve
+family rather than silently omitting non-linear spans.
+
+- [x] Accept an ADR for family-specific bounded curve pieces, certified intersection isolation, curved half-edges, area/containment bounds and incomplete-result policy.
+- [x] Support line/polyline, circle/arc, ellipse/elliptical arc, rational conic, parabola/hyperbola, Bezier, B-spline and NURBS visible intervals.
+- [x] Isolate transverse pair and self intersections without coordinate snapping or missed-root `Complete` claims.
+- [x] Treat tangency, overlap, poles, unresolved multiple roots and exhausted subdivision as typed incomplete component outcomes.
+- [x] Sort half-edges by actual outgoing curve tangent and preserve exact source-span parameter provenance in traversal order.
+- [x] Compute analytic Green-area terms where available and bounded interval integration otherwise; publish orientation only when the area-sign enclosure is resolved.
+- [x] Perform bounded curve-aware containment and include exact circular/elliptic extrema in contour bounds.
+- [x] Join fillet-owned trim boundaries to output-arc endpoints through explicit ownership, never proximity inference.
+- [x] Expose analysis scope, status, issues and consumed budgets to public consumers while keeping output equation-free and non-persistent.
+- [x] Add an all-family pair/self-intersection, transform, scale, ambiguity, budget and persistence-neutrality corpus.
+- [x] Render returned curved source intervals through public curve evaluation and expose focused browser UAT scenes and diagnostics.
+
+Gate: every built-in family can participate in a complete finite visual face only
+when all relevant roots, local rotations, area signs and containment decisions are
+resolved; ambiguous or over-budget components never publish false complete faces.
+
+Completion record (2026-07-21): ADR 0024 extends the read-only M26 arrangement
+through family-specific linear, circular, analytic-conic, polynomial and homogeneous
+rational pieces. Pure-Rust outward interval arithmetic, certified transcendental and
+angle kernels, interval-Newton/Krawczyk isolation and bounded integration make root,
+tangent-order, area and containment publication fail closed. Periodic winding,
+source-parameter provenance, exact endpoint joins, same-carrier overlap and explicit
+fillet ownership remain structural state; coordinate proximity and render samples
+never establish topology. Component-local ambiguity removes affected faces while
+retaining provably disjoint clean components under an overall incomplete status.
+
+The 31-test M31 corpus covers all 120 family-pair fixtures, self-intersections,
+required scales and transforms, periodic seams, nesting, malformed geometry,
+overlap/tangency, local and global budgets, fillet ownership and canonical-JSON
+neutrality. Six focused browser scenes expose complete curved topology, movable
+fillet trims, editable NURBS self-intersections, typed incompleteness and budget
+exhaustion using public curve evaluation.
+
+Post-completion UAT regressions make active endpoint-to-curve interior contacts
+structural source splits after fresh accepted-residual validation, so movable fillet
+closures no longer depend on the sign of a tiny geometric residual. Self-isolation
+retries transverse roots on artificial parameter boundaries in a larger source-domain
+box and merges duplicate certified parameter boxes only after a fresh uniqueness
+proof. Required-scale/reflection and knot-refinement tests preserve complete NURBS
+self-roots away from semantic boundaries; a root exactly on an inserted semantic
+knot boundary remains a typed incomplete result rather than false `Complete`.
+Cycle-area integration apportions the unchanged scale-relative display uncertainty
+target across directed fragments before independently checking the summed interval
+against the original target. A captured NURBS capsule regression sweeps nearby
+control-point perturbations while preserving four certified roots, eleven fragments,
+four faces and matching endpoint topology without weakening fail-closed acceptance.
+`cargo fmt --all -- --check`, `git diff --check`, warnings-denied locked workspace
+Clippy, full locked workspace tests, locked WASM, release Trunk and focused
+desktop/mobile Chromium E2E pass.
+
+## M32: post-expansion UAT and release hardening
+
+Status: active.
+
+Goal: re-run the release discipline after M30-M31 broaden the public browser and
+analysis surfaces.
+
+- [ ] Consolidate construction, NURBS, fillet and all-family profile UAT instructions in the browser.
+- [ ] Add desktop E2E for every new interaction and retained-state failure path.
+- [ ] Extend malformed/extreme-value mutation coverage to the new commands and profile analysis.
+- [ ] Record updated native/browser performance and resource envelopes.
+- [ ] Re-run package, licence, documentation, native, locked WASM and browser release gates.
+- [ ] Update compatibility, changelog and public release records for the next preview.
+
+2026-07-21 UAT handoff slice: the browser can copy a deterministic
+`GEOSOLVE_SCENE_V1` capsule containing canonical sketch JSON, exact profile budgets,
+active-example/status metadata and a checksum. A private pure-Rust LZSS/base64url
+codec keeps text compact without a new dependency. The existing Import text action
+recognizes capsules, independently solves the document and restores profile options;
+malformed, corrupt, oversized or over-budget capsules retain the accepted scene.
+Native codec/round-trip/atomicity tests and focused Chromium copy/import coverage
+pass. Capsules are diagnostic exchange text, not a new sketch persistence schema.
+The same focused layout gate assigns every below-canvas diagnostic section an
+explicit desktop grid area and enforces usable solver/profile/audit/release heights;
+long bodies scroll locally instead of collapsing sibling rows, while narrow screens
+retain the natural stacked document flow.
+
+Gate: all M1-M31 acceptance, mutation, documentation, package, native, WASM,
+performance and browser suites pass from one release-gate command.
+
+## M33: CAD engine contract and baselines
+
+Status: planned.
+
+Goal: freeze the product and ownership decisions for a host-usable planar sketch
+engine before changing persistence or public state semantics.
+
+- [ ] Accept ADRs for design-versus-accepted state, host parameters, immutable external snapshots, cancellation/concurrency, companion APIs and draft-v5 development.
+- [ ] Freeze a complete entity/feature/constraint/dimension applicability matrix and identify every unsupported ordinary CAD combination.
+- [ ] Define accepted-state identity over design revision, parameter revision, external-snapshot digest, activation state and solver policy.
+- [ ] Define the ownership boundaries for host undo, expressions, units, projection, topology and production profiles.
+- [ ] Add deterministic representative workloads for connected, disconnected, spline-heavy, parameter-heavy, external-reference and activation-heavy sketches.
+- [ ] Record cold compile, warm edit, diagnostics, profile, cancellation-latency and memory measurement boundaries without imposing premature thresholds.
+
+Gate: every new semantic concept has an accepted decision and representative fixture;
+M1-M32 behavior and frozen wire languages remain unchanged.
+
+## M34: retained design and accepted solved state
+
+Status: planned.
+
+Goal: retain structurally valid unsolved intent without ever presenting it as
+accepted geometry.
+
+- [ ] Separate design, attempted-candidate and independently accepted solved views with distinct revisions.
+- [ ] Retain structurally valid conflicts, unavailable references and failed unsuppression in design intent.
+- [ ] Continue rejecting malformed, non-finite, resource-invalid or referentially invalid design transactions entirely.
+- [ ] Publish optional finite attempted geometry as non-authoritative evidence only.
+- [ ] Preserve the last accepted state across topology-changing unsolved edits and identify which design revision it solved.
+- [ ] Define persistence and host display rules for design elements that have no accepted solved counterpart yet.
+
+Gate: no unsolved or attempted state can produce a success-like status, accepted
+revision or authoritative audit; retained design can be repaired through ordinary
+transactions.
+
+## M35: cancellation and operation control
+
+Status: planned.
+
+Goal: make every potentially expensive sketch operation safely interruptible by an
+interactive host.
+
+- [ ] Add cooperative cancellation and deterministic work controls to lowering, nonlinear solving, rank, diagnostic trials and profile analysis.
+- [ ] Distinguish cancellation, work exhaustion, numerical rejection, invalid geometry and convergence.
+- [ ] Add documented cancellation checkpoints and measured maximum latency around non-interruptible kernels.
+- [ ] Let hosts implement deadlines through the same cancellation mechanism without making wall time part of correctness.
+- [ ] Prove cancellation retains accepted state and cannot commit a partially validated result.
+- [ ] Keep native and single-threaded WASM behavior equivalent.
+
+Gate: cancelled work never reports convergence or valid publication, commits nothing
+and leaves the prior accepted state bitwise unchanged.
+
+## M36: semantic feature and scalar foundations
+
+Status: planned.
+
+Goal: create closed typed operands for a complete CAD catalog without exposing an
+arbitrary curve or residual plugin interface.
+
+- [ ] Introduce capability-specific references for points, centers, endpoints, controls, directions, line supports, curve spans and scalar properties.
+- [ ] Add explicit fixed/equal scalar semantics and the units/domains required by signed length, angle, dimensionless, curvature and parameter values.
+- [ ] Preserve one persistent semantic source when a relation lowers into several ordinary rows.
+- [ ] Make every operand serializable, audit-readable and branch-aware without coordinate inference.
+- [ ] Add exhaustive current-schema command/effect/measurement characterization before extending the catalog.
+
+Gate: every semantic operand validates through persistent IDs, lowers deterministically
+and has exact, malformed, persistence and audit coverage.
+
+## M37: standard planar constraint catalog
+
+Status: planned.
+
+Goal: cover the ordinary geometric relations expected from a production planar
+sketch engine.
+
+- [ ] Add first-class concentric and collinear relations.
+- [ ] Add horizontal and vertical relations between arbitrary point features.
+- [ ] Add grouped whole-entity block/fix and point symmetry about a center.
+- [ ] Generalize line/entity symmetry and equal circular radius across compatible circles and arcs.
+- [ ] Add equal scalar, distance and angle relations where the applicability matrix permits them.
+- [ ] Add high-level contact and tangent constructors that allocate and validate explicit latent branch state for hosts.
+- [ ] Preserve explicit same/opposite direction, side, neighborhood and containment choices for every multi-root relation.
+
+Gate: the frozen standard relation matrix has no undocumented family gaps; every new
+row passes derivative, transform, scale, persistence, branch, cancellation and
+rollback gates.
+
+## M38: dimensions and persistent measurements
+
+Status: planned.
+
+Goal: complete the normal dimensional vocabulary and make measurement semantics
+available without UI formulas.
+
+- [ ] Add signed relative horizontal/vertical and absolute datum-coordinate dimensions.
+- [ ] Add signed point-to-line distance and parallel-line separation.
+- [ ] Add two-line and three-point angle, circular sweep and circular arc-length dimensions.
+- [ ] Add driving/reference ellipse-axis and supported conic-property dimensions.
+- [ ] Persist curvature, osculating-radius and generic measurement definitions with typed units and provenance.
+- [ ] Add equation-free bounded length measurement for every regular bounded curve.
+- [ ] Add driving and equal path-length constraints only with bounded value/derivative evaluation and typed work exhaustion.
+- [ ] Remove the misleading line-only public meaning of `CurveLength` through a migration-safe replacement.
+
+Gate: every driving and reference form agrees on the same independently evaluated
+measurement; no integral dimension succeeds outside its certified work and derivative
+contract.
+
+## M39: CAD workbench foundation and core authoring
+
+Status: planned.
+
+Goal: begin the desktop-only rewrite early enough to test the ordinary CAD interaction
+model before host and advanced workflows build on it.
+
+- [ ] Split application state, domain controller, tools, selection, scene, panels, persistence and browser platform code into explicit modules.
+- [ ] Make one domain adapter the sole owner of sketch sessions and unstable core-report translation.
+- [ ] Add explicit accepted, design-unsolved, solving, solved-preview and rejected-attempt application states.
+- [ ] Build a CAD-like desktop shell with command bar, tool palette, sketch tree, full-height canvas, property inspector, status bar and Problems drawer.
+- [ ] Add retained scene layers, adaptive public-jet tessellation and revision-keyed geometry/profile caches.
+- [ ] Implement point, line/polyline, rectangle, circle/arc, core constraints, dimensions, drag, delete, undo and redo through public commands.
+- [ ] Draw selectable persistent constraint glyphs and driving/reference dimensions without recomputing equations in the browser.
+- [ ] Keep the old advanced lab available only through an explicit temporary developer route during migration.
+
+Gate: automated desktop E2E proves every core workflow, accepted-state retention and
+canvas/tree/inspector synchronization before human UAT begins. Mobile support is not
+implemented or tested.
+
+## M40: human UAT 1 - core sketch interaction
+
+Status: planned; human approval required.
+
+Goal: retire the risk that the basic creation, selection, constraint and dimension
+interaction model is mathematically correct but unsuitable for CAD authoring.
+
+- [ ] Prequalify all objective core workflows through native, WASM and isolated desktop browser automation.
+- [ ] Provide one URL, deterministic resets and a 30-45 minute core drafting script requiring no build or numeric comparison.
+- [ ] Exercise geometry creation, constraints, driving/reference dimensions, constrained drag, conflict/redundancy, delete and history.
+- [ ] Assess whether accepted, preview, unsolved and rejected states are unmistakable.
+- [ ] Capture every finding as a scene capsule, screenshot, action transcript and accepted/attempted diagnostic bundle.
+- [ ] Convert objective findings into native and browser regressions and complete only the necessary targeted human rechecks.
+
+Gate: the supervising human explicitly approves the core interaction scorecard and no
+correctness, data-loss, misleading-state or basic-usability blocker remains.
+
+## M41: construction roles and activation
+
+Status: planned.
+
+Goal: represent construction and configuration semantics as explicit domain state.
+
+- [ ] Add persisted regular/profile and construction geometry roles.
+- [ ] Keep construction geometry fully constrainable while excluding it from production profiles by default.
+- [ ] Generalize activation over entities, constraints, dimensions and associations.
+- [ ] Distinguish user suppression, host-configuration inactivity, unavailable dependency and unavailable external reference.
+- [ ] Validate the effective active dependency closure and report every inactivity reason.
+- [ ] Preserve branch, span, winding, contact and ownership state while inactive and across reactivation.
+
+Gate: activation changes are atomic, never evaluate dangling dependencies and never
+infer a new branch from retained coordinates.
+
+## M42: typed host parameters
+
+Status: planned.
+
+Goal: let host-owned expression/configuration systems drive sketches through finite
+typed values without becoming solver variables or a second expression language.
+
+- [ ] Add persistent parameter identities and typed length, angle, dimensionless and activation input bindings.
+- [ ] Accept immutable revisioned parameter batches and map dependencies to affected sources/components.
+- [ ] Allow one parameter to drive multiple dimensions without adding an artificial unknown.
+- [ ] Return declared reference measurements as revision-stamped output proposals with units and provenance.
+- [ ] Reject input/output ownership cycles and stale parameter commits atomically.
+- [ ] Keep expression parsing, unit display and configuration dependency graphs host-owned.
+
+Gate: identical design and parameter bytes reproduce identical accepted geometry and
+diagnostics; rejection changes no accepted input or output revision.
+
+## M43: immutable external 2D references
+
+Status: planned.
+
+Goal: constrain native sketch geometry against other sketches or model geometry
+without callbacks, hidden fixed copies or coordinate-based repair.
+
+- [ ] Persist stable local external-binding identity and expected feature kind.
+- [ ] Accept immutable finite 2D point/curve snapshots carrying revision, digest, domain, orientation, scale and resource evidence.
+- [ ] Integrate external features into the same typed operand and audit system as native geometry without adding solver variables.
+- [ ] Require explicit rebinding/remapping for family, span or topology changes.
+- [ ] Report missing, stale, duplicate, wrong-kind, non-finite, oversized and incompatible snapshots as typed unsolved-design outcomes.
+- [ ] Keep arbitrary host/PDM keys and 3D projection computation outside sketch equations and canonical sketch state.
+- [ ] Let diagnostic capsules bundle design, parameter and snapshot inputs for reproducibility without making stored status authoritative.
+
+Gate: one attempt validates against exactly one immutable snapshot set and records its
+revision/digest; no host callback or proximity inference participates in solving.
+
+## M44: host-state workbench integration
+
+Status: planned.
+
+Goal: expose construction, activation, parameters, references and dual-state behavior
+coherently through the CAD-like desktop consumer.
+
+- [ ] Add construction styling and explicit profile participation controls.
+- [ ] Add activation/suppression editors distinct from driving/reference dimension mode.
+- [ ] Add parameter inputs, bindings and output proposals without exposing internal design scalars indiscriminately.
+- [ ] Add external-reference tree entries, styling, revision/digest status and explicit rebind workflows.
+- [ ] Display design, attempted and accepted revisions together whenever they differ.
+- [ ] Prove atomic batch updates, stale/missing inputs and accepted-state retention in browser automation.
+
+Gate: every host-state workflow is objectively qualified before the second human UAT
+checkpoint; the browser still contains no equation or host callback.
+
+## M45: human UAT 2 - CAD host semantics
+
+Status: planned; human approval required.
+
+Goal: retire trust and comprehension risks around construction, activation,
+parameters, external references and retained unsolved intent.
+
+- [ ] Prequalify all state/revision/digest/atomicity behavior automatically.
+- [ ] Provide a 30-45 minute prepared script for role conversion, suppression/reactivation, shared parameter updates, invalid configurations and external-reference loss/recovery.
+- [ ] Assess whether stale external data, solver rejection and unsolved design are visibly distinct.
+- [ ] Assess whether parameter ownership, output proposals and activation reasons are understandable.
+- [ ] Capture findings automatically and convert objective defects into regressions.
+- [ ] Require only targeted human rechecks unless the host-state workflow changes materially.
+
+Gate: the supervising human approves the host-semantics scorecard and no state-trust,
+recovery or ownership blocker remains.
+
+## M46: stable diagnostics and mobility evidence
+
+Status: planned.
+
+Goal: let CAD hosts explain and repair sketches without consuming unstable core
+reports or parsing display strings.
+
+- [ ] Publish stable sketch-owned solve, source, component, dependency, activation, parameter and external-reference diagnostic DTOs.
+- [ ] Keep design, attempt and accepted revisions explicit in every relevant diagnostic.
+- [ ] Report structural and numerical rank, equality/bounded/one-sided DOF and diagnostic completeness separately.
+- [ ] Add budgeted mobility witnesses mapped to persistent point/scalar identities.
+- [ ] Add bounded conflict cores or ranked repair candidates without claiming global minimality.
+- [ ] Publish stable machine-readable action suggestions that create ordinary explicit transactions.
+- [ ] Move direct core reports behind a clearly unstable advanced-diagnostics seam.
+
+Gate: a host can render every supported success, failure, incompleteness and repair
+path from persistent domain IDs and stable codes alone.
+
+## M47: prepared jobs and concurrency contract
+
+Status: planned.
+
+Goal: let native and WASM hosts schedule sketch work safely without an internal async
+runtime or thread pool.
+
+- [ ] Make accepted snapshots immutable and shareable under a documented Rust ownership contract.
+- [ ] Prepare solve/profile jobs against exact design, parameter, external, activation and policy revisions.
+- [ ] Return attempted diagnostics and a candidate patch without mutating session state.
+- [ ] Add compare-and-swap commit that rejects every stale input revision.
+- [ ] Specify synchronous single-writer sessions and host-managed worker scheduling.
+- [ ] Prove deterministic publication independent of scheduling order and cancellation timing.
+- [ ] Add compile-time and runtime tests for the intended `Send`/`Sync` surface without adding `unsafe` code.
+
+Gate: stale or cancelled work remains inspectable but can never overwrite a newer
+accepted state; native and single-threaded WASM consumers share one semantic contract.
+
+## M48: incremental solving and production scale
+
+Status: planned.
+
+Goal: stop rebuilding the complete document for ordinary edits and publish an honest
+supported production envelope.
+
+- [ ] Retain persistent-to-runtime mappings and patch nonstructural edits through the existing session machinery.
+- [ ] Rebuild only affected topology/dependency closures for structural, parameter, reference and activation changes.
+- [ ] Add indexed stores and structural-sharing history without changing canonical order or ID high-water semantics.
+- [ ] Add profile broad-phase indexing and revision-keyed immutable piece/bounds caches while preserving certified narrow-phase decisions.
+- [ ] Benchmark cold import, warm edit, drag, diagnostics, parameter/reference updates, cancellation latency, profiles and memory separately.
+- [ ] Evaluate a pure-Rust rank-revealing sparse authority against dense SVD or publish an explicit connected-component size limit if parity cannot be proved.
+- [ ] Preserve complete fresh validation and diagnostic evidence on every optimized return path.
+
+Gate: incremental and full rebuild paths agree on accepted geometry, status, rank,
+branch and source diagnostics; all documented workload envelopes pass.
+
+## M49: sketch operations companion
+
+Status: planned.
+
+Goal: provide reusable drafting operations without moving construction algorithms or
+private equations into the numerical solver.
+
+- [ ] Establish a separate companion API/crate that produces public sketch transactions and owns no residual formulas.
+- [ ] Add general split, break, trim and extend with identity-preserving result mappings.
+- [ ] Generalize visible topology to multiple explicit intervals per immutable support.
+- [ ] Add family-complete mirror where exact parameter transformation is available.
+- [ ] Add chamfer and preserve explicit ownership for existing fillet workflows.
+- [ ] Add rectangle, polygon, slot and pattern expansion into ordinary geometry and grouped sources.
+- [ ] Keep general spline/conic offset approximation and persistent pattern-object personality outside the M55 gate.
+
+Gate: every operation is deterministic, transactional, dependency-aware and
+replaceable by an equivalent host transaction without changing solver semantics.
+
+## M50: production topology companion
+
+Status: planned.
+
+Goal: turn accepted visible geometry into trustworthy wire/profile input for a CAD
+feature system without creating B-rep or solver state.
+
+- [ ] Establish a separate production topology API/crate over accepted sketch snapshots and exact input digests.
+- [ ] Publish revision-stamped wires, orientation, nesting, holes, source-span provenance and bounded region boundaries.
+- [ ] Define explicit production policies for tangency, overlap, touching contours, T-junctions and self-intersections.
+- [ ] Filter construction and external geometry only through declared query scope.
+- [ ] Keep production results ephemeral and distinct from visual-analysis faces, persistent sketch entities and solver sources.
+- [ ] Preserve `Complete`, `Truncated`, `Skipped` and cancellation evidence with consumed budgets.
+
+Gate: downstream CAD features may consume only `Complete` output for the exact
+accepted-state/input digest; ambiguous, stale or incomplete topology is unusable.
+
+## M51: advanced workbench completion and automated qualification
+
+Status: planned.
+
+Goal: complete the CAD-like desktop demo over advanced geometry, operations,
+diagnostics and topology, then remove the old playground.
+
+- [ ] Add conic, Bezier, B-spline and NURBS controls, weights, knots, gauges and periodic transitions.
+- [ ] Add explicit editors for sweep, side, orientation, winding, neighborhood and other branch state.
+- [ ] Add companion fillet, trim, split, extend, mirror, chamfer, pattern, polygon and slot workflows.
+- [ ] Add production profile inspection, source navigation and truthful incomplete-state presentation.
+- [ ] Add conflict navigation, redundancy display, mobility evidence, cancellation and stale-result presentation.
+- [ ] Add a versioned desktop workspace envelope for annotations, panel state, attributes, parameters and external descriptors around canonical sketch inputs.
+- [ ] Split browser automation into isolated core, host-state, advanced, persistence, profile and performance suites.
+- [ ] Remove the old playground state, legacy application, hidden DOM and obsolete CSS after automated parity.
+- [ ] Generate deterministic UAT scenes, capsules, instructions and automatic finding evidence.
+
+Gate: every advertised workflow passes native, WASM and fresh-profile desktop browser
+qualification without retries; no legacy alternate application or browser equation
+remains.
+
+## M52: human UAT 3 - advanced geometry and topology
+
+Status: planned; human approval required.
+
+Goal: retire perceptual branch, advanced-authoring, topology-trust and interaction-
+performance risks after objective qualification is complete.
+
+- [ ] Provide a 45-60 minute prepared script covering conics, splines/NURBS, weights/knots, periodic transitions and explicit branch controls.
+- [ ] Exercise fillets, trims, mirrors, patterns and other companion operations.
+- [ ] Inspect valid profiles, holes, self-intersections and intentionally incomplete topology.
+- [ ] Exercise rapid edits, cancellation and one representative medium sketch.
+- [ ] Assess local predictability, branch clarity, coherent associated motion, topology trust and interactive responsiveness.
+- [ ] Capture findings automatically, add regressions and perform targeted human rechecks.
+
+Gate: the supervising human approves the advanced/topology scorecard and no wrong-
+branch, misleading-profile, interaction or responsiveness blocker remains.
+
+## M53: API and schema release-candidate freeze
+
+Status: planned.
+
+Goal: make one deliberate compatibility cut only after ordinary, host and advanced
+workflows have passed their phase UAT.
+
+- [ ] Freeze one final sketch v5 language with deterministic direct migration from frozen v1-v4.
+- [ ] Freeze separate versioned parameter, external-snapshot and desktop-workspace envelopes.
+- [ ] Freeze the supported Rust/WASM facade, request builders, diagnostics, capability queries, cancellation and threading contracts.
+- [ ] Remove fixture/scenario and unstable compiler/runtime types from the primary production surface.
+- [ ] Pass schema goldens, downstream compile fixtures, SemVer checks, packaged-crate examples and migration mutation tests.
+- [ ] Record the candidate commit, toolchains, performance/resource envelopes and complete automated evidence bundle.
+- [ ] Revoke and requalify the candidate after any API, schema, persistence or major workflow change.
+
+Gate: the exact release candidate passes every native, WASM, browser, fuzz, mutation,
+performance, package, documentation and licence gate with no known correctness or
+trust blocker.
+
+## M54: human UAT 4 - integrated release candidate
+
+Status: planned; human approval required.
+
+Goal: validate end-to-end trust and coherence on the frozen candidate rather than
+repeat an exhaustive feature matrix.
+
+- [ ] Provide one 45-60 minute integrated workflow from empty sketch through ordinary/construction geometry, constraints, parameters, external references, advanced curves and an associative operation.
+- [ ] Introduce and repair a conflict, inspect a production profile and exercise save/reload/history/capsule recovery.
+- [ ] Include a short unscripted exploratory authoring period.
+- [ ] Assess whether normal work is unobtrusive, failures are trustworthy and advanced diagnostics remain available without dominating the workflow.
+- [ ] Capture and regress every objective finding; request only targeted rechecks unless the candidate changes materially.
+- [ ] Record explicit human sign-off and disposition of nonblocking polish findings.
+
+Gate: the supervising human ratifies the release-candidate scorecard and no integrated
+correctness, data-loss, topology, persistence or trust blocker remains.
+
+## M55: production embedding release gate
+
+Status: planned.
+
+Goal: prove a real CAD host can build on the frozen contract without duplicating
+equations and publish a CAD-engine-ready release candidate.
+
+- [ ] Add a mock host that owns expressions, parameter values, external keys, attributes, cross-system history and worker scheduling.
+- [ ] Exercise retained unsolved intent, immutable snapshots, parameters, activation, cancellation, stale jobs, stable diagnostics and production topology through public APIs only.
+- [ ] Add coverage-guided fuzz targets and resource limits for every document/input/transaction/profile envelope.
+- [ ] Gate Linux, Windows, macOS and `wasm32-unknown-unknown` Rust consumers without adding a C ABI.
+- [ ] Build examples from packaged archives and complete MSRV, dependency, advisory, licence and documentation checks.
+- [ ] Publish compatibility, migration, performance, security and resource records.
+- [ ] Run one reproducible release command covering all M1-M54 automated acceptance and recorded human approvals.
+
+Gate: no input can panic, exceed its declared interruption/resource policy, publish
+non-finite data, falsely report success/complete topology or commit stale work. The
+result is a production embedding release candidate; a `1.0` label waits for at least
+one real downstream CAD integration.
+
 ## Explicit non-goals
 
-The following are not part of M8-M29:
+The following are not part of M8-M55:
 
 - solid modeling, B-rep booleans, meshing or a production rendering system;
+- 3D sketch curves or a unified 2D/3D sketch entity model;
 - global enumeration of every geometric root;
 - arbitrary third-party curve or manifold plugins;
+- user-authored residual equations or soft ordinary constraints;
+- an internal expression/configuration language or host B-rep projection callbacks;
+- C/C++ ABI bindings or an approved `unsafe` exception;
+- responsive, tablet or mobile support for the desktop demo workbench;
 - physical contact, collision detection, friction or impact;
 - mass properties, loads, reactions, statics, inverse dynamics or forward dynamics;
 - time integration.
 
-These require separate product decisions after both library deliverables are complete.
+These require separate product decisions after the production embedding gate.

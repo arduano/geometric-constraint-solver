@@ -1,4 +1,13 @@
 //! Pure geometric value types shared by sketches and mechanisms.
+//!
+//! The crate provides checked planar/spatial frames, `SE(2)`/`SE(3)` poses,
+//! immutable analytic and parametric curves, locally supported B-splines/NURBS and
+//! differential geometry through third-order jets. Construction and evaluation
+//! reject invalid domains, non-finite values, poles and unresolved regularity rather
+//! than substituting zero or clamping silently.
+//!
+//! These are numerical geometry values only. Solver variables, constraints,
+//! persistent design identities and assembly topology belong to the domain crates.
 
 mod bsplines;
 mod conics;

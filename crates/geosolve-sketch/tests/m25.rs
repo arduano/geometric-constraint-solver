@@ -402,19 +402,23 @@ fn current_document_round_trips_offsets_and_v1_v2_migrate_their_frozen_schemas()
             DocumentDimensionMode::Driving,
         )
         .unwrap();
-    let canonical_v3 = legacy.to_canonical_json().unwrap();
-    assert!(canonical_v3.starts_with("{\"version\":3,"));
-    let legacy_v1 = canonical_v3.replacen("\"version\":3", "\"version\":1", 1);
+    let canonical_v4 = legacy.to_canonical_json().unwrap();
+    assert!(canonical_v4.starts_with("{\"version\":4,"));
+    let mut prior: serde_json::Value = serde_json::from_str(&canonical_v4).unwrap();
+    prior.as_object_mut().unwrap().remove("trim_views");
+    prior["version"] = 1.into();
+    let legacy_v1 = serde_json::to_string(&prior).unwrap();
     let migrated = SketchDocument::from_json(&legacy_v1).unwrap();
-    assert_eq!(migrated.version(), 3);
-    assert_eq!(migrated.to_canonical_json().unwrap(), canonical_v3);
-    let legacy_v2 = canonical_v3.replacen("\"version\":3", "\"version\":2", 1);
+    assert_eq!(migrated.version(), 4);
+    assert_eq!(migrated.to_canonical_json().unwrap(), canonical_v4);
+    prior["version"] = 2.into();
+    let legacy_v2 = serde_json::to_string(&prior).unwrap();
     assert_eq!(
         SketchDocument::from_json(&legacy_v2)
             .unwrap()
             .to_canonical_json()
             .unwrap(),
-        canonical_v3
+        canonical_v4
     );
 
     let (mut document, source, target_segment) = document_line_pair();
@@ -447,8 +451,15 @@ fn current_document_round_trips_offsets_and_v1_v2_migrate_their_frozen_schemas()
         }
     ));
 
-    let offset_claiming_v1 = json.replacen("\"version\":3", "\"version\":1", 1);
-    assert!(SketchDocument::from_json(&offset_claiming_v1).is_err());
+    let mut offset_claiming_v1: serde_json::Value = serde_json::from_str(&json).unwrap();
+    offset_claiming_v1["version"] = 1.into();
+    offset_claiming_v1
+        .as_object_mut()
+        .unwrap()
+        .remove("trim_views");
+    assert!(
+        SketchDocument::from_json(&serde_json::to_string(&offset_claiming_v1).unwrap()).is_err()
+    );
 }
 
 fn add_mirror_axis(document: &mut SketchDocument) -> CurveSpan {

@@ -4,13 +4,14 @@
 use geosolve_core::{HardValidity, SolveTermination, SolverConfig};
 use geosolve_geometry::Point2;
 use geosolve_sketch::{
-    ArcSweep, ContactDefinition, ContactDomain, ContactNeighborhood, CurveContactNeighborhood,
-    CurveDefinition, CurveMeasurementKind, CurveNormalSide, CurveSpan, DimensionMode,
-    DocumentArcSweep, DocumentCommand, DocumentCommandEffect, DocumentConstraintDefinition,
-    DocumentCurveNormalSide, DocumentDimensionMode, DocumentEdit, DocumentFilletEndpointOrder,
-    DocumentObjectId, DocumentSolveRequest, FilletEndpointOrder, LineLineFilletIds,
-    LineLineFilletRequest, LineParameterDomain, ScalarDomain, ScalarUnit, Sketch, SketchCurve,
-    SketchCurveContact, SketchDocument, SketchDocumentSession, SketchSolveRequest,
+    ArcSweep, ContactDefinition, ContactDomain, ContactNeighborhood, ContactState,
+    CurveContactNeighborhood, CurveDefinition, CurveMeasurementKind, CurveNormalSide, CurveSpan,
+    DimensionMode, DocumentArcSweep, DocumentCommand, DocumentCommandEffect,
+    DocumentConstraintDefinition, DocumentCurveNormalSide, DocumentDimensionMode, DocumentEdit,
+    DocumentFilletEndpointOrder, DocumentObjectId, DocumentSolveRequest, FilletEndpointOrder,
+    LatentVariableRole, LineLineFilletIds, LineLineFilletRequest, LineParameterDomain,
+    ScalarDomain, ScalarUnit, Sketch, SketchBound, SketchCurve, SketchCurveContact, SketchDocument,
+    SketchDocumentSession, SketchSolveRequest, SolveRejection,
 };
 
 fn transformed(point: [f64; 2], scale: f64, angle: f64, offset: [f64; 2]) -> [f64; 2] {
@@ -192,7 +193,7 @@ fn runtime_line_fillet_rows_derive_the_accepted_arc() {
             .abs()
             <= 1.0e-9
     );
-    assert!(sketch.add_point_on_arc(first_start, arc, 0.5).is_err());
+    assert!(sketch.add_point_on_arc(first_start, arc, 0.5).is_ok());
     assert!(
         sketch
             .add_line_line_fillet(
@@ -205,6 +206,176 @@ fn runtime_line_fillet_rows_derive_the_accepted_arc() {
             )
             .is_err()
     );
+}
+
+#[test]
+fn runtime_curve_fillet_uses_local_periodic_and_unbounded_bounds() {
+    let mut sketch = Sketch::new(1.0).unwrap();
+    let circle_center = sketch.add_point(Point2::origin()).unwrap();
+    let line_start = sketch.add_point(Point2::new(0.0, 1.0)).unwrap();
+    let line_end = sketch.add_point(Point2::new(6.0, 1.0)).unwrap();
+    let fillet_center = sketch.add_point(Point2::new(3.1, 0.1)).unwrap();
+    let circle = sketch.add_circle(circle_center, 2.0).unwrap();
+    let line = sketch.add_segment(line_start, line_end).unwrap();
+    for point in [circle_center, line_start, line_end] {
+        sketch.add_fixed_point(point).unwrap();
+    }
+    sketch
+        .add_circle_radius(circle, 2.0, DimensionMode::Driving)
+        .unwrap();
+    let arc = sketch
+        .add_arc(
+            fillet_center,
+            0.9,
+            std::f64::consts::FRAC_PI_2,
+            std::f64::consts::PI,
+            ArcSweep::CounterClockwise,
+        )
+        .unwrap();
+    let fillet = sketch
+        .add_curve_curve_fillet(
+            arc,
+            SketchCurveContact {
+                curve: SketchCurve::Circle(circle),
+                parameter: 0.0,
+                neighborhood: CurveContactNeighborhood::Local {
+                    lower: -0.4,
+                    upper: 0.4,
+                },
+            },
+            CurveNormalSide::Right,
+            SketchCurveContact {
+                curve: SketchCurve::Line {
+                    segment: line,
+                    domain: LineParameterDomain::SupportingLine,
+                },
+                parameter: 0.5,
+                neighborhood: CurveContactNeighborhood::Local {
+                    lower: 0.25,
+                    upper: 0.75,
+                },
+            },
+            CurveNormalSide::Right,
+            FilletEndpointOrder::SecondThenFirst,
+        )
+        .unwrap();
+    sketch
+        .add_arc_radius(arc, 1.0, DimensionMode::Driving)
+        .unwrap();
+
+    let compiled = sketch.compile(SketchSolveRequest::default()).unwrap();
+    let expected_bounds = [
+        (LatentVariableRole::FirstCurveParameter, -0.4, 0.4),
+        (LatentVariableRole::SecondCurveParameter, 0.25, 0.75),
+    ];
+    for (role, expected_lower, expected_upper) in expected_bounds {
+        let mapping = compiled
+            .bound_mappings()
+            .iter()
+            .find(|mapping| {
+                mapping.bound
+                    == SketchBound::Contact {
+                        constraint_id: fillet,
+                        role,
+                    }
+            })
+            .unwrap();
+        let bound = compiled.problem().bound(mapping.bound_id).unwrap();
+        assert_eq!(bound.lower(), Some(expected_lower));
+        assert_eq!(bound.upper(), Some(expected_upper));
+    }
+    assert_eq!(
+        compiled
+            .problem()
+            .audit_rows()
+            .unwrap()
+            .iter()
+            .filter(|row| row.source_label.contains("associative curve fillet"))
+            .count(),
+        6
+    );
+    let jacobians = compiled.problem().check_jacobians(1.0e-6).unwrap();
+    assert!(jacobians.all_within(2.0e-6), "{jacobians:#?}");
+
+    let result = sketch
+        .solve(SketchSolveRequest::default(), SolverConfig::default())
+        .unwrap();
+    assert!(result.accepted(), "{:#?}", result.rejection);
+    let solved = result.geometry.arc(arc).unwrap();
+    assert!((solved.center - Point2::new(3.0, 0.0)).norm() <= 1.0e-9);
+    let (start, end) = solved.endpoints().unwrap();
+    assert!((start - Point2::new(3.0, 1.0)).norm() <= 1.0e-9);
+    assert!((end - Point2::new(2.0, 0.0)).norm() <= 1.0e-9);
+    assert!(matches!(
+        sketch.contact_state(fillet).unwrap(),
+        ContactState::CurveCurveFillet { .. }
+    ));
+    assert!(sketch.add_point_on_arc(circle_center, arc, 0.5).is_ok());
+}
+
+#[test]
+fn runtime_curve_fillet_rejects_unresolved_offset_regularity() {
+    let mut sketch = Sketch::new(1.0).unwrap();
+    let radius = 1.0 - 5.0e-9;
+    let center_x = 1.0 - radius;
+    let circle_center = sketch.add_point(Point2::origin()).unwrap();
+    let line_start = sketch.add_point(Point2::new(-2.0, -radius)).unwrap();
+    let line_end = sketch.add_point(Point2::new(2.0, -radius)).unwrap();
+    let fillet_center = sketch.add_point(Point2::new(center_x, 0.0)).unwrap();
+    let circle = sketch.add_circle(circle_center, 1.0).unwrap();
+    let line = sketch.add_segment(line_start, line_end).unwrap();
+    for point in [circle_center, line_start, line_end, fillet_center] {
+        sketch.add_fixed_point(point).unwrap();
+    }
+    sketch
+        .add_circle_radius(circle, 1.0, DimensionMode::Driving)
+        .unwrap();
+    let arc = sketch
+        .add_arc(
+            fillet_center,
+            radius,
+            0.0,
+            -std::f64::consts::FRAC_PI_2,
+            ArcSweep::Clockwise,
+        )
+        .unwrap();
+    let fillet = sketch
+        .add_curve_curve_fillet(
+            arc,
+            SketchCurveContact {
+                curve: SketchCurve::Circle(circle),
+                parameter: 0.0,
+                neighborhood: CurveContactNeighborhood::Local {
+                    lower: -0.25,
+                    upper: 0.25,
+                },
+            },
+            CurveNormalSide::Left,
+            SketchCurveContact {
+                curve: SketchCurve::Line {
+                    segment: line,
+                    domain: LineParameterDomain::BoundedSegment,
+                },
+                parameter: (center_x + 2.0) / 4.0,
+                neighborhood: CurveContactNeighborhood::Interior,
+            },
+            CurveNormalSide::Left,
+            FilletEndpointOrder::FirstThenSecond,
+        )
+        .unwrap();
+    sketch
+        .add_arc_radius(arc, radius, DimensionMode::Driving)
+        .unwrap();
+
+    let result = sketch
+        .solve(SketchSolveRequest::default(), SolverConfig::default())
+        .unwrap();
+    assert!(!result.accepted());
+    assert!(matches!(
+        result.rejection,
+        Some(SolveRejection::InvalidFilletGeometry(rejected)) if rejected == fillet
+    ));
+    assert!(result.geometry.arc(arc).unwrap().center.x.is_finite());
 }
 
 #[test]
@@ -261,7 +432,7 @@ fn persistent_line_fillet_round_trips_and_projects_derived_endpoints() {
         )
         .unwrap();
     let canonical = document.to_canonical_json().unwrap();
-    assert!(canonical.contains("\"version\":3"));
+    assert!(canonical.contains("\"version\":4"));
     assert!(canonical.contains("\"kind\":\"line_line_fillet\""));
     assert_eq!(
         SketchDocument::from_json(&canonical)
@@ -270,14 +441,26 @@ fn persistent_line_fillet_round_trips_and_projects_derived_endpoints() {
             .unwrap(),
         canonical
     );
-    assert!(
-        SketchDocument::from_json(&canonical.replacen("\"version\":3", "\"version\":2", 1))
+    for old_version in [1, 2, 3] {
+        assert!(
+            SketchDocument::from_json(&canonical.replacen(
+                "\"version\":4",
+                &format!("\"version\":{old_version}"),
+                1
+            ))
             .is_err()
-    );
-    assert!(
-        SketchDocument::from_json(&canonical.replacen("\"version\":3", "\"version\":1", 1))
-            .is_err()
-    );
+        );
+    }
+    let mut frozen_v3: serde_json::Value = serde_json::from_str(&canonical).unwrap();
+    frozen_v3["version"] = 3.into();
+    frozen_v3.as_object_mut().unwrap().remove("trim_views");
+    let migrated_v3 =
+        SketchDocument::from_json(&serde_json::to_string(&frozen_v3).unwrap()).unwrap();
+    assert_eq!(migrated_v3.version(), 4);
+    assert!(migrated_v3.constraints().iter().any(|constraint| matches!(
+        constraint.definition,
+        DocumentConstraintDefinition::LineLineFillet { .. }
+    )));
 
     let session = SketchDocumentSession::new(
         document,
@@ -344,13 +527,13 @@ fn persistent_line_fillet_round_trips_and_projects_derived_endpoints() {
     assert!(
         consumer
             .add_constraint(
-                "unsupported fillet consumer",
+                "associated fillet consumer",
                 DocumentConstraintDefinition::PointOnCurve {
                     point: consumer_point,
                     contact: consumer_contact,
                 }
             )
-            .is_err()
+            .is_ok()
     );
 }
 

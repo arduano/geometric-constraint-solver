@@ -1,5 +1,6 @@
 #![cfg_attr(test, allow(dead_code))]
 
+use std::collections::{BTreeMap, VecDeque};
 use std::f64::consts::{FRAC_PI_2, TAU};
 use std::fmt::Write as _;
 
@@ -10,20 +11,335 @@ use geosolve_linkage::{
     spatial_example,
 };
 use geosolve_sketch::{
-    AlphaPerformanceSize, AlphaScenarioKind, ContactId, ContactNeighborhood, ContactStateEdit,
-    CurveDefinition, CurveId, CurveSpan, DesignPointId, DocumentAngleOrientation, DocumentArcSweep,
-    DocumentCommand, DocumentCommandEffect, DocumentConstraintDefinition, DocumentConstraintId,
-    DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode, DocumentEdit,
-    DocumentHyperbolaBranch, DocumentObjectId, DocumentSolveRequest, DocumentSolveResult,
+    AlphaPerformanceSize, AlphaScenarioKind, ContactDomain, ContactId, ContactNeighborhood,
+    ContactStateEdit, CurveDefinition, CurveId, CurveSpan, DesignPointId, DesignScalarId,
+    DocumentAngleOrientation, DocumentArcSweep, DocumentBSplineSpanDirection, DocumentCommand,
+    DocumentCommandEffect, DocumentConstraintDefinition, DocumentConstraintId,
+    DocumentCurveNormalSide, DocumentDimensionDefinition, DocumentDimensionId,
+    DocumentDimensionMode, DocumentEdit, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint,
+    DocumentHyperbolaBranch, DocumentLineOffsetOrientation, DocumentLineSide, DocumentObjectId,
+    DocumentSolveRequest, DocumentSolveResult, DocumentTrimBoundary, DocumentVisibleCurveInterval,
     FeatureEndpoint, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PersistentId, ScalarDomain, ScalarUnit,
-    SketchDocument, SketchDocumentSession, TangentOrientation, VisualProfileOptions,
-    alpha_performance_document, alpha_scenario,
+    SketchDocument, SketchDocumentSession, TangentOrientation, VisualProfileAnalysis,
+    VisualProfileEdge, VisualProfileOptions, alpha_performance_document, alpha_scenario,
 };
 
 const CANVAS_WIDTH: f64 = 1000.0;
 const CANVAS_HEIGHT: f64 = 700.0;
 const CURVE_SAMPLES: u32 = 48;
 const HIT_RADIUS_PX: f64 = 14.0;
+const PROFILE_RENDER_TOLERANCE_PX: f64 = 0.35;
+const PROFILE_RENDER_MAX_EVALUATIONS: usize = 200_000;
+const PROFILE_RENDER_MAX_SUBDIVISIONS: usize = 100_000;
+const PROFILE_RENDER_MIN_DEPTH: u32 = 2;
+const PROFILE_RENDER_MAX_DEPTH: u32 = 32;
+const SCENE_CAPSULE_HEADER: &str = "GEOSOLVE_SCENE_V1";
+const SCENE_CAPSULE_CODEC: &str = "lzss12-4-base64url";
+const MAX_SCENE_CAPSULE_JSON_BYTES: usize = 16 * 1024 * 1024;
+
+#[derive(Clone, Debug, PartialEq)]
+struct DecodedSceneCapsule {
+    document_json: String,
+    profile_options: VisualProfileOptions,
+}
+
+fn scene_match_key(input: &[u8], position: usize) -> Option<u32> {
+    (position + 2 < input.len()).then(|| {
+        (u32::from(input[position]) << 16)
+            | (u32::from(input[position + 1]) << 8)
+            | u32::from(input[position + 2])
+    })
+}
+
+fn index_scene_position(input: &[u8], position: usize, index: &mut BTreeMap<u32, VecDeque<usize>>) {
+    let Some(key) = scene_match_key(input, position) else {
+        return;
+    };
+    let candidates = index.entry(key).or_default();
+    while candidates
+        .front()
+        .is_some_and(|candidate| position - candidate > 4096)
+    {
+        candidates.pop_front();
+    }
+    candidates.push_back(position);
+    if candidates.len() > 64 {
+        candidates.pop_front();
+    }
+}
+
+fn scene_best_match(
+    input: &[u8],
+    position: usize,
+    index: &BTreeMap<u32, VecDeque<usize>>,
+) -> Option<(usize, usize)> {
+    let candidates = index.get(&scene_match_key(input, position)?)?;
+    let mut best = None;
+    for candidate in candidates.iter().rev().copied() {
+        let offset = position - candidate;
+        if offset == 0 || offset > 4096 {
+            continue;
+        }
+        let mut length = 0;
+        while length < 18
+            && position + length < input.len()
+            && input[candidate + length] == input[position + length]
+        {
+            length += 1;
+        }
+        if length >= 3 && best.is_none_or(|(_, best_length)| length > best_length) {
+            best = Some((offset, length));
+            if length == 18 {
+                break;
+            }
+        }
+    }
+    best
+}
+
+fn compress_scene_bytes(input: &[u8]) -> Vec<u8> {
+    let mut output = Vec::with_capacity(input.len());
+    let mut index = BTreeMap::<u32, VecDeque<usize>>::new();
+    let mut position = 0;
+    while position < input.len() {
+        let control_index = output.len();
+        output.push(0);
+        let mut control = 0_u8;
+        for bit in 0..8 {
+            if position == input.len() {
+                break;
+            }
+            let consumed = if let Some((offset, length)) = scene_best_match(input, position, &index)
+            {
+                control |= 1 << bit;
+                let packed = ((offset - 1) << 4) | (length - 3);
+                output.extend_from_slice(&u16::try_from(packed).expect("12+4 bits").to_be_bytes());
+                length
+            } else {
+                output.push(input[position]);
+                1
+            };
+            for indexed in position..position + consumed {
+                index_scene_position(input, indexed, &mut index);
+            }
+            position += consumed;
+        }
+        output[control_index] = control;
+    }
+    output
+}
+
+fn decompress_scene_bytes(input: &[u8], expected_len: usize) -> Result<Vec<u8>, String> {
+    if expected_len > MAX_SCENE_CAPSULE_JSON_BYTES {
+        return Err("declared JSON size exceeds the scene capsule limit".into());
+    }
+    let mut output = Vec::with_capacity(expected_len);
+    let mut position = 0;
+    while output.len() < expected_len {
+        let control = *input
+            .get(position)
+            .ok_or("compressed scene ended before its control byte")?;
+        position += 1;
+        for bit in 0..8 {
+            if output.len() == expected_len {
+                break;
+            }
+            if control & (1 << bit) == 0 {
+                let value = *input
+                    .get(position)
+                    .ok_or("compressed scene ended inside a literal")?;
+                position += 1;
+                output.push(value);
+                continue;
+            }
+            let packed = u16::from_be_bytes([
+                *input
+                    .get(position)
+                    .ok_or("compressed scene ended inside a match")?,
+                *input
+                    .get(position + 1)
+                    .ok_or("compressed scene ended inside a match")?,
+            ]);
+            position += 2;
+            let offset = usize::from(packed >> 4) + 1;
+            let length = usize::from(packed & 0x0f) + 3;
+            if offset > output.len() || output.len() + length > expected_len {
+                return Err("compressed scene contains an invalid match".into());
+            }
+            for _ in 0..length {
+                output.push(output[output.len() - offset]);
+            }
+        }
+    }
+    if position != input.len() {
+        return Err("compressed scene has trailing bytes".into());
+    }
+    Ok(output)
+}
+
+const BASE64URL: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+fn base64url_encode(input: &[u8]) -> String {
+    let mut output = String::with_capacity(input.len().div_ceil(3) * 4);
+    for chunk in input.chunks(3) {
+        let value = (u32::from(chunk[0]) << 16)
+            | (u32::from(*chunk.get(1).unwrap_or(&0)) << 8)
+            | u32::from(*chunk.get(2).unwrap_or(&0));
+        output.push(char::from(BASE64URL[((value >> 18) & 63) as usize]));
+        output.push(char::from(BASE64URL[((value >> 12) & 63) as usize]));
+        if chunk.len() > 1 {
+            output.push(char::from(BASE64URL[((value >> 6) & 63) as usize]));
+        }
+        if chunk.len() > 2 {
+            output.push(char::from(BASE64URL[(value & 63) as usize]));
+        }
+    }
+    output
+}
+
+fn base64url_value(value: u8) -> Option<u8> {
+    match value {
+        b'A'..=b'Z' => Some(value - b'A'),
+        b'a'..=b'z' => Some(value - b'a' + 26),
+        b'0'..=b'9' => Some(value - b'0' + 52),
+        b'-' => Some(62),
+        b'_' => Some(63),
+        _ => None,
+    }
+}
+
+fn base64url_decode(input: &str) -> Result<Vec<u8>, String> {
+    if input.len() % 4 == 1 {
+        return Err("scene capsule payload has an invalid base64url length".into());
+    }
+    let mut output = Vec::with_capacity(input.len() / 4 * 3 + 2);
+    for chunk in input.as_bytes().chunks(4) {
+        let mut value = 0_u32;
+        for byte in chunk {
+            value = (value << 6)
+                | u32::from(base64url_value(*byte).ok_or("invalid base64url scene payload")?);
+        }
+        value <<= 6 * (4 - chunk.len());
+        output.push(((value >> 16) & 0xff) as u8);
+        if chunk.len() > 2 {
+            output.push(((value >> 8) & 0xff) as u8);
+        }
+        if chunk.len() > 3 {
+            output.push((value & 0xff) as u8);
+        }
+    }
+    Ok(output)
+}
+
+fn scene_checksum(input: &[u8]) -> u64 {
+    input.iter().fold(0xcbf2_9ce4_8422_2325, |checksum, byte| {
+        (checksum ^ u64::from(*byte)).wrapping_mul(0x0000_0100_0000_01b3)
+    })
+}
+
+fn format_profile_options(options: VisualProfileOptions) -> String {
+    format!(
+        "{},{},{},{},{},{},{},{}",
+        options.max_candidate_pairs,
+        options.max_intersection_subdivisions,
+        options.max_intersection_depth,
+        options.max_intersection_roots,
+        options.max_fragments,
+        options.max_integration_subdivisions,
+        options.max_containment_tests,
+        options.max_faces,
+    )
+}
+
+fn parse_profile_options(value: &str) -> Result<VisualProfileOptions, String> {
+    let values = value
+        .split(',')
+        .map(|value| {
+            value
+                .parse::<usize>()
+                .map_err(|_| "scene capsule has invalid profile options".to_owned())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let [
+        candidates,
+        subdivisions,
+        depth,
+        roots,
+        fragments,
+        integration,
+        containment,
+        faces,
+    ] = values.as_slice()
+    else {
+        return Err("scene capsule must contain eight profile options".into());
+    };
+    if *candidates > 1_000_000
+        || *subdivisions > 5_000_000
+        || *depth > 128
+        || *roots > 1_000_000
+        || *fragments > 1_000_000
+        || *integration > 5_000_000
+        || *containment > 1_000_000
+        || *faces > 100_000
+    {
+        return Err("scene capsule profile options exceed browser safety limits".into());
+    }
+    Ok(VisualProfileOptions {
+        max_candidate_pairs: *candidates,
+        max_intersection_subdivisions: *subdivisions,
+        max_intersection_depth: *depth,
+        max_intersection_roots: *roots,
+        max_fragments: *fragments,
+        max_integration_subdivisions: *integration,
+        max_containment_tests: *containment,
+        max_faces: *faces,
+    })
+}
+
+fn decode_scene_capsule(value: &str) -> Result<DecodedSceneCapsule, String> {
+    let mut lines = value.trim().lines();
+    if lines.next() != Some(SCENE_CAPSULE_HEADER) {
+        return Err("unsupported scene capsule header".into());
+    }
+    let mut fields = BTreeMap::new();
+    for line in lines {
+        let (name, value) = line
+            .split_once('=')
+            .ok_or("scene capsule metadata line has no equals sign")?;
+        if fields.insert(name, value).is_some() {
+            return Err(format!("scene capsule repeats field {name}"));
+        }
+    }
+    let field = |name| {
+        fields
+            .get(name)
+            .copied()
+            .ok_or_else(|| format!("scene capsule is missing {name}"))
+    };
+    if field("codec")? != SCENE_CAPSULE_CODEC {
+        return Err("unsupported scene capsule codec".into());
+    }
+    let expected_len = field("json_bytes")?
+        .parse::<usize>()
+        .map_err(|_| "scene capsule has an invalid JSON size")?;
+    let payload = field("payload")?;
+    if payload.len() > MAX_SCENE_CAPSULE_JSON_BYTES * 2 {
+        return Err("scene capsule payload exceeds the browser safety limit".into());
+    }
+    let compressed = base64url_decode(payload)?;
+    let document = decompress_scene_bytes(&compressed, expected_len)?;
+    let expected_checksum = u64::from_str_radix(field("checksum")?, 16)
+        .map_err(|_| "scene capsule has an invalid checksum")?;
+    if scene_checksum(&document) != expected_checksum {
+        return Err("scene capsule checksum mismatch".into());
+    }
+    let document_json =
+        String::from_utf8(document).map_err(|_| "scene capsule document is not valid UTF-8")?;
+    Ok(DecodedSceneCapsule {
+        document_json,
+        profile_options: parse_profile_options(field("profile_options")?)?,
+    })
+}
 
 fn sketch_example_kind(key: &str) -> Option<AlphaScenarioKind> {
     Some(match key {
@@ -50,6 +366,25 @@ fn sketch_example_kind(key: &str) -> Option<AlphaScenarioKind> {
         "conic-gallery" => AlphaScenarioKind::ConicGallery,
         "conic-tangency" => AlphaScenarioKind::ConicTangency,
         "conic-circle-limit" => AlphaScenarioKind::ConicCircleLimit,
+        "m28-trimmed-fillet" => AlphaScenarioKind::M28TrimmedFillet,
+        "construction-supporting-offset" => AlphaScenarioKind::SupportingOffset,
+        "construction-exact-offset" => AlphaScenarioKind::ExactTranslatedOffset,
+        "construction-entity-mirror" => AlphaScenarioKind::EntityMirror,
+        "construction-directed-angle" => AlphaScenarioKind::DirectedAngle,
+        "fillet-line-line-reference" => AlphaScenarioKind::M27ReferenceFillet,
+        "fillet-line-circle" => AlphaScenarioKind::FilletLineCircle,
+        "fillet-line-bezier" => AlphaScenarioKind::FilletLineBezier,
+        "fillet-nurbs-line" => AlphaScenarioKind::FilletNurbsLine,
+        "nurbs-quarter-circle" => AlphaScenarioKind::NurbsQuarterCircle,
+        "nurbs-local-support" => AlphaScenarioKind::NurbsLocalSupport,
+        "nurbs-periodic" => AlphaScenarioKind::NurbsPeriodic,
+        "nurbs-differential" => AlphaScenarioKind::NurbsDifferential,
+        "profile-all-families" => AlphaScenarioKind::ProfileAllFamilies,
+        "profile-curved-topology" => AlphaScenarioKind::ProfileCurvedTopology,
+        "profile-fillet-trim" => AlphaScenarioKind::ProfileFilletTrim,
+        "profile-nurbs-self-intersection" => AlphaScenarioKind::ProfileNurbsSelfIntersection,
+        "profile-incomplete" => AlphaScenarioKind::ProfileIncomplete,
+        "profile-budget" => AlphaScenarioKind::ProfileBudget,
         _ => return None,
     })
 }
@@ -431,6 +766,8 @@ struct SpatialExampleView {
 pub(crate) struct PlaygroundState {
     session: SketchDocumentSession,
     spatial: Option<SpatialExampleView>,
+    example_kind: Option<AlphaScenarioKind>,
+    profile_options_override: Option<VisualProfileOptions>,
     tool: Tool,
     selection: Vec<SelectionItem>,
     draft: Vec<[f64; 2]>,
@@ -479,6 +816,8 @@ impl PlaygroundState {
         let mut state = Self {
             session,
             spatial: None,
+            example_kind: None,
+            profile_options_override: None,
             tool: Tool::Select,
             selection: Vec::new(),
             draft: Vec::new(),
@@ -508,6 +847,7 @@ impl PlaygroundState {
     pub(crate) fn example(kind: AlphaScenarioKind, scale: f64) -> Result<Self, String> {
         let fixture = alpha_scenario(kind, scale).map_err(|error| error.to_string())?;
         let mut state = Self::from_document_request(fixture.document, fixture.request, true)?;
+        state.example_kind = Some(kind);
         state.last_attempt = format!(
             "Loaded canonical {} example at scale {scale:e}.",
             kind.key()
@@ -888,8 +1228,10 @@ impl PlaygroundState {
         curve_sampling_report(self.document())
             .samples
             .into_iter()
-            .flat_map(|(span, samples)| {
-                samples
+            .flat_map(|visible| {
+                let span = visible.interval.support;
+                visible
+                    .samples
                     .windows(2)
                     .filter_map(move |pair| {
                         let first = self.viewport.model_to_svg(pair[0].1);
@@ -1331,14 +1673,17 @@ impl PlaygroundState {
         let curves: Vec<_> = curve_sampling_report(self.document())
             .samples
             .into_iter()
-            .filter_map(|(span, samples)| {
-                samples.iter().find_map(|(parameter, point)| {
-                    point_in_rect(self.viewport.model_to_svg(*point), min, max).then_some(
+            .filter_map(|visible| {
+                visible.samples.windows(2).find_map(|pair| {
+                    let first = self.viewport.model_to_svg(pair[0].1);
+                    let second = self.viewport.model_to_svg(pair[1].1);
+                    segment_intersects_rect(first, second, min, max).then(|| {
+                        let parameter = pair[0].0.midpoint(pair[1].0);
                         SelectionItem::Curve {
-                            span,
-                            parameter: *parameter,
-                        },
-                    )
+                            span: visible.interval.support,
+                            parameter,
+                        }
+                    })
                 })
             })
             .collect();
@@ -1548,7 +1893,14 @@ impl PlaygroundState {
     }
 
     pub(crate) fn apply_dimension(&mut self, kind: usize, mode: DocumentDimensionMode, value: f64) {
-        self.apply_dimension_labeled(kind, mode, value, "dimension");
+        self.apply_dimension_labeled_with_offset(
+            kind,
+            mode,
+            value,
+            "dimension",
+            DocumentLineSide::Left,
+            DocumentLineOffsetOrientation::Same,
+        );
     }
 
     fn apply_dimension_labeled(
@@ -1557,6 +1909,26 @@ impl PlaygroundState {
         mode: DocumentDimensionMode,
         value: f64,
         label: &str,
+    ) {
+        self.apply_dimension_labeled_with_offset(
+            kind,
+            mode,
+            value,
+            label,
+            DocumentLineSide::Left,
+            DocumentLineOffsetOrientation::Same,
+        );
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn apply_dimension_labeled_with_offset(
+        &mut self,
+        kind: usize,
+        mode: DocumentDimensionMode,
+        value: f64,
+        label: &str,
+        offset_side: DocumentLineSide,
+        offset_orientation: DocumentLineOffsetOrientation,
     ) {
         if self.reject_spatial_edit("Dimension editing") {
             return;
@@ -1588,6 +1960,12 @@ impl PlaygroundState {
                             &dimension.definition
                     {
                         document.reselect_curve_branch(*curve)?;
+                    }
+                    if matches!(
+                        dimension.definition,
+                        DocumentDimensionDefinition::OrientedAngle { .. }
+                    ) {
+                        document.set_oriented_angle_orientation(id, angle_orientation)?;
                     }
                     document.set_dimension_mode(id, mode)?;
                     return Ok(id);
@@ -1622,6 +2000,22 @@ impl PlaygroundState {
                         target,
                         orientation: angle_orientation,
                     },
+                    5 if curves.len() == 2 => DocumentDimensionDefinition::SupportingLineOffset {
+                        source: curves[0].0,
+                        target_segment: curves[1].0,
+                        target,
+                        side: offset_side,
+                        orientation: offset_orientation,
+                    },
+                    6 if curves.len() == 2 => {
+                        DocumentDimensionDefinition::ExactTranslatedSegmentOffset {
+                            source: curves[0].0,
+                            target_segment: curves[1].0,
+                            target,
+                            side: offset_side,
+                            orientation: offset_orientation,
+                        }
+                    }
                     _ => {
                         return Err(geosolve_sketch::DocumentError::InvalidField {
                             field: "dimension selection",
@@ -1651,6 +2045,259 @@ impl PlaygroundState {
                 self.rejected_result(message, transaction.outcome.result);
             }
             Err(error) => self.rejected_change(format!("Dimension not applied: {error}")),
+        }
+    }
+
+    fn create_selected_mirror(&mut self) {
+        if self.reject_spatial_edit("Mirror construction") {
+            return;
+        }
+        let curves = self.selected_curves();
+        if curves.len() != 2 {
+            self.rejected_change(
+                "Select the source curve first and one line-axis span second for entity mirror.",
+            );
+            return;
+        }
+        let label = format!("Entity mirror {}", self.document().curves().len() + 1);
+        let effect = self.apply_edit(DocumentEdit::CreateMirroredCurve {
+            label,
+            source_curve: curves[0].0.curve,
+            axis: curves[1].0,
+        });
+        if let Some(DocumentCommandEffect::CreatedMirroredCurve(ids)) = effect {
+            self.selection = vec![SelectionItem::Curve {
+                span: CurveSpan::line(ids.mirrored_curve),
+                parameter: 0.5,
+            }];
+            self.last_attempt = "Entity mirror created from ordinary symmetry constraints.".into();
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn apply_selected_fillet(
+        &mut self,
+        first_side: DocumentCurveNormalSide,
+        first_trim_endpoint: DocumentFilletTrimEndpoint,
+        second_side: DocumentCurveNormalSide,
+        second_trim_endpoint: DocumentFilletTrimEndpoint,
+        endpoint_order: DocumentFilletEndpointOrder,
+        sweep: DocumentArcSweep,
+        radius: f64,
+        radius_mode: DocumentDimensionMode,
+    ) {
+        if self.reject_spatial_edit("Fillet editing") {
+            return;
+        }
+        let Some(constraint) = self.selection.iter().find_map(|item| match item {
+            SelectionItem::Constraint(id)
+                if self.document().constraint(*id).is_some_and(|constraint| {
+                    matches!(
+                        constraint.definition,
+                        DocumentConstraintDefinition::LineLineFillet { .. }
+                            | DocumentConstraintDefinition::CurveCurveFillet { .. }
+                    )
+                }) =>
+            {
+                Some(*id)
+            }
+            _ => None,
+        }) else {
+            self.rejected_change("Select one line or generic fillet association to edit.");
+            return;
+        };
+        let transaction = self.session.transact(
+            self.session.revision(),
+            "edit fillet branch and radius",
+            move |document| {
+                let definition = document
+                    .constraint(constraint)
+                    .ok_or(geosolve_sketch::DocumentError::UnknownId {
+                        kind: "fillet constraint",
+                        id: constraint.0,
+                    })?
+                    .definition
+                    .clone();
+                let arc = match definition {
+                    DocumentConstraintDefinition::LineLineFillet { arc, .. } => {
+                        document.set_line_line_fillet_branch(
+                            constraint,
+                            first_side,
+                            second_side,
+                            endpoint_order,
+                            sweep,
+                        )?;
+                        arc
+                    }
+                    DocumentConstraintDefinition::CurveCurveFillet { arc, .. } => {
+                        document.set_curve_curve_fillet_branch(
+                            constraint,
+                            first_side,
+                            first_trim_endpoint,
+                            second_side,
+                            second_trim_endpoint,
+                            endpoint_order,
+                            sweep,
+                        )?;
+                        arc
+                    }
+                    _ => {
+                        return Err(geosolve_sketch::DocumentError::InvalidField {
+                            field: "fillet selection",
+                            message: "selected source is not a fillet association".into(),
+                        });
+                    }
+                };
+                let (dimension, target) = document
+                    .dimensions()
+                    .iter()
+                    .find_map(|dimension| match dimension.definition {
+                        DocumentDimensionDefinition::Radius { curve, target } if curve == arc => {
+                            Some((dimension.id, target))
+                        }
+                        _ => None,
+                    })
+                    .ok_or(geosolve_sketch::DocumentError::InvalidField {
+                        field: "fillet radius",
+                        message: "fillet output has no radius dimension".into(),
+                    })?;
+                document.set_scalar_value(target, radius)?;
+                document.set_dimension_mode(dimension, radius_mode)
+            },
+        );
+        match transaction {
+            Ok(transaction) if transaction.accepted() => {
+                self.accepted_change("Fillet branch and radius transaction accepted.");
+            }
+            Ok(transaction) => self.rejected_result(
+                format!(
+                    "Fillet edit rejected; accepted association retained: {:?}",
+                    transaction.outcome.result.solve().rejection
+                ),
+                transaction.outcome.result,
+            ),
+            Err(error) => self.rejected_change(format!("Fillet edit not applied: {error}")),
+        }
+    }
+
+    fn selected_nurbs_context(&self) -> Option<(CurveId, Option<ContactId>)> {
+        self.selection.iter().find_map(|item| match item {
+            SelectionItem::Curve { span, .. }
+                if self.document().curve(span.curve).is_some_and(|curve| {
+                    matches!(curve.definition, CurveDefinition::Nurbs { .. })
+                }) =>
+            {
+                Some((span.curve, None))
+            }
+            SelectionItem::Contact(contact) => {
+                let slot = self.document().contact(*contact)?;
+                self.document()
+                    .curve(slot.curve.curve)
+                    .is_some_and(|curve| matches!(curve.definition, CurveDefinition::Nurbs { .. }))
+                    .then_some((slot.curve.curve, Some(*contact)))
+            }
+            _ => None,
+        })
+    }
+
+    fn set_selected_nurbs_weight(&mut self, weight: DesignScalarId, value: f64) {
+        let Some((curve, _)) = self.selected_nurbs_context() else {
+            self.rejected_change("Select a NURBS curve or one of its contacts first.");
+            return;
+        };
+        let owned = self
+            .document()
+            .curve(curve)
+            .is_some_and(|curve| match &curve.definition {
+                CurveDefinition::Nurbs {
+                    weights,
+                    gauge_weight,
+                    ..
+                } => weights.contains(&weight) && *gauge_weight != weight,
+                _ => false,
+            });
+        if !owned {
+            self.rejected_change("Choose a non-gauge weight owned by the selected NURBS.");
+            return;
+        }
+        if self
+            .apply_edit(DocumentEdit::SetScalarValue {
+                scalar: weight,
+                value,
+            })
+            .is_some()
+        {
+            self.last_attempt = "Non-gauge NURBS weight edit accepted.".into();
+        }
+    }
+
+    fn set_selected_nurbs_control(&mut self, control: DesignPointId, position: [f64; 2]) {
+        let Some((curve, _)) = self.selected_nurbs_context() else {
+            self.rejected_change("Select a NURBS curve before editing a control point.");
+            return;
+        };
+        let owned = self
+            .document()
+            .curve(curve)
+            .is_some_and(|curve| match &curve.definition {
+                CurveDefinition::Nurbs { controls, .. } => controls.contains(&control),
+                _ => false,
+            });
+        if !owned {
+            self.rejected_change("Choose a control point owned by the selected NURBS.");
+            return;
+        }
+        if self
+            .apply_edit(DocumentEdit::SetPointPosition {
+                point: control,
+                position,
+            })
+            .is_some()
+        {
+            self.last_attempt = "Exact NURBS control target accepted and projected.".into();
+        }
+    }
+
+    fn set_selected_nurbs_gauge(&mut self, weight: DesignScalarId) {
+        let Some((curve, _)) = self.selected_nurbs_context() else {
+            self.rejected_change("Select a NURBS curve or one of its contacts first.");
+            return;
+        };
+        if self
+            .apply_edit(DocumentEdit::SetNurbsWeightGauge {
+                curve,
+                gauge_weight: weight,
+            })
+            .is_some()
+        {
+            self.last_attempt =
+                "NURBS gauge changed without changing parameterized geometry.".into();
+        }
+    }
+
+    fn insert_selected_nurbs_knot(&mut self, parameter: f64) {
+        let Some((curve, _)) = self.selected_nurbs_context() else {
+            self.rejected_change("Select a NURBS curve before inserting a knot.");
+            return;
+        };
+        if self
+            .apply_edit(DocumentEdit::InsertNurbsKnot { curve, parameter })
+            .is_some()
+        {
+            self.last_attempt = "Homogeneous NURBS knot insertion accepted.".into();
+        }
+    }
+
+    fn transition_selected_nurbs_contact(&mut self, direction: DocumentBSplineSpanDirection) {
+        let Some((_, Some(contact))) = self.selected_nurbs_context() else {
+            self.rejected_change("Select an endpoint contact on a NURBS span to transition it.");
+            return;
+        };
+        if self
+            .apply_edit(DocumentEdit::TransitionNurbsContact { contact, direction })
+            .is_some()
+        {
+            self.last_attempt = "Explicit NURBS span/winding transition accepted.".into();
         }
     }
 
@@ -1950,11 +2597,36 @@ impl PlaygroundState {
             return;
         }
         self.cancel_interaction();
-        match self.session.import_json(self.session.revision(), json) {
+        let capsule = if json.trim_start().starts_with(SCENE_CAPSULE_HEADER) {
+            match decode_scene_capsule(json) {
+                Ok(capsule) => Some(capsule),
+                Err(error) => {
+                    self.rejected_change(format!(
+                        "Scene capsule import failed atomically; accepted document retained: {error}"
+                    ));
+                    return;
+                }
+            }
+        } else {
+            None
+        };
+        let imported_json = capsule
+            .as_ref()
+            .map_or(json, |capsule| capsule.document_json.as_str());
+        match self
+            .session
+            .import_json(self.session.revision(), imported_json)
+        {
             Ok(outcome) if outcome.accepted() => {
                 self.selection.clear();
+                self.example_kind = None;
+                self.profile_options_override = capsule.map(|capsule| capsule.profile_options);
                 self.fit_view();
-                self.accepted_change("JSON import accepted and autosaved.");
+                self.accepted_change(if self.profile_options_override.is_some() {
+                    "Compressed scene capsule imported and autosaved."
+                } else {
+                    "JSON import accepted and autosaved."
+                });
             }
             Ok(outcome) => {
                 let message = format!(
@@ -1976,6 +2648,33 @@ impl PlaygroundState {
         self.session
             .export_json()
             .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn export_scene_capsule(&self) -> Result<String, String> {
+        let document_json = self.export_json()?;
+        let profile = self
+            .document()
+            .analyze_visual_profiles(self.profile_options());
+        let hard_validity = format!(
+            "{:?}",
+            self.display_session()
+                .accepted_result()
+                .accepted_view()
+                .core_report
+                .hard_validity
+        );
+        let compressed = compress_scene_bytes(document_json.as_bytes());
+        let payload = base64url_encode(&compressed);
+        let example = self.example_kind.map_or("imported", AlphaScenarioKind::key);
+        Ok(format!(
+            "{SCENE_CAPSULE_HEADER}\ncodec={SCENE_CAPSULE_CODEC}\nexample={example}\nmodel_scale={}\nhard_validity={hard_validity}\nprofile_status={:?}\nprofile_issues={}\nprofile_options={}\njson_bytes={}\nchecksum={:016x}\npayload={payload}",
+            self.document().model_scale(),
+            profile.status,
+            profile.issues.len(),
+            format_profile_options(self.profile_options()),
+            document_json.len(),
+            scene_checksum(document_json.as_bytes()),
+        ))
     }
 
     pub(crate) fn storage_json(&mut self) -> Option<String> {
@@ -2021,7 +2720,7 @@ impl PlaygroundState {
             curve_sampling_report(self.session.document())
                 .samples
                 .into_iter()
-                .flat_map(|(_, samples)| samples.into_iter().map(|(_, point)| point)),
+                .flat_map(|visible| visible.samples.into_iter().map(|(_, point)| point)),
         );
         positions.extend(
             curve_configuration_handles(self.session.document())
@@ -2098,7 +2797,9 @@ impl PlaygroundState {
         let document = self.session.document();
         self.selection.retain(|item| match item {
             SelectionItem::Point(id) => document.point(*id).is_some(),
-            SelectionItem::Curve { span, .. } => document.curve(span.curve).is_some(),
+            SelectionItem::Curve { span, parameter } => document
+                .is_parameter_visible(*span, *parameter)
+                .unwrap_or(false),
             SelectionItem::Contact(id) => document.contact(*id).is_some(),
             SelectionItem::Constraint(id) => document.constraint(*id).is_some(),
             SelectionItem::Dimension(id) => document.dimension(*id).is_some(),
@@ -2199,7 +2900,8 @@ impl PlaygroundState {
             object_row(&mut markup, "point", point.id.0, &point.label, "");
         }
         for curve in document.curves() {
-            object_row(&mut markup, "curve", curve.id.0, &curve.label, "");
+            let state = visible_interval_state(document, curve.id);
+            object_row(&mut markup, "curve", curve.id.0, &curve.label, &state);
         }
         for contact in document.contacts() {
             object_row(
@@ -2214,12 +2916,22 @@ impl PlaygroundState {
             );
         }
         for constraint in document.constraints() {
+            let state = if constraint.suppressed {
+                "off"
+            } else if matches!(
+                constraint.definition,
+                DocumentConstraintDefinition::CurveCurveFillet { .. }
+            ) {
+                "active association; Delete explodes to fixed trims and an ordinary arc"
+            } else {
+                ""
+            };
             object_row(
                 &mut markup,
                 "constraint",
                 constraint.id.0,
                 &constraint.label,
-                if constraint.suppressed { "off" } else { "" },
+                state,
             );
         }
         for dimension in document.dimensions() {
@@ -2253,6 +2965,12 @@ impl PlaygroundState {
         let result = self.display_session().accepted_result();
         let mut markup = Self::solve_status_markup_with_result(&result);
         let sampling = curve_sampling_report(self.document());
+        let _ = write!(
+            markup,
+            "<div class=\"trim-view-status\"><strong>{} trim view(s) / {} visible interval(s)</strong><span>Resolved from accepted support parameters and persistent boundary provenance.</span></div>",
+            self.document().trim_views().len(),
+            sampling.samples.len(),
+        );
         if !sampling.failures.is_empty() {
             let messages = sampling
                 .failures
@@ -2387,10 +3105,18 @@ impl PlaygroundState {
         }
         let session = self.display_session();
         let document = session.document();
+        let visible_intervals = document
+            .curves()
+            .iter()
+            .filter_map(|curve| document.visible_curve_intervals(curve.id).ok())
+            .map(|intervals| intervals.len())
+            .sum::<usize>();
         format!(
-            "{} points / {} curves / {} sources / revision {}",
+            "{} points / {} curves / {} trim views / {} visible intervals / {} sources / revision {}",
             document.points().len(),
             document.curves().len(),
+            document.trim_views().len(),
+            visible_intervals,
             document.constraints().len() + document.dimensions().len(),
             session.revision()
         )
@@ -2408,14 +3134,37 @@ impl PlaygroundState {
         result.accepted_view().core_report.hard_validity == HardValidity::Valid
     }
 
+    fn profile_options(&self) -> VisualProfileOptions {
+        self.profile_options_override.unwrap_or_else(|| {
+            self.example_kind
+                .and_then(AlphaScenarioKind::profile_uat)
+                .map_or_else(VisualProfileOptions::default, |uat| uat.options)
+        })
+    }
+
+    fn profile_presentation(&self) -> ProfilePresentation {
+        build_profile_presentation(
+            self.document(),
+            self.viewport,
+            self.profile_options(),
+            ProfileRenderOptions::default(),
+        )
+    }
+
     #[allow(clippy::too_many_lines)]
     pub(crate) fn render_svg(&self) -> String {
         if let Some(spatial) = self.spatial_view() {
             return render_spatial_svg(spatial, self.viewport);
         }
+        let profile = self.profile_presentation();
+        self.render_svg_with_profile(&profile)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn render_svg_with_profile(&self, profile: &ProfilePresentation) -> String {
         let mut markup = String::new();
         render_grid(&mut markup, self.viewport);
-        render_visual_profiles(self.document(), self.viewport, &mut markup);
+        markup.push_str(&profile.overlay_markup);
         let active_configuration = match self.gesture.as_ref() {
             Some(PointerGesture::DragCurveConfiguration { handle, .. }) => Some(*handle),
             _ => None,
@@ -2427,7 +3176,9 @@ impl PlaygroundState {
             &mut markup,
         );
         let sampling = curve_sampling_report(self.document());
-        for (span, samples) in sampling.samples {
+        for visible in sampling.samples {
+            let span = visible.interval.support;
+            let samples = visible.samples;
             if samples.len() < 2 {
                 continue;
             }
@@ -2448,16 +3199,33 @@ impl PlaygroundState {
             }
             let _ = write!(
                 markup,
-                "<path class=\"playground-curve{}\" data-curve-id=\"{}\" data-segment=\"{}\" d=\"{}\"><title>{}</title></path>",
+                "<path class=\"playground-curve{}\" data-curve-id=\"{}\" data-span-id=\"{}\" data-segment=\"{}\" data-visible-start=\"{:.17}\" data-visible-end=\"{:.17}\" data-delete-policy=\"underlying-curve\" d=\"{}\"><title>{}; selecting or deleting targets the underlying CurveId</title></path>",
                 if selected { " selected" } else { "" },
                 span.curve,
                 span.segment,
+                span.segment,
+                visible.interval.start,
+                visible.interval.end,
                 path,
                 crate::escape_html(
                     self.document()
                         .curve(span.curve)
                         .map_or("curve", |curve| curve.label.as_str())
                 )
+            );
+            render_derived_trim_marker(
+                &mut markup,
+                self.viewport,
+                &visible.interval,
+                &samples,
+                FeatureEndpoint::Start,
+            );
+            render_derived_trim_marker(
+                &mut markup,
+                self.viewport,
+                &visible.interval,
+                &samples,
+                FeatureEndpoint::End,
             );
         }
         render_sampling_failures(&mut markup, &sampling.failures);
@@ -2478,6 +3246,22 @@ impl PlaygroundState {
             );
         }
         for contact in self.document().contacts() {
+            let Some(parameter) = self.document().scalar(contact.parameter).map(|scalar| {
+                if let ContactDomain::Periodic { period } = contact.domain {
+                    scalar.value + f64::from(contact.winding) * period
+                } else {
+                    scalar.value
+                }
+            }) else {
+                continue;
+            };
+            if !self
+                .document()
+                .is_parameter_visible(contact.curve, parameter)
+                .unwrap_or(false)
+            {
+                continue;
+            }
             if let Ok(jet) = self.document().evaluate_contact_jet(contact.id) {
                 let position = [jet.position.x, jet.position.y];
                 let svg = self.viewport.model_to_svg(position);
@@ -2692,7 +3476,9 @@ impl PlaygroundState {
         let Some(samples) = curve_sampling_report(&candidate)
             .samples
             .into_iter()
-            .find_map(|(span, samples)| (span.curve == curve).then_some(samples))
+            .find_map(|visible| {
+                (visible.interval.support.curve == curve).then_some(visible.samples)
+            })
             .filter(|samples| {
                 samples.len() >= 2
                     && samples
@@ -3106,9 +3892,7 @@ fn curve_configuration_handles(document: &SketchDocument) -> Vec<CurveConfigurat
             CurveDefinition::CircularArc { .. }
             | CurveDefinition::EllipticalArc { .. }
             | CurveDefinition::ParabolaSegment { .. }
-            | CurveDefinition::HyperbolaSegment { .. }
-                if document.line_line_fillet_for_arc(curve.id).is_none() =>
-            {
+            | CurveDefinition::HyperbolaSegment { .. } => {
                 for (endpoint, parameter, role, short_label) in [
                     (FeatureEndpoint::Start, 0.0, "trim start", "S / trim start"),
                     (FeatureEndpoint::End, 1.0, "trim end", "E / trim end"),
@@ -3118,7 +3902,17 @@ fn curve_configuration_handles(document: &SketchDocument) -> Vec<CurveConfigurat
                         continue;
                     };
                     let position = [jet.position.x, jet.position.y];
-                    if position.iter().all(|value| value.is_finite()) {
+                    let support = CurveSpan::line(curve.id);
+                    let visible = document
+                        .is_parameter_visible(support, parameter)
+                        .unwrap_or(false);
+                    let independently_editable = document
+                        .project_curve_trim_endpoint(curve.id, endpoint, position)
+                        .is_ok();
+                    if visible
+                        && independently_editable
+                        && position.iter().all(|value| value.is_finite())
+                    {
                         handles.push(CurveConfigurationHandleView {
                             handle: CurveConfigurationHandle {
                                 curve: curve.id,
@@ -3428,10 +4222,40 @@ fn add_contact(
     tangent_orientation: TangentOrientation,
     winding: i32,
 ) -> Result<geosolve_sketch::ContactId, geosolve_sketch::DocumentError> {
-    let parameter = match neighborhood_choice {
+    let picked_parameter = match neighborhood_choice {
         NeighborhoodChoice::Start => 0.0,
         NeighborhoodChoice::End => 1.0,
         NeighborhoodChoice::Picked | NeighborhoodChoice::Interior => selection.1,
+    };
+    let periodic = document.curve(selection.0.curve).is_some_and(|curve| {
+        matches!(
+            curve.definition,
+            CurveDefinition::Circle { .. } | CurveDefinition::Ellipse { .. }
+        )
+    });
+    let total_parameter = if periodic
+        && matches!(
+            neighborhood_choice,
+            NeighborhoodChoice::Start | NeighborhoodChoice::End
+        ) {
+        f64::from(winding).mul_add(TAU, picked_parameter)
+    } else {
+        picked_parameter
+    };
+    if !document.is_parameter_visible(selection.0, total_parameter)? {
+        return Err(geosolve_sketch::DocumentError::InvalidField {
+            field: "contact parameter",
+            message: "selected parameter lies outside the accepted visible interval".into(),
+        });
+    }
+    let parameter = if periodic
+        && matches!(
+            neighborhood_choice,
+            NeighborhoodChoice::Picked | NeighborhoodChoice::Interior
+        ) {
+        (-f64::from(winding)).mul_add(TAU, total_parameter)
+    } else {
+        picked_parameter
     };
     let neighborhood = match neighborhood_choice {
         NeighborhoodChoice::Picked => {
@@ -3463,7 +4287,11 @@ fn dimension_target(definition: &DocumentDimensionDefinition) -> geosolve_sketch
     }
 }
 
-type CurveSamples = (CurveSpan, Vec<(f64, [f64; 2])>);
+#[derive(Clone, Debug)]
+struct CurveSamples {
+    interval: DocumentVisibleCurveInterval,
+    samples: Vec<(f64, [f64; 2])>,
+}
 
 #[derive(Clone, Debug, Default)]
 struct CurveSamplingReport {
@@ -3476,57 +4304,34 @@ struct CurveSamplingFailure {
     message: String,
 }
 
-fn curve_is_periodic(definition: &CurveDefinition) -> bool {
-    matches!(
-        definition,
-        CurveDefinition::Circle { .. }
-            | CurveDefinition::Ellipse { .. }
-            | CurveDefinition::BSpline {
-                form: geosolve_sketch::DocumentBSplineForm::Periodic,
-                ..
-            }
-            | CurveDefinition::Nurbs {
-                form: geosolve_sketch::DocumentBSplineForm::Periodic,
-                ..
-            }
-    )
-}
-
-fn curve_uses_angular_parameter(definition: &CurveDefinition) -> bool {
-    matches!(
-        definition,
-        CurveDefinition::Circle { .. } | CurveDefinition::Ellipse { .. }
-    )
-}
-
 fn first_curve_selection(
     document: &SketchDocument,
     curve: geosolve_sketch::CurveId,
 ) -> Option<(CurveSpan, f64)> {
-    let definition = &document.curve(curve)?.definition;
-    let span = document.curve_spans(curve).ok()?.into_iter().next()?;
-    let parameter = if curve_uses_angular_parameter(definition) {
-        0.0
-    } else {
-        0.5
-    };
-    Some((span, parameter))
+    let visible = curve_sampling_report(document)
+        .samples
+        .into_iter()
+        .find(|samples| samples.interval.support.curve == curve)?;
+    Some((
+        visible.interval.support,
+        visible.interval.start.midpoint(visible.interval.end),
+    ))
 }
 
 fn curve_sampling_report(document: &SketchDocument) -> CurveSamplingReport {
     let mut report = CurveSamplingReport::default();
     for curve in document.curves() {
-        let spans = match document.curve_spans(curve.id) {
-            Ok(spans) => spans,
+        let intervals = match document.visible_curve_intervals(curve.id) {
+            Ok(intervals) => intervals,
             Err(error) => {
                 report.failures.push(CurveSamplingFailure {
-                    message: format!("{}: {error}", curve.label),
+                    message: format!("{} visible intervals: {error}", curve.label),
                 });
                 continue;
             }
         };
-        for span in spans {
-            let angular = curve_uses_angular_parameter(&curve.definition);
+        for interval in intervals {
+            let span = interval.support;
             let sample_count = if matches!(
                 curve.definition,
                 CurveDefinition::Line { .. } | CurveDefinition::Polyline { .. }
@@ -3538,14 +4343,25 @@ fn curve_sampling_report(document: &SketchDocument) -> CurveSamplingReport {
             let mut samples = Vec::new();
             for index in 0..=sample_count {
                 let fraction = f64::from(index) / f64::from(sample_count);
-                let parameter = if angular { fraction * TAU } else { fraction };
+                let parameter = if index == 0 {
+                    interval.start
+                } else if index == sample_count {
+                    interval.end
+                } else {
+                    fraction.mul_add(interval.end - interval.start, interval.start)
+                };
                 match document.evaluate_curve_jet(span, parameter) {
                     Ok(jet) => samples.push((parameter, [jet.position.x, jet.position.y])),
                     Err(error) => {
                         report.failures.push(CurveSamplingFailure {
                             message: format!(
-                                "{} span {} at parameter {parameter}: {error}",
-                                curve.label, span.segment
+                                "{} span {} visible [{:.17}..{:.17}] ({} -> {}) at parameter {parameter:.17}: {error}",
+                                curve.label,
+                                span.segment,
+                                interval.start,
+                                interval.end,
+                                trim_boundary_description(interval.start_boundary),
+                                trim_boundary_description(interval.end_boundary),
                             ),
                         });
                         samples.clear();
@@ -3553,7 +4369,7 @@ fn curve_sampling_report(document: &SketchDocument) -> CurveSamplingReport {
                     }
                 }
             }
-            report.samples.push((span, samples));
+            report.samples.push(CurveSamples { interval, samples });
         }
     }
     report
@@ -3567,6 +4383,77 @@ fn render_sampling_failures(markup: &mut String, failures: &[CurveSamplingFailur
             "<text class=\"curve-sampling-warning\" role=\"alert\" aria-label=\"{message}\" x=\"16\" y=\"{}\">Curve sampling failed<title>{message}</title></text>",
             24 + index * 18,
         );
+    }
+}
+
+fn render_derived_trim_marker(
+    markup: &mut String,
+    viewport: Viewport,
+    interval: &DocumentVisibleCurveInterval,
+    samples: &[(f64, [f64; 2])],
+    endpoint: FeatureEndpoint,
+) {
+    let (boundary, sample, endpoint_label) = match endpoint {
+        FeatureEndpoint::Start => (interval.start_boundary, samples.first(), "start"),
+        FeatureEndpoint::End => (interval.end_boundary, samples.last(), "end"),
+    };
+    let DocumentTrimBoundary::FilletContact { owner, contact } = boundary else {
+        return;
+    };
+    let Some((parameter, point)) = sample else {
+        return;
+    };
+    let svg = viewport.model_to_svg(*point);
+    let label = format!(
+        "Derived visible {endpoint_label} on curve {} span {}; fillet owner {owner}, contact {contact}, parameter {parameter:.17}",
+        interval.support.curve, interval.support.segment,
+    );
+    let _ = write!(
+        markup,
+        "<circle class=\"derived-trim-marker\" data-derived-trim-marker=\"{endpoint_label}\" data-curve-id=\"{}\" data-span-id=\"{}\" data-trim-owner=\"{owner}\" data-trim-contact=\"{contact}\" data-visible-parameter=\"{parameter:.17}\" aria-label=\"{}\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"5\"><title>{}</title></circle>",
+        interval.support.curve,
+        interval.support.segment,
+        crate::escape_html(&label),
+        svg[0],
+        svg[1],
+        crate::escape_html(&label),
+    );
+}
+
+fn trim_boundary_description(boundary: DocumentTrimBoundary) -> String {
+    match boundary {
+        DocumentTrimBoundary::Fixed(parameter) => {
+            format!("fixed p={:.6} w={}", parameter.parameter, parameter.winding)
+        }
+        DocumentTrimBoundary::FilletContact { owner, contact } => {
+            format!("fillet owner {owner} contact {contact}")
+        }
+    }
+}
+
+fn visible_interval_state(document: &SketchDocument, curve: CurveId) -> String {
+    match document.visible_curve_intervals(curve) {
+        Ok(intervals) => {
+            let descriptions = intervals
+                .iter()
+                .map(|interval| {
+                    format!(
+                        "span {} [{:.6}..{:.6}] {} -> {}",
+                        interval.support.segment,
+                        interval.start,
+                        interval.end,
+                        trim_boundary_description(interval.start_boundary),
+                        trim_boundary_description(interval.end_boundary),
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("; ");
+            format!(
+                "{} visible interval(s): {descriptions}; deletion targets underlying CurveId",
+                intervals.len()
+            )
+        }
+        Err(error) => format!("visible intervals unavailable: {error}"),
     }
 }
 
@@ -4077,27 +4964,645 @@ fn render_grid(markup: &mut String, viewport: Viewport) {
     }
 }
 
-fn render_visual_profiles(document: &SketchDocument, viewport: Viewport, markup: &mut String) {
-    let analysis = document.analyze_visual_profiles(VisualProfileOptions::default());
-    for face in analysis.faces {
-        let mut path = String::new();
-        for contour in face.contours {
-            let Some(first) = contour.edges.first() else {
-                continue;
-            };
-            let start = viewport.model_to_svg(first.start);
-            let _ = write!(path, "M {:.3} {:.3}", start[0], start[1]);
-            for edge in contour.edges {
-                let end = viewport.model_to_svg(edge.end);
-                let _ = write!(path, " L {:.3} {:.3}", end[0], end[1]);
-            }
-            path.push_str(" Z ");
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct ProfileRenderOptions {
+    tolerance_px: f64,
+    max_evaluations: usize,
+    max_subdivisions: usize,
+    minimum_depth: u32,
+    maximum_depth: u32,
+}
+
+impl Default for ProfileRenderOptions {
+    fn default() -> Self {
+        Self {
+            tolerance_px: PROFILE_RENDER_TOLERANCE_PX,
+            max_evaluations: PROFILE_RENDER_MAX_EVALUATIONS,
+            max_subdivisions: PROFILE_RENDER_MAX_SUBDIVISIONS,
+            minimum_depth: PROFILE_RENDER_MIN_DEPTH,
+            maximum_depth: PROFILE_RENDER_MAX_DEPTH,
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProfileRenderStatus {
+    Complete,
+    Truncated,
+    Skipped,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct ProfileRenderReport {
+    status: ProfileRenderStatus,
+    tolerance_px: f64,
+    rendered_face_count: usize,
+    omitted_face_count: usize,
+    evaluation_consumed: usize,
+    evaluation_limit: usize,
+    subdivision_consumed: usize,
+    subdivision_limit: usize,
+    warnings: Vec<String>,
+}
+
+impl ProfileRenderReport {
+    fn consumed(&self) -> usize {
+        self.evaluation_consumed
+            .saturating_add(self.subdivision_consumed)
+    }
+
+    fn limit(&self) -> usize {
+        self.evaluation_limit.saturating_add(self.subdivision_limit)
+    }
+}
+
+#[derive(Clone, Debug)]
+struct ProfilePresentation {
+    analysis: VisualProfileAnalysis,
+    overlay_markup: String,
+    render: ProfileRenderReport,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ProfileRenderPoint {
+    parameter: f64,
+    svg: [f64; 2],
+    tangent: [f64; 2],
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ProfileRenderBudget {
+    evaluations: usize,
+    subdivisions: usize,
+    options: ProfileRenderOptions,
+}
+
+impl ProfileRenderBudget {
+    fn consume_evaluation(&mut self) -> Result<(), String> {
+        if self.evaluations >= self.options.max_evaluations {
+            return Err(format!(
+                "web curve-evaluation budget exhausted at {}",
+                self.options.max_evaluations
+            ));
+        }
+        self.evaluations += 1;
+        Ok(())
+    }
+
+    fn consume_subdivision(&mut self) -> Result<(), String> {
+        if self.subdivisions >= self.options.max_subdivisions {
+            return Err(format!(
+                "web adaptive-subdivision budget exhausted at {}",
+                self.options.max_subdivisions
+            ));
+        }
+        self.subdivisions += 1;
+        Ok(())
+    }
+}
+
+fn build_profile_presentation(
+    document: &SketchDocument,
+    viewport: Viewport,
+    analysis_options: VisualProfileOptions,
+    render_options: ProfileRenderOptions,
+) -> ProfilePresentation {
+    let analysis = document.analyze_visual_profiles(analysis_options);
+    let (overlay_markup, render) =
+        render_visual_profiles(document, viewport, &analysis, render_options);
+    ProfilePresentation {
+        analysis,
+        overlay_markup,
+        render,
+    }
+}
+
+fn render_visual_profiles(
+    document: &SketchDocument,
+    viewport: Viewport,
+    analysis: &VisualProfileAnalysis,
+    options: ProfileRenderOptions,
+) -> (String, ProfileRenderReport) {
+    let mut markup = String::new();
+    let mut budget = ProfileRenderBudget {
+        evaluations: 0,
+        subdivisions: 0,
+        options,
+    };
+    let mut rendered_face_count = 0;
+    let mut warnings = Vec::new();
+    for (face_index, face) in analysis.faces.iter().enumerate() {
+        match render_profile_face(document, viewport, face, &mut budget) {
+            Ok(path) => {
+                let _ = write!(
+                    markup,
+                    "<path class=\"visual-profile-overlay\" fill-rule=\"evenodd\" d=\"{path}\" />"
+                );
+                rendered_face_count += 1;
+            }
+            Err(error) => warnings.push(format!(
+                "Face {} omitted by the web renderer: {error}",
+                face_index + 1
+            )),
+        }
+    }
+    let omitted_face_count = analysis.faces.len().saturating_sub(rendered_face_count);
+    let status = if omitted_face_count == 0 {
+        ProfileRenderStatus::Complete
+    } else if rendered_face_count == 0 {
+        ProfileRenderStatus::Skipped
+    } else {
+        ProfileRenderStatus::Truncated
+    };
+    (
+        markup,
+        ProfileRenderReport {
+            status,
+            tolerance_px: options.tolerance_px,
+            rendered_face_count,
+            omitted_face_count,
+            evaluation_consumed: budget.evaluations,
+            evaluation_limit: options.max_evaluations,
+            subdivision_consumed: budget.subdivisions,
+            subdivision_limit: options.max_subdivisions,
+            warnings,
+        },
+    )
+}
+
+fn render_profile_face(
+    document: &SketchDocument,
+    viewport: Viewport,
+    face: &geosolve_sketch::VisualProfileFace,
+    budget: &mut ProfileRenderBudget,
+) -> Result<String, String> {
+    if face.contours.is_empty() {
+        return Err("native face has no contours".into());
+    }
+    let mut path = String::new();
+    for (contour_index, contour) in face.contours.iter().enumerate() {
+        if contour.edges.is_empty() {
+            return Err(format!("contour {} has no edges", contour_index + 1));
+        }
+        let mut first_endpoint = None;
+        let mut previous_endpoint = None;
+        for (edge_index, edge) in contour.edges.iter().enumerate() {
+            let samples =
+                sample_profile_edge(document, viewport, edge, budget).map_err(|error| {
+                    format!(
+                        "contour {}, edge {} ({}, span {}): {error}",
+                        contour_index + 1,
+                        edge_index + 1,
+                        edge.source_span.curve,
+                        edge.source_span.segment,
+                    )
+                })?;
+            let first = samples
+                .first()
+                .ok_or_else(|| "adaptive sampling returned no edge points".to_owned())?;
+            let last = samples
+                .last()
+                .ok_or_else(|| "adaptive sampling returned no edge points".to_owned())?;
+            let (start_allowance, native_start) =
+                profile_endpoint_allowance(document, viewport, edge, 0, *first, budget)?;
+            let (end_allowance, native_end) =
+                profile_endpoint_allowance(document, viewport, edge, 1, *last, budget)?;
+            if edge_index == 0 {
+                let _ = write!(path, "M {:.3} {:.3}", first.svg[0], first.svg[1]);
+                first_endpoint = Some((*first, start_allowance, native_start));
+            } else {
+                let (previous, previous_allowance, previous_native) =
+                    previous_endpoint.expect("non-first contour edge has a predecessor");
+                validate_profile_render_join(
+                    previous,
+                    previous_allowance,
+                    previous_native,
+                    *first,
+                    start_allowance,
+                    native_start,
+                    budget.options.tolerance_px,
+                    "between consecutive edges",
+                )?;
+                let _ = write!(path, " L {:.3} {:.3}", first.svg[0], first.svg[1]);
+            }
+            for sample in samples.iter().skip(1) {
+                let _ = write!(path, " L {:.3} {:.3}", sample.svg[0], sample.svg[1]);
+            }
+            previous_endpoint = Some((*last, end_allowance, native_end));
+        }
+        let (last, last_allowance, last_native) =
+            previous_endpoint.expect("nonempty contour has a final endpoint");
+        let (first, first_allowance, first_native) =
+            first_endpoint.expect("nonempty contour has an initial endpoint");
+        validate_profile_render_join(
+            last,
+            last_allowance,
+            last_native,
+            first,
+            first_allowance,
+            first_native,
+            budget.options.tolerance_px,
+            "at final contour closure",
+        )?;
+        path.push_str(" Z ");
+    }
+    Ok(path)
+}
+
+fn profile_endpoint_allowance(
+    document: &SketchDocument,
+    viewport: Viewport,
+    edge: &VisualProfileEdge,
+    endpoint: usize,
+    sample: ProfileRenderPoint,
+    budget: &mut ProfileRenderBudget,
+) -> Result<(f64, [f64; 2]), String> {
+    let enclosure = edge.source_parameter_enclosures[endpoint];
+    let representative = edge.source_parameters[endpoint];
+    if !representative.is_finite()
+        || !enclosure.into_iter().all(f64::is_finite)
+        || enclosure[0] > enclosure[1]
+        || representative < enclosure[0]
+        || representative > enclosure[1]
+    {
+        return Err(format!(
+            "native endpoint {} has invalid parameter-enclosure evidence",
+            endpoint + 1
+        ));
+    }
+    let native = if endpoint == 0 { edge.start } else { edge.end };
+    if !native.into_iter().all(f64::is_finite) {
+        return Err(format!(
+            "native endpoint {} has non-finite position evidence",
+            endpoint + 1
+        ));
+    }
+    let native_svg = viewport.model_to_svg(native);
+    if !native_svg.into_iter().all(f64::is_finite) {
+        return Err(format!(
+            "native endpoint {} could not be mapped to the viewport",
+            endpoint + 1
+        ));
+    }
+    let mut enclosure_allowance = 0.0_f64;
+    for parameter in enclosure {
+        if parameter.to_bits() == representative.to_bits() {
+            continue;
+        }
+        let bound =
+            evaluate_profile_render_point(document, viewport, edge.source_span, parameter, budget)?;
+        enclosure_allowance = enclosure_allowance.max(distance(sample.svg, bound.svg));
+    }
+    let native_allowance = distance(sample.svg, native_svg);
+    if !enclosure_allowance.is_finite() || !native_allowance.is_finite() {
+        return Err(format!(
+            "native endpoint {} produced a non-finite render allowance",
+            endpoint + 1
+        ));
+    }
+    if native_allowance > budget.options.tolerance_px + enclosure_allowance {
+        return Err(format!(
+            "sampled endpoint {} differs from native evidence by {:.6}px (allowed {:.6}px)",
+            endpoint + 1,
+            native_allowance,
+            budget.options.tolerance_px + enclosure_allowance,
+        ));
+    }
+    Ok((native_allowance.max(enclosure_allowance), native_svg))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn validate_profile_render_join(
+    previous: ProfileRenderPoint,
+    previous_allowance: f64,
+    previous_native: [f64; 2],
+    next: ProfileRenderPoint,
+    next_allowance: f64,
+    next_native: [f64; 2],
+    tolerance: f64,
+    context: &str,
+) -> Result<(), String> {
+    let native_gap = distance(previous_native, next_native);
+    let sampled_gap = distance(previous.svg, next.svg);
+    let allowed = tolerance + previous_allowance + next_allowance;
+    if !native_gap.is_finite() || !sampled_gap.is_finite() || !allowed.is_finite() {
+        return Err(format!("non-finite endpoint gap {context}"));
+    }
+    if native_gap > tolerance || sampled_gap > allowed {
+        return Err(format!(
+            "unresolved endpoint gap {context}: native {native_gap:.6}px, sampled {sampled_gap:.6}px, allowed {allowed:.6}px",
+        ));
+    }
+    Ok(())
+}
+
+fn sample_profile_edge(
+    document: &SketchDocument,
+    viewport: Viewport,
+    edge: &VisualProfileEdge,
+    budget: &mut ProfileRenderBudget,
+) -> Result<Vec<ProfileRenderPoint>, String> {
+    let start = evaluate_profile_render_point(
+        document,
+        viewport,
+        edge.source_span,
+        edge.source_parameters[0],
+        budget,
+    )?;
+    let end = evaluate_profile_render_point(
+        document,
+        viewport,
+        edge.source_span,
+        edge.source_parameters[1],
+        budget,
+    )?;
+    let mut samples = vec![start];
+    subdivide_profile_edge(
+        document,
+        viewport,
+        edge.source_span,
+        start,
+        end,
+        0,
+        budget,
+        &mut samples,
+    )?;
+    Ok(samples)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn subdivide_profile_edge(
+    document: &SketchDocument,
+    viewport: Viewport,
+    span: CurveSpan,
+    start: ProfileRenderPoint,
+    end: ProfileRenderPoint,
+    depth: u32,
+    budget: &mut ProfileRenderBudget,
+    samples: &mut Vec<ProfileRenderPoint>,
+) -> Result<(), String> {
+    let parameter = start.parameter.midpoint(end.parameter);
+    if parameter.to_bits() == start.parameter.to_bits()
+        || parameter.to_bits() == end.parameter.to_bits()
+    {
+        if distance(start.svg, end.svg) <= budget.options.tolerance_px {
+            samples.push(end);
+            return Ok(());
+        }
+        return Err("parameter interval cannot be subdivided representably".into());
+    }
+    let midpoint = evaluate_profile_render_point(document, viewport, span, parameter, budget)?;
+    let flat = profile_segment_is_flat(start, midpoint, end, budget.options.tolerance_px);
+    if depth >= budget.options.minimum_depth && flat {
+        samples.push(end);
+        return Ok(());
+    }
+    if depth >= budget.options.maximum_depth {
+        return Err(format!(
+            "web adaptive depth limit {} reached before the {:.3}px tolerance",
+            budget.options.maximum_depth, budget.options.tolerance_px
+        ));
+    }
+    budget.consume_subdivision()?;
+    subdivide_profile_edge(
+        document,
+        viewport,
+        span,
+        start,
+        midpoint,
+        depth + 1,
+        budget,
+        samples,
+    )?;
+    subdivide_profile_edge(
+        document,
+        viewport,
+        span,
+        midpoint,
+        end,
+        depth + 1,
+        budget,
+        samples,
+    )
+}
+
+fn evaluate_profile_render_point(
+    document: &SketchDocument,
+    viewport: Viewport,
+    span: CurveSpan,
+    parameter: f64,
+    budget: &mut ProfileRenderBudget,
+) -> Result<ProfileRenderPoint, String> {
+    budget.consume_evaluation()?;
+    let jet = document
+        .evaluate_curve_jet(span, parameter)
+        .map_err(|error| format!("curve evaluation at {parameter:.17} failed: {error}"))?;
+    let position = [jet.position.x, jet.position.y];
+    let tangent = [
+        jet.first_derivative.x * viewport.pixels_per_unit,
+        -jet.first_derivative.y * viewport.pixels_per_unit,
+    ];
+    if !position.into_iter().chain(tangent).all(f64::is_finite) {
+        return Err(format!(
+            "curve evaluation at {parameter:.17} produced non-finite render data"
+        ));
+    }
+    let svg = viewport.model_to_svg(position);
+    if !svg.into_iter().all(f64::is_finite) {
+        return Err(format!(
+            "curve evaluation at {parameter:.17} could not be mapped to the viewport"
+        ));
+    }
+    Ok(ProfileRenderPoint {
+        parameter,
+        svg,
+        tangent,
+    })
+}
+
+fn profile_segment_is_flat(
+    start: ProfileRenderPoint,
+    midpoint: ProfileRenderPoint,
+    end: ProfileRenderPoint,
+    tolerance: f64,
+) -> bool {
+    let midpoint_deviation = point_segment_distance(midpoint.svg, start.svg, end.svg).0;
+    let tangent_deviation = [start.tangent, midpoint.tangent, end.tangent]
+        .into_iter()
+        .map(|tangent| profile_tangent_deviation(start.svg, end.svg, tangent))
+        .fold(0.0, f64::max);
+    midpoint_deviation <= tolerance && tangent_deviation <= tolerance
+}
+
+fn profile_tangent_deviation(start: [f64; 2], end: [f64; 2], tangent: [f64; 2]) -> f64 {
+    let tangent_length = tangent[0].hypot(tangent[1]);
+    if tangent_length == 0.0 || !tangent_length.is_finite() {
+        return f64::INFINITY;
+    }
+    let chord = [end[0] - start[0], end[1] - start[1]];
+    (chord[0] * tangent[1] - chord[1] * tangent[0]).abs() / tangent_length
+}
+
+#[allow(clippy::too_many_lines)]
+fn profile_diagnostics_markup(presentation: &ProfilePresentation) -> String {
+    let analysis = &presentation.analysis;
+    let contour_count = analysis
+        .faces
+        .iter()
+        .map(|face| face.contours.len())
+        .sum::<usize>();
+    let families = analysis
+        .families
+        .iter()
+        .map(|family| format!("{family:?}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut markup = format!(
+        "<div class=\"profile-status-grid\"><div><span>native scope</span><strong>{:?}</strong></div><div><span>native status</span><strong>{:?}</strong></div><div><span>families</span><strong>{}</strong></div><div><span>faces / contours</span><strong>{} / {contour_count}</strong></div><div><span>intersections</span><strong>{}</strong></div><div><span>issues</span><strong>{}</strong></div></div><p class=\"profile-family-list\"><strong>Family roles:</strong> {}</p>",
+        analysis.scope,
+        analysis.status,
+        analysis.families.len(),
+        analysis.faces.len(),
+        analysis.intersections.len(),
+        analysis.issues.len(),
+        crate::escape_html(&families),
+    );
+    markup.push_str("<div class=\"profile-area-list\"><strong>Native bounded areas</strong>");
+    if analysis.faces.is_empty() {
+        markup.push_str("<p>No native face area was published.</p>");
+    } else {
+        for (face_index, face) in analysis.faces.iter().enumerate() {
+            let _ = write!(
+                markup,
+                "<p>Face {}: area {} +/- {}",
+                face_index + 1,
+                crate::format_metric(face.visual_area),
+                crate::format_metric(face.area_uncertainty),
+            );
+            for (contour_index, contour) in face.contours.iter().enumerate() {
+                let source_spans = contour
+                    .edges
+                    .iter()
+                    .map(|edge| {
+                        format!(
+                            "{} / span {}",
+                            edge.source_span.curve, edge.source_span.segment
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let _ = write!(
+                    markup,
+                    "<br>Contour {} {:?}: signed {} +/- {}; source spans {}",
+                    contour_index + 1,
+                    contour.orientation,
+                    crate::format_metric(contour.signed_area),
+                    crate::format_metric(contour.area_uncertainty),
+                    crate::escape_html(&source_spans),
+                );
+            }
+            markup.push_str("</p>");
+        }
+    }
+    markup.push_str(
+        "</div><div class=\"profile-intersection-list\"><strong>Certified native intersections</strong>",
+    );
+    if analysis.intersections.is_empty() {
+        markup.push_str("<p>None.</p>");
+    } else {
+        for (index, intersection) in analysis.intersections.iter().enumerate() {
+            let relation = if intersection.first_span.curve == intersection.second_span.curve {
+                "self"
+            } else {
+                "pair"
+            };
+            let _ = write!(
+                markup,
+                "<p><strong>Root {} ({relation})</strong><br>{} / span {} at [{}, {}]<br>{} / span {} at [{}, {}]<br>position [[{}, {}], [{}, {}]]</p>",
+                index + 1,
+                intersection.first_span.curve,
+                intersection.first_span.segment,
+                crate::format_metric(intersection.first_parameter_enclosure[0]),
+                crate::format_metric(intersection.first_parameter_enclosure[1]),
+                intersection.second_span.curve,
+                intersection.second_span.segment,
+                crate::format_metric(intersection.second_parameter_enclosure[0]),
+                crate::format_metric(intersection.second_parameter_enclosure[1]),
+                crate::format_metric(intersection.position_enclosure[0][0]),
+                crate::format_metric(intersection.position_enclosure[0][1]),
+                crate::format_metric(intersection.position_enclosure[1][0]),
+                crate::format_metric(intersection.position_enclosure[1][1]),
+            );
+        }
+    }
+    markup.push_str("</div><div class=\"profile-issue-list\"><strong>Typed native issues</strong>");
+    if analysis.issues.is_empty() {
+        markup.push_str("<p>None.</p>");
+    } else {
+        for issue in &analysis.issues {
+            let kind = crate::escape_html(&format!("{:?}", issue.kind));
+            let spans = issue
+                .affected_spans
+                .iter()
+                .map(|span| format!("{} / span {}", span.curve, span.segment))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let _ = write!(
+                markup,
+                "<p><strong>{kind}</strong><br>Affected source spans: {}</p>",
+                crate::escape_html(&spans),
+            );
+        }
+    }
+    markup.push_str(
+        "</div><div class=\"profile-budget-list\"><strong>Native consumed / limit</strong><dl>",
+    );
+    for (label, counter) in [
+        ("candidate pairs", analysis.budgets.candidate_pairs),
+        (
+            "intersection subdivisions",
+            analysis.budgets.intersection_subdivisions,
+        ),
+        ("intersection roots", analysis.budgets.intersection_roots),
+        ("fragments", analysis.budgets.fragments),
+        (
+            "integration subdivisions",
+            analysis.budgets.integration_subdivisions,
+        ),
+        ("containment tests", analysis.budgets.containment_tests),
+        ("faces", analysis.budgets.faces),
+    ] {
         let _ = write!(
             markup,
-            "<path class=\"visual-profile-overlay\" fill-rule=\"evenodd\" d=\"{path}\" />"
+            "<div><dt>{label}</dt><dd>{} / {}</dd></div>",
+            counter.consumed, counter.limit
         );
     }
+    let render = &presentation.render;
+    let _ = write!(
+        markup,
+        "</dl></div><div class=\"profile-render-status{}\"><strong>Web render: {:?}</strong><span>{} rendered / {} omitted faces; {} / {} combined work consumed.</span><span>Curve evaluations: {} / {}; adaptive subdivisions: {} / {}; fixed screen tolerance: {:.2}px.</span>",
+        if render.status == ProfileRenderStatus::Complete {
+            ""
+        } else {
+            " warning"
+        },
+        render.status,
+        render.rendered_face_count,
+        render.omitted_face_count,
+        render.consumed(),
+        render.limit(),
+        render.evaluation_consumed,
+        render.evaluation_limit,
+        render.subdivision_consumed,
+        render.subdivision_limit,
+        render.tolerance_px,
+    );
+    for warning in &render.warnings {
+        let _ = write!(markup, "<span>{}</span>", crate::escape_html(warning));
+    }
+    markup.push_str("</div>");
+    markup
 }
 
 fn object_row(markup: &mut String, kind: &str, id: PersistentId, label: &str, state: &str) {
@@ -4158,6 +5663,39 @@ fn finite_screen_offset(value: f64, center: f64, pixels_per_unit: f64) -> f64 {
 
 fn point_in_rect(point: [f64; 2], min: [f64; 2], max: [f64; 2]) -> bool {
     point[0] >= min[0] && point[0] <= max[0] && point[1] >= min[1] && point[1] <= max[1]
+}
+
+fn segment_intersects_rect(
+    first: [f64; 2],
+    second: [f64; 2],
+    min: [f64; 2],
+    max: [f64; 2],
+) -> bool {
+    if point_in_rect(first, min, max) || point_in_rect(second, min, max) {
+        return true;
+    }
+    let delta = [second[0] - first[0], second[1] - first[1]];
+    let mut lower = 0.0_f64;
+    let mut upper = 1.0_f64;
+    for axis in 0..2 {
+        if delta[axis] == 0.0 {
+            if first[axis] < min[axis] || first[axis] > max[axis] {
+                return false;
+            }
+            continue;
+        }
+        let mut first_crossing = (min[axis] - first[axis]) / delta[axis];
+        let mut second_crossing = (max[axis] - first[axis]) / delta[axis];
+        if first_crossing > second_crossing {
+            std::mem::swap(&mut first_crossing, &mut second_crossing);
+        }
+        lower = lower.max(first_crossing);
+        upper = upper.min(second_crossing);
+        if lower > upper {
+            return false;
+        }
+    }
+    true
 }
 
 fn point_segment_distance(point: [f64; 2], first: [f64; 2], second: [f64; 2]) -> (f64, f64) {
@@ -4238,11 +5776,27 @@ mod tests {
     }
 
     #[test]
-    fn m19_and_m20_selector_keys_are_public_and_visible() {
+    fn public_domain_example_selector_keys_are_visible() {
         for (key, expected) in [
             ("conic-gallery", AlphaScenarioKind::ConicGallery),
             ("conic-tangency", AlphaScenarioKind::ConicTangency),
             ("conic-circle-limit", AlphaScenarioKind::ConicCircleLimit),
+            ("m28-trimmed-fillet", AlphaScenarioKind::M28TrimmedFillet),
+            (
+                "profile-all-families",
+                AlphaScenarioKind::ProfileAllFamilies,
+            ),
+            (
+                "profile-curved-topology",
+                AlphaScenarioKind::ProfileCurvedTopology,
+            ),
+            ("profile-fillet-trim", AlphaScenarioKind::ProfileFilletTrim),
+            (
+                "profile-nurbs-self-intersection",
+                AlphaScenarioKind::ProfileNurbsSelfIntersection,
+            ),
+            ("profile-incomplete", AlphaScenarioKind::ProfileIncomplete),
+            ("profile-budget", AlphaScenarioKind::ProfileBudget),
         ] {
             assert_eq!(sketch_example_kind(key), Some(expected));
             assert_eq!(expected.key(), key);
@@ -4256,7 +5810,12 @@ mod tests {
             Some(SpatialExampleKind::BlockBase)
         );
         let page = include_str!("../index.html");
-        for group in ["M19 / analytic conics", "M20 / spatial assemblies"] {
+        for group in [
+            "M19 / analytic conics",
+            "M20 / spatial assemblies",
+            "M28 / visible parent trims",
+            "M31 / all-family visual profiles",
+        ] {
             assert!(page.contains(&format!("<optgroup label=\"{group}\">")));
         }
         for key in [
@@ -4265,9 +5824,148 @@ mod tests {
             "conic-circle-limit",
             "shaft-bearing",
             "block-base",
+            "m28-trimmed-fillet",
+            "profile-all-families",
+            "profile-curved-topology",
+            "profile-fillet-trim",
+            "profile-nurbs-self-intersection",
+            "profile-incomplete",
+            "profile-budget",
         ] {
             assert!(page.contains(&format!("value=\"{key}\"")));
         }
+        assert!(page.contains("data-action=\"copy-scene-capsule\""));
+    }
+
+    #[test]
+    fn scene_capsule_codec_and_profile_options_round_trip_deterministically() {
+        for input in [
+            b"".as_slice(),
+            b"abc",
+            b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            br#"{"curves":[{"label":"repeated repeated repeated"}]}"#,
+        ] {
+            let compressed = compress_scene_bytes(input);
+            assert_eq!(
+                decompress_scene_bytes(&compressed, input.len()).unwrap(),
+                input
+            );
+            let encoded = base64url_encode(&compressed);
+            assert_eq!(base64url_decode(&encoded).unwrap(), compressed);
+        }
+
+        let state = PlaygroundState::example(AlphaScenarioKind::ProfileBudget, 1.0).unwrap();
+        let json = state.export_json().unwrap();
+        let capsule = state.export_scene_capsule().unwrap();
+        assert_eq!(capsule, state.export_scene_capsule().unwrap());
+        assert!(capsule.starts_with("GEOSOLVE_SCENE_V1\n"));
+        assert!(capsule.contains("profile_status=Skipped"));
+        let decoded = decode_scene_capsule(&capsule).unwrap();
+        assert_eq!(decoded.document_json, json);
+        assert_eq!(decoded.profile_options.max_intersection_roots, 0);
+
+        let mut imported = PlaygroundState::empty().unwrap();
+        imported.import_json(&capsule);
+        assert_eq!(imported.export_json().unwrap(), json);
+        assert_eq!(imported.profile_options(), decoded.profile_options);
+        assert_eq!(
+            imported
+                .document()
+                .analyze_visual_profiles(imported.profile_options())
+                .status,
+            geosolve_sketch::VisualProfileStatus::Skipped
+        );
+
+        let gallery = PlaygroundState::example(AlphaScenarioKind::ProfileAllFamilies, 1.0).unwrap();
+        let gallery_json = gallery.export_json().unwrap();
+        let gallery_capsule = gallery.export_scene_capsule().unwrap();
+        assert!(gallery_capsule.len() < gallery_json.len());
+    }
+
+    #[test]
+    fn malformed_scene_capsules_retain_the_accepted_document_atomically() {
+        let mut state = PlaygroundState::example(AlphaScenarioKind::A1, 1.0).unwrap();
+        let retained = state.export_json().unwrap();
+        let capsule = state.export_scene_capsule().unwrap();
+        let payload = capsule.find("payload=").expect("capsule payload") + "payload=".len();
+        let mut corrupted = capsule.into_bytes();
+        corrupted[payload] = if corrupted[payload] == b'A' {
+            b'B'
+        } else {
+            b'A'
+        };
+        state.import_json(std::str::from_utf8(&corrupted).unwrap());
+        assert_eq!(state.export_json().unwrap(), retained);
+        assert!(
+            state
+                .last_attempt
+                .contains("capsule import failed atomically")
+        );
+
+        state.import_json(
+            "GEOSOLVE_SCENE_V1\ncodec=lzss12-4-base64url\nprofile_options=1,1,1,1,1,1,1,1\njson_bytes=16777217\nchecksum=0\npayload=AA",
+        );
+        assert_eq!(state.export_json().unwrap(), retained);
+        assert!(
+            state
+                .last_attempt
+                .contains("capsule import failed atomically")
+        );
+    }
+
+    #[test]
+    fn exact_nurbs_control_authoring_refreshes_certified_self_root_evidence() {
+        let mut state =
+            PlaygroundState::example(AlphaScenarioKind::ProfileNurbsSelfIntersection, 1.0).unwrap();
+        let curve = state
+            .document()
+            .curves()
+            .iter()
+            .find(|curve| curve.label == "Profile self-intersecting NURBS")
+            .expect("profile NURBS")
+            .clone();
+        let CurveDefinition::Nurbs { controls, .. } = curve.definition else {
+            panic!("profile scenario curve must be NURBS");
+        };
+        state.selection = vec![SelectionItem::Curve {
+            span: CurveSpan::line(curve.id),
+            parameter: 0.5,
+        }];
+        let before = state
+            .document()
+            .analyze_visual_profiles(VisualProfileOptions::default());
+        assert_eq!(
+            before.status,
+            geosolve_sketch::VisualProfileStatus::Complete
+        );
+        assert_eq!(
+            before
+                .intersections
+                .iter()
+                .filter(|root| root.first_span.curve == root.second_span.curve)
+                .count(),
+            1
+        );
+
+        let point = state.document().point(controls[1]).unwrap().position;
+        state.set_selected_nurbs_control(controls[1], [point[0] + 0.1, point[1] + 0.05]);
+        let accepted = state.document().point(controls[1]).unwrap().position;
+        assert!(distance(point, accepted) > 0.1);
+        let presentation = state.profile_presentation();
+        assert_eq!(
+            presentation.analysis.status,
+            geosolve_sketch::VisualProfileStatus::Complete
+        );
+        assert_eq!(
+            presentation
+                .analysis
+                .intersections
+                .iter()
+                .filter(|root| root.first_span.curve == root.second_span.curve)
+                .count(),
+            1
+        );
+        assert!(profile_diagnostics_markup(&presentation).contains("Root 1 (self)"));
     }
 
     #[test]
@@ -4544,7 +6242,9 @@ mod tests {
                 _ => panic!("wrong definition for {tool:?}: {definition:?}"),
             }
             assert_eq!(
-                curve_sampling_report(state.document()).samples[0].1.len(),
+                curve_sampling_report(state.document()).samples[0]
+                    .samples
+                    .len(),
                 CURVE_SAMPLES as usize + 1,
                 "{tool:?}",
             );
@@ -5301,7 +7001,9 @@ mod tests {
     #[test]
     fn straight_curves_use_only_their_exact_endpoints() {
         let state = PlaygroundState::example(AlphaScenarioKind::Corpus, 1.0).unwrap();
-        for (span, samples) in curve_sampling_report(state.document()).samples {
+        for visible in curve_sampling_report(state.document()).samples {
+            let span = visible.interval.support;
+            let samples = visible.samples;
             let curve = state.document().curve(span.curve).unwrap();
             match curve.definition {
                 CurveDefinition::Line { .. } | CurveDefinition::Polyline { .. } => {
@@ -5358,7 +7060,9 @@ mod tests {
         let samples = curve_sampling_report(&document)
             .samples
             .into_iter()
-            .find_map(|(span, samples)| (span.curve == ellipse).then_some(samples))
+            .find_map(|visible| {
+                (visible.interval.support.curve == ellipse).then_some(visible.samples)
+            })
             .unwrap();
         assert_eq!(samples.len(), CURVE_SAMPLES as usize + 1);
         assert_eq!(samples[0].0.to_bits(), 0.0f64.to_bits());
@@ -5398,22 +7102,253 @@ mod tests {
         let samples = curve_sampling_report(&document)
             .samples
             .into_iter()
-            .filter(|(span, _)| span.curve == spline)
+            .filter(|visible| visible.interval.support.curve == spline)
             .collect::<Vec<_>>();
         assert_eq!(samples.len(), 2);
         assert_eq!(
             samples
                 .iter()
-                .map(|(span, _)| span.segment)
+                .map(|visible| visible.interval.support.segment)
                 .collect::<Vec<_>>(),
             vec![41, 73]
         );
         assert!(
             samples
                 .iter()
-                .all(|(_, values)| values.len() == CURVE_SAMPLES as usize + 1)
+                .all(|visible| visible.samples.len() == CURVE_SAMPLES as usize + 1)
         );
-        assert!(distance(samples[0].1.last().unwrap().1, samples[1].1[0].1) <= 1.0e-12);
+        assert!(
+            distance(
+                samples[0].samples.last().unwrap().1,
+                samples[1].samples[0].1,
+            ) <= 1.0e-12
+        );
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn m28_visible_intervals_drive_every_curve_consumer_and_explode_cleanly() {
+        let mut state = PlaygroundState::example(AlphaScenarioKind::M28TrimmedFillet, 1.0).unwrap();
+        let curve = |label: &str| {
+            state
+                .document()
+                .curves()
+                .iter()
+                .find(|curve| curve.label == label)
+                .unwrap()
+                .id
+        };
+        let circle = curve("M28 trimmed circle parent");
+        let line = curve("M28 trimmed line parent");
+        let (association, arc) = state
+            .document()
+            .constraints()
+            .iter()
+            .find_map(|constraint| match constraint.definition {
+                DocumentConstraintDefinition::CurveCurveFillet { arc, .. } => {
+                    Some((constraint.id, arc))
+                }
+                _ => None,
+            })
+            .unwrap();
+        let public_line = state
+            .document()
+            .visible_curve_intervals(line)
+            .unwrap()
+            .remove(0);
+        let public_circle = state
+            .document()
+            .visible_curve_intervals(circle)
+            .unwrap()
+            .remove(0);
+        assert!((public_circle.start + std::f64::consts::PI).abs() <= 1.0e-12);
+        assert_eq!(public_circle.end.to_bits(), 0.0_f64.to_bits());
+        assert!((public_line.start - 0.5).abs() <= 1.0e-9);
+        assert_eq!(public_line.end.to_bits(), 1.0_f64.to_bits());
+
+        let sampling = curve_sampling_report(state.document());
+        let sampled_line = sampling
+            .samples
+            .iter()
+            .find(|samples| samples.interval.support.curve == line)
+            .unwrap();
+        assert_eq!(sampled_line.interval, public_line);
+        assert_eq!(
+            sampled_line.samples.first().unwrap().0.to_bits(),
+            public_line.start.to_bits()
+        );
+        assert_eq!(
+            sampled_line.samples.last().unwrap().0.to_bits(),
+            public_line.end.to_bits()
+        );
+        assert_eq!(
+            first_curve_selection(state.document(), line),
+            Some((
+                public_line.support,
+                public_line.start.midpoint(public_line.end)
+            ))
+        );
+
+        let svg = state.render_svg();
+        assert!(svg.contains(&format!(
+            "data-curve-id=\"{line}\" data-span-id=\"0\" data-segment=\"0\" data-visible-start=\"{:.17}\" data-visible-end=\"{:.17}\" data-delete-policy=\"underlying-curve\"",
+            public_line.start, public_line.end
+        )));
+        assert!(svg.contains("data-derived-trim-marker=\"start\""));
+        assert!(svg.contains("data-derived-trim-marker=\"end\""));
+        assert!(
+            !curve_configuration_handles(state.document())
+                .iter()
+                .any(|view| view.handle.curve == arc)
+        );
+        assert!(include_str!("../styles.css").contains(".derived-trim-marker"));
+        assert!(include_str!("../styles.css").contains("pointer-events: none"));
+
+        state.clear_selection();
+        assert!(!state.select_at(state.viewport.model_to_svg([1.0, 1.0]), false));
+        assert!(state.selection.is_empty());
+        assert!(state.select_at(state.viewport.model_to_svg([4.5, 1.0]), false));
+        assert!(matches!(
+            state.selection.as_slice(),
+            [SelectionItem::Curve { span, parameter }]
+                if span.curve == line && *parameter >= public_line.start
+                    && *parameter <= public_line.end
+        ));
+
+        let hidden_min = state.viewport.model_to_svg([0.8, 1.2]);
+        let hidden_max = state.viewport.model_to_svg([1.2, 0.8]);
+        state.begin_box_select(801, hidden_min, false);
+        state.update_gesture(801, hidden_max);
+        state.end_gesture(801, true);
+        assert!(state.selected_curves().is_empty());
+        let visible_min = state.viewport.model_to_svg([4.0, 1.2]);
+        let visible_max = state.viewport.model_to_svg([5.0, 0.8]);
+        state.begin_box_select(802, visible_min, false);
+        state.update_gesture(802, visible_max);
+        state.end_gesture(802, true);
+        assert!(
+            state
+                .selected_curves()
+                .iter()
+                .any(|(span, parameter)| span.curve == line
+                    && *parameter >= public_line.start
+                    && *parameter <= public_line.end)
+        );
+
+        let mut candidate = state.document().clone();
+        assert!(
+            add_contact(
+                &mut candidate,
+                (public_line.support, 0.25),
+                false,
+                "hidden contact",
+                NeighborhoodChoice::Picked,
+                TangentOrientation::Aligned,
+                0,
+            )
+            .is_err()
+        );
+        assert!(
+            add_contact(
+                &mut candidate,
+                (public_line.support, 0.75),
+                false,
+                "visible contact",
+                NeighborhoodChoice::Picked,
+                TangentOrientation::Aligned,
+                0,
+            )
+            .is_ok()
+        );
+
+        let objects = state.object_list_markup();
+        assert!(objects.contains("fillet owner"));
+        assert!(objects.contains("deletion targets underlying CurveId"));
+        assert!(objects.contains("Delete explodes to fixed trims and an ordinary arc"));
+        let status = state.solve_status_markup();
+        assert!(status.contains("2 trim view(s) / 3 visible interval(s)"));
+        assert!(
+            state
+                .document_status()
+                .contains("2 trim views / 3 visible intervals")
+        );
+
+        let canonical = state.export_json().unwrap();
+        let imported = PlaygroundState::from_json(&canonical).unwrap();
+        assert_eq!(imported.export_json().unwrap(), canonical);
+        assert_eq!(
+            imported.document().visible_curve_intervals(line).unwrap(),
+            state.document().visible_curve_intervals(line).unwrap()
+        );
+
+        let mut hidden_contact_document = state.document().clone();
+        let hidden_point = hidden_contact_document
+            .add_point("suppressed hidden contact point", [4.5, 1.0])
+            .unwrap();
+        let hidden_contact = add_contact(
+            &mut hidden_contact_document,
+            (public_line.support, 0.75),
+            false,
+            "suppressed hidden contact",
+            NeighborhoodChoice::Picked,
+            TangentOrientation::Aligned,
+            0,
+        )
+        .unwrap();
+        let hidden_constraint = hidden_contact_document
+            .add_constraint(
+                "suppressed hidden point on curve",
+                DocumentConstraintDefinition::PointOnCurve {
+                    point: hidden_point,
+                    contact: hidden_contact,
+                },
+            )
+            .unwrap();
+        let hidden_source = hidden_contact_document
+            .constraint(hidden_constraint)
+            .unwrap()
+            .source_id;
+        hidden_contact_document
+            .set_source_suppressed(hidden_source, true)
+            .unwrap();
+        hidden_contact_document
+            .set_contact_states(&[ContactStateEdit {
+                contact: hidden_contact,
+                value: 0.25,
+                winding: 0,
+                neighborhood: ContactNeighborhood::Local {
+                    lower: 0.1,
+                    upper: 0.4,
+                },
+                tangent_orientation: None,
+            }])
+            .unwrap();
+        let hidden_contact_state =
+            PlaygroundState::from_json(&hidden_contact_document.to_canonical_json().unwrap())
+                .unwrap();
+        assert!(
+            !hidden_contact_state
+                .render_svg()
+                .contains(&format!("data-contact-id=\"{hidden_contact}\""))
+        );
+
+        state.delete_object(DocumentObjectId::Constraint(association));
+        assert!(state.accepted_is_valid(), "{}", state.last_attempt);
+        assert!(state.document().constraint(association).is_none());
+        assert!(state.document().curve(arc).is_some());
+        assert!(state.document().curve_curve_fillet_for_arc(arc).is_none());
+        for view in state.document().trim_views() {
+            assert!(matches!(view.start, DocumentTrimBoundary::Fixed(_)));
+            assert!(matches!(view.end, DocumentTrimBoundary::Fixed(_)));
+        }
+        assert_eq!(
+            curve_configuration_handles(state.document())
+                .iter()
+                .filter(|view| view.handle.curve == arc)
+                .count(),
+            2
+        );
+        assert!(!state.render_svg().contains("data-derived-trim-marker"));
     }
 
     #[test]
@@ -5459,7 +7394,7 @@ mod tests {
 
         let sampling = curve_sampling_report(&document);
         assert_eq!(sampling.samples.len(), 1);
-        assert!(sampling.samples[0].1.is_empty());
+        assert!(sampling.samples[0].samples.is_empty());
         assert_eq!(sampling.failures.len(), 1);
         assert!(sampling.failures[0].message.contains("zero speed"));
 
@@ -6470,8 +8405,234 @@ mod tests {
             .expect("rectangle should render one visual profile");
         assert!(overlay.contains("fill-rule=\"evenodd\""));
         assert!(!overlay.contains("data-"));
+        let styles = include_str!("../styles.css");
+        let profile_rule = &styles[styles.find(".visual-profile-overlay").unwrap()..];
+        assert!(profile_rule[..profile_rule.find('}').unwrap()].contains("pointer-events: none"));
         assert_eq!(state.export_json().unwrap(), before);
         assert_eq!(state.selection, selection);
+    }
+
+    #[test]
+    fn curved_profile_edges_have_adaptive_interior_points_in_directed_order() {
+        let state =
+            PlaygroundState::example(AlphaScenarioKind::ProfileCurvedTopology, 1.0).unwrap();
+        let presentation = state.profile_presentation();
+        assert_eq!(
+            presentation.analysis.status,
+            geosolve_sketch::VisualProfileStatus::Complete
+        );
+        let edge = presentation
+            .analysis
+            .faces
+            .iter()
+            .flat_map(|face| &face.contours)
+            .flat_map(|contour| &contour.edges)
+            .find(|edge| {
+                state
+                    .document()
+                    .curve(edge.source_span.curve)
+                    .is_some_and(|curve| {
+                        matches!(
+                            curve.definition,
+                            CurveDefinition::Circle { .. } | CurveDefinition::Ellipse { .. }
+                        )
+                    })
+            })
+            .unwrap();
+        let mut budget = ProfileRenderBudget {
+            evaluations: 0,
+            subdivisions: 0,
+            options: ProfileRenderOptions::default(),
+        };
+        let samples =
+            sample_profile_edge(state.document(), state.viewport(), edge, &mut budget).unwrap();
+        assert!(samples.len() > 2, "{samples:#?}");
+        assert_eq!(
+            samples.first().unwrap().parameter.to_bits(),
+            edge.source_parameters[0].to_bits()
+        );
+        assert_eq!(
+            samples.last().unwrap().parameter.to_bits(),
+            edge.source_parameters[1].to_bits()
+        );
+        let ascending = edge.source_parameters[0] < edge.source_parameters[1];
+        assert!(samples.windows(2).all(|pair| if ascending {
+            pair[0].parameter < pair[1].parameter
+        } else {
+            pair[0].parameter > pair[1].parameter
+        }));
+    }
+
+    #[test]
+    fn reverse_directed_profile_parameters_are_not_reordered() {
+        let state =
+            PlaygroundState::example(AlphaScenarioKind::ProfileCurvedTopology, 1.0).unwrap();
+        let presentation = state.profile_presentation();
+        let edge = presentation
+            .analysis
+            .faces
+            .iter()
+            .flat_map(|face| &face.contours)
+            .flat_map(|contour| &contour.edges)
+            .find(|edge| edge.source_parameters[0] > edge.source_parameters[1])
+            .expect("nested hole must include reverse-directed source traversal");
+        let mut budget = ProfileRenderBudget {
+            evaluations: 0,
+            subdivisions: 0,
+            options: ProfileRenderOptions::default(),
+        };
+        let samples =
+            sample_profile_edge(state.document(), state.viewport(), edge, &mut budget).unwrap();
+        assert!(
+            samples
+                .windows(2)
+                .all(|pair| pair[0].parameter > pair[1].parameter),
+            "{samples:#?}"
+        );
+        let expected_start = state
+            .document()
+            .evaluate_curve_jet(edge.source_span, edge.source_parameters[0])
+            .unwrap();
+        let expected_end = state
+            .document()
+            .evaluate_curve_jet(edge.source_span, edge.source_parameters[1])
+            .unwrap();
+        assert!(
+            distance(
+                samples.first().unwrap().svg,
+                state
+                    .viewport()
+                    .model_to_svg([expected_start.position.x, expected_start.position.y])
+            ) <= 1.0e-12
+        );
+        assert!(
+            distance(
+                samples.last().unwrap().svg,
+                state
+                    .viewport()
+                    .model_to_svg([expected_end.position.x, expected_end.position.y])
+            ) <= 1.0e-12
+        );
+    }
+
+    #[test]
+    fn nested_profile_holes_share_one_even_odd_overlay_path() {
+        let state =
+            PlaygroundState::example(AlphaScenarioKind::ProfileCurvedTopology, 1.0).unwrap();
+        let presentation = state.profile_presentation();
+        assert!(
+            presentation
+                .analysis
+                .faces
+                .iter()
+                .any(|face| face.contours.len() >= 2)
+        );
+        assert!(presentation.overlay_markup.split('<').any(|tag| {
+            tag.starts_with("path class=\"visual-profile-overlay\"")
+                && tag.contains("fill-rule=\"evenodd\"")
+                && tag.matches("M ").count() >= 2
+        }));
+    }
+
+    #[test]
+    fn native_budget_scene_never_gains_a_web_overlay() {
+        let state = PlaygroundState::example(AlphaScenarioKind::ProfileBudget, 1.0).unwrap();
+        let before = state.export_json().unwrap();
+        let selection = state.selection.clone();
+        let presentation = state.profile_presentation();
+        assert_eq!(
+            presentation.analysis.status,
+            geosolve_sketch::VisualProfileStatus::Skipped
+        );
+        assert!(presentation.analysis.faces.is_empty());
+        assert!(presentation.overlay_markup.is_empty());
+        assert_eq!(presentation.render.rendered_face_count, 0);
+        assert_eq!(presentation.render.omitted_face_count, 0);
+        assert_eq!(state.export_json().unwrap(), before);
+        assert_eq!(state.selection, selection);
+    }
+
+    #[test]
+    fn web_budget_failure_omits_whole_face_without_changing_native_status() {
+        let state =
+            PlaygroundState::example(AlphaScenarioKind::ProfileCurvedTopology, 1.0).unwrap();
+        let presentation = state.profile_presentation();
+        assert!(presentation.analysis.faces.len() > 1);
+        let mut first_face_budget = ProfileRenderBudget {
+            evaluations: 0,
+            subdivisions: 0,
+            options: ProfileRenderOptions::default(),
+        };
+        render_profile_face(
+            state.document(),
+            state.viewport(),
+            &presentation.analysis.faces[0],
+            &mut first_face_budget,
+        )
+        .unwrap();
+        let options = ProfileRenderOptions {
+            max_evaluations: first_face_budget.evaluations,
+            max_subdivisions: first_face_budget.subdivisions,
+            ..ProfileRenderOptions::default()
+        };
+        let (overlay, render) = render_visual_profiles(
+            state.document(),
+            state.viewport(),
+            &presentation.analysis,
+            options,
+        );
+        assert_eq!(
+            presentation.analysis.status,
+            geosolve_sketch::VisualProfileStatus::Complete
+        );
+        assert_eq!(render.status, ProfileRenderStatus::Truncated);
+        assert_eq!(render.rendered_face_count, 1);
+        assert_eq!(
+            render.omitted_face_count,
+            presentation.analysis.faces.len() - 1
+        );
+        assert_eq!(
+            overlay.matches("class=\"visual-profile-overlay\"").count(),
+            1
+        );
+        assert!(!render.warnings.is_empty());
+    }
+
+    #[test]
+    fn sampled_profile_gap_omits_whole_face_instead_of_drawing_connector() {
+        let state = PlaygroundState::example(AlphaScenarioKind::ProfileFilletTrim, 1.0).unwrap();
+        let mut analysis = state.profile_presentation().analysis;
+        assert!(!analysis.faces.is_empty(), "{analysis:#?}");
+        analysis.faces.truncate(1);
+        let contour = &mut analysis.faces[0].contours[0];
+        assert!(contour.edges.len() >= 2, "{analysis:#?}");
+        let edge = &mut contour.edges[1];
+        let parameter = edge.source_parameters[0]
+            + 0.5 * (edge.source_parameters[1] - edge.source_parameters[0]);
+        let jet = state
+            .document()
+            .evaluate_curve_jet(edge.source_span, parameter)
+            .unwrap();
+        edge.source_parameters[0] = parameter;
+        edge.source_parameter_enclosures[0] = [parameter, parameter];
+        edge.start = [jet.position.x, jet.position.y];
+
+        let (overlay, render) = render_visual_profiles(
+            state.document(),
+            state.viewport(),
+            &analysis,
+            ProfileRenderOptions::default(),
+        );
+        assert!(overlay.is_empty());
+        assert_eq!(render.status, ProfileRenderStatus::Skipped);
+        assert_eq!(render.rendered_face_count, 0);
+        assert_eq!(render.omitted_face_count, 1);
+        assert!(
+            render
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("endpoint gap"))
+        );
     }
 
     #[test]
@@ -6535,8 +8696,12 @@ pub(crate) mod wasm {
     };
 
     use geosolve_sketch::{
-        ContactId, DesignPointId, DocumentConstraintId, DocumentDimensionId, DocumentDimensionMode,
-        DocumentObjectId, MAX_DOCUMENT_JSON_BYTES, PersistentId,
+        ContactId, CurveDefinition, DesignPointId, DesignScalarId, DocumentArcSweep,
+        DocumentBSplineSpanDirection, DocumentConstraintDefinition, DocumentConstraintId,
+        DocumentCurveNormalSide, DocumentDimensionDefinition, DocumentDimensionId,
+        DocumentDimensionMode, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint,
+        DocumentLineOffsetOrientation, DocumentLineSide, DocumentObjectId, MAX_DOCUMENT_JSON_BYTES,
+        PersistentId,
     };
     use wasm_bindgen::{JsCast, JsValue, closure::Closure};
     use web_sys::{
@@ -6547,8 +8712,8 @@ pub(crate) mod wasm {
 
     use super::{
         CANVAS_HEIGHT, CANVAS_WIDTH, ConicDrawOptions, DrawTool, HIT_RADIUS_PX, PlaygroundState,
-        SelectionItem, Tool, first_curve_selection, parse_finite_conic_option, sketch_example_kind,
-        spatial_example_kind,
+        ProfilePresentation, SelectionItem, Tool, first_curve_selection, parse_finite_conic_option,
+        profile_diagnostics_markup, sketch_example_kind, spatial_example_kind,
     };
 
     const STORAGE_KEY: &str = "geosolve.sketch-playground.accepted.v1";
@@ -6613,6 +8778,8 @@ pub(crate) mod wasm {
         install_wheel_listener(document, &app)?;
         install_keyboard_listener(document, &app)?;
         install_conic_option_listeners(document, &app)?;
+        install_nurbs_weight_listener(document, &app)?;
+        install_nurbs_control_listener(document, &app)?;
         install_file_listener(document, &app)?;
         required(document, "playground-root")?.set_attribute("data-e2e-ready", "true")?;
         Ok(())
@@ -6622,6 +8789,19 @@ pub(crate) mod wasm {
         document
             .get_element_by_id(id)
             .ok_or_else(|| JsValue::from_str(&format!("missing #{id} element")))
+    }
+
+    fn copy_selected_text(document: &Document) -> bool {
+        js_sys::Reflect::get(document.as_ref(), &JsValue::from_str("execCommand"))
+            .ok()
+            .and_then(|value| value.dyn_into::<js_sys::Function>().ok())
+            .and_then(|function| {
+                function
+                    .call1(document.as_ref(), &JsValue::from_str("copy"))
+                    .ok()
+            })
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false)
     }
 
     fn set_disabled(element: &Element, disabled: bool) -> Result<(), JsValue> {
@@ -6638,6 +8818,143 @@ pub(crate) mod wasm {
         } else {
             element.remove_attribute("hidden")
         }
+    }
+
+    const PROFILE_ATTRIBUTES: [&str; 28] = [
+        "data-profile-status",
+        "data-profile-scope",
+        "data-profile-family-count",
+        "data-profile-face-count",
+        "data-profile-contour-count",
+        "data-profile-intersection-count",
+        "data-profile-self-intersection-count",
+        "data-profile-issue-count",
+        "data-profile-render-status",
+        "data-profile-rendered-face-count",
+        "data-profile-omitted-face-count",
+        "data-profile-render-consumed",
+        "data-profile-render-limit",
+        "data-profile-candidate-pairs-consumed",
+        "data-profile-candidate-pairs-limit",
+        "data-profile-intersection-subdivisions-consumed",
+        "data-profile-intersection-subdivisions-limit",
+        "data-profile-intersection-roots-consumed",
+        "data-profile-intersection-roots-limit",
+        "data-profile-fragments-consumed",
+        "data-profile-fragments-limit",
+        "data-profile-integration-subdivisions-consumed",
+        "data-profile-integration-subdivisions-limit",
+        "data-profile-containment-tests-consumed",
+        "data-profile-containment-tests-limit",
+        "data-profile-faces-consumed",
+        "data-profile-faces-limit",
+        "data-profile-render-warning-count",
+    ];
+
+    fn clear_profile_attributes(root: &Element) -> Result<(), JsValue> {
+        for attribute in PROFILE_ATTRIBUTES {
+            root.remove_attribute(attribute)?;
+        }
+        Ok(())
+    }
+
+    fn set_profile_budget_attributes(
+        root: &Element,
+        name: &str,
+        counter: geosolve_sketch::VisualProfileBudgetCounter,
+    ) -> Result<(), JsValue> {
+        root.set_attribute(
+            &format!("data-profile-{name}-consumed"),
+            &counter.consumed.to_string(),
+        )?;
+        root.set_attribute(
+            &format!("data-profile-{name}-limit"),
+            &counter.limit.to_string(),
+        )
+    }
+
+    fn render_profile_presentation(
+        document: &Document,
+        root: &Element,
+        presentation: &ProfilePresentation,
+    ) -> Result<(), JsValue> {
+        let analysis = &presentation.analysis;
+        let render = &presentation.render;
+        let contour_count = analysis
+            .faces
+            .iter()
+            .map(|face| face.contours.len())
+            .sum::<usize>();
+        root.set_attribute("data-profile-status", &format!("{:?}", analysis.status))?;
+        root.set_attribute("data-profile-scope", &format!("{:?}", analysis.scope))?;
+        root.set_attribute(
+            "data-profile-family-count",
+            &analysis.families.len().to_string(),
+        )?;
+        root.set_attribute("data-profile-face-count", &analysis.faces.len().to_string())?;
+        root.set_attribute("data-profile-contour-count", &contour_count.to_string())?;
+        root.set_attribute(
+            "data-profile-intersection-count",
+            &analysis.intersections.len().to_string(),
+        )?;
+        root.set_attribute(
+            "data-profile-self-intersection-count",
+            &analysis
+                .intersections
+                .iter()
+                .filter(|intersection| {
+                    intersection.first_span.curve == intersection.second_span.curve
+                })
+                .count()
+                .to_string(),
+        )?;
+        root.set_attribute(
+            "data-profile-issue-count",
+            &analysis.issues.len().to_string(),
+        )?;
+        root.set_attribute(
+            "data-profile-render-status",
+            &format!("{:?}", render.status),
+        )?;
+        root.set_attribute(
+            "data-profile-rendered-face-count",
+            &render.rendered_face_count.to_string(),
+        )?;
+        root.set_attribute(
+            "data-profile-omitted-face-count",
+            &render.omitted_face_count.to_string(),
+        )?;
+        root.set_attribute(
+            "data-profile-render-consumed",
+            &render.consumed().to_string(),
+        )?;
+        root.set_attribute("data-profile-render-limit", &render.limit().to_string())?;
+        root.set_attribute(
+            "data-profile-render-warning-count",
+            &render.warnings.len().to_string(),
+        )?;
+        for (name, counter) in [
+            ("candidate-pairs", analysis.budgets.candidate_pairs),
+            (
+                "intersection-subdivisions",
+                analysis.budgets.intersection_subdivisions,
+            ),
+            ("intersection-roots", analysis.budgets.intersection_roots),
+            ("fragments", analysis.budgets.fragments),
+            (
+                "integration-subdivisions",
+                analysis.budgets.integration_subdivisions,
+            ),
+            ("containment-tests", analysis.budgets.containment_tests),
+            ("faces", analysis.budgets.faces),
+        ] {
+            set_profile_budget_attributes(root, name, counter)?;
+        }
+        let section = required(document, "profile-analysis-section")?;
+        set_hidden(&section, false)?;
+        required(document, "profile-analysis")?
+            .set_inner_html(&profile_diagnostics_markup(presentation));
+        Ok(())
     }
 
     fn render_shared(document: &Document, app: &Rc<RefCell<PlaygroundState>>) {
@@ -6657,6 +8974,7 @@ pub(crate) mod wasm {
             .unwrap_or(0)
             .saturating_add(1);
         root.set_attribute("data-render-sequence", &sequence.to_string())?;
+        render_example_uat(document, state, &root)?;
         if state.is_spatial() {
             return render_spatial(document, state, &root);
         }
@@ -6707,6 +9025,21 @@ pub(crate) mod wasm {
         root.set_attribute(
             "data-pixels-per-unit",
             &state.viewport().pixels_per_unit.to_string(),
+        )?;
+        root.set_attribute(
+            "data-trim-view-count",
+            &state.document().trim_views().len().to_string(),
+        )?;
+        let visible_interval_count = state
+            .document()
+            .curves()
+            .iter()
+            .filter_map(|curve| state.document().visible_curve_intervals(curve.id).ok())
+            .map(|intervals| intervals.len())
+            .sum::<usize>();
+        root.set_attribute(
+            "data-visible-interval-count",
+            &visible_interval_count.to_string(),
         )?;
         let accepted = state.display_session().accepted_result();
         let report = &accepted.accepted_view().core_report;
@@ -6766,8 +9099,10 @@ pub(crate) mod wasm {
         } else {
             root.remove_attribute("data-sparse-fallback")?;
         }
+        let profile = state.profile_presentation();
+        render_profile_presentation(document, &root, &profile)?;
         let viewport = required(document, "sketch-viewport")?;
-        viewport.set_inner_html(&state.render_svg());
+        viewport.set_inner_html(&state.render_svg_with_profile(&profile));
         viewport.set_attribute("aria-label", "Editable geometric sketch")?;
         viewport.set_attribute("data-tool", state.tool().key())?;
         if state.gesture_pointer().is_some() {
@@ -6780,9 +9115,11 @@ pub(crate) mod wasm {
         required(document, "document-status")?.set_text_content(Some(&state.document_status()));
         required(document, "interaction-help")?.set_text_content(Some(&state.interaction_help()));
         render_conic_options(document, state)?;
+        render_selected_dimension(document, state)?;
+        render_fillet_controls(document, state, &root)?;
+        render_nurbs_controls(document, state, &root)?;
         required(document, "selection-summary")?.set_text_content(Some(&state.selection_summary()));
-        required(document, "playground-solve-status")?
-            .set_inner_html(&PlaygroundState::solve_status_markup_with_result(&accepted));
+        required(document, "playground-solve-status")?.set_inner_html(&state.solve_status_markup());
         let object_list = required(document, "object-list")?;
         let audit = required(document, "playground-audit")?;
         if state.preview_active() {
@@ -6904,6 +9241,437 @@ pub(crate) mod wasm {
         Ok(())
     }
 
+    fn render_example_uat(
+        document: &Document,
+        state: &PlaygroundState,
+        root: &Element,
+    ) -> Result<(), JsValue> {
+        let panel = required(document, "uat-panel")?;
+        let Some(kind) = state.example_kind else {
+            set_hidden(&panel, true)?;
+            root.remove_attribute("data-example-key")?;
+            root.remove_attribute("data-uat-equality-dof")?;
+            root.remove_attribute("data-uat-bounded-dof")?;
+            root.remove_attribute("data-uat-profile-status")?;
+            root.remove_attribute("data-uat-profile-family-count")?;
+            root.remove_attribute("data-uat-profile-minimum-face-count")?;
+            return Ok(());
+        };
+        root.set_attribute("data-example-key", kind.key())?;
+        if let Some(uat) = kind.uat() {
+            set_hidden(&panel, false)?;
+            root.set_attribute(
+                "data-uat-equality-dof",
+                &uat.expected_equality_dof.to_string(),
+            )?;
+            root.set_attribute(
+                "data-uat-bounded-dof",
+                &uat.expected_bounded_dof.to_string(),
+            )?;
+            root.remove_attribute("data-uat-profile-status")?;
+            root.remove_attribute("data-uat-profile-family-count")?;
+            root.remove_attribute("data-uat-profile-minimum-face-count")?;
+            required(document, "uat-title")?.set_text_content(Some(uat.title));
+            required(document, "uat-instructions")?.set_text_content(Some(uat.instructions));
+            required(document, "uat-metric-label")?.set_text_content(Some("Expected DOF"));
+            required(document, "uat-action-label")?.set_text_content(Some("Primary drag"));
+            required(document, "uat-primary-drag")?.set_text_content(Some(uat.primary_drag));
+            required(document, "uat-dof")?.set_text_content(Some(&format!(
+                "{} equality / {} bounded",
+                uat.expected_equality_dof, uat.expected_bounded_dof
+            )));
+            return Ok(());
+        }
+        if let Some(uat) = kind.profile_uat() {
+            set_hidden(&panel, false)?;
+            root.remove_attribute("data-uat-equality-dof")?;
+            root.remove_attribute("data-uat-bounded-dof")?;
+            root.set_attribute(
+                "data-uat-profile-status",
+                &format!("{:?}", uat.expected_status),
+            )?;
+            root.set_attribute(
+                "data-uat-profile-family-count",
+                &uat.expected_family_count.to_string(),
+            )?;
+            root.set_attribute(
+                "data-uat-profile-minimum-face-count",
+                &uat.expected_minimum_face_count.to_string(),
+            )?;
+            required(document, "uat-title")?.set_text_content(Some(uat.title));
+            required(document, "uat-instructions")?.set_text_content(Some(uat.instructions));
+            required(document, "uat-metric-label")?.set_text_content(Some("Expected profile"));
+            required(document, "uat-action-label")?
+                .set_text_content(Some("Expected families / faces"));
+            required(document, "uat-dof")?
+                .set_text_content(Some(&format!("{:?}", uat.expected_status)));
+            required(document, "uat-primary-drag")?.set_text_content(Some(&format!(
+                "{} families / at least {} faces",
+                uat.expected_family_count, uat.expected_minimum_face_count
+            )));
+            return Ok(());
+        }
+        set_hidden(&panel, true)?;
+        root.remove_attribute("data-uat-equality-dof")?;
+        root.remove_attribute("data-uat-bounded-dof")?;
+        root.remove_attribute("data-uat-profile-status")?;
+        root.remove_attribute("data-uat-profile-family-count")?;
+        root.remove_attribute("data-uat-profile-minimum-face-count")?;
+        Ok(())
+    }
+
+    fn set_select_index(document: &Document, id: &str, index: usize) -> Result<(), JsValue> {
+        required(document, id)?
+            .dyn_into::<HtmlSelectElement>()?
+            .set_selected_index(i32::try_from(index).unwrap_or(0));
+        Ok(())
+    }
+
+    fn render_selected_dimension(
+        document: &Document,
+        state: &PlaygroundState,
+    ) -> Result<(), JsValue> {
+        let Some(dimension) = state.selection.iter().find_map(|item| match item {
+            SelectionItem::Dimension(id) => state.document().dimension(*id),
+            _ => None,
+        }) else {
+            return Ok(());
+        };
+        let (kind, target) = match dimension.definition {
+            DocumentDimensionDefinition::PointDistance { target, .. } => (0, target),
+            DocumentDimensionDefinition::CurveLength { target, .. } => (1, target),
+            DocumentDimensionDefinition::Radius { target, .. } => (2, target),
+            DocumentDimensionDefinition::Diameter { target, .. } => (3, target),
+            DocumentDimensionDefinition::OrientedAngle {
+                target,
+                orientation,
+                ..
+            } => {
+                set_select_index(
+                    document,
+                    "angle-orientation",
+                    usize::from(
+                        orientation == geosolve_sketch::DocumentAngleOrientation::Clockwise,
+                    ),
+                )?;
+                (4, target)
+            }
+            DocumentDimensionDefinition::SupportingLineOffset {
+                target,
+                side,
+                orientation,
+                ..
+            } => {
+                set_select_index(
+                    document,
+                    "offset-side",
+                    usize::from(side == DocumentLineSide::Right),
+                )?;
+                set_select_index(
+                    document,
+                    "offset-orientation",
+                    usize::from(orientation == DocumentLineOffsetOrientation::Reversed),
+                )?;
+                (5, target)
+            }
+            DocumentDimensionDefinition::ExactTranslatedSegmentOffset {
+                target,
+                side,
+                orientation,
+                ..
+            } => {
+                set_select_index(
+                    document,
+                    "offset-side",
+                    usize::from(side == DocumentLineSide::Right),
+                )?;
+                set_select_index(
+                    document,
+                    "offset-orientation",
+                    usize::from(orientation == DocumentLineOffsetOrientation::Reversed),
+                )?;
+                (6, target)
+            }
+        };
+        set_select_index(document, "dimension-kind", kind)?;
+        set_select_index(
+            document,
+            "dimension-mode",
+            usize::from(dimension.mode == DocumentDimensionMode::Reference),
+        )?;
+        required(document, "dimension-label")?
+            .dyn_into::<HtmlInputElement>()?
+            .set_value(&dimension.label);
+        if let Some(value) = state.document().scalar(target) {
+            required(document, "dimension-value")?
+                .dyn_into::<HtmlInputElement>()?
+                .set_value(&value.value.to_string());
+        }
+        Ok(())
+    }
+
+    fn render_fillet_controls(
+        document: &Document,
+        state: &PlaygroundState,
+        root: &Element,
+    ) -> Result<(), JsValue> {
+        let controls = required(document, "fillet-controls")?;
+        let selected = state.selection.iter().find_map(|item| match item {
+            SelectionItem::Constraint(id) => state
+                .document()
+                .constraint(*id)
+                .map(|constraint| (*id, &constraint.definition)),
+            _ => None,
+        });
+        let Some((constraint, definition)) = selected else {
+            set_hidden(&controls, true)?;
+            root.remove_attribute("data-selected-fillet")?;
+            return Ok(());
+        };
+        let (arc, first_side, first_trim, second_side, second_trim, endpoint_order, generic) =
+            match definition {
+                DocumentConstraintDefinition::LineLineFillet {
+                    arc,
+                    first_side,
+                    second_side,
+                    endpoint_order,
+                    ..
+                } => (
+                    *arc,
+                    *first_side,
+                    DocumentFilletTrimEndpoint::End,
+                    *second_side,
+                    DocumentFilletTrimEndpoint::Start,
+                    *endpoint_order,
+                    false,
+                ),
+                DocumentConstraintDefinition::CurveCurveFillet {
+                    arc,
+                    first_side,
+                    first_trim_endpoint,
+                    second_side,
+                    second_trim_endpoint,
+                    endpoint_order,
+                    ..
+                } => (
+                    *arc,
+                    *first_side,
+                    *first_trim_endpoint,
+                    *second_side,
+                    *second_trim_endpoint,
+                    *endpoint_order,
+                    true,
+                ),
+                _ => {
+                    set_hidden(&controls, true)?;
+                    root.remove_attribute("data-selected-fillet")?;
+                    return Ok(());
+                }
+            };
+        let Some((dimension, target)) =
+            state
+                .document()
+                .dimensions()
+                .iter()
+                .find_map(|dimension| match dimension.definition {
+                    DocumentDimensionDefinition::Radius { curve, target } if curve == arc => {
+                        Some((dimension, target))
+                    }
+                    _ => None,
+                })
+        else {
+            set_hidden(&controls, true)?;
+            return Ok(());
+        };
+        let sweep = match state.document().curve(arc).map(|curve| &curve.definition) {
+            Some(CurveDefinition::CircularArc { sweep, .. }) => *sweep,
+            _ => DocumentArcSweep::CounterClockwise,
+        };
+        set_hidden(&controls, false)?;
+        root.set_attribute("data-selected-fillet", &constraint.0.to_string())?;
+        set_select_index(
+            document,
+            "fillet-first-side",
+            usize::from(first_side == DocumentCurveNormalSide::Right),
+        )?;
+        set_select_index(
+            document,
+            "fillet-second-side",
+            usize::from(second_side == DocumentCurveNormalSide::Right),
+        )?;
+        set_select_index(
+            document,
+            "fillet-first-trim",
+            usize::from(first_trim == DocumentFilletTrimEndpoint::Start),
+        )?;
+        set_select_index(
+            document,
+            "fillet-second-trim",
+            usize::from(second_trim == DocumentFilletTrimEndpoint::End),
+        )?;
+        set_disabled(&required(document, "fillet-first-trim")?, !generic)?;
+        set_disabled(&required(document, "fillet-second-trim")?, !generic)?;
+        set_select_index(
+            document,
+            "fillet-order",
+            usize::from(endpoint_order == DocumentFilletEndpointOrder::SecondThenFirst),
+        )?;
+        set_select_index(
+            document,
+            "fillet-sweep",
+            usize::from(sweep == DocumentArcSweep::Clockwise),
+        )?;
+        set_select_index(
+            document,
+            "fillet-radius-mode",
+            usize::from(dimension.mode == DocumentDimensionMode::Reference),
+        )?;
+        if let Some(radius) = state.document().scalar(target) {
+            required(document, "fillet-radius")?
+                .dyn_into::<HtmlInputElement>()?
+                .set_value(&radius.value.to_string());
+        }
+        Ok(())
+    }
+
+    fn render_nurbs_controls(
+        document: &Document,
+        state: &PlaygroundState,
+        root: &Element,
+    ) -> Result<(), JsValue> {
+        let controls = required(document, "nurbs-controls")?;
+        let Some((curve_id, contact_id)) = state.selected_nurbs_context() else {
+            set_hidden(&controls, true)?;
+            root.remove_attribute("data-selected-nurbs")?;
+            return Ok(());
+        };
+        let Some(curve) = state.document().curve(curve_id) else {
+            set_hidden(&controls, true)?;
+            return Ok(());
+        };
+        let CurveDefinition::Nurbs {
+            form,
+            degree,
+            controls: control_ids,
+            weights,
+            gauge_weight,
+            span_ids,
+            ..
+        } = &curve.definition
+        else {
+            set_hidden(&controls, true)?;
+            return Ok(());
+        };
+        set_hidden(&controls, false)?;
+        root.set_attribute("data-selected-nurbs", &curve_id.0.to_string())?;
+        let contact_state = contact_id
+            .and_then(|contact| state.document().contact(contact))
+            .map(|contact| {
+                let parameter = state
+                    .document()
+                    .scalar(contact.parameter)
+                    .map_or(f64::NAN, |scalar| scalar.value);
+                format!(
+                    "; selected contact span {}, winding {}, parameter {parameter:.6}",
+                    contact.curve.segment, contact.winding
+                )
+            })
+            .unwrap_or_default();
+        required(document, "nurbs-state")?.set_text_content(Some(&format!(
+            "{}: {:?}, degree {}, {} controls, {} weights, {} stable spans{}",
+            curve.label,
+            form,
+            degree,
+            control_ids.len(),
+            weights.len(),
+            span_ids.len(),
+            contact_state
+        )));
+        let selected_control = selected_nurbs_control(document)
+            .filter(|control| control_ids.contains(control))
+            .unwrap_or(control_ids[0]);
+        let control_options = control_ids
+            .iter()
+            .enumerate()
+            .map(|(index, control)| {
+                let point = state.document().point(*control);
+                let label = point.map_or("unknown control", |point| point.label.as_str());
+                let position = point.map_or([f64::NAN; 2], |point| point.position);
+                let selected = if *control == selected_control {
+                    " selected"
+                } else {
+                    ""
+                };
+                format!(
+                    "<option value=\"{}\"{}>{}: {} ({:.8}, {:.8})</option>",
+                    control.0,
+                    selected,
+                    index + 1,
+                    crate::escape_html(label),
+                    position[0],
+                    position[1],
+                )
+            })
+            .collect::<String>();
+        required(document, "nurbs-control")?.set_inner_html(&control_options);
+        if let Some(point) = state.document().point(selected_control) {
+            required(document, "nurbs-control-x")?
+                .dyn_into::<HtmlInputElement>()?
+                .set_value(&point.position[0].to_string());
+            required(document, "nurbs-control-y")?
+                .dyn_into::<HtmlInputElement>()?
+                .set_value(&point.position[1].to_string());
+        }
+        let selected_weight = selected_nurbs_weight(document)
+            .filter(|weight| weights.contains(weight))
+            .unwrap_or_else(|| {
+                weights
+                    .iter()
+                    .copied()
+                    .find(|weight| weight != gauge_weight)
+                    .unwrap_or(*gauge_weight)
+            });
+        let options = weights
+            .iter()
+            .map(|weight| {
+                let scalar = state.document().scalar(*weight);
+                let label = scalar.map_or("unknown weight", |scalar| scalar.label.as_str());
+                let value = scalar.map_or(f64::NAN, |scalar| scalar.value);
+                let gauge = if weight == gauge_weight {
+                    " [gauge]"
+                } else {
+                    ""
+                };
+                let selected = if *weight == selected_weight {
+                    " selected"
+                } else {
+                    ""
+                };
+                format!(
+                    "<option value=\"{}\"{}>{}: {:.8}{}</option>",
+                    weight.0,
+                    selected,
+                    crate::escape_html(label),
+                    value,
+                    gauge
+                )
+            })
+            .collect::<String>();
+        required(document, "nurbs-weight")?.set_inner_html(&options);
+        if let Some(weight) = state.document().scalar(selected_weight) {
+            required(document, "nurbs-weight-value")?
+                .dyn_into::<HtmlInputElement>()?
+                .set_value(&weight.value.to_string());
+        }
+        let transition_enabled = contact_id.is_some();
+        for action in ["previous-nurbs-span", "next-nurbs-span"] {
+            if let Some(button) = document.query_selector(&format!("[data-action=\"{action}\"]"))? {
+                set_disabled(&button, !transition_enabled)?;
+            }
+        }
+        Ok(())
+    }
+
     fn render_conic_options(document: &Document, state: &PlaygroundState) -> Result<(), JsValue> {
         let conic_tool = match state.tool() {
             Tool::Draw(tool) if tool.is_conic() => Some(tool),
@@ -6996,6 +9764,11 @@ pub(crate) mod wasm {
         root.remove_attribute("data-authoritative-revision")?;
         root.remove_attribute("data-history-length")?;
         root.remove_attribute("data-history-cursor")?;
+        root.remove_attribute("data-trim-view-count")?;
+        root.remove_attribute("data-visible-interval-count")?;
+        clear_profile_attributes(root)?;
+        set_hidden(&required(document, "profile-analysis-section")?, true)?;
+        required(document, "profile-analysis")?.set_text_content(None);
         root.set_attribute(
             "data-viewport-center-x",
             &state.viewport().center[0].to_string(),
@@ -7169,8 +9942,15 @@ pub(crate) mod wasm {
                         *callback_app.borrow_mut() = state;
                     }
                 }
-                "load-example" => {
-                    let selected = select_value(&callback_document, "alpha-example");
+                "load-example" | "reload-example" => {
+                    let selected = if action == "reload-example" {
+                        callback_app
+                            .borrow()
+                            .example_kind
+                            .map(|kind| kind.key().to_owned())
+                    } else {
+                        select_value(&callback_document, "alpha-example")
+                    };
                     let sketch_kind = selected.as_deref().and_then(sketch_example_kind);
                     let spatial_kind = selected.as_deref().and_then(spatial_example_kind);
                     let scale = select_value(&callback_document, "alpha-scale")
@@ -7239,8 +10019,124 @@ pub(crate) mod wasm {
                     update_branch_options(&callback_document, &mut state);
                     let label = input_value(&callback_document, "dimension-label")
                         .unwrap_or_else(|| "dimension".into());
-                    state.apply_dimension_labeled(kind, mode, value, &label);
+                    let offset_side = if select_index(&callback_document, "offset-side") == Some(1)
+                    {
+                        DocumentLineSide::Right
+                    } else {
+                        DocumentLineSide::Left
+                    };
+                    let offset_orientation =
+                        if select_index(&callback_document, "offset-orientation") == Some(1) {
+                            DocumentLineOffsetOrientation::Reversed
+                        } else {
+                            DocumentLineOffsetOrientation::Same
+                        };
+                    state.apply_dimension_labeled_with_offset(
+                        kind,
+                        mode,
+                        value,
+                        &label,
+                        offset_side,
+                        offset_orientation,
+                    );
                 }
+                "create-mirror" => callback_app.borrow_mut().create_selected_mirror(),
+                "apply-fillet" => {
+                    let mut state = callback_app.borrow_mut();
+                    if let Some(radius) = optional_input_number(&callback_document, "fillet-radius")
+                    {
+                        state.apply_selected_fillet(
+                            if select_index(&callback_document, "fillet-first-side") == Some(1) {
+                                DocumentCurveNormalSide::Right
+                            } else {
+                                DocumentCurveNormalSide::Left
+                            },
+                            if select_index(&callback_document, "fillet-first-trim") == Some(1) {
+                                DocumentFilletTrimEndpoint::Start
+                            } else {
+                                DocumentFilletTrimEndpoint::End
+                            },
+                            if select_index(&callback_document, "fillet-second-side") == Some(1) {
+                                DocumentCurveNormalSide::Right
+                            } else {
+                                DocumentCurveNormalSide::Left
+                            },
+                            if select_index(&callback_document, "fillet-second-trim") == Some(1) {
+                                DocumentFilletTrimEndpoint::End
+                            } else {
+                                DocumentFilletTrimEndpoint::Start
+                            },
+                            if select_index(&callback_document, "fillet-order") == Some(1) {
+                                DocumentFilletEndpointOrder::SecondThenFirst
+                            } else {
+                                DocumentFilletEndpointOrder::FirstThenSecond
+                            },
+                            if select_index(&callback_document, "fillet-sweep") == Some(1) {
+                                DocumentArcSweep::Clockwise
+                            } else {
+                                DocumentArcSweep::CounterClockwise
+                            },
+                            radius,
+                            if select_index(&callback_document, "fillet-radius-mode") == Some(1) {
+                                DocumentDimensionMode::Reference
+                            } else {
+                                DocumentDimensionMode::Driving
+                            },
+                        );
+                    } else {
+                        state.rejected_change("Fillet radius must be finite.");
+                    }
+                }
+                "set-nurbs-weight" => {
+                    let weight = selected_nurbs_weight(&callback_document);
+                    let value = optional_input_number(&callback_document, "nurbs-weight-value");
+                    let mut state = callback_app.borrow_mut();
+                    match (weight, value) {
+                        (Some(weight), Some(value)) => {
+                            state.set_selected_nurbs_weight(weight, value)
+                        }
+                        _ => state.rejected_change(
+                            "Choose an owned NURBS weight and enter a finite positive value.",
+                        ),
+                    }
+                }
+                "set-nurbs-control" => {
+                    let control = selected_nurbs_control(&callback_document);
+                    let x = optional_input_number(&callback_document, "nurbs-control-x");
+                    let y = optional_input_number(&callback_document, "nurbs-control-y");
+                    let mut state = callback_app.borrow_mut();
+                    match (control, x, y) {
+                        (Some(control), Some(x), Some(y)) => {
+                            state.set_selected_nurbs_control(control, [x, y]);
+                        }
+                        _ => state.rejected_change(
+                            "Choose an owned NURBS control and enter finite X/Y targets.",
+                        ),
+                    }
+                }
+                "set-nurbs-gauge" => {
+                    let mut state = callback_app.borrow_mut();
+                    if let Some(weight) = selected_nurbs_weight(&callback_document) {
+                        state.set_selected_nurbs_gauge(weight);
+                    } else {
+                        state.rejected_change("Choose an owned NURBS weight for the gauge.");
+                    }
+                }
+                "insert-nurbs-knot" => {
+                    let mut state = callback_app.borrow_mut();
+                    if let Some(parameter) = optional_input_number(&callback_document, "nurbs-knot")
+                    {
+                        state.insert_selected_nurbs_knot(parameter);
+                    } else {
+                        state.rejected_change("Knot parameter must be finite.");
+                    }
+                }
+                "previous-nurbs-span" => callback_app
+                    .borrow_mut()
+                    .transition_selected_nurbs_contact(DocumentBSplineSpanDirection::Previous),
+                "next-nurbs-span" => callback_app
+                    .borrow_mut()
+                    .transition_selected_nurbs_contact(DocumentBSplineSpanDirection::Next),
                 "export-json" => {
                     if let Ok(json) = callback_app.borrow().export_json()
                         && let Some(textarea) = required(&callback_document, "document-json")
@@ -7249,6 +10145,33 @@ pub(crate) mod wasm {
                     {
                         textarea.set_value(&json);
                         textarea.select();
+                    }
+                }
+                "copy-scene-capsule" => {
+                    let capsule = callback_app.borrow().export_scene_capsule();
+                    match capsule {
+                        Ok(capsule) => {
+                            let copied = required(&callback_document, "document-json")
+                                .ok()
+                                .and_then(|element| element.dyn_into::<HtmlTextAreaElement>().ok())
+                                .is_some_and(|textarea| {
+                                    textarea.set_value(&capsule);
+                                    textarea.select();
+                                    copy_selected_text(&callback_document)
+                                });
+                            callback_app.borrow_mut().last_attempt = if copied {
+                                format!(
+                                    "Compressed scene capsule copied ({} characters).",
+                                    capsule.len()
+                                )
+                            } else {
+                                "Compressed scene capsule generated and selected; the browser denied automatic clipboard access."
+                                    .into()
+                            };
+                        }
+                        Err(error) => callback_app
+                            .borrow_mut()
+                            .rejected_change(format!("Scene capsule export failed: {error}")),
                     }
                 }
                 "import-json" => {
@@ -7326,6 +10249,70 @@ pub(crate) mod wasm {
                 .add_event_listener_with_callback(event_name, callback.as_ref().unchecked_ref())?;
             callback.forget();
         }
+        Ok(())
+    }
+
+    fn install_nurbs_weight_listener(
+        document: &Document,
+        app: &Rc<RefCell<PlaygroundState>>,
+    ) -> Result<(), JsValue> {
+        let select = required(document, "nurbs-weight")?;
+        let callback_document = document.clone();
+        let callback_app = Rc::clone(app);
+        let callback = Closure::<dyn FnMut(Event)>::new(move |_event: Event| {
+            let Some(weight) = selected_nurbs_weight(&callback_document) else {
+                return;
+            };
+            let value = callback_app
+                .borrow()
+                .document()
+                .scalar(weight)
+                .map(|scalar| scalar.value);
+            if let Some(value) = value
+                && let Some(input) = required(&callback_document, "nurbs-weight-value")
+                    .ok()
+                    .and_then(|element| element.dyn_into::<HtmlInputElement>().ok())
+            {
+                input.set_value(&value.to_string());
+            }
+        });
+        select.add_event_listener_with_callback("change", callback.as_ref().unchecked_ref())?;
+        callback.forget();
+        Ok(())
+    }
+
+    fn install_nurbs_control_listener(
+        document: &Document,
+        app: &Rc<RefCell<PlaygroundState>>,
+    ) -> Result<(), JsValue> {
+        let select = required(document, "nurbs-control")?;
+        let callback_document = document.clone();
+        let callback_app = Rc::clone(app);
+        let callback = Closure::<dyn FnMut(Event)>::new(move |_event: Event| {
+            let Some(control) = selected_nurbs_control(&callback_document) else {
+                return;
+            };
+            let position = callback_app
+                .borrow()
+                .document()
+                .point(control)
+                .map(|point| point.position);
+            if let Some(position) = position {
+                for (id, value) in [
+                    ("nurbs-control-x", position[0]),
+                    ("nurbs-control-y", position[1]),
+                ] {
+                    if let Some(input) = required(&callback_document, id)
+                        .ok()
+                        .and_then(|element| element.dyn_into::<HtmlInputElement>().ok())
+                    {
+                        input.set_value(&value.to_string());
+                    }
+                }
+            }
+        });
+        select.add_event_listener_with_callback("change", callback.as_ref().unchecked_ref())?;
+        callback.forget();
         Ok(())
     }
 
@@ -7798,6 +10785,18 @@ pub(crate) mod wasm {
             .dyn_into::<HtmlSelectElement>()
             .ok()
             .map(|select| select.value())
+    }
+
+    fn selected_nurbs_weight(document: &Document) -> Option<DesignScalarId> {
+        select_value(document, "nurbs-weight")
+            .and_then(|value| PersistentId::from_str(&value).ok())
+            .map(DesignScalarId)
+    }
+
+    fn selected_nurbs_control(document: &Document) -> Option<DesignPointId> {
+        select_value(document, "nurbs-control")
+            .and_then(|value| PersistentId::from_str(&value).ok())
+            .map(DesignPointId)
     }
 
     fn optional_input_number(document: &Document, id: &str) -> Option<f64> {

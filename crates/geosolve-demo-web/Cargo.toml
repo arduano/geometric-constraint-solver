@@ -3,17 +3,21 @@ name = "geosolve-demo-web"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+license-file.workspace = true
+readme.workspace = true
 rust-version.workspace = true
 authors.workspace = true
+description = "Non-authoritative WASM diagnostic playground for GeoSolve"
+publish = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-geosolve-core = { path = "../geosolve-core" }
-geosolve-geometry = { path = "../geosolve-geometry" }
-geosolve-linkage = { path = "../geosolve-linkage" }
-geosolve-sketch = { path = "../geosolve-sketch" }
+geosolve-core = { version = "0.2.0", path = "../geosolve-core" }
+geosolve-geometry = { version = "0.2.0", path = "../geosolve-geometry" }
+geosolve-linkage = { version = "0.2.0", path = "../geosolve-linkage" }
+geosolve-sketch = { version = "0.2.0", path = "../geosolve-sketch" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.7"

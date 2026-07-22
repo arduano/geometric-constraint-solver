@@ -207,6 +207,7 @@ select:focus-visible {
   fill: rgba(84, 211, 158, 0.14);
   stroke: rgba(84, 211, 158, 0.42);
   stroke-width: 1;
+  vector-effect: non-scaling-stroke;
   pointer-events: none;
 }
 
@@ -1404,6 +1405,26 @@ footer code {
   padding-bottom: 0.35rem;
 }
 
+.uat-panel:not([hidden]) {
+  display: grid;
+  grid-template-columns: minmax(11rem, 0.55fr) minmax(20rem, 1.45fr) minmax(18rem, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.35rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #66573b;
+  border-radius: 0.55rem;
+  background: linear-gradient(100deg, rgb(47 39 24 / 94%), rgb(17 26 30 / 94%) 60%);
+}
+
+.uat-panel .page-kicker { margin-bottom: 0.2rem; color: #ffc866; }
+.uat-panel p { margin: 0; color: #b8c5c7; font-size: 0.72rem; line-height: 1.45; }
+.uat-panel dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; margin: 0; }
+.uat-panel dl div { min-width: 0; }
+.uat-panel dt { color: #8ca0a4; font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.uat-panel dd { margin: 0.15rem 0 0; overflow-wrap: anywhere; color: #f0dcae; font-size: 0.7rem; }
+.uat-panel button { min-height: 2.2rem; padding: 0.35rem 0.55rem; }
+
 button,
 input,
 textarea,
@@ -1605,6 +1626,15 @@ button:disabled { cursor: not-allowed; opacity: 0.38; }
 .playground-point.selected { fill: #ffc866; stroke: #fff0c0; }
 .playground-contact { fill: #f6c768; stroke: #fff0c8; stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: none; }
 
+.derived-trim-marker {
+  fill: #172126;
+  stroke: #d9be77;
+  stroke-width: 2;
+  stroke-dasharray: 2 2;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
 .conic-construction-line {
   fill: none;
   stroke: #806f4d;
@@ -1684,16 +1714,51 @@ button:disabled { cursor: not-allowed; opacity: 0.38; }
   grid-area: diagnostics;
   grid-template-areas:
     "summary audit"
-    "persistence audit";
+    "profile audit"
+    "persistence release";
   grid-template-columns: minmax(320px, 0.72fr) minmax(0, 1.28fr);
-  grid-template-rows: auto minmax(0, 1fr);
-  max-height: min(520px, 70dvh);
+  grid-template-rows: minmax(12rem, auto) minmax(24rem, 52dvh) auto;
+  max-height: none;
 }
 
 .diagnostics-summary { grid-area: summary; overflow: auto; }
 .diagnostics-summary .status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.trim-view-status { display: grid; gap: 0.25rem; margin-top: 0.65rem; padding: 0.6rem; border: 1px solid #514d3d; border-radius: 0.4rem; background: #151a19; }
+.trim-view-status strong { color: #e4ca8c; font-size: 0.76rem; }
+.trim-view-status span { color: #8f866a; font-size: 0.66rem; line-height: 1.4; }
+.profile-analysis-section { grid-area: profile; overflow: auto; }
+.profile-status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; overflow: hidden; border: 1px solid #315348; border-radius: 0.4rem; background: #315348; }
+.profile-status-grid > div { display: grid; gap: 0.25rem; padding: 0.55rem; background: #101b1a; }
+.profile-status-grid span { color: #71968c; font-size: 0.6rem; text-transform: uppercase; }
+.profile-status-grid strong { overflow-wrap: anywhere; color: #8ce0ba; font-size: 0.7rem; }
+.profile-family-list,
+.profile-area-list,
+.profile-intersection-list,
+.profile-issue-list,
+.profile-budget-list,
+.profile-render-status { margin: 0.55rem 0 0; padding: 0.55rem; border: 1px solid #293d42; border-radius: 0.4rem; background: #10171a; color: #93aaad; font-size: 0.67rem; line-height: 1.45; overflow-wrap: anywhere; }
+.profile-family-list strong,
+.profile-area-list > strong,
+.profile-intersection-list > strong,
+.profile-issue-list > strong,
+.profile-budget-list > strong { color: #c9d8da; }
+.profile-area-list p,
+.profile-intersection-list p,
+.profile-issue-list p { margin: 0.4rem 0 0; }
+.profile-intersection-list p strong { color: #8ce0ba; }
+.profile-issue-list p strong { color: #f0bd78; }
+.profile-budget-list dl { display: grid; gap: 0.2rem; margin: 0.45rem 0 0; }
+.profile-budget-list dl div { display: grid; grid-template-columns: minmax(10rem, 1fr) auto; gap: 0.5rem; }
+.profile-budget-list dt { color: #779095; }
+.profile-budget-list dd { margin: 0; color: #d0dddf; text-align: right; }
+.profile-render-status { display: grid; gap: 0.25rem; border-color: #315348; background: #101b1a; }
+.profile-render-status strong { color: #8ce0ba; }
+.profile-render-status.warning { border-color: #7c5d36; background: #211b13; }
+.profile-render-status.warning strong { color: #f0bd78; }
+.profile-render-status span { display: block; }
 .diagnostics-panel .audit-section { grid-area: audit; overflow: auto; border-left: 1px solid #293d42; }
-.diagnostics-panel .persistence-section { grid-area: persistence; overflow: auto; }
+.diagnostics-panel .persistence-section { grid-area: persistence; align-self: start; width: 100%; overflow: auto; }
+.diagnostics-panel .release-contract { grid-area: release; align-self: start; width: 100%; overflow: auto; border-left: 1px solid #293d42; }
 .inspector-section { padding: 0.8rem; border-bottom: 1px solid #293d42; }
 .section-heading { margin-bottom: 0.65rem; color: #a9bdc0; font-size: 0.72rem; letter-spacing: 0.11em; text-transform: uppercase; }
 .section-heading button { min-height: 2rem; padding: 0.25rem 0.5rem; }
@@ -1702,6 +1767,7 @@ button:disabled { cursor: not-allowed; opacity: 0.38; }
 .field-row > * { min-width: 0; flex: 1; }
 .primary-action { margin-top: 0.65rem; }
 .selection-summary, .attempt-notice, #storage-status { color: #9db0b3; font-size: 0.78rem; line-height: 1.5; }
+.control-help { margin: 0 0 0.5rem; color: #8ea2a6; font-size: 0.7rem; line-height: 1.45; }
 .selection-actions { margin-top: 0.65rem; }
 .selection-actions button { flex: 1; }
 .object-list { display: grid; gap: 0.3rem; }
@@ -1838,6 +1904,8 @@ button:disabled { cursor: not-allowed; opacity: 0.38; }
 
 @media (max-width: 1180px) {
   .conic-options:not([hidden]) { grid-template-columns: minmax(15rem, 1.2fr) repeat(2, minmax(9rem, 0.7fr)); }
+  .uat-panel:not([hidden]) { grid-template-columns: minmax(12rem, 0.8fr) minmax(20rem, 1.5fr) minmax(16rem, 1fr); }
+  .uat-panel button { grid-column: 1 / -1; }
   .playground-grid { grid-template-columns: minmax(0, 1fr) minmax(280px, 320px); }
   .playground-header p { display: none; }
 }
@@ -1852,8 +1920,37 @@ button:disabled { cursor: not-allowed; opacity: 0.38; }
   }
 
   .inspector-panel { position: static; max-height: none; }
-  .diagnostics-panel { max-height: min(520px, 70dvh); }
+  .diagnostics-panel { max-height: none; }
 }
+
+.legal-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.9rem;
+  padding: 0.85rem 0.25rem 0;
+  color: #6f8589;
+  font-size: 0.72rem;
+}
+
+.legal-footer a { color: #8bbec6; }
+
+.release-contract dl {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.75rem 0;
+}
+
+.release-contract dl div {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.8fr) minmax(0, 1.2fr);
+  gap: 0.65rem;
+}
+
+.release-contract dt { color: #7f989d; }
+.release-contract dd { margin: 0; color: #d5e0e2; }
+.release-contract p { color: #9eb1b5; line-height: 1.5; }
+.release-links { display: flex; flex-wrap: wrap; gap: 0.45rem 0.9rem; }
+.release-links a { color: #8fd2dc; }
 
 @media (max-width: 760px) {
   .playground .example-bar {
@@ -1864,6 +1961,8 @@ button:disabled { cursor: not-allowed; opacity: 0.38; }
     display: none;
   }
   .playground .example-bar button { grid-column: 1 / -1; }
+  .uat-panel:not([hidden]) { grid-template-columns: 1fr; }
+  .uat-panel button { grid-column: auto; }
   .playground { width: calc(100vw - 0.75rem); margin-top: 0.5rem; }
   .playground-header { align-items: flex-start; flex-direction: column; }
   .playground-brand { display: grid; gap: 0.15rem; }
@@ -1873,7 +1972,8 @@ button:disabled { cursor: not-allowed; opacity: 0.38; }
   .playground-grid { display: block; }
   .canvas-panel, .inspector-panel, .diagnostics-panel { margin-bottom: 0.65rem; max-height: none; }
   .diagnostics-panel { display: block; }
-  .diagnostics-panel .audit-section { border-left: 0; }
+  .diagnostics-panel .audit-section,
+  .diagnostics-panel .release-contract { border-left: 0; }
   .tool-rail { position: sticky; top: 0; z-index: 10; border-radius: 0; }
   .conic-options:not([hidden]) { grid-template-columns: 1fr 1fr; }
   .conic-options-heading, .conic-options-error:not([hidden]) { grid-column: 1 / -1; }

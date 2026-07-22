@@ -9,7 +9,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
 /// Current on-disk sketch-document schema.
-pub const SKETCH_DOCUMENT_VERSION: u32 = 3;
+pub const SKETCH_DOCUMENT_VERSION: u32 = 4;
 /// Defensive import limit for all persistent objects combined.
 pub const MAX_DOCUMENT_OBJECTS: usize = 100_000;
 /// Defensive import limit for one polyline.
@@ -488,6 +488,44 @@ pub struct CurveSpan {
     pub segment: u32,
 }
 
+/// Persistent principal parameter and explicit traversal winding for one trim boundary.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentTrimParameter {
+    pub parameter: f64,
+    pub winding: i32,
+}
+
+/// Persistent provenance of one visible-interval boundary.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DocumentTrimBoundary {
+    Fixed(DocumentTrimParameter),
+    FilletContact {
+        owner: DocumentConstraintId,
+        contact: ContactId,
+    },
+}
+
+/// Equation-free visible interval over immutable curve support.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentCurveTrimView {
+    pub support: CurveSpan,
+    pub start: DocumentTrimBoundary,
+    pub end: DocumentTrimBoundary,
+}
+
+/// Resolved unwrapped visible interval together with its persistent boundary provenance.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DocumentVisibleCurveInterval {
+    pub support: CurveSpan,
+    pub start: f64,
+    pub end: f64,
+    pub start_boundary: DocumentTrimBoundary,
+    pub end_boundary: DocumentTrimBoundary,
+}
+
 /// Endpoint selected by a semantic curve feature.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -717,6 +755,14 @@ pub enum DocumentFilletEndpointOrder {
     SecondThenFirst,
 }
 
+/// Visible parent endpoint owned by one generic fillet contact.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DocumentFilletTrimEndpoint {
+    Start,
+    End,
+}
+
 /// Internal circle-tangency containment branch.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -845,6 +891,16 @@ pub enum DocumentConstraintDefinition {
         first_side: DocumentCurveNormalSide,
         second_contact: ContactId,
         second_side: DocumentCurveNormalSide,
+        endpoint_order: DocumentFilletEndpointOrder,
+    },
+    CurveCurveFillet {
+        arc: CurveId,
+        first_contact: ContactId,
+        first_side: DocumentCurveNormalSide,
+        first_trim_endpoint: DocumentFilletTrimEndpoint,
+        second_contact: ContactId,
+        second_side: DocumentCurveNormalSide,
+        second_trim_endpoint: DocumentFilletTrimEndpoint,
         endpoint_order: DocumentFilletEndpointOrder,
     },
 }
@@ -1079,6 +1135,32 @@ pub struct LineLineFilletIds {
     pub radius_target: DesignScalarId,
 }
 
+/// One generic fillet parent request with explicit root and visible-endpoint state.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CurveFilletParentRequest {
+    pub curve: CurveSpan,
+    pub parameter: f64,
+    pub winding: i32,
+    pub neighborhood: ContactNeighborhood,
+    pub side: DocumentCurveNormalSide,
+    pub trim_endpoint: DocumentFilletTrimEndpoint,
+    pub periodic_anchor: Option<DocumentTrimParameter>,
+}
+
+/// Validated input for one atomic associative generic curve fillet construction.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CurveCurveFilletRequest {
+    pub first: CurveFilletParentRequest,
+    pub second: CurveFilletParentRequest,
+    pub endpoint_order: DocumentFilletEndpointOrder,
+    pub sweep: DocumentArcSweep,
+    pub radius: f64,
+    pub radius_mode: DocumentDimensionMode,
+}
+
+/// Persistent identities created by one associative generic curve fillet construction.
+pub type CurveCurveFilletIds = LineLineFilletIds;
+
 /// Versioned persistent sketch graph. Runtime solver IDs never appear here.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SketchDocument {
@@ -1090,6 +1172,7 @@ pub struct SketchDocument {
     scalars: Vec<DesignScalar>,
     curves: Vec<DesignCurve>,
     contacts: Vec<ContactSlot>,
+    trim_views: Vec<DocumentCurveTrimView>,
     constraints: Vec<DocumentConstraint>,
     dimensions: Vec<DocumentDimension>,
     source_order: Vec<DocumentSourceId>,
@@ -1330,6 +1413,73 @@ impl From<DocumentConstraintDefinitionV2> for DocumentConstraintDefinition {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct DocumentConstraintV3 {
+    id: DocumentConstraintId,
+    source_id: DocumentSourceId,
+    label: String,
+    suppressed: bool,
+    definition: DocumentConstraintDefinitionV3,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(untagged)]
+enum DocumentConstraintDefinitionV3 {
+    Previous(DocumentConstraintDefinitionV2),
+    LineFillet(DocumentLineFilletDefinitionV3),
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+enum DocumentLineFilletDefinitionV3 {
+    LineLineFillet {
+        arc: CurveId,
+        first_contact: ContactId,
+        first_side: DocumentCurveNormalSide,
+        second_contact: ContactId,
+        second_side: DocumentCurveNormalSide,
+        endpoint_order: DocumentFilletEndpointOrder,
+    },
+}
+
+impl From<DocumentConstraintV3> for DocumentConstraint {
+    fn from(constraint: DocumentConstraintV3) -> Self {
+        Self {
+            id: constraint.id,
+            source_id: constraint.source_id,
+            label: constraint.label,
+            suppressed: constraint.suppressed,
+            definition: constraint.definition.into(),
+        }
+    }
+}
+
+impl From<DocumentConstraintDefinitionV3> for DocumentConstraintDefinition {
+    fn from(definition: DocumentConstraintDefinitionV3) -> Self {
+        match definition {
+            DocumentConstraintDefinitionV3::Previous(previous) => previous.into(),
+            DocumentConstraintDefinitionV3::LineFillet(
+                DocumentLineFilletDefinitionV3::LineLineFillet {
+                    arc,
+                    first_contact,
+                    first_side,
+                    second_contact,
+                    second_side,
+                    endpoint_order,
+                },
+            ) => Self::LineLineFillet {
+                arc,
+                first_contact,
+                first_side,
+                second_contact,
+                second_side,
+                endpoint_order,
+            },
+        }
+    }
+}
+
 /// Frozen version-one wire representation. The in-memory document is deliberately
 /// separate so future versions migrate explicitly instead of mutating this schema.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -1398,6 +1548,7 @@ impl From<SketchDocumentV1> for SketchDocument {
             scalars: document.scalars,
             curves: document.curves,
             contacts: document.contacts,
+            trim_views: Vec::new(),
             constraints: document
                 .constraints
                 .into_iter()
@@ -1489,6 +1640,7 @@ impl From<SketchDocumentV2> for SketchDocument {
             scalars: document.scalars,
             curves: document.curves,
             contacts: document.contacts,
+            trim_views: Vec::new(),
             constraints: document
                 .constraints
                 .into_iter()
@@ -1511,12 +1663,52 @@ struct SketchDocumentV3 {
     scalars: Vec<DesignScalar>,
     curves: Vec<DesignCurve>,
     contacts: Vec<ContactSlot>,
+    constraints: Vec<DocumentConstraintV3>,
+    dimensions: Vec<DocumentDimension>,
+    source_order: Vec<DocumentSourceId>,
+}
+
+impl From<SketchDocumentV3> for SketchDocument {
+    fn from(document: SketchDocumentV3) -> Self {
+        Self {
+            version: SKETCH_DOCUMENT_VERSION,
+            id: document.id,
+            next_id: document.next_id,
+            model_scale: document.model_scale,
+            points: document.points,
+            scalars: document.scalars,
+            curves: document.curves,
+            contacts: document.contacts,
+            trim_views: Vec::new(),
+            constraints: document
+                .constraints
+                .into_iter()
+                .map(DocumentConstraint::from)
+                .collect(),
+            dimensions: document.dimensions,
+            source_order: document.source_order,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct SketchDocumentV4 {
+    version: u32,
+    id: DocumentId,
+    next_id: PersistentId,
+    model_scale: f64,
+    points: Vec<DesignPoint>,
+    scalars: Vec<DesignScalar>,
+    curves: Vec<DesignCurve>,
+    contacts: Vec<ContactSlot>,
+    trim_views: Vec<DocumentCurveTrimView>,
     constraints: Vec<DocumentConstraint>,
     dimensions: Vec<DocumentDimension>,
     source_order: Vec<DocumentSourceId>,
 }
 
-impl From<&SketchDocument> for SketchDocumentV3 {
+impl From<&SketchDocument> for SketchDocumentV4 {
     fn from(document: &SketchDocument) -> Self {
         Self {
             version: document.version,
@@ -1527,6 +1719,7 @@ impl From<&SketchDocument> for SketchDocumentV3 {
             scalars: document.scalars.clone(),
             curves: document.curves.clone(),
             contacts: document.contacts.clone(),
+            trim_views: document.trim_views.clone(),
             constraints: document.constraints.clone(),
             dimensions: document.dimensions.clone(),
             source_order: document.source_order.clone(),
@@ -1534,8 +1727,8 @@ impl From<&SketchDocument> for SketchDocumentV3 {
     }
 }
 
-impl From<SketchDocumentV3> for SketchDocument {
-    fn from(document: SketchDocumentV3) -> Self {
+impl From<SketchDocumentV4> for SketchDocument {
+    fn from(document: SketchDocumentV4) -> Self {
         Self {
             version: document.version,
             id: document.id,
@@ -1545,6 +1738,7 @@ impl From<SketchDocumentV3> for SketchDocument {
             scalars: document.scalars,
             curves: document.curves,
             contacts: document.contacts,
+            trim_views: document.trim_views,
             constraints: document.constraints,
             dimensions: document.dimensions,
             source_order: document.source_order,
@@ -1591,6 +1785,7 @@ impl SketchDocument {
             scalars: Vec::new(),
             curves: Vec::new(),
             contacts: Vec::new(),
+            trim_views: Vec::new(),
             constraints: Vec::new(),
             dimensions: Vec::new(),
             source_order: Vec::new(),
@@ -1632,6 +1827,112 @@ impl SketchDocument {
         &self.contacts
     }
 
+    /// Returns all persistent visible-interval views in canonical support order.
+    #[must_use]
+    pub fn trim_views(&self) -> &[DocumentCurveTrimView] {
+        &self.trim_views
+    }
+
+    /// Returns the persistent trim view for one immutable support span.
+    #[must_use]
+    pub fn trim_view(&self, support: CurveSpan) -> Option<&DocumentCurveTrimView> {
+        self.trim_views.iter().find(|view| view.support == support)
+    }
+
+    /// Resolves one support span's accepted visible interval and boundary provenance.
+    ///
+    /// Absence of a persistent view resolves to the complete native span.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an invalid support or malformed/dangling boundary.
+    pub fn visible_interval(
+        &self,
+        support: CurveSpan,
+    ) -> Result<DocumentVisibleCurveInterval, DocumentError> {
+        self.validate_span(support)?;
+        if let Some(view) = self.trim_view(support) {
+            return self.resolve_trim_view(view);
+        }
+        let period = self.trim_support_period(support)?;
+        let periodic = self.trim_support_is_periodic(support)?;
+        let start_parameter = DocumentTrimParameter {
+            parameter: 0.0,
+            winding: 0,
+        };
+        let end_parameter = DocumentTrimParameter {
+            parameter: if periodic { 0.0 } else { period },
+            winding: i32::from(periodic),
+        };
+        Ok(DocumentVisibleCurveInterval {
+            support,
+            start: 0.0,
+            end: period,
+            start_boundary: DocumentTrimBoundary::Fixed(start_parameter),
+            end_boundary: DocumentTrimBoundary::Fixed(end_parameter),
+        })
+    }
+
+    /// Resolves every accepted visible support interval for one curve in semantic order.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a missing curve or malformed trim view.
+    pub fn visible_curve_intervals(
+        &self,
+        curve: CurveId,
+    ) -> Result<Vec<DocumentVisibleCurveInterval>, DocumentError> {
+        self.curve_spans(curve)?
+            .into_iter()
+            .map(|span| self.visible_interval(span))
+            .collect()
+    }
+
+    /// Returns whether one unwrapped support parameter is inside the accepted visible interval.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a non-finite parameter, invalid support, or malformed trim view.
+    pub fn is_parameter_visible(
+        &self,
+        support: CurveSpan,
+        total_parameter: f64,
+    ) -> Result<bool, DocumentError> {
+        finite(total_parameter, "visible curve parameter")?;
+        let interval = self.visible_interval(support)?;
+        Ok(total_parameter >= interval.start && total_parameter <= interval.end)
+    }
+
+    /// Removes one fully fixed trim view while preserving immutable support geometry.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a missing view or either association-owned boundary.
+    pub fn clear_fixed_trim_view(&mut self, support: CurveSpan) -> Result<(), DocumentError> {
+        let mut candidate = self.clone();
+        let index = candidate
+            .trim_views
+            .iter()
+            .position(|view| view.support == support)
+            .ok_or_else(|| DocumentError::InvalidField {
+                field: "trim view",
+                message: "support has no persistent trim view".into(),
+            })?;
+        let view = candidate.trim_views[index];
+        if matches!(view.start, DocumentTrimBoundary::FilletContact { .. })
+            || matches!(view.end, DocumentTrimBoundary::FilletContact { .. })
+        {
+            return invalid(
+                "trim view",
+                "association-owned trim boundaries cannot be cleared",
+            );
+        }
+        candidate.trim_views.remove(index);
+        candidate.validate()?;
+        *self = candidate;
+        Ok(())
+    }
+
     #[must_use]
     pub fn constraints(&self) -> &[DocumentConstraint] {
         &self.constraints
@@ -1651,6 +1952,19 @@ impl SketchDocument {
                 DocumentConstraintDefinition::LineLineFillet { arc: output, .. }
                     if output == arc
             )
+        })
+    }
+
+    /// Returns the active generic association that derives one circular arc's fillet endpoints.
+    #[must_use]
+    pub fn curve_curve_fillet_for_arc(&self, arc: CurveId) -> Option<&DocumentConstraint> {
+        self.constraints.iter().find(|constraint| {
+            !constraint.suppressed
+                && matches!(
+                    constraint.definition,
+                    DocumentConstraintDefinition::CurveCurveFillet { arc: output, .. }
+                        if output == arc
+                )
         })
     }
 
@@ -1895,7 +2209,7 @@ impl SketchDocument {
         Ok(Self::spline_basis(definition)?.continuity_at(parameter)?)
     }
 
-    fn spline_basis(
+    pub(crate) fn spline_basis(
         definition: &CurveDefinition,
     ) -> Result<geosolve_geometry::BSplineBasis, DocumentCurveEvaluationError> {
         let (CurveDefinition::BSpline {
@@ -1933,7 +2247,7 @@ impl SketchDocument {
         })
     }
 
-    fn bspline_geometry(
+    pub(crate) fn bspline_geometry(
         &self,
         definition: &CurveDefinition,
     ) -> Result<geosolve_geometry::BSplineCurve2, DocumentCurveEvaluationError> {
@@ -1960,7 +2274,7 @@ impl SketchDocument {
         )?)
     }
 
-    fn nurbs_geometry(
+    pub(crate) fn nurbs_geometry(
         &self,
         definition: &CurveDefinition,
     ) -> Result<geosolve_geometry::NurbsCurve2, DocumentCurveEvaluationError> {
@@ -1995,7 +2309,7 @@ impl SketchDocument {
         )?)
     }
 
-    fn spline_span_index(
+    pub(crate) fn spline_span_index(
         definition: &CurveDefinition,
         semantic_id: u32,
     ) -> Result<geosolve_geometry::BSplineSpanIndex, DocumentCurveEvaluationError> {
@@ -2054,7 +2368,9 @@ impl SketchDocument {
             !constraint.suppressed
                 && matches!(
                     constraint.definition,
-                    DocumentConstraintDefinition::LineLineFillet { arc, .. } if arc == curve
+                    DocumentConstraintDefinition::LineLineFillet { arc, .. }
+                        | DocumentConstraintDefinition::CurveCurveFillet { arc, .. }
+                        if arc == curve
                 )
         }) {
             return Err(DocumentTrimProjectionError::UnsupportedCurve { curve });
@@ -2436,7 +2752,7 @@ impl SketchDocument {
     }
 
     #[allow(clippy::too_many_lines)]
-    fn conic_geometry(
+    pub(crate) fn conic_geometry(
         &self,
         definition: &CurveDefinition,
     ) -> Result<crate::ConicGeometry, DocumentConicGeometryError> {
@@ -2768,6 +3084,16 @@ impl SketchDocument {
         curve: CurveId,
         parameter: f64,
     ) -> Result<DocumentBSplineInsertion, DocumentError> {
+        if self
+            .trim_views
+            .iter()
+            .any(|view| view.support.curve == curve)
+        {
+            return invalid(
+                "B-spline knot insertion",
+                "curve has a persistent trim view",
+            );
+        }
         let mut candidate = self.clone();
         let curve_value = candidate
             .curve(curve)
@@ -3001,6 +3327,13 @@ impl SketchDocument {
         curve: CurveId,
         parameter: f64,
     ) -> Result<DocumentNurbsInsertion, DocumentError> {
+        if self
+            .trim_views
+            .iter()
+            .any(|view| view.support.curve == curve)
+        {
+            return invalid("NURBS knot insertion", "curve has a persistent trim view");
+        }
         let mut candidate = self.clone();
         let curve_value = candidate
             .curve(curve)
@@ -4147,6 +4480,234 @@ impl SketchDocument {
         })
     }
 
+    /// Creates one associative circular fillet between two regular immutable curve supports.
+    ///
+    /// The construction creates one contact-owned trim view per parent without changing either
+    /// support definition. Full circles and ellipses require explicit periodic anchors.
+    ///
+    /// # Errors
+    ///
+    /// Rejects duplicate or already-trimmed supports, endpoint/ambiguous roots, irregular or
+    /// tangent parent jets, unresolved offset factors, invalid periodic anchors, or any expanded
+    /// document that fails complete validation.
+    pub fn add_curve_curve_fillet(
+        &mut self,
+        label: &str,
+        request: CurveCurveFilletRequest,
+    ) -> Result<CurveCurveFilletIds, DocumentError> {
+        validate_label(label, "curve fillet label")?;
+        finite_positive(request.radius, "curve fillet radius")?;
+        if request.first.curve == request.second.curve {
+            return invalid("curve fillet parent", "support spans must be distinct");
+        }
+        for parent in [request.first, request.second] {
+            self.validate_fillet_parent_request(parent)?;
+            if self.trim_view(parent.curve).is_some() {
+                return invalid(
+                    "curve fillet parent",
+                    "support already has a persistent trim view",
+                );
+            }
+        }
+        let before = self.clone();
+        let result = self.add_curve_curve_fillet_inner(label, request);
+        if result.is_err() {
+            let next_id = self.next_id;
+            *self = before;
+            self.next_id = next_id;
+        }
+        result
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn add_curve_curve_fillet_inner(
+        &mut self,
+        label: &str,
+        request: CurveCurveFilletRequest,
+    ) -> Result<CurveCurveFilletIds, DocumentError> {
+        let first_jet = self.validate_fillet_parent_request(request.first)?;
+        let second_jet = self.validate_fillet_parent_request(request.second)?;
+        let first_differential =
+            first_jet
+                .differential()
+                .map_err(|source| DocumentError::InvalidField {
+                    field: "curve fillet parent",
+                    message: source.to_string(),
+                })?;
+        let second_differential =
+            second_jet
+                .differential()
+                .map_err(|source| DocumentError::InvalidField {
+                    field: "curve fillet parent",
+                    message: source.to_string(),
+                })?;
+        let tangent_cross = cross(
+            [
+                first_differential.unit_tangent.x,
+                first_differential.unit_tangent.y,
+            ],
+            [
+                second_differential.unit_tangent.x,
+                second_differential.unit_tangent.y,
+            ],
+        );
+        if !tangent_cross.is_finite() || tangent_cross.abs() <= 1.0e-8 {
+            return invalid(
+                "curve fillet parent",
+                "parent tangents are parallel or numerically unresolved",
+            );
+        }
+        let first_sign = fillet_side_sign(request.first.side);
+        let second_sign = fillet_side_sign(request.second.side);
+        for (sign, curvature) in [
+            (first_sign, first_differential.signed_curvature),
+            (second_sign, second_differential.signed_curvature),
+        ] {
+            let factor = 1.0 - sign * request.radius * curvature;
+            if !factor.is_finite() || factor.abs() <= 1.0e-8 {
+                return invalid(
+                    "curve fillet parent",
+                    "parent offset factor is numerically unresolved",
+                );
+            }
+        }
+        let offset_center = |jet: geosolve_geometry::CurveJet2,
+                             differential: geosolve_geometry::CurveDifferential2,
+                             sign: f64|
+         -> [f64; 2] {
+            [
+                jet.position.x + sign * request.radius * differential.left_normal.x,
+                jet.position.y + sign * request.radius * differential.left_normal.y,
+            ]
+        };
+        let first_center = offset_center(first_jet, first_differential, first_sign);
+        let second_center = offset_center(second_jet, second_differential, second_sign);
+        let center_position = [
+            0.5 * (first_center[0] + second_center[0]),
+            0.5 * (first_center[1] + second_center[1]),
+        ];
+        finite_pair(center_position, "curve fillet center")?;
+        let contact_angle =
+            |position: geosolve_geometry::Point2<f64>| -> Result<f64, DocumentError> {
+                let offset = [
+                    position.x - center_position[0],
+                    position.y - center_position[1],
+                ];
+                validate_direction(offset, "curve fillet radial seed")?;
+                Ok(offset[1].atan2(offset[0]))
+            };
+        let first_angle = contact_angle(first_jet.position)?;
+        let second_angle = contact_angle(second_jet.position)?;
+        let (start_value, end_value) = match request.endpoint_order {
+            DocumentFilletEndpointOrder::FirstThenSecond => (first_angle, second_angle),
+            DocumentFilletEndpointOrder::SecondThenFirst => (second_angle, first_angle),
+        };
+        document_arc_signed_sweep(start_value, end_value, request.sweep)?;
+
+        let center = self.add_named_point(format!("{label}.center"), center_position)?;
+        let radius = self.add_scalar(
+            format!("{label}.radius"),
+            request.radius,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )?;
+        let start_angle = self.add_scalar(
+            format!("{label}.start_angle"),
+            start_value,
+            ScalarUnit::Angle,
+            ScalarDomain::Finite,
+        )?;
+        let end_angle = self.add_scalar(
+            format!("{label}.end_angle"),
+            end_value,
+            ScalarUnit::Angle,
+            ScalarDomain::Finite,
+        )?;
+        let arc = self.add_curve(
+            format!("{label}.arc"),
+            CurveDefinition::CircularArc {
+                center,
+                radius,
+                start_angle,
+                end_angle,
+                sweep: request.sweep,
+            },
+        )?;
+        let contacts = [
+            self.add_curve_contact(
+                format!("{label}.first_contact"),
+                request.first.curve,
+                request.first.parameter,
+                request.first.winding,
+                request.first.neighborhood,
+                None,
+            )?,
+            self.add_curve_contact(
+                format!("{label}.second_contact"),
+                request.second.curve,
+                request.second.parameter,
+                request.second.winding,
+                request.second.neighborhood,
+                None,
+            )?,
+        ];
+        let contact_parameters = [
+            self.require_contact(contacts[0])?.parameter,
+            self.require_contact(contacts[1])?.parameter,
+        ];
+        let constraint = DocumentConstraintId(self.allocate_id()?);
+        let source_id = DocumentSourceId(self.allocate_id()?);
+        self.constraints.push(DocumentConstraint {
+            id: constraint,
+            source_id,
+            label: format!("{label}.association"),
+            suppressed: false,
+            definition: DocumentConstraintDefinition::CurveCurveFillet {
+                arc,
+                first_contact: contacts[0],
+                first_side: request.first.side,
+                first_trim_endpoint: request.first.trim_endpoint,
+                second_contact: contacts[1],
+                second_side: request.second.side,
+                second_trim_endpoint: request.second.trim_endpoint,
+                endpoint_order: request.endpoint_order,
+            },
+        });
+        self.source_order.push(source_id);
+        self.trim_views.extend([
+            self.fillet_trim_view(request.first, constraint, contacts[0])?,
+            self.fillet_trim_view(request.second, constraint, contacts[1])?,
+        ]);
+        self.validate()?;
+
+        let radius_target = self.add_scalar(
+            format!("{label}.radius_target"),
+            request.radius,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )?;
+        let radius_dimension = self.add_dimension(
+            format!("{label}.radius_dimension"),
+            DocumentDimensionDefinition::Radius {
+                curve: arc,
+                target: radius_target,
+            },
+            request.radius_mode,
+        )?;
+        Ok(CurveCurveFilletIds {
+            constraint,
+            arc,
+            center,
+            radius,
+            start_angle,
+            end_angle,
+            contacts,
+            contact_parameters,
+            radius_dimension,
+            radius_target,
+        })
+    }
+
     /// Mirrors one point-defined curve about a directed line span.
     ///
     /// The result is ordinary geometry associated by one ordinary point-symmetry constraint per
@@ -4407,6 +4968,7 @@ impl SketchDocument {
                         && matches!(
                             constraint.definition,
                             DocumentConstraintDefinition::LineLineFillet { arc, .. }
+                                | DocumentConstraintDefinition::CurveCurveFillet { arc, .. }
                                 if arc == curve.id
                         )
                 })
@@ -4728,6 +5290,179 @@ impl SketchDocument {
         Ok(())
     }
 
+    /// Atomically changes both generic-parent sides, owned trim endpoints, arc order, and sweep.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a missing/non-generic association, malformed ownership, or a branch
+    /// whose resulting bounded/periodic visible intervals are invalid.
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+    pub fn set_curve_curve_fillet_branch(
+        &mut self,
+        constraint: DocumentConstraintId,
+        first_side: DocumentCurveNormalSide,
+        first_trim_endpoint: DocumentFilletTrimEndpoint,
+        second_side: DocumentCurveNormalSide,
+        second_trim_endpoint: DocumentFilletTrimEndpoint,
+        endpoint_order: DocumentFilletEndpointOrder,
+        sweep: DocumentArcSweep,
+    ) -> Result<(), DocumentError> {
+        let mut candidate = self.clone();
+        let (
+            arc,
+            first_contact,
+            old_first_trim_endpoint,
+            second_contact,
+            old_second_trim_endpoint,
+            old_order,
+        ) = {
+            let source = candidate
+                .constraint(constraint)
+                .ok_or_else(|| unknown("constraint", constraint.0))?;
+            let DocumentConstraintDefinition::CurveCurveFillet {
+                arc,
+                first_contact,
+                first_trim_endpoint,
+                second_contact,
+                second_trim_endpoint,
+                endpoint_order,
+                ..
+            } = source.definition
+            else {
+                return invalid("constraint", "branch edit requires a generic curve fillet");
+            };
+            (
+                arc,
+                first_contact,
+                first_trim_endpoint,
+                second_contact,
+                second_trim_endpoint,
+                endpoint_order,
+            )
+        };
+        for (contact, old_endpoint, new_endpoint) in [
+            (first_contact, old_first_trim_endpoint, first_trim_endpoint),
+            (
+                second_contact,
+                old_second_trim_endpoint,
+                second_trim_endpoint,
+            ),
+        ] {
+            if old_endpoint == new_endpoint {
+                continue;
+            }
+            let slot = candidate.require_contact(contact)?.clone();
+            let support = slot.curve;
+            let periodic = candidate.trim_support_is_periodic(support)?;
+            let retained_winding = if candidate.trim_support_allows_winding(support)? {
+                slot.winding
+            } else {
+                0
+            };
+            let view = candidate
+                .trim_views
+                .iter_mut()
+                .find(|view| view.support == support)
+                .ok_or_else(|| DocumentError::InvalidField {
+                    field: "trim view",
+                    message: "generic fillet parent has no trim view".into(),
+                })?;
+            let expected = DocumentTrimBoundary::FilletContact {
+                owner: constraint,
+                contact,
+            };
+            let retained_fixed = match old_endpoint {
+                DocumentFilletTrimEndpoint::Start if view.start == expected => view.end,
+                DocumentFilletTrimEndpoint::End if view.end == expected => view.start,
+                _ => {
+                    return invalid(
+                        "trim view ownership",
+                        "generic fillet does not own its recorded parent endpoint",
+                    );
+                }
+            };
+            let DocumentTrimBoundary::Fixed(anchor) = retained_fixed else {
+                return invalid(
+                    "trim view ownership",
+                    "a generic fillet parent requires one fixed opposite boundary",
+                );
+            };
+            let fixed = DocumentTrimBoundary::Fixed(if periodic {
+                anchor
+            } else {
+                DocumentTrimParameter {
+                    parameter: match new_endpoint {
+                        DocumentFilletTrimEndpoint::Start => 1.0,
+                        DocumentFilletTrimEndpoint::End => 0.0,
+                    },
+                    winding: retained_winding,
+                }
+            });
+            (view.start, view.end) = match new_endpoint {
+                DocumentFilletTrimEndpoint::Start => (expected, fixed),
+                DocumentFilletTrimEndpoint::End => (fixed, expected),
+            };
+        }
+        if endpoint_order != old_order {
+            candidate.swap_fillet_arc_angles(arc)?;
+        }
+        let source = candidate
+            .constraints
+            .iter_mut()
+            .find(|source| source.id == constraint)
+            .ok_or_else(|| unknown("constraint", constraint.0))?;
+        let DocumentConstraintDefinition::CurveCurveFillet {
+            first_side: current_first_side,
+            first_trim_endpoint: current_first_trim_endpoint,
+            second_side: current_second_side,
+            second_trim_endpoint: current_second_trim_endpoint,
+            endpoint_order: current_order,
+            ..
+        } = &mut source.definition
+        else {
+            return invalid("constraint", "branch edit requires a generic curve fillet");
+        };
+        *current_first_side = first_side;
+        *current_first_trim_endpoint = first_trim_endpoint;
+        *current_second_side = second_side;
+        *current_second_trim_endpoint = second_trim_endpoint;
+        *current_order = endpoint_order;
+        let output = candidate
+            .curve_mut(arc)
+            .ok_or_else(|| unknown("curve", arc.0))?;
+        let CurveDefinition::CircularArc { sweep: current, .. } = &mut output.definition else {
+            return invalid("curve fillet arc", "output must remain a circular arc");
+        };
+        *current = sweep;
+        candidate.validate()?;
+        *self = candidate;
+        Ok(())
+    }
+
+    fn swap_fillet_arc_angles(&mut self, arc: CurveId) -> Result<(), DocumentError> {
+        let (start, end) = match &self
+            .curve(arc)
+            .ok_or_else(|| unknown("curve", arc.0))?
+            .definition
+        {
+            CurveDefinition::CircularArc {
+                start_angle,
+                end_angle,
+                ..
+            } => (*start_angle, *end_angle),
+            _ => return invalid("curve fillet arc", "output must remain a circular arc"),
+        };
+        let start_value = self.require_scalar(start)?.value;
+        let end_value = self.require_scalar(end)?.value;
+        self.scalar_mut(start)
+            .ok_or_else(|| unknown("scalar", start.0))?
+            .value = end_value;
+        self.scalar_mut(end)
+            .ok_or_else(|| unknown("scalar", end.0))?
+            .value = start_value;
+        Ok(())
+    }
+
     /// Atomically replaces one point contact or both contacts of one tangency source.
     ///
     /// # Errors
@@ -4748,6 +5483,21 @@ impl SketchDocument {
             return invalid("contact edits", "contact IDs must be distinct");
         }
         self.ordered_source_contacts(&requested.iter().copied().collect::<Vec<_>>())?;
+        if self.constraints.iter().any(|constraint| {
+            constraint.suppressed
+                && matches!(
+                    constraint.definition,
+                    DocumentConstraintDefinition::CurveCurveFillet { .. }
+                )
+                && constraint_contacts(&constraint.definition)
+                    .iter()
+                    .any(|contact| requested.contains(contact))
+        }) {
+            return invalid(
+                "contact edits",
+                "suppressed curve fillet contacts remain frozen with their visible intervals",
+            );
+        }
         let mut candidate = self.clone();
         for edit in edits {
             let (parameter, domain) = {
@@ -4875,6 +5625,38 @@ impl SketchDocument {
         Ok(())
     }
 
+    /// Changes the explicit direction of an existing oriented-angle dimension.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a missing dimension or a non-angle dimension.
+    pub fn set_oriented_angle_orientation(
+        &mut self,
+        id: DocumentDimensionId,
+        orientation: DocumentAngleOrientation,
+    ) -> Result<(), DocumentError> {
+        let mut candidate = self.clone();
+        let dimension = candidate
+            .dimensions
+            .iter_mut()
+            .find(|value| value.id == id)
+            .ok_or_else(|| unknown("dimension", id.0))?;
+        let DocumentDimensionDefinition::OrientedAngle {
+            orientation: current,
+            ..
+        } = &mut dimension.definition
+        else {
+            return invalid(
+                "dimension",
+                "orientation edit requires an oriented-angle dimension",
+            );
+        };
+        *current = orientation;
+        candidate.validate()?;
+        *self = candidate;
+        Ok(())
+    }
+
     /// Suppresses or unsuppresses one persistent source without deleting it.
     ///
     /// # Errors
@@ -4960,11 +5742,13 @@ impl SketchDocument {
                 candidate
                     .scalars
                     .retain(|value| !owned_scalars.contains(&value.id));
+                candidate.trim_views.retain(|view| view.support.curve != id);
             }
             DocumentObjectId::Contact(id) => retain_remove(&mut candidate.contacts, |v| v.id == id)
                 .then_some(())
                 .ok_or_else(|| unknown("contact", id.0))?,
             DocumentObjectId::Constraint(id) => {
+                candidate.freeze_generic_fillet_boundaries(id)?;
                 let source = candidate
                     .constraint(id)
                     .ok_or_else(|| unknown("constraint", id.0))?
@@ -4988,6 +5772,54 @@ impl SketchDocument {
             other => other,
         })?;
         *self = candidate;
+        Ok(())
+    }
+
+    fn freeze_generic_fillet_boundaries(
+        &mut self,
+        constraint: DocumentConstraintId,
+    ) -> Result<(), DocumentError> {
+        let contacts = match self
+            .constraint(constraint)
+            .ok_or_else(|| unknown("constraint", constraint.0))?
+            .definition
+        {
+            DocumentConstraintDefinition::CurveCurveFillet {
+                first_contact,
+                second_contact,
+                ..
+            } => [first_contact, second_contact],
+            _ => return Ok(()),
+        };
+        for contact in contacts {
+            let slot = self.require_contact(contact)?.clone();
+            let accepted = DocumentTrimBoundary::Fixed(DocumentTrimParameter {
+                parameter: self.require_scalar(slot.parameter)?.value,
+                winding: slot.winding,
+            });
+            let expected = DocumentTrimBoundary::FilletContact {
+                owner: constraint,
+                contact,
+            };
+            let view = self
+                .trim_views
+                .iter_mut()
+                .find(|view| view.support == slot.curve)
+                .ok_or_else(|| DocumentError::InvalidField {
+                    field: "trim view",
+                    message: "generic fillet parent has no owned trim view".into(),
+                })?;
+            if view.start == expected {
+                view.start = accepted;
+            } else if view.end == expected {
+                view.end = accepted;
+            } else {
+                return invalid(
+                    "trim view ownership",
+                    "generic fillet does not own its recorded boundary",
+                );
+            }
+        }
         Ok(())
     }
 
@@ -5119,7 +5951,8 @@ impl SketchDocument {
             }
         }
         if let Some(arc) = self.constraints.iter().find_map(|constraint| {
-            let DocumentConstraintDefinition::LineLineFillet { arc, .. } = constraint.definition
+            let (DocumentConstraintDefinition::LineLineFillet { arc, .. }
+            | DocumentConstraintDefinition::CurveCurveFillet { arc, .. }) = constraint.definition
             else {
                 return None;
             };
@@ -5186,6 +6019,7 @@ impl SketchDocument {
             + self.scalars.len()
             + self.curves.len()
             + self.contacts.len()
+            + self.trim_views.len()
             + self.constraints.len() * 2
             + self.dimensions.len() * 2
             + curve_point_references;
@@ -5248,6 +6082,16 @@ impl SketchDocument {
                 );
             }
         }
+        let mut trimmed_supports = BTreeSet::new();
+        for view in &self.trim_views {
+            if !trimmed_supports.insert(view.support) {
+                return invalid(
+                    "trim view support",
+                    "a curve support may have at most one trim view",
+                );
+            }
+            self.resolve_trim_view(view)?;
+        }
         let mut sources = BTreeSet::new();
         let mut used_contacts = BTreeSet::new();
         let mut fillet_arcs = BTreeSet::new();
@@ -5257,11 +6101,16 @@ impl SketchDocument {
             sources.insert(constraint.source_id);
             validate_label(&constraint.label, "constraint label")?;
             self.validate_constraint_definition(&constraint.definition)?;
-            if let DocumentConstraintDefinition::LineLineFillet { arc, .. } = constraint.definition
+            let fillet_arc = match constraint.definition {
+                DocumentConstraintDefinition::LineLineFillet { arc, .. }
+                | DocumentConstraintDefinition::CurveCurveFillet { arc, .. } => Some(arc),
+                _ => None,
+            };
+            if let Some(arc) = fillet_arc
                 && !fillet_arcs.insert(arc)
             {
                 return invalid(
-                    "line fillet arc",
+                    "fillet arc",
                     "one output arc may belong to only one fillet association",
                 );
             }
@@ -5275,21 +6124,69 @@ impl SketchDocument {
             }
         }
         for constraint in &self.constraints {
-            if matches!(
-                constraint.definition,
-                DocumentConstraintDefinition::LineLineFillet { .. }
-            ) {
-                continue;
-            }
-            if constraint_contacts(&constraint.definition)
-                .into_iter()
-                .filter_map(|contact| self.contact(contact))
-                .any(|contact| fillet_arcs.contains(&contact.curve.curve))
+            if let DocumentConstraintDefinition::CurveCurveFillet {
+                first_contact,
+                first_trim_endpoint,
+                second_contact,
+                second_trim_endpoint,
+                ..
+            } = constraint.definition
             {
-                return invalid(
-                    "line fillet arc",
-                    "derived output arcs cannot own executable contacts before M28",
-                );
+                self.validate_owned_trim_boundary(
+                    constraint.id,
+                    first_contact,
+                    first_trim_endpoint,
+                )?;
+                self.validate_owned_trim_boundary(
+                    constraint.id,
+                    second_contact,
+                    second_trim_endpoint,
+                )?;
+            }
+        }
+        for constraint in self
+            .constraints
+            .iter()
+            .filter(|constraint| !constraint.suppressed)
+        {
+            for contact in constraint_contacts(&constraint.definition) {
+                let slot = self.require_contact(contact)?;
+                let Some(view) = self.trim_view(slot.curve) else {
+                    continue;
+                };
+                let interval = self.resolve_trim_view(view)?;
+                let value = self.resolve_fixed_trim_parameter(
+                    slot.curve,
+                    DocumentTrimParameter {
+                        parameter: self.require_scalar(slot.parameter)?.value,
+                        winding: slot.winding,
+                    },
+                )?;
+                let owned = view.start
+                    == (DocumentTrimBoundary::FilletContact {
+                        owner: constraint.id,
+                        contact,
+                    })
+                    || view.end
+                        == (DocumentTrimBoundary::FilletContact {
+                            owner: constraint.id,
+                            contact,
+                        });
+                if owned {
+                    if value.to_bits() != interval.start.to_bits()
+                        && value.to_bits() != interval.end.to_bits()
+                    {
+                        return invalid(
+                            "trim contact visibility",
+                            "owned contact must resolve to its visible boundary",
+                        );
+                    }
+                } else if !(interval.start < value && value < interval.end) {
+                    return invalid(
+                        "trim contact visibility",
+                        "executable non-owner contact must lie inside the visible interval",
+                    );
+                }
             }
         }
         for dimension in &self.dimensions {
@@ -5323,7 +6220,7 @@ impl SketchDocument {
         self.validate()?;
         let mut canonical = self.clone();
         canonical.canonicalize();
-        Ok(serde_json::to_string(&SketchDocumentV3::from(&canonical))?)
+        Ok(serde_json::to_string(&SketchDocumentV4::from(&canonical))?)
     }
 
     /// Parses and strictly validates a versioned JSON document.
@@ -5341,9 +6238,22 @@ impl SketchDocument {
         }
         let header: DocumentHeader = serde_json::from_str(json)?;
         let mut document = match header.version {
-            1 => Self::from(serde_json::from_str::<SketchDocumentV1>(json)?),
-            2 => Self::from(serde_json::from_str::<SketchDocumentV2>(json)?),
-            3 => Self::from(serde_json::from_str::<SketchDocumentV3>(json)?),
+            1 => {
+                let wire = serde_json::from_str::<SketchDocumentV1>(json)?;
+                validate_legacy_contact_language(&wire.contacts)?;
+                Self::from(wire)
+            }
+            2 => {
+                let wire = serde_json::from_str::<SketchDocumentV2>(json)?;
+                validate_legacy_contact_language(&wire.contacts)?;
+                Self::from(wire)
+            }
+            3 => {
+                let wire = serde_json::from_str::<SketchDocumentV3>(json)?;
+                validate_legacy_contact_language(&wire.contacts)?;
+                Self::from(wire)
+            }
+            4 => Self::from(serde_json::from_str::<SketchDocumentV4>(json)?),
             actual => {
                 return Err(DocumentError::UnsupportedVersion {
                     actual,
@@ -5361,6 +6271,7 @@ impl SketchDocument {
         self.scalars.sort_by_key(|value| value.id);
         self.curves.sort_by_key(|value| value.id);
         self.contacts.sort_by_key(|value| value.id);
+        self.trim_views.sort_by_key(|value| value.support);
         self.constraints.sort_by_key(|value| value.id);
         self.dimensions.sort_by_key(|value| value.id);
     }
@@ -5448,11 +6359,16 @@ impl SketchDocument {
             .iter()
             .filter(|constraint| !constraint.suppressed)
             .any(|constraint| {
-                let DocumentConstraintDefinition::LineLineFillet {
+                let (DocumentConstraintDefinition::LineLineFillet {
                     first_contact,
                     second_contact,
                     ..
-                } = constraint.definition
+                }
+                | DocumentConstraintDefinition::CurveCurveFillet {
+                    first_contact,
+                    second_contact,
+                    ..
+                }) = constraint.definition
                 else {
                     return false;
                 };
@@ -6317,6 +7233,74 @@ impl SketchDocument {
                     );
                 }
             }
+            C::CurveCurveFillet {
+                arc,
+                first_contact,
+                first_side,
+                second_contact,
+                second_side,
+                ..
+            } => {
+                if first_contact == second_contact {
+                    return invalid("fillet contact", "parent contacts must be distinct");
+                }
+                let first = self.require_contact(*first_contact)?;
+                let second = self.require_contact(*second_contact)?;
+                if first.curve == second.curve {
+                    return invalid("fillet parent", "support spans must be distinct");
+                }
+                for contact in [first, second] {
+                    if contact.tangent_orientation.is_some()
+                        || matches!(
+                            contact.neighborhood,
+                            ContactNeighborhood::Start | ContactNeighborhood::End
+                        )
+                    {
+                        return invalid(
+                            "fillet contact",
+                            "parents require unoriented interior or finite-local roots",
+                        );
+                    }
+                }
+                let output = self.require_radial_curve(*arc)?;
+                if !matches!(output.definition, CurveDefinition::CircularArc { .. }) {
+                    return invalid("curve fillet arc", "output must be a circular arc");
+                }
+                if first.curve.curve == *arc || second.curve.curve == *arc {
+                    return invalid("fillet parent", "output arc cannot be a parent support");
+                }
+                let first_differential = self.contact_differential(first)?;
+                let second_differential = self.contact_differential(second)?;
+                let tangent_cross = cross(
+                    [
+                        first_differential.unit_tangent.x,
+                        first_differential.unit_tangent.y,
+                    ],
+                    [
+                        second_differential.unit_tangent.x,
+                        second_differential.unit_tangent.y,
+                    ],
+                );
+                if !tangent_cross.is_finite() || tangent_cross.abs() <= 1.0e-8 {
+                    return invalid(
+                        "fillet parent",
+                        "parent tangents are parallel or numerically unresolved",
+                    );
+                }
+                let radius = self.curve_radius(output)?;
+                for (side, curvature) in [
+                    (*first_side, first_differential.signed_curvature),
+                    (*second_side, second_differential.signed_curvature),
+                ] {
+                    let factor = 1.0 - fillet_side_sign(side) * radius * curvature;
+                    if !factor.is_finite() || factor.abs() <= 1.0e-8 {
+                        return invalid(
+                            "fillet parent",
+                            "parent offset factor is numerically unresolved",
+                        );
+                    }
+                }
+            }
         }
         Ok(())
     }
@@ -6383,6 +7367,306 @@ impl SketchDocument {
             _ => ScalarUnit::Length,
         };
         require_scalar_role(scalar, unit, ScalarDomain::Positive, "dimension target")
+    }
+
+    fn validate_fillet_parent_request(
+        &self,
+        parent: CurveFilletParentRequest,
+    ) -> Result<geosolve_geometry::CurveJet2, DocumentError> {
+        self.validate_span(parent.curve)?;
+        finite(parent.parameter, "curve fillet contact parameter")?;
+        let periodic = self.trim_support_is_periodic(parent.curve)?;
+        let period = self.trim_support_period(parent.curve)?;
+        let total = if periodic {
+            if !(0.0..period).contains(&parent.parameter) {
+                return invalid(
+                    "curve fillet contact parameter",
+                    "periodic principal value must be in [0, period)",
+                );
+            }
+            let anchor = parent
+                .periodic_anchor
+                .ok_or_else(|| DocumentError::InvalidField {
+                    field: "curve fillet periodic anchor",
+                    message: "a full circle or ellipse requires an explicit anchor".into(),
+                })?;
+            let anchor_total = self.resolve_fixed_trim_parameter(parent.curve, anchor)?;
+            let contact_total = parent.parameter + f64::from(parent.winding) * period;
+            let (start, end) = match parent.trim_endpoint {
+                DocumentFilletTrimEndpoint::Start => (contact_total, anchor_total),
+                DocumentFilletTrimEndpoint::End => (anchor_total, contact_total),
+            };
+            if !start.is_finite() || !end.is_finite() || start >= end || end - start > period {
+                return invalid(
+                    "curve fillet periodic anchor",
+                    "anchor and contact must define an increasing interval no wider than one period",
+                );
+            }
+            contact_total
+        } else {
+            let allows_winding = self.trim_support_allows_winding(parent.curve)?;
+            if (!allows_winding && parent.winding != 0)
+                || parent.periodic_anchor.is_some()
+                || !(0.0 < parent.parameter && parent.parameter < 1.0)
+            {
+                return invalid(
+                    "curve fillet contact parameter",
+                    "bounded support requires a strict-interior parameter, compatible winding, and no periodic anchor",
+                );
+            }
+            parent.parameter
+        };
+        finite(total, "curve fillet total parameter")?;
+        match parent.neighborhood {
+            ContactNeighborhood::Interior => {}
+            ContactNeighborhood::Local { lower, upper }
+                if lower.is_finite() && upper.is_finite() && lower < total && total < upper => {}
+            ContactNeighborhood::Local { .. } => {
+                return invalid(
+                    "curve fillet contact neighborhood",
+                    "finite local bounds must strictly contain the unwrapped root",
+                );
+            }
+            ContactNeighborhood::Start | ContactNeighborhood::End => {
+                return invalid(
+                    "curve fillet contact neighborhood",
+                    "fillet parents cannot select support endpoints",
+                );
+            }
+        }
+        let jet = self
+            .evaluate_curve_jet(parent.curve, total)
+            .map_err(|error| DocumentError::InvalidField {
+                field: "curve fillet parent",
+                message: error.to_string(),
+            })?;
+        jet.differential()
+            .map_err(|error| DocumentError::InvalidField {
+                field: "curve fillet parent",
+                message: error.to_string(),
+            })?;
+        Ok(jet)
+    }
+
+    fn fillet_trim_view(
+        &self,
+        parent: CurveFilletParentRequest,
+        owner: DocumentConstraintId,
+        contact: ContactId,
+    ) -> Result<DocumentCurveTrimView, DocumentError> {
+        let periodic = self.trim_support_is_periodic(parent.curve)?;
+        let fixed = if periodic {
+            parent
+                .periodic_anchor
+                .ok_or_else(|| DocumentError::InvalidField {
+                    field: "curve fillet periodic anchor",
+                    message: "a full circle or ellipse requires an explicit anchor".into(),
+                })?
+        } else {
+            DocumentTrimParameter {
+                parameter: match parent.trim_endpoint {
+                    DocumentFilletTrimEndpoint::Start => 1.0,
+                    DocumentFilletTrimEndpoint::End => 0.0,
+                },
+                winding: if self.trim_support_allows_winding(parent.curve)? {
+                    parent.winding
+                } else {
+                    0
+                },
+            }
+        };
+        let contact_boundary = DocumentTrimBoundary::FilletContact { owner, contact };
+        let fixed = DocumentTrimBoundary::Fixed(fixed);
+        let (start, end) = match parent.trim_endpoint {
+            DocumentFilletTrimEndpoint::Start => (contact_boundary, fixed),
+            DocumentFilletTrimEndpoint::End => (fixed, contact_boundary),
+        };
+        Ok(DocumentCurveTrimView {
+            support: parent.curve,
+            start,
+            end,
+        })
+    }
+
+    fn trim_support_is_periodic(&self, support: CurveSpan) -> Result<bool, DocumentError> {
+        Ok(matches!(
+            self.validate_span(support)?.definition,
+            CurveDefinition::Circle { .. } | CurveDefinition::Ellipse { .. }
+        ))
+    }
+
+    fn trim_support_allows_winding(&self, support: CurveSpan) -> Result<bool, DocumentError> {
+        Ok(matches!(
+            self.validate_span(support)?.definition,
+            CurveDefinition::Circle { .. }
+                | CurveDefinition::Ellipse { .. }
+                | CurveDefinition::BSpline {
+                    form: DocumentBSplineForm::Periodic,
+                    ..
+                }
+                | CurveDefinition::Nurbs {
+                    form: DocumentBSplineForm::Periodic,
+                    ..
+                }
+        ))
+    }
+
+    fn trim_support_period(&self, support: CurveSpan) -> Result<f64, DocumentError> {
+        Ok(if self.trim_support_is_periodic(support)? {
+            std::f64::consts::TAU
+        } else {
+            1.0
+        })
+    }
+
+    fn resolve_fixed_trim_parameter(
+        &self,
+        support: CurveSpan,
+        parameter: DocumentTrimParameter,
+    ) -> Result<f64, DocumentError> {
+        finite(parameter.parameter, "trim boundary parameter")?;
+        let periodic = self.trim_support_is_periodic(support)?;
+        let period = self.trim_support_period(support)?;
+        let total = if periodic {
+            if !(0.0..period).contains(&parameter.parameter) {
+                return invalid(
+                    "trim boundary parameter",
+                    "periodic principal value must be in [0, period)",
+                );
+            }
+            parameter.parameter + f64::from(parameter.winding) * period
+        } else {
+            if (!self.trim_support_allows_winding(support)? && parameter.winding != 0)
+                || !(0.0..=1.0).contains(&parameter.parameter)
+            {
+                return invalid(
+                    "trim boundary parameter",
+                    "bounded support requires a parameter in [0, 1] with compatible winding",
+                );
+            }
+            parameter.parameter
+        };
+        finite(total, "unwrapped trim boundary")?;
+        Ok(total)
+    }
+
+    fn resolve_trim_boundary(
+        &self,
+        support: CurveSpan,
+        boundary: DocumentTrimBoundary,
+    ) -> Result<f64, DocumentError> {
+        match boundary {
+            DocumentTrimBoundary::Fixed(parameter) => {
+                self.resolve_fixed_trim_parameter(support, parameter)
+            }
+            DocumentTrimBoundary::FilletContact { owner, contact } => {
+                let constraint = self
+                    .constraint(owner)
+                    .ok_or_else(|| unknown("trim boundary owner", owner.0))?;
+                let owns_contact = matches!(
+                    constraint.definition,
+                    DocumentConstraintDefinition::CurveCurveFillet {
+                        first_contact,
+                        second_contact,
+                        ..
+                    } if first_contact == contact || second_contact == contact
+                );
+                if !owns_contact {
+                    return invalid(
+                        "trim boundary owner",
+                        "owner is not the generic fillet that owns this contact",
+                    );
+                }
+                let slot = self.require_contact(contact)?;
+                if slot.curve != support {
+                    return invalid(
+                        "trim boundary contact",
+                        "contact support does not match the trim view",
+                    );
+                }
+                let principal = self.require_scalar(slot.parameter)?.value;
+                let parameter = DocumentTrimParameter {
+                    parameter: principal,
+                    winding: slot.winding,
+                };
+                self.resolve_fixed_trim_parameter(support, parameter)
+            }
+        }
+    }
+
+    fn resolve_trim_view(
+        &self,
+        view: &DocumentCurveTrimView,
+    ) -> Result<DocumentVisibleCurveInterval, DocumentError> {
+        self.validate_span(view.support)?;
+        let start = self.resolve_trim_boundary(view.support, view.start)?;
+        let end = self.resolve_trim_boundary(view.support, view.end)?;
+        let period = self.trim_support_period(view.support)?;
+        if !start.is_finite() || !end.is_finite() || start >= end || end - start > period {
+            return invalid(
+                "trim view interval",
+                "must be finite, increasing, and no wider than one native period",
+            );
+        }
+        Ok(DocumentVisibleCurveInterval {
+            support: view.support,
+            start,
+            end,
+            start_boundary: view.start,
+            end_boundary: view.end,
+        })
+    }
+
+    fn validate_owned_trim_boundary(
+        &self,
+        owner: DocumentConstraintId,
+        contact: ContactId,
+        endpoint: DocumentFilletTrimEndpoint,
+    ) -> Result<(), DocumentError> {
+        let slot = self.require_contact(contact)?;
+        let view = self
+            .trim_view(slot.curve)
+            .ok_or_else(|| DocumentError::InvalidField {
+                field: "trim view ownership",
+                message: "generic fillet parent has no trim view".into(),
+            })?;
+        let expected = DocumentTrimBoundary::FilletContact { owner, contact };
+        let (contact_boundary, opposite) = match endpoint {
+            DocumentFilletTrimEndpoint::Start => (view.start, view.end),
+            DocumentFilletTrimEndpoint::End => (view.end, view.start),
+        };
+        let DocumentTrimBoundary::Fixed(fixed) = opposite else {
+            return invalid(
+                "trim view ownership",
+                "generic fillet must own exactly its requested endpoint and one fixed opposite boundary",
+            );
+        };
+        if contact_boundary != expected {
+            return invalid(
+                "trim view ownership",
+                "generic fillet must own exactly its requested endpoint and one fixed opposite boundary",
+            );
+        }
+        if !self.trim_support_is_periodic(slot.curve)? {
+            let expected_fixed: f64 = match endpoint {
+                DocumentFilletTrimEndpoint::Start => 1.0,
+                DocumentFilletTrimEndpoint::End => 0.0,
+            };
+            let expected_winding = if self.trim_support_allows_winding(slot.curve)? {
+                slot.winding
+            } else {
+                0
+            };
+            if fixed.winding != expected_winding
+                || fixed.parameter.to_bits() != expected_fixed.to_bits()
+            {
+                return invalid(
+                    "trim view ownership",
+                    "bounded generic fillet support must retain the opposite native endpoint",
+                );
+            }
+        }
+        Ok(())
     }
 
     fn validate_span(&self, span: CurveSpan) -> Result<&DesignCurve, DocumentError> {
@@ -6627,7 +7911,7 @@ fn curve_owned_scalars(definition: &CurveDefinition) -> Vec<DesignScalarId> {
     }
 }
 
-enum DocumentConicGeometryError {
+pub(crate) enum DocumentConicGeometryError {
     Document(DocumentError),
     Definition(geosolve_geometry::ConicDefinitionError),
 }
@@ -7026,6 +8310,13 @@ fn validate_contact_curve(
             ContactDomain::SupportingLine | ContactDomain::Periodic { .. },
             ContactNeighborhood::Interior,
         ) => {}
+        (
+            ContactDomain::SupportingLine | ContactDomain::Periodic { .. },
+            ContactNeighborhood::Local { lower, upper },
+        ) if lower.is_finite()
+            && upper.is_finite()
+            && lower < contact_total_value(contact, scalar.value)
+            && contact_total_value(contact, scalar.value) < upper => {}
         (ContactDomain::Bounded { lower, .. }, ContactNeighborhood::Start)
             if scalar.value.to_bits() == lower.to_bits() => {}
         (ContactDomain::Bounded { upper, .. }, ContactNeighborhood::End)
@@ -7050,6 +8341,21 @@ fn validate_contact_curve(
                 "selection does not match the contact parameter",
             );
         }
+    }
+    Ok(())
+}
+
+fn validate_legacy_contact_language(contacts: &[ContactSlot]) -> Result<(), DocumentError> {
+    if contacts.iter().any(|contact| {
+        matches!(
+            contact.domain,
+            ContactDomain::SupportingLine | ContactDomain::Periodic { .. }
+        ) && matches!(contact.neighborhood, ContactNeighborhood::Local { .. })
+    }) {
+        return invalid(
+            "contact.neighborhood",
+            "sketch versions 1 through 3 do not support local periodic or supporting-line neighborhoods",
+        );
     }
     Ok(())
 }
@@ -7101,6 +8407,11 @@ fn constraint_contacts(definition: &DocumentConstraintDefinition) -> Vec<Contact
             ..
         }
         | DocumentConstraintDefinition::LineLineFillet {
+            first_contact,
+            second_contact,
+            ..
+        }
+        | DocumentConstraintDefinition::CurveCurveFillet {
             first_contact,
             second_contact,
             ..
@@ -7263,7 +8574,8 @@ fn constraint_references_object(
             DocumentObjectId::Curve(selected),
         ) => *first == selected || *second == selected,
         (
-            DocumentConstraintDefinition::LineLineFillet { arc, .. },
+            DocumentConstraintDefinition::LineLineFillet { arc, .. }
+            | DocumentConstraintDefinition::CurveCurveFillet { arc, .. },
             DocumentObjectId::Curve(selected),
         ) => *arc == selected,
         (
@@ -7314,6 +8626,11 @@ fn constraint_references_object(
                 ..
             }
             | DocumentConstraintDefinition::LineLineFillet {
+                first_contact,
+                second_contact,
+                ..
+            }
+            | DocumentConstraintDefinition::CurveCurveFillet {
                 first_contact,
                 second_contact,
                 ..
@@ -7609,6 +8926,13 @@ fn contact_total_value(contact: &ContactSlot, principal: f64) -> f64 {
     match contact.domain {
         ContactDomain::Periodic { period } => principal + f64::from(contact.winding) * period,
         ContactDomain::SupportingLine | ContactDomain::Bounded { .. } => principal,
+    }
+}
+
+const fn fillet_side_sign(side: DocumentCurveNormalSide) -> f64 {
+    match side {
+        DocumentCurveNormalSide::Left => 1.0,
+        DocumentCurveNormalSide::Right => -1.0,
     }
 }
 

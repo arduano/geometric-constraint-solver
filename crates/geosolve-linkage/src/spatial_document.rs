@@ -108,6 +108,7 @@ persistent_id!(
 );
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum SpatialDocumentError {
     #[error("unsupported spatial document version {0}")]
     UnsupportedVersion(u32),

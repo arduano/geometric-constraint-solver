@@ -255,33 +255,36 @@ fn application_attributes_cannot_change_solver_or_canonical_document_state() {
 #[test]
 fn prior_wire_payloads_are_frozen_and_dispatch_rejects_unknown_versions() {
     let document = SketchDocument::with_id(1.0, DocumentId(PersistentId::from_u128(1))).unwrap();
-    let version_three = concat!(
-        "{\"version\":3,\"id\":\"00000000000000000000000000000001\",",
+    let version_four = concat!(
+        "{\"version\":4,\"id\":\"00000000000000000000000000000001\",",
         "\"next_id\":\"00000000000000000000000000000002\",\"model_scale\":1.0,",
         "\"points\":[],\"scalars\":[],\"curves\":[],\"contacts\":[],",
-        "\"constraints\":[],\"dimensions\":[],\"source_order\":[]}"
+        "\"trim_views\":[],\"constraints\":[],\"dimensions\":[],\"source_order\":[]}"
     );
+    let version_three = version_four
+        .replacen("\"version\":4", "\"version\":3", 1)
+        .replacen("\"trim_views\":[],", "", 1);
     let version_two = version_three.replacen("\"version\":3", "\"version\":2", 1);
     let version_one = version_three.replacen("\"version\":3", "\"version\":1", 1);
-    assert_eq!(document.to_canonical_json().unwrap(), version_three);
-    for prior in [&version_one, &version_two] {
+    assert_eq!(document.to_canonical_json().unwrap(), version_four);
+    for prior in [&version_one, &version_two, &version_three] {
         assert_eq!(
             SketchDocument::from_json(prior)
                 .unwrap()
                 .to_canonical_json()
                 .unwrap(),
-            version_three
+            version_four
         );
     }
 
-    let unsupported = version_three.replacen("\"version\":3", "\"version\":4", 1);
+    let unsupported = version_four.replacen("\"version\":4", "\"version\":5", 1);
     assert!(matches!(
         SketchDocument::from_json(&unsupported),
         Err(DocumentError::UnsupportedVersion {
-            actual: 4,
-            expected: 3,
+            actual: 5,
+            expected: 4,
         })
     ));
-    let unknown = version_three.replacen('{', "{\"attributes\":[],", 1);
+    let unknown = version_four.replacen('{', "{\"attributes\":[],", 1);
     assert!(SketchDocument::from_json(&unknown).is_err());
 }

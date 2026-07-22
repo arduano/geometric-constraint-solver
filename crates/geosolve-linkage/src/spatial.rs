@@ -136,6 +136,7 @@ spatial_id!(
 
 /// Construction, compilation, gauge, solve, or independent-validation failure.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum SpatialAssemblyError {
     #[error("spatial model scale must be positive and finite, got {value}")]
     InvalidModelScale { value: f64 },
@@ -2807,13 +2808,12 @@ fn validate_driver_consistency(assembly: &SpatialAssembly) -> Result<(), Spatial
                     return Err(SpatialAssemblyError::IncompatibleDriverTargets { coordinate });
                 }
             }
-            SpatialSourceKind::TranslationPositionDriver { coordinate, target } => {
+            SpatialSourceKind::TranslationPositionDriver { coordinate, target }
                 if translation_targets
                     .insert(coordinate, target)
-                    .is_some_and(|existing| existing.to_bits() != target.to_bits())
-                {
-                    return Err(SpatialAssemblyError::IncompatibleDriverTargets { coordinate });
-                }
+                    .is_some_and(|existing| existing.to_bits() != target.to_bits()) =>
+            {
+                return Err(SpatialAssemblyError::IncompatibleDriverTargets { coordinate });
             }
             _ => {}
         }

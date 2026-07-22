@@ -3,12 +3,18 @@ name = "geosolve-linkage"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+license-file.workspace = true
+readme.workspace = true
 rust-version.workspace = true
 authors.workspace = true
+description = "Persistent planar and spatial linkage and assembly kinematics"
+documentation = "https://docs.rs/geosolve-linkage/0.2.0"
+keywords = ["cad", "kinematics", "linkage", "solver"]
+categories = ["algorithms", "mathematics", "science"]
 
 [dependencies]
-geosolve-core = { path = "../geosolve-core" }
-geosolve-geometry = { path = "../geosolve-geometry" }
+geosolve-core = { version = "0.2.0", path = "../geosolve-core" }
+geosolve-geometry = { version = "0.2.0", path = "../geosolve-geometry" }
 nalgebra.workspace = true
 serde.workspace = true
 serde_json.workspace = true
