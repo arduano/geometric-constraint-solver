@@ -592,6 +592,16 @@ is re-gated cleanly before M33 implementation. M32 acceptance is complete.
 - The complete feature/relation/dimension applicability matrix and representative production workloads are deterministic and reviewable.
 - No target-only concept is exposed as implemented behavior and all frozen M1-M32 contracts remain green.
 
+Completion record (2026-07-23): ADRs 0025-0028, the machine-checked 15-family/
+38-relation/37-dimension capability matrix, six exact current-v4 workload signatures
+and 24 Criterion measurement cases freeze the production embedding contract without
+adding target APIs or changing v1-v4. Cancellation latency remains explicitly
+unavailable until M35. A release-gate-generated spatial seed additionally hardened
+bitwise-idempotent accepted `Pose3` reconstruction without relaxing exact velocity or
+continuation snapshots. Clean candidate `5cd7cb6` passes the complete native,
+documentation, package/licence, locked WASM, performance and Chromium release gate;
+M33 acceptance is complete.
+
 ## M34 acceptance: retained design and accepted state
 
 - Design, attempted candidate and accepted solved state have separate identities and revisions.

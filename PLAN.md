@@ -1230,24 +1230,48 @@ performance and browser suites pass from one release-gate command.
 
 ## M33: CAD engine contract and baselines
 
-Status: active.
+Status: complete as of 2026-07-23.
 
 Goal: freeze the product and ownership decisions for a host-usable planar sketch
 engine before changing persistence or public state semantics.
 
-- [ ] Accept ADRs for design-versus-accepted state, host parameters, immutable external snapshots, cancellation/concurrency, companion APIs and draft-v5 development.
-- [ ] Freeze a complete entity/feature/constraint/dimension applicability matrix and identify every unsupported ordinary CAD combination.
-- [ ] Define accepted-state identity over design revision, parameter revision, external-snapshot digest, activation state and solver policy.
-- [ ] Define the ownership boundaries for host undo, expressions, units, projection, topology and production profiles.
-- [ ] Add deterministic representative workloads for connected, disconnected, spline-heavy, parameter-heavy, external-reference and activation-heavy sketches.
-- [ ] Record cold compile, warm edit, diagnostics, profile, cancellation-latency and memory measurement boundaries without imposing premature thresholds.
+- [x] Accept ADRs for design-versus-accepted state, host parameters, immutable external snapshots, cancellation/concurrency, companion APIs and draft-v5 development.
+- [x] Freeze a complete entity/feature/constraint/dimension applicability matrix and identify every unsupported ordinary CAD combination.
+- [x] Define accepted-state identity over design revision, parameter revision, external-snapshot digest, activation state and solver policy.
+- [x] Define the ownership boundaries for host undo, expressions, units, projection, topology and production profiles.
+- [x] Add deterministic representative workloads for connected, disconnected, spline-heavy, parameter-heavy, external-reference and activation-heavy sketches.
+- [x] Record cold compile, warm edit, diagnostics, profile, cancellation-latency and memory measurement boundaries without imposing premature thresholds.
+
+Completion record (2026-07-23): accepted ADRs 0025-0028 define separate design,
+attempt and accepted identities with complete immutable input stamps; host-owned
+parameters, expressions, units, projection and history; cooperative operation control
+and prepared-work concurrency; draft-v5 development; and one-way operations/topology
+companion boundaries. The machine-checked capability matrix freezes 15 curve
+families, 38 relations, 37 dimensions/measurements and explicit unsupported or
+conditional combinations without adding a target-only API or changing frozen v1-v4.
+
+Six deterministic current-v4 workloads freeze exact document, solve, audit and
+profile signatures. Criterion validates 24 cold-compile, warm-edit/solve,
+solve/diagnostic and visual-profile cases; peak RSS remains observational, and
+cancellation latency is explicitly unavailable until M35. The full gate exposed one
+saved transformed spatial property where repeated quaternion normalization changed an
+accepted snapshot by a few ULPs. Machine-roundoff-unit `Pose3` reconstruction is now
+bitwise idempotent while the public norm-validation band and exact velocity/
+continuation snapshot checks remain unchanged; the saved seed and zero-distance
+continuation are regressions.
+
+Clean candidate `5cd7cb6` passes `scripts/release-gate.sh`: format/diff,
+warnings-denied workspace Clippy/rustdoc, full locked workspace tests, locked WASM,
+benchmark compilation, mutation and native timing gates, the 1,536-coordinate spatial
+release case in `90.08 s`, licences, package contents, release Trunk and complete
+Chromium. The focused M33 tests and all 24 Criterion test-mode cases also pass.
 
 Gate: every new semantic concept has an accepted decision and representative fixture;
 M1-M32 behavior and frozen wire languages remain unchanged.
 
 ## M34: retained design and accepted solved state
 
-Status: planned.
+Status: active.
 
 Goal: retain structurally valid unsolved intent without ever presenting it as
 accepted geometry.

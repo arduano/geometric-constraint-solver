@@ -23,9 +23,9 @@ M23-M31 subsequently complete spatial kinematics, sketch embedding identities,
 advanced constructions, generic fillets and persistent trim views, interactive
 construction/NURBS UAT and certified all-family visual profiles.
 
-- **Baseline:** implemented behavior through M32, with M1-M7 domain behavior protected as the frozen regression baseline.
-- **Active target:** M33 CAD engine contracts and representative baselines.
-- **Planned target:** M33-M55 production sketch embedding, CAD-like desktop consumer, companion operations/topology and release qualification. Planned statements are not implemented capabilities.
+- **Baseline:** implemented behavior through M32 plus the completed M33 contract and representative baselines, with M1-M7 domain behavior protected as the frozen regression baseline.
+- **Active target:** M34 retained design, attempted candidate and accepted solved state.
+- **Planned target:** M34-M55 production sketch embedding, CAD-like desktop consumer, companion operations/topology and release qualification. Planned statements are not implemented capabilities.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
@@ -112,8 +112,10 @@ enclosures. A component is complete only when every relevant root, outgoing tang
 order, area sign and containment decision is resolved within explicit budgets.
 Sampling is rendering only and cannot prove arrangement topology.
 
-M33-M48 are the planned production-embedding transition. They add a standard planar
-relation/dimension surface, retained design intent separate from accepted solved
+M33 accepts the production-embedding identity, host-input, operation-control and
+companion-boundary contracts without adding target behavior. M34-M48 are the planned
+implementation transition. They add a standard planar relation/dimension surface,
+retained design intent separate from accepted solved
 state, typed construction/activation semantics, host-supplied parameter values,
 immutable external 2D snapshots, cancellation, stable persistent-ID diagnostics,
 revision-checked prepared jobs and incremental solving. Host expressions, projection
@@ -128,8 +130,8 @@ owns no private residual equation.
 
 M50 targets a `geosolve-sketch-topology` companion for revision-stamped production
 wires, nesting, holes and source provenance. Its complete output may feed a host B-rep
-feature, but it owns no B-rep entities and never changes sketch solve state. These are
-planned crate names and boundaries until M33 accepts their ADRs.
+feature, but it owns no B-rep entities and never changes sketch solve state. M33
+accepts these names and boundaries; both crates remain planned until M49/M50.
 
 ### `geosolve-linkage`
 
@@ -382,7 +384,7 @@ Every executable residual row has structured audit metadata generated with the e
 
 Persistence stores domain topology, continuous accepted state and every discrete branch/span/winding/gauge/assembly choice in a versioned envelope. Runtime slot-map keys are remapped deterministically and are never serialized as persistent identity. M11 establishes the alpha sketch document, M17 establishes the first planar linkage document and gauge schema, M22 and M23 complete each product schema, M24 freezes the first sketch wire DTO and migration dispatch, M25 migrates strict sketch v1 input to canonical v2 for associative construction definitions, M27 advances canonical sketch output to v3 for associative fillets, M28 freezes v1-v3 input and advances canonical output to v4 for generic fillets and trim views, and M29 finalizes public compatibility policy.
 
-M33-M52 may develop an explicitly unstable draft-v5 representation while v1-v4
+M34-M52 may develop an explicitly unstable draft-v5 representation while v1-v4
 remain frozen supported languages. M53 alone freezes final sketch v5 plus separate
 versioned parameter, external-snapshot and desktop-workspace envelopes. Host/PDM keys,
 formula graphs and application undo remain host state rather than canonical sketch

@@ -12,7 +12,8 @@ must remain source-compatible except where retaining behavior would preserve a
 soundness issue, false success, invalid accepted geometry or a security defect.
 After `1.0`, Rust API compatibility follows Cargo SemVer.
 
-M33-M55 are the planned production-embedding transition. M53 freezes the next
+M33 completes the production-embedding contract and baseline freeze without adding
+target APIs. M34-M55 are the planned implementation transition. M53 freezes the next
 release-candidate API and sketch v5 language only after the ordinary, host-state and
 advanced workbench phases pass automated acceptance and their M40/M45/M52 human UAT
 gates. M54 then ratifies the integrated candidate. Until M53 passes, any draft-v5
