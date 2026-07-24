@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use geosolve_core::{OperationCheckpoint, OperationController, OperationWorkCounter};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
@@ -1176,6 +1177,7 @@ pub struct SketchDocument {
     constraints: Vec<DocumentConstraint>,
     dimensions: Vec<DocumentDimension>,
     source_order: Vec<DocumentSourceId>,
+    mutation_validation_deferred: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -1560,6 +1562,7 @@ impl From<SketchDocumentV1> for SketchDocument {
                 .map(DocumentDimension::from)
                 .collect(),
             source_order: document.source_order,
+            mutation_validation_deferred: false,
         }
     }
 }
@@ -1648,6 +1651,7 @@ impl From<SketchDocumentV2> for SketchDocument {
                 .collect(),
             dimensions: document.dimensions,
             source_order: document.source_order,
+            mutation_validation_deferred: false,
         }
     }
 }
@@ -1687,6 +1691,7 @@ impl From<SketchDocumentV3> for SketchDocument {
                 .collect(),
             dimensions: document.dimensions,
             source_order: document.source_order,
+            mutation_validation_deferred: false,
         }
     }
 }
@@ -1742,6 +1747,7 @@ impl From<SketchDocumentV4> for SketchDocument {
             constraints: document.constraints,
             dimensions: document.dimensions,
             source_order: document.source_order,
+            mutation_validation_deferred: false,
         }
     }
 }
@@ -1789,6 +1795,7 @@ impl SketchDocument {
             constraints: Vec::new(),
             dimensions: Vec::new(),
             source_order: Vec::new(),
+            mutation_validation_deferred: false,
         })
     }
 
@@ -1928,7 +1935,7 @@ impl SketchDocument {
             );
         }
         candidate.trim_views.remove(index);
-        candidate.validate()?;
+        candidate.validate_after_mutation()?;
         *self = candidate;
         Ok(())
     }
@@ -3301,7 +3308,7 @@ impl SketchDocument {
                 migrated_contacts.push(contact_id);
             }
         }
-        candidate.validate()?;
+        candidate.validate_after_mutation()?;
         *self = candidate;
         Ok(DocumentBSplineInsertion {
             curve,
@@ -3541,7 +3548,7 @@ impl SketchDocument {
         } else {
             Vec::new()
         };
-        candidate.validate()?;
+        candidate.validate_after_mutation()?;
         *self = candidate;
         Ok(DocumentNurbsInsertion {
             curve,
@@ -3733,7 +3740,7 @@ impl SketchDocument {
         target.curve.segment = span_ids[target_ordinal];
         target.winding = winding;
         target.neighborhood = neighborhood;
-        candidate.validate()?;
+        candidate.validate_after_mutation()?;
         *self = candidate;
         Ok(())
     }
@@ -3852,7 +3859,7 @@ impl SketchDocument {
         target.curve.segment = span_ids[target_ordinal];
         target.winding = winding;
         target.neighborhood = neighborhood;
-        candidate.validate()?;
+        candidate.validate_after_mutation()?;
         *self = candidate;
         Ok(())
     }
@@ -4678,7 +4685,7 @@ impl SketchDocument {
             self.fillet_trim_view(request.first, constraint, contacts[0])?,
             self.fillet_trim_view(request.second, constraint, contacts[1])?,
         ]);
-        self.validate()?;
+        self.validate_after_mutation()?;
 
         let radius_target = self.add_scalar(
             format!("{label}.radius_target"),
@@ -4932,7 +4939,7 @@ impl SketchDocument {
             .find(|value| value.id == id)
             .ok_or_else(|| unknown("point", id.0))?
             .position = position;
-        candidate.validate()?;
+        candidate.validate_after_mutation()?;
         *self = candidate;
         Ok(())
     }
@@ -4997,7 +5004,7 @@ impl SketchDocument {
             .ok_or_else(|| unknown("scalar", id.0))?;
         validate_scalar_value(value, scalar.domain)?;
         scalar.value = value;
-        candidate.validate()?;
+        candidate.validate_after_mutation()?;
         *self = candidate;
         Ok(())
     }
@@ -5056,7 +5063,7 @@ impl SketchDocument {
             return invalid("curve", "weight gauge curve family changed");
         };
         *selected = gauge_weight;
-        candidate.validate()?;
+        candidate.validate_after_mutation()?;
         *self = candidate;
         Ok(())
     }
@@ -5089,7 +5096,7 @@ impl SketchDocument {
             );
         };
         *current = weighted_middle;
-        candidate.validate()?;
+        candidate.validate_after_mutation()?;
         *self = candidate;
         Ok(())
     }
@@ -5117,7 +5124,7 @@ impl SketchDocument {
             return invalid("curve", "branch edit requires a hyperbola segment");
         };
         *current = branch;
-        candidate.validate()?;
+        candidate.validate_after_mutation()?;
         *self = candidate;
         Ok(())
     }
@@ -5163,7 +5170,7 @@ impl SketchDocument {
             }
             _ => return invalid("curve span", "branch edit requires a line segment"),
         }
-        candidate.validate()?;
+        candidate.validate_after_mutation()?;
         *self = candidate;
         Ok(())
     }
@@ -5202,7 +5209,7 @@ impl SketchDocument {
             return invalid("curve", "sweep edit requires a circular or elliptical arc");
         };
         *current = sweep;
-        candidate.validate()?;
+        candidate.validate_after_mutation()?;
         *self = candidate;
         Ok(())
     }
@@ -5285,7 +5292,7 @@ impl SketchDocument {
             return invalid("line fillet arc", "output must remain a circular arc");
         };
         *current = sweep;
-        candidate.validate()?;
+        candidate.validate_after_mutation()?;
         *self = candidate;
         Ok(())
     }
@@ -5434,7 +5441,7 @@ impl SketchDocument {
             return invalid("curve fillet arc", "output must remain a circular arc");
         };
         *current = sweep;
-        candidate.validate()?;
+        candidate.validate_after_mutation()?;
         *self = candidate;
         Ok(())
     }
@@ -5529,7 +5536,7 @@ impl SketchDocument {
             validate_scalar_value(edit.value, scalar.domain)?;
             scalar.value = edit.value;
         }
-        candidate.validate()?;
+        candidate.validate_after_mutation()?;
         *self = candidate;
         Ok(())
     }
@@ -5602,7 +5609,7 @@ impl SketchDocument {
         };
         *current_mode = mode;
         *current_direction = normalized_vector(center_direction)?;
-        candidate.validate()?;
+        candidate.validate_after_mutation()?;
         *self = candidate;
         Ok(())
     }
@@ -5652,7 +5659,7 @@ impl SketchDocument {
             );
         };
         *current = orientation;
-        candidate.validate()?;
+        candidate.validate_after_mutation()?;
         *self = candidate;
         Ok(())
     }
@@ -5889,7 +5896,7 @@ impl SketchDocument {
             }
             _ => candidate.remove(object)?,
         }
-        candidate.validate()?;
+        candidate.validate_after_mutation()?;
         *self = candidate;
         Ok(())
     }
@@ -5978,7 +5985,7 @@ impl SketchDocument {
                 return Err(error);
             }
         }
-        candidate.validate()?;
+        candidate.validate_after_mutation()?;
         *self = candidate;
         Ok(())
     }
@@ -5990,6 +5997,39 @@ impl SketchDocument {
     /// Returns the first schema, resource, value, reference, or ordering error.
     #[allow(clippy::too_many_lines)]
     pub fn validate(&self) -> Result<(), DocumentError> {
+        let completed = self.validate_with_controller(None)?;
+        debug_assert!(completed, "uncontrolled validation cannot be interrupted");
+        Ok(())
+    }
+
+    fn validate_after_mutation(&self) -> Result<(), DocumentError> {
+        if self.mutation_validation_deferred {
+            Ok(())
+        } else {
+            self.validate()
+        }
+    }
+
+    pub(crate) fn defer_mutation_validation(&mut self) {
+        self.mutation_validation_deferred = true;
+    }
+
+    pub(crate) fn resume_mutation_validation(&mut self) {
+        self.mutation_validation_deferred = false;
+    }
+
+    #[allow(clippy::too_many_lines)]
+    pub(crate) fn validate_with_controller(
+        &self,
+        mut controller: Option<&mut OperationController>,
+    ) -> Result<bool, DocumentError> {
+        if !charge_document_item(
+            &mut controller,
+            OperationWorkCounter::DocumentValidationItems,
+            OperationCheckpoint::DocumentValidation,
+        ) {
+            return Ok(false);
+        }
         if self.version != SKETCH_DOCUMENT_VERSION {
             return Err(DocumentError::UnsupportedVersion {
                 actual: self.version,
@@ -6033,17 +6073,42 @@ impl SketchDocument {
         let mut ids = BTreeSet::new();
         insert_unique(&mut ids, self.id.0)?;
         for point in &self.points {
+            if !charge_document_item(
+                &mut controller,
+                OperationWorkCounter::DocumentValidationItems,
+                OperationCheckpoint::DocumentValidation,
+            ) {
+                return Ok(false);
+            }
             insert_unique(&mut ids, point.id.0)?;
             validate_label(&point.label, "point label")?;
             finite_pair(point.position, "point position")?;
         }
         for scalar in &self.scalars {
+            if !charge_document_item(
+                &mut controller,
+                OperationWorkCounter::DocumentValidationItems,
+                OperationCheckpoint::DocumentValidation,
+            ) {
+                return Ok(false);
+            }
             insert_unique(&mut ids, scalar.id.0)?;
             validate_label(&scalar.label, "scalar label")?;
             validate_scalar_value(scalar.value, scalar.domain)?;
         }
         let mut used_scalars = BTreeSet::new();
         for curve in &self.curves {
+            if !charge_document_item(
+                &mut controller,
+                OperationWorkCounter::DocumentValidationItems,
+                OperationCheckpoint::DocumentValidation,
+            ) || !charge_document_item(
+                &mut controller,
+                OperationWorkCounter::DocumentDependencyItems,
+                OperationCheckpoint::DocumentDependency,
+            ) {
+                return Ok(false);
+            }
             insert_unique(&mut ids, curve.id.0)?;
             validate_label(&curve.label, "curve label")?;
             self.validate_curve_definition(curve.id, &curve.definition)?;
@@ -6053,6 +6118,17 @@ impl SketchDocument {
         }
         let mut contact_scalars = BTreeSet::new();
         for contact in &self.contacts {
+            if !charge_document_item(
+                &mut controller,
+                OperationWorkCounter::DocumentValidationItems,
+                OperationCheckpoint::DocumentValidation,
+            ) || !charge_document_item(
+                &mut controller,
+                OperationWorkCounter::DocumentDependencyItems,
+                OperationCheckpoint::DocumentDependency,
+            ) {
+                return Ok(false);
+            }
             insert_unique(&mut ids, contact.id.0)?;
             validate_label(&contact.label, "contact label")?;
             let curve = self.validate_span(contact.curve)?;
@@ -6084,6 +6160,17 @@ impl SketchDocument {
         }
         let mut trimmed_supports = BTreeSet::new();
         for view in &self.trim_views {
+            if !charge_document_item(
+                &mut controller,
+                OperationWorkCounter::DocumentValidationItems,
+                OperationCheckpoint::DocumentValidation,
+            ) || !charge_document_item(
+                &mut controller,
+                OperationWorkCounter::DocumentDependencyItems,
+                OperationCheckpoint::DocumentDependency,
+            ) {
+                return Ok(false);
+            }
             if !trimmed_supports.insert(view.support) {
                 return invalid(
                     "trim view support",
@@ -6096,6 +6183,17 @@ impl SketchDocument {
         let mut used_contacts = BTreeSet::new();
         let mut fillet_arcs = BTreeSet::new();
         for constraint in &self.constraints {
+            if !charge_document_item(
+                &mut controller,
+                OperationWorkCounter::DocumentValidationItems,
+                OperationCheckpoint::DocumentValidation,
+            ) || !charge_document_item(
+                &mut controller,
+                OperationWorkCounter::DocumentDependencyItems,
+                OperationCheckpoint::DocumentDependency,
+            ) {
+                return Ok(false);
+            }
             insert_unique(&mut ids, constraint.id.0)?;
             insert_unique(&mut ids, constraint.source_id.0)?;
             sources.insert(constraint.source_id);
@@ -6124,6 +6222,13 @@ impl SketchDocument {
             }
         }
         for constraint in &self.constraints {
+            if !charge_document_item(
+                &mut controller,
+                OperationWorkCounter::DocumentDependencyItems,
+                OperationCheckpoint::DocumentDependency,
+            ) {
+                return Ok(false);
+            }
             if let DocumentConstraintDefinition::CurveCurveFillet {
                 first_contact,
                 first_trim_endpoint,
@@ -6149,6 +6254,13 @@ impl SketchDocument {
             .iter()
             .filter(|constraint| !constraint.suppressed)
         {
+            if !charge_document_item(
+                &mut controller,
+                OperationWorkCounter::DocumentDependencyItems,
+                OperationCheckpoint::DocumentDependency,
+            ) {
+                return Ok(false);
+            }
             for contact in constraint_contacts(&constraint.definition) {
                 let slot = self.require_contact(contact)?;
                 let Some(view) = self.trim_view(slot.curve) else {
@@ -6190,6 +6302,17 @@ impl SketchDocument {
             }
         }
         for dimension in &self.dimensions {
+            if !charge_document_item(
+                &mut controller,
+                OperationWorkCounter::DocumentValidationItems,
+                OperationCheckpoint::DocumentValidation,
+            ) || !charge_document_item(
+                &mut controller,
+                OperationWorkCounter::DocumentDependencyItems,
+                OperationCheckpoint::DocumentDependency,
+            ) {
+                return Ok(false);
+            }
             insert_unique(&mut ids, dimension.id.0)?;
             insert_unique(&mut ids, dimension.source_id.0)?;
             sources.insert(dimension.source_id);
@@ -6197,7 +6320,17 @@ impl SketchDocument {
             self.validate_dimension_definition(&dimension.definition)?;
             claim_scalar(&mut used_scalars, dimension_target(&dimension.definition))?;
         }
-        let ordered: BTreeSet<_> = self.source_order.iter().copied().collect();
+        let mut ordered = BTreeSet::new();
+        for source in &self.source_order {
+            if !charge_document_item(
+                &mut controller,
+                OperationWorkCounter::DocumentValidationItems,
+                OperationCheckpoint::DocumentValidation,
+            ) {
+                return Ok(false);
+            }
+            ordered.insert(*source);
+        }
         if ordered.len() != self.source_order.len() || ordered != sources {
             return invalid("source_order", "must contain every source exactly once");
         }
@@ -6208,7 +6341,7 @@ impl SketchDocument {
                 "must be greater than every allocated persistent ID",
             );
         }
-        Ok(())
+        Ok(true)
     }
 
     /// Serializes a normalized deterministic JSON representation.
@@ -6229,6 +6362,31 @@ impl SketchDocument {
     ///
     /// Returns a JSON, schema, resource, value, reference, or ordering error.
     pub fn from_json(json: &str) -> Result<Self, DocumentError> {
+        let mut document = Self::parse_json(json)?;
+        document.validate()?;
+        document.canonicalize();
+        Ok(document)
+    }
+
+    pub(crate) fn from_json_with_controller(
+        json: &str,
+        controller: &mut OperationController,
+    ) -> Result<Option<Self>, DocumentError> {
+        if controller
+            .checkpoint(OperationCheckpoint::DocumentValidation)
+            .is_err()
+        {
+            return Ok(None);
+        }
+        let mut document = Self::parse_json(json)?;
+        if !document.validate_with_controller(Some(controller))? {
+            return Ok(None);
+        }
+        document.canonicalize();
+        Ok(Some(document))
+    }
+
+    fn parse_json(json: &str) -> Result<Self, DocumentError> {
         if json.len() > MAX_DOCUMENT_JSON_BYTES {
             return Err(DocumentError::ResourceLimit {
                 resource: "JSON bytes",
@@ -6237,7 +6395,7 @@ impl SketchDocument {
             });
         }
         let header: DocumentHeader = serde_json::from_str(json)?;
-        let mut document = match header.version {
+        let document = match header.version {
             1 => {
                 let wire = serde_json::from_str::<SketchDocumentV1>(json)?;
                 validate_legacy_contact_language(&wire.contacts)?;
@@ -6261,8 +6419,6 @@ impl SketchDocument {
                 });
             }
         };
-        document.validate()?;
-        document.canonicalize();
         Ok(document)
     }
 
@@ -9011,6 +9167,16 @@ fn validate_unit_direction(value: [f64; 2], field: &'static str) -> Result<(), D
     } else {
         invalid(field, "must be normalized")
     }
+}
+
+fn charge_document_item(
+    controller: &mut Option<&mut OperationController>,
+    counter: OperationWorkCounter,
+    checkpoint: OperationCheckpoint,
+) -> bool {
+    controller
+        .as_deref_mut()
+        .is_none_or(|controller| controller.charge(counter, 1, checkpoint).is_ok())
 }
 
 fn normalized_vector(value: [f64; 2]) -> Result<[f64; 2], DocumentError> {

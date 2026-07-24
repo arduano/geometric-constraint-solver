@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use geosolve_core::{OperationCheckpoint, OperationController, OperationWorkCounter};
 use geosolve_geometry::{BSplineSpanIndex, DirectedParameterTrim, Point2, Vector2};
 
 use crate::document::{
@@ -237,20 +238,76 @@ impl LoweredDocument {
     }
 }
 
+fn lowering_item(
+    controller: &mut Option<&mut OperationController>,
+) -> Result<(), geosolve_core::OperationStopReason> {
+    let Some(controller) = controller.as_deref_mut() else {
+        return Ok(());
+    };
+    controller.charge(
+        OperationWorkCounter::DocumentLoweringItems,
+        1,
+        OperationCheckpoint::DocumentLowering,
+    )
+}
+
 impl SketchDocument {
     /// Deterministically lowers persistent semantic IDs to fresh runtime IDs.
     ///
     /// # Errors
     ///
     /// Returns a document-validation or guarded runtime-model error.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the internal unlimited path reports an interruption
+    /// without an operation controller.
     pub fn lower(&self) -> Result<LoweredDocument, DocumentError> {
-        self.validate()?;
+        self.lower_inner(None)
+            .map(|lowered| lowered.expect("uncontrolled lowering cannot be interrupted"))
+    }
+
+    /// Deterministically lowers this document under cooperative operation control.
+    ///
+    /// Lowering uses scratch runtime state and never modifies this document.
+    ///
+    /// # Errors
+    ///
+    /// Returns a document-validation or guarded runtime-model error.
+    pub fn lower_controlled(
+        &self,
+        control: geosolve_core::OperationControl,
+    ) -> Result<geosolve_core::OperationOutcome<LoweredDocument>, DocumentError> {
+        let mut controller = OperationController::new(control);
+        let Some(lowered) = self.lower_inner(Some(&mut controller))? else {
+            return Ok(controller.outcome_unchecked());
+        };
+        Ok(controller.outcome(lowered))
+    }
+
+    pub(crate) fn lower_with_controller(
+        &self,
+        controller: &mut OperationController,
+    ) -> Result<Option<LoweredDocument>, DocumentError> {
+        self.lower_inner(Some(controller))
+    }
+
+    fn lower_inner(
+        &self,
+        mut controller: Option<&mut OperationController>,
+    ) -> Result<Option<LoweredDocument>, DocumentError> {
+        if !self.validate_with_controller(controller.as_deref_mut())? {
+            return Ok(None);
+        }
         let mut sketch = Sketch::new(self.model_scale())?;
         let mut mappings = DocumentRuntimeMap::default();
 
         let mut points: Vec<_> = self.points().iter().collect();
         points.sort_by_key(|point| point.id);
         for point in points {
+            if lowering_item(&mut controller).is_err() {
+                return Ok(None);
+            }
             let runtime = sketch.add_named_point(
                 &point.label,
                 Point2::new(point.position[0], point.position[1]),
@@ -264,6 +321,9 @@ impl SketchDocument {
         let mut curves: Vec<_> = self.curves().iter().collect();
         curves.sort_by_key(|curve| curve.id);
         for curve in curves {
+            if lowering_item(&mut controller).is_err() {
+                return Ok(None);
+            }
             let runtime = lower_curve(self, &mut sketch, &mappings, curve)?;
             mappings.curves.push(CurveRuntimeMapping {
                 persistent: curve.id,
@@ -282,6 +342,9 @@ impl SketchDocument {
             .map(|dimension| (dimension.source_id, dimension))
             .collect();
         for source in self.source_order() {
+            if lowering_item(&mut controller).is_err() {
+                return Ok(None);
+            }
             if let Some(constraint) = constraints.get(source) {
                 let runtime = if constraint.suppressed {
                     None
@@ -314,7 +377,7 @@ impl SketchDocument {
                 });
             }
         }
-        Ok(LoweredDocument { sketch, mappings })
+        Ok(Some(LoweredDocument { sketch, mappings }))
     }
 
     /// Copies independently accepted runtime state back through persistent IDs.
@@ -329,6 +392,21 @@ impl SketchDocument {
         candidate.validate()?;
         *self = candidate;
         Ok(())
+    }
+
+    pub(crate) fn project_accepted_state_with_controller(
+        &mut self,
+        sketch: &Sketch,
+        mappings: &DocumentRuntimeMap,
+        controller: &mut OperationController,
+    ) -> Result<bool, DocumentError> {
+        let mut candidate = self.clone();
+        candidate.project_accepted_state_inner(sketch, mappings)?;
+        if !candidate.validate_with_controller(Some(controller))? {
+            return Ok(false);
+        }
+        *self = candidate;
+        Ok(true)
     }
 
     #[allow(clippy::too_many_lines)]

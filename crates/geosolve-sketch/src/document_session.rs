@@ -1,6 +1,9 @@
 use std::collections::BTreeMap;
 
-use geosolve_core::{HardValidity, SolveTermination, SolverConfig};
+use geosolve_core::{
+    HardValidity, OperationCheckpoint, OperationControl, OperationController, OperationOutcome,
+    SolveTermination, SolverConfig,
+};
 use geosolve_geometry::Point2;
 use thiserror::Error;
 
@@ -850,7 +853,7 @@ pub struct SketchDocumentSession {
 /// Design-tree consumers read [`Self::design_document`]. Solved rendering, accepted
 /// audit, measurements, and profiles must read [`Self::accepted_state`]. Optional
 /// candidate geometry from [`Self::last_attempt`] is preview evidence only.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RetainedSketchDocumentSession {
     design: SketchDocument,
     design_identity: SketchDesignIdentity,
@@ -893,6 +896,70 @@ impl SketchDocumentSession {
             allocator_cursors,
             span_allocator_cursors,
         })
+    }
+
+    /// Builds the first accepted document/session revision under operation control.
+    ///
+    /// Construction and projection use scratch state. An interrupted outcome
+    /// contains no partially constructed session.
+    ///
+    /// # Errors
+    ///
+    /// Returns document/lowering/session errors or an initial solve rejection.
+    pub fn new_controlled(
+        document: SketchDocument,
+        request: DocumentSolveRequest,
+        config: SolverConfig,
+        control: geosolve_core::OperationControl,
+    ) -> Result<geosolve_core::OperationOutcome<Self>, DocumentSessionError> {
+        let mut controller = OperationController::new(control);
+        let Some(lowered) = document.lower_with_controller(&mut controller)? else {
+            return Ok(controller.outcome_unchecked());
+        };
+        let (sketch, mappings) = lowered.into_parts();
+        let runtime_request = lower_request(request, &mappings)?;
+        let Some(runtime) =
+            SketchSession::new_with_controller(sketch, runtime_request, config, &mut controller)?
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        let mut document = document;
+        let projected = document.project_accepted_state_with_controller(
+            runtime.sketch(),
+            &mappings,
+            &mut controller,
+        );
+        if matches!(projected, Ok(false)) {
+            return Ok(controller.outcome_unchecked());
+        }
+        if controller
+            .checkpoint(OperationCheckpoint::AfterFinalValidation)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        projected?;
+        if controller
+            .checkpoint(OperationCheckpoint::BeforeCommit)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        let allocator_cursors = BTreeMap::from([(document.id(), document.allocator_cursor())]);
+        let span_allocator_cursors =
+            BTreeMap::from([(document.id(), document.spline_span_allocator_cursors())]);
+        Ok(controller.outcome(Self {
+            document,
+            runtime,
+            mappings,
+            request,
+            config,
+            revision: 0,
+            history: Vec::new(),
+            history_cursor: 0,
+            allocator_cursors,
+            span_allocator_cursors,
+        }))
     }
 
     #[must_use]
@@ -975,6 +1042,48 @@ impl SketchDocumentSession {
         Ok(result)
     }
 
+    /// Controlled counterpart to [`Self::rebuild_request`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the same setup errors as [`Self::rebuild_request`].
+    pub fn rebuild_request_controlled(
+        &mut self,
+        expected_revision: u64,
+        request: DocumentSolveRequest,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<DocumentSolveResult>, DocumentSessionError> {
+        self.check_revision(expected_revision)?;
+        let mut controller = OperationController::new(control);
+        let Some(attempt) = attempt_document_controlled(
+            &self.document,
+            request,
+            None,
+            self.config,
+            &mut controller,
+        )?
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        let AttemptedDocument {
+            accepted,
+            mut result,
+        } = attempt;
+        let Some((document, runtime, mappings)) = accepted else {
+            self.retain_accepted_view(&mut result);
+            return Ok(controller.outcome(result));
+        };
+        if controller
+            .checkpoint(OperationCheckpoint::BeforeCommit)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        self.request = request;
+        self.commit(document, runtime, mappings);
+        Ok(controller.outcome(result))
+    }
+
     /// Applies one command by clone, solve, independent validation, and atomic swap.
     ///
     /// Numerical rejection is returned in the outcome and leaves accepted state/history unchanged.
@@ -1048,6 +1157,106 @@ impl SketchDocumentSession {
         })
     }
 
+    /// Applies one command under cooperative cancellation and deterministic work limits.
+    ///
+    /// Interrupted work runs only on a complete session clone, so document,
+    /// runtime, revisions, history, geometry, and audit remain unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same stale-revision, edit, lowering, and solver-start errors
+    /// as [`Self::apply`].
+    pub fn apply_controlled(
+        &mut self,
+        command: DocumentCommand,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<DocumentCommandOutcome>, DocumentSessionError> {
+        let mut controller = OperationController::new(control);
+        if controller
+            .checkpoint(OperationCheckpoint::DocumentValidation)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        self.check_revision(command.expected_revision)?;
+        let before = self.document.clone();
+        let mut candidate = before.clone();
+        self.advance_candidate_allocator(&mut candidate);
+        candidate.defer_mutation_validation();
+        let (effect, command_drag) = match command.edit {
+            DocumentEdit::SetPointPosition { point, position } => {
+                let mut target_candidate = candidate.clone();
+                target_candidate.set_point_position(point, position)?;
+                (
+                    DocumentCommandEffect::UpdatedPoint(point),
+                    Some(DocumentDragTarget {
+                        point,
+                        target: position,
+                    }),
+                )
+            }
+            edit => (apply_edit(&mut candidate, edit)?, None),
+        };
+        candidate.resume_mutation_validation();
+        let Some(attempt) = attempt_document_controlled(
+            &candidate,
+            self.request,
+            command_drag,
+            self.config,
+            &mut controller,
+        )?
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        let AttemptedDocument {
+            accepted,
+            mut result,
+        } = attempt;
+        let Some((accepted_document, runtime, mappings)) = accepted else {
+            self.retain_accepted_view(&mut result);
+            return Ok(controller.outcome(DocumentCommandOutcome {
+                revision: self.revision,
+                effect: None,
+                result,
+            }));
+        };
+        if let Some(drag) = command_drag
+            && before
+                .point(drag.point)
+                .map(|point| point.position.map(f64::to_bits))
+                == accepted_document
+                    .point(drag.point)
+                    .map(|point| point.position.map(f64::to_bits))
+        {
+            self.retain_accepted_view(&mut result);
+            return Ok(controller.outcome(DocumentCommandOutcome {
+                revision: self.revision,
+                effect: None,
+                result,
+            }));
+        }
+        if controller
+            .checkpoint(OperationCheckpoint::BeforeCommit)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        self.history.truncate(self.history_cursor);
+        self.history.push(HistoryEntry {
+            before,
+            after: accepted_document.clone(),
+            effect: effect.clone(),
+        });
+        self.history_cursor = self.history.len();
+        self.record_allocator(&accepted_document);
+        self.commit(accepted_document, runtime, mappings);
+        Ok(controller.outcome(DocumentCommandOutcome {
+            revision: self.revision,
+            effect: Some(effect),
+            result,
+        }))
+    }
+
     /// Applies a compound document edit to one clone, solve, and history entry.
     ///
     /// The callback may use the public [`SketchDocument`] construction/editing API. Its
@@ -1114,6 +1323,94 @@ impl SketchDocumentSession {
         })
     }
 
+    /// Controlled counterpart to [`Self::transact`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the same edit and solve setup errors as [`Self::transact`].
+    pub fn transact_controlled<T, F>(
+        &mut self,
+        expected_revision: u64,
+        label: impl Into<String>,
+        edit: F,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<DocumentTransactionOutcome<T>>, DocumentSessionError>
+    where
+        F: FnOnce(&mut SketchDocument) -> Result<T, DocumentError>,
+    {
+        self.check_revision(expected_revision)?;
+        let mut controller = OperationController::new(control);
+        if controller
+            .checkpoint(OperationCheckpoint::DocumentValidation)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        let label = label.into();
+        if label.trim().is_empty() || label.len() > crate::MAX_LABEL_BYTES {
+            return Err(DocumentError::InvalidField {
+                field: "transaction label",
+                message: format!("must contain 1..={} bytes", crate::MAX_LABEL_BYTES),
+            }
+            .into());
+        }
+        let before = self.document.clone();
+        let mut candidate = before.clone();
+        self.advance_candidate_allocator(&mut candidate);
+        candidate.defer_mutation_validation();
+        let value = edit(&mut candidate)?;
+        candidate.resume_mutation_validation();
+        let Some(attempt) = attempt_document_controlled(
+            &candidate,
+            self.request,
+            None,
+            self.config,
+            &mut controller,
+        )?
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        let AttemptedDocument {
+            accepted,
+            mut result,
+        } = attempt;
+        let effect = DocumentCommandEffect::Transaction(label);
+        let Some((accepted_document, runtime, mappings)) = accepted else {
+            self.retain_accepted_view(&mut result);
+            return Ok(controller.outcome(DocumentTransactionOutcome {
+                value: None,
+                outcome: DocumentCommandOutcome {
+                    revision: self.revision,
+                    effect: None,
+                    result,
+                },
+            }));
+        };
+        if controller
+            .checkpoint(OperationCheckpoint::BeforeCommit)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        self.history.truncate(self.history_cursor);
+        self.history.push(HistoryEntry {
+            before,
+            after: accepted_document.clone(),
+            effect: effect.clone(),
+        });
+        self.history_cursor = self.history.len();
+        self.record_allocator(&accepted_document);
+        self.commit(accepted_document, runtime, mappings);
+        Ok(controller.outcome(DocumentTransactionOutcome {
+            value: Some(value),
+            outcome: DocumentCommandOutcome {
+                revision: self.revision,
+                effect: Some(effect),
+                result,
+            },
+        }))
+    }
+
     /// Restores the snapshot before the most recent accepted command.
     ///
     /// # Errors
@@ -1148,6 +1445,52 @@ impl SketchDocumentSession {
         })
     }
 
+    /// Controlled counterpart to [`Self::undo`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the same history and solve setup errors as [`Self::undo`].
+    pub fn undo_controlled(
+        &mut self,
+        expected_revision: u64,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<DocumentCommandOutcome>, DocumentSessionError> {
+        self.check_revision(expected_revision)?;
+        let index = self
+            .history_cursor
+            .checked_sub(1)
+            .ok_or(DocumentSessionError::NothingToUndo)?;
+        let mut candidate = self.history[index].before.clone();
+        self.advance_candidate_allocator(&mut candidate);
+        let request = DocumentSolveRequest {
+            drag: None,
+            ..self.request
+        };
+        let mut controller = OperationController::new(control);
+        let Some(attempt) =
+            attempt_document_controlled(&candidate, request, None, self.config, &mut controller)?
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        let (document, runtime, mappings) = attempt
+            .accepted
+            .ok_or(DocumentSessionError::InvalidHistorySnapshot)?;
+        if controller
+            .checkpoint(OperationCheckpoint::BeforeCommit)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        self.history_cursor = index;
+        self.request = request;
+        self.commit(document, runtime, mappings);
+        Ok(controller.outcome(DocumentCommandOutcome {
+            revision: self.revision,
+            effect: Some(DocumentCommandEffect::Undo),
+            result: attempt.result,
+        }))
+    }
+
     /// Reapplies the next accepted command snapshot.
     ///
     /// # Errors
@@ -1180,6 +1523,52 @@ impl SketchDocumentSession {
             effect: Some(DocumentCommandEffect::Redo),
             result: attempt.result,
         })
+    }
+
+    /// Controlled counterpart to [`Self::redo`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the same history and solve setup errors as [`Self::redo`].
+    pub fn redo_controlled(
+        &mut self,
+        expected_revision: u64,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<DocumentCommandOutcome>, DocumentSessionError> {
+        self.check_revision(expected_revision)?;
+        let entry = self
+            .history
+            .get(self.history_cursor)
+            .ok_or(DocumentSessionError::NothingToRedo)?;
+        let mut candidate = entry.after.clone();
+        self.advance_candidate_allocator(&mut candidate);
+        let request = DocumentSolveRequest {
+            drag: None,
+            ..self.request
+        };
+        let mut controller = OperationController::new(control);
+        let Some(attempt) =
+            attempt_document_controlled(&candidate, request, None, self.config, &mut controller)?
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        let (document, runtime, mappings) = attempt
+            .accepted
+            .ok_or(DocumentSessionError::InvalidHistorySnapshot)?;
+        if controller
+            .checkpoint(OperationCheckpoint::BeforeCommit)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        self.history_cursor += 1;
+        self.request = request;
+        self.commit(document, runtime, mappings);
+        Ok(controller.outcome(DocumentCommandOutcome {
+            revision: self.revision,
+            effect: Some(DocumentCommandEffect::Redo),
+            result: attempt.result,
+        }))
     }
 
     /// Imports a complete candidate atomically and records only an accepted import.
@@ -1228,6 +1617,69 @@ impl SketchDocumentSession {
             effect: Some(DocumentCommandEffect::Imported),
             result,
         })
+    }
+
+    /// Controlled counterpart to [`Self::import_json`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the same import and solve setup errors as [`Self::import_json`].
+    pub fn import_json_controlled(
+        &mut self,
+        expected_revision: u64,
+        json: &str,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<DocumentCommandOutcome>, DocumentSessionError> {
+        self.check_revision(expected_revision)?;
+        let mut controller = OperationController::new(control);
+        let Some(mut candidate) = SketchDocument::from_json_with_controller(json, &mut controller)?
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        self.advance_candidate_allocator(&mut candidate);
+        let before = self.document.clone();
+        let request = DocumentSolveRequest {
+            drag: None,
+            ..self.request
+        };
+        let Some(attempt) =
+            attempt_document_controlled(&candidate, request, None, self.config, &mut controller)?
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        let AttemptedDocument {
+            accepted,
+            mut result,
+        } = attempt;
+        let Some((document, runtime, mappings)) = accepted else {
+            self.retain_accepted_view(&mut result);
+            return Ok(controller.outcome(DocumentCommandOutcome {
+                revision: self.revision,
+                effect: None,
+                result,
+            }));
+        };
+        if controller
+            .checkpoint(OperationCheckpoint::BeforeCommit)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        self.history.truncate(self.history_cursor);
+        self.history.push(HistoryEntry {
+            before,
+            after: document.clone(),
+            effect: DocumentCommandEffect::Imported,
+        });
+        self.history_cursor = self.history.len();
+        self.record_allocator(&document);
+        self.request = request;
+        self.commit(document, runtime, mappings);
+        Ok(controller.outcome(DocumentCommandOutcome {
+            revision: self.revision,
+            effect: Some(DocumentCommandEffect::Imported),
+            result,
+        }))
     }
 
     /// Exports the accepted document in canonical deterministic form.
@@ -1317,6 +1769,72 @@ impl RetainedSketchDocumentSession {
         config: SolverConfig,
     ) -> Result<Self, DocumentSessionError> {
         Self::new_at(document, request, config, 0, 0, None, 0)
+    }
+
+    /// Starts a retained-design lifecycle under operation control.
+    ///
+    /// All identities, attempts, and accepted state are constructed on scratch
+    /// state and are returned only as one completed value.
+    ///
+    /// # Errors
+    ///
+    /// Rejects malformed design data or invalid solver policy.
+    pub fn new_controlled(
+        document: SketchDocument,
+        request: DocumentSolveRequest,
+        config: SolverConfig,
+        control: geosolve_core::OperationControl,
+    ) -> Result<geosolve_core::OperationOutcome<Self>, DocumentSessionError> {
+        let mut controller = OperationController::new(control);
+        if !document.validate_with_controller(Some(&mut controller))? {
+            return Ok(controller.outcome_unchecked());
+        }
+        let config = crate::compiler::acceptance_solver_config(config);
+        config.validate().map_err(crate::SketchError::from)?;
+        let design_identity = SketchDesignIdentity {
+            document: document.id(),
+            revision: SketchDesignRevision(0),
+        };
+        let attempt_identity = SketchAttemptIdentity {
+            document: document.id(),
+            revision: SketchAttemptRevision(0),
+        };
+        let input = SketchAttemptInput {
+            design: design_identity,
+            candidate_request: request,
+            publication_request: request,
+            solver_config: config,
+        };
+        let Some(execution) =
+            run_retained_attempt_controlled(&document, request, None, config, &mut controller)
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        if controller
+            .checkpoint(OperationCheckpoint::BeforeCommit)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        let (last_attempt, accepted) = publish_retained_attempt(
+            &document,
+            &input,
+            attempt_identity,
+            None,
+            Some(0),
+            execution,
+        );
+        let accepted_revision_high_water =
+            accepted.as_ref().map(|accepted| accepted.identity.revision);
+        Ok(controller.outcome(Self {
+            design: document,
+            design_identity,
+            last_attempt,
+            accepted,
+            accepted_revision_high_water,
+            request,
+            config,
+        }))
     }
 
     /// Restores design intent when no prior accepted graph is available.
@@ -1525,6 +2043,147 @@ impl RetainedSketchDocumentSession {
         self.retain_candidate(candidate, effect, command_drag)
     }
 
+    /// Retains and attempts one edit under cooperative operation control.
+    ///
+    /// Cancellation or work exhaustion advances no design, attempt, or accepted
+    /// identity because all work is performed on a lifecycle clone.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same stale-design, edit, validation, and solve setup errors
+    /// as [`Self::apply`].
+    pub fn apply_controlled(
+        &mut self,
+        expected: SketchDesignIdentity,
+        edit: DocumentEdit,
+        control: OperationControl,
+    ) -> Result<
+        OperationOutcome<RetainedDocumentTransactionOutcome<DocumentCommandEffect>>,
+        DocumentSessionError,
+    > {
+        let mut controller = OperationController::new(control);
+        if controller
+            .checkpoint(OperationCheckpoint::DocumentValidation)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        self.check_design_identity(expected)?;
+        let mut candidate = self.design.clone();
+        candidate.defer_mutation_validation();
+        let (effect, command_drag) = match edit {
+            DocumentEdit::SetPointPosition { point, position } => {
+                candidate.set_point_position(point, position)?;
+                (
+                    DocumentCommandEffect::UpdatedPoint(point),
+                    Some(DocumentDragTarget {
+                        point,
+                        target: position,
+                    }),
+                )
+            }
+            edit => (apply_edit(&mut candidate, edit)?, None),
+        };
+        candidate.resume_mutation_validation();
+        let Some(value) =
+            self.retain_candidate_controlled(candidate, effect, command_drag, &mut controller)?
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        Ok(controller.outcome(value))
+    }
+
+    /// Reattempts retained design under cooperative operation control.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same stale-design and revision-exhaustion errors as
+    /// [`Self::reattempt`].
+    pub fn reattempt_controlled(
+        &mut self,
+        expected: SketchDesignIdentity,
+        request: DocumentSolveRequest,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<SketchDocumentAttempt>, DocumentSessionError> {
+        let mut controller = OperationController::new(control);
+        if controller
+            .checkpoint(OperationCheckpoint::DocumentValidation)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        self.check_design_identity(expected)?;
+        let attempt_identity = self.next_attempt_identity()?;
+        let parent = self
+            .accepted
+            .as_ref()
+            .map(SketchAcceptedDocumentState::identity);
+        let input = SketchAttemptInput {
+            design: self.design_identity,
+            candidate_request: request,
+            publication_request: request,
+            solver_config: self.config,
+        };
+        let seed = match seed_from_accepted_parent_controlled(
+            &self.design,
+            self.accepted.as_ref(),
+            &mut controller,
+        ) {
+            Ok(Some(seed)) => seed,
+            Ok(None) => return Ok(controller.outcome_unchecked()),
+            Err(error) => {
+                let execution = RetainedAttemptExecution::failure(
+                    SketchAttemptFailureKind::AcceptedSession,
+                    error.to_string(),
+                );
+                let (attempt, accepted) = publish_retained_attempt(
+                    &self.design,
+                    &input,
+                    attempt_identity,
+                    parent,
+                    next_accepted_revision(self.accepted_revision_high_water),
+                    execution,
+                );
+                if controller
+                    .checkpoint(OperationCheckpoint::BeforeCommit)
+                    .is_err()
+                {
+                    return Ok(controller.outcome_unchecked());
+                }
+                self.request = request;
+                self.last_attempt = attempt.clone();
+                debug_assert!(accepted.is_none());
+                return Ok(controller.outcome(attempt));
+            }
+        };
+        let Some(execution) =
+            run_retained_attempt_controlled(&seed, request, None, self.config, &mut controller)
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        let (attempt, accepted) = publish_retained_attempt(
+            &self.design,
+            &input,
+            attempt_identity,
+            parent,
+            next_accepted_revision(self.accepted_revision_high_water),
+            execution,
+        );
+        if controller
+            .checkpoint(OperationCheckpoint::BeforeCommit)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        self.request = request;
+        self.last_attempt = attempt.clone();
+        if let Some(accepted) = accepted {
+            self.accepted_revision_high_water = Some(accepted.identity.revision);
+            self.accepted = Some(accepted);
+        }
+        Ok(controller.outcome(attempt))
+    }
+
     /// Retains a compound design transaction and attempts its complete resulting graph.
     ///
     /// # Errors
@@ -1544,6 +2203,40 @@ impl RetainedSketchDocumentSession {
         let value = edit(&mut candidate)?;
         candidate.validate()?;
         self.retain_candidate(candidate, value, None)
+    }
+
+    /// Controlled counterpart to [`Self::transact`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the same edit and solve setup errors as [`Self::transact`].
+    pub fn transact_controlled<T, F>(
+        &mut self,
+        expected: SketchDesignIdentity,
+        edit: F,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<RetainedDocumentTransactionOutcome<T>>, DocumentSessionError>
+    where
+        F: FnOnce(&mut SketchDocument) -> Result<T, DocumentError>,
+    {
+        self.check_design_identity(expected)?;
+        let mut controller = OperationController::new(control);
+        if controller
+            .checkpoint(OperationCheckpoint::DocumentValidation)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        let mut candidate = self.design.clone();
+        candidate.defer_mutation_validation();
+        let value = edit(&mut candidate)?;
+        candidate.resume_mutation_validation();
+        let Some(outcome) =
+            self.retain_candidate_controlled(candidate, value, None, &mut controller)?
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        Ok(controller.outcome(outcome))
     }
 
     /// Attempts the current design again without allocating a design revision.
@@ -1609,6 +2302,38 @@ impl RetainedSketchDocumentSession {
         self.check_design_identity(expected)?;
         let candidate = SketchDocument::from_json(json)?;
         self.retain_candidate(candidate, DocumentCommandEffect::Imported, None)
+    }
+
+    /// Controlled counterpart to [`Self::import_design_json`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the same import and solve setup errors as [`Self::import_design_json`].
+    pub fn import_design_json_controlled(
+        &mut self,
+        expected: SketchDesignIdentity,
+        json: &str,
+        control: OperationControl,
+    ) -> Result<
+        OperationOutcome<RetainedDocumentTransactionOutcome<DocumentCommandEffect>>,
+        DocumentSessionError,
+    > {
+        self.check_design_identity(expected)?;
+        let mut controller = OperationController::new(control);
+        let Some(candidate) = SketchDocument::from_json_with_controller(json, &mut controller)?
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        let Some(outcome) = self.retain_candidate_controlled(
+            candidate,
+            DocumentCommandEffect::Imported,
+            None,
+            &mut controller,
+        )?
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        Ok(controller.outcome(outcome))
     }
 
     /// Exports only the retained design graph in frozen canonical v4 syntax.
@@ -1725,6 +2450,96 @@ impl RetainedSketchDocumentSession {
             attempt: attempt_identity,
             published_accepted,
         })
+    }
+
+    fn retain_candidate_controlled<T>(
+        &mut self,
+        candidate: SketchDocument,
+        value: T,
+        command_drag: Option<DocumentDragTarget>,
+        controller: &mut OperationController,
+    ) -> Result<Option<RetainedDocumentTransactionOutcome<T>>, DocumentSessionError> {
+        if candidate.id() != self.design_identity.document {
+            return Err(DocumentSessionError::ForeignDesign {
+                expected: self.design_identity.document,
+                actual: candidate.id(),
+            });
+        }
+        if !candidate.validate_with_controller(Some(controller))? {
+            return Ok(None);
+        }
+        let design_revision = self
+            .design_identity
+            .revision
+            .0
+            .checked_add(1)
+            .ok_or(DocumentSessionError::RevisionExhausted { domain: "design" })?;
+        let attempt_identity = self.next_attempt_identity()?;
+        let design_identity = SketchDesignIdentity {
+            document: self.design_identity.document,
+            revision: SketchDesignRevision(design_revision),
+        };
+        let parent = self
+            .accepted
+            .as_ref()
+            .map(SketchAcceptedDocumentState::identity);
+        let input = SketchAttemptInput {
+            design: design_identity,
+            candidate_request: effective_attempt_request(self.request, command_drag),
+            publication_request: self.request,
+            solver_config: self.config,
+        };
+        let execution = match seed_from_accepted_parent_controlled(
+            &candidate,
+            self.accepted.as_ref(),
+            controller,
+        ) {
+            Ok(Some(seed)) => {
+                let Some(execution) = run_retained_attempt_controlled(
+                    &seed,
+                    self.request,
+                    command_drag,
+                    self.config,
+                    controller,
+                ) else {
+                    return Ok(None);
+                };
+                execution
+            }
+            Ok(None) => return Ok(None),
+            Err(error) => RetainedAttemptExecution::failure(
+                SketchAttemptFailureKind::AcceptedSession,
+                error.to_string(),
+            ),
+        };
+        let (attempt, accepted) = publish_retained_attempt(
+            &candidate,
+            &input,
+            attempt_identity,
+            parent,
+            next_accepted_revision(self.accepted_revision_high_water),
+            execution,
+        );
+        if controller
+            .checkpoint(OperationCheckpoint::BeforeCommit)
+            .is_err()
+        {
+            return Ok(None);
+        }
+        let published_accepted = accepted.as_ref().map(SketchAcceptedDocumentState::identity);
+        self.design = candidate;
+        self.design_identity = design_identity;
+        self.last_attempt = attempt;
+        if let Some(accepted) = accepted {
+            self.accepted_revision_high_water = Some(accepted.identity.revision);
+            self.accepted = Some(accepted);
+        }
+        Ok(Some(RetainedDocumentTransactionOutcome {
+            value,
+            design: design_identity,
+            attempt: attempt_identity,
+            published_accepted,
+        }))
     }
 }
 
@@ -1879,6 +2694,157 @@ fn run_retained_attempt(
     }
 }
 
+#[allow(clippy::too_many_lines)]
+fn run_retained_attempt_controlled(
+    candidate: &SketchDocument,
+    request: DocumentSolveRequest,
+    command_drag: Option<DocumentDragTarget>,
+    config: SolverConfig,
+    controller: &mut OperationController,
+) -> Option<RetainedAttemptExecution> {
+    let lowered = match candidate.lower_with_controller(controller) {
+        Ok(Some(lowered)) => lowered,
+        Ok(None) => return None,
+        Err(error) => {
+            return Some(RetainedAttemptExecution::failure(
+                SketchAttemptFailureKind::Lowering,
+                error.to_string(),
+            ));
+        }
+    };
+    let (mut sketch, mappings) = lowered.into_parts();
+    let validation_sketch = sketch.clone();
+    let runtime_request = match lower_request(request, &mappings) {
+        Ok(request) => request,
+        Err(error) => {
+            return Some(RetainedAttemptExecution {
+                mappings: Some(mappings),
+                ..RetainedAttemptExecution::failure(
+                    SketchAttemptFailureKind::Request,
+                    error.to_string(),
+                )
+            });
+        }
+    };
+    let attempted_request =
+        match lower_request(effective_attempt_request(request, command_drag), &mappings) {
+            Ok(request) => request,
+            Err(error) => {
+                return Some(RetainedAttemptExecution {
+                    mappings: Some(mappings),
+                    ..RetainedAttemptExecution::failure(
+                        SketchAttemptFailureKind::Request,
+                        error.to_string(),
+                    )
+                });
+            }
+        };
+    let solve = match sketch.solve_with_controller(attempted_request, config, controller) {
+        Ok(Some(solve)) => solve,
+        Ok(None) => return None,
+        Err(error) => {
+            return Some(RetainedAttemptExecution {
+                mappings: Some(mappings),
+                ..RetainedAttemptExecution::failure(
+                    SketchAttemptFailureKind::Solve,
+                    error.to_string(),
+                )
+            });
+        }
+    };
+    let attempted_geometry = solve.attempted_geometry.clone();
+    if !solve.accepted() {
+        return Some(RetainedAttemptExecution {
+            solve: Some(solve),
+            attempted_geometry,
+            mappings: Some(mappings),
+            accepted: None,
+            failure: None,
+        });
+    }
+    if controller
+        .checkpoint(OperationCheckpoint::BeforeFinalValidation)
+        .is_err()
+    {
+        return None;
+    }
+    let runtime_solve = match sketch.solve_with_controller(runtime_request, config, controller) {
+        Ok(Some(solve)) => solve,
+        Ok(None) => return None,
+        Err(error) => {
+            return Some(RetainedAttemptExecution {
+                solve: None,
+                attempted_geometry,
+                mappings: Some(mappings),
+                accepted: None,
+                failure: Some(SketchAttemptFailure {
+                    kind: SketchAttemptFailureKind::AcceptedSession,
+                    message: error.to_string(),
+                }),
+            });
+        }
+    };
+    let runtime = match SketchSession::from_accepted_solve_with_controller(
+        sketch,
+        &validation_sketch,
+        runtime_request,
+        config,
+        runtime_solve,
+        controller,
+    ) {
+        Ok(Some(runtime)) => runtime,
+        Ok(None) => return None,
+        Err(error) => {
+            return Some(RetainedAttemptExecution {
+                solve: None,
+                attempted_geometry,
+                mappings: Some(mappings),
+                accepted: None,
+                failure: Some(SketchAttemptFailure {
+                    kind: SketchAttemptFailureKind::AcceptedSession,
+                    message: error.to_string(),
+                }),
+            });
+        }
+    };
+    let mut document = candidate.clone();
+    let projected =
+        document.project_accepted_state_with_controller(runtime.sketch(), &mappings, controller);
+    if matches!(projected, Ok(false)) {
+        return None;
+    }
+    if controller
+        .checkpoint(OperationCheckpoint::AfterFinalValidation)
+        .is_err()
+    {
+        return None;
+    }
+    if let Err(error) = projected {
+        let mut rejected = runtime.accepted_result().clone();
+        rejected.rejection = Some(SolveRejection::IndependentValidationFailed(
+            error.to_string(),
+        ));
+        rejected.acceptance_hard_residual_max = None;
+        rejected.core_report.hard_validity = HardValidity::Invalid;
+        rejected.core_report.termination = SolveTermination::Stalled;
+        return Some(RetainedAttemptExecution {
+            attempted_geometry: rejected.attempted_geometry.clone(),
+            solve: Some(rejected),
+            mappings: Some(mappings),
+            accepted: None,
+            failure: None,
+        });
+    }
+    let solve = runtime.accepted_result().clone();
+    Some(RetainedAttemptExecution {
+        attempted_geometry: solve.attempted_geometry.clone(),
+        solve: Some(solve),
+        mappings: Some(mappings.clone()),
+        accepted: Some((document, runtime, mappings)),
+        failure: None,
+    })
+}
+
 fn publish_retained_attempt(
     solved_design: &SketchDocument,
     input: &SketchAttemptInput,
@@ -2002,6 +2968,105 @@ fn seed_from_accepted_parent(
     Ok(seed)
 }
 
+fn seed_from_accepted_parent_controlled(
+    design: &SketchDocument,
+    parent: Option<&SketchAcceptedDocumentState>,
+    controller: &mut OperationController,
+) -> Result<Option<SketchDocument>, DocumentError> {
+    let Some(parent) = parent else {
+        return Ok(Some(design.clone()));
+    };
+    let mut seed = design.clone();
+    for point in design.points() {
+        if controller
+            .checkpoint(OperationCheckpoint::DocumentValidation)
+            .is_err()
+        {
+            return Ok(None);
+        }
+        let (Some(parent_design), Some(parent_accepted)) = (
+            parent.solved_design.point(point.id),
+            parent.document.point(point.id),
+        ) else {
+            continue;
+        };
+        if pair_bits(point.position) == pair_bits(parent_design.position) {
+            seed.point_mut(point.id)
+                .expect("point came from this document")
+                .position = parent_accepted.position;
+        }
+    }
+    for scalar in design.scalars() {
+        if controller
+            .checkpoint(OperationCheckpoint::DocumentValidation)
+            .is_err()
+        {
+            return Ok(None);
+        }
+        let (Some(parent_design), Some(parent_accepted)) = (
+            parent.solved_design.scalar(scalar.id),
+            parent.document.scalar(scalar.id),
+        ) else {
+            continue;
+        };
+        if scalar.value.to_bits() == parent_design.value.to_bits() {
+            seed.scalar_mut(scalar.id)
+                .expect("scalar came from this document")
+                .value = parent_accepted.value;
+        }
+    }
+    for curve in design.curves() {
+        if controller
+            .checkpoint(OperationCheckpoint::DocumentValidation)
+            .is_err()
+        {
+            return Ok(None);
+        }
+        let CurveDefinition::RationalQuadraticConic {
+            weighted_middle, ..
+        } = curve.definition
+        else {
+            continue;
+        };
+        let (Some(parent_design), Some(parent_accepted)) = (
+            parent.solved_design.curve(curve.id),
+            parent.document.curve(curve.id),
+        ) else {
+            continue;
+        };
+        let (
+            CurveDefinition::RationalQuadraticConic {
+                weighted_middle: parent_design_middle,
+                ..
+            },
+            CurveDefinition::RationalQuadraticConic {
+                weighted_middle: parent_accepted_middle,
+                ..
+            },
+        ) = (&parent_design.definition, &parent_accepted.definition)
+        else {
+            continue;
+        };
+        if pair_bits(weighted_middle) == pair_bits(*parent_design_middle) {
+            let CurveDefinition::RationalQuadraticConic {
+                weighted_middle: seed_middle,
+                ..
+            } = &mut seed
+                .curve_mut(curve.id)
+                .expect("curve came from this document")
+                .definition
+            else {
+                unreachable!("curve family came from this document");
+            };
+            *seed_middle = *parent_accepted_middle;
+        }
+    }
+    if !seed.validate_with_controller(Some(controller))? {
+        return Ok(None);
+    }
+    Ok(Some(seed))
+}
+
 fn pair_bits(value: [f64; 2]) -> [u64; 2] {
     value.map(f64::to_bits)
 }
@@ -2056,6 +3121,90 @@ fn attempt_document(
         accepted: Some((document, runtime, mappings)),
         result,
     })
+}
+
+fn attempt_document_controlled(
+    candidate: &SketchDocument,
+    request: DocumentSolveRequest,
+    command_drag: Option<DocumentDragTarget>,
+    config: SolverConfig,
+    controller: &mut OperationController,
+) -> Result<Option<AttemptedDocument>, DocumentSessionError> {
+    let Some(lowered) = candidate.lower_with_controller(controller)? else {
+        return Ok(None);
+    };
+    let (mut sketch, mappings) = lowered.into_parts();
+    let validation_sketch = sketch.clone();
+    let runtime_request = lower_request(request, &mappings)?;
+    let attempted_request = lower_request(
+        DocumentSolveRequest {
+            drag: command_drag.or(request.drag),
+            stability_target: request.stability_target,
+            previous_state_preferences: command_drag.is_none()
+                && request.previous_state_preferences,
+        },
+        &mappings,
+    )?;
+    let Some(solve) = sketch.solve_with_controller(attempted_request, config, controller)? else {
+        return Ok(None);
+    };
+    if solve.rejection.is_some() {
+        return Ok(Some(AttemptedDocument {
+            accepted: None,
+            result: DocumentSolveResult::new(solve, mappings),
+        }));
+    }
+    if controller
+        .checkpoint(OperationCheckpoint::BeforeFinalValidation)
+        .is_err()
+    {
+        return Ok(None);
+    }
+    let Some(runtime_solve) = sketch.solve_with_controller(runtime_request, config, controller)?
+    else {
+        return Ok(None);
+    };
+    let Some(runtime) = SketchSession::from_accepted_solve_with_controller(
+        sketch,
+        &validation_sketch,
+        runtime_request,
+        config,
+        runtime_solve,
+        controller,
+    )?
+    else {
+        return Ok(None);
+    };
+    let mut document = candidate.clone();
+    let projected =
+        document.project_accepted_state_with_controller(runtime.sketch(), &mappings, controller);
+    if matches!(projected, Ok(false)) {
+        return Ok(None);
+    }
+    if controller
+        .checkpoint(OperationCheckpoint::AfterFinalValidation)
+        .is_err()
+    {
+        return Ok(None);
+    }
+    if let Err(error) = projected {
+        let mut solve = runtime.accepted_result().clone();
+        solve.rejection = Some(SolveRejection::IndependentValidationFailed(
+            error.to_string(),
+        ));
+        solve.acceptance_hard_residual_max = None;
+        solve.core_report.hard_validity = HardValidity::Invalid;
+        solve.core_report.termination = SolveTermination::Stalled;
+        return Ok(Some(AttemptedDocument {
+            accepted: None,
+            result: DocumentSolveResult::new(solve, mappings),
+        }));
+    }
+    let result = DocumentSolveResult::new(runtime.accepted_result().clone(), mappings.clone());
+    Ok(Some(AttemptedDocument {
+        accepted: Some((document, runtime, mappings)),
+        result,
+    }))
 }
 
 fn lower_request(

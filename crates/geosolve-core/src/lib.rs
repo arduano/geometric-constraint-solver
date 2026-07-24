@@ -20,6 +20,7 @@ mod bounds;
 mod continuation;
 mod error;
 mod linearization;
+mod operation;
 mod problem;
 mod residual;
 mod session;
@@ -43,6 +44,11 @@ pub use linearization::{
     AcceptedHardComponentLinearization, AcceptedHardLinearization, AcceptedNullspaceBasis,
     AcceptedNullspaceVector, RawTangentBlock, ReducedHardRow, ReducedTangentBlock,
     SensitivitySolution, SensitivityStatus,
+};
+pub use operation::{
+    CONTROLLED_DENSE_KERNEL_MAX_DIMENSION, CancellationHandle, CancellationToken,
+    OperationCheckpoint, OperationControl, OperationController, OperationLimits, OperationOutcome,
+    OperationReport, OperationStopReason, OperationWork, OperationWorkCounter, cancellation_pair,
 };
 pub use problem::{
     AuditAnnotations, AuditBoundAnnotation, AuditEvaluationStatus, AuditRowDescriptor,

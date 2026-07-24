@@ -23,9 +23,9 @@ M23-M31 subsequently complete spatial kinematics, sketch embedding identities,
 advanced constructions, generic fillets and persistent trim views, interactive
 construction/NURBS UAT and certified all-family visual profiles.
 
-- **Baseline:** implemented behavior through M34, including the completed M33 contract/baselines and retained-design lifecycle, with M1-M7 domain behavior protected as the frozen regression baseline.
-- **Active target:** M35 cancellation and operation control.
-- **Planned target:** M35-M55 production sketch embedding, CAD-like desktop consumer, companion operations/topology and release qualification. Planned statements are not implemented capabilities.
+- **Baseline:** implemented behavior through M35, including the completed M33 contract/baselines, retained-design lifecycle and cooperative operation control, with M1-M7 domain behavior protected as the frozen regression baseline.
+- **Active target:** M36 semantic feature and scalar foundations.
+- **Planned target:** M36-M55 production sketch embedding, CAD-like desktop consumer, companion operations/topology and release qualification. Planned statements are not implemented capabilities.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
@@ -213,6 +213,17 @@ accepted views separately; revision high-water metadata is host-owned until the 
 wire freeze. M43-M47 extend
 attempt identity with immutable parameter/external/activation revisions and require a
 compare-and-swap commit for prepared work.
+
+M35 adds additive `OperationControl`/`OperationController` boundaries shared by core
+and sketch operations. A monotonic library token carries host cancellation; overflow-safe
+deterministic counters authorize lowering, iteration, factorization, rank, diagnostic,
+validation and profile work without consulting wall time. Outcomes distinguish
+cancellation and work exhaustion from numerical or geometric rejection and from
+independently validated convergence. Controlled mutations perform work on scratch
+state and check cancellation immediately before atomic publication. Controlled dense
+factorization and rank kernels are bounded to 256 rows and 256 columns per kernel in
+M35; larger controlled inputs fail closed before kernel entry. M47 alone adds prepared
+jobs, stale-result rejection and compare-and-swap concurrency.
 
 ## 6. Hard validity and secondary optimum status
 

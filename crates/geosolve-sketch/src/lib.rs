@@ -110,6 +110,11 @@ pub use document_session::{
     SketchAttemptRevision, SketchDesignIdentity, SketchDesignRevision, SketchDocumentAttempt,
     SketchDocumentSession, SketchLifecycleRevisionHighWater,
 };
+pub use geosolve_core::{
+    CancellationHandle, CancellationToken, OperationCheckpoint, OperationControl, OperationLimits,
+    OperationOutcome, OperationReport, OperationStopReason, OperationWork, OperationWorkCounter,
+    cancellation_pair,
+};
 pub use geosolve_geometry::{
     BSplineBasis, BSplineContinuity, BSplineDefinitionError, BSplineEvaluationError, BSplineForm,
     BSplineInsertionError, BSplineKnotSide, BSplineSpanIndex, ConicDefinitionError,

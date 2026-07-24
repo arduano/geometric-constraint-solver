@@ -626,6 +626,17 @@ gates. M34 acceptance is complete.
 - Cancellation at every documented checkpoint commits nothing and retains accepted state bitwise.
 - Native and single-threaded WASM consumers observe the same operation outcome semantics.
 
+Completion record (2026-07-24): public core and sketch operation-control APIs carry a
+monotonic cancellation token, deterministic overflow-safe limits, typed stop reasons
+and exact reports through lowering, compilation, nonlinear/hierarchy work,
+factorization, rank, diagnostics, validation, profiles and session publication.
+Controlled mutations use scratch state and a final pre-commit checkpoint, so all
+cancelled/exhausted paths retain accepted bytes and revisions. Controlled dense
+kernels reject either dimension above the documented M35 256 limit before execution;
+20-run release probes bound the measured profile, QR and rank-SVD checkpoint windows
+in `docs/M35_CANCELLATION_LATENCY.md`. Nineteen focused regressions plus the complete
+locked native, WASM, rustdoc, Trunk and release gates pass. M35 acceptance is complete.
+
 ## M36 acceptance: semantic features and scalars
 
 - Typed point, direction, support, curve and scalar references validate and persist through stable domain IDs.

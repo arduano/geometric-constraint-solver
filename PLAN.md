@@ -1311,24 +1311,44 @@ transactions.
 
 ## M35: cancellation and operation control
 
-Status: active.
+Status: complete as of 2026-07-24.
 
 Goal: make every potentially expensive sketch operation safely interruptible by an
 interactive host.
 
-- [ ] Add cooperative cancellation and deterministic work controls to lowering, nonlinear solving, rank, diagnostic trials and profile analysis.
-- [ ] Distinguish cancellation, work exhaustion, numerical rejection, invalid geometry and convergence.
-- [ ] Add documented cancellation checkpoints and measured maximum latency around non-interruptible kernels.
-- [ ] Let hosts implement deadlines through the same cancellation mechanism without making wall time part of correctness.
-- [ ] Prove cancellation retains accepted state and cannot commit a partially validated result.
-- [ ] Keep native and single-threaded WASM behavior equivalent.
+- [x] Add cooperative cancellation and deterministic work controls to lowering, nonlinear solving, rank, diagnostic trials and profile analysis.
+- [x] Distinguish cancellation, work exhaustion, numerical rejection, invalid geometry and convergence.
+- [x] Add documented cancellation checkpoints and measured maximum latency around non-interruptible kernels.
+- [x] Let hosts implement deadlines through the same cancellation mechanism without making wall time part of correctness.
+- [x] Prove cancellation retains accepted state and cannot commit a partially validated result.
+- [x] Keep native and single-threaded WASM behavior equivalent.
+
+Completion record (2026-07-24): additive core operation-control APIs provide a
+monotonic host cancellation handle/token, deterministic overflow-safe work limits,
+typed operation outcomes and exact checkpoint/work reports. Controlled sketch
+lowering, compilation, solving, rank/diagnostic work, profiles and accepted/retained
+session mutations operate on scratch state and check `BeforeCommit` immediately before
+clone-and-swap publication. Cancellation and work exhaustion therefore remain distinct
+from invalid geometry, numerical rejection and independently validated convergence;
+neither can publish partial state or advance accepted revisions.
+
+Controlled dense factorization and rank kernels authorize exact counters and enforce a
+256-row/256-column M35 input bound before entering their non-interruptible regions.
+`docs/M35_CANCELLATION_LATENCY.md` records 20-run release maxima of `12.623086 ms`
+for profile cancellation, `2.687691 ms` for the bounded QR window and `7.323588 ms`
+for the bounded rank-SVD window. Nineteen focused M35 regressions cover cancellation,
+work exhaustion, checkpoint placement, rollback, constructor/compile/session parity,
+dense-cap boundaries and operation reports. Frozen sketch v1-v4 remains unchanged;
+M47 prepared jobs and compare-and-swap concurrency remain deferred. Formatting,
+warnings-denied locked workspace Clippy/rustdoc, full locked workspace tests, locked
+WASM, release Trunk and the complete release gate pass.
 
 Gate: cancelled work never reports convergence or valid publication, commits nothing
 and leaves the prior accepted state bitwise unchanged.
 
 ## M36: semantic feature and scalar foundations
 
-Status: planned.
+Status: active.
 
 Goal: create closed typed operands for a complete CAD catalog without exposing an
 arbitrary curve or residual plugin interface.

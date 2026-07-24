@@ -3,8 +3,10 @@
 mod interval;
 mod pieces;
 
+use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
+use std::rc::Rc;
 
 use interval::{
     Interval, TAU_INTERVAL, atan2_box, atan2_point, cross_interval, next_down, next_up,
@@ -15,6 +17,10 @@ use crate::{
     ContactDomain, ContactId, CurveDefinition, CurveId, CurveSpan, DesignPointId,
     DocumentBSplineForm, DocumentConstraintDefinition, DocumentFilletEndpointOrder,
     DocumentTrimBoundary, DocumentVisibleCurveInterval, FeatureEndpoint, SketchDocument,
+};
+use geosolve_core::{
+    OperationCheckpoint, OperationControl, OperationController, OperationOutcome,
+    OperationWorkCounter,
 };
 
 /// Maximum half-width accepted for displayed area, relative to model-scale squared.
@@ -350,6 +356,7 @@ struct ExplicitFilletJoin {
 #[derive(Clone, Debug)]
 struct Work {
     options: VisualProfileOptions,
+    operation: Option<Rc<RefCell<OperationController>>>,
     candidate_pairs: usize,
     intersection_subdivisions: usize,
     intersection_roots: usize,
@@ -363,6 +370,7 @@ impl Work {
     fn new(options: VisualProfileOptions) -> Self {
         Self {
             options,
+            operation: None,
             candidate_pairs: 0,
             intersection_subdivisions: 0,
             intersection_roots: 0,
@@ -371,6 +379,35 @@ impl Work {
             containment_tests: 0,
             faces: 0,
         }
+    }
+
+    fn controlled(
+        options: VisualProfileOptions,
+        operation: Rc<RefCell<OperationController>>,
+    ) -> Self {
+        let mut work = Self::new(options);
+        work.operation = Some(operation);
+        work
+    }
+
+    fn charge_operation(
+        &self,
+        counter: OperationWorkCounter,
+        amount: usize,
+        checkpoint: OperationCheckpoint,
+    ) -> bool {
+        self.operation.as_ref().is_none_or(|operation| {
+            operation
+                .borrow_mut()
+                .charge(counter, amount, checkpoint)
+                .is_ok()
+        })
+    }
+
+    fn checkpoint(&self, checkpoint: OperationCheckpoint) -> bool {
+        self.operation
+            .as_ref()
+            .is_none_or(|operation| operation.borrow_mut().checkpoint(checkpoint).is_ok())
     }
 
     fn report(&self) -> VisualProfileBudgetReport {
@@ -396,6 +433,16 @@ impl Work {
     }
 
     fn charge_root(&mut self) -> Result<(), VisualProfileIssueKind> {
+        if !self.charge_operation(
+            OperationWorkCounter::ProfileRoots,
+            1,
+            OperationCheckpoint::ProfileSubdivision,
+        ) {
+            return Err(VisualProfileIssueKind::IntersectionRootBudgetExceeded {
+                required: self.intersection_roots.saturating_add(1),
+                limit: self.options.max_intersection_roots,
+            });
+        }
         let required = self.intersection_roots.checked_add(1).ok_or(
             VisualProfileIssueKind::IntersectionRootBudgetExceeded {
                 required: usize::MAX,
@@ -410,6 +457,17 @@ impl Work {
         }
         self.intersection_roots = required;
         Ok(())
+    }
+}
+
+enum ProfileSetupError<T> {
+    Interrupted,
+    Analysis(T),
+}
+
+impl<T> From<T> for ProfileSetupError<T> {
+    fn from(value: T) -> Self {
+        Self::Analysis(value)
     }
 }
 
@@ -463,6 +521,28 @@ impl SketchDocument {
     pub fn analyze_visual_profiles(&self, options: VisualProfileOptions) -> VisualProfileAnalysis {
         analyze_visual_profiles(self, options)
     }
+
+    /// Runs visual profile analysis under cooperative operation control.
+    ///
+    /// Cancellation and operation-limit exhaustion are outer outcomes and can
+    /// therefore never be confused with `Complete`, `Truncated`, or `Skipped`.
+    pub fn analyze_visual_profiles_controlled(
+        &self,
+        options: VisualProfileOptions,
+        control: OperationControl,
+    ) -> OperationOutcome<VisualProfileAnalysis> {
+        let operation = Rc::new(RefCell::new(OperationController::new(control)));
+        if operation
+            .borrow_mut()
+            .checkpoint(OperationCheckpoint::ProfileCandidate)
+            .is_err()
+        {
+            return operation.borrow().outcome_unchecked();
+        }
+        let analysis =
+            analyze_visual_profiles_with_work(self, Work::controlled(options, operation.clone()));
+        operation.borrow().outcome(analysis)
+    }
 }
 
 #[allow(clippy::too_many_lines)]
@@ -470,22 +550,32 @@ fn analyze_visual_profiles(
     document: &SketchDocument,
     options: VisualProfileOptions,
 ) -> VisualProfileAnalysis {
-    let mut work = Work::new(options);
-    let welded = match welded_points(document) {
+    analyze_visual_profiles_with_work(document, Work::new(options))
+}
+
+#[allow(clippy::too_many_lines)]
+fn analyze_visual_profiles_with_work(
+    document: &SketchDocument,
+    mut work: Work,
+) -> VisualProfileAnalysis {
+    let options = work.options;
+    let welded = match welded_points(document, &work) {
         Ok(value) => value,
-        Err((first, second)) => {
+        Err(ProfileSetupError::Analysis((first, second))) => {
             return skipped_analysis(
                 &work,
                 VisualProfileIssueKind::InconsistentCoincidence { first, second },
                 Vec::new(),
             );
         }
+        Err(ProfileSetupError::Interrupted) => return interrupted_profile_analysis(&work),
     };
-    let mut sources = match source_pieces(document, &welded) {
+    let mut sources = match source_pieces(document, &welded, &work) {
         Ok(value) => value,
-        Err((support, kind)) => {
+        Err(ProfileSetupError::Analysis((support, kind))) => {
             return skipped_analysis(&work, kind, vec![support]);
         }
+        Err(ProfileSetupError::Interrupted) => return interrupted_profile_analysis(&work),
     };
     let families = sources
         .iter()
@@ -494,12 +584,18 @@ fn analyze_visual_profiles(
         .into_iter()
         .collect::<Vec<_>>();
 
-    let explicit_fillet_joins = match apply_explicit_joins(document, &welded, &mut sources) {
+    let explicit_fillet_joins = match apply_explicit_joins(document, &welded, &mut sources, &work) {
         Ok(value) => value,
-        Err((kind, affected)) => return skipped_analysis(&work, kind, affected),
+        Err(ProfileSetupError::Analysis((kind, affected))) => {
+            return skipped_analysis(&work, kind, affected);
+        }
+        Err(ProfileSetupError::Interrupted) => return interrupted_profile_analysis(&work),
     };
 
     for source in &sources {
+        if !work.checkpoint(OperationCheckpoint::ProfileSubdivision) {
+            return interrupted_profile_analysis(&work);
+        }
         if let Err(kind) = certify_piece_domain(source, &mut work) {
             return skipped_analysis(&work, kind, vec![source.span]);
         }
@@ -546,6 +642,21 @@ fn analyze_visual_profiles(
     let mut pair_issues = Vec::new();
     for first in 0..sources.len() {
         for second in first + 1..sources.len() {
+            if !work.charge_operation(
+                OperationWorkCounter::ProfileCandidatePairs,
+                1,
+                OperationCheckpoint::ProfileCandidate,
+            ) {
+                return skipped_analysis_with_families(
+                    &work,
+                    VisualProfileIssueKind::CandidateBudgetExceeded {
+                        required: work.candidate_pairs.saturating_add(1),
+                        limit: options.max_candidate_pairs,
+                    },
+                    sources.iter().map(|source| source.span).collect(),
+                    families,
+                );
+            }
             work.candidate_pairs += 1;
             if same_periodic_partition(&sources[first], &sources[second]) {
                 continue;
@@ -582,6 +693,21 @@ fn analyze_visual_profiles(
     for (source, piece) in sources.iter().enumerate() {
         if !piece.curve.may_self_intersect() {
             continue;
+        }
+        if !work.charge_operation(
+            OperationWorkCounter::ProfileCandidatePairs,
+            1,
+            OperationCheckpoint::ProfileCandidate,
+        ) {
+            return skipped_analysis_with_families(
+                &work,
+                VisualProfileIssueKind::CandidateBudgetExceeded {
+                    required: work.candidate_pairs.saturating_add(1),
+                    limit: options.max_candidate_pairs,
+                },
+                sources.iter().map(|source| source.span).collect(),
+                families,
+            );
         }
         work.candidate_pairs += 1;
         match isolate_self(piece, source, &mut work) {
@@ -783,6 +909,21 @@ fn analyze_visual_profiles(
         );
     };
     if required_fragments > options.max_fragments {
+        return skipped_analysis_with_families(
+            &work,
+            VisualProfileIssueKind::FragmentBudgetExceeded {
+                required: required_fragments,
+                limit: options.max_fragments,
+            },
+            sources.iter().map(|source| source.span).collect(),
+            families,
+        );
+    }
+    if !work.charge_operation(
+        OperationWorkCounter::ProfileFragments,
+        required_fragments,
+        OperationCheckpoint::ProfileSubdivision,
+    ) {
         return skipped_analysis_with_families(
             &work,
             VisualProfileIssueKind::FragmentBudgetExceeded {
@@ -1036,7 +1177,8 @@ struct WeldedPoints {
 
 fn welded_points(
     document: &SketchDocument,
-) -> Result<WeldedPoints, (DesignPointId, DesignPointId)> {
+    work: &Work,
+) -> Result<WeldedPoints, ProfileSetupError<(DesignPointId, DesignPointId)>> {
     let mut points = document
         .points()
         .iter()
@@ -1054,6 +1196,9 @@ fn welded_points(
         .iter()
         .filter(|constraint| !constraint.suppressed)
     {
+        if !work.checkpoint(OperationCheckpoint::ProfileCandidate) {
+            return Err(ProfileSetupError::Interrupted);
+        }
         if let DocumentConstraintDefinition::Coincident { first, second } = constraint.definition
             && let (Some(first), Some(second)) = (indices.get(&first), indices.get(&second))
         {
@@ -1071,6 +1216,9 @@ fn welded_points(
     let mut positions = BTreeMap::<DesignPointId, [f64; 2]>::new();
     let tolerance = document.model_scale() * 1.0e-9;
     for (index, point) in points.iter().copied().enumerate() {
+        if !work.checkpoint(OperationCheckpoint::ProfileCandidate) {
+            return Err(ProfileSetupError::Interrupted);
+        }
         let root = points[sets.root(index)];
         roots.insert(point, root);
         if !profile_roots.contains(&root) {
@@ -1089,7 +1237,7 @@ fn welded_points(
         if (position[0] - root_position[0]).abs() > tolerance
             || (position[1] - root_position[1]).abs() > tolerance
         {
-            return Err((root, point));
+            return Err((root, point).into());
         }
     }
     Ok(WeldedPoints { roots })
@@ -1126,9 +1274,13 @@ fn profile_point_ids(document: &SketchDocument) -> BTreeSet<DesignPointId> {
 fn source_pieces(
     document: &SketchDocument,
     welded: &WeldedPoints,
-) -> Result<Vec<SourcePiece>, (CurveSpan, VisualProfileIssueKind)> {
+    work: &Work,
+) -> Result<Vec<SourcePiece>, ProfileSetupError<(CurveSpan, VisualProfileIssueKind)>> {
     let mut sources = Vec::new();
     for curve in document.curves() {
+        if !work.checkpoint(OperationCheckpoint::ProfileCandidate) {
+            return Err(ProfileSetupError::Interrupted);
+        }
         let spans = document.curve_spans(curve.id).map_err(|_| {
             let support = CurveSpan::line(curve.id);
             (
@@ -1137,6 +1289,9 @@ fn source_pieces(
             )
         })?;
         for (span_ordinal, span) in spans.iter().copied().enumerate() {
+            if !work.checkpoint(OperationCheckpoint::ProfileCandidate) {
+                return Err(ProfileSetupError::Interrupted);
+            }
             let interval = document.visible_interval(span).map_err(|_| {
                 (
                     span,
@@ -1216,12 +1371,7 @@ fn source_pieces(
             )?);
         }
     }
-    sources.sort_by(|first, second| {
-        first
-            .span
-            .cmp(&second.span)
-            .then_with(|| first.piece_ordinal.cmp(&second.piece_ordinal))
-    });
+    sources.sort_by_key(|source| (source.span, source.piece_ordinal));
     Ok(sources)
 }
 
@@ -1376,8 +1526,10 @@ fn apply_explicit_joins(
     document: &SketchDocument,
     welded: &WeldedPoints,
     sources: &mut Vec<SourcePiece>,
-) -> Result<BTreeSet<ExplicitFilletJoin>, (VisualProfileIssueKind, Vec<CurveSpan>)> {
-    apply_explicit_contact_splits(document, welded, sources)?;
+    work: &Work,
+) -> Result<BTreeSet<ExplicitFilletJoin>, ProfileSetupError<(VisualProfileIssueKind, Vec<CurveSpan>)>>
+{
+    apply_explicit_contact_splits(document, welded, sources, work)?;
     let join_tolerance = document.model_scale() * 1.0e-9;
     let keys = sources
         .iter()
@@ -1399,6 +1551,9 @@ fn apply_explicit_joins(
     };
 
     for constraint in document.constraints() {
+        if !work.checkpoint(OperationCheckpoint::ProfileCandidate) {
+            return Err(ProfileSetupError::Interrupted);
+        }
         if constraint.suppressed
             && !matches!(
                 constraint.definition,
@@ -1492,7 +1647,8 @@ fn apply_explicit_joins(
                                 second: CurveSpan::line(arc),
                             },
                             vec![support, CurveSpan::line(arc)],
-                        ));
+                        )
+                            .into());
                     };
                     let arc_span = CurveSpan::line(arc);
                     let Some(arc_endpoint) = source_endpoint(sources, arc_span, arc_parameter)
@@ -1506,7 +1662,8 @@ fn apply_explicit_joins(
                                 document.contact(contact).expect("validated contact").curve,
                                 arc_span,
                             ],
-                        ));
+                        )
+                            .into());
                     };
                     validate_join_positions(
                         sources,
@@ -1534,6 +1691,9 @@ fn apply_explicit_joins(
         .map(|(index, _)| keys[sets.root(index)])
         .collect::<Vec<_>>();
     for source in sources {
+        if !work.checkpoint(OperationCheckpoint::ProfileCandidate) {
+            return Err(ProfileSetupError::Interrupted);
+        }
         source.start = canonical[key_index[&source.start]];
         source.end = canonical[key_index[&source.end]];
     }
@@ -1560,7 +1720,8 @@ fn apply_explicit_contact_splits(
     document: &SketchDocument,
     welded: &WeldedPoints,
     sources: &mut Vec<SourcePiece>,
-) -> Result<(), (VisualProfileIssueKind, Vec<CurveSpan>)> {
+    work: &Work,
+) -> Result<(), ProfileSetupError<(VisualProfileIssueKind, Vec<CurveSpan>)>> {
     let contacts = document
         .constraints()
         .iter()
@@ -1572,6 +1733,9 @@ fn apply_explicit_contact_splits(
         .collect::<Vec<_>>();
     let tolerance = document.model_scale() * 1.0e-9;
     for (point, contact_id) in contacts {
+        if !work.checkpoint(OperationCheckpoint::ProfileCandidate) {
+            return Err(ProfileSetupError::Interrupted);
+        }
         let point_vertex = VertexKey::Persistent(welded.roots[&point]);
         let Some(point_source) = sources
             .iter()
@@ -1618,7 +1782,8 @@ fn apply_explicit_contact_splits(
                     second: contact.curve,
                 },
                 vec![point_source, contact.curve],
-            ));
+            )
+                .into());
         }
 
         let mut right = sources[source_index].clone();
@@ -1814,6 +1979,19 @@ fn subdivide_preflight(
         || middle.to_bits() == parameter.upper.to_bits()
     {
         return Ok(false);
+    }
+    if !work.charge_operation(
+        OperationWorkCounter::ProfileSubdivisions,
+        1,
+        OperationCheckpoint::ProfileSubdivision,
+    ) {
+        return Err(
+            VisualProfileIssueKind::IntersectionSubdivisionBudgetExceeded {
+                first: source.span,
+                second: source.span,
+                limit: work.options.max_intersection_subdivisions,
+            },
+        );
     }
     work.intersection_subdivisions += 1;
     stack.push((Interval::hull(middle, parameter.upper), depth + 1));
@@ -2510,6 +2688,19 @@ fn line_curve_intersections(
                 second: curve.span,
             });
         }
+        if !work.charge_operation(
+            OperationWorkCounter::ProfileSubdivisions,
+            1,
+            OperationCheckpoint::ProfileSubdivision,
+        ) {
+            return Err(
+                VisualProfileIssueKind::IntersectionSubdivisionBudgetExceeded {
+                    first: line.span,
+                    second: curve.span,
+                    limit: work.options.max_intersection_subdivisions,
+                },
+            );
+        }
         work.intersection_subdivisions += 1;
         stack.push((Interval::hull(middle, parameter.upper), depth + 1));
         stack.push((Interval::hull(parameter.lower, middle), depth + 1));
@@ -2822,6 +3013,19 @@ fn isolate_self(
                 second: source.span,
             });
         }
+        if !work.charge_operation(
+            OperationWorkCounter::ProfileSubdivisions,
+            1,
+            OperationCheckpoint::ProfileSubdivision,
+        ) {
+            return Err(
+                VisualProfileIssueKind::IntersectionSubdivisionBudgetExceeded {
+                    first: source.span,
+                    second: source.span,
+                    limit: work.options.max_intersection_subdivisions,
+                },
+            );
+        }
         work.intersection_subdivisions += 1;
         let left = Interval::hull(parameter.lower, middle);
         let right = Interval::hull(middle, parameter.upper);
@@ -3015,6 +3219,19 @@ fn isolate_rectangles(
             });
         }
         if work.intersection_subdivisions >= work.options.max_intersection_subdivisions {
+            return Err(
+                VisualProfileIssueKind::IntersectionSubdivisionBudgetExceeded {
+                    first: first.span,
+                    second: second.span,
+                    limit: work.options.max_intersection_subdivisions,
+                },
+            );
+        }
+        if !work.charge_operation(
+            OperationWorkCounter::ProfileSubdivisions,
+            1,
+            OperationCheckpoint::ProfileSubdivision,
+        ) {
             return Err(
                 VisualProfileIssueKind::IntersectionSubdivisionBudgetExceeded {
                     first: first.span,
@@ -3980,6 +4197,19 @@ fn certify_tangent_collar(
                 },
             );
         }
+        if !work.charge_operation(
+            OperationWorkCounter::ProfileSubdivisions,
+            1,
+            OperationCheckpoint::ProfileSubdivision,
+        ) {
+            return Err(
+                VisualProfileIssueKind::IntersectionSubdivisionBudgetExceeded {
+                    first: source.span,
+                    second: other_span,
+                    limit: work.options.max_intersection_subdivisions,
+                },
+            );
+        }
         work.intersection_subdivisions += 1;
         let interior = endpoint + direction * width;
         if !interior.is_finite() || interior.to_bits() == endpoint.to_bits() {
@@ -4471,6 +4701,16 @@ fn integrate_fragment(
                     support: source.span,
                 });
             }
+            if !work.charge_operation(
+                OperationWorkCounter::ProfileIntegrations,
+                1,
+                OperationCheckpoint::ProfileIntegration,
+            ) {
+                return Err(VisualProfileIssueKind::IntegrationBudgetExceeded {
+                    support: source.span,
+                    limit: work.options.max_integration_subdivisions,
+                });
+            }
             work.integration_subdivisions += 1;
             stack.push((Interval::hull(middle, interval.upper), depth + 1));
             stack.push((Interval::hull(interval.lower, middle), depth + 1));
@@ -4714,6 +4954,18 @@ fn build_faces(
     }
     let mut faces = Vec::new();
     for (index, cycle) in cycles.iter().enumerate().take(face_limit) {
+        if !work.charge_operation(
+            OperationWorkCounter::ProfileFaces,
+            1,
+            OperationCheckpoint::ProfileFace,
+        ) {
+            return Err(FaceBuildError::Global(
+                VisualProfileIssueKind::FaceBudgetExceeded {
+                    required: work.faces.saturating_add(1),
+                    limit: work.options.max_faces,
+                },
+            ));
+        }
         let visual_area = children[index]
             .iter()
             .fold(cycle.area, |area, child| area.sub(cycles[*child].area));
@@ -4944,6 +5196,29 @@ fn isolate_ray_roots(
                 support: source.span,
             });
         }
+        if work.intersection_subdivisions >= work.options.max_intersection_subdivisions {
+            return Err(
+                VisualProfileIssueKind::IntersectionSubdivisionBudgetExceeded {
+                    first: source.span,
+                    second: source.span,
+                    limit: work.options.max_intersection_subdivisions,
+                },
+            );
+        }
+        if !work.charge_operation(
+            OperationWorkCounter::ProfileSubdivisions,
+            1,
+            OperationCheckpoint::ProfileSubdivision,
+        ) {
+            return Err(
+                VisualProfileIssueKind::IntersectionSubdivisionBudgetExceeded {
+                    first: source.span,
+                    second: source.span,
+                    limit: work.options.max_intersection_subdivisions,
+                },
+            );
+        }
+        work.intersection_subdivisions += 1;
         stack.push((Interval::hull(middle, interval.upper), depth + 1));
         stack.push((Interval::hull(interval.lower, middle), depth + 1));
     }
@@ -4962,6 +5237,16 @@ fn charge_containment(work: &mut Work) -> Result<(), VisualProfileIssueKind> {
     if work.containment_tests >= work.options.max_containment_tests {
         return Err(VisualProfileIssueKind::ContainmentBudgetExceeded {
             required: work.options.max_containment_tests.saturating_add(1),
+            limit: work.options.max_containment_tests,
+        });
+    }
+    if !work.charge_operation(
+        OperationWorkCounter::ProfileContainmentTests,
+        1,
+        OperationCheckpoint::ProfileContainment,
+    ) {
+        return Err(VisualProfileIssueKind::ContainmentBudgetExceeded {
+            required: work.containment_tests.saturating_add(1),
             limit: work.options.max_containment_tests,
         });
     }
@@ -5047,6 +5332,20 @@ fn skipped_analysis(
     affected_spans: Vec<CurveSpan>,
 ) -> VisualProfileAnalysis {
     skipped_analysis_with_families(work, kind, affected_spans, Vec::new())
+}
+
+fn interrupted_profile_analysis(work: &Work) -> VisualProfileAnalysis {
+    VisualProfileAnalysis {
+        scope: VisualProfileGeometryScope::AllBuiltInPlanarCurves,
+        status: VisualProfileStatus::Skipped,
+        families: Vec::new(),
+        faces: Vec::new(),
+        intersections: Vec::new(),
+        issues: Vec::new(),
+        budgets: work.report(),
+        candidate_pairs: work.candidate_pairs,
+        fragment_count: work.fragments,
+    }
 }
 
 fn skipped_analysis_with_families(

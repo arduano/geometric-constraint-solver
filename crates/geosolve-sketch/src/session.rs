@@ -1,6 +1,7 @@
 use geosolve_core::{
-    AcceptedAuditPatch, HardValidity, SessionCoreRejection, SessionDomainRejection, SessionError,
-    SessionPatch, SessionTransactionRejection, SolveSession, SolveTermination, SolverConfig,
+    AcceptedAuditPatch, HardValidity, OperationCheckpoint, OperationControl, OperationController,
+    OperationOutcome, SessionCoreRejection, SessionDomainRejection, SessionError, SessionPatch,
+    SessionTransactionRejection, SolveSession, SolveTermination, SolverConfig,
 };
 use geosolve_geometry::{Point2, Vector2};
 use thiserror::Error;
@@ -193,6 +194,139 @@ impl SketchSession {
         })
     }
 
+    /// Builds the first accepted sketch/session revision under operation control.
+    ///
+    /// Construction uses only scratch state. An interrupted outcome contains no
+    /// partially constructed session.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed compile/core failure or the initial domain rejection.
+    pub fn new_controlled(
+        sketch: Sketch,
+        request: SketchSolveRequest,
+        config: SolverConfig,
+        control: geosolve_core::OperationControl,
+    ) -> Result<geosolve_core::OperationOutcome<Self>, SketchSessionError> {
+        let mut controller = geosolve_core::OperationController::new(control);
+        let Some(session) = Self::new_with_controller(sketch, request, config, &mut controller)?
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        Ok(controller.outcome(session))
+    }
+
+    pub(crate) fn new_with_controller(
+        mut sketch: Sketch,
+        request: SketchSolveRequest,
+        config: SolverConfig,
+        controller: &mut geosolve_core::OperationController,
+    ) -> Result<Option<Self>, SketchSessionError> {
+        let validation_sketch = sketch.clone();
+        let Some(solve) = sketch.solve_with_controller(request, config, controller)? else {
+            return Ok(None);
+        };
+        let Some(session) = Self::from_accepted_solve_inner(
+            sketch,
+            &validation_sketch,
+            request,
+            config,
+            solve,
+            Some(controller),
+        )?
+        else {
+            return Ok(None);
+        };
+        if controller
+            .checkpoint(geosolve_core::OperationCheckpoint::BeforeCommit)
+            .is_err()
+        {
+            return Ok(None);
+        }
+        Ok(Some(session))
+    }
+
+    pub(crate) fn from_accepted_solve_with_controller(
+        sketch: Sketch,
+        validation_sketch: &Sketch,
+        request: SketchSolveRequest,
+        config: SolverConfig,
+        solve: SketchSolveResult,
+        controller: &mut geosolve_core::OperationController,
+    ) -> Result<Option<Self>, SketchSessionError> {
+        Self::from_accepted_solve_inner(
+            sketch,
+            validation_sketch,
+            request,
+            config,
+            solve,
+            Some(controller),
+        )
+    }
+
+    fn from_accepted_solve_inner(
+        sketch: Sketch,
+        validation_sketch: &Sketch,
+        request: SketchSolveRequest,
+        config: SolverConfig,
+        solve: SketchSolveResult,
+        controller: Option<&mut geosolve_core::OperationController>,
+    ) -> Result<Option<Self>, SketchSessionError> {
+        if let Some(rejection) = solve.rejection {
+            return Err(SketchSessionError::InitialRejected(rejection));
+        }
+        let config = acceptance_solver_config(config);
+        let Some(mut compiled) = (if let Some(controller) = controller {
+            sketch.compile_with_controller(request, controller)?
+        } else {
+            Some(sketch.compile(request)?)
+        }) else {
+            return Ok(None);
+        };
+        let mut core = SolveSession::from_accepted_report(
+            compiled.problem().clone(),
+            config,
+            solve.core_report,
+        )?;
+        compiled.replace_problem(core.problem().clone());
+        let mut audit_refresh = AcceptedAuditPatch::new(core.revisions());
+        copy_changed_constraint_audits(
+            &core,
+            &compiled,
+            validation_sketch,
+            &sketch,
+            request,
+            &mut audit_refresh,
+        )?;
+        core.refresh_accepted_audit(audit_refresh)?;
+        compiled.replace_problem(core.problem().clone());
+        let report = core.report().clone();
+        let geometry = sketch.geometry();
+        let accepted_result = SketchSolveResult {
+            attempted_geometry: Some(geometry.clone()),
+            geometry,
+            display_audit: report.audit.clone(),
+            reference_values: sketch.reference_values()?,
+            source_mappings: compiled.source_mappings().to_vec(),
+            bound_mappings: compiled.bound_mappings().to_vec(),
+            core_report: report,
+            rejection: None,
+            acceptance_hard_residual_max: solve.acceptance_hard_residual_max,
+        };
+        let preference_targets = preference_targets(validation_sketch, &compiled);
+        Ok(Some(Self {
+            sketch,
+            request,
+            compiled,
+            core,
+            accepted_result,
+            revision: 0,
+            revisions: SketchSessionRevisions::default(),
+            topology_compilations: 1,
+            preference_targets,
+        }))
+    }
+
     #[must_use]
     pub const fn sketch(&self) -> &Sketch {
         &self.sketch
@@ -268,11 +402,26 @@ impl SketchSession {
     ///
     /// Returns stale/preflight/compile failures before mutation. Numerical and
     /// domain failures are returned as rejected [`SketchSolveResult`] values.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the internal uncontrolled operation path reports interruption.
     #[allow(clippy::too_many_lines)]
     pub fn apply_patch(
         &mut self,
         patch: SketchSessionPatch,
     ) -> Result<SketchSolveResult, SketchSessionError> {
+        self.apply_patch_inner(patch, None).map(|result| {
+            result.expect("uncontrolled sketch session application cannot be interrupted")
+        })
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn apply_patch_inner(
+        &mut self,
+        patch: SketchSessionPatch,
+        mut controller: Option<&mut OperationController>,
+    ) -> Result<Option<SketchSolveResult>, SketchSessionError> {
         if patch.expected_revision != self.revision {
             return Err(SketchSessionError::StalePatch {
                 expected: patch.expected_revision,
@@ -380,17 +529,37 @@ impl SketchSession {
         let validation_template = candidate_sketch.clone();
         let mut candidate_core = self.core.clone();
         let validation_tolerance = candidate_core.config().normalized_residual_tolerance;
-        let (transaction, complete_candidate) =
-            candidate_core.apply_with_output(core_patch, |problem, report| {
-                complete_candidate_for_problem(
-                    problem,
-                    report,
-                    &validation_compiled,
-                    &validation_template,
-                    candidate_request,
-                    validation_tolerance,
-                )
-            })?;
+        let transaction = match controller.as_deref_mut() {
+            Some(controller) => candidate_core.apply_with_output_controlled(
+                core_patch,
+                |problem, report| {
+                    complete_candidate_for_problem(
+                        problem,
+                        report,
+                        &validation_compiled,
+                        &validation_template,
+                        candidate_request,
+                        validation_tolerance,
+                    )
+                },
+                controller,
+            )?,
+            None => Some(
+                candidate_core.apply_with_output(core_patch, |problem, report| {
+                    complete_candidate_for_problem(
+                        problem,
+                        report,
+                        &validation_compiled,
+                        &validation_template,
+                        candidate_request,
+                        validation_tolerance,
+                    )
+                })?,
+            ),
+        };
+        let Some((transaction, complete_candidate)) = transaction else {
+            return Ok(None);
+        };
 
         let rejection = transaction.rejection.map(|rejection| match rejection {
             SessionTransactionRejection::Domain(rejection) => rejection,
@@ -404,7 +573,7 @@ impl SketchSession {
         if let Some(rejection) = rejection {
             let acceptance_max = crate::compiler::rejection_residual_max(&rejection)
                 .map(|maximum| maximum.max(transaction.report.hard_residual_max));
-            return Ok(SketchSolveResult {
+            return Ok(Some(SketchSolveResult {
                 geometry: self.sketch.geometry(),
                 attempted_geometry: None,
                 display_audit: self.accepted_result.display_audit.clone(),
@@ -414,21 +583,23 @@ impl SketchSession {
                 core_report: transaction.report,
                 rejection: Some(rejection),
                 acceptance_hard_residual_max: acceptance_max,
-            });
+            }));
         }
 
         let _ = complete_candidate.ok_or(SketchSessionError::MissingCandidate)?;
-        let complete = match finalize_solved_candidate(
+        let complete = match finalize_solved_candidate_controlled(
             &mut candidate_core,
             &validation_compiled,
             &validation_template,
             candidate_request,
+            controller.as_deref_mut(),
         )? {
-            Ok(complete) => complete,
-            Err((sync_report, rejection)) => {
+            None => return Ok(None),
+            Some(Ok(complete)) => complete,
+            Some(Err((sync_report, rejection))) => {
                 let acceptance_max = crate::compiler::rejection_residual_max(&rejection)
                     .map(|maximum| maximum.max(sync_report.hard_residual_max));
-                return Ok(SketchSolveResult {
+                return Ok(Some(SketchSolveResult {
                     geometry: self.sketch.geometry(),
                     attempted_geometry: None,
                     display_audit: self.accepted_result.display_audit.clone(),
@@ -438,7 +609,7 @@ impl SketchSession {
                     core_report: sync_report,
                     rejection: Some(rejection),
                     acceptance_hard_residual_max: acceptance_max,
-                });
+                }));
             }
         };
         let mut accepted_compiled = self.compiled.clone();
@@ -474,6 +645,13 @@ impl SketchSession {
             core_report: report,
             rejection: None,
         };
+        if let Some(controller) = controller
+            && controller
+                .checkpoint(OperationCheckpoint::BeforeCommit)
+                .is_err()
+        {
+            return Ok(None);
+        }
         self.sketch = complete.sketch;
         self.request = candidate_request;
         self.compiled = accepted_compiled;
@@ -488,7 +666,46 @@ impl SketchSession {
         }
         self.preference_targets = candidate_preference_targets;
         self.accepted_result = result.clone();
-        Ok(result)
+        Ok(Some(result))
+    }
+
+    /// Controlled counterpart to [`Self::apply_patch`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the same patch and solve setup errors as [`Self::apply_patch`].
+    pub fn apply_patch_controlled(
+        &mut self,
+        patch: SketchSessionPatch,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<SketchSolveResult>, SketchSessionError> {
+        if patch.expected_revision != self.revision {
+            return Err(SketchSessionError::StalePatch {
+                expected: patch.expected_revision,
+                actual: self.revision,
+            });
+        }
+        let mut controller = OperationController::new(control);
+        if controller
+            .checkpoint(OperationCheckpoint::DocumentValidation)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        let mut candidate = self.clone();
+        let Some(result) = candidate.apply_patch_inner(patch, Some(&mut controller))? else {
+            return Ok(controller.outcome_unchecked());
+        };
+        if result.accepted() {
+            if controller
+                .checkpoint(OperationCheckpoint::BeforeCommit)
+                .is_err()
+            {
+                return Ok(controller.outcome_unchecked());
+            }
+            *self = candidate;
+        }
+        Ok(controller.outcome(result))
     }
 
     /// Explicitly rebuilds request shape over the current accepted sketch.
@@ -503,6 +720,20 @@ impl SketchSession {
         request: SketchSolveRequest,
     ) -> Result<&SketchSolveResult, SketchSessionError> {
         self.rebuild(expected_revision, self.sketch.clone(), request)
+    }
+
+    /// Controlled counterpart to [`Self::rebuild_request`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the same rebuild errors as [`Self::rebuild_request`].
+    pub fn rebuild_request_controlled(
+        &mut self,
+        expected_revision: u64,
+        request: SketchSolveRequest,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<SketchSolveResult>, SketchSessionError> {
+        self.rebuild_controlled(expected_revision, self.sketch.clone(), request, control)
     }
 
     /// Explicitly rebuilds changed topology/request shape as one clone-and-swap.
@@ -583,6 +814,78 @@ impl SketchSession {
         *self = rebuilt;
         Ok(&self.accepted_result)
     }
+
+    /// Controlled counterpart to [`Self::rebuild`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the same rebuild errors as [`Self::rebuild`].
+    pub fn rebuild_controlled(
+        &mut self,
+        expected_revision: u64,
+        sketch: Sketch,
+        request: SketchSolveRequest,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<SketchSolveResult>, SketchSessionError> {
+        if expected_revision != self.revision {
+            return Err(SketchSessionError::StalePatch {
+                expected: expected_revision,
+                actual: self.revision,
+            });
+        }
+        let mut controller = OperationController::new(control);
+        self.rebuild_with_controller(sketch, request, &mut controller)
+    }
+
+    fn rebuild_with_controller(
+        &mut self,
+        mut sketch: Sketch,
+        request: SketchSolveRequest,
+        controller: &mut OperationController,
+    ) -> Result<OperationOutcome<SketchSolveResult>, SketchSessionError> {
+        if controller
+            .checkpoint(OperationCheckpoint::DocumentLowering)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        let validation_sketch = sketch.clone();
+        let Some(solve) = sketch.solve_with_controller(request, self.core.config(), controller)?
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        if !solve.accepted() {
+            return Ok(controller.outcome(solve));
+        }
+        let Some(mut rebuilt) = Self::from_accepted_solve_with_controller(
+            sketch,
+            &validation_sketch,
+            request,
+            self.core.config(),
+            solve,
+            controller,
+        )?
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        rebuilt.revision = self.revision.saturating_add(1);
+        rebuilt.revisions = SketchSessionRevisions {
+            topology: self.revisions.topology.saturating_add(1),
+            source: self.revisions.source.saturating_add(1),
+            state: self.revisions.state.saturating_add(1),
+            bound: self.revisions.bound.saturating_add(1),
+        };
+        rebuilt.topology_compilations = self.topology_compilations.saturating_add(1);
+        if controller
+            .checkpoint(OperationCheckpoint::BeforeCommit)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        let result = rebuilt.accepted_result.clone();
+        *self = rebuilt;
+        Ok(controller.outcome(result))
+    }
 }
 
 fn preference_targets(sketch: &Sketch, compiled: &CompiledSketch) -> Vec<(PointId, Point2<f64>)> {
@@ -653,15 +956,27 @@ fn complete_candidate_for_problem(
     })
 }
 
+type CandidateFinalization =
+    Result<CompleteSketchCandidate, (geosolve_core::SolveReport, SolveRejection)>;
+
+#[allow(clippy::result_large_err)]
 fn finalize_solved_candidate(
     core: &mut SolveSession,
     compiled: &CompiledSketch,
     template: &Sketch,
     request: SketchSolveRequest,
-) -> Result<
-    Result<CompleteSketchCandidate, (geosolve_core::SolveReport, SolveRejection)>,
-    SketchSessionError,
-> {
+) -> Result<CandidateFinalization, SketchSessionError> {
+    finalize_solved_candidate_controlled(core, compiled, template, request, None)
+        .map(|result| result.expect("uncontrolled candidate finalization cannot be interrupted"))
+}
+
+fn finalize_solved_candidate_controlled(
+    core: &mut SolveSession,
+    compiled: &CompiledSketch,
+    template: &Sketch,
+    request: SketchSolveRequest,
+    mut controller: Option<&mut OperationController>,
+) -> Result<Option<CandidateFinalization>, SketchSessionError> {
     for _ in 0..4 {
         let tolerance = core.config().normalized_residual_tolerance;
         let complete = match complete_candidate_for_problem(
@@ -676,23 +991,39 @@ fn finalize_solved_candidate(
             Err(rejection) => {
                 let mut report = core.report().clone();
                 report.hard_validity = rejection.hard_validity;
-                return Ok(Err((report, rejection.reason)));
+                return Ok(Some(Err((report, rejection.reason))));
             }
         };
-        match synchronize_accepted_latents(core, compiled, &complete.normalized_latents)? {
-            LatentSynchronization::Unchanged => return Ok(Ok(complete)),
+        let synchronization = match controller.as_deref_mut() {
+            Some(controller) => synchronize_accepted_latents_controlled(
+                core,
+                compiled,
+                &complete.normalized_latents,
+                controller,
+            )?,
+            None => Some(synchronize_accepted_latents(
+                core,
+                compiled,
+                &complete.normalized_latents,
+            )?),
+        };
+        let Some(synchronization) = synchronization else {
+            return Ok(None);
+        };
+        match synchronization {
+            LatentSynchronization::Unchanged => return Ok(Some(Ok(complete))),
             LatentSynchronization::Committed => {}
             LatentSynchronization::Rejected(report, rejection) => {
-                return Ok(Err((*report, rejection)));
+                return Ok(Some(Err((*report, rejection))));
             }
         }
     }
     let mut report = core.report().clone();
     report.termination = SolveTermination::Stalled;
-    Ok(Err((
+    Ok(Some(Err((
         report,
         SolveRejection::CoreTermination(SolveTermination::Stalled),
-    )))
+    ))))
 }
 
 fn synchronize_accepted_latents(
@@ -700,6 +1031,25 @@ fn synchronize_accepted_latents(
     compiled: &CompiledSketch,
     latents: &[SolvedLatent],
 ) -> Result<LatentSynchronization, SketchSessionError> {
+    synchronize_accepted_latents_inner(core, compiled, latents, None)
+        .map(|result| result.expect("uncontrolled latent synchronization cannot be interrupted"))
+}
+
+fn synchronize_accepted_latents_controlled(
+    core: &mut SolveSession,
+    compiled: &CompiledSketch,
+    latents: &[SolvedLatent],
+    controller: &mut OperationController,
+) -> Result<Option<LatentSynchronization>, SketchSessionError> {
+    synchronize_accepted_latents_inner(core, compiled, latents, Some(controller))
+}
+
+fn synchronize_accepted_latents_inner(
+    core: &mut SolveSession,
+    compiled: &CompiledSketch,
+    latents: &[SolvedLatent],
+    controller: Option<&mut OperationController>,
+) -> Result<Option<LatentSynchronization>, SketchSessionError> {
     let mut patch = SessionPatch::new(core.revisions());
     let mut changed = false;
     for latent in latents {
@@ -729,11 +1079,23 @@ fn synchronize_accepted_latents(
         }
     }
     if !changed {
-        return Ok(LatentSynchronization::Unchanged);
+        return Ok(Some(LatentSynchronization::Unchanged));
     }
-    let transaction = core.apply(patch)?;
+    let transaction = match controller {
+        Some(controller) => core
+            .apply_with_output_controlled(
+                patch,
+                |_, _| Ok::<(), SessionDomainRejection<std::convert::Infallible>>(()),
+                controller,
+            )?
+            .map(|(transaction, _)| transaction),
+        None => Some(core.apply(patch)?),
+    };
+    let Some(transaction) = transaction else {
+        return Ok(None);
+    };
     if transaction.committed() {
-        return Ok(LatentSynchronization::Committed);
+        return Ok(Some(LatentSynchronization::Committed));
     }
     let rejection = match transaction.rejection.as_ref() {
         Some(SessionTransactionRejection::Core(rejection)) => {
@@ -744,10 +1106,10 @@ fn synchronize_accepted_latents(
             "unknown core latent synchronization rejection".into(),
         ),
     };
-    Ok(LatentSynchronization::Rejected(
+    Ok(Some(LatentSynchronization::Rejected(
         Box::new(transaction.report),
         rejection,
-    ))
+    )))
 }
 
 fn apply_domain_edit(

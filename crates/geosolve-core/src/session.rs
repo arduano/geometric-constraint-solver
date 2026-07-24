@@ -4,8 +4,9 @@ use crate::analysis::EliminationPlan;
 use crate::linearization::build_accepted_hard_linearization;
 use crate::{
     AcceptedHardLinearization, BoundId, BoundStatus, CoordinateBound, CoreError, HardValidity,
-    Problem, ResidualBlock, ResidualCategory, ResidualId, ResidualRowAudit, SecondaryStatus,
-    SolveReport, SolverConfig, SourceConstraint, SourceConstraintId, VariableId, VariableValue,
+    OperationCheckpoint, OperationController, Problem, ResidualBlock, ResidualCategory, ResidualId,
+    ResidualRowAudit, SecondaryStatus, SolveReport, SolverConfig, SourceConstraint,
+    SourceConstraintId, VariableId, VariableValue,
 };
 
 /// Independent revision counters for one accepted persistent session state.
@@ -250,8 +251,24 @@ impl SolveSession {
     /// initial solve is not finite, hard-valid, rank-valid, and bound-feasible.
     pub fn new(mut problem: Problem, config: SolverConfig) -> Result<Self, SessionError> {
         let report = problem.solve(config)?;
+        Self::from_accepted_report(problem, config, report)
+    }
+
+    /// Builds retained session state from a solve that was already independently
+    /// validated by a domain pipeline.
+    #[doc(hidden)]
+    pub fn from_accepted_report(
+        problem: Problem,
+        config: SolverConfig,
+        report: SolveReport,
+    ) -> Result<Self, SessionError> {
         if let Some(rejection) = core_rejection(&report, config) {
             return Err(SessionError::InitialRejected(rejection));
+        }
+        if problem.packed_state()? != report.accepted_state {
+            return Err(SessionError::InitialRejected(
+                SessionCoreRejection::EvaluationFailure,
+            ));
         }
         let revisions = SessionRevisions::default();
         let plan = EliminationPlan::new(&problem)?;
@@ -355,12 +372,51 @@ impl SolveSession {
     /// Returns stale/invalid patch or solver-start failures. A rejected domain
     /// candidate is returned in the transaction with attempted hard validity
     /// updated from [`SessionDomainRejection`].
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the internal uncontrolled operation path reports interruption.
     #[allow(clippy::too_many_lines)]
     pub fn apply_with_output<R, T, F>(
         &mut self,
         patch: SessionPatch,
         decide: F,
     ) -> Result<(SessionTransaction<R>, Option<T>), SessionError>
+    where
+        F: FnOnce(&Problem, &SolveReport) -> Result<T, SessionDomainRejection<R>>,
+    {
+        self.apply_with_output_inner(patch, decide, None)
+            .map(|result| result.expect("uncontrolled session application cannot be interrupted"))
+    }
+
+    /// Applies a transaction with operation control and no partial publication.
+    ///
+    /// `Ok(None)` means operation control stopped work and this session remains unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns stale/invalid patch or solver-start failures.
+    #[allow(clippy::type_complexity)]
+    pub fn apply_with_output_controlled<R, T, F>(
+        &mut self,
+        patch: SessionPatch,
+        decide: F,
+        controller: &mut OperationController,
+    ) -> Result<Option<(SessionTransaction<R>, Option<T>)>, SessionError>
+    where
+        F: FnOnce(&Problem, &SolveReport) -> Result<T, SessionDomainRejection<R>>,
+    {
+        self.apply_with_output_inner(patch, decide, Some(controller))
+    }
+
+    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::type_complexity)]
+    fn apply_with_output_inner<R, T, F>(
+        &mut self,
+        patch: SessionPatch,
+        decide: F,
+        mut controller: Option<&mut OperationController>,
+    ) -> Result<Option<(SessionTransaction<R>, Option<T>)>, SessionError>
     where
         F: FnOnce(&Problem, &SolveReport) -> Result<T, SessionDomainRejection<R>>,
     {
@@ -447,12 +503,31 @@ impl SolveSession {
         } else {
             plan.clone()
         };
-        let mut report = candidate.solve_session_components(
-            self.config,
-            &dirty_components,
-            &dirty_hierarchy_residuals,
-            &candidate_plan,
-        )?;
+        let report = match controller.as_deref_mut() {
+            Some(controller) => candidate.solve_session_components_with_controller(
+                self.config,
+                &dirty_components,
+                &dirty_hierarchy_residuals,
+                &candidate_plan,
+                controller,
+            )?,
+            None => Some(candidate.solve_session_components(
+                self.config,
+                &dirty_components,
+                &dirty_hierarchy_residuals,
+                &candidate_plan,
+            )?),
+        };
+        let Some(mut report) = report else {
+            return Ok(None);
+        };
+        if let Some(controller) = controller.as_deref_mut()
+            && controller
+                .checkpoint(OperationCheckpoint::BeforeFinalValidation)
+                .is_err()
+        {
+            return Ok(None);
+        }
         let mut output = None;
         let rejection = if let Some(rejection) = core_rejection_before_domain(&report, self.config)
         {
@@ -473,15 +548,30 @@ impl SolveSession {
                 }
             }
         };
+        if let Some(controller) = controller.as_deref_mut()
+            && controller
+                .checkpoint(OperationCheckpoint::AfterFinalValidation)
+                .is_err()
+        {
+            return Ok(None);
+        }
         if rejection.is_some() {
-            return Ok((
+            return Ok(Some((
                 SessionTransaction {
                     report,
                     rejection,
                     revisions: self.revisions,
                 },
                 None,
-            ));
+            )));
+        }
+
+        if let Some(controller) = controller
+            && controller
+                .checkpoint(OperationCheckpoint::BeforeCommit)
+                .is_err()
+        {
+            return Ok(None);
         }
 
         let mut revisions = self.revisions;
@@ -529,14 +619,14 @@ impl SolveSession {
         self.revisions = revisions;
         self.component_stamps = stamps;
         self.plan = candidate_plan;
-        Ok((
+        Ok(Some((
             SessionTransaction {
                 report,
                 rejection: None,
                 revisions,
             },
             output,
-        ))
+        )))
     }
 
     /// Refreshes accepted source labels and residual row descriptors without

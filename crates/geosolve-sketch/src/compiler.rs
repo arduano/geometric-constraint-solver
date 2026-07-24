@@ -1,8 +1,8 @@
 use geosolve_core::{
     AuditBinding, AuditEvaluationStatus, AuditSnapshot, BoundId, CoordinateBound, HardValidity,
-    Problem, ResidualBlock, ResidualCategory, ResidualId, ResidualRowAudit, SolveReport,
-    SolveTermination, SolverConfig, SourceConstraint, SourceConstraintId, VariableBlock,
-    VariableId, VariableValue,
+    OperationCheckpoint, OperationController, OperationWorkCounter, Problem, ResidualBlock,
+    ResidualCategory, ResidualId, ResidualRowAudit, SolveReport, SolveTermination, SolverConfig,
+    SourceConstraint, SourceConstraintId, VariableBlock, VariableId, VariableValue,
 };
 use geosolve_geometry::{Point2, Vector2};
 
@@ -1167,6 +1167,18 @@ impl SketchSolveResult {
     }
 }
 
+fn compile_item(control: &mut Option<&mut OperationController>) -> bool {
+    control.as_deref_mut().is_none_or(|controller| {
+        controller
+            .charge(
+                OperationWorkCounter::DocumentLoweringItems,
+                1,
+                OperationCheckpoint::DocumentLowering,
+            )
+            .is_ok()
+    })
+}
+
 impl Sketch {
     /// Compiles the current accepted geometry and one transient solve request.
     ///
@@ -1174,16 +1186,50 @@ impl Sketch {
     ///
     /// Returns an error for stale IDs, non-finite geometry, invalid scale, or
     /// a rejected core declaration.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the internal uncontrolled path reports an interruption.
     #[allow(clippy::too_many_lines)]
     pub fn compile(&self, request: SketchSolveRequest) -> Result<CompiledSketch, SketchError> {
+        self.compile_inner(request, None)
+            .map(|compiled| compiled.expect("uncontrolled compilation cannot be interrupted"))
+    }
+
+    pub(crate) fn compile_with_controller(
+        &self,
+        request: SketchSolveRequest,
+        controller: &mut OperationController,
+    ) -> Result<Option<CompiledSketch>, SketchError> {
+        self.compile_inner(request, Some(controller))
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn compile_inner(
+        &self,
+        request: SketchSolveRequest,
+        mut control: Option<&mut OperationController>,
+    ) -> Result<Option<CompiledSketch>, SketchError> {
+        if !compile_item(&mut control) {
+            return Ok(None);
+        }
         validate_model_scale(self.model_scale)?;
         validate_request(self, request)?;
+        if !compile_item(&mut control) {
+            return Ok(None);
+        }
         self.preflight_segments()?;
+        if !compile_item(&mut control) {
+            return Ok(None);
+        }
         self.preflight_conics()?;
 
         let mut problem = Problem::new();
         let mut point_variables = Vec::new();
         for (point_id, point) in self.points.iter() {
+            if !compile_item(&mut control) {
+                return Ok(None);
+            }
             validate_point(point.position(), "point position")?;
             let variable_id = problem.add_variable(VariableBlock::vec2(
                 [point.position().x, point.position().y],
@@ -1198,6 +1244,9 @@ impl Sketch {
         let mut circle_radius_variables = Vec::new();
         let mut bound_mappings = Vec::new();
         for (circle_id, circle) in self.circles.iter() {
+            if !compile_item(&mut control) {
+                return Ok(None);
+            }
             validate_radius(circle.radius())?;
             let variable_id =
                 problem.add_variable(VariableBlock::scalar(circle.radius(), self.model_scale)?);
@@ -1219,6 +1268,9 @@ impl Sketch {
         }
         let mut arc_radius_variables = Vec::new();
         for (arc_id, arc) in self.arcs.iter() {
+            if !compile_item(&mut control) {
+                return Ok(None);
+            }
             validate_radius(arc.radius())?;
             let variable_id =
                 problem.add_variable(VariableBlock::scalar(arc.radius(), self.model_scale)?);
@@ -1240,6 +1292,9 @@ impl Sketch {
         }
         let mut arc_angle_variables = Vec::new();
         for source in &self.source_order {
+            if !compile_item(&mut control) {
+                return Ok(None);
+            }
             let PersistentSource::Constraint(constraint_id) = *source else {
                 continue;
             };
@@ -1273,6 +1328,9 @@ impl Sketch {
         }
         let mut conic_vector_variables = Vec::new();
         for (conic_id, conic) in self.conics.iter() {
+            if !compile_item(&mut control) {
+                return Ok(None);
+            }
             let crate::ConicKind::RationalQuadratic {
                 weighted_middle, ..
             } = conic.kind()
@@ -1291,6 +1349,9 @@ impl Sketch {
         }
         let mut conic_scalar_variables = Vec::new();
         for (conic_id, conic) in self.conics.iter() {
+            if !compile_item(&mut control) {
+                return Ok(None);
+            }
             let scalar = match conic.kind() {
                 crate::ConicKind::Ellipse {
                     minor_axis_ratio, ..
@@ -1345,6 +1406,9 @@ impl Sketch {
         let mut nurbs_weight_variables = Vec::new();
         for (nurbs_id, curve) in self.nurbs.iter() {
             for (control_index, weight) in curve.weights().iter().copied().enumerate() {
+                if !compile_item(&mut control) {
+                    return Ok(None);
+                }
                 if control_index == curve.gauge_index() {
                     continue;
                 }
@@ -1374,6 +1438,9 @@ impl Sketch {
         let mut source_mappings = Vec::new();
         let mut latent_variables = Vec::new();
         for source in &self.source_order {
+            if !compile_item(&mut control) {
+                return Ok(None);
+            }
             match *source {
                 PersistentSource::Constraint(constraint_id) => {
                     let Some(constraint) = self.constraints.get(constraint_id) else {
@@ -1413,6 +1480,9 @@ impl Sketch {
         }
 
         if let Some(drag) = request.drag {
+            if !compile_item(&mut control) {
+                return Ok(None);
+            }
             source_mappings.push(compile_point_target(
                 self,
                 &mut problem,
@@ -1425,6 +1495,9 @@ impl Sketch {
             )?);
         }
         if let Some(stability) = request.stability_target {
+            if !compile_item(&mut control) {
+                return Ok(None);
+            }
             source_mappings.push(compile_point_target(
                 self,
                 &mut problem,
@@ -1441,6 +1514,9 @@ impl Sketch {
         }
         if request.previous_state_preferences {
             for (point_id, point) in self.points.iter() {
+                if !compile_item(&mut control) {
+                    return Ok(None);
+                }
                 if request.drag.is_some_and(|drag| drag.point == point_id)
                     || request
                         .stability_target
@@ -1465,6 +1541,9 @@ impl Sketch {
         // retained coordinates so the compile seam and pre-attempt audit use
         // the exact warm-start state; solve synchronization remains trusted.
         for mapping in &point_variables {
+            if !compile_item(&mut control) {
+                return Ok(None);
+            }
             let position = self.point_position(mapping.point_id)?;
             problem.set_variable_value(
                 mapping.variable_id,
@@ -1472,7 +1551,7 @@ impl Sketch {
             )?;
         }
 
-        Ok(CompiledSketch {
+        Ok(Some(CompiledSketch {
             problem,
             point_variables,
             circle_radius_variables,
@@ -1484,7 +1563,7 @@ impl Sketch {
             latent_variables,
             bound_mappings,
             source_mappings,
-        })
+        }))
     }
 
     /// Compiles, solves, independently validates, and conditionally commits a request.
@@ -1493,16 +1572,99 @@ impl Sketch {
     ///
     /// Returns an error when compilation or the core solve cannot be started.
     /// Numerical and geometric solve failures are returned as rejected results.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the internal unlimited path reports an interruption
+    /// without an operation controller.
     #[allow(clippy::too_many_lines)]
     pub fn solve(
         &mut self,
         request: SketchSolveRequest,
         config: SolverConfig,
     ) -> Result<SketchSolveResult, SketchError> {
+        self.solve_inner(request, config, None)
+            .map(|result| result.expect("uncontrolled sketch solving cannot be interrupted"))
+    }
+
+    /// Solves on a scratch sketch under cooperative operation control.
+    ///
+    /// An interrupted outcome never publishes candidate geometry as accepted
+    /// and leaves this sketch unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed sketch compilation or core construction/evaluation error.
+    pub fn solve_controlled(
+        &mut self,
+        request: SketchSolveRequest,
+        config: SolverConfig,
+        control: geosolve_core::OperationControl,
+    ) -> Result<geosolve_core::OperationOutcome<SketchSolveResult>, SketchError> {
+        let mut controller = geosolve_core::OperationController::new(control);
+        if controller
+            .checkpoint(geosolve_core::OperationCheckpoint::DocumentLowering)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        let mut candidate = self.clone();
+        let result = candidate.solve_inner(request, config, Some(&mut controller))?;
+        let Some(result) = result else {
+            return Ok(controller.outcome_unchecked());
+        };
+        if result.accepted() {
+            if controller
+                .checkpoint(geosolve_core::OperationCheckpoint::BeforeCommit)
+                .is_err()
+            {
+                return Ok(controller.outcome_unchecked());
+            }
+            *self = candidate;
+        }
+        Ok(controller.outcome(result))
+    }
+
+    pub(crate) fn solve_with_controller(
+        &mut self,
+        request: SketchSolveRequest,
+        config: SolverConfig,
+        controller: &mut geosolve_core::OperationController,
+    ) -> Result<Option<SketchSolveResult>, SketchError> {
+        if controller
+            .checkpoint(geosolve_core::OperationCheckpoint::DocumentLowering)
+            .is_err()
+        {
+            return Ok(None);
+        }
+        let mut candidate = self.clone();
+        let result = candidate.solve_inner(request, config, Some(controller))?;
+        if result.as_ref().is_some_and(SketchSolveResult::accepted) {
+            *self = candidate;
+        }
+        Ok(result)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn solve_inner(
+        &mut self,
+        request: SketchSolveRequest,
+        config: SolverConfig,
+        mut control: Option<&mut geosolve_core::OperationController>,
+    ) -> Result<Option<SketchSolveResult>, SketchError> {
         let config = acceptance_solver_config(config);
-        let mut compiled = self.compile(request)?;
+        let Some(mut compiled) = self.compile_inner(request, control.as_deref_mut())? else {
+            return Ok(None);
+        };
         let mut retained_audit = compiled.problem.audit_snapshot_partial();
-        let mut core_report = compiled.problem.solve(config)?;
+        let mut core_report = if let Some(controller) = control.as_deref_mut() {
+            let Some(report) = compiled.problem.solve_with_controller(config, controller)? else {
+                return Ok(None);
+            };
+            report
+        } else {
+            compiled.problem.solve(config)?
+        };
         let mut candidate = compiled.solved_state(self)?;
         let mut candidate_preparation =
             self.derive_curve_fillet_arcs(&mut candidate, config.normalized_residual_tolerance);
@@ -1526,8 +1688,22 @@ impl Sketch {
                     break;
                 }
                 analysis_sketch.commit_solved_state(&candidate)?;
-                compiled = analysis_sketch.compile(request)?;
-                core_report = compiled.problem.solve(config)?;
+                let Some(recompiled) =
+                    analysis_sketch.compile_inner(request, control.as_deref_mut())?
+                else {
+                    return Ok(None);
+                };
+                compiled = recompiled;
+                core_report = if let Some(controller) = control.as_deref_mut() {
+                    let Some(report) =
+                        compiled.problem.solve_with_controller(config, controller)?
+                    else {
+                        return Ok(None);
+                    };
+                    report
+                } else {
+                    compiled.problem.solve(config)?
+                };
                 candidate = compiled.solved_state(&analysis_sketch)?;
                 candidate_preparation = self
                     .derive_curve_fillet_arcs(&mut candidate, config.normalized_residual_tolerance);
@@ -1538,6 +1714,13 @@ impl Sketch {
         }
 
         let core_hard_validity = core_report.hard_validity;
+        if let Some(controller) = control.as_deref_mut()
+            && controller
+                .checkpoint(geosolve_core::OperationCheckpoint::BeforeFinalValidation)
+                .is_err()
+        {
+            return Ok(None);
+        }
         let candidate_validation = candidate_preparation.and_then(|()| {
             self.validate_m7_candidate(&candidate, config.normalized_residual_tolerance)
         });
@@ -1608,7 +1791,21 @@ impl Sketch {
         // `solved_state_for_problem` constructs every geometry family in retained
         // order and rejects any non-finite variable before returning the candidate.
         let attempted_geometry = Some(candidate.geometry.clone());
+        if let Some(controller) = control.as_deref_mut()
+            && controller
+                .checkpoint(geosolve_core::OperationCheckpoint::AfterFinalValidation)
+                .is_err()
+        {
+            return Ok(None);
+        }
         if rejection.is_none() {
+            if let Some(controller) = control
+                && controller
+                    .checkpoint(geosolve_core::OperationCheckpoint::BeforeCommit)
+                    .is_err()
+            {
+                return Ok(None);
+            }
             self.commit_solved_state(&candidate)?;
         }
         let display_audit = if rejection.is_none() {
@@ -1623,7 +1820,7 @@ impl Sketch {
             retained_audit
         };
 
-        Ok(SketchSolveResult {
+        Ok(Some(SketchSolveResult {
             geometry: self.geometry(),
             attempted_geometry,
             display_audit,
@@ -1633,7 +1830,7 @@ impl Sketch {
             core_report,
             rejection,
             acceptance_hard_residual_max,
-        })
+        }))
     }
 
     #[must_use]
