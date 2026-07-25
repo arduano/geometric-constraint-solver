@@ -6,8 +6,9 @@ use slotmap::{Key, SlotMap};
 
 use crate::{
     AuditBinding, BoundId, BoundStatus, CoordinateBound, CoreError, DiagnosticCompleteness,
-    EvaluationErrorCategory, ResidualBlock, ResidualCategory, ResidualId, SourceConstraint,
-    SourceConstraintId, VariableBlock, VariableId, VariableKind, VariableValue,
+    EvaluationErrorCategory, OperationCheckpoint, OperationController, OperationWorkCounter,
+    ResidualBlock, ResidualCategory, ResidualId, SourceConstraint, SourceConstraintId,
+    VariableBlock, VariableId, VariableKind, VariableValue,
     analysis::{AliasElimination, DecompositionCache, FixedElimination},
     linearization::{evaluate_values, normalize_residuals},
     sparse::SparseSymbolicCache,
@@ -713,6 +714,48 @@ impl Problem {
             )?;
         }
         Ok(snapshot)
+    }
+
+    /// Evaluates an audit snapshot while observing deterministic operation control.
+    ///
+    /// A `None` result means cancellation or work exhaustion was observed at a
+    /// residual boundary before the snapshot became publishable.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error under the same malformed-state conditions as
+    /// [`Self::audit_snapshot`].
+    pub fn audit_snapshot_with_controller(
+        &self,
+        controller: &mut OperationController,
+    ) -> Result<Option<AuditSnapshot>, CoreError> {
+        let state = self.variable_state();
+        let mut snapshot = self.audit_source_shell();
+        for (residual_id, residual) in self.residuals.iter() {
+            if controller
+                .charge(
+                    OperationWorkCounter::ComponentLinearizations,
+                    1,
+                    OperationCheckpoint::ComponentBoundary,
+                )
+                .is_err()
+            {
+                return Ok(None);
+            }
+            let variables = Self::incident_values_from_state(residual, &state)?;
+            let raw_values = evaluate_values(residual_id, residual, &variables)?;
+            let normalized_values = normalize_residuals(residual, &raw_values)?;
+            self.validate_residual_linearization(&state, residual_id)?;
+            append_audit_rows(
+                &mut snapshot,
+                residual_id,
+                residual,
+                &variables,
+                &raw_values,
+                &normalized_values,
+            )?;
+        }
+        Ok(Some(snapshot))
     }
 
     /// Builds a best-effort audit, retaining fresh finite values on derivative failure.

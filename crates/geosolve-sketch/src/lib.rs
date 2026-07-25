@@ -62,13 +62,13 @@ pub use characterization::{
 };
 pub use compiler::{
     ArcAngleRole, ArcAngleVariableMapping, ArcRadiusVariableMapping, CircleRadiusVariableMapping,
-    CompiledSketch, ConicScalarRole, ConicScalarVariableMapping, ConicVectorRole,
-    ConicVectorVariableMapping, DragTarget, LatentVariableMapping, LatentVariableRole,
-    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, MIN_REPRESENTABLE_RADIUS, NurbsWeightVariableMapping,
-    PointVariableMapping, ReferenceDimensionValue, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE,
-    SketchBound, SketchBoundMapping, SketchGeometry, SketchSolveRequest, SketchSolveResult,
-    SketchSource, SketchSourceMapping, SolveRejection, SolvedArc, SolvedCircle, SolvedConic,
-    SolvedConicKind, SolvedNurbs, SolvedPoint,
+    CompiledSketch, ConicScalarVariableMapping, ConicVectorRole, ConicVectorVariableMapping,
+    DragTarget, LatentVariableMapping, LatentVariableRole, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT,
+    MIN_REPRESENTABLE_RADIUS, NurbsWeightVariableMapping, PointVariableMapping,
+    ReferenceDimensionValue, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, SketchBound, SketchBoundMapping,
+    SketchGeometry, SketchSolveRequest, SketchSolveResult, SketchSource, SketchSourceMapping,
+    SolveRejection, SolvedArc, SolvedCircle, SolvedConic, SolvedConicKind, SolvedNurbs,
+    SolvedPoint,
 };
 pub use conics::{ConicCurve, ConicGeometry, ConicKind};
 pub use curves::{
@@ -130,12 +130,13 @@ pub use geosolve_geometry::{
     NurbsEvaluationError, NurbsInsertionError, ProperConicKind,
 };
 pub use model::{
-    ArcId, BSplineId, BezierId, CircleId, ConicId, CoordinateAxis, CurveContactNeighborhood,
-    CurveContinuity, CurveCurvatureRelation, CurveDirectionRelation, CurveMeasurementKind,
-    CurveNormalSide, CurveTangentOrientation, DimensionKind, DimensionMode, FilletEndpointOrder,
-    LineSegment, NurbsId, PointId, SegmentBranch, SegmentEndpoint, SegmentId, Sketch,
-    SketchConstraint, SketchConstraintId, SketchConstraintKind, SketchCurve, SketchCurveContact,
-    SketchDimension, SketchDimensionId, SketchError, SketchPoint,
+    ArcAngleEndpoint, ArcId, BSplineId, BezierId, CircleId, ConicId, ConicScalarRole,
+    CoordinateAxis, CurveContactNeighborhood, CurveContinuity, CurveCurvatureRelation,
+    CurveDirectionRelation, CurveMeasurementKind, CurveNormalSide, CurveTangentOrientation,
+    DimensionKind, DimensionMode, FilletEndpointOrder, LineSegment, NurbsId, PointId,
+    SegmentBranch, SegmentEndpoint, SegmentId, Sketch, SketchConstraint, SketchConstraintId,
+    SketchConstraintKind, SketchCurve, SketchCurveContact, SketchDimension, SketchDimensionId,
+    SketchError, SketchPoint, SketchScalarRef,
 };
 pub use nurbs::NurbsCurve;
 pub use profiles::{
@@ -149,9 +150,12 @@ pub use scenarios::{
     redundant_rectangle, tangent_circles, underconstrained_triangle,
 };
 pub use semantic::{
-    DocumentScalarAudit, DocumentScalarAuditBinding, DocumentScalarBranch,
-    DocumentScalarPropertyRef, DocumentScalarRelation, DocumentScalarRow, DocumentScalarSource,
-    DocumentScalarUnit, DocumentSemanticSourceCatalog, DocumentSignedLengthProvenance,
+    DocumentAngleOperand, DocumentCircleArcTangentRequest, DocumentConstructedRelation,
+    DocumentContactSeed, DocumentLineCircleTangentRequest, DocumentPlanarAudit,
+    DocumentPlanarRelation, DocumentPlanarSource, DocumentScalarAudit, DocumentScalarAuditBinding,
+    DocumentScalarBranch, DocumentScalarPropertyRef, DocumentScalarRelation, DocumentScalarRow,
+    DocumentScalarSource, DocumentScalarUnit, DocumentSemanticCatalogSession,
+    DocumentSemanticSolveResult, DocumentSemanticSourceCatalog, DocumentSignedLengthProvenance,
     LoweredDocumentScalarSource,
 };
 pub use session::{

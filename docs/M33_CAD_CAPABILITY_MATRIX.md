@@ -20,7 +20,7 @@ persistent semantic source.
 | --- | --- | --- |
 | implemented_m32 | M32 | Public behavior implemented and released in the baseline through M32 |
 | implemented_m36 | M36 | Public closed semantic operands scalar row foundations and characterization implemented at M36 |
-| planned_m37 | M37 | Contract target for the standard planar relation catalog only |
+| implemented_m37 | M37 | Public standard planar relation catalog and characterization implemented at M37 |
 | planned_m38 | M38 | Contract target for dimensions and persistent measurements only |
 | planned_m49 | M49 | Contract target for the separate sketch-operations companion only |
 | unsupported_through_m55 | M55 | Deliberately outside the supported product through M55 |
@@ -115,18 +115,18 @@ relation state and do not introduce an undocumented residual formula.
 | curve_curve_fillet | DocumentConstraintDefinition::CurveCurveFillet | output_arc,curve_contact,curve_contact | mixed_length_dimensionless | side_selected | two_normal_sides,two_trim_endpoints,endpoint_order,sweep,span,winding,neighborhood | 6_hard | implemented_m32 | M32 | Common-jet association supports all regular family pairs with explicit trim ownership |
 | fixed_scalar | DocumentScalarRelation::Fixed | scalar_property,target | property_unit | property_defined | scalar_domain | 1_hard | implemented_m36 | M36 | One catalog-owned persistent semantic source lowers one deterministic raw/normalized row with complete audit and independent evidence validation |
 | equal_scalar | DocumentScalarRelation::Equal | scalar_property,scalar_property | property_unit | property_defined | scalar_domain | 1_hard | implemented_m36 | M36 | Exact unit domain support and neighborhood compatibility is validated before one deterministic equality row is emitted |
-| concentric | concentric_relation | center_feature,center_feature | length | signed_cartesian | none | 2_hard | planned_m37 | M37 | Only center-bearing families are applicable |
-| collinear | collinear_relation | line_support,line_support | mixed_length_dimensionless | orientation_invariant | none | 2_hard | planned_m37 | M37 | Parallel direction and zero signed support offset form one semantic source |
-| horizontal_points | horizontal_point_pair_relation | point,point | length | signed_difference | none | 1_hard | planned_m37 | M37 | Arbitrary point features no longer require a line entity |
-| vertical_points | vertical_point_pair_relation | point,point | length | signed_difference | none | 1_hard | planned_m37 | M37 | Arbitrary point features no longer require a line entity |
-| block_entity | block_entity_relation | entity | mixed | property_defined | captured_semantic_state | variable_hard | planned_m37 | M37 | One grouped source fixes every independent semantic degree of the selected entity |
-| point_symmetry_about_center | point_symmetry_relation | point,point,center_point | length | signed_cartesian | none | 2_hard | planned_m37 | M37 | Pair midpoint is constrained to the explicit center feature |
-| entity_symmetry_about_line | entity_symmetry_relation | entity,entity,line_support | mixed | correspondence_selected | operand_correspondence,line_orientation | variable_hard | planned_m37 | M37 | Entity correspondence is explicit and never inferred by proximity |
-| equal_circular_radius | equal_circular_radius_relation | circular_curve,circular_curve | length | positive_magnitude | none | 1_hard | planned_m37 | M37 | Generalizes current circle-only equality to circles and circular arcs |
-| equal_distance | equal_distance_relation | point_pair,point_pair | length | unsigned_magnitude | none | 1_hard | planned_m37 | M37 | Two semantic point-pair distances share one equality row |
-| equal_angle | equal_angle_relation | angle_operand,angle_operand | angle | directed | orientation,winding | 1_hard | planned_m37 | M37 | Both angle operands carry explicit orientation and unwrapping state |
-| contact_constructor | high_level_contact_constructor | point_or_curve_operands | length | property_defined | allocated_domain,span,winding,neighborhood | delegates_2_hard | planned_m37 | M37 | Constructor allocates explicit latent contact state then emits the existing contact relation |
-| tangent_constructor | high_level_tangent_constructor | curve_operands | mixed_length_dimensionless | orientation_selected | allocated_domain,span,winding,neighborhood,tangent_orientation,side_or_containment | delegates_3_hard | planned_m37 | M37 | Constructor allocates branch state then emits the existing tangent relation |
+| concentric | concentric_relation | center_feature,center_feature | length | signed_cartesian | none | 2_hard | implemented_m37 | M37 | Only center-bearing families are applicable |
+| collinear | collinear_relation | line_support,line_support | mixed_length_dimensionless | orientation_invariant | none | 2_hard | implemented_m37 | M37 | Parallel direction and zero signed support offset form one semantic source |
+| horizontal_points | horizontal_point_pair_relation | point,point | length | signed_difference | none | 1_hard | implemented_m37 | M37 | Arbitrary point features no longer require a line entity |
+| vertical_points | vertical_point_pair_relation | point,point | length | signed_difference | none | 1_hard | implemented_m37 | M37 | Arbitrary point features no longer require a line entity |
+| block_entity | block_entity_relation | entity | mixed | property_defined | captured_semantic_state | variable_hard | implemented_m37 | M37 | One grouped source fixes every independent semantic degree of the selected entity |
+| point_symmetry_about_center | point_symmetry_relation | point,point,center_point | length | signed_cartesian | none | 2_hard | implemented_m37 | M37 | Pair midpoint is constrained to the explicit center feature |
+| entity_symmetry_about_line | entity_symmetry_relation | entity,entity,line_support | mixed | correspondence_selected | operand_correspondence,line_orientation | variable_hard | implemented_m37 | M37 | Entity correspondence is explicit and never inferred by proximity |
+| equal_circular_radius | equal_circular_radius_relation | circular_curve,circular_curve | length | positive_magnitude | none | 1_hard | implemented_m37 | M37 | Generalizes current circle-only equality to circles and circular arcs |
+| equal_distance | equal_distance_relation | point_pair,point_pair | length | unsigned_magnitude | none | 1_hard | implemented_m37 | M37 | Two semantic point-pair distances share one equality row |
+| equal_angle | equal_angle_relation | angle_operand,angle_operand | angle | directed | orientation,winding | 1_hard | implemented_m37 | M37 | Both angle operands carry explicit orientation and unwrapping state |
+| contact_constructor | high_level_contact_constructor | point_or_curve_operands | length | property_defined | allocated_domain,span,winding,neighborhood | delegates_2_hard | implemented_m37 | M37 | Constructor allocates explicit latent contact state then emits the existing contact relation |
+| tangent_constructor | high_level_tangent_constructor | curve_operands | mixed_length_dimensionless | orientation_selected | allocated_domain,span,winding,neighborhood,tangent_orientation,side_or_containment | delegates_3_hard | implemented_m37 | M37 | Constructor allocates branch state then emits the existing tangent relation |
 | equal_path_length | equal_path_length_relation | bounded_curve_interval,bounded_curve_interval | length | unsigned_magnitude | interval_endpoints,span,winding | 1_hard | planned_m38 | M38 | Equality is permitted only with bounded value derivative and work evidence |
 <!-- M33_TABLE:relations:END -->
 

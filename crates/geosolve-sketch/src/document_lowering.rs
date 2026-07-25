@@ -149,7 +149,7 @@ impl DocumentRuntimeMap {
             .flatten()
     }
 
-    fn runtime_segment(&self, span: CurveSpan) -> Option<SegmentId> {
+    pub(crate) fn runtime_segment(&self, span: CurveSpan) -> Option<SegmentId> {
         match self.runtime_curve(span.curve)? {
             RuntimeCurve::Line(segment) => (span.segment == 0).then_some(*segment),
             RuntimeCurve::Polyline(segments) => segments.get(span.segment as usize).copied(),
@@ -163,14 +163,14 @@ impl DocumentRuntimeMap {
         }
     }
 
-    fn runtime_circle(&self, id: CurveId) -> Option<CircleId> {
+    pub(crate) fn runtime_circle(&self, id: CurveId) -> Option<CircleId> {
         match self.runtime_curve(id)? {
             RuntimeCurve::Circle(circle) => Some(*circle),
             _ => None,
         }
     }
 
-    fn runtime_arc(&self, id: CurveId) -> Option<ArcId> {
+    pub(crate) fn runtime_arc(&self, id: CurveId) -> Option<ArcId> {
         match self.runtime_curve(id)? {
             RuntimeCurve::CircularArc(arc) => Some(*arc),
             _ => None,
@@ -1531,7 +1531,7 @@ fn contact_value(
     }
 }
 
-fn runtime_curve_contact(
+pub(crate) fn runtime_curve_contact(
     document: &SketchDocument,
     mappings: &DocumentRuntimeMap,
     contact: &crate::document::ContactSlot,
@@ -1572,6 +1572,53 @@ fn runtime_curve_contact(
             }
             crate::ContactNeighborhood::Start => CurveContactNeighborhood::Start,
             crate::ContactNeighborhood::End => CurveContactNeighborhood::End,
+        },
+    })
+}
+
+pub(crate) fn runtime_endpoint_contact(
+    mappings: &DocumentRuntimeMap,
+    span: CurveSpan,
+    endpoint: FeatureEndpoint,
+) -> Result<SketchCurveContact, DocumentError> {
+    let curve = match mappings
+        .runtime_curve(span.curve)
+        .ok_or_else(|| unknown_runtime("curve", span.curve.0))?
+    {
+        RuntimeCurve::Line(_) | RuntimeCurve::Polyline(_) => SketchCurve::Line {
+            segment: runtime_segment(mappings, span)?,
+            domain: LineParameterDomain::BoundedSegment,
+        },
+        RuntimeCurve::CircularArc(arc) => SketchCurve::Arc(*arc),
+        RuntimeCurve::QuadraticBezier(bezier) | RuntimeCurve::CubicBezier(bezier) => {
+            SketchCurve::Bezier(*bezier)
+        }
+        RuntimeCurve::Conic(conic) => SketchCurve::Conic(*conic),
+        RuntimeCurve::BSpline { .. } => {
+            let (spline, span) = mappings
+                .runtime_bspline_span(span)
+                .ok_or_else(|| unknown_runtime("B-spline span", span.curve.0))?;
+            SketchCurve::BSpline { spline, span }
+        }
+        RuntimeCurve::Nurbs { .. } => {
+            let (nurbs, span) = mappings
+                .runtime_nurbs_span(span)
+                .ok_or_else(|| unknown_runtime("NURBS span", span.curve.0))?;
+            SketchCurve::Nurbs { nurbs, span }
+        }
+        RuntimeCurve::Circle(_) => {
+            return invalid_runtime("periodic curve has no bounded endpoint");
+        }
+    };
+    Ok(SketchCurveContact {
+        curve,
+        parameter: match endpoint {
+            FeatureEndpoint::Start => 0.0,
+            FeatureEndpoint::End => 1.0,
+        },
+        neighborhood: match endpoint {
+            FeatureEndpoint::Start => CurveContactNeighborhood::Start,
+            FeatureEndpoint::End => CurveContactNeighborhood::End,
         },
     })
 }

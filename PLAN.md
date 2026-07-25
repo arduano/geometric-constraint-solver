@@ -1383,27 +1383,45 @@ tables characterize all 30 current commands, 28 accepted effects and 16 current
 dimension/differential/conic measurements. Thirteen focused M36 regressions cover
 exact, malformed, persistence, refinement-stable control identity, complete parameter
 branch invariants, scale, cancellation, reserved identity collision, audit corruption,
-normalized finite differences and accepted-row validation behavior. M37 relation
-catalog and M38 persistent measurement/path-length behavior remain unimplemented.
+normalized finite differences and accepted-row validation behavior. M38 persistent
+measurement/path-length behavior remains unimplemented.
 
 ## M37: standard planar constraint catalog
 
-Status: planned.
+Status: complete as of 2026-07-25.
 
 Goal: cover the ordinary geometric relations expected from a production planar
 sketch engine.
 
-- [ ] Add first-class concentric and collinear relations.
-- [ ] Add horizontal and vertical relations between arbitrary point features.
-- [ ] Add grouped whole-entity block/fix and point symmetry about a center.
-- [ ] Generalize line/entity symmetry and equal circular radius across compatible circles and arcs.
-- [ ] Add equal scalar, distance and angle relations where the applicability matrix permits them.
-- [ ] Add high-level contact and tangent constructors that allocate and validate explicit latent branch state for hosts.
-- [ ] Preserve explicit same/opposite direction, side, neighborhood and containment choices for every multi-root relation.
+- [x] Add first-class concentric and collinear relations.
+- [x] Add horizontal and vertical relations between arbitrary point features.
+- [x] Add grouped whole-entity block/fix and point symmetry about a center.
+- [x] Generalize line/entity symmetry and equal circular radius across compatible circles and arcs.
+- [x] Add equal scalar, distance and angle relations where the applicability matrix permits them.
+- [x] Add high-level contact and tangent constructors that allocate and validate explicit latent branch state for hosts.
+- [x] Preserve explicit same/opposite direction, side, neighborhood and containment choices for every multi-root relation.
 
 Gate: the frozen standard relation matrix has no undocumented family gaps; every new
 row passes derivative, transform, scale, persistence, branch, cancellation and
 rollback gates.
+
+Completion record (2026-07-25): the separately serialized semantic-source catalog now
+owns persistent concentric, collinear, arbitrary point-pair horizontal/vertical,
+grouped block, center-point and explicitly corresponded line/entity symmetry, equal
+circular radius, equal point-pair distance and explicitly oriented/unwrapped equal
+angle relations. High-level contact and tangent constructors allocate complete
+domain/span/winding/neighborhood/orientation/side or containment state atomically and
+reuse the established common-jet and specialized tangent equations. New collinear,
+equal-distance and equal-angle residuals have analytic AD Jacobians, mixed-unit row
+scaling, structured per-row audit and independent accepted-residual validation.
+
+Fourteen focused M37 regressions cover all frozen relation rows, circle/arc radius family
+pairs, typed point features, exact and transformed finite differences at model scales
+`1e-6`, `1` and `1e6`, canonical persistence with branch state, malformed and
+tautological no-mutation rejection, constructor atomicity, cancellation, grouped
+source audit completeness and retained-session rollback. Frozen sketch v1-v4 remains
+byte/schema compatible. Formatting, warnings-denied locked workspace Clippy, full
+locked workspace tests and the locked WASM consumer check pass.
 
 ## M38: dimensions and persistent measurements
 

@@ -1524,6 +1524,121 @@ pub(crate) struct AxisDifferenceResidual {
     pub(crate) coordinate: usize,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct CollinearResidual {
+    pub(crate) first: [usize; 2],
+    pub(crate) second: [usize; 2],
+}
+
+impl SketchAdFormula for CollinearResidual {
+    fn evaluate_dual(
+        &self,
+        variables: &[SketchAdValue],
+    ) -> Result<Vec<DualDVec64>, EvaluationError> {
+        let a = ad_point(variables, self.first[0], "first collinear support")?;
+        let b = ad_point(variables, self.first[1], "first collinear support")?;
+        let c = ad_point(variables, self.second[0], "second collinear support")?;
+        let d = ad_point(variables, self.second[1], "second collinear support")?;
+        let first = ad_unit(&[&b[0] - &a[0], &b[1] - &a[1]], "first collinear support")?;
+        let second = ad_unit(&[&d[0] - &c[0], &d[1] - &c[1]], "second collinear support")?;
+        Ok(vec![
+            &first[0] * &second[1] - &first[1] * &second[0],
+            &first[0] * (&c[1] - &a[1]) - &first[1] * (&c[0] - &a[0]),
+        ])
+    }
+}
+
+impl ResidualEvaluator for CollinearResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, false).map(|(values, _)| values)
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, true).map(|(_, jacobians)| jacobians)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct EqualDistanceResidual {
+    pub(crate) first: [usize; 2],
+    pub(crate) second: [usize; 2],
+}
+
+impl SketchAdFormula for EqualDistanceResidual {
+    fn evaluate_dual(
+        &self,
+        variables: &[SketchAdValue],
+    ) -> Result<Vec<DualDVec64>, EvaluationError> {
+        let a = ad_point(variables, self.first[0], "first equal distance")?;
+        let b = ad_point(variables, self.first[1], "first equal distance")?;
+        let c = ad_point(variables, self.second[0], "second equal distance")?;
+        let d = ad_point(variables, self.second[1], "second equal distance")?;
+        let first = ((&b[0] - &a[0]).powi(2) + (&b[1] - &a[1]).powi(2)).sqrt();
+        let second = ((&d[0] - &c[0]).powi(2) + (&d[1] - &c[1]).powi(2)).sqrt();
+        if first.re == 0.0 || second.re == 0.0 {
+            return Err(EvaluationError::degenerate(
+                "equal distance requires two nonzero point-pair distances",
+            ));
+        }
+        Ok(vec![first - second])
+    }
+}
+
+impl ResidualEvaluator for EqualDistanceResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, false).map(|(values, _)| values)
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, true).map(|(_, jacobians)| jacobians)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct EqualAngleResidual {
+    pub(crate) first: [[usize; 2]; 2],
+    pub(crate) second: [[usize; 2]; 2],
+    pub(crate) first_orientation: AngleOrientation,
+    pub(crate) first_winding: i32,
+    pub(crate) second_orientation: AngleOrientation,
+    pub(crate) second_winding: i32,
+}
+
+impl SketchAdFormula for EqualAngleResidual {
+    fn evaluate_dual(
+        &self,
+        variables: &[SketchAdValue],
+    ) -> Result<Vec<DualDVec64>, EvaluationError> {
+        let angle = |pair: [[usize; 2]; 2], orientation: AngleOrientation, winding: i32| {
+            let a = ad_point(variables, pair[0][0], "equal angle first support")?;
+            let b = ad_point(variables, pair[0][1], "equal angle first support")?;
+            let c = ad_point(variables, pair[1][0], "equal angle second support")?;
+            let d = ad_point(variables, pair[1][1], "equal angle second support")?;
+            let first = ad_unit(&[&b[0] - &a[0], &b[1] - &a[1]], "equal angle support")?;
+            let second = ad_unit(&[&d[0] - &c[0], &d[1] - &c[1]], "equal angle support")?;
+            let cross = &first[0] * &second[1] - &first[1] * &second[0];
+            let dot = &first[0] * &second[0] + &first[1] * &second[1];
+            Ok::<_, EvaluationError>(
+                cross.atan2(dot) * orientation.sign() + f64::from(winding) * std::f64::consts::TAU,
+            )
+        };
+        Ok(vec![
+            angle(self.first, self.first_orientation, self.first_winding)?
+                - angle(self.second, self.second_orientation, self.second_winding)?,
+        ])
+    }
+}
+
+impl ResidualEvaluator for EqualAngleResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, false).map(|(values, _)| values)
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, true).map(|(_, jacobians)| jacobians)
+    }
+}
+
 impl ResidualEvaluator for AxisDifferenceResidual {
     fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
         let (start, end) = two_points(variables, "axis-difference")?;

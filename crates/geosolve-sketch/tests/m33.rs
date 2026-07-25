@@ -19,7 +19,7 @@ const MATRIX: &str = include_str!("../../../docs/M33_CAD_CAPABILITY_MATRIX.md");
 const STATUSES: [&str; 7] = [
     "implemented_m32",
     "implemented_m36",
-    "planned_m37",
+    "implemented_m37",
     "planned_m38",
     "planned_m49",
     "unsupported_through_m55",
@@ -113,7 +113,7 @@ fn assert_status_contract(table: &Table) {
         let expected_target = match row[status_column] {
             "implemented_m32" => "M32",
             "implemented_m36" => "M36",
-            "planned_m37" => "M37",
+            "implemented_m37" => "M37",
             "planned_m38" => "M38",
             "planned_m49" => "M49",
             "unsupported_through_m55" | "conditional" => "M55",
@@ -137,7 +137,7 @@ fn marked_capability_tables_are_complete_deterministic_and_typed() {
         let expected_target = match row[0] {
             "implemented_m32" => "M32",
             "implemented_m36" => "M36",
-            "planned_m37" => "M37",
+            "implemented_m37" => "M37",
             "planned_m38" => "M38",
             "planned_m49" => "M49",
             "unsupported_through_m55" | "conditional" => "M55",

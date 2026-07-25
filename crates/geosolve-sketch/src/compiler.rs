@@ -14,14 +14,15 @@ use crate::curves::{
     validate_bounded_parameter, validate_radius,
 };
 use crate::model::{
-    ArcId, CircleId, ConicId, CoordinateAxis, CurveContactNeighborhood, DimensionKind,
-    DimensionMode, NurbsId, PersistentSource, PointId, SegmentId, Sketch, SketchConstraintId,
-    SketchConstraintKind, SketchCurve, SketchCurveContact, SketchDimensionId, SketchError,
-    validate_model_scale, validate_point,
+    ArcAngleEndpoint, ArcId, CircleId, ConicId, ConicScalarRole, CoordinateAxis,
+    CurveContactNeighborhood, DimensionKind, DimensionMode, NurbsId, PersistentSource, PointId,
+    SegmentId, Sketch, SketchConstraintId, SketchConstraintKind, SketchCurve, SketchCurveContact,
+    SketchDimensionId, SketchError, SketchScalarRef, validate_model_scale, validate_point,
 };
 use crate::residuals::{
     AxisDifferenceResidual, BezierIncidence, CircleArcTangencyResidual, CircleTangencyResidual,
-    CoincidentResidual, CurveParameterIncidence, DistanceResidual, FixedCoordinateResidual,
+    CoincidentResidual, CollinearResidual, CurveParameterIncidence, DistanceResidual,
+    EqualAngleResidual, EqualDistanceResidual, FixedCoordinateResidual,
     GenericCurveDirectionResidual, GenericCurveFilletResidual, GenericCurveIncidence,
     GenericCurvePairResidual, GenericEndpointContinuityResidual, GenericEqualCurvatureResidual,
     GenericPointOnCurveResidual, LineBezierTangencyResidual, LineCircleTangencyResidual,
@@ -135,14 +136,6 @@ pub struct ArcAngleVariableMapping {
     pub arc_id: ArcId,
     pub role: ArcAngleRole,
     pub variable_id: VariableId,
-}
-
-/// Scalar shape coordinate owned by one runtime conic.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ConicScalarRole {
-    MinorAxisRatio,
-    MiddleWeight,
-    SemiConjugate,
 }
 
 /// Exact conic-shape-scalar-to-core-variable relationship in conic insertion order.
@@ -1291,6 +1284,7 @@ impl Sketch {
             });
         }
         let mut arc_angle_variables = Vec::new();
+        let mut fillet_angle_arcs = Vec::new();
         for source in &self.source_order {
             if !compile_item(&mut control) {
                 return Ok(None);
@@ -1301,29 +1295,51 @@ impl Sketch {
             let Some(constraint) = self.constraints.get(constraint_id) else {
                 continue;
             };
-            let SketchConstraintKind::CurveCurveFillet { arc, .. } = constraint.kind() else {
-                continue;
+            let arcs = match constraint.kind() {
+                SketchConstraintKind::CurveCurveFillet { arc, .. } => vec![(arc, true)],
+                SketchConstraintKind::FixedArcAngle { arc, .. }
+                | SketchConstraintKind::FixedScalar {
+                    property: SketchScalarRef::ArcAngle { arc, .. },
+                    ..
+                } => vec![(arc, false)],
+                SketchConstraintKind::EqualScalar { first, second, .. } => [first, second]
+                    .into_iter()
+                    .filter_map(|property| match property {
+                        SketchScalarRef::ArcAngle { arc, .. } => Some((arc, false)),
+                        _ => None,
+                    })
+                    .collect(),
+                _ => continue,
             };
-            if arc_angle_variable_optional(&arc_angle_variables, arc, ArcAngleRole::Start).is_some()
-            {
-                return Err(geosolve_core::CoreError::InvalidSolverConfig {
-                    field: "associated arc angle mapping",
-                    message: "an output arc has more than one active fillet association",
+            for (arc, fillet) in arcs {
+                if fillet && fillet_angle_arcs.contains(&arc) {
+                    return Err(geosolve_core::CoreError::InvalidSolverConfig {
+                        field: "associated arc angle mapping",
+                        message: "an output arc has more than one active fillet association",
+                    }
+                    .into());
                 }
-                .into());
-            }
-            let arc_value = self.arc_value(arc)?;
-            retained_arc_turn_offset(arc_value)?;
-            for (role, value) in [
-                (ArcAngleRole::Start, arc_value.start_angle()),
-                (ArcAngleRole::End, arc_value.end_angle()),
-            ] {
-                let variable_id = problem.add_variable(VariableBlock::scalar(value, 1.0)?);
-                arc_angle_variables.push(ArcAngleVariableMapping {
-                    arc_id: arc,
-                    role,
-                    variable_id,
-                });
+                if fillet {
+                    fillet_angle_arcs.push(arc);
+                }
+                if arc_angle_variable_optional(&arc_angle_variables, arc, ArcAngleRole::Start)
+                    .is_some()
+                {
+                    continue;
+                }
+                let arc_value = self.arc_value(arc)?;
+                retained_arc_turn_offset(arc_value)?;
+                for (role, value) in [
+                    (ArcAngleRole::Start, arc_value.start_angle()),
+                    (ArcAngleRole::End, arc_value.end_angle()),
+                ] {
+                    let variable_id = problem.add_variable(VariableBlock::scalar(value, 1.0)?);
+                    arc_angle_variables.push(ArcAngleVariableMapping {
+                        arc_id: arc,
+                        role,
+                        variable_id,
+                    });
+                }
             }
         }
         let mut conic_vector_variables = Vec::new();
@@ -3567,6 +3583,39 @@ fn compile_constraint(
             "vertical",
             "x",
         )?,
+        SketchConstraintKind::HorizontalPoints { first, second }
+        | SketchConstraintKind::VerticalPoints { first, second } => {
+            let (coordinate, orientation, coordinate_name) = match constraint.kind() {
+                SketchConstraintKind::HorizontalPoints { .. } => (1, "horizontal", "y"),
+                SketchConstraintKind::VerticalPoints { .. } => (0, "vertical", "x"),
+                _ => unreachable!(),
+            };
+            let first_name = sketch.point_name(first)?;
+            let second_name = sketch.point_name(second)?;
+            let label = format!(
+                "constraint {}: {first_name} and {second_name} {orientation}",
+                constraint.ordinal()
+            );
+            let source_id = problem.add_source(SourceConstraint::new(&label)?);
+            let residual = ResidualBlock::new(
+                source_id,
+                ResidualCategory::Hard,
+                vec![
+                    point_variable(point_variables, first)?,
+                    point_variable(point_variables, second)?,
+                ],
+                1,
+                vec![scale],
+                vec![audit_row(
+                    format!(
+                        "({second_name}.{coordinate_name} - {first_name}.{coordinate_name}) / model_scale"
+                    ),
+                    pair_bindings(first_name, second_name),
+                )],
+                AxisDifferenceResidual { coordinate },
+            )?;
+            (label, residual)
+        }
         kind => {
             return compile_curve_constraint(
                 sketch,
@@ -3969,6 +4018,43 @@ fn compile_curve_constraint(
                 }),
             )
         }
+        SketchConstraintKind::Collinear { first, second } => {
+            let (_, _, first_value) = segment_points(sketch, first)?;
+            let (_, _, second_value) = segment_points(sketch, second)?;
+            let first_indices = segment_incidence(sketch, point_variables, &mut incidence, first)?;
+            let second_indices =
+                segment_incidence(sketch, point_variables, &mut incidence, second)?;
+            let bindings = vec![
+                AuditBinding::new("first", first_value.label()),
+                AuditBinding::new("second", second_value.label()),
+            ];
+            (
+                format!(
+                    "constraint {}: {} and {} collinear",
+                    constraint.ordinal(),
+                    first_value.label(),
+                    second_value.label()
+                ),
+                2,
+                vec![1.0, scale],
+                vec![
+                    audit_row_unit(
+                        "cross(unit_direction(first), unit_direction(second))".into(),
+                        bindings.clone(),
+                        "dimensionless",
+                    ),
+                    audit_row(
+                        "cross(unit_direction(first), second.start - first.start) / model_scale"
+                            .into(),
+                        bindings,
+                    ),
+                ],
+                Box::new(CollinearResidual {
+                    first: first_indices,
+                    second: second_indices,
+                }),
+            )
+        }
         SketchConstraintKind::EqualCircleRadius { first, second } => {
             let first_value = sketch.circle_value(first)?;
             let second_value = sketch.circle_value(second)?;
@@ -3991,6 +4077,227 @@ fn compile_curve_constraint(
                     ],
                 )],
                 Box::new(ScalarEqualityResidual),
+            )
+        }
+        SketchConstraintKind::EqualCircleArcRadius { circle, arc } => {
+            let circle_value = sketch.circle_value(circle)?;
+            let arc_value = sketch.arc_value(arc)?;
+            incidence.add(circle_radius_variable(circle_radius_variables, circle)?);
+            incidence.add(arc_radius_variable(arc_radius_variables, arc)?);
+            (
+                format!(
+                    "constraint {}: {} and {} equal circular radius",
+                    constraint.ordinal(),
+                    circle_value.label(),
+                    arc_value.label()
+                ),
+                1,
+                vec![scale],
+                vec![audit_row(
+                    "(radius(circle) - radius(arc)) / model_scale".into(),
+                    vec![
+                        AuditBinding::new("circle", circle_value.label()),
+                        AuditBinding::new("arc", arc_value.label()),
+                    ],
+                )],
+                Box::new(ScalarEqualityResidual),
+            )
+        }
+        SketchConstraintKind::EqualArcRadius { first, second } => {
+            let first_value = sketch.arc_value(first)?;
+            let second_value = sketch.arc_value(second)?;
+            incidence.add(arc_radius_variable(arc_radius_variables, first)?);
+            incidence.add(arc_radius_variable(arc_radius_variables, second)?);
+            (
+                format!(
+                    "constraint {}: {} and {} equal circular radius",
+                    constraint.ordinal(),
+                    first_value.label(),
+                    second_value.label()
+                ),
+                1,
+                vec![scale],
+                vec![audit_row(
+                    "(radius(first arc) - radius(second arc)) / model_scale".into(),
+                    vec![
+                        AuditBinding::new("first", first_value.label()),
+                        AuditBinding::new("second", second_value.label()),
+                    ],
+                )],
+                Box::new(ScalarEqualityResidual),
+            )
+        }
+        SketchConstraintKind::FixedArcAngle {
+            arc,
+            endpoint,
+            target,
+        } => {
+            let arc_value = sketch.arc_value(arc)?;
+            let role = match endpoint {
+                ArcAngleEndpoint::Start => ArcAngleRole::Start,
+                ArcAngleEndpoint::End => ArcAngleRole::End,
+            };
+            incidence.add(arc_angle_variable(arc_angle_variables, arc, role)?);
+            (
+                format!(
+                    "constraint {}: {} {endpoint:?} angle fixed",
+                    constraint.ordinal(),
+                    arc_value.label()
+                ),
+                1,
+                vec![1.0],
+                vec![audit_row_unit(
+                    "arc endpoint angle - captured angle".into(),
+                    vec![
+                        AuditBinding::new("arc", arc_value.label()),
+                        AuditBinding::new("endpoint", format!("{endpoint:?}")),
+                        AuditBinding::new("target", target.to_string()),
+                    ],
+                    "radian",
+                )],
+                Box::new(ScalarTargetResidual {
+                    target,
+                    multiplier: 1.0,
+                }),
+            )
+        }
+        SketchConstraintKind::FixedScalar {
+            property,
+            target,
+            residual_scale,
+        } => {
+            incidence.add(scalar_property_variable(
+                circle_radius_variables,
+                arc_radius_variables,
+                arc_angle_variables,
+                conic_scalar_variables,
+                nurbs_weight_variables,
+                property,
+            )?);
+            (
+                format!("constraint {}: mapped scalar fixed", constraint.ordinal()),
+                1,
+                vec![residual_scale],
+                vec![audit_row_unit(
+                    "property - target".into(),
+                    vec![
+                        AuditBinding::new("property", format!("{property:?}")),
+                        AuditBinding::new("target", target.to_string()),
+                    ],
+                    "property-unit",
+                )],
+                Box::new(ScalarTargetResidual {
+                    target,
+                    multiplier: 1.0,
+                }),
+            )
+        }
+        SketchConstraintKind::EqualScalar {
+            first,
+            second,
+            residual_scale,
+        } => {
+            incidence.add(scalar_property_variable(
+                circle_radius_variables,
+                arc_radius_variables,
+                arc_angle_variables,
+                conic_scalar_variables,
+                nurbs_weight_variables,
+                first,
+            )?);
+            incidence.add(scalar_property_variable(
+                circle_radius_variables,
+                arc_radius_variables,
+                arc_angle_variables,
+                conic_scalar_variables,
+                nurbs_weight_variables,
+                second,
+            )?);
+            (
+                format!("constraint {}: mapped scalars equal", constraint.ordinal()),
+                1,
+                vec![residual_scale],
+                vec![audit_row_unit(
+                    "first property - second property".into(),
+                    vec![
+                        AuditBinding::new("first", format!("{first:?}")),
+                        AuditBinding::new("second", format!("{second:?}")),
+                    ],
+                    "property-unit",
+                )],
+                Box::new(ScalarEqualityResidual),
+            )
+        }
+        SketchConstraintKind::EqualDistance { first, second } => {
+            let first_indices = [
+                incidence.add(point_variable(point_variables, first[0])?),
+                incidence.add(point_variable(point_variables, first[1])?),
+            ];
+            let second_indices = [
+                incidence.add(point_variable(point_variables, second[0])?),
+                incidence.add(point_variable(point_variables, second[1])?),
+            ];
+            let bindings = vec![
+                AuditBinding::new("first start", sketch.point_name(first[0])?),
+                AuditBinding::new("first end", sketch.point_name(first[1])?),
+                AuditBinding::new("second start", sketch.point_name(second[0])?),
+                AuditBinding::new("second end", sketch.point_name(second[1])?),
+            ];
+            (
+                format!(
+                    "constraint {}: equal point-pair distances",
+                    constraint.ordinal()
+                ),
+                1,
+                vec![scale],
+                vec![audit_row(
+                    "(distance(first) - distance(second)) / model_scale".into(),
+                    bindings,
+                )],
+                Box::new(EqualDistanceResidual {
+                    first: first_indices,
+                    second: second_indices,
+                }),
+            )
+        }
+        SketchConstraintKind::EqualAngle {
+            first,
+            second,
+            first_orientation,
+            first_winding,
+            second_orientation,
+            second_winding,
+        } => {
+            let mut pair_indices = |pair: [SegmentId; 2]| -> Result<[[usize; 2]; 2], SketchError> {
+                Ok([
+                    segment_incidence(sketch, point_variables, &mut incidence, pair[0])?,
+                    segment_incidence(sketch, point_variables, &mut incidence, pair[1])?,
+                ])
+            };
+            let first_indices = pair_indices(first)?;
+            let second_indices = pair_indices(second)?;
+            (
+                format!("constraint {}: equal directed angles", constraint.ordinal()),
+                1,
+                vec![1.0],
+                vec![audit_row_unit(
+                    "directed_angle(first, orientation, winding) - directed_angle(second, orientation, winding)".into(),
+                    vec![
+                        AuditBinding::new("first orientation", format!("{first_orientation:?}")),
+                        AuditBinding::new("first winding", first_winding.to_string()),
+                        AuditBinding::new("second orientation", format!("{second_orientation:?}")),
+                        AuditBinding::new("second winding", second_winding.to_string()),
+                    ],
+                    "radian",
+                )],
+                Box::new(EqualAngleResidual {
+                    first: first_indices,
+                    second: second_indices,
+                    first_orientation,
+                    first_winding,
+                    second_orientation,
+                    second_winding,
+                }),
             )
         }
         SketchConstraintKind::Midpoint { point, segment } => {
@@ -4019,6 +4326,41 @@ fn compile_curve_constraint(
                         bindings.clone(),
                     ),
                     audit_row("(P.y - (A.y + B.y)/2) / model_scale".into(), bindings),
+                ],
+                Box::new(evaluator),
+            )
+        }
+        SketchConstraintKind::PointSymmetry {
+            first,
+            second,
+            center,
+        } => {
+            let evaluator = MidpointResidual {
+                point: incidence.add(point_variable(point_variables, center)?),
+                start: incidence.add(point_variable(point_variables, first)?),
+                end: incidence.add(point_variable(point_variables, second)?),
+            };
+            let bindings = vec![
+                AuditBinding::new("first", sketch.point_name(first)?),
+                AuditBinding::new("second", sketch.point_name(second)?),
+                AuditBinding::new("center", sketch.point_name(center)?),
+            ];
+            (
+                format!(
+                    "constraint {}: point symmetry about center",
+                    constraint.ordinal()
+                ),
+                2,
+                vec![scale, scale],
+                vec![
+                    audit_row(
+                        "(center.x - (first.x + second.x)/2) / model_scale".into(),
+                        bindings.clone(),
+                    ),
+                    audit_row(
+                        "(center.y - (first.y + second.y)/2) / model_scale".into(),
+                        bindings,
+                    ),
                 ],
                 Box::new(evaluator),
             )
@@ -6110,6 +6452,35 @@ fn nurbs_weight_variable(
             nurbs,
             index: control_index,
         })
+}
+
+fn scalar_property_variable(
+    circle_mappings: &[CircleRadiusVariableMapping],
+    arc_mappings: &[ArcRadiusVariableMapping],
+    arc_angle_mappings: &[ArcAngleVariableMapping],
+    conic_mappings: &[ConicScalarVariableMapping],
+    nurbs_mappings: &[NurbsWeightVariableMapping],
+    property: SketchScalarRef,
+) -> Result<VariableId, SketchError> {
+    match property {
+        SketchScalarRef::CircleRadius(circle) => circle_radius_variable(circle_mappings, circle),
+        SketchScalarRef::ArcRadius(arc) => arc_radius_variable(arc_mappings, arc),
+        SketchScalarRef::ArcAngle { arc, endpoint } => arc_angle_variable(
+            arc_angle_mappings,
+            arc,
+            match endpoint {
+                ArcAngleEndpoint::Start => ArcAngleRole::Start,
+                ArcAngleEndpoint::End => ArcAngleRole::End,
+            },
+        ),
+        SketchScalarRef::ConicScalar { conic, role } => {
+            conic_scalar_variable(conic_mappings, conic, role)
+        }
+        SketchScalarRef::NurbsWeight {
+            nurbs,
+            control_index,
+        } => nurbs_weight_variable(nurbs_mappings, nurbs, control_index),
+    }
 }
 
 fn nurbs_weight_value(

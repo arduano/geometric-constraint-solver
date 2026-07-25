@@ -316,6 +316,40 @@ pub enum SegmentEndpoint {
     End,
 }
 
+/// Start or end angle coordinate of a directed circular arc.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ArcAngleEndpoint {
+    Start,
+    End,
+}
+
+/// Scalar shape coordinate owned by one runtime conic.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ConicScalarRole {
+    MinorAxisRatio,
+    MiddleWeight,
+    SemiConjugate,
+}
+
+/// Closed runtime scalar-property operand used by semantic scalar relations.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SketchScalarRef {
+    CircleRadius(CircleId),
+    ArcRadius(ArcId),
+    ArcAngle {
+        arc: ArcId,
+        endpoint: ArcAngleEndpoint,
+    },
+    ConicScalar {
+        conic: ConicId,
+        role: ConicScalarRole,
+    },
+    NurbsWeight {
+        nurbs: NurbsId,
+        control_index: usize,
+    },
+}
+
 /// Relative tangent direction selected by a generic curve tangency.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CurveTangentOrientation {
@@ -429,6 +463,14 @@ pub enum SketchConstraintKind {
     Vertical {
         segment: SegmentId,
     },
+    HorizontalPoints {
+        first: PointId,
+        second: PointId,
+    },
+    VerticalPoints {
+        first: PointId,
+        second: PointId,
+    },
     PointOnLine {
         point: PointId,
         segment: SegmentId,
@@ -458,6 +500,10 @@ pub enum SketchConstraintKind {
         first: SegmentId,
         second: SegmentId,
     },
+    Collinear {
+        first: SegmentId,
+        second: SegmentId,
+    },
     Perpendicular {
         first: SegmentId,
         second: SegmentId,
@@ -470,6 +516,41 @@ pub enum SketchConstraintKind {
         first: CircleId,
         second: CircleId,
     },
+    EqualCircleArcRadius {
+        circle: CircleId,
+        arc: ArcId,
+    },
+    EqualArcRadius {
+        first: ArcId,
+        second: ArcId,
+    },
+    FixedArcAngle {
+        arc: ArcId,
+        endpoint: ArcAngleEndpoint,
+        target: f64,
+    },
+    FixedScalar {
+        property: SketchScalarRef,
+        target: f64,
+        residual_scale: f64,
+    },
+    EqualScalar {
+        first: SketchScalarRef,
+        second: SketchScalarRef,
+        residual_scale: f64,
+    },
+    EqualDistance {
+        first: [PointId; 2],
+        second: [PointId; 2],
+    },
+    EqualAngle {
+        first: [SegmentId; 2],
+        second: [SegmentId; 2],
+        first_orientation: AngleOrientation,
+        first_winding: i32,
+        second_orientation: AngleOrientation,
+        second_winding: i32,
+    },
     Midpoint {
         point: PointId,
         segment: SegmentId,
@@ -478,6 +559,11 @@ pub enum SketchConstraintKind {
         first: PointId,
         second: PointId,
         line: SegmentId,
+    },
+    PointSymmetry {
+        first: PointId,
+        second: PointId,
+        center: PointId,
     },
     LineCircleTangency {
         line: SegmentId,
@@ -1063,6 +1149,219 @@ impl Sketch {
         Ok(self.insert_constraint(SketchConstraintKind::Vertical { segment }))
     }
 
+    /// Constrains two arbitrary stored point features to share their Y coordinate.
+    ///
+    /// # Errors
+    /// Returns an error for missing or repeated point identities.
+    pub fn add_horizontal_points(
+        &mut self,
+        first: PointId,
+        second: PointId,
+    ) -> Result<SketchConstraintId, SketchError> {
+        self.validate_point_pair(first, second)?;
+        Ok(self.insert_constraint(SketchConstraintKind::HorizontalPoints { first, second }))
+    }
+
+    /// Constrains two arbitrary stored point features to share their X coordinate.
+    ///
+    /// # Errors
+    /// Returns an error for missing or repeated point identities.
+    pub fn add_vertical_points(
+        &mut self,
+        first: PointId,
+        second: PointId,
+    ) -> Result<SketchConstraintId, SketchError> {
+        self.validate_point_pair(first, second)?;
+        Ok(self.insert_constraint(SketchConstraintKind::VerticalPoints { first, second }))
+    }
+
+    /// Constrains two directed line supports to the same infinite supporting line.
+    ///
+    /// # Errors
+    /// Returns an error for a missing or degenerate support.
+    pub fn add_collinear(
+        &mut self,
+        first: SegmentId,
+        second: SegmentId,
+    ) -> Result<SketchConstraintId, SketchError> {
+        self.validate_segment_geometry(first)?;
+        self.validate_segment_geometry(second)?;
+        Ok(self.insert_constraint(SketchConstraintKind::Collinear { first, second }))
+    }
+
+    /// Constrains the midpoint of two points to an explicit center point.
+    ///
+    /// # Errors
+    /// Returns an error for missing or repeated point identities.
+    pub fn add_point_symmetry(
+        &mut self,
+        first: PointId,
+        second: PointId,
+        center: PointId,
+    ) -> Result<SketchConstraintId, SketchError> {
+        self.validate_point_pair(first, second)?;
+        self.point_position(center)?;
+        Ok(self.insert_constraint(SketchConstraintKind::PointSymmetry {
+            first,
+            second,
+            center,
+        }))
+    }
+
+    /// Equates two point-pair distances without introducing a target dimension.
+    ///
+    /// # Errors
+    /// Returns an error for a missing or repeated point in either pair.
+    pub fn add_equal_distance(
+        &mut self,
+        first_start: PointId,
+        first_end: PointId,
+        second_start: PointId,
+        second_end: PointId,
+    ) -> Result<SketchConstraintId, SketchError> {
+        self.validate_point_pair(first_start, first_end)?;
+        self.validate_point_pair(second_start, second_end)?;
+        Ok(self.insert_constraint(SketchConstraintKind::EqualDistance {
+            first: [first_start, first_end],
+            second: [second_start, second_end],
+        }))
+    }
+
+    /// Equates two explicitly oriented and unwrapped angles between line supports.
+    ///
+    /// # Errors
+    /// Returns an error for a missing or degenerate support.
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_equal_angle(
+        &mut self,
+        first_from: SegmentId,
+        first_to: SegmentId,
+        second_from: SegmentId,
+        second_to: SegmentId,
+        first_orientation: AngleOrientation,
+        first_winding: i32,
+        second_orientation: AngleOrientation,
+        second_winding: i32,
+    ) -> Result<SketchConstraintId, SketchError> {
+        for segment in [first_from, first_to, second_from, second_to] {
+            self.validate_segment_geometry(segment)?;
+        }
+        Ok(self.insert_constraint(SketchConstraintKind::EqualAngle {
+            first: [first_from, first_to],
+            second: [second_from, second_to],
+            first_orientation,
+            first_winding,
+            second_orientation,
+            second_winding,
+        }))
+    }
+
+    /// Equates a full-circle radius with a circular-arc radius.
+    ///
+    /// # Errors
+    /// Returns an error for a missing circle or arc.
+    pub fn add_equal_circle_arc_radius(
+        &mut self,
+        circle: CircleId,
+        arc: ArcId,
+    ) -> Result<SketchConstraintId, SketchError> {
+        self.circle_value(circle)?;
+        self.arc_value(arc)?;
+        Ok(self.insert_constraint(SketchConstraintKind::EqualCircleArcRadius { circle, arc }))
+    }
+
+    /// Equates the radii of two circular arcs.
+    ///
+    /// # Errors
+    /// Returns an error for a missing arc.
+    pub fn add_equal_arc_radius(
+        &mut self,
+        first: ArcId,
+        second: ArcId,
+    ) -> Result<SketchConstraintId, SketchError> {
+        self.arc_value(first)?;
+        self.arc_value(second)?;
+        Ok(self.insert_constraint(SketchConstraintKind::EqualArcRadius { first, second }))
+    }
+
+    /// Fixes one directed circular-arc endpoint angle as part of grouped entity blocking.
+    ///
+    /// # Errors
+    /// Returns an error for a missing arc or non-finite target.
+    pub fn add_fixed_arc_angle(
+        &mut self,
+        arc: ArcId,
+        endpoint: ArcAngleEndpoint,
+        target: f64,
+    ) -> Result<SketchConstraintId, SketchError> {
+        self.arc_value(arc)?;
+        validate_finite(target, "fixed arc angle")?;
+        Ok(self.insert_constraint(SketchConstraintKind::FixedArcAngle {
+            arc,
+            endpoint,
+            target,
+        }))
+    }
+
+    /// Fixes one mapped scalar property through an executable hard row.
+    ///
+    /// # Errors
+    /// Returns an error for a missing property or invalid target/scale.
+    pub fn add_fixed_scalar(
+        &mut self,
+        property: SketchScalarRef,
+        target: f64,
+        residual_scale: f64,
+    ) -> Result<SketchConstraintId, SketchError> {
+        self.validate_scalar_ref(property)?;
+        validate_finite(target, "fixed scalar target")?;
+        validate_model_scale(residual_scale)?;
+        Ok(self.insert_constraint(SketchConstraintKind::FixedScalar {
+            property,
+            target,
+            residual_scale,
+        }))
+    }
+
+    /// Equates two mapped scalar properties through one executable hard row.
+    ///
+    /// # Errors
+    /// Returns an error for a missing property or invalid residual scale.
+    pub fn add_equal_scalar(
+        &mut self,
+        first: SketchScalarRef,
+        second: SketchScalarRef,
+        residual_scale: f64,
+    ) -> Result<SketchConstraintId, SketchError> {
+        self.validate_scalar_ref(first)?;
+        self.validate_scalar_ref(second)?;
+        validate_model_scale(residual_scale)?;
+        Ok(self.insert_constraint(SketchConstraintKind::EqualScalar {
+            first,
+            second,
+            residual_scale,
+        }))
+    }
+
+    fn validate_scalar_ref(&self, property: SketchScalarRef) -> Result<(), SketchError> {
+        match property {
+            SketchScalarRef::CircleRadius(circle) => self.circle_value(circle).map(|_| ()),
+            SketchScalarRef::ArcRadius(arc) | SketchScalarRef::ArcAngle { arc, .. } => {
+                self.arc_value(arc).map(|_| ())
+            }
+            SketchScalarRef::ConicScalar { conic, .. } => self
+                .conics
+                .get(conic)
+                .map(|_| ())
+                .ok_or(SketchError::UnknownConic(conic)),
+            SketchScalarRef::NurbsWeight { nurbs, .. } => self
+                .nurbs
+                .get(nurbs)
+                .map(|_| ())
+                .ok_or(SketchError::UnknownNurbs(nurbs)),
+        }
+    }
+
     #[must_use]
     pub fn constraint(&self, constraint: SketchConstraintId) -> Option<&SketchConstraint> {
         self.constraints.get(constraint)
@@ -1373,7 +1672,11 @@ fn constraint_references_point(
     match kind {
         SketchConstraintKind::FixedPoint { point: id, .. }
         | SketchConstraintKind::FixedCoordinate { point: id, .. } => id == point,
-        SketchConstraintKind::Coincident { first, second } => first == point || second == point,
+        SketchConstraintKind::Coincident { first, second }
+        | SketchConstraintKind::HorizontalPoints { first, second }
+        | SketchConstraintKind::VerticalPoints { first, second } => {
+            first == point || second == point
+        }
         SketchConstraintKind::Horizontal { segment }
         | SketchConstraintKind::Vertical { segment } => sketch
             .segment_endpoints(segment)
@@ -1431,7 +1734,8 @@ fn constraint_references_point(
         } => constrained == point || contact.curve.references_point(sketch, point),
         SketchConstraintKind::Parallel { first, second }
         | SketchConstraintKind::Perpendicular { first, second }
-        | SketchConstraintKind::EqualSegmentLength { first, second } => [first, second]
+        | SketchConstraintKind::EqualSegmentLength { first, second }
+        | SketchConstraintKind::Collinear { first, second } => [first, second]
             .into_iter()
             .filter_map(|segment| sketch.segment_endpoints(segment).ok())
             .any(|(start, end)| start == point || end == point),
@@ -1440,6 +1744,39 @@ fn constraint_references_point(
             .into_iter()
             .filter_map(|circle| sketch.circles.get(circle))
             .any(|circle| circle.center() == point),
+        SketchConstraintKind::EqualCircleArcRadius { circle, arc } => {
+            sketch
+                .circles
+                .get(circle)
+                .is_some_and(|value| value.center() == point)
+                || sketch
+                    .arcs
+                    .get(arc)
+                    .is_some_and(|value| value.center() == point)
+        }
+        SketchConstraintKind::EqualArcRadius { first, second } => [first, second]
+            .into_iter()
+            .filter_map(|arc| sketch.arcs.get(arc))
+            .any(|arc| arc.center() == point),
+        SketchConstraintKind::FixedArcAngle { arc, .. } => sketch
+            .arcs
+            .get(arc)
+            .is_some_and(|arc| arc.center() == point),
+        SketchConstraintKind::FixedScalar { property, .. } => {
+            scalar_ref_references_point(property, point, sketch)
+        }
+        SketchConstraintKind::EqualScalar { first, second, .. } => {
+            scalar_ref_references_point(first, point, sketch)
+                || scalar_ref_references_point(second, point, sketch)
+        }
+        SketchConstraintKind::EqualDistance { first, second } => {
+            first.contains(&point) || second.contains(&point)
+        }
+        SketchConstraintKind::EqualAngle { first, second, .. } => first
+            .into_iter()
+            .chain(second)
+            .filter_map(|segment| sketch.segment_endpoints(segment).ok())
+            .any(|(start, end)| start == point || end == point),
         SketchConstraintKind::SymmetricAboutLine {
             first,
             second,
@@ -1451,6 +1788,11 @@ fn constraint_references_point(
                     .segment_endpoints(line)
                     .is_ok_and(|(start, end)| start == point || end == point)
         }
+        SketchConstraintKind::PointSymmetry {
+            first,
+            second,
+            center,
+        } => first == point || second == point || center == point,
         SketchConstraintKind::LineCircleTangency { line, circle, .. } => {
             sketch
                 .segment_endpoints(line)
@@ -1508,6 +1850,27 @@ fn constraint_references_point(
                     .get(arc)
                     .is_some_and(|value| value.center() == point)
         }
+    }
+}
+
+fn scalar_ref_references_point(property: SketchScalarRef, point: PointId, sketch: &Sketch) -> bool {
+    match property {
+        SketchScalarRef::CircleRadius(circle) => sketch
+            .circles
+            .get(circle)
+            .is_some_and(|curve| curve.center() == point),
+        SketchScalarRef::ArcRadius(arc) | SketchScalarRef::ArcAngle { arc, .. } => sketch
+            .arcs
+            .get(arc)
+            .is_some_and(|curve| curve.center() == point),
+        SketchScalarRef::ConicScalar { conic, .. } => sketch
+            .conics
+            .get(conic)
+            .is_some_and(|curve| curve.points().contains(&point)),
+        SketchScalarRef::NurbsWeight { nurbs, .. } => sketch
+            .nurbs
+            .get(nurbs)
+            .is_some_and(|curve| curve.controls().contains(&point)),
     }
 }
 
