@@ -23,9 +23,9 @@ M23-M31 subsequently complete spatial kinematics, sketch embedding identities,
 advanced constructions, generic fillets and persistent trim views, interactive
 construction/NURBS UAT and certified all-family visual profiles.
 
-- **Baseline:** implemented behavior through M35, including the completed M33 contract/baselines, retained-design lifecycle and cooperative operation control, with M1-M7 domain behavior protected as the frozen regression baseline.
-- **Active target:** M36 semantic feature and scalar foundations.
-- **Planned target:** M36-M55 production sketch embedding, CAD-like desktop consumer, companion operations/topology and release qualification. Planned statements are not implemented capabilities.
+- **Baseline:** implemented behavior through M36, including the completed M33 contract/baselines, retained-design lifecycle, cooperative operation control and closed semantic operand/scalar foundations, with M1-M7 domain behavior protected as the frozen regression baseline.
+- **Active target:** M37 standard planar constraint catalog.
+- **Planned target:** M37-M55 production sketch embedding, CAD-like desktop consumer, companion operations/topology and release qualification. Planned statements are not implemented capabilities.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 

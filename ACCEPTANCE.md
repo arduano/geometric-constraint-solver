@@ -643,6 +643,20 @@ locked native, WASM, rustdoc, Trunk and release gates pass. M35 acceptance is co
 - Composite relations retain one semantic source and complete structured audit evidence.
 - No coordinate proximity or public plugin callback selects operand or branch meaning.
 
+Completion record (2026-07-25): M36 adds closed, serializable references for points,
+centers, endpoints, owning-curve plus persistent-point controls (including
+refinement-stable B-spline/NURBS controls), directions, line supports, curve spans and
+scalar properties. Fixed/equal scalar sources live in one strict document-bound
+catalog, reserve identities through the document allocator, carry explicit
+unit/domain/support/neighborhood/branch provenance and lower deterministically to
+separate raw and normalized hard-row values/Jacobians with complete structured audit.
+Normalized scalar-row derivatives pass central finite differences at all required
+scales; malformed topology/neighborhoods, sibling/document identity collisions,
+persistence, cancellation/work exhaustion and tampered public row/audit evidence have
+focused regressions. The catalog is serialized separately from frozen sketch v1-v4,
+and M37/M38 catalog and measurement behavior is not implied. M36 acceptance is
+complete.
+
 ## M37 acceptance: standard constraint catalog
 
 - Concentric, collinear, point-pair horizontal/vertical, block/fix, point symmetry and broadened equal/symmetry relations cover the frozen applicability matrix.

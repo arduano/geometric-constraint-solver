@@ -1348,19 +1348,43 @@ and leaves the prior accepted state bitwise unchanged.
 
 ## M36: semantic feature and scalar foundations
 
-Status: active.
+Status: complete as of 2026-07-25.
 
 Goal: create closed typed operands for a complete CAD catalog without exposing an
 arbitrary curve or residual plugin interface.
 
-- [ ] Introduce capability-specific references for points, centers, endpoints, controls, directions, line supports, curve spans and scalar properties.
-- [ ] Add explicit fixed/equal scalar semantics and the units/domains required by signed length, angle, dimensionless, curvature and parameter values.
-- [ ] Preserve one persistent semantic source when a relation lowers into several ordinary rows.
-- [ ] Make every operand serializable, audit-readable and branch-aware without coordinate inference.
-- [ ] Add exhaustive current-schema command/effect/measurement characterization before extending the catalog.
+- [x] Introduce capability-specific references for points, centers, endpoints, controls, directions, line supports, curve spans and scalar properties.
+- [x] Add explicit fixed/equal scalar semantics and the units/domains required by signed length, angle, dimensionless, curvature and parameter values.
+- [x] Preserve one persistent semantic source when a relation lowers into several ordinary rows.
+- [x] Make every operand serializable, audit-readable and branch-aware without coordinate inference.
+- [x] Add exhaustive current-schema command/effect/measurement characterization before extending the catalog.
 
 Gate: every semantic operand validates through persistent IDs, lowers deterministically
 and has exact, malformed, persistence and audit coverage.
+
+Completion record (2026-07-25): capability-specific persistent operands now cover
+point, center, endpoint, persistent owning-curve control identity (including
+B-spline/NURBS controls across knot insertion), directed
+axis/tangent/normal, directed line support and stable curve spans with explicit
+winding. Closed scalar-property operands distinguish length, angle, dimensionless,
+inverse-length curvature and curve parameters while retaining explicit signed-length,
+orientation, side, winding and neighborhood provenance. Fixed/equal scalar sources
+live in one separately serialized document-bound catalog whose deterministic
+allocation reserves the document high-water ID and rejects duplicate/out-of-order
+sibling identities. They validate exact unit/domain/support/neighborhood compatibility,
+lower deterministically to clearly separated raw and normalized hard-row evaluation
+and Jacobians, pass normalized central finite differences at all required scales and
+require independent `1e-9` validation of recomputed values and public evidence
+structure. Controlled lowering reports cancellation/work exhaustion without mutation.
+
+The new strict semantic-source catalog serde is deliberately separate from frozen sketch v1-v4;
+canonical v4 bytes and strict older readers remain unchanged. Exhaustive stable kind
+tables characterize all 30 current commands, 28 accepted effects and 16 current
+dimension/differential/conic measurements. Thirteen focused M36 regressions cover
+exact, malformed, persistence, refinement-stable control identity, complete parameter
+branch invariants, scale, cancellation, reserved identity collision, audit corruption,
+normalized finite differences and accepted-row validation behavior. M37 relation
+catalog and M38 persistent measurement/path-length behavior remain unimplemented.
 
 ## M37: standard planar constraint catalog
 

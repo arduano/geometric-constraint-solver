@@ -18,7 +18,7 @@ use geosolve_sketch::{
 const MATRIX: &str = include_str!("../../../docs/M33_CAD_CAPABILITY_MATRIX.md");
 const STATUSES: [&str; 7] = [
     "implemented_m32",
-    "planned_m36",
+    "implemented_m36",
     "planned_m37",
     "planned_m38",
     "planned_m49",
@@ -112,7 +112,7 @@ fn assert_status_contract(table: &Table) {
     for row in &table.rows {
         let expected_target = match row[status_column] {
             "implemented_m32" => "M32",
-            "planned_m36" => "M36",
+            "implemented_m36" => "M36",
             "planned_m37" => "M37",
             "planned_m38" => "M38",
             "planned_m49" => "M49",
@@ -136,7 +136,7 @@ fn marked_capability_tables_are_complete_deterministic_and_typed() {
     for row in &statuses.rows {
         let expected_target = match row[0] {
             "implemented_m32" => "M32",
-            "planned_m36" => "M36",
+            "implemented_m36" => "M36",
             "planned_m37" => "M37",
             "planned_m38" => "M38",
             "planned_m49" => "M49",

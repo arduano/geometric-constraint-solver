@@ -19,7 +19,7 @@ persistent semantic source.
 | status | target | meaning |
 | --- | --- | --- |
 | implemented_m32 | M32 | Public behavior implemented and released in the baseline through M32 |
-| planned_m36 | M36 | Contract target for semantic feature and scalar foundations only |
+| implemented_m36 | M36 | Public closed semantic operands scalar row foundations and characterization implemented at M36 |
 | planned_m37 | M37 | Contract target for the standard planar relation catalog only |
 | planned_m38 | M38 | Contract target for dimensions and persistent measurements only |
 | planned_m49 | M49 | Contract target for the separate sketch-operations companion only |
@@ -74,10 +74,10 @@ typed operands, not additions to the current public enum.
 | conic_minor_axis_endpoint | DocumentConicFeature::MinorAxisEndpoint | point | ellipse,elliptical_arc | implemented_m32 | M32 | Immutable conic query uses explicit minor-axis orientation |
 | conic_bounded_endpoint | DocumentConicFeature::BoundedEndpoint | point | elliptical_arc,rational_quadratic_conic,parabola,hyperbola | implemented_m32 | M32 | Immutable conic query selects one explicit bounded trim endpoint |
 | conic_selected_branch_vertex | DocumentConicFeature::SelectedBranchVertex | point | hyperbola | implemented_m32 | M32 | Immutable conic query retains the explicit hyperbola branch |
-| direction | typed_direction_ref | direction | all_15 | planned_m36 | M36 | Standard relations need a closed directed operand independent of storage layout |
-| line_support | typed_line_support_ref | line_support | line,polyline | planned_m36 | M36 | Collinearity offsets and symmetry require an explicit supporting line operand |
-| curve_span | typed_curve_span_ref | curve_span | all_15 | planned_m36 | M36 | Generic contact length and differential consumers need stable semantic span identity |
-| scalar_property | typed_scalar_property_ref | scalar | all_15 | planned_m36 | M36 | Fixed equal and dimensional relations require a closed unit-bearing property operand |
+| direction | DocumentDirectionRef | direction | all_15 | implemented_m36 | M36 | Closed directed operands retain axis support tangent or normal branch state independently of storage layout |
+| line_support | DocumentLineSupportRef | line_support | line,polyline | implemented_m36 | M36 | Persistent semantic span plus explicit forward or reverse direction selects the supporting line |
+| curve_span | DocumentCurveSpanRef | curve_span | all_15 | implemented_m36 | M36 | Stable semantic span identity and explicit winding validate without coordinate inference |
+| scalar_property | DocumentScalarPropertyRef | scalar | all_15 | implemented_m36 | M36 | Persistent scalar identity carries a closed unit domain and unit-specific branch contract |
 <!-- M33_TABLE:feature_kinds:END -->
 
 ## Relations
@@ -113,8 +113,8 @@ relation state and do not introduce an undocumented residual formula.
 | endpoint_continuity | DocumentConstraintDefinition::EndpointContinuity | endpoint_contact,endpoint_contact | mixed_length_dimensionless | ordered_path | endpoint_order,span,winding,continuity,rates | G0=2,G1=3,G2=4,ParametricC2=6 | implemented_m32 | M32 | Ordered common jets implement separately named geometric and parametric continuity |
 | line_line_fillet | DocumentConstraintDefinition::LineLineFillet | output_arc,line_contact,line_contact | mixed_length_dimensionless | side_selected | two_normal_sides,endpoint_order,sweep,neighborhood | 6_hard | implemented_m32 | M32 | One association emits four offset-center rows and two output-radial rows |
 | curve_curve_fillet | DocumentConstraintDefinition::CurveCurveFillet | output_arc,curve_contact,curve_contact | mixed_length_dimensionless | side_selected | two_normal_sides,two_trim_endpoints,endpoint_order,sweep,span,winding,neighborhood | 6_hard | implemented_m32 | M32 | Common-jet association supports all regular family pairs with explicit trim ownership |
-| fixed_scalar | fixed_scalar_relation | scalar_property,target | property_unit | property_defined | scalar_domain | 1_hard | planned_m36 | M36 | Closed scalar operands must exist before scalar relations are public |
-| equal_scalar | equal_scalar_relation | scalar_property,scalar_property | property_unit | property_defined | scalar_domain | 1_hard | planned_m36 | M36 | Compatible units and domains are validated before one equality row is emitted |
+| fixed_scalar | DocumentScalarRelation::Fixed | scalar_property,target | property_unit | property_defined | scalar_domain | 1_hard | implemented_m36 | M36 | One catalog-owned persistent semantic source lowers one deterministic raw/normalized row with complete audit and independent evidence validation |
+| equal_scalar | DocumentScalarRelation::Equal | scalar_property,scalar_property | property_unit | property_defined | scalar_domain | 1_hard | implemented_m36 | M36 | Exact unit domain support and neighborhood compatibility is validated before one deterministic equality row is emitted |
 | concentric | concentric_relation | center_feature,center_feature | length | signed_cartesian | none | 2_hard | planned_m37 | M37 | Only center-bearing families are applicable |
 | collinear | collinear_relation | line_support,line_support | mixed_length_dimensionless | orientation_invariant | none | 2_hard | planned_m37 | M37 | Parallel direction and zero signed support offset form one semantic source |
 | horizontal_points | horizontal_point_pair_relation | point,point | length | signed_difference | none | 1_hard | planned_m37 | M37 | Arbitrary point features no longer require a line entity |
@@ -191,9 +191,9 @@ semantic sign convention; it is not a separate physical dimension.
 | length | ScalarUnit::Length | length | domain_and_semantic_role | none | property_defined | implemented_m32 | M32 | Canonical model-unit length exists in v4 |
 | angle | ScalarUnit::Angle | angle | orientation_and_unwrap | orientation,winding | property_defined | implemented_m32 | M32 | Canonical numeric angle is radians |
 | parameter | ScalarUnit::Parameter | curve_parameter | domain_defined | span,winding,neighborhood | property_defined | implemented_m32 | M32 | Curve parameter value is not a model length |
-| dimensionless | dimensionless_unit | dimensionless | property_defined | none | property_defined | planned_m36 | M36 | Ratios and other scalar properties must not masquerade as parameters |
-| curvature | curvature_unit | inverse_length | signed_by_parameter_orientation | normal_side_or_sign_relation | property_defined | planned_m36 | M36 | Curvature requires a distinct inverse-length quantity |
-| signed_length_semantics | Length+Finite+semantic_sign | length | signed | operand_order,axis,side_or_datum | property_defined | planned_m36 | M36 | Signed relative and datum values require explicit sign provenance |
+| dimensionless | DocumentScalarUnit::Dimensionless | dimensionless | property_defined | none | property_defined | implemented_m36 | M36 | Explicit operand semantics distinguish ratios from frozen-v4 parameter storage |
+| curvature | DocumentScalarUnit::Curvature | inverse_length | signed_by_parameter_orientation | normal_side_or_sign_relation | property_defined | implemented_m36 | M36 | Distinct inverse-length scaling and explicit signed or normal-side state are validated |
+| signed_length_semantics | DocumentScalarBranch::SignedLength | length | signed | operand_order,axis,side_or_datum | property_defined | implemented_m36 | M36 | Closed provenance records ordered axis side or datum meaning without inspecting coordinates |
 <!-- M33_TABLE:scalar_units:END -->
 
 <!-- M33_TABLE:scalar_domains:BEGIN -->
@@ -218,7 +218,7 @@ a target row elsewhere in this document.
 | center_without_semantic_center | center_feature | line,polyline,rational_quadratic_conic,parabola,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m55 | M55 | These definitions carry no unique semantic center |
 | focus_without_semantic_focus | focus_feature | line,polyline,circle,circular_arc,rational_quadratic_conic,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m55 | M55 | These definitions carry no unique conic focus |
 | axis_without_semantic_axis | axis_feature | circle,circular_arc,rational_quadratic_conic,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m55 | M55 | An axis cannot be selected from incidental coordinates |
-| spline_control_feature_current_gap | curve_control_feature | clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | planned_m36 | M36 | Current FeatureRef does not expose spline controls although definitions store them |
+| spline_control_feature_current_gap | DocumentControlRef | clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | implemented_m36 | M36 | The capability-specific operand uses owning curve plus persistent point membership and survives knot insertion; legacy FeatureRef retains its frozen index language |
 | public_curve_plugin | curve_family | arbitrary_trait_object | unsupported_through_m55 | M55 | Built-in and external snapshot curve languages remain closed and serializable |
 | implicit_coefficient_conic | curve_family | implicit_polynomial_coefficients | unsupported_through_m55 | M55 | Unnormalized implicit coefficient gauges are outside the explicit parametric model |
 | spatial_sketch_curve | curve_family | three_dimensional_curve | unsupported_through_m55 | M55 | Sketch geometry remains planar and host projection is external input |

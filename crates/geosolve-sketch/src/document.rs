@@ -565,6 +565,84 @@ pub enum FeatureRef {
     },
 }
 
+/// Capability-specific point operand with no coordinate-based fallback.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DocumentPointRef {
+    Point { point: DesignPointId },
+    Center(DocumentCenterRef),
+    Endpoint(DocumentEndpointRef),
+    Control(DocumentControlRef),
+    Focus { curve: CurveId, index: u32 },
+    FixedCurveLocation { contact: ContactId },
+}
+
+/// Capability-specific reference to a curve's stored semantic center.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentCenterRef {
+    pub curve: CurveId,
+}
+
+/// Capability-specific reference to one non-periodic curve endpoint.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentEndpointRef {
+    pub curve: CurveId,
+    pub endpoint: FeatureEndpoint,
+}
+
+/// Capability-specific reference to one stored point control.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentControlRef {
+    pub curve: CurveId,
+    pub control: DesignPointId,
+}
+
+/// Explicit orientation of a direction or supporting-line operand.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DocumentDirectionSense {
+    Forward,
+    Reverse,
+}
+
+/// Persistent directed supporting-line operand.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentLineSupportRef {
+    pub span: CurveSpan,
+    pub direction: DocumentDirectionSense,
+}
+
+/// Persistent curve-span operand with explicit traversal winding.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentCurveSpanRef {
+    pub span: CurveSpan,
+    pub winding: i32,
+}
+
+/// Closed direction operand. Branch selection is serialized in every variant.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DocumentDirectionRef {
+    CurveAxis {
+        curve: CurveId,
+        direction: DocumentDirectionSense,
+    },
+    LineSupport(DocumentLineSupportRef),
+    CurveTangent {
+        contact: ContactId,
+        direction: DocumentDirectionSense,
+    },
+    CurveNormal {
+        contact: ContactId,
+        side: DocumentCurveNormalSide,
+    },
+}
+
 /// One finite point-valued feature exposed by the persistent conic query seam.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DocumentConicFeature {
@@ -1177,6 +1255,8 @@ pub struct SketchDocument {
     constraints: Vec<DocumentConstraint>,
     dimensions: Vec<DocumentDimension>,
     source_order: Vec<DocumentSourceId>,
+    /// Ownership for semantic catalogs persisted outside frozen sketch v1-v4.
+    semantic_source_reservations: BTreeMap<DocumentSourceId, DocumentSourceId>,
     mutation_validation_deferred: bool,
 }
 
@@ -1562,6 +1642,7 @@ impl From<SketchDocumentV1> for SketchDocument {
                 .map(DocumentDimension::from)
                 .collect(),
             source_order: document.source_order,
+            semantic_source_reservations: BTreeMap::new(),
             mutation_validation_deferred: false,
         }
     }
@@ -1651,6 +1732,7 @@ impl From<SketchDocumentV2> for SketchDocument {
                 .collect(),
             dimensions: document.dimensions,
             source_order: document.source_order,
+            semantic_source_reservations: BTreeMap::new(),
             mutation_validation_deferred: false,
         }
     }
@@ -1691,6 +1773,7 @@ impl From<SketchDocumentV3> for SketchDocument {
                 .collect(),
             dimensions: document.dimensions,
             source_order: document.source_order,
+            semantic_source_reservations: BTreeMap::new(),
             mutation_validation_deferred: false,
         }
     }
@@ -1747,6 +1830,7 @@ impl From<SketchDocumentV4> for SketchDocument {
             constraints: document.constraints,
             dimensions: document.dimensions,
             source_order: document.source_order,
+            semantic_source_reservations: BTreeMap::new(),
             mutation_validation_deferred: false,
         }
     }
@@ -1795,6 +1879,7 @@ impl SketchDocument {
             constraints: Vec::new(),
             dimensions: Vec::new(),
             source_order: Vec::new(),
+            semantic_source_reservations: BTreeMap::new(),
             mutation_validation_deferred: false,
         })
     }
@@ -2960,11 +3045,11 @@ impl SketchDocument {
                     | CurveDefinition::EllipticalArc { .. }
                     | CurveDefinition::RationalQuadraticConic { .. }
                     | CurveDefinition::ParabolaSegment { .. }
-                    | CurveDefinition::HyperbolaSegment { .. }
-                    | CurveDefinition::BSpline { .. }
-                    | CurveDefinition::Nurbs { .. } => 0,
+                    | CurveDefinition::HyperbolaSegment { .. } => 0,
                     CurveDefinition::QuadraticBezier { .. } => 3,
                     CurveDefinition::CubicBezier { .. } => 4,
+                    CurveDefinition::BSpline { controls, .. }
+                    | CurveDefinition::Nurbs { controls, .. } => controls.len(),
                 };
                 if usize::try_from(index).map_or(true, |value| value >= count) {
                     return invalid("feature control", "control index is outside the curve");
@@ -2986,6 +3071,160 @@ impl SketchDocument {
             FeatureRef::FixedCurveLocation { contact } => {
                 self.require_contact(contact)?;
             }
+        }
+        Ok(())
+    }
+
+    /// Validates one closed point-valued operand through persistent identity.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a missing identity or unsupported capability.
+    pub fn validate_point_ref(&self, point: DocumentPointRef) -> Result<(), DocumentError> {
+        let feature = match point {
+            DocumentPointRef::Point { point } => FeatureRef::Point { point },
+            DocumentPointRef::Center(center) => FeatureRef::CurveCenter {
+                curve: center.curve,
+            },
+            DocumentPointRef::Endpoint(endpoint) => FeatureRef::CurveEndpoint {
+                curve: endpoint.curve,
+                endpoint: endpoint.endpoint,
+            },
+            DocumentPointRef::Control(control) => return self.validate_control_ref(control),
+            DocumentPointRef::Focus { curve, index } => FeatureRef::CurveFocus { curve, index },
+            DocumentPointRef::FixedCurveLocation { contact } => {
+                FeatureRef::FixedCurveLocation { contact }
+            }
+        };
+        self.validate_feature(feature)
+    }
+
+    /// Validates a center operand without accepting an incidental coordinate match.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the curve is missing or has no semantic center.
+    pub fn validate_center_ref(&self, center: DocumentCenterRef) -> Result<(), DocumentError> {
+        self.validate_feature(FeatureRef::CurveCenter {
+            curve: center.curve,
+        })
+    }
+
+    /// Validates an endpoint operand without manufacturing an endpoint for periodic topology.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the curve is missing or has no semantic endpoint.
+    pub fn validate_endpoint_ref(
+        &self,
+        endpoint: DocumentEndpointRef,
+    ) -> Result<(), DocumentError> {
+        self.validate_feature(FeatureRef::CurveEndpoint {
+            curve: endpoint.curve,
+            endpoint: endpoint.endpoint,
+        })
+    }
+
+    /// Validates a stored control operand, including B-spline and NURBS controls.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the curve is missing or the persistent point is not one
+    /// of that curve's stored controls.
+    pub fn validate_control_ref(&self, control: DocumentControlRef) -> Result<(), DocumentError> {
+        self.resolve_control_ref(control).map(|_| ())
+    }
+
+    /// Resolves a stored control through its persistent point identity.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the owning curve is missing, the point is missing, or
+    /// the point is not a stored control of that curve.
+    pub fn resolve_control_ref(
+        &self,
+        control: DocumentControlRef,
+    ) -> Result<DesignPointId, DocumentError> {
+        self.require_point(control.control)?;
+        let curve = self
+            .curve(control.curve)
+            .ok_or_else(|| unknown("curve", control.curve.0))?;
+        let controls: &[DesignPointId] = match &curve.definition {
+            CurveDefinition::Line { start, end, .. } => {
+                if control.control == *start || control.control == *end {
+                    return Ok(control.control);
+                }
+                &[]
+            }
+            CurveDefinition::Polyline { points, .. }
+            | CurveDefinition::BSpline {
+                controls: points, ..
+            }
+            | CurveDefinition::Nurbs {
+                controls: points, ..
+            } => points,
+            CurveDefinition::QuadraticBezier { controls } => controls,
+            CurveDefinition::CubicBezier { controls } => controls,
+            _ => &[],
+        };
+        if controls.contains(&control.control) {
+            Ok(control.control)
+        } else {
+            invalid(
+                "feature control",
+                "persistent point is not a stored control of the owning curve",
+            )
+        }
+    }
+
+    /// Validates one directed line-support operand.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error unless the persistent span is a line or polyline segment.
+    pub fn validate_line_support_ref(
+        &self,
+        support: DocumentLineSupportRef,
+    ) -> Result<(), DocumentError> {
+        self.validate_line_span(support.span)?;
+        Ok(())
+    }
+
+    /// Validates one branch-explicit direction operand.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a missing or unsupported semantic direction.
+    pub fn validate_direction_ref(
+        &self,
+        direction: DocumentDirectionRef,
+    ) -> Result<(), DocumentError> {
+        match direction {
+            DocumentDirectionRef::CurveAxis { curve, .. } => {
+                self.validate_feature(FeatureRef::CurveAxis { curve })
+            }
+            DocumentDirectionRef::LineSupport(support) => self.validate_line_support_ref(support),
+            DocumentDirectionRef::CurveTangent { contact, .. }
+            | DocumentDirectionRef::CurveNormal { contact, .. } => {
+                let contact = self.require_contact(contact)?;
+                self.contact_differential(contact)?;
+                Ok(())
+            }
+        }
+    }
+
+    /// Validates one stable semantic span and its explicit traversal winding.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a missing span or nonzero winding on non-periodic topology.
+    pub fn validate_curve_span_ref(&self, span: DocumentCurveSpanRef) -> Result<(), DocumentError> {
+        self.validate_span(span.span)?;
+        if span.winding != 0 && !self.trim_support_allows_winding(span.span)? {
+            return invalid(
+                "curve span winding",
+                "non-periodic topology requires zero winding",
+            );
         }
         Ok(())
     }
@@ -6450,6 +6689,69 @@ impl SketchDocument {
 
     pub(crate) const fn allocator_cursor(&self) -> PersistentId {
         self.next_id
+    }
+
+    pub(crate) fn allocate_semantic_catalog_id(
+        &mut self,
+    ) -> Result<DocumentSourceId, DocumentError> {
+        let id = DocumentSourceId(self.allocate_id()?);
+        self.semantic_source_reservations.insert(id, id);
+        Ok(id)
+    }
+
+    pub(crate) fn allocate_semantic_source_id(
+        &mut self,
+        catalog: DocumentSourceId,
+    ) -> Result<DocumentSourceId, DocumentError> {
+        if self.semantic_source_reservations.get(&catalog) != Some(&catalog) {
+            return invalid(
+                "semantic catalog identity",
+                "catalog is not reserved by this document",
+            );
+        }
+        let id = DocumentSourceId(self.allocate_id()?);
+        self.semantic_source_reservations.insert(id, catalog);
+        Ok(id)
+    }
+
+    pub(crate) fn semantic_reservation_owner(
+        &self,
+        id: DocumentSourceId,
+    ) -> Option<DocumentSourceId> {
+        self.semantic_source_reservations.get(&id).copied()
+    }
+
+    pub(crate) fn register_semantic_catalog(
+        &mut self,
+        catalog: DocumentSourceId,
+        sources: &[DocumentSourceId],
+    ) -> Result<(), DocumentError> {
+        let mut ids = Vec::with_capacity(sources.len() + 1);
+        ids.push(catalog);
+        ids.extend_from_slice(sources);
+        let mut unique = BTreeSet::new();
+        for id in &ids {
+            if !unique.insert(*id) {
+                return Err(DocumentError::DuplicateId(id.0));
+            }
+            if id.0 >= self.next_id || self.element(id.0).is_some() {
+                return invalid(
+                    "semantic source identity",
+                    "identity is not a reserved, non-element document ID",
+                );
+            }
+            if self.semantic_source_reservations.contains_key(id) {
+                return invalid(
+                    "semantic source identity",
+                    "identity is already owned by a loaded semantic catalog",
+                );
+            }
+        }
+        self.semantic_source_reservations.insert(catalog, catalog);
+        for source in sources {
+            self.semantic_source_reservations.insert(*source, catalog);
+        }
+        Ok(())
     }
 
     pub(crate) fn spline_span_allocator_cursors(&self) -> BTreeMap<CurveId, u32> {

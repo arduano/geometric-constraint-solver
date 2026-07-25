@@ -27,6 +27,7 @@ mod alpha_scenarios;
 mod attributes;
 mod beziers;
 mod bsplines;
+mod characterization;
 mod compiler;
 mod conics;
 mod curves;
@@ -39,6 +40,7 @@ mod nurbs;
 mod profiles;
 mod residuals;
 mod scenarios;
+mod semantic;
 mod session;
 
 pub use alpha_scenarios::{
@@ -55,6 +57,9 @@ pub use alpha_scenarios::{
 pub use attributes::{SketchAttributeError, SketchAttributes};
 pub use beziers::{BezierCurve, BezierEvaluationError, BezierKind};
 pub use bsplines::BSplineCurve;
+pub use characterization::{
+    CurrentDocumentCommandKind, CurrentDocumentEffectKind, CurrentMeasurementKind,
+};
 pub use compiler::{
     ArcAngleRole, ArcAngleVariableMapping, ArcRadiusVariableMapping, CircleRadiusVariableMapping,
     CompiledSketch, ConicScalarRole, ConicScalarVariableMapping, ConicVectorRole,
@@ -79,22 +84,24 @@ pub use document::{
     CurveFilletParentRequest, CurveId, CurveSpan, DesignCurve, DesignPoint, DesignPointId,
     DesignScalar, DesignScalarId, DocumentAngleOrientation, DocumentArcSweep,
     DocumentArcTangencySide, DocumentBSplineForm, DocumentBSplineInsertion,
-    DocumentBSplineSpanDirection, DocumentCircleContainment, DocumentCircleTangencyMode,
-    DocumentConicFeature, DocumentConicMeasurement, DocumentConicQueryError, DocumentConstraint,
-    DocumentConstraintDefinition, DocumentConstraintId, DocumentCoordinateAxis,
-    DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation,
-    DocumentCurveEvaluationError, DocumentCurveMeasurementError, DocumentCurveMeasurementKind,
-    DocumentCurveNormalSide, DocumentCurveTrimView, DocumentDimension, DocumentDimensionDefinition,
-    DocumentDimensionId, DocumentDimensionMode, DocumentElementId, DocumentError,
-    DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint, DocumentHyperbolaBranch, DocumentId,
-    DocumentLineOffsetOrientation, DocumentLineSide, DocumentMirroredBSplineInsertion,
-    DocumentNurbsInsertion, DocumentObjectId, DocumentSourceId, DocumentSourceOwner,
-    DocumentSourceRef, DocumentTrimBoundary, DocumentTrimParameter, DocumentTrimProjection,
-    DocumentTrimProjectionError, DocumentVisibleCurveInterval, FeatureEndpoint, FeatureRef,
-    LineLineFilletIds, LineLineFilletRequest, MAX_BSPLINE_CONTROLS, MAX_DOCUMENT_JSON_BYTES,
-    MAX_DOCUMENT_OBJECTS, MAX_LABEL_BYTES, MAX_POLYLINE_POINTS, MirroredCurveIds, PersistentId,
-    RectangleIds, SKETCH_DOCUMENT_VERSION, ScalarDomain, ScalarUnit, SketchDocument,
-    TangentOrientation,
+    DocumentBSplineSpanDirection, DocumentCenterRef, DocumentCircleContainment,
+    DocumentCircleTangencyMode, DocumentConicFeature, DocumentConicMeasurement,
+    DocumentConicQueryError, DocumentConstraint, DocumentConstraintDefinition,
+    DocumentConstraintId, DocumentControlRef, DocumentCoordinateAxis, DocumentCurveContinuity,
+    DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation, DocumentCurveEvaluationError,
+    DocumentCurveMeasurementError, DocumentCurveMeasurementKind, DocumentCurveNormalSide,
+    DocumentCurveSpanRef, DocumentCurveTrimView, DocumentDimension, DocumentDimensionDefinition,
+    DocumentDimensionId, DocumentDimensionMode, DocumentDirectionRef, DocumentDirectionSense,
+    DocumentElementId, DocumentEndpointRef, DocumentError, DocumentFilletEndpointOrder,
+    DocumentFilletTrimEndpoint, DocumentHyperbolaBranch, DocumentId, DocumentLineOffsetOrientation,
+    DocumentLineSide, DocumentLineSupportRef, DocumentMirroredBSplineInsertion,
+    DocumentNurbsInsertion, DocumentObjectId, DocumentPointRef, DocumentSourceId,
+    DocumentSourceOwner, DocumentSourceRef, DocumentTrimBoundary, DocumentTrimParameter,
+    DocumentTrimProjection, DocumentTrimProjectionError, DocumentVisibleCurveInterval,
+    FeatureEndpoint, FeatureRef, LineLineFilletIds, LineLineFilletRequest, MAX_BSPLINE_CONTROLS,
+    MAX_DOCUMENT_JSON_BYTES, MAX_DOCUMENT_OBJECTS, MAX_LABEL_BYTES, MAX_POLYLINE_POINTS,
+    MirroredCurveIds, PersistentId, RectangleIds, SKETCH_DOCUMENT_VERSION, ScalarDomain,
+    ScalarUnit, SketchDocument, TangentOrientation,
 };
 pub use document_lowering::{
     ContactRuntimeMapping, CurveRuntimeMapping, DocumentContactRole, DocumentRuntimeMap,
@@ -140,6 +147,12 @@ pub use profiles::{
 pub use scenarios::{
     ConflictingRectangleIds, TangentCirclesIds, UnderconstrainedTriangleIds, conflicting_rectangle,
     redundant_rectangle, tangent_circles, underconstrained_triangle,
+};
+pub use semantic::{
+    DocumentScalarAudit, DocumentScalarAuditBinding, DocumentScalarBranch,
+    DocumentScalarPropertyRef, DocumentScalarRelation, DocumentScalarRow, DocumentScalarSource,
+    DocumentScalarUnit, DocumentSemanticSourceCatalog, DocumentSignedLengthProvenance,
+    LoweredDocumentScalarSource,
 };
 pub use session::{
     SketchPatch, SketchSession, SketchSessionError, SketchSessionPatch, SketchSessionRevisions,
