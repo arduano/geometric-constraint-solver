@@ -180,8 +180,8 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   top: -0.45rem;
   left: calc(100% - 0.15rem);
   width: 20rem;
-  max-height: min(38rem, calc(100vh - 5rem));
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
   padding: 0.45rem;
   visibility: hidden;
   border: 1px solid #596263;
