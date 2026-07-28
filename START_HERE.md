@@ -18,7 +18,8 @@ M54 completed stable sketch-owned diagnostics, M55 completed the preserved alpha
 constraint/dimension/branch-action surface, M56 completed prepared jobs and exact-input
 compare-and-swap publication, M57 completed dependency-local retained solving and bounded
 production-scale evidence, M58 completed the deterministic equation-free sketch operations
-companion and multi-interval visible topology, and M59 is now active. The workbench is a
+companion and multi-interval visible topology, M59 completed the revision-stamped production
+topology companion, and M60 is now active. The workbench is a
 non-authoritative demo consumer, not a production UI or third solver. Mobile support and
 physics remain outside future acceptance.
 
@@ -75,8 +76,10 @@ added complete-input snapshots, typed scratch jobs, non-mutating patches and saf
 native/WASM scheduling. M57 retained compatible runtime/core state, indexed persistent mappings,
 dependency-local updates, accepted-revision profile caches and honest bounded rank/scale evidence.
 M58 added `geosolve-sketch-ops`, exact-stamped public transaction proposals and ordered
-multi-interval visible supports without adding residuals or changing canonical v4.
-The active milestone is **M59: production topology companion**. Old Chromium/CDP, HTTP
+multi-interval visible supports without adding residuals or changing canonical v4. M59 added
+`geosolve-sketch-topology`, complete-input accepted snapshots, bounded ambiguity evidence,
+independently validated oriented wires/regions/holes and exact native/external source provenance.
+The active milestone is **M60: advanced workbench completion**. Old Chromium/CDP, HTTP
 serving, DOM-scraping, screenshot, wall-clock browser-timing and source-substring-scan gates remain
 retired.
 
@@ -124,6 +127,7 @@ Durable cleanup records:
 - `docs/M56_IMPLEMENTATION.md`
 - `docs/M57_IMPLEMENTATION.md`
 - `docs/M58_IMPLEMENTATION.md`
+- `docs/M59_IMPLEMENTATION.md`
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

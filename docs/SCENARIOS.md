@@ -1259,9 +1259,9 @@ instruction or a supported persistence format.
 
 M33-M44 add the current production-embedding fixtures without replacing the frozen
 scenarios above. Cleanup M46-M53 preserves their durable behavior through direct tests and
-approved post-cleanup UAT. M54-M58 complete stable diagnostics, early alpha action parity,
-prepared concurrency, incremental scale and the equation-free operations companion; M59-M64 own
-the remaining production-topology/release scope. Every
+approved post-cleanup UAT. M54-M59 complete stable diagnostics, early alpha action parity,
+prepared concurrency, incremental scale and the separate operations/production-topology
+companions; M60-M64 own the remaining advanced-workbench/release scope. Every
 new fixture must name its exact design, parameter, external-snapshot, activation and
 accepted-state revisions. The workbench remains a desktop-only public-API consumer; no
 mobile scenario is required.
@@ -1527,6 +1527,35 @@ not coordinate proximity. Canonical v4 export/import rejects multi-interval and 
 constraint-contact topology, while the hidden draft-v5 bridge round-trips it pending M62. The
 companion depends directly only on `geosolve-sketch` and `geosolve-geometry`; it has no direct
 core, linkage, production-topology or UI dependency.
+
+### M59-C1 - Complete production topology and fail-closed provenance
+
+The direct M59 corpus captures immutable complete retained-input stamps only when the accepted
+geometry belongs to that exact design and host input. It exercises the separate read-only
+production-topology companion without a UI, B-rep owner or operation-owned equation:
+
+1. one exact square publishes a complete counterclockwise wire and bounded region; concentric
+   circles publish deterministic outer/hole nesting with certified signed area;
+2. profile-only and profile-plus-construction queries publish their declared native scope, while
+   external line inclusion publishes binding, source revision, digest and parameter-domain
+   provenance and explicitly lists ignored external point entries;
+3. open supports, overlaps, tangent contours, T-junctions and rejected self-intersections publish
+   typed incomplete evidence and no consumable wire;
+4. deterministic wire limits return `Truncated`, repeated identical snapshot/request queries are
+   value-identical, and cancellation/work exhaustion remains a separate outer outcome;
+5. a complete M58 split edge with two adjacent visible intervals closes the same square through
+   exact semantic parameter provenance rather than coordinate welding; and
+6. newer design/parameter/activation/external/request/policy input makes captured output stale,
+   while cancelled/exhausted queries leave the live session and accepted geometry unchanged.
+
+Visual-profile analysis is only bounded candidate evidence. M59 independently verifies declared
+eligible-source coverage, source parameter enclosures, freshly evaluated edge endpoints, wire
+closure, certified orientation/area and output counts. Only `Complete` constructs
+`TopologyProductionProfile`, and host consumption must pass exact-input `validate_current`.
+External line endpoints do not proximity-weld to native endpoints: M43 has no persistent
+cross-owner endpoint relationship, so such mixed closure remains `Skipped` until a future host
+identity contract exists. The companion depends directly only on `geosolve-sketch` and
+`geosolve-geometry` and owns no residual, live solver/session, publication or B-rep state.
 
 ### UAT-C3 - Advanced geometry and topology at M61
 

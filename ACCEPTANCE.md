@@ -1050,6 +1050,21 @@ qualification pass without a private residual, browser harness or restored legac
 - Tangency, overlap, touching, T-junction and self-intersection policies are explicit and bounded.
 - Stale, cancelled, truncated or ambiguous output cannot be consumed as a production profile and never changes solver state.
 
+Completion record (2026-07-29): `geosolve-sketch-topology` captures only the current
+independently accepted state for the complete retained design/host input stamp. Queries declare
+profile/construction and immutable external-line scope, all ambiguity policies and deterministic
+candidate/output limits. Visual analysis is bounded candidate evidence, not promoted output:
+eligible-source coverage, exact interval/domain provenance, parameter enclosures, fresh endpoints,
+closure, signed-area orientation and output counts are independently checked before a
+`TopologyProductionProfile` exists.
+
+Complete profiles expose oriented wires and outer/hole regions with exact native visible-interval
+or external binding/revision/digest/domain provenance, and must revalidate exact live-session input
+before host consumption. Cancelled/work-exhausted operations and truncated/skipped topology never
+carry consumable production output or mutate solve state. Fifteen direct cases cover complete,
+ambiguous, bounded, stale, worker-movable, external/construction and M58 multi-interval behavior;
+focused compatibility, full workspace, WASM and release Trunk qualification pass.
+
 ### M60: advanced workbench and direct qualification
 
 - The M55 alpha action surface remains complete while advanced geometry and companion workflows are

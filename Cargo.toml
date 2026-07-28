@@ -7,6 +7,7 @@ members = [
     "crates/geosolve-linkage",
     "crates/geosolve-sketch",
     "crates/geosolve-sketch-ops",
+    "crates/geosolve-sketch-topology",
 ]
 resolver = "3"
 

@@ -1,0 +1,21 @@
+[package]
+name = "geosolve-sketch-topology"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+license-file.workspace = true
+readme.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Revision-stamped production wire extraction for GeoSolve sketches"
+documentation = "https://docs.rs/geosolve-sketch-topology/0.2.0"
+keywords = ["cad", "sketch", "topology", "geometry"]
+categories = ["algorithms", "mathematics", "science"]
+
+[dependencies]
+geosolve-geometry = { version = "0.2.0", path = "../geosolve-geometry" }
+geosolve-sketch = { version = "0.2.0", path = "../geosolve-sketch" }
+thiserror.workspace = true
+
+[lints]
+workspace = true

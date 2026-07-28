@@ -23,16 +23,16 @@ M23-M31 subsequently complete spatial kinematics, sketch embedding identities,
 advanced constructions, generic fillets and persistent trim views, interactive
 construction/NURBS UAT and certified all-family visual profiles.
 
-- **Baseline:** implemented and accepted behavior through M58. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology. M1-M7 remain the frozen regression baseline.
-- **Active target:** M59 owns the revision-stamped production topology companion.
-- **Planned sequence:** M59-M64 carries the qualified operations baseline through production release scope.
+- **Baseline:** implemented and accepted behavior through M59. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology; M59 adds the read-only production-topology companion with exact accepted-input provenance and fail-closed completeness. M1-M7 remain the frozen regression baseline.
+- **Active target:** M60 owns advanced-workbench completion and direct qualification.
+- **Planned sequence:** M60-M64 carries the qualified companion baseline through production release scope.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
 `PLAN.md` owns current execution numbering. Milestone labels in the preserved M8
 completion record and in ADRs accepted before the playground rebaseline describe the
 allocation at acceptance time; their architectural decisions remain accepted, but
-current ownership is the completed M10-M58 sequence and executable M59-M64 sequence listed in
+current ownership is the completed M10-M59 sequence and executable M60-M64 sequence listed in
 section 15.
 
 ## 3. Crate responsibilities
@@ -196,10 +196,14 @@ private residual equation, solver state or B-rep topology. Several visible inter
 one immutable support through exact fixed/contact boundary identity; canonical sketch v4 remains
 frozen until M62.
 
-M59 targets a `geosolve-sketch-topology` companion for revision-stamped production
-wires, nesting, holes and source provenance. Its complete output may feed a host B-rep
-feature, but it owns no B-rep entities and never changes sketch solve state. M33
-accepted both names and boundaries; only the topology companion remains planned.
+M59 completes `geosolve-sketch-topology`, a read-only companion for revision-stamped production
+wires, nesting, holes and exact source provenance. It accepts only the current independently
+accepted state for the complete retained input, uses visual-profile analysis solely as bounded
+candidate evidence, and independently checks declared source coverage, parameter provenance,
+fresh endpoints, closure, orientation/area and output limits. Complete output may feed a host
+B-rep feature, but the companion owns no B-rep entities and never changes sketch solve state.
+Cancelled, exhausted, truncated, skipped, ambiguous or stale results cannot be consumed as a
+production profile.
 
 ### `geosolve-linkage`
 
@@ -583,6 +587,6 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
 - M56: completed prepared jobs and concurrency contract.
 - M57: completed incremental production-scale solving.
 - M58: completed sketch-operation companion and multi-interval visible topology.
-- M59: active production-topology companion.
-- M60-M61: planned advanced workbench and human advanced/topology UAT.
+- M59: completed production-topology companion.
+- M60-M61: active advanced workbench followed by human advanced/topology UAT.
 - M62-M64: planned v5/API candidate freeze, integrated human UAT and production embedding release.

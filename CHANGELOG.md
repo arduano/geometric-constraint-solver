@@ -47,6 +47,12 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   linear-pattern expansions.
 - Ordered non-overlapping multi-interval visibility over immutable curve supports, including
   exact fixed/contact boundary identity and ordinary point-on-curve-owned trim boundaries.
+- The separate `geosolve-sketch-topology` companion with complete-input accepted snapshots,
+  worker-movable controlled queries, explicit native/construction/external scope and bounded
+  tangency/overlap/touching/T-junction/self-intersection policies.
+- Independently checked production wires, outer/hole regions, certified orientation/area and exact
+  native-visible-interval or immutable-external-line provenance. Only complete current results
+  expose a consumable production profile.
 
 ### Changed
 
@@ -99,6 +105,10 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   Unsupported exact transforms are never sampled into approximations; stale, cancelled,
   exhausted and foreign-input proposals cannot mutate the live session. Canonical sketch v4
   remains frozen and rejects M58-only topology until the planned M62 schema freeze.
+- Completed M59 without promoting visual-profile output directly or adding B-rep state.
+  Candidate evidence is independently checked for declared-source coverage, parameters,
+  endpoints, closure, orientation, area and output limits. Stale, cancelled, exhausted,
+  truncated, ambiguous and uncovered-source results cannot be consumed as production topology.
 
 ## [0.2.0] - 2026-07-22
 

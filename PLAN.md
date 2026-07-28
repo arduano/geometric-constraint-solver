@@ -2496,14 +2496,58 @@ all-feature workspace suite, demo-web and operations WASM checks and the Trunk r
 
 ### M59: production topology companion
 
-Status: active; begins from the qualified M58 operation/topology boundary.
+Status: complete as of 2026-07-29.
 
-Scope: revision-stamped complete wires/profiles, nesting/holes/provenance, explicit
-ambiguity policy, declared construction/external filtering and typed incomplete outcomes.
+Goal: add a separate read-only production-topology companion without converting bounded visual
+analysis directly into a B-rep claim or giving the companion solver/publication ownership.
+
+- [x] Add `geosolve-sketch-topology` with direct dependencies only on public sketch and immutable
+  geometry APIs, plus native/WASM-safe controlled prepared queries.
+- [x] Capture the complete current retained input and matching independently accepted state;
+  reject retained accepted geometry from any older design, parameter, activation, external,
+  request or solver-policy input.
+- [x] Require explicit native profile/construction and external line scope, and publish exact
+  eligible-source evidence including ignored external point entries.
+- [x] Publish typed bounded policy for tangency, overlap, touching contours, T-junctions and
+  self-intersections, with separate complete/truncated/skipped evidence.
+- [x] Independently validate source coverage, parameter enclosures, fresh endpoints, wire closure,
+  certified orientation/area, outer/hole nesting and output limits before exposing a production
+  profile.
+- [x] Publish exact native visible-interval and immutable external line revision/digest/domain
+  provenance, plus exact-input validation before host consumption.
+- [x] Directly qualify determinism, safe worker ownership, stale/cancelled/exhausted atomicity,
+  ambiguity policies, construction/external filtering, M58 multi-interval compatibility and
+  dependency boundaries under native, workspace and WASM gates.
+
+Gate: complete. Only a current `Complete` result carries consumable production wires and regions.
+The companion owns no residual, live session, accepted publication path or B-rep entity.
+
+Completion notes (2026-07-29): `TopologySnapshot` captures one complete
+`PreparedSketchInput` only when the accepted state was independently published for that exact
+design and host input. `PreparedTopologyQuery` is worker-movable and returns outer
+cancelled/work-exhausted outcomes separately from `TopologyCompleteness`. `TopologyRequest`
+records native construction and immutable external-line scope, all ambiguity policies and
+deterministic analysis/output limits.
+
+Visual-profile analysis supplies bounded candidate evidence only. The companion independently
+checks complete eligible-source coverage, exact interval/domain provenance, parameter enclosures,
+fresh curve endpoint evaluation, closure, certified signed-area orientation and output counts.
+Only `TopologyCompleteness::Complete` constructs `TopologyProductionProfile`; every live consumer
+must pass exact-stamp `validate_current`. Native multi-interval sources retain exact boundary
+provenance. External line snapshots retain binding, revision, digest and domain evidence but do
+not proximity-weld to native endpoints because M43 has no persistent cross-owner endpoint join.
+
+The 15-case M59 suite covers square and nested-hole production output, construction filtering,
+external line/point scope, open/overlap/tangent/T-junction/self-intersection failures, deterministic
+output truncation and replay, safe worker movement, M58 multi-interval closure, cancellation/
+exhaustion/stale atomicity, older design/host-input rejection and manifest isolation. Focused
+M26/M28/M31/M34/M57 and M58 compatibility, warnings-denied Clippy, the complete workspace,
+topology/demo WASM and release Trunk gates pass. `docs/M59_IMPLEMENTATION.md` records exact APIs,
+commands and limitations.
 
 ### M60: advanced workbench completion
 
-Status: planned; begins after M59 passes.
+Status: active; begins from the qualified M59 production-topology boundary.
 
 Scope: build on the completed M55 action surface by adding advanced curves/branches, companion
 operations, production profiles, stable diagnostics, cancellation/stale presentation and a
