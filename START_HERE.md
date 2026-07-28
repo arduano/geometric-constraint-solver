@@ -80,8 +80,9 @@ approval.
 
 M53-P012 subsequently supersedes S3 before human ratings: the top dropdown remains, but nested
 group disclosures are replaced by right-expanding hover/focus flyouts for faster navigation. The
-stable scenarios, guidance and fixture semantics are unchanged; clean S4 qualification remains
-pending.
+stable scenarios, guidance and fixture semantics are unchanged. The complete clean release gate
+passes from build-source commit `49ddcb8`; `docs/M53_UAT.md` records the frozen M53-S4 manifest and
+temporary human endpoint. Targeted supervising-human review remains pending.
 
 The displaced functional/release roadmap is preserved as literal placeholders
 M100X-M109X: stable diagnostics, prepared jobs, incremental scale, operations, production

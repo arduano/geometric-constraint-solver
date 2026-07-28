@@ -11,10 +11,9 @@ post-cleanup candidate and objective direct qualification. This file is now cons
 for its sole active purpose: **M53 is active and alone owns the supervising-human ratings and
 approval here.**
 
-`PLAN.md` now marks M52 complete. M53-S3 is superseded before ratings by the flyout-navigation
-request M53-P012, so the scorecard remains paused until a newly qualified M53-S4 candidate is
-recorded below. No blank rating, automated result or historical M44 observation counts as M53
-approval.
+`PLAN.md` now marks M52 complete. M53-S3 was superseded before ratings by the flyout-navigation
+request M53-P012. The newly qualified M53-S4 candidate is ready for targeted human review; no
+blank rating, automated result or historical M44 observation counts as M53 approval.
 
 ## Durable M53 review and change control
 
@@ -46,6 +45,7 @@ replace or defer another finding, roadmap item or open question.
 | M53-S1 | `feat/m53-host-semantics-uat` at base `9002565`, qualified M38-M52 working tree; recorded release distribution manifest SHA-256 `ea878d3b4dceff61a46c68734dc00f627a089e77a9cd02720ce92017b9235af2` | retired temporary endpoint; no longer valid | no human review started | superseded before review: recovery audit found the live watcher had rebuilt `dist` to manifest `868d45822086714cd457bb2e9912d4b57f3aeb44dcc58663e363c365a7195d88`, so the served bytes no longer matched the recorded identity |
 | M53-S2 | clean build-source commit `66fd90d62d06a810e465185e24fff40ebbea5ef2`; release distribution manifest SHA-256 `65f74cd18ed59e443848c65da1efd5e89150b7b95742eff629fa9bc9d8c8a751` | retired temporary endpoint; no longer valid | no human review started | superseded before ratings by the material M53-P011 scenario-selector presentation change; server stopped before S3 qualification |
 | M53-S3 | clean build-source commit `17a4a25ee1e3d0ee4d0b27a1f08dd7d23e6437aa`; release distribution manifest SHA-256 `213b8f41b18af239738eb0336651216fa4693a8f1ecbefa0f2f7bf7d6b675518` | retired temporary endpoint; no longer valid | no human review started | superseded before ratings by M53-P012; server stopped before flyout-selector implementation and S4 qualification |
+| M53-S4 | clean build-source commit `49ddcb8ea8d098ec7a3e38180465d9df43831457`; release distribution manifest SHA-256 `d2d91ff200a7e55d0e04bb90e863d9c771f10325cb286b5147790bdb8e192b33` | `http://100.94.63.83:8080/` from the completed distribution; non-watching temporary server | pending supervising-human entry | ready for targeted M53-P011/P012 retest and the remaining M53 scorecard; no human rating or approval has been recorded |
 
 S1 used the SHA-256 output of `sha256sum dist/* | sha256sum`, but its watched distribution
 changed after recording. Any candidate rebuild must receive a new session row and digest.
@@ -68,6 +68,13 @@ SHA-256 values, and `sha256sum dist/* | sha256sum` remained
 verification. The later ledger/handoff commit changes no demo-web product input or frozen
 distribution byte. M53-P012 subsequently superseded S3 without erasing that qualification record.
 
+S4 was produced by the same complete clean release gate from commit `49ddcb8`. The gate passed,
+including demo-web 29/29 and the release-only 256-moving-body sparse crossover test in 136.97s.
+All seven files retrieved from the non-watching endpoint matched their local SHA-256 values;
+`sha256sum dist/* | sha256sum` produced
+`d2d91ff200a7e55d0e04bb90e863d9c771f10325cb286b5147790bdb8e192b33`. The handoff-only commit
+that records this session changes no demo-web product input or frozen distribution byte.
+
 ### Findings and change-request ledger
 
 | ID | Session/section and exact sequence | Observation or request | Classification | Status and disposition | Regression/requalification | Human retest/rating |
@@ -83,7 +90,7 @@ distribution byte. M53-P012 subsequently superseded S3 without erasing that qual
 | M53-P009 | Recovery capability-contract audit, before human setup observation | The machine-read M33 capability matrix still labels completed M38 dimensions and path-length behavior as planned/current gaps. | objective defect | complete in `a5542da`: M38 catalog rows use `implemented_m38`; frozen legacy `EqualLength`/`CurveLength` rows point to the separate M38 path APIs instead of claiming M38 still waits | exact staged domain tree passed M33 2/2, M38 11/11 and the complete core/sketch/linkage all-feature suites | not a product rating |
 | M53-P010 | Exact staged editor release build, before human setup observation | The supported Trunk 0.21 build must not reject the conventional inherited `NO_COLOR=1` environment value before compiling the candidate. | objective defect | complete in `66fd90d`: the release gate unsets `NO_COLOR` only for its Trunk subprocess; this changes no product bytes or solver/editor behavior | the complete clean release gate passed, including editor 58/58, demo-web 24/24, all-feature WASM check and Trunk 0.21.14 release build | not a product rating |
 | M53-P011 | M53-S2, before any scored human section | Replace the easily lost bottom UAT launcher/action wall with a reusable scenario-definition system: a nested scenario selector near the top of the UI, grouped scenarios, scenario-specific descriptions/guidance in a sidebar, and clean removal of superseded one-off harnesses while preserving every current scenario for future reuse. | human clarity/layout | in progress awaiting human retest: implementation is complete in `17a4a25` with six typed scenario definitions under three nested groups, contextual objectives/questions/steps/expected results, recent transcript and typed evidence in the inspector; exact stale-input variants/revisions and last-submitted typed inputs remain observable; selection/switch/reset reconstruct deterministic ephemeral state, Exit restores the ordinary workspace, and the old launcher/overlay/action wall is deleted without restoring M44/playground/E2E infrastructure | catalog 6/6, preserved fixture semantics 4/4 and complete demo-web 29/29 pass; the clean full release gate passed from `17a4a25`, M53-S3 records manifest `213b8f41b18af239738eb0336651216fa4693a8f1ecbefa0f2f7bf7d6b675518`, and all seven served files match local SHA-256. Earlier local headless interaction was exploratory visual inspection only, is not retained browser qualification and does not replace human UAT | targeted human retest required for scenario discoverability, grouping, guidance and natural-use flow; no rating recorded yet |
-| M53-P012 | M53-S3, before any scored human section | Replace the nested per-group collapsible disclosures with a right-expanding flyout menu: hovering or focusing a group item shows its submenu immediately on the right for quicker scenario navigation, while retaining the top **Scenarios** dropdown, stable scenario definitions and sidebar guidance. | human clarity/layout | in progress awaiting clean qualification: recursive plain-list branches now open immediately to the right on hover or focus, group clicks cause no workspace save/render, `aria-expanded` follows visual state, and narrow layouts expose the same branches inline; fixture semantics, stable IDs, guidance and isolation are unchanged | focused catalog 6/6 and complete demo-web 29/29 pass with warnings-denied demo-web Clippy and locked all-feature WASM check. Exploratory headless interaction verified hover bridge, focus/Tab selection, rightward placement at 1440/1024, inline fallback at 800 and no console errors; this is visual inspection only, not retained browser qualification. Clean release gate and M53-S4 identity remain pending | targeted human retest required for flyout speed, discoverability and navigation clarity; no rating recorded yet |
+| M53-P012 | M53-S3, before any scored human section | Replace the nested per-group collapsible disclosures with a right-expanding flyout menu: hovering or focusing a group item shows its submenu immediately on the right for quicker scenario navigation, while retaining the top **Scenarios** dropdown, stable scenario definitions and sidebar guidance. | human clarity/layout | in progress awaiting human retest: implementation is complete in `49ddcb8`; recursive plain-list branches open immediately to the right on hover or focus, group clicks cause no workspace save/render, `aria-expanded` follows visual state, and narrow layouts expose the same branches inline; fixture semantics, stable IDs, guidance and isolation are unchanged | focused catalog 6/6 and complete demo-web 29/29 pass with warnings-denied Clippy and locked all-feature WASM. The complete clean release gate passed from `49ddcb8`; M53-S4 records manifest `d2d91ff200a7e55d0e04bb90e863d9c771f10325cb286b5147790bdb8e192b33`, and all seven served files match local SHA-256. Exploratory headless interaction also verified hover bridge, focus/Tab selection, ARIA state, rightward placement at 1440/1024, inline fallback at 800 and no console errors; this is visual inspection only, not retained browser qualification | targeted human retest required for flyout speed, discoverability and navigation clarity; no rating recorded yet |
 
 ### Preserved development continuity
 
@@ -91,7 +98,7 @@ distribution byte. M53-P012 subsequently superseded S3 without erasing that qual
 | --- | --- | --- |
 | M53 ratings, findings and explicit approval | this scorecard and `PLAN.md` M53 | active; no rating or approval recorded |
 | Later diagnostics, concurrency, scale, operations/topology, advanced workbench/UAT and release work | `PLAN.md` M100X-M109X | preserved placeholders; M53 feedback must not silently consume or reorder them |
-| Recovered M38-M52 implementation/evidence and the M53-P011 selector on `feat/m53-host-semantics-uat` | Git commits plus completed milestone records | complete in five dependency-safe commits through `17a4a25`; all unique work is in the sole main worktree and no untracked files remain |
+| Recovered M38-M52 implementation/evidence and the M53 scenario selector on `feat/m53-host-semantics-uat` | Git commits plus completed milestone records | product implementation is complete in dependency-safe commits through `49ddcb8`; all unique work is in the sole main worktree and no untracked files remain |
 | Cargo duplicate `license`/`license-file` metadata warnings seen during release build | existing package metadata | known nonblocking concern; warnings-denied Clippy and M52 gates pass, and M53 does not broaden into metadata cleanup |
 
 Recovery Git result (2026-07-28): the branch has no upstream or configured remote, no stash,
@@ -280,7 +287,7 @@ direct assertions.
 
 | Review context | Value |
 | --- | --- |
-| Candidate build/revision | pending M53-S4 after M53-P012 flyout-selector qualification |
+| Candidate build/revision | M53-S4: `49ddcb8ea8d098ec7a3e38180465d9df43831457`; distribution manifest `d2d91ff200a7e55d0e04bb90e863d9c771f10325cb286b5147790bdb8e192b33` |
 | Desktop browser/OS | pending supervising-human entry |
 | Elapsed time | pending supervising-human entry |
 | Supervising human/date | pending supervising-human entry |

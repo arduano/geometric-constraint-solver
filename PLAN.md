@@ -2247,7 +2247,7 @@ external references and retained unsolved intent on the post-cleanup workbench.
   targeted human review.
 - [x] Replace nested per-group disclosures with recursive right-expanding hover/focus flyouts,
   retaining an inline narrow-screen fallback and the same stable scenario definitions.
-- [ ] Requalify the flyout selector and record M53-S4 before targeted human review.
+- [x] Requalify the flyout selector and record M53-S4 before targeted human review.
 - [ ] Assess role/profile and suppression/mode distinctions.
 - [ ] Assess parameter ownership, proposal provenance and invalid/stale recovery.
 - [ ] Assess missing/stale/topology/rebind external-reference recovery.
@@ -2274,8 +2274,10 @@ change presents the already qualified M52 fixture behavior and adds no new host 
 
 M53-P012 supersedes only the S3 selector navigation presentation before human ratings. Recursive
 plain-list branches now open immediately to the right on hover or focus, with an inline narrow
-fallback; focused tests and exploratory browser interaction pass, while the clean release gate and
-M53-S4 identity remain pending.
+fallback. Focused tests and exploratory browser interaction pass; the complete clean release gate
+passed from `49ddcb8`, and M53-S4 records distribution manifest
+`d2d91ff200a7e55d0e04bb90e863d9c771f10325cb286b5147790bdb8e192b33`. Targeted human review
+remains pending.
 
 ## Placeholder future functional sequence
 
