@@ -48,6 +48,8 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   reusable typed six-scenario catalog, a top nested **Scenarios** selector and a contextual guide
   sidebar. The same ten objective points, deterministic reset/evidence behavior and ordinary
   workspace isolation remain, with no new public API, schema or browser-owned domain semantics.
+  Nested groups now open as right-expanding hover/focus flyouts, with an inline narrow-screen
+  fallback, instead of requiring a separate disclosure toggle at each level.
 - Consolidated the WASM consumer to one directly tested workbench and removed the legacy
   playground, routes, browser E2E, serving/download glue and browser-owned qualification path.
 

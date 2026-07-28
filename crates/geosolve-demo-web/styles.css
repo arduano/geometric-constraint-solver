@@ -106,9 +106,9 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   z-index: 12;
   top: calc(100% + 0.45rem);
   left: 0;
-  width: min(28rem, calc(100vw - 2rem));
+  width: min(18rem, calc(100vw - 2rem));
   max-height: min(38rem, calc(100vh - 5rem));
-  overflow: auto;
+  overflow: visible;
   padding: 0.45rem;
   border: 1px solid #596263;
   border-radius: 5px;
@@ -122,51 +122,28 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   content: "No review scenarios are available.";
   font-size: 0.72rem;
 }
-.wb-scenario-menu details {
+.wb-scenario-catalog-header {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.4rem 0.55rem 0.55rem;
   border-bottom: 1px solid #343b3c;
 }
-.wb-scenario-catalog > details:last-child { border-bottom: 0; }
-.wb-scenario-menu details > summary {
-  display: flex;
-  min-height: 2rem;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.45rem;
-  color: #c6d0ce;
-  cursor: pointer;
-  font-size: 0.72rem;
-  font-weight: 700;
-  list-style: none;
-}
-.wb-scenario-menu details > summary::-webkit-details-marker { display: none; }
-.wb-scenario-menu details > summary::before {
-  width: 0.65rem;
-  color: #d29a45;
-  content: "▸";
-}
-.wb-scenario-menu details[open] > summary::before { content: "▾"; }
-.wb-scenario-menu details details > summary {
-  padding-left: 1.2rem;
-  color: #aebbb8;
-  font-weight: 600;
-}
-.wb-scenario-menu details > p {
-  margin: 0;
-  padding: 0 0.55rem 0.35rem;
+.wb-scenario-catalog-header strong { color: #d6b16f; font-size: 0.72rem; }
+.wb-scenario-catalog-header span {
   color: #7f8b89;
   font-size: 0.65rem;
   line-height: 1.35;
 }
-.wb-scenario-menu details details > p { padding-left: 1.2rem; }
-.wb-scenario-menu ul {
+.wb-scenario-level {
   display: grid;
   gap: 0.2rem;
   margin: 0;
-  padding: 0.15rem 0 0.45rem;
+  padding: 0.3rem 0 0;
   list-style: none;
 }
-.wb-scenario-menu ul ul { padding-left: 0.75rem; }
-.wb-scenario-menu li { min-width: 0; }
+.wb-scenario-branch,
+.wb-scenario-leaf { min-width: 0; }
+.wb-scenario-branch { position: relative; }
 .wb-scenario-menu button {
   display: grid;
   width: 100%;
@@ -179,13 +156,51 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   font-size: 0.7rem;
   text-align: left;
 }
+.wb-scenario-branch-trigger { position: relative; padding-right: 1.6rem !important; }
+.wb-scenario-branch-trigger::after {
+  position: absolute;
+  top: 50%;
+  right: 0.55rem;
+  color: #d29a45;
+  content: "▸";
+  font-size: 0.75rem;
+  transform: translateY(-50%);
+}
 .wb-scenario-menu button:hover,
+.wb-scenario-branch:focus-within > .wb-scenario-branch-trigger,
 .wb-scenario-menu button[aria-current="true"] {
   border-color: #806b3f;
   background: #34302a;
 }
 .wb-scenario-menu button strong { color: #e4e9e5; font-size: 0.72rem; }
 .wb-scenario-menu button span { color: #8f9b99; line-height: 1.35; }
+.wb-scenario-flyout {
+  position: absolute;
+  z-index: 2;
+  top: -0.45rem;
+  left: calc(100% - 0.15rem);
+  width: 20rem;
+  max-height: min(38rem, calc(100vh - 5rem));
+  overflow: auto;
+  padding: 0.45rem;
+  visibility: hidden;
+  border: 1px solid #596263;
+  border-radius: 5px;
+  opacity: 0;
+  background: rgb(24 29 29 / 98%);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 55%);
+  pointer-events: none;
+  transform: translateX(-0.25rem);
+  transition: opacity 80ms ease-out, transform 80ms ease-out, visibility 0s linear 80ms;
+}
+.wb-scenario-branch:hover > .wb-scenario-flyout,
+.wb-scenario-branch:focus-within > .wb-scenario-flyout {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+  transition-delay: 0s;
+}
 .wb-command-context { display: flex; align-items: center; gap: 0.7rem; margin-left: auto; font-size: 0.78rem; }
 #wb-lifecycle {
   padding: 0.22rem 0.5rem;
@@ -489,7 +504,25 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
     left: 0.75rem;
     width: auto;
     max-height: calc(100vh - 4.55rem);
+    overflow: auto;
   }
+  .wb-scenario-flyout {
+    position: static;
+    display: none;
+    width: auto;
+    max-height: none;
+    margin: 0.2rem 0 0.35rem 0.75rem;
+    padding: 0.25rem;
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+    box-shadow: none;
+  }
+  .wb-scenario-branch:hover > .wb-scenario-flyout,
+  .wb-scenario-branch:focus-within > .wb-scenario-flyout { display: block; }
+  .wb-scenario-branch:hover > .wb-scenario-branch-trigger::after,
+  .wb-scenario-branch:focus-within > .wb-scenario-branch-trigger::after { content: "▾"; }
   .wb-scenario-selector > summary strong { max-width: 7rem; }
   .wb-document-name { display: none; }
   .wb-scenario-global-controls { grid-template-columns: 1fr; }

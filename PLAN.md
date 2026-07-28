@@ -2245,6 +2245,9 @@ external references and retained unsolved intent on the post-cleanup workbench.
   selector and a contextual guide while preserving P1-P10 and ordinary-workspace isolation.
 - [x] Requalify the integrated demo-web/WASM/release candidate and record its new identity before
   targeted human review.
+- [x] Replace nested per-group disclosures with recursive right-expanding hover/focus flyouts,
+  retaining an inline narrow-screen fallback and the same stable scenario definitions.
+- [ ] Requalify the flyout selector and record M53-S4 before targeted human review.
 - [ ] Assess role/profile and suppression/mode distinctions.
 - [ ] Assess parameter ownership, proposal provenance and invalid/stale recovery.
 - [ ] Assess missing/stale/topology/rebind external-reference recovery.
@@ -2268,6 +2271,11 @@ M53-P011 owns the selector change: the typed catalog, native regressions and cle
 release qualification pass, and M53-S3 records build-source commit `17a4a25` plus its frozen
 distribution manifest. The targeted human discoverability/guidance retest remains pending. The
 change presents the already qualified M52 fixture behavior and adds no new host semantic.
+
+M53-P012 supersedes only the S3 selector navigation presentation before human ratings. Recursive
+plain-list branches now open immediately to the right on hover or focus, with an inline narrow
+fallback; focused tests and exploratory browser interaction pass, while the clean release gate and
+M53-S4 identity remain pending.
 
 ## Placeholder future functional sequence
 

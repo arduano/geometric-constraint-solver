@@ -81,9 +81,55 @@ pub(crate) mod wasm {
         }));
         render(document, &workbench)?;
         install_clicks(document, &workbench)?;
+        install_scenario_flyout_state(document)?;
         install_canvas(document, &workbench)?;
         install_keyboard(document, &workbench)?;
         Ok(())
+    }
+
+    fn install_scenario_flyout_state(document: &Document) -> Result<(), JsValue> {
+        let menu = required(document, "wb-scenario-menu")?;
+        for name in ["pointerover", "focusin"] {
+            let callback = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
+                let Some(branch) = scenario_branch(&event) else {
+                    return;
+                };
+                set_branch_expanded(&branch, true);
+            });
+            menu.add_event_listener_with_callback(name, callback.as_ref().unchecked_ref())?;
+            callback.forget();
+        }
+        for name in ["pointerout", "focusout"] {
+            let callback = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
+                let Some(branch) = scenario_branch(&event) else {
+                    return;
+                };
+                let still_open = branch.matches(":hover").unwrap_or(false)
+                    || branch.matches(":focus-within").unwrap_or(false);
+                if !still_open {
+                    set_branch_expanded(&branch, false);
+                }
+            });
+            menu.add_event_listener_with_callback(name, callback.as_ref().unchecked_ref())?;
+            callback.forget();
+        }
+        Ok(())
+    }
+
+    fn scenario_branch(event: &Event) -> Option<Element> {
+        event
+            .target()?
+            .dyn_into::<Element>()
+            .ok()?
+            .closest(".wb-scenario-branch")
+            .ok()
+            .flatten()
+    }
+
+    fn set_branch_expanded(branch: &Element, expanded: bool) {
+        if let Ok(Some(trigger)) = branch.query_selector("[data-scenario-group-trigger]") {
+            let _ = trigger.set_attribute("aria-expanded", if expanded { "true" } else { "false" });
+        }
     }
 
     fn empty_coordinator() -> Result<RetainedEditorCoordinator, String> {
@@ -143,14 +189,17 @@ pub(crate) mod wasm {
             let target = origin
                 .closest(concat!(
                     "[data-wb-tool], [data-editor-item], [data-wb-action], ",
-                    "[data-scenario-id], [data-scenario-action], [data-scenario-control]"
+                    "[data-scenario-id], [data-scenario-action], [data-scenario-control], ",
+                    "[data-scenario-group-trigger]"
                 ))
                 .ok()
                 .flatten()
                 .unwrap_or(origin);
             let mut selected_scenario = false;
             let mut exited_scenarios = false;
-            if let Some(tool) = target
+            if target.has_attribute("data-scenario-group-trigger") {
+                return;
+            } else if let Some(tool) = target
                 .get_attribute("data-wb-tool")
                 .and_then(|key| tool_from_key(&key))
             {

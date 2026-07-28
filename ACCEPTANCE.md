@@ -913,6 +913,8 @@ acceptance is complete; only M53 supervising-human judgment remains.
 - The selected-scenario guide exposes its description, objective points, human questions, steps,
   expected outcome and recent transcript/evidence. Direct tests qualify catalog completeness and
   isolation; grouping and presentation add no browser-owned domain logic.
+- Nested scenario groups open immediately as right-expanding flyouts on hover or keyboard focus;
+  narrow layouts keep every branch reachable inline without restoring per-group disclosure state.
 - Construction, suppression, parameters, external references and unsolved-state recovery are understandable and trustworthy.
 - No unresolved ownership, stale-data, recovery or state-trust blocker remains; objective findings have direct regressions.
 - Every UAT request/finding has a durable identifier, classification, disposition and applicable

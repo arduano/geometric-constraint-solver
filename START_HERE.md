@@ -78,6 +78,11 @@ retain their direct M52 qualification. Clean integrated requalification passes a
 pending, and neither automated qualification nor candidate delivery constitutes a rating or
 approval.
 
+M53-P012 subsequently supersedes S3 before human ratings: the top dropdown remains, but nested
+group disclosures are replaced by right-expanding hover/focus flyouts for faster navigation. The
+stable scenarios, guidance and fixture semantics are unchanged; clean S4 qualification remains
+pending.
+
 The displaced functional/release roadmap is preserved as literal placeholders
 M100X-M109X: stable diagnostics, prepared jobs, incremental scale, operations, production
 topology, advanced workbench, advanced UAT, API/schema freeze, integrated UAT and the

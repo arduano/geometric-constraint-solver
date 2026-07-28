@@ -1373,6 +1373,10 @@ activates its deterministic ephemeral candidate; switching selects a fresh candi
 available across scenarios, while **Exit scenario** discards all scenario state and restores
 the unchanged ordinary workspace.
 
+Inside the top dropdown, group branches are recursive right-expanding flyouts: hover or keyboard
+focus exposes the next level immediately, while narrow layouts render the same branch inline. The
+flyout state is ephemeral navigation presentation and never becomes scenario or workspace state.
+
 The guide sidebar publishes the selected scenario's description, objective points, human
 questions, typed steps, expected outcome and recent transcript/evidence. Stable definitions
 may group and present typed candidate actions, but the browser does not derive equations,

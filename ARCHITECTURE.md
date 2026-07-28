@@ -216,7 +216,9 @@ presentation grouping, objective links and guide copy. Selecting, switching or r
 scenario delegates to typed candidate constructors and actions; accepted geometry, lifecycle and
 evidence still come from public domain/audit APIs. Selector expansion and the selected guide are
 ephemeral presentation state: they do not enter the ordinary workspace snapshot, any public API or
-schema, and they add no equation or host callback.
+schema, and they add no equation or host callback. Within the top dropdown, recursive plain-list
+group branches use right-expanding hover/focus flyouts; narrow layouts present the same branches
+inline without changing catalog identity or scenario state.
 
 Historically, M13 implemented the disposable alpha playground interactions and M14 hardened
 its E2E, import/error recovery and performance. M46-M50 replaced every retained semantic

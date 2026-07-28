@@ -242,13 +242,6 @@ impl ScenarioGroup {
     pub(crate) const fn children(self) -> &'static [ScenarioNode] {
         self.children
     }
-
-    fn contains(self, selected: Option<ScenarioId>) -> bool {
-        self.children.iter().any(|node| match node {
-            ScenarioNode::Group(group) => group.contains(selected),
-            ScenarioNode::Scenario(id) => Some(*id) == selected,
-        })
-    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -832,35 +825,26 @@ impl ScenarioWorkbenchState {
 }
 
 fn selector_markup(selected: Option<ScenarioId>) -> String {
-    let mut markup =
-        String::from("<nav class=\"wb-scenario-catalog\" aria-label=\"M53 scenario selector\">");
-    render_group(&mut markup, *SCENARIO_CATALOG.root(), selected, true);
+    let root = SCENARIO_CATALOG.root();
+    let mut markup = String::from(
+        "<nav class=\"wb-scenario-catalog\" aria-label=\"M53 scenario selector\"><header class=\"wb-scenario-catalog-header\"><strong>",
+    );
+    push_escaped_text(&mut markup, root.title());
+    markup.push_str("</strong><span>");
+    push_escaped_text(&mut markup, root.description());
+    markup.push_str("</span></header>");
+    render_level(&mut markup, root.children(), selected);
     markup.push_str("</nav>");
     markup
 }
 
-fn render_group(
-    markup: &mut String,
-    group: ScenarioGroup,
-    selected: Option<ScenarioId>,
-    root: bool,
-) {
-    let open = root || group.contains(selected);
-    let _ = write!(
-        markup,
-        "<details class=\"wb-scenario-group\" data-scenario-group=\"{}\"{}><summary>",
-        group.id().key(),
-        if open { " open" } else { "" }
-    );
-    push_escaped_text(markup, group.title());
-    markup.push_str("</summary><p>");
-    push_escaped_text(markup, group.description());
-    markup.push_str("</p><ul>");
-    for node in group.children() {
-        markup.push_str("<li>");
+fn render_level(markup: &mut String, nodes: &[ScenarioNode], selected: Option<ScenarioId>) {
+    markup.push_str("<ul class=\"wb-scenario-level\">");
+    for node in nodes {
         match node {
-            ScenarioNode::Group(child) => render_group(markup, *child, selected, false),
+            ScenarioNode::Group(group) => render_group_branch(markup, *group, selected),
             ScenarioNode::Scenario(id) => {
+                markup.push_str("<li class=\"wb-scenario-leaf\">");
                 let definition = id.definition();
                 let _ = write!(
                     markup,
@@ -876,12 +860,34 @@ fn render_group(
                 push_escaped_text(markup, definition.title());
                 markup.push_str("</strong><span>");
                 push_escaped_text(markup, definition.description());
-                markup.push_str("</span></button>");
+                markup.push_str("</span></button></li>");
             }
         }
-        markup.push_str("</li>");
     }
-    markup.push_str("</ul></details>");
+    markup.push_str("</ul>");
+}
+
+fn render_group_branch(markup: &mut String, group: ScenarioGroup, selected: Option<ScenarioId>) {
+    let key = group.id().key();
+    let _ = write!(
+        markup,
+        concat!(
+            "<li class=\"wb-scenario-branch\" data-scenario-group=\"{key}\">",
+            "<button id=\"wb-scenario-group-{key}\" type=\"button\" ",
+            "class=\"wb-scenario-branch-trigger\" data-scenario-group-trigger=\"{key}\" ",
+            "aria-expanded=\"false\" aria-controls=\"wb-scenario-flyout-{key}\"><strong>"
+        ),
+        key = key,
+    );
+    push_escaped_text(markup, group.title());
+    markup.push_str("</strong><span>");
+    push_escaped_text(markup, group.description());
+    let _ = write!(
+        markup,
+        "</span></button><div id=\"wb-scenario-flyout-{key}\" class=\"wb-scenario-flyout\" aria-labelledby=\"wb-scenario-group-{key}\">",
+    );
+    render_level(markup, group.children(), selected);
+    markup.push_str("</div></li>");
 }
 
 fn scenario_guide_markup(id: ScenarioId) -> String {
@@ -1049,17 +1055,21 @@ mod tests {
     }
 
     #[test]
-    fn selector_uses_recursive_native_disclosures_and_plain_list_buttons() {
+    fn selector_uses_recursive_hover_focus_flyouts_and_plain_list_buttons() {
         let mut state = ScenarioWorkbenchState::new();
         state
             .select(ScenarioId::ExternalLossExplicitRecovery)
             .unwrap();
         let markup = state.menu_markup();
 
-        assert_eq!(markup.matches("<details").count(), 4);
-        assert_eq!(markup.matches("<summary>").count(), 4);
+        assert_eq!(markup.matches("data-scenario-group-trigger=").count(), 3);
+        assert_eq!(markup.matches("class=\"wb-scenario-flyout\"").count(), 3);
         assert_eq!(markup.matches("data-scenario-id=").count(), 6);
-        assert!(markup.contains("<ul><li><details"));
+        assert!(markup.contains("class=\"wb-scenario-catalog-header\""));
+        assert!(markup.contains("aria-expanded=\"false\""));
+        assert!(markup.contains("aria-controls=\"wb-scenario-flyout-host-owned-inputs\""));
+        assert!(!markup.contains("<details"));
+        assert!(!markup.contains("<summary"));
         assert!(markup.contains(
             "data-scenario-id=\"external-loss-explicit-recovery\" aria-current=\"true\""
         ));
