@@ -2586,11 +2586,35 @@ behavior and commands; `docs/M61_UAT.md` is the prepared human scorecard.
 
 ### M61: human UAT 3 - advanced geometry and topology
 
-Status: active; objective M60 qualification is complete and supervising-human approval is now
-required.
+Status: active; the first candidate was withdrawn after five human blockers. The remediated
+candidate is directly qualified and supervising-human approval is now required.
 
 Scope: advanced authoring, operations, topology, branch clarity and interaction-performance
 review after objective direct qualification.
+
+- [x] Preserve and expose ten representative nonzero-mobility alpha mechanisms, including both
+  scissor fixtures, with a preselected persistent driver, active-scenario projected drag, exact
+  reset and ordinary-workspace isolation.
+- [x] Repair recursive desktop flyouts so third-level descendants expand to the right without
+  becoming children of a clipping scroll container.
+- [x] Add cursor-anchored wheel zoom, middle-drag pan, explicit zoom/Fit controls and direct camera
+  math/large-scene containment tests.
+- [x] Add reusable headless construction proposals, draft/previews and sole-workbench controls for
+  quadratic/cubic Bezier, ellipse, elliptical arc, rational quadratic conic, parabola, hyperbola
+  and clamped/periodic gauge-separated NURBS.
+- [x] Reject non-finite/out-of-domain conic state and invalid NURBS degree/count/weight/gauge
+  topology atomically; sample advanced previews only through public sketch curve evaluation.
+- [x] Revoke the original scorecard candidate and replace its instructions with the expanded
+  mechanism, camera, authoring, navigation, branch, operation and topology review.
+
+Remediation notes (2026-07-29): the M61 subtree now contains an **Interactive mechanisms** branch
+with **Compact mechanisms** and **Linkage mechanisms** grandchildren plus the four preserved
+advanced/topology leaves. Ten new stable leaves cover compass, Bezier bridge, twin-roller cam,
+tangent orbit, trammel, Scotch yoke, rotating square, scissor jack, five-stage scissor tower and
+Peaucellier linkage. The active scenario owns all selection/projected-drag effects while scenario
+persistence remains disabled. The editor/workbench construct every requested advanced family
+through public document/session APIs; no equation, deleted playground, `/#/dev/lab` or browser
+harness returned. `docs/M61_UAT.md` records the replacement scorecard and no human approval.
 
 ### M62: API and schema release-candidate freeze
 

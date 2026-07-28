@@ -281,6 +281,21 @@ evidence remains non-consumable. The application workspace v2 envelope labels ea
 payload as frozen canonical v4 or explicitly unstable draft v5 and migrates legacy workspace v1.
 These presentation/persistence additions own no equation, branch inference or B-rep state.
 
+M61 remediation keeps those boundaries intact while making the candidate genuinely interactive.
+Advanced construction state and proposal/preview generation live in `geosolve-constraint-editor`;
+complete preview curves are sampled by applying a localized proposal to a temporary public
+`SketchDocument` and calling public curve-jet/visible-interval APIs. The web crate owns only the
+toolbar, option parsing, SVG markup and event normalization. Invalid conic/NURBS options and
+topology reject before publication, and a NURBS gauge always names a weight exactly equal to one.
+
+Scenario selection still creates an ephemeral `ScenarioCandidate`, but interaction lookup now
+returns its active mutable `RetainedEditorCoordinator`. Selection, projected point previews and
+accepted release therefore operate on the visible scenario rather than the hidden ordinary
+coordinator. Save remains disabled for the complete scenario lifetime; reset reconstructs the
+public alpha fixture and exit reveals the unchanged ordinary workspace. Ten mechanism leaves use
+public `alpha_scenario` constructors and preselect their documented persistent driver. Canvas
+camera state remains web-only and affects only the supplied editor viewport.
+
 ## 4. Numerical representation and linearization
 
 A problem contains variable blocks `x` and residual blocks `r_i(x_incident)`. Every variable has an ambient representation, a tangent dimension, a local retraction and positive finite characteristic step scales. Every residual declares its source, priority category, ordered local incidence, output dimension, positive finite residual scales, evaluator, Jacobian path and audit rows.

@@ -60,6 +60,14 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   guidance/transcript/evidence and complete ordinary-workspace isolation.
 - A version-2 desktop workspace envelope with explicit canonical-v4/draft-v5 document encodings,
   exact M58 multi-interval round trips and deterministic legacy-v1 migration.
+- Ten movable nonzero-mobility mechanism scenarios from the preserved public alpha corpus,
+  including scissor jack/tower and Peaucellier linkage, with preselected drivers, exact reset and
+  ordinary-workspace isolation.
+- Reusable headless and sole-workbench authoring for quadratic/cubic Beziers, ellipse/elliptical
+  arc, rational quadratic conic, parabola, hyperbola and clamped/periodic NURBS with explicit
+  conic/topology/gauge options and public-curve previews.
+- Cursor-anchored wheel zoom, middle-drag pan, explicit zoom/Fit controls and scale feedback for
+  ordinary and scenario canvas inspection.
 
 ### Changed
 
@@ -120,6 +128,10 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   consumes public operations/topology companions directly, labels only complete current production
   profiles consumable, retains the full M55 action surface and all ten prior scenario identities,
   and is directly qualified for the active M61 human UAT.
+- Replaced the withdrawn first M61 candidate after five human blockers. Active scenario selection
+  and projected drag now target the rendered ephemeral coordinator; recursive third-level desktop
+  flyouts no longer clip; invalid advanced construction remains atomic. No deleted playground,
+  `/#/dev/lab`, browser E2E or legacy UAT harness returned.
 
 ## [0.2.0] - 2026-07-22
 

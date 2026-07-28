@@ -102,7 +102,9 @@ finite-difference Jacobian test.
 
 - The workbench remains a desktop diagnostic consumer, not a production renderer or B-rep host.
 - Advanced authoring in this cut is scenario-led; it does not claim a general-purpose control for
-  every advanced curve property.
+  every advanced curve property. This M60 limitation was superseded by the M61 replacement
+  candidate, which adds reusable Bezier/conic/NURBS construction controls without changing M60's
+  completed solver/companion scope.
 - Scenario operation replacement deliberately uses reset/transcript as its UAT history boundary;
   it does not claim ordinary coordinator undo across an ephemeral fixture replacement.
 - Production topology is recomputed from the current accepted input for presentation. No stale
@@ -110,3 +112,11 @@ finite-difference Jacobian test.
 - Mobile and responsive behavior remain outside acceptance.
 - The next blocker is supervising-human M61 UAT. Objective qualification is complete, but no M61
   human approval is recorded yet.
+
+## Post-completion M61 remediation note
+
+The original M60-prepared human candidate was withdrawn on 2026-07-29 after five UAT blockers.
+M61 remediation does not reopen M60 or alter its completion evidence. It adds ten movable public
+alpha mechanism leaves, active-scenario projected drag, recursive unclipped flyouts, a web-only
+pan/zoom/Fit camera and reusable headless Bezier/conic/NURBS authoring. The four stable M60 leaves,
+their public companion boundaries and all pre-M60 scenario identities remain unchanged.

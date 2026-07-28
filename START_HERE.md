@@ -20,7 +20,8 @@ compare-and-swap publication, M57 completed dependency-local retained solving an
 production-scale evidence, M58 completed the deterministic equation-free sketch operations
 companion and multi-interval visible topology, M59 completed the revision-stamped production
 topology companion, and M60 completed the directly qualified advanced workbench and prepared M61
-scorecard. M61 human UAT is now active. The workbench is a
+scorecard. The first M61 candidate was withdrawn for five interaction/coverage blockers; its
+remediated human UAT is now active. The workbench is a
 non-authoritative demo consumer, not a production UI or third solver. Mobile support and
 physics remain outside future acceptance.
 
@@ -82,7 +83,9 @@ multi-interval visible supports without adding residuals or changing canonical v
 independently validated oriented wires/regions/holes and exact native/external source provenance.
 M60 added public companion presentation, four deterministic advanced/topology scenario leaves and
 a versioned canonical-v4/draft-v5 desktop workspace envelope while retaining the full M55 action
-surface. The active milestone is **M61: human UAT 3 — advanced geometry and topology**. Old Chromium/CDP, HTTP
+surface. M61 remediation adds ten movable nonzero-DOF mechanism leaves, active-scenario projected
+drag, unclipped recursive flyouts, full Bezier/conic/NURBS authoring and an inspectable canvas
+camera. The active milestone is **M61: human UAT 3 — advanced geometry and topology**. Old Chromium/CDP, HTTP
 serving, DOM-scraping, screenshot, wall-clock browser-timing and source-substring-scan gates remain
 retired.
 
@@ -132,6 +135,7 @@ Durable cleanup records:
 - `docs/M58_IMPLEMENTATION.md`
 - `docs/M59_IMPLEMENTATION.md`
 - `docs/M60_IMPLEMENTATION.md`
+- `docs/M61_REMEDIATION.md`
 - `docs/M61_UAT.md` (prepared scorecard; no M61 approval recorded yet)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at

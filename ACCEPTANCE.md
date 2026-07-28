@@ -1093,8 +1093,20 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
 
 ### M61: human UAT 3
 
-- Status: active; `docs/M61_UAT.md` is prepared and no human approval is recorded yet.
-- The supervising human completes the prepared 45-60 minute advanced geometry/topology scorecard.
+- Status: active; the original candidate was withdrawn after five UAT blockers. The replacement
+  scorecard in `docs/M61_UAT.md` is prepared and no human approval is recorded yet.
+- Ten representative public alpha mechanisms expose documented nonzero equality/bounded mobility,
+  preselect one persistent driver, accept projected drag through the active ephemeral coordinator,
+  reset exactly and never mutate ordinary workspace persistence.
+- Recursive desktop scenario branches expand to the right through the compact/linkage third level
+  without flyout clipping or nested scroll overflow.
+- Wheel zoom is cursor-anchored; middle-drag pan, explicit zoom controls and Fit remain available
+  in ordinary and scenario modes without changing solver state.
+- The sole workbench authors quadratic/cubic Beziers, ellipse/elliptical arc, rational quadratic
+  conic, parabola, hyperbola and clamped/periodic NURBS through reusable headless proposals.
+- Conic/NURBS options, rational gauge state and terminal topology validate atomically; advanced
+  previews sample only public domain curve evaluation and contain no browser equation.
+- The supervising human completes the prepared 60-90 minute advanced geometry/topology scorecard.
 - Advanced controls, branch transitions, associated operations, topology claims and representative interaction performance are understandable and trustworthy.
 - No unresolved wrong-branch, misleading-profile, advanced-interaction or responsiveness blocker remains.
 

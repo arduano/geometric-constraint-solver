@@ -1593,14 +1593,57 @@ These scenarios own no equation, curve evaluator, applicability rule, branch heu
 publication or B-rep state. The right-expanding selector, guide, transcript and topology card are
 presentation only. Native/WASM direct tests are the objective qualification path.
 
+### M61-R1 - Replacement interactive candidate
+
+The first M61 candidate was withdrawn after human review found fixed-only UAT scenes, missing
+representative mechanisms, clipped third-level navigation, missing advanced authoring and no
+canvas camera. The replacement retains the four M60 leaves and nests them under **Advanced curves
+& topology**. A sibling **Interactive mechanisms** group has **Compact mechanisms** and **Linkage
+mechanisms** grandchildren:
+
+| Stable scenario ID | Public alpha fixture | Initial mobility | Preselected driver |
+| --- | --- | --- | --- |
+| `drafting-compass` | `StressCompass` | equality/bounded `1/1` | `first_tip` |
+| `bezier-c1-bridge` | `StressBridge` | equality/bounded `3/1` | `left_seam` |
+| `twin-roller-bezier-cam` | `MotionCam` | equality/bounded `2/2` | `left_center` |
+| `tangent-orbit` | `MotionOrbit` | equality/bounded `1/1` | `moving_center` |
+| `elliptic-trammel` | `MotionTrammel` | equality/bounded `1/1` | `horizontal_slider` |
+| `scotch-yoke` | `MotionScotchYoke` | equality/bounded `1/1` | `crank_pin` |
+| `rotating-square` | `MotionRotatingSquare` | equality/bounded `1/1` | `corners[1]` |
+| `scissor-jack` | `MotionScissor` | equality/bounded `1/1` | `slider` |
+| `five-stage-scissor-tower` | `MotionScissorTower` | equality/bounded `1/1` | `right_levels[0]` |
+| `peaucellier-linkage` | `MotionPeaucellier` | equality/bounded `1/1` | `input` |
+
+Canvas selection and projected point movement dispatch to the rendered scenario coordinator.
+Accepted release changes only that ephemeral candidate; save remains suppressed. Reset rebuilds
+the same public fixture and selected persistent driver. Exit reveals the ordinary coordinator
+whose canonical workspace bytes never changed.
+
+Ordinary mode now exposes reusable headless construction tools for quadratic/cubic Beziers,
+ellipse, directed elliptical arc, rational quadratic conic, trimmed parabola, chosen-branch
+trimmed hyperbola and clamped/periodic NURBS. Conic values and NURBS form/degree/weights/gauge are
+explicit editor state. NURBS weights are positive, the named gauge weight is exactly one, control
+count exceeds degree and explicit weights match controls. Invalid terminal construction is atomic.
+Advanced previews localize the proposal into a temporary public document and sample public visible
+intervals/curve jets; neither editor nor web code owns a curve equation.
+
+The web-only camera supplies the editor viewport. Wheel zoom preserves its cursor model point,
+middle-drag changes only model center, `+`/`-` use the canvas center and Fit bounds all scene
+points/curves including the tall scissor tower. Camera state is neither sketch nor scenario state.
+Every desktop flyout keeps visible overflow, so the new third-level compact/linkage menus expand
+to the right rather than clipping inside their parent.
+
 ### UAT-C3 - Advanced geometry and topology at M61
 
-The four M60-W1 leaves are the prepared entry point. They cover all-family accepted geometry,
+The four M60-W1 leaves plus the ten M61-R1 mechanism leaves are the replacement entry point. They
+cover movable nonzero-DOF solver behavior, advanced authoring and camera inspection as well as
+all-family accepted geometry,
 periodic NURBS span/winding and knot topology, fillet/trim plus split/mirror/pattern operations,
 complete production regions, intentionally open/incomplete topology, cancellation and fresh
-recovery. The 45-60 minute review judges local predictability, branch clarity, coherent associated
-motion, topology trust and perceived desktop responsiveness. `docs/M61_UAT.md` owns the scorecard;
-objective facts remain directly qualified and M61 requires explicit supervising-human approval.
+recovery. The 60-90 minute replacement review judges local predictability, branch clarity,
+coherent associated motion, topology trust and perceived desktop responsiveness.
+`docs/M61_UAT.md` owns the scorecard; objective facts remain directly qualified and M61 requires
+explicit supervising-human approval.
 
 ### UAT-C4 - Integrated release candidate at M63
 
@@ -1615,7 +1658,8 @@ matrix.
 
 Each checkpoint provides one manual entry point, deterministic resets and concise
 instructions. The top **Scenarios** entry now contains the eight stable M53 leaves, two
-direct-qualified M55 leaves and four direct-qualified M61-preparation leaves; the M53/M55
+direct-qualified M55 leaves, four direct-qualified M60 leaves and ten movable M61-remediation
+leaves; the M53/M55
 subtrees and M53 approval record are unchanged. UAT-C3 is ready after M60; the catalog machinery
 may host UAT-C4 only after its preceding milestone is executed.
 Findings capture the candidate revision, selected scenario,
