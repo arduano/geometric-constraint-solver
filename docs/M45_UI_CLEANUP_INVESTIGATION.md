@@ -9,7 +9,7 @@ M46 froze direct owners/retirements, M47 deleted the broad M44 fixture/E2E after
 replacement, M48 deleted M40 browser E2E after direct workbench qualification, M49 extracted
 retained legacy semantics, and M50 deleted `#/dev/lab` and all remaining old E2E. No UI
 feature-parity requirement survives; native domain behavior is preserved while legacy-only
-browser delivery retired. M51-M52 subsequently completed; M53 now owns human review.
+browser delivery retired. M51-M52 subsequently completed; M53 human review later passed.
 
 ## Requirements
 
@@ -81,7 +81,7 @@ ownership and M50 deleted the legacy runtime.
 - Advanced sketch and spatial **semantics** stay in native domain tests. Their old browser
   controls/views retire; no replacement diagnostic route or UI parity is required.
 - Finding capture is deterministic cleanup/UAT infrastructure over public APIs, not a
-  stable product API. Placeholder M107X may revisit release-surface ownership.
+  stable product API. M61 may revisit release-surface ownership.
 
 ## Out of scope
 

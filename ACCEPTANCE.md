@@ -56,7 +56,7 @@ orientation/span/winding/branch state; curvature, G2 and separately named parame
 C2 behavior; driving/reference dimensions; truthful diagnostics; and versioned
 persistence. It did not complete the production host-embedding contract.
 
-Completion of Deliverable 1 at placeholder M109X additionally requires the ordinary planar CAD
+Completion of Deliverable 1 at M63 additionally requires the ordinary planar CAD
 constraint/dimension catalog, retained unsolved design intent separated from accepted
 geometry, construction/activation semantics, typed host parameters, immutable
 external 2D references, cancellation, stable persistent-ID diagnostics, stale-work
@@ -88,7 +88,7 @@ platform events, accessibility and browser storage remain presentation-owned.
 
 ## Frozen M1-M7 regression baseline
 
-All existing M1-M7 tests and the advanced free-radius circle/arc tangency follow-up remain mandatory through placeholder M109X.
+All existing M1-M7 tests and the advanced free-radius circle/arc tangency follow-up remain mandatory through M63.
 
 ### Core representation and solver
 
@@ -146,13 +146,13 @@ Baseline candidate vectors do not yet carry M8 completeness metadata. Until the 
 - Geometry and audit values always come from the same accepted state.
 - It displays termination, hard residual, rank/DOF, branch and candidate diagnostics, plus grouped source audit rows.
 - It preserves prior valid geometry visibly after failed edits.
-- Automated Rust and WASM adapter coverage remains through placeholder M109X. M13-M14 added the disposable playground and historical browser/mobile E2E as alpha acceptance consumers without making them authoritative; cleanup M46-M50 replaces retained claims with direct owning-layer tests and deletes that old infrastructure.
+- Automated Rust and WASM adapter coverage remains through M63. M13-M14 added the disposable playground and historical browser/mobile E2E as alpha acceptance consumers without making them authoritative; cleanup M46-M50 replaces retained claims with direct owning-layer tests and deletes that old infrastructure.
 
 ## M8 acceptance: contract rebaseline and representative baselines
 
 M8 is ready for review only when every item below is objectively present. These checkboxes are acceptance criteria and do not mark `PLAN.md` complete.
 
-The checked wording below is the preserved M8 completion record. Its then-current M8-M22 allocations are historical; `PLAN.md` now governs completed work, cleanup M46-M53 and the placeholder M100X-M109X future sequence.
+The checked wording below is the preserved M8 completion record. Its then-current M8-M22 allocations are historical; `PLAN.md` now governs completed work through M53 and the executable M54-M63 sequence.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -900,9 +900,13 @@ lifecycle and accepted/attempted audit. The production-used sidecar state direct
 ordinary actions and saves, unchanged exit state and persistence-codec reload. Focused and full
 native tests, formatting/diff, warnings-denied workspace Clippy, WASM check and release Trunk build
 pass without browser automation or serving. Independent read-only verification passed. M52
-acceptance is complete; only M53 supervising-human judgment remains.
+acceptance is complete. M53 subsequently received supervising-human approval.
 
 ## M53 acceptance: human UAT 2
+
+Completion note (2026-07-28): the supervising human rated every M53-S5 scorecard area Pass,
+reported no concern or blocker and explicitly approved the milestone. The candidate identity,
+finding dispositions and approval record are retained in `docs/M53_UAT.md`.
 
 - The supervising human completes and explicitly approves the selector-led 35-50 minute
   host-semantics scorecard.
@@ -928,66 +932,68 @@ acceptance is complete; only M53 supervising-human judgment remains.
   regression/requalification plus human retest; deferred future scope retains an explicit roadmap
   owner.
 
-## Placeholder future acceptance
+## M54-M63 acceptance
 
-The literal M100X-M109X identifiers are placeholder future numbers, not executable cleanup
-milestones. They will be renumbered after M53; no old browser E2E qualification may return.
+These are the final executable post-M53 milestone numbers. No old browser E2E qualification may
+return.
 
-### M100X: stable diagnostics
+### M54: stable diagnostics
 
 - Hosts consume solve, source, component, dependency, activation, parameter and external-reference diagnostics through stable domain DTOs and persistent IDs.
 - Structural/numerical rank, equality/bounded/one-sided mobility and diagnostic completeness remain separate.
 - Machine-readable repair suggestions never mutate state automatically or claim globally minimal conflict proof.
 
-### M101X: prepared jobs and concurrency
+### M55: prepared jobs and concurrency
 
 - Prepared jobs capture every relevant input revision and cannot mutate a session until compare-and-swap commit.
 - Stale or cancelled work cannot overwrite a newer accepted state.
 - The documented safe Rust ownership contract works for host-managed native workers and single-threaded WASM without `unsafe` code.
 
-### M102X: incremental solving and scale
+### M56: incremental solving and scale
 
 - Incremental and full-rebuild paths agree on geometry, validation, rank, branch and diagnostics.
 - Parameter, reference, activation and local geometry edits dirty only their dependency closures without skipping fresh acceptance evidence.
 - Published cold/warm/profile/memory/cancellation envelopes pass, and rank authority is either proved sparse or bounded honestly by a supported connected-component limit.
 
-### M103X: sketch operations companion
+### M57: sketch operations companion
 
 - The companion owns no residual equations and emits deterministic public sketch transactions with identity-preserving mappings.
 - Split, trim, extend, mirror, chamfer and baseline macro/pattern operations are transactional and dependency-aware.
 - Multiple visible intervals never rewrite immutable support definitions or infer topology by proximity.
 
-### M104X: production topology companion
+### M58: production topology companion
 
 - Complete output publishes revision-stamped wires, nesting, holes, orientation and exact source provenance for the declared scope.
 - Tangency, overlap, touching, T-junction and self-intersection policies are explicit and bounded.
 - Stale, cancelled, truncated or ambiguous output cannot be consumed as a production profile and never changes solver state.
 
-### M105X: advanced workbench and direct qualification
+### M59: advanced workbench and direct qualification
 
+- The headless editor and visible workbench expose at least every preserved M13-M14 alpha
+  constraint, dimension and explicit branch action before claiming advanced-workbench completion.
 - The one CAD-like desktop consumer covers advanced curves, branches, operations, diagnostics, production profiles, persistence and cancellation without private equations.
 - Direct editor, presentation, persistence and WASM-adapter suites qualify every objective claim; no old playground or browser E2E returns.
 - The generated UAT evidence package is deterministic; no mobile behavior is claimed.
 
-### M106X: human UAT 3
+### M60: human UAT 3
 
 - The supervising human completes the prepared 45-60 minute advanced geometry/topology scorecard.
 - Advanced controls, branch transitions, associated operations, topology claims and representative interaction performance are understandable and trustworthy.
 - No unresolved wrong-branch, misleading-profile, advanced-interaction or responsiveness blocker remains.
 
-### M107X: release-candidate freeze
+### M61: release-candidate freeze
 
 - Sketch v5, parameter/snapshot/workspace envelopes and the supported Rust/WASM API are frozen with deterministic migration and compatibility tests.
 - The exact candidate passes SemVer, schema, package, native, WASM, fuzz, mutation, performance, documentation and licence gates through direct automated qualification.
 - Any material API/schema/workflow change revokes the candidate and requires full requalification.
 
-### M108X: human UAT 4
+### M62: human UAT 4
 
 - The supervising human completes and signs the 45-60 minute integrated candidate workflow plus exploratory authoring.
 - Normal work, failure recovery, persistence, profiles and advanced diagnostics form one coherent and trustworthy experience.
 - Every objective finding has a direct regression; only targeted human rechecks remain unless the candidate changes materially.
 
-### M109X: production embedding release
+### M63: production embedding release
 
 - A mock CAD host owns expressions, external keys, application metadata/history and worker scheduling while consuming only stable public GeoSolve APIs.
 - Retained intent, immutable inputs, activation, cancellation, stale work, diagnostics and production topology pass end to end.

@@ -92,7 +92,7 @@ host-semantics consumer evidence at that checkpoint.
    external inputs plus accepted/attempted evidence.
 7. **Keep scene-capsule semantics only as transitional diagnostic input.** M49 either moves
    retained codec/evidence behavior to direct tests or retires it; M50 removes obsolete
-   glue. Placeholder M107X owns any later supported release-surface decision.
+   glue. M61 owns any later supported release-surface decision.
 
 ## Ordered cleanup boundary
 
@@ -102,15 +102,15 @@ host-semantics consumer evidence at that checkpoint.
 4. M48 replaced retained M40 contracts and purged M40 browser infrastructure (complete).
 5. M49 extracted retained legacy semantics and completed a zero-unowned-assertion ledger (complete).
 6. M50 removed the old E2E stack, `#/dev/lab`, playground code and obsolete glue (complete).
-7. M51 hardened one workbench and M52 direct-qualified the minimal UAT candidate (complete); M53
-   performs the active supervising-human UAT.
+7. M51 hardened one workbench, M52 direct-qualified the minimal UAT candidate and M53 completed
+   supervising-human UAT (complete).
 
 This ordering removes the legacy application without losing regression authority or
 pretending browser-only delivery is a durable product capability.
 
 ## Known closure blockers
 
-- Human UAT and approval remain pending until M53.
+- Human UAT and approval were pending at this investigation checkpoint and later passed at M53.
 - The workspace-wide warnings-denied Clippy failure found during M45 was cleared by the
   behavior-preserving M46 match-guard rewrite in `crates/geosolve-linkage/src/spatial.rs`.
 - No old playground, fixture or test deletion was authorized merely by this

@@ -103,11 +103,11 @@ which configures Trunk's ordinary development behavior and is not an old test se
 ### Current-state records after the completed cleanup sequence
 
 `PLAN.md`, `ACCEPTANCE.md`, `START_HERE.md`, `ARCHITECTURE.md`, `README.md` and `CHANGELOG.md`
-now record M50-M52 complete and M53 active. `docs/SCENARIOS.md`, `docs/M14_PERFORMANCE.md`,
+now record M50-M53 complete and M54 active. `docs/SCENARIOS.md`, `docs/M14_PERFORMANCE.md`,
 `docs/M29_SCALE_PERFORMANCE.md` and `docs/M32_SCALE_PERFORMANCE.md` use historical or
 direct-successor wording. `docs/M40_UAT.md` remains an archived pre-cleanup candidate record. The
 historical M45 candidate evidence is archived inside `docs/M53_UAT.md`, whose distinct current
-sections own the active M53 procedure and scorecard; old browser/serving details remain historical
+sections retain the completed M53 procedure and scorecard; old browser/serving details remain historical
 evidence, not current instructions.
 
 ### Exhaustive token disposition

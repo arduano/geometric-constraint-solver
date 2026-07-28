@@ -24,9 +24,9 @@ persistent semantic source.
 | implemented_m36 | M36 | Public closed semantic operands scalar row foundations and characterization implemented at M36 |
 | implemented_m37 | M37 | Public standard planar relation catalog and characterization implemented at M37 |
 | implemented_m38 | M38 | Public dimensions and persistent measurements catalog implemented at M38 |
-| planned_m103x | M103X | Contract target for the separate sketch-operations companion only |
-| unsupported_through_m109x | M109X | Deliberately outside the supported product through M109X |
-| conditional | M109X | Available only when the stated finite domain regularity branch and work conditions hold |
+| planned_m57 | M57 | Contract target for the separate sketch-operations companion only |
+| unsupported_through_m63 | M63 | Deliberately outside the supported product through M63 |
+| conditional | M63 | Available only when the stated finite domain regularity branch and work conditions hold |
 <!-- M33_TABLE:status_vocabulary:END -->
 
 ## Curve families
@@ -216,42 +216,42 @@ a target row elsewhere in this document.
 <!-- M33_TABLE:unsupported_combinations:BEGIN -->
 | id | capability | operands | status | target | reason |
 | --- | --- | --- | --- | --- | --- |
-| periodic_curve_endpoint | endpoint_feature | circle,ellipse,periodic_b_spline,periodic_nurbs | unsupported_through_m109x | M109X | Periodic topology has no distinguished start or end feature |
-| center_without_semantic_center | center_feature | line,polyline,rational_quadratic_conic,parabola,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m109x | M109X | These definitions carry no unique semantic center |
-| focus_without_semantic_focus | focus_feature | line,polyline,circle,circular_arc,rational_quadratic_conic,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m109x | M109X | These definitions carry no unique conic focus |
-| axis_without_semantic_axis | axis_feature | circle,circular_arc,rational_quadratic_conic,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m109x | M109X | An axis cannot be selected from incidental coordinates |
+| periodic_curve_endpoint | endpoint_feature | circle,ellipse,periodic_b_spline,periodic_nurbs | unsupported_through_m63 | M63 | Periodic topology has no distinguished start or end feature |
+| center_without_semantic_center | center_feature | line,polyline,rational_quadratic_conic,parabola,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m63 | M63 | These definitions carry no unique semantic center |
+| focus_without_semantic_focus | focus_feature | line,polyline,circle,circular_arc,rational_quadratic_conic,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m63 | M63 | These definitions carry no unique conic focus |
+| axis_without_semantic_axis | axis_feature | circle,circular_arc,rational_quadratic_conic,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m63 | M63 | An axis cannot be selected from incidental coordinates |
 | spline_control_feature_current_gap | DocumentControlRef | clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | implemented_m36 | M36 | The capability-specific operand uses owning curve plus persistent point membership and survives knot insertion; legacy FeatureRef retains its frozen index language |
-| public_curve_plugin | curve_family | arbitrary_trait_object | unsupported_through_m109x | M109X | Built-in and external snapshot curve languages remain closed and serializable |
-| implicit_coefficient_conic | curve_family | implicit_polynomial_coefficients | unsupported_through_m109x | M109X | Unnormalized implicit coefficient gauges are outside the explicit parametric model |
-| spatial_sketch_curve | curve_family | three_dimensional_curve | unsupported_through_m109x | M109X | Sketch geometry remains planar and host projection is external input |
-| contact_invalid_domain | point_or_curve_contact | escaped_parameter,ambiguous_neighborhood,invalid_span | conditional | M109X | Contact succeeds only for the explicit valid domain span winding and neighborhood |
-| tangency_zero_speed | tangent_relation | zero_speed_or_nondifferentiable_jet | conditional | M109X | A finite nonzero first derivative is required for tangent orientation |
-| curvature_insufficient_regularity | curvature_relation_or_measurement | zero_speed_or_missing_second_derivative | conditional | M109X | Curvature needs a regular second-order jet and finite conditioning |
-| c2_insufficient_regularity | parametric_c2_relation | span_without_guaranteed_c2 | conditional | M109X | Parametric C2 cannot be claimed across an insufficiently continuous knot |
-| fillet_parallel_parents | fillet_relation | parallel_or_unresolved_parent_tangents | conditional | M109X | The selected local offset intersection is not uniquely regular |
-| fillet_singular_offset | fillet_relation | one_minus_side_radius_curvature_near_zero | conditional | M109X | The selected normal offset is singular or numerically unresolved |
-| radius_non_circular | radius_dimension | ellipse,elliptical_arc,rational_quadratic_conic,parabola,hyperbola,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m109x | M109X | Noncircular curves do not have one CAD radius property |
-| diameter_non_circular | diameter_dimension | ellipse,elliptical_arc,rational_quadratic_conic,parabola,hyperbola,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m109x | M109X | Axis and conic-property dimensions replace an ambiguous diameter |
-| equal_radius_non_circular | equal_circular_radius_relation | ellipse,elliptical_arc,rational_quadratic_conic,parabola,hyperbola,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m109x | M109X | Equal circular radius applies only to circles and circular arcs |
-| concentric_without_centers | concentric_relation | any_operand_without_curve_center | unsupported_through_m109x | M109X | Concentricity requires two explicit semantic center features |
-| collinear_non_linear | collinear_relation | any_non_line_support | unsupported_through_m109x | M109X | Collinearity is a relation between explicit supporting lines |
-| horizontal_whole_non_linear | horizontal_relation | any_non_line_support | unsupported_through_m109x | M109X | Whole-curve horizontal is ambiguous and a contact tangent direction must be used instead |
-| vertical_whole_non_linear | vertical_relation | any_non_line_support | unsupported_through_m109x | M109X | Whole-curve vertical is ambiguous and a contact tangent direction must be used instead |
-| parallel_whole_non_linear | parallel_relation | any_non_line_support | unsupported_through_m109x | M109X | Parallelism needs line supports and not sampled curve chords |
-| perpendicular_whole_non_linear | perpendicular_relation | any_non_line_support | unsupported_through_m109x | M109X | Perpendicularity needs line supports or explicit contact directions |
-| midpoint_non_linear | midpoint_relation | any_non_line_support | unsupported_through_m109x | M109X | Parametric half value and half arc length are not interchangeable midpoint meanings |
-| symmetry_axis_non_linear | symmetry_relation | non_line_axis | unsupported_through_m109x | M109X | Reflection requires an explicit line support and not a sampled curve tangent |
-| equal_length_non_linear_current_gap | equal_length_relation | bounded_non_line_curve_interval | unsupported_through_m109x | M109X | Frozen legacy EqualLength is not broadened; implemented M38 EqualPathLength owns bounded-curve equality |
-| curve_length_non_linear_current_gap | curve_length_dimension | bounded_non_line_curve_interval | unsupported_through_m109x | M109X | Frozen v4 CurveLength remains line-only; implemented M38 PathLength owns bounded non-line intervals |
-| generic_curve_angle | angle_dimension | tangent_of_arbitrary_curve,tangent_of_arbitrary_curve | unsupported_through_m109x | M109X | M38 angles are two-line or three-point and curve tangents require explicit contact operands |
-| arbitrary_curve_offset | offset_dimension | any_non_line_support | unsupported_through_m109x | M109X | Only supporting-line and exact translated-segment offsets are solver dimensions |
-| rational_conic_property_dimension | conic_property_dimension | rational_quadratic_conic | unsupported_through_m109x | M109X | A generic rational segment has no canonical ellipse parabola or hyperbola property identity |
-| driving_curvature | curvature_dimension | curve_contact,target_curvature | unsupported_through_m109x | M109X | M38 persists curvature measurements but does not promise a driving curvature dimension |
-| path_length_unbounded | path_length_dimension_or_relation | supporting_line_or_unbounded_interval | conditional | M109X | Path length requires an explicit finite bounded interval |
-| path_length_invalid_derivative | path_length_dimension_or_relation | pole,zero_speed,nonfinite_derivative | conditional | M109X | Value and derivative evaluation must both be finite and complete |
-| path_length_work_exhausted | path_length_dimension_or_relation | exhausted_integration_or_derivative_budget | conditional | M109X | Work exhaustion is a typed non-success outcome and emits no accepted row |
-| arbitrary_multi_fragment_trim | trim_view | multiple_visible_intervals_per_support_span | planned_m103x | M103X | M103X generalizes visible topology through the separate operations companion |
-| solid_or_brep_operand | sketch_relation_or_dimension | face,edge,surface,solid | unsupported_through_m109x | M109X | B-rep topology and projection remain host or companion concerns rather than sketch equations |
+| public_curve_plugin | curve_family | arbitrary_trait_object | unsupported_through_m63 | M63 | Built-in and external snapshot curve languages remain closed and serializable |
+| implicit_coefficient_conic | curve_family | implicit_polynomial_coefficients | unsupported_through_m63 | M63 | Unnormalized implicit coefficient gauges are outside the explicit parametric model |
+| spatial_sketch_curve | curve_family | three_dimensional_curve | unsupported_through_m63 | M63 | Sketch geometry remains planar and host projection is external input |
+| contact_invalid_domain | point_or_curve_contact | escaped_parameter,ambiguous_neighborhood,invalid_span | conditional | M63 | Contact succeeds only for the explicit valid domain span winding and neighborhood |
+| tangency_zero_speed | tangent_relation | zero_speed_or_nondifferentiable_jet | conditional | M63 | A finite nonzero first derivative is required for tangent orientation |
+| curvature_insufficient_regularity | curvature_relation_or_measurement | zero_speed_or_missing_second_derivative | conditional | M63 | Curvature needs a regular second-order jet and finite conditioning |
+| c2_insufficient_regularity | parametric_c2_relation | span_without_guaranteed_c2 | conditional | M63 | Parametric C2 cannot be claimed across an insufficiently continuous knot |
+| fillet_parallel_parents | fillet_relation | parallel_or_unresolved_parent_tangents | conditional | M63 | The selected local offset intersection is not uniquely regular |
+| fillet_singular_offset | fillet_relation | one_minus_side_radius_curvature_near_zero | conditional | M63 | The selected normal offset is singular or numerically unresolved |
+| radius_non_circular | radius_dimension | ellipse,elliptical_arc,rational_quadratic_conic,parabola,hyperbola,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m63 | M63 | Noncircular curves do not have one CAD radius property |
+| diameter_non_circular | diameter_dimension | ellipse,elliptical_arc,rational_quadratic_conic,parabola,hyperbola,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m63 | M63 | Axis and conic-property dimensions replace an ambiguous diameter |
+| equal_radius_non_circular | equal_circular_radius_relation | ellipse,elliptical_arc,rational_quadratic_conic,parabola,hyperbola,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m63 | M63 | Equal circular radius applies only to circles and circular arcs |
+| concentric_without_centers | concentric_relation | any_operand_without_curve_center | unsupported_through_m63 | M63 | Concentricity requires two explicit semantic center features |
+| collinear_non_linear | collinear_relation | any_non_line_support | unsupported_through_m63 | M63 | Collinearity is a relation between explicit supporting lines |
+| horizontal_whole_non_linear | horizontal_relation | any_non_line_support | unsupported_through_m63 | M63 | Whole-curve horizontal is ambiguous and a contact tangent direction must be used instead |
+| vertical_whole_non_linear | vertical_relation | any_non_line_support | unsupported_through_m63 | M63 | Whole-curve vertical is ambiguous and a contact tangent direction must be used instead |
+| parallel_whole_non_linear | parallel_relation | any_non_line_support | unsupported_through_m63 | M63 | Parallelism needs line supports and not sampled curve chords |
+| perpendicular_whole_non_linear | perpendicular_relation | any_non_line_support | unsupported_through_m63 | M63 | Perpendicularity needs line supports or explicit contact directions |
+| midpoint_non_linear | midpoint_relation | any_non_line_support | unsupported_through_m63 | M63 | Parametric half value and half arc length are not interchangeable midpoint meanings |
+| symmetry_axis_non_linear | symmetry_relation | non_line_axis | unsupported_through_m63 | M63 | Reflection requires an explicit line support and not a sampled curve tangent |
+| equal_length_non_linear_current_gap | equal_length_relation | bounded_non_line_curve_interval | unsupported_through_m63 | M63 | Frozen legacy EqualLength is not broadened; implemented M38 EqualPathLength owns bounded-curve equality |
+| curve_length_non_linear_current_gap | curve_length_dimension | bounded_non_line_curve_interval | unsupported_through_m63 | M63 | Frozen v4 CurveLength remains line-only; implemented M38 PathLength owns bounded non-line intervals |
+| generic_curve_angle | angle_dimension | tangent_of_arbitrary_curve,tangent_of_arbitrary_curve | unsupported_through_m63 | M63 | M38 angles are two-line or three-point and curve tangents require explicit contact operands |
+| arbitrary_curve_offset | offset_dimension | any_non_line_support | unsupported_through_m63 | M63 | Only supporting-line and exact translated-segment offsets are solver dimensions |
+| rational_conic_property_dimension | conic_property_dimension | rational_quadratic_conic | unsupported_through_m63 | M63 | A generic rational segment has no canonical ellipse parabola or hyperbola property identity |
+| driving_curvature | curvature_dimension | curve_contact,target_curvature | unsupported_through_m63 | M63 | M38 persists curvature measurements but does not promise a driving curvature dimension |
+| path_length_unbounded | path_length_dimension_or_relation | supporting_line_or_unbounded_interval | conditional | M63 | Path length requires an explicit finite bounded interval |
+| path_length_invalid_derivative | path_length_dimension_or_relation | pole,zero_speed,nonfinite_derivative | conditional | M63 | Value and derivative evaluation must both be finite and complete |
+| path_length_work_exhausted | path_length_dimension_or_relation | exhausted_integration_or_derivative_budget | conditional | M63 | Work exhaustion is a typed non-success outcome and emits no accepted row |
+| arbitrary_multi_fragment_trim | trim_view | multiple_visible_intervals_per_support_span | planned_m57 | M57 | M57 generalizes visible topology through the separate operations companion |
+| solid_or_brep_operand | sketch_relation_or_dimension | face,edge,surface,solid | unsupported_through_m63 | M63 | B-rep topology and projection remain host or companion concerns rather than sketch equations |
 <!-- M33_TABLE:unsupported_combinations:END -->
 
 ## Ownership consequences

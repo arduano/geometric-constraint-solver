@@ -7655,7 +7655,7 @@ impl SketchDocument {
         Ok(serde_json::to_string(&SketchDocumentV4::from(&canonical))?)
     }
 
-    /// Explicitly unsupported draft-v5 codec for pre-M107X M41 state.
+    /// Explicitly unsupported draft-v5 codec for pre-M61 M41 state.
     #[doc(hidden)]
     pub fn to_draft_v5_json(&self) -> Result<String, DocumentError> {
         self.validate()?;
@@ -7683,7 +7683,7 @@ impl SketchDocument {
         Ok(serde_json::to_string(&draft)?)
     }
 
-    /// Restores the explicitly unsupported pre-M107X draft-v5 representation.
+    /// Restores the explicitly unsupported pre-M61 draft-v5 representation.
     #[doc(hidden)]
     pub fn from_draft_v5_json(json: &str) -> Result<Self, DocumentError> {
         if json.len() > MAX_DOCUMENT_JSON_BYTES {

@@ -33,8 +33,8 @@ The library must support independently editable 2D sketch geometry, including:
 
 M22 completed the built-in curve and generic differential-constraint surface, not
 the complete production embedding contract. M33-M45 close the first ordinary-CAD,
-host-integration and interaction-consumer cut; M46-M53 perform the cleanup rebase;
-the placeholder M100X-M109X sequence preserves the later functional/release work. This deliverable
+host-integration and interaction-consumer cut; M46-M53 perform the cleanup rebase and approved
+host-semantics UAT; M54-M63 complete the later functional/release work. This deliverable
 does not include a solid B-rep kernel, meshing or 3D sketch curves.
 
 ### Deliverable 2: 2D and 3D rigid-body kinematics
@@ -111,7 +111,7 @@ engine that a real CAD host can use. The accepted personality is:
 - an embedding UI may map a platform pointer or 3D camera ray onto a sketch plane and
   render returned DTOs, but it must not recreate the editor's interaction state machine
   or infer geometric assistance independently;
-- supported embedding targets are Rust and WASM only through placeholder M109X;
+- supported embedding targets are Rust and WASM only through M63;
 - the reusable library remains `GPL-3.0-or-later`;
 - the web consumer is a desktop demo of sketch-constraint workflows, not a mobile
   product or solid modeller.
@@ -134,8 +134,8 @@ engine that a real CAD host can use. The accepted personality is:
   geometry enter one attempt as immutable revisioned values.
 - Keep cross-system expressions, B-rep projection, topological naming, feature
   history and application undo outside the sketch solver contract.
-- Keep future human acceptance limited to completed M40.7, post-cleanup M53, and
-  placeholder M106X and M108X. Every objective correctness, persistence,
+- Keep human acceptance limited to completed M40.7 and M53, plus the planned M60 and M62 gates.
+  Every objective correctness, persistence,
   compatibility and presentation-adapter assertion must pass through direct unit or
   integration tests at its owning layer before a human checkpoint begins; old CDP E2E
   suites are not a qualification path.
@@ -1359,7 +1359,7 @@ for profile cancellation, `2.687691 ms` for the bounded QR window and `7.323588 
 for the bounded rank-SVD window. Nineteen focused M35 regressions cover cancellation,
 work exhaustion, checkpoint placement, rollback, constructor/compile/session parity,
 dense-cap boundaries and operation reports. Frozen sketch v1-v4 remains unchanged;
-Placeholder M101X prepared jobs and compare-and-swap concurrency remain deferred. Formatting,
+M55 prepared jobs and compare-and-swap concurrency remain deferred. Formatting,
 warnings-denied locked workspace Clippy/rustdoc, full locked workspace tests, locked
 WASM, release Trunk and the complete release gate pass.
 
@@ -1869,7 +1869,7 @@ Completion note (2026-07-27): M41 added closed profile/construction roles, immut
 revisioned host activation, one deterministic typed dependency closure, activity-aware
 lowering/profile/branch/ownership consumers and activation revision/digest lifecycle
 stamps. Frozen v1-v4 bytes remain unchanged for representable state; supported v4
-encoding rejects non-default M41 state and the pre-M107X draft-v5 codec remains explicitly
+encoding rejects non-default M41 state and the pre-M61 draft-v5 codec remains explicitly
 unsupported. Focused M41 tests, independent verification, locked all-feature workspace
 tests, warnings-denied workspace Clippy, the WASM check and the release Trunk build all
 passed. M42 and M43 subsequently completed.
@@ -2018,13 +2018,11 @@ demo-web suite passed 103/103 and `git diff --check` passed; no browser suite wa
 the investigation. Workspace-wide Clippy reproduced the disclosed linkage lint during
 M45; the M46 follow-up cleared it without changing behavior.
 
-## Cleanup numbering convention
+## Post-cleanup numbering record
 
-M46-M53 are the executable cleanup sequence. The literal identifiers M100X-M109X are
-**placeholder future numbers**: the `100` series keeps displaced functional work out of
-the cleanup sequence, and the suffix `X` explicitly means “not a final milestone number.”
-They preserve scope and dependency order only and will be renumbered after M53. They must
-not be treated as active implementation milestones during cleanup.
+M46-M53 are the completed cleanup and host-semantics UAT sequence. After M53 approval, the
+temporary ten-entry future sequence was finalized consecutively as M54-M63 without changing its
+dependency order or scope. M54 is therefore the next executable milestone.
 
 ## Pre-cleanup phase
 
@@ -2236,7 +2234,7 @@ remain exclusively M53 work.
 
 ### M53: human UAT 2 - CAD host semantics
 
-Status: active; human approval required.
+Status: complete as of 2026-07-28; supervising-human approval recorded.
 
 Goal: retire trust and comprehension risks around construction, activation, parameters,
 external references and retained unsolved intent on the post-cleanup workbench.
@@ -2253,36 +2251,37 @@ external references and retained unsolved intent on the post-cleanup workbench.
 - [x] Render targeted canvas icons/highlights and global fallback, and add two reusable scenarios
   demonstrating attributed conflict and unattributable input failure with recovery.
 - [x] Requalify canvas error attribution and record M53-S5 before targeted human review.
-- [ ] Assess role/profile and suppression/mode distinctions.
-- [ ] Assess parameter ownership, proposal provenance and invalid/stale recovery.
-- [ ] Assess missing/stale/topology/rebind external-reference recovery.
-- [ ] Assess design/latest-attempt/accepted-state clarity and natural-use coherence.
-- [ ] Capture findings, convert objective defects into direct regressions and perform only targeted rechecks.
-- [ ] Record explicit supervising-human approval and disposition of nonblocking concerns.
+- [x] Assess role/profile and suppression/mode distinctions.
+- [x] Assess parameter ownership, proposal provenance and invalid/stale recovery.
+- [x] Assess missing/stale/topology/rebind external-reference recovery.
+- [x] Assess design/latest-attempt/accepted-state clarity and natural-use coherence.
+- [x] Capture findings, convert objective defects into direct regressions and perform only targeted rechecks.
+- [x] Record explicit supervising-human approval and disposition of nonblocking concerns.
 
 Gate: the supervising human approves the host-semantics scorecard and no state-trust,
 recovery or ownership blocker remains.
 
-Active execution note (2026-07-28): `docs/M53_UAT.md` is the consolidated durable M53 session, finding,
+Execution record (2026-07-28): `docs/M53_UAT.md` is the consolidated durable M53 session, finding,
 change-request and retest ledger. Every observation or UI request must be recorded and classified
 before implementation. Objective defects require direct regressions and targeted requalification;
 clarity/layout changes require an identified candidate rebuild and affected human retest; future
-scope remains in M100X-M109X or an explicit open question. One request must not shadow or silently
+scope remains in M54-M63 or an explicit open question. One request did not shadow or silently
 close another development concern, question or plan. Candidate identities and any temporary
 human-only access details belong exclusively in the M53 ledger; they are not automated gates,
 retained server infrastructure or product routes.
 
 M53-P011 owns the selector change: the typed catalog, native regressions and clean integrated
 release qualification pass, and M53-S3 records build-source commit `17a4a25` plus its frozen
-distribution manifest. The targeted human discoverability/guidance retest remains pending. The
+distribution manifest. The targeted human discoverability/guidance retest passed in the final
+M53-S5 approval. The
 change presents the already qualified M52 fixture behavior and adds no new host semantic.
 
 M53-P012 supersedes only the S3 selector navigation presentation before human ratings. Recursive
 plain-list branches now open immediately to the right on hover or focus, with an inline narrow
 fallback. Focused tests and exploratory browser interaction pass; the complete clean release gate
 passed from `49ddcb8`, and M53-S4 records distribution manifest
-`d2d91ff200a7e55d0e04bb90e863d9c771f10325cb286b5147790bdb8e192b33`. Targeted human review
-remains pending.
+`d2d91ff200a7e55d0e04bb90e863d9c771f10325cb286b5147790bdb8e192b33`. The final M53-S5
+supervising-human review rated the flyout navigation Pass.
 
 M53-P013 supersedes S4 before ratings. It owns structured current-error metadata at the public
 headless-editor/UI seam, owner-and-operand canvas attribution, global fallback, accessible
@@ -2290,89 +2289,91 @@ non-mutating tooltips and two reusable demonstration scenarios under **Error att
 implementation and direct native/WASM regressions are complete: conflict targets come only from
 attempt mappings/core sources and document dependencies, wrong-kind input remains global, recovery
 clears metadata, and accepted geometry remains the only rendered geometry. Clean qualification and
-M53-S5 identity are recorded below; targeted human review remains pending.
+M53-S5 identity are recorded below; the targeted human review passed.
 
 M53-S5 completion note (2026-07-28): the complete clean release gate passes from build-source
 commit `f72116b`, including editor 60/60, demo-web 31/31, the 127.85s release-only 256-moving-body
 sparse crossover, all-feature WASM, package/licence checks and the Trunk 0.21.14 release build.
 `docs/M53_UAT.md` records distribution manifest
 `1a96ebe29b5eaa8973b9f726d062be74428f2545763a108a19688913ccaaeadc`; every served file matches
-its local SHA-256. Targeted supervising-human review remains pending.
+its local SHA-256. The supervising human subsequently rated every scorecard area Pass, reported no
+concern or blocker and explicitly approved M53 on 2026-07-28.
 
-## Placeholder future functional sequence
+## Post-M53 functional and release sequence
 
-### M100X: stable diagnostics and mobility evidence
+### M54: stable diagnostics and mobility evidence
 
-Status: placeholder future number; not executable until post-cleanup renumbering.
+Status: active.
 
 Scope: publish stable sketch-owned diagnostics, revision identities, structural/numerical
 rank and mobility evidence, bounded conflict/repair information, and move direct core
 reports behind an unstable seam.
 
-### M101X: prepared jobs and concurrency contract
+### M55: prepared jobs and concurrency contract
 
-Status: placeholder future number; not executable until post-cleanup renumbering.
+Status: planned; begins after M54 passes.
 
 Scope: immutable accepted snapshots, exact-revision prepared jobs, non-mutating candidate
 patches, compare-and-swap commit, host-managed scheduling and safe Rust `Send`/`Sync`
 contracts for native and single-threaded WASM consumers.
 
-### M102X: incremental solving and production scale
+### M56: incremental solving and production scale
 
-Status: placeholder future number; not executable until post-cleanup renumbering.
+Status: planned; begins after M55 passes.
 
 Scope: persistent runtime mappings, dependency-closure rebuilds, indexed/history storage,
 profile caches, workload envelopes, sparse-rank evaluation and full fresh validation on
 every optimized return path.
 
-### M103X: sketch operations companion
+### M57: sketch operations companion
 
-Status: placeholder future number; not executable until post-cleanup renumbering.
+Status: planned; begins after M56 passes.
 
 Scope: a separate no-residual-formula transaction companion for split/break/trim/extend,
 mirror, chamfer, grouped rectangle/polygon/slot/pattern expansion and multi-interval visible
 topology.
 
-### M104X: production topology companion
+### M58: production topology companion
 
-Status: placeholder future number; not executable until post-cleanup renumbering.
+Status: planned; begins after M57 passes.
 
 Scope: revision-stamped complete wires/profiles, nesting/holes/provenance, explicit
 ambiguity policy, declared construction/external filtering and typed incomplete outcomes.
 
-### M105X: advanced workbench completion
+### M59: advanced workbench completion
 
-Status: placeholder future number; not executable until post-cleanup renumbering.
+Status: planned; begins after M58 passes.
 
-Scope: add advanced curves/branches, companion operations, production profiles, stable
-diagnostics, cancellation/stale presentation and a versioned desktop workspace envelope to
-the already-clean single workbench. Qualification remains direct; no old playground or CDP
-E2E may return.
+Scope: first expose at least the complete preserved M13-M14 alpha constraint, dimension and branch
+action surface through the headless editor and visible workbench, then add advanced curves/branches,
+companion operations, production profiles, stable diagnostics, cancellation/stale presentation and
+a versioned desktop workspace envelope to the already-clean single workbench. Qualification remains
+direct; no old playground or CDP E2E may return.
 
-### M106X: human UAT 3 - advanced geometry and topology
+### M60: human UAT 3 - advanced geometry and topology
 
-Status: placeholder future number; human approval required after renumbering.
+Status: planned; human approval required after M59 qualification.
 
 Scope: advanced authoring, operations, topology, branch clarity and interaction-performance
 review after objective direct qualification.
 
-### M107X: API and schema release-candidate freeze
+### M61: API and schema release-candidate freeze
 
-Status: placeholder future number; not executable until post-cleanup renumbering.
+Status: planned; begins after M60 passes.
 
 Scope: final sketch v5 migration, parameter/external/workspace schemas, supported Rust/WASM
 facade, package/SemVer/schema gates and removal of unstable fixture/compiler surfaces.
 
-### M108X: human UAT 4 - integrated release candidate
+### M62: human UAT 4 - integrated release candidate
 
-Status: placeholder future number; human approval required after renumbering.
+Status: planned; human approval required after the M61 candidate freezes.
 
 Scope: one integrated frozen-candidate workflow, conflict recovery, production profiles,
 persistence/history, exploratory authoring and explicit sign-off.
 
-### M109X: production embedding release gate
+### M63: production embedding release gate
 
-Status: placeholder future number; not executable until post-cleanup renumbering.
+Status: planned; begins after M62 passes.
 
 Scope: mock CAD host, public-API-only embedding, fuzz/resource limits, Linux/Windows/macOS/
 WASM consumers, packaged examples and one reproducible release command covering every
@@ -2380,7 +2381,7 @@ renumbered automated gate and recorded human approval.
 
 ## Explicit non-goals
 
-The following are not part of the program through placeholder M109X:
+The following are not part of the program through M63:
 
 - solid modeling, B-rep booleans, meshing or a production rendering system;
 - 3D sketch curves or a unified 2D/3D sketch entity model;

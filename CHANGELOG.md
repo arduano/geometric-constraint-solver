@@ -27,9 +27,8 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 
 - Rebased the post-M44 roadmap: M45 preserves cleanup evidence without human approval;
   M46-M53 replace and purge legacy browser E2E/playground infrastructure, consolidate one
-  directly tested workbench and perform post-cleanup host-semantics UAT. Later functional
-  and release work is preserved under explicit non-executable placeholders M100X-M109X
-  pending post-cleanup renumbering.
+  directly tested workbench and perform post-cleanup host-semantics UAT. M53 received explicit
+  supervising-human approval, and the later functional/release sequence is finalized as M54-M63.
 - Completed the M46 ownership freeze: every old M14/M40/M44 browser/static assertion and
   legacy inline test has a named direct-test owner or reviewed retirement, while no old
   fixture, E2E script or playground code was deleted early.
@@ -46,7 +45,7 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - Completed M51 by removing the survivor's design-only storage migration, duplicate M40
   report/evidence fixtures and stale M32 distribution copy; one workspace snapshot and directly
   tested presentation, persistence, effect and typed-evidence transformations remain.
-- Replaced the M52 candidate's one-off bottom launcher and overlay for active M53 review with a
+- Replaced the M52 candidate's one-off bottom launcher and overlay for M53 review with a
   reusable typed scenario catalog, a top nested **Scenarios** selector and a contextual guide
   sidebar. The original six scenarios preserve the same ten objective points, deterministic
   reset/evidence behavior and ordinary workspace isolation, with no browser-owned domain semantics.

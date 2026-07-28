@@ -13,8 +13,8 @@ M10-M14 delivered a disposable 2D Sketch Playground Alpha over reusable Rust API
 M39-M44 established a desktop-only CAD-like workbench. Cleanup M46-M50 replaced every
 retained assertion with direct owning-layer tests and removed the separately routed legacy
 application and browser E2E stack. M51 hardened the one surviving workbench; M52 completed the
-direct-qualified post-cleanup host-semantics candidate, and M53 is now the active supervising-human
-checkpoint. The workbench is a
+direct-qualified post-cleanup host-semantics candidate, M53 received supervising-human approval,
+and M54 is now active. The workbench is a
 non-authoritative demo consumer, not a production UI or third solver. Mobile support and
 physics remain outside future acceptance.
 
@@ -60,29 +60,24 @@ cut. M51 is complete: it removed the remaining design-only storage migration, du
 report/evidence fixtures and stale distribution copy while preserving directly owned
 presentation, persistence and typed evidence transformations. M52 is complete: its minimal
 in-memory host-semantics candidate passed direct native/WASM qualification and independent
-verification. The active milestone is **M53: human UAT 2 - CAD host semantics**. No objective
-cleanup qualification may use Chromium/CDP, HTTP serving, DOM scraping, screenshots, wall-clock
-browser timing or source-substring scans. M53 may use a temporary human-only delivery endpoint and
-ordinary human screenshot evidence for a visual finding, but neither becomes an automated gate or
-retained product/server surface. M53 owns clarity, trust, finding disposition and explicit
-supervising-human approval; its objective state claims remain backed by M52 tests. Every live UAT
-request, related candidate change and retest must first be preserved in the durable ledger in
-`docs/M53_UAT.md`; future scope remains owned by the literal `PLAN.md` placeholders rather than
-silently broadening M53.
+verification. M53 is complete: the supervising human rated every M53-S5 scorecard area Pass,
+reported no concern or blocker and explicitly approved the host-semantics gate on 2026-07-28. Its
+objective state claims remain backed by M52 tests and the final direct-qualified candidate. The
+active milestone is **M54: stable diagnostics and mobility evidence**. Old Chromium/CDP, HTTP
+serving, DOM-scraping, screenshot, wall-clock browser-timing and source-substring-scan gates remain
+retired.
 
-Active M53 finding M53-P011 replaces only the M52 candidate's one-off launcher and overlay with
+Completed M53 finding M53-P011 replaced only the M52 candidate's one-off launcher and overlay with
 six reusable typed host-semantics scenario definitions, a nested **Scenarios** selector and a
 contextual guide sidebar. The four fixed fixture families, ten objective points and ordinary-workspace isolation
 retain their direct M52 qualification. Clean integrated requalification passes and
-`docs/M53_UAT.md` records the frozen M53-S3 candidate; targeted supervising-human review remains
-pending, and neither automated qualification nor candidate delivery constitutes a rating or
-approval.
+`docs/M53_UAT.md` records the frozen M53-S3 candidate and final M53-S5 approval.
 
 M53-P012 subsequently supersedes S3 before human ratings: the top dropdown remains, but nested
 group disclosures are replaced by right-expanding hover/focus flyouts for faster navigation. The
 stable scenarios, guidance and fixture semantics are unchanged. The complete clean release gate
 passes from build-source commit `49ddcb8`; `docs/M53_UAT.md` records the frozen M53-S4 manifest and
-temporary human endpoint. Targeted supervising-human review remains pending.
+temporary human endpoint. The final M53-S5 review rated the flyout navigation Pass.
 
 M53-P013 subsequently supersedes S4 before ratings. It requests structured current-error metadata
 at the headless-editor/UI seam, persistent owner-and-operand highlights on the accepted canvas,
@@ -90,20 +85,18 @@ accessible error markers, a global fallback when attribution is not defensible, 
 demonstration scenarios under a fourth selector group. The implementation and direct regressions
 are complete, growing the catalog to eight scenarios. The complete clean release gate passes from
 build-source commit `f72116b`; `docs/M53_UAT.md` records the frozen M53-S5 manifest and temporary
-human endpoint. Targeted supervising-human review remains pending.
+human endpoint. The targeted attribution review passed as part of final M53-S5 approval.
 
-The displaced functional/release roadmap is preserved as literal placeholders
-M100X-M109X: stable diagnostics, prepared jobs, incremental scale, operations, production
-topology, advanced workbench, advanced UAT, API/schema freeze, integrated UAT and the
-production embedding release. The `X` suffix means these are not executable milestone
-numbers; they are renumbered only after M53.
+The finalized M54-M63 functional/release roadmap covers stable diagnostics, prepared jobs,
+incremental scale, operations, production topology, advanced workbench, advanced UAT, API/schema
+freeze, integrated UAT and the production embedding release.
 
 Durable cleanup records:
 
 - `docs/M45_CLEANUP_PLAN.md`
 - `docs/M45_UI_CLEANUP_INVESTIGATION.md`
 - `docs/M45_TEST_FIXTURE_CLEANUP_INVESTIGATION.md`
-- `docs/M53_UAT.md` (active M53 scorecard with the archived M45 capture retained in one place)
+- `docs/M53_UAT.md` (approved M53 scorecard with the archived M45 capture retained in one place)
 - `docs/M46_DIRECT_TEST_REPLACEMENT.md`
 - `docs/M46_REBASE_INVENTORY.md`
 - `docs/M47_IMPLEMENTATION.md`

@@ -30,7 +30,7 @@ use crate::{
     SketchSolveRequest, SketchSolveResult, SketchSource, SolveRejection,
 };
 
-/// Unstable pre-M107X external snapshot wire version.
+/// Unstable pre-M61 external snapshot wire version.
 pub const EXTERNAL_SNAPSHOT_SET_VERSION_V1: u32 = 1;
 /// Defensive bound for one immutable external snapshot set.
 pub const MAX_EXTERNAL_SNAPSHOT_ENTRIES: usize = crate::MAX_EXTERNAL_BINDINGS;
@@ -161,7 +161,7 @@ pub enum ExternalSnapshotInputError {
     Json(String),
 }
 
-/// Separately versioned immutable external snapshot envelope (unstable until M107X).
+/// Separately versioned immutable external snapshot envelope (unstable until M61).
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExternalSnapshotSetV1 {
@@ -1097,7 +1097,7 @@ impl SketchAcceptedStateIdentity {
 /// Exact M34 inputs evaluated by one attempt before later host-input stamps exist.
 ///
 /// M41-M43 extend the lifecycle with activation, parameter and external-snapshot
-/// identities; placeholder M101X later adds prepared-work identity. This type
+/// identities; M55 later adds prepared-work identity. This type
 /// intentionally records only inputs implemented by M34 and does not claim to be the
 /// final v5 input stamp.
 #[derive(Clone, Copy, Debug, PartialEq)]

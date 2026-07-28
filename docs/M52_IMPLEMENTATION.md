@@ -6,12 +6,12 @@
 
 **Complete as of 2026-07-28.** The disposable, human-visible candidate, its direct objective
 qualification, final parent gates and independent read-only verification pass. This document
-records objective M52 evidence only; it records no human UAT rating or approval. Active M53
-exclusively owns clarity, trust and sign-off.
+records objective M52 evidence only; it records no human UAT rating or approval. M53 later owned
+and passed clarity, trust and sign-off.
 
 > **Historical successor note (M53):** this record describes the UI and private symbols exactly as
 > qualified at M52, including the then-current **Load disposable M52 UAT** button and overlay.
-> Active finding M53-P011 later replaces only that one-off presentation with a private typed
+> Finding M53-P011 later replaces only that one-off presentation with a private typed
 > six-scenario catalog, top **Scenarios** selector and guide sidebar. The four fixture families,
 > ten objective points, typed transitions/evidence and ordinary-workspace isolation remain; current
 > selector qualification, candidate identity and human findings belong in `docs/M53_UAT.md`. This
@@ -166,10 +166,11 @@ also passed. The Trunk command was run from `crates/geosolve-demo-web` as
 No browser launch, server, DOM observation, screenshot, timing/retry, download or source-substring
 scan was used. Independent read-only verification passed after confirming the dedicated
 identities-only evidence path and the production-used `UatWorkbenchState` load/action/save/exit
-regression. M52 is complete and M53 is active.
+regression. M52 and M53 are complete; M54 is active.
 
 ## Out of scope
 
-Human usability/trust ratings, finding disposition and explicit approval remain M53. Browser E2E,
+Human usability/trust ratings, finding disposition and explicit approval belonged to M53 and are
+recorded in `docs/M53_UAT.md`. Browser E2E,
 restored serving infrastructure, persistent product fixtures, schema/storage changes, new solver
 or editor semantics, and any supported public UAT/capture export remain out of scope.

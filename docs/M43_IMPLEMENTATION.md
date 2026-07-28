@@ -4,7 +4,7 @@
 
 Status: implemented and qualified (2026-07-27).
 This file owns the M43 working contract only. It does not prescribe M44 UI work or
-M100X stable-diagnostic compatibility.
+M54 stable-diagnostic compatibility.
 
 ## Completion evidence
 
@@ -58,7 +58,7 @@ M100X stable-diagnostic compatibility.
 - Frozen sketch v1-v4 fields, variants, readers, writers and canonical v4 bytes remain
   unchanged. Supported v4 export rejects non-default M43 state; a private unsupported
   draft-v5 document DTO and a separately versioned external-set envelope may evolve
-  until M107X (ADR 0025:102-117; M41 inventory:22-28; M42 inventory:66-69).
+  until M61 (ADR 0025:102-117; M41 inventory:22-28; M42 inventory:66-69).
 - A diagnostic capsule may bundle design, parameter batch, activation input and exact
   external set for reproduction, but is diagnostic exchange only: saved status,
   attempted geometry and host identity never become authoritative persistence
@@ -177,7 +177,7 @@ before activity closure/lowering. Do not fold external digest into parameter or
 activation digests. At synchronous publication compare design identity, parameter,
 external, activation and solver-policy members exactly; any mismatch makes the attempt
 stale/non-publishable while retaining its evidence. This is the M43 synchronous
-foundation, not M101X's prepared-job API.
+foundation, not M55's prepared-job API.
 
 Availability is resolved before M41 closure: a declared external binding that lacks one
 valid, exact-kind entry contributes `UnavailableExternalReference` to that binding and
@@ -312,13 +312,13 @@ one-sided-span policy and are not necessary for M43's point/curve snapshot gate.
 
 - **External-set codec:** expose `ExternalSnapshotSetV1` and its canonical
   encode/decode/digest API publicly, but mark the API and wire language explicitly
-  **unstable until M107X**.  It is a separate, versioned envelope, not draft-v5 document
+  **unstable until M61**.  It is a separate, versioned envelope, not draft-v5 document
   JSON and not supported sketch v1-v4 JSON.  It uses strict version dispatch and
   `deny_unknown_fields`; entries canonicalize by local binding ID and hash version, set
   revision, entry source evidence, variant/domain/orientation/scale/resource evidence,
   and exact finite `f64` bits.  This is required for a host to construct reproducible
   immutable input and for a capsule to carry exact input; no stable compatibility claim
-  is made before M107X.
+  is made before M61.
 - **Diagnostic capsule boundary/file:** keep the existing private, disposable scene
   capsule producer/parser in `crates/geosolve-demo-web/src/playground.rs` as the capsule
   boundary.  Extend its `DecodedSceneCapsule` envelope only with canonical public
@@ -327,7 +327,7 @@ one-sided-span policy and are not necessary for M43's point/curve snapshot gate.
   document-session validation/attempt path.  It may carry display evidence, but it must
   not import stored solve status, attempted geometry, accepted state, host keys, or any
   authority to publish.  This changes diagnostic interchange only, not M44 tree/status/
-  rebind UI and not M100X stable diagnostic DTOs.
+  rebind UI and not M54 stable diagnostic DTOs.
 - **Source revision:** use `u64` `source_revision` plus a 32-byte canonical
   `source_digest` for each entry.  The set itself likewise uses `u64` revision plus
   digest.  Revision supplies monotone stale ordering; digest supplies exact feature-byte
@@ -346,7 +346,7 @@ one-sided-span policy and are not necessary for M43's point/curve snapshot gate.
   per-entry revision/digest/domain/orientation/scale/resource evidence, fixed
   coefficients, and rebind on family/span/topology/orientation change.  ADR 0025:65-88
   requires separate external-set revision/digest members in immutable attempt and
-  accepted stamps; its M107X rule permits an unstable separate envelope now but forbids
+  accepted stamps; its M61 rule permits an unstable separate envelope now but forbids
   presenting it as a supported sketch wire language.
 - Existing native operands are capability-specific: `DocumentPointRef` is closed
   (`document.rs:583-593`) and native curve operands are `CurveSpan` plus explicit
@@ -362,7 +362,7 @@ one-sided-span policy and are not necessary for M43's point/curve snapshot gate.
   2597-2682`; `ARCHITECTURE.md:102-106` calls it a private disposable-browser interchange
   format.  Keeping it there avoids falsely turning diagnostic exchange into sketch
   persistence.  M44 owns presentation and rebind workflows (`PLAN.md:1919-1934`), while
-  M100X owns stable diagnostic compatibility (`PLAN.md:1953-1969`).
+  M54 owns stable diagnostic compatibility (`PLAN.md:1953-1969`).
 
 Rejected: (a) six or all-family snapshot alternatives now, because only point plus one
 closed curve kind is required and broader families expand regularity/span policy; (b)
@@ -372,19 +372,19 @@ callback/provider trait, because ADR 0026 forbids callbacks/lazy resolution; (d)
 input-only Rust structs, because they cannot provide canonical external bytes for
 reproducible capsules; (e) an opaque host revision token, because host keys remain
 sidecar data; and (f) moving capsule or external-reference UI policy into M43 workbench
-code, because that is M44/M100X scope.
+code, because that is M44/M54 scope.
 
 ### Open questions
 
 None blocking.  The governing documents agree on a closed, revision-and-digest stamped,
 immutable external input boundary; the above deliberately narrow v1 meets that boundary
-without claiming M44, M100X, or M107X behavior.
+without claiming M44, M54, or M61 behavior.
 
 ## Out of scope
 
 - M44 browser/workbench tree entries, styles, status display and rebind interaction.
-- M100X stable diagnostics compatibility/freeze, M101X prepared asynchronous jobs/CAS API,
-  and M107X supported v5/persistence-envelope freeze.
+- M54 stable diagnostics compatibility/freeze, M55 prepared asynchronous jobs/CAS API,
+  and M61 supported v5/persistence-envelope freeze.
 - Host formula evaluation, units/display conversion, PDM/topological naming, projection,
   callbacks, host undo/history and host output commit.
 - New solver variables, hidden fixed native geometry, generic curve plugins, new

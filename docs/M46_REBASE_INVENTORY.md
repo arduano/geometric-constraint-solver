@@ -4,14 +4,14 @@
 
 ## Status
 
-Rebase decisions are complete and applied to the authoritative roadmap: M45 is complete
-without human approval; M46-M53 are the executable cleanup/UAT sequence; M100X-M109X are
-literal non-executable placeholders until post-M53 renumbering. The evidence below records
+Rebase decisions are complete and applied to the authoritative roadmap: M45 completed
+without human approval; M46-M53 completed the cleanup/UAT sequence; after M53 approval the
+preserved functional sequence received its final M54-M63 numbering. The evidence below records
 the pre-edit conflicts and remains useful as the consolidation checklist.
 
 ## Requirements
 
-- Rebase the old forward functional sequence M46--M55 to placeholders M100X--M109X, preserving the ordered mapping: M46 → M100X, M47 → M101X, M48 → M102X, M49 → M103X, M50 → M104X, M51 → M105X, M52 → M106X, M53 → M107X, M54 → M108X and M55 → M109X.
+- Rebase the old forward functional sequence M46--M55 away from the cleanup numbers, preserving the ordered final mapping: M46 → M54, M47 → M55, M48 → M56, M49 → M57, M50 → M58, M51 → M59, M52 → M60, M53 → M61, M54 → M62 and M55 → M63.
 - Introduce cleanup milestones beginning at M46 without presenting displaced functional work as current M46--M55 work.
 - Preserve genuinely historical milestone names (completed M1--M45 records and historical M13/M14 playground claims) while changing forward-looking ownership, gates, release order, and UAT placement.
 - Inventory all repository text/metadata references to M45--M55 sequencing, acceptance, UAT numbering, release order, and legacy-playground removal; identify phase wording that conflicts with a pre-cleanup/post-cleanup split or relocated human UAT.
@@ -29,7 +29,7 @@ the pre-edit conflicts and remains useful as the consolidation checklist.
 ### Authoritative status and roadmap — forward-looking, must change
 
 - `PLAN.md:34-36,84-89,112-115,135-137` uses M33--M55 as the future embedding/program range, assigns post-alpha workbench replacement through M51, promises Rust/WASM support through M55, and fixes the old UAT list. `:1901-2032` is completed M43--active M45 context, but `:2024-2027` assigns full playground removal to M51 and conflicts with cleanup-first wording.
-- `PLAN.md:2034-2215` is the complete old functional M46--M55 specification and gate order: diagnostics; jobs; incremental scale; operations; topology; workbench removal/parity; advanced UAT; v5 freeze; integrated UAT; release. Rehome each section intact under its mapped placeholder, then create new M46+ cleanup sections ahead of it. `:2101,2219-2233` also use M55 as a future gate/non-goal boundary and must follow the release placeholder.
+- `PLAN.md:2034-2215` is the complete old functional M46--M55 specification and gate order: diagnostics; jobs; incremental scale; operations; topology; workbench removal/parity; advanced UAT; v5 freeze; integrated UAT; release. Rehome each section intact under its mapped later milestone, then create new M46+ cleanup sections ahead of it. `:2101,2219-2233` also use M55 as a future gate/non-goal boundary and must follow the final release milestone.
 - `ARCHITECTURE.md:16,26-35,115-123,175-184,215-222,266-280,456-460,476-506` contains the status taxonomy, old future ownership, companion allocation, staged workbench/removal claim, old UAT list, v5 and prepared-job sequencing, and roadmap allocation. All references from M46 onward are forward-looking except the M45 current-state sentence; change their milestone identities and phase language together.
 - `START_HERE.md:12-18,36-65,83-85` is the live handoff: it calls M45 active, says M51 will remove the old playground, gives the old M33--M55 north star/UAT list, and names M10--M55 as current numbering. Preserve the M45/M14 history but replace all post-cleanup ownership and the M51 removal assertion.
 - `README.md:9,15,27,31-37` presents old M36--M55 scope, roadmap range, later workbench phases, and four UAT numbers to users; it must be synchronized with the authoritative plan.
@@ -40,17 +40,17 @@ the pre-edit conflicts and remains useful as the consolidation checklist.
 - `ACCEPTANCE.md:59-64,80-86,90,148,154` makes M55 the delivery/endurance boundary, says M39--M51 replace the playground, and describes M10--M55 as current. The M8 text at `:154` is a preserved historical record and should retain its then-current allocation with an explicit historical label rather than be silently renumbered.
 - `ACCEPTANCE.md:765-790` is completed M44 evidence plus deferred M45 preparation history; preserve it. `:792-859` is the authoritative old M45--M55 gate sequence. In particular `:795` forbids deletion before M51 parity, `:830-834` assigns removal to M51, `:836-852` assigns UAT 3/4 to M52/M54, and `:854-859` places release at M55. These are the highest-risk acceptance edits.
 - `docs/SCENARIOS.md:1249,1339-1372` assigns production fixtures through M55, defines M45 UAT-C2 and M52/M54 UAT-C3/C4, and asserts that M40.7/M45/M52/M54 require explicit approval. Keep the completed/historical UAT-C1 and M45 evidence, but relocate forward scenario headings, gate references, and approval numbering to the decided post-cleanup phases.
-- `docs/API_COMPATIBILITY.md:15-23,91,107-108` ties the implementation transition, v5 freeze, human gates, platform support and no-C-ABI boundary to M36--M55/M53/M54/M55. These are forward compatibility promises and must move with the mapped placeholders.
+- `docs/API_COMPATIBILITY.md:15-23,91,107-108` ties the implementation transition, v5 freeze, human gates, platform support and no-C-ABI boundary to M36--M55/M53/M54/M55. These are forward compatibility promises and must move with the mapped later milestones.
 - `docs/M33_CAD_CAPABILITY_MATRIX.md:25-27,217-252` and `crates/geosolve-sketch/tests/m33.rs:118-119,142-143` encode M49 and M55 as matrix/coverage labels (`planned_m49`, `unsupported_through_m55`, `conditional`). They are code/test labels directly referenced by documentation; rebase label values, stable IDs, matrix prose, and test expectations atomically.
 
 ### Milestone-specific architecture/ADR/implementation documents — forward-looking, must change
 
-- `docs/adr/0027-cancellation-and-prepared-concurrency.md:29,98,112,174,205`; `docs/adr/0025-retained-design-attempt-and-accepted-state.md:16,86,108,114`; and Rust doc comments at `crates/geosolve-sketch/src/document_session.rs:1099`, `:33,164` and `crates/geosolve-sketch/src/document.rs:7634,7662` assign prepared jobs, lifecycle extent, v5 freeze, and pre-freeze wire state to M47/M52/M53. They must move with M101X/M106X/M107X as appropriate.
-- `docs/adr/0028-sketch-operations-and-production-topology-companions.md:27,98,109,168,192` assigns operation/topology ownership and its M55 contract to M49/M50/M55; rebase to M103X/M104X/M109X.
-- `docs/adr/0026-immutable-host-inputs-and-external-snapshots.md:123` and `docs/adr/0029-headless-constraint-editor-state-machine.md:70` name M53 as the freeze; rebase to M107X.
-- `docs/M35_CANCELLATION_LATENCY.md:47` and ADR 0027 `:98` name M48 as later latency improvement; rebase to M102X.
+- `docs/adr/0027-cancellation-and-prepared-concurrency.md:29,98,112,174,205`; `docs/adr/0025-retained-design-attempt-and-accepted-state.md:16,86,108,114`; and Rust doc comments at `crates/geosolve-sketch/src/document_session.rs:1099`, `:33,164` and `crates/geosolve-sketch/src/document.rs:7634,7662` assign prepared jobs, lifecycle extent, v5 freeze, and pre-freeze wire state to M47/M52/M53. They must move with M55/M60/M61 as appropriate.
+- `docs/adr/0028-sketch-operations-and-production-topology-companions.md:27,98,109,168,192` assigns operation/topology ownership and its M55 contract to M49/M50/M55; rebase to M57/M58/M63.
+- `docs/adr/0026-immutable-host-inputs-and-external-snapshots.md:123` and `docs/adr/0029-headless-constraint-editor-state-machine.md:70` name M53 as the freeze; rebase to M61.
+- `docs/M35_CANCELLATION_LATENCY.md:47` and ADR 0027 `:98` name M48 as later latency improvement; rebase to M56.
 - `docs/M41_IMPLEMENTATION.md:12,26,65-66,77,81,83,109`; `docs/M42_IMPLEMENTATION.md:68,221-222,253`; `docs/M43_IMPLEMENTATION.md:5,59,178,313,319,328,347,363,373,379,384-385`; and `docs/M44_IMPLEMENTATION.md:126` contain forward ownership exclusions/hand-offs to M46/M47/M50/M52/M53. These are not historical claims and must be rebased; completion evidence in the same files remains historically named.
-- `docs/M46_DIRECT_TEST_REPLACEMENT.md:3,7-20,49-60` already calls itself M46 and directs deletion of M14/M40/M44 E2E only after direct replacement. It is a new-cleanup candidate, not old stable-diagnostics work. Its `:51-52,58` old M51/M53 successor references must be resolved against the new cleanup phase and placeholder schedule.
+- `docs/M46_DIRECT_TEST_REPLACEMENT.md:3,7-20,49-60` already calls itself M46 and directs deletion of M14/M40/M44 E2E only after direct replacement. It is a new-cleanup candidate, not old stable-diagnostics work. Its `:51-52,58` old M51/M53 successor references must be resolved against the new cleanup phase and later schedule.
 
 ### Legacy playground-removal and cleanup handoffs — phase-conflicted, must change together
 
@@ -63,17 +63,17 @@ the pre-edit conflicts and remains useful as the consolidation checklist.
   `docs/M45_CLEANUP_PLAN.md` and the archived section of `docs/M53_UAT.md`; no absent
   handoff remains an authority.
 - The record formerly named `docs/M45_UAT.md` captured the deferred M45 review, preserved points,
-  incomplete M14 status and blockers. M53 consolidated that historical material with the active
-  human scorecard in `docs/M53_UAT.md`; preserve the M45 facts in its archived section, but use M53
-  naming for the current session, findings and approval.
+  incomplete M14 status and blockers. M53 consolidated that historical material with its then-active
+  human scorecard in `docs/M53_UAT.md`; preserve the M45 facts in its archived section and the M53
+  naming for the completed session, findings and approval.
 - `scripts/serve-m45.sh:17` was the M45-specific UAT banner at this inventory snapshot. M50
   removed that obsolete server after direct replacement, and M53 uses only a temporary human
   delivery endpoint; do not restore or mechanically rename the old script.
 
 ### Secondary forward ranges and release-order wording — must change
 
-- `PLAN.md:35,112,2101,2219`; `ARCHITECTURE.md:16,35,487`; `ACCEPTANCE.md:59,90,148,154`; `START_HERE.md:59,85`; `README.md:9,15`; and `CHANGELOG.md:16` use M55 or M10--M55/M33--M55 as an endpoint/current range. Replace each with the new placeholder release endpoint or a phase-neutral phrase.
-- `docs/SCENARIOS.md:1249`; `docs/M33_CAD_CAPABILITY_MATRIX.md:26-27,217-252`; `docs/API_COMPATIBILITY.md:17,107-108`; and ADR 0028 `:109` use “through M55” as a support/contract horizon. These must track M109X, not cleanup M55.
+- `PLAN.md:35,112,2101,2219`; `ARCHITECTURE.md:16,35,487`; `ACCEPTANCE.md:59,90,148,154`; `START_HERE.md:59,85`; `README.md:9,15`; and `CHANGELOG.md:16` use M55 or M10--M55/M33--M55 as an endpoint/current range. Replace each with the final release endpoint or a phase-neutral phrase.
+- `docs/SCENARIOS.md:1249`; `docs/M33_CAD_CAPABILITY_MATRIX.md:26-27,217-252`; `docs/API_COMPATIBILITY.md:17,107-108`; and ADR 0028 `:109` use “through M55” as a support/contract horizon. These must track M63, not cleanup M55.
 
 ### Scripts/handoffs and code/test labels
 
@@ -85,39 +85,39 @@ the pre-edit conflicts and remains useful as the consolidation checklist.
 
 ## Decisions / inferred constraints
 
-- **Exact functional placeholder map:**
+- **Exact final functional map:**
 
-  | Old functional milestone | Placeholder after cleanup rebase | Existing functional scope to preserve under placeholder |
+  | Old functional milestone | Final milestone after M53 | Existing functional scope preserved |
   | --- | --- | --- |
-  | M46 | M100X | stable diagnostics and mobility evidence |
-  | M47 | M101X | prepared jobs and concurrency |
-  | M48 | M102X | incremental solving and production scale |
-  | M49 | M103X | sketch operations companion |
-  | M50 | M104X | production topology companion |
-  | M51 | M105X | advanced workbench completion and direct automated qualification; legacy-playground removal moved to cleanup M50 |
-  | M52 | M106X | advanced geometry/topology human UAT |
-  | M53 | M107X | API/schema release-candidate freeze |
-  | M54 | M108X | integrated release-candidate human UAT |
-  | M55 | M109X | production embedding release |
+  | M46 | M54 | stable diagnostics and mobility evidence |
+  | M47 | M55 | prepared jobs and concurrency |
+  | M48 | M56 | incremental solving and production scale |
+  | M49 | M57 | sketch operations companion |
+  | M50 | M58 | production topology companion |
+  | M51 | M59 | advanced workbench completion and direct automated qualification; legacy-playground removal moved to cleanup M50 |
+  | M52 | M60 | advanced geometry/topology human UAT |
+  | M53 | M61 | API/schema release-candidate freeze |
+  | M54 | M62 | integrated release-candidate human UAT |
+  | M55 | M63 | production embedding release |
 
 - **Historical names that remain:** completed M1--M44 claims; M45’s deferred-preparation history and final investigation completion without approval; M13/M14 alpha and incomplete-full-M14 evidence; M39/M40/M44 qualification results; dated cleanup-investigation facts; and existing test/script file names. A historical sentence may retain an old number only where it reports an event that occurred under that number and does not schedule a future owner.
 - **Forward names that change:** every old M46--M55 heading, gate, target, capability-matrix value, test expectation, ADR future-owner statement, range endpoint, UAT-C3/C4 heading, release dependency, and future removal/successor assignment. “M51 parity/removal” is forward even inside an M45 historical investigation document.
 - Treat explicit completed-record language as historical unless it assigns work after M45; do not renumber accepted historical M13/M14, M39--M45 completion/preparation evidence merely because it mentions the playground.
 - Treat any statement that says M46--M55 “will,” “targets,” “remains,” “requires,” “through M55,” or assigns a future UAT/release gate as forward-looking and therefore rebase-sensitive.
-- M51-specific claims are high risk: they currently combine a future parity/removal requirement with an assertion that the legacy lab is still transitional. Cleanup milestones beginning at M46 must either move that removal work into the cleanup phase or explicitly defer it under its new placeholder owner; both statements cannot remain unchanged.
+- M51-specific claims are high risk: they currently combine a future parity/removal requirement with an assertion that the legacy lab is still transitional. Cleanup milestones beginning at M46 must either move that removal work into the cleanup phase or explicitly defer it under its later owner; both statements cannot remain unchanged.
 - **Phase conflicts to eliminate:** (1) “cleanup must not pull deletion forward” versus a cleanup roadmap that removes/rehomes the lab; (2) “M39--M51 replace the playground” versus post-cleanup replacement phases; (3) old UAT 3/4 labels at M52/M54 versus relocated human UAT; (4) M53 v5 freeze before old M54/M55 release language versus any inserted cleanup gates; and (5) “through M55” support/non-goal/release claims versus M55 becoming a cleanup milestone rather than the functional release endpoint.
 
 ## Resolved decisions
 
-- Placeholder notation is literal M100X-M109X. The `X` suffix explicitly means “not a
-  final milestone number”; no numeric expansion occurs before M53.
+- The temporary ten-entry placeholder sequence retained scope and dependency order until M53
+  approval; its final numbering is M54-M63.
 - M46-M49 are pre-cleanup replacement/extraction, M50 is the purge cut, and M51-M53 are
   post-cleanup consolidation/candidate/human-UAT work.
-- Legacy-playground removal occurs at M50, not placeholder M105X. Placeholder M105X owns
+- Legacy-playground removal occurs at M50, not M59. M59 owns
   only later advanced-workbench completion over the already-clean application.
-- Human UAT 2 relocates to M53; advanced/integrated UAT remain placeholder M106X/M108X.
-- Functional support/release horizons formerly phrased “through M55” now use placeholder
-  M109X or phase-neutral wording.
+- Human UAT 2 relocates to M53; advanced/integrated UAT remain M60/M62.
+- Functional support/release horizons formerly phrased “through M55” now use M63 or phase-neutral
+  wording.
 - The 29-file initial scan remains the provenance inventory; current consistency must be
   proven by a fresh repository search and diff review rather than its original line numbers.
 

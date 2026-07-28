@@ -1259,7 +1259,7 @@ instruction or a supported persistence format.
 
 M33-M44 add the current production-embedding fixtures without replacing the frozen
 scenarios above. Cleanup M46-M53 preserves their durable behavior through direct tests and
-post-cleanup UAT. Placeholder M100X-M109X preserves later functional/release scope. Every
+approved post-cleanup UAT. M54-M63 own the later executable functional/release scope. Every
 new fixture must name its exact design, parameter, external-snapshot, activation and
 accepted-state revisions. The workbench remains a desktop-only public-API consumer; no
 mobile scenario is required.
@@ -1267,7 +1267,7 @@ mobile scenario is required.
 Objective geometry, residual, derivative, rank, branch, persistence, migration, resource,
 cancellation, presentation-adapter and topology assertions are directly automated at their
 owning Rust/WASM layer. Old browser E2E is not a qualification path. Human review is
-limited to completed M40.7, post-cleanup M53 and placeholder M106X/M108X after direct
+limited to completed M40.7 and M53 plus planned M60/M62 after direct
 automated qualification.
 
 ### M40-ES1 - Headless persistent line selection and relation action
@@ -1354,7 +1354,7 @@ without selecting from coordinates.
 ### UAT-C2 - CAD host semantics at M53
 
 M52 directly qualified four fixed fixture families and ten objective points without
-recording human approval. Active M53 presents that same behavior as six typed scenarios and adds
+recording human approval. Completed M53 presents that same behavior as six typed scenarios and adds
 two M53-P013 error-presentation scenarios under the stable root `m53-host-semantics`
 (**M53 Host semantics**):
 
@@ -1385,8 +1385,8 @@ The guide sidebar publishes the selected scenario's description, objective point
 questions, typed steps, expected outcome and recent transcript/evidence. Stable definitions
 may group and present typed candidate actions, but the browser does not derive equations,
 accepted state, revisions, digests or recovery semantics. Those remain products of the
-direct-qualified fixture transitions and public domain/audit APIs. The prepared human
-review judges discoverability, state, ownership and recovery clarity.
+direct-qualified fixture transitions and public domain/audit APIs. The completed human review
+judged discoverability, state, ownership and recovery clarity as Pass.
 
 `attributed-canvas-error` begins with an accepted fixed two-point line and a reference
 line-length dimension whose stored target is intentionally incompatible with the fixed geometry.
@@ -1402,7 +1402,7 @@ top-right marker without highlighting unrelated geometry. A subsequent valid len
 accepted state and clears the marker. Both examples expose the same message in non-mutating
 hover/focus tooltips and the canonical Problems panel.
 
-### UAT-C3 - Advanced geometry and topology at placeholder M106X
+### UAT-C3 - Advanced geometry and topology at M60
 
 Prepared advanced scenes cover conics, Bezier/B-spline/NURBS controls, weights,
 knots, periodic transitions, explicit branch edits, fillet/trim/mirror/pattern
@@ -1411,7 +1411,7 @@ topology. One medium sketch exercises rapid edit and cancellation. The 45-60 min
 review judges local predictability, branch clarity, coherent associated motion,
 topology trust and perceived responsiveness.
 
-### UAT-C4 - Integrated release candidate at placeholder M108X
+### UAT-C4 - Integrated release candidate at M62
 
 The frozen candidate starts from an empty workspace and proceeds through ordinary
 and construction geometry, constraints, host parameters, an external reference, an
@@ -1424,13 +1424,13 @@ matrix.
 
 Each checkpoint provides one manual entry point, deterministic resets and concise
 instructions. M53 uses one top **Scenarios** entry point with the eight stable leaves above;
-the catalog machinery may host UAT-C3/UAT-C4 only after their placeholder milestones are
-renumbered and executed. Findings capture the candidate revision, selected scenario,
+the catalog machinery may host UAT-C3/UAT-C4 only after their preceding milestones are executed.
+Findings capture the candidate revision, selected scenario,
 workspace input, action transcript and accepted/attempted diagnostics from public APIs; a
 human may attach an OS screenshot for a visual finding. Objective defects receive direct
 owning-layer regressions. A targeted human recheck is preferred; a full checkpoint repeats
-only after a material API, schema or primary-workflow change. Completed M40.7 required explicit
-supervising-human sign-off; active M53 and eventual renumbered M106X/M108X require the same.
+only after a material API, schema or primary-workflow change. Completed M40.7 and M53 required
+explicit supervising-human sign-off; planned M60/M62 require the same.
 
 ## Frozen near-singular fixtures
 

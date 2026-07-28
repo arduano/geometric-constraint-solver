@@ -9,7 +9,7 @@ This completed M45 inventory is the source evidence for cleanup M46-M50. `PLAN.m
 claims move to direct Rust/WASM owning-layer tests, browser-only delivery is explicitly
 retired, M47 removed M44 E2E, M48 removed M40 E2E, and M49 closed the M14/92-test
 ledger before M50 deleted the old runtime and all remaining browser infrastructure.
-M51-M52 subsequently completed; M53 now owns the human review over the sole workbench.
+M51-M52 subsequently completed; M53 human review over the sole workbench later passed.
 
 ## Requirements
 
@@ -310,7 +310,7 @@ The nine M14 E2E E-groups are likewise resolved by the final direct-owner/retire
 in `docs/M46_DIRECT_TEST_REPLACEMENT.md`: durable domain, editor, persistence and adapter
 claims move to the named M47-M49 owners; old authoring UI, mobile/profile presentation,
 browser timing and file delivery retire. M50 removes the legacy runtime only after those
-replacement tests pass. Placeholder M107X owns any later stable release-surface decision.
+replacement tests pass. M61 owns any later stable release-surface decision.
 
 ## Out of scope
 

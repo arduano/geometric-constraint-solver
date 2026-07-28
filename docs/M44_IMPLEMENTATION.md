@@ -21,7 +21,7 @@ remains complete.
 - The review originally prepared for M45 covers role conversion, suppression/reactivation,
   a shared parameter, invalid-parameter recovery, stale/missing/valid external recovery,
   and retained unsolved design over accepted geometry. M45 preserved those points but did
-  not perform UAT; M53 now owns the post-cleanup review. Revisions, digests, and atomicity
+  not perform UAT; M53 later completed and approved the post-cleanup review. Revisions, digests, and atomicity
   remain directly automated (`docs/SCENARIOS.md:1339-1345`).
 - The editor is the deterministic interaction-policy consumer of public sketch APIs;
   the web layer may only map platform inputs, render returned DTOs, and apply typed
@@ -132,7 +132,7 @@ None blocking. Parent-owned scope decisions are:
   action and does not become canonical sketch history or browser-owned policy.
 - M44 stale-input automation exercises the existing synchronous revision rejection and typed
   retained attempts only. Captured asynchronous jobs and compare-and-swap publication remain
-  exclusively M101X; M44 adds no synthetic CAS state.
+  exclusively M55; M44 adds no synthetic CAS state.
 
 ## Qualification evidence and deferred carry-forward gate
 
@@ -192,5 +192,5 @@ capture. The copied shell initially lacked a `chromium` command; an explicit Chr
 was stopped after desktop layout and still did not produce the M14 final-pass line. The
 supervising user then explicitly authorized avoiding the costly legacy suite and
 fast-tracking to M45. M44 is complete on focused evidence, not on a retroactive M14 pass.
-Human UAT remains owned by the supervising user. Its historical M45 preparation and active M53
+Human UAT remains owned by the supervising user. Its historical M45 preparation and completed M53
 scorecard are consolidated in `docs/M53_UAT.md`.

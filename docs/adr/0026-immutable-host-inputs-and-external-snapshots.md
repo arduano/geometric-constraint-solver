@@ -120,7 +120,7 @@ compare-and-swap publication consume these immutable inputs; they do not revise 
 ownership boundary.
 
 The separate parameter and external-snapshot wire envelopes remain subject to the
-M107X freeze described by ADR 0025. This ADR is an M33 contract decision only. M33
+M61 freeze described by ADR 0025. This ADR is an M33 contract decision only. M33
 adds no parameter, external-reference, callback, persistence or public session API.
 
 ## Consequences

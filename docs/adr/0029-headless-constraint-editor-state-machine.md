@@ -69,5 +69,5 @@ qualified editor state machine.
 
 Selection and drafting policy move out of `geosolve-demo-web`; presentation-specific
 code becomes smaller and replaceable. The editor is a public pre-1.0 crate and may
-evolve before the M107X API freeze. Existing M39/M40 browser evidence is retained as
+evolve before the M61 API freeze. Existing M39/M40 browser evidence is retained as
 historical regression evidence but does not qualify the replacement architecture.

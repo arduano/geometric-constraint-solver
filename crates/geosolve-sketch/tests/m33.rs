@@ -21,8 +21,8 @@ const STATUSES: [&str; 7] = [
     "implemented_m36",
     "implemented_m37",
     "implemented_m38",
-    "planned_m103x",
-    "unsupported_through_m109x",
+    "planned_m57",
+    "unsupported_through_m63",
     "conditional",
 ];
 
@@ -115,8 +115,8 @@ fn assert_status_contract(table: &Table) {
             "implemented_m36" => "M36",
             "implemented_m37" => "M37",
             "implemented_m38" => "M38",
-            "planned_m103x" => "M103X",
-            "unsupported_through_m109x" | "conditional" => "M109X",
+            "planned_m57" => "M57",
+            "unsupported_through_m63" | "conditional" => "M63",
             status => panic!("unknown M33 status {status:?}"),
         };
         assert_eq!(row[target_column], expected_target, "row {}", row[0]);
@@ -139,8 +139,8 @@ fn marked_capability_tables_are_complete_deterministic_and_typed() {
             "implemented_m36" => "M36",
             "implemented_m37" => "M37",
             "implemented_m38" => "M38",
-            "planned_m103x" => "M103X",
-            "unsupported_through_m109x" | "conditional" => "M109X",
+            "planned_m57" => "M57",
+            "unsupported_through_m63" | "conditional" => "M63",
             status => panic!("unknown status {status:?}"),
         };
         assert_eq!(row[1], expected_target);
