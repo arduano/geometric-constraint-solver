@@ -2252,7 +2252,7 @@ external references and retained unsolved intent on the post-cleanup workbench.
   using a global scope whenever the domain evidence cannot identify individual elements cleanly.
 - [x] Render targeted canvas icons/highlights and global fallback, and add two reusable scenarios
   demonstrating attributed conflict and unattributable input failure with recovery.
-- [ ] Requalify canvas error attribution and record M53-S5 before targeted human review.
+- [x] Requalify canvas error attribution and record M53-S5 before targeted human review.
 - [ ] Assess role/profile and suppression/mode distinctions.
 - [ ] Assess parameter ownership, proposal provenance and invalid/stale recovery.
 - [ ] Assess missing/stale/topology/rebind external-reference recovery.
@@ -2290,7 +2290,14 @@ non-mutating tooltips and two reusable demonstration scenarios under **Error att
 implementation and direct native/WASM regressions are complete: conflict targets come only from
 attempt mappings/core sources and document dependencies, wrong-kind input remains global, recovery
 clears metadata, and accepted geometry remains the only rendered geometry. Clean qualification and
-M53-S5 identity are pending.
+M53-S5 identity are recorded below; targeted human review remains pending.
+
+M53-S5 completion note (2026-07-28): the complete clean release gate passes from build-source
+commit `f72116b`, including editor 60/60, demo-web 31/31, the 127.85s release-only 256-moving-body
+sparse crossover, all-feature WASM, package/licence checks and the Trunk 0.21.14 release build.
+`docs/M53_UAT.md` records distribution manifest
+`1a96ebe29b5eaa8973b9f726d062be74428f2545763a108a19688913ccaaeadc`; every served file matches
+its local SHA-256. Targeted supervising-human review remains pending.
 
 ## Placeholder future functional sequence
 

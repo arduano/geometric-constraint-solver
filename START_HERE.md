@@ -88,8 +88,9 @@ M53-P013 subsequently supersedes S4 before ratings. It requests structured curre
 at the headless-editor/UI seam, persistent owner-and-operand highlights on the accepted canvas,
 accessible error markers, a global fallback when attribution is not defensible, and two reusable
 demonstration scenarios under a fourth selector group. The implementation and direct regressions
-are complete, growing the catalog to eight scenarios; S4 is retired and clean M53-S5 qualification
-is pending.
+are complete, growing the catalog to eight scenarios. The complete clean release gate passes from
+build-source commit `f72116b`; `docs/M53_UAT.md` records the frozen M53-S5 manifest and temporary
+human endpoint. Targeted supervising-human review remains pending.
 
 The displaced functional/release roadmap is preserved as literal placeholders
 M100X-M109X: stable diagnostics, prepared jobs, incremental scale, operations, production
