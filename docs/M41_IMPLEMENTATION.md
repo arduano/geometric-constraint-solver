@@ -11,7 +11,7 @@ qualification evidence; M42-M52 subsequently completed and M53 human UAT later p
 - Effective activation must be explicit, dependency-safe, and explain every inactive result with a closed reason set. Inactive branch/contact/topology state must survive reactivation without coordinate inference.
 - All M1-M40 behavior remains mandatory: no false-success path, independently validated accepted state, transactional rejection, deterministic ordering, explicit discrete state, and frozen v1-v4 languages (`PLAN.md` common gate; `ACCEPTANCE.md` global/frozen gates).
 - The implementation must preserve the M34 split among retained design, optional attempt, and independently accepted state. M41 is a domain-state extension, not a reason to label retained/attempted geometry accepted (`ARCHITECTURE.md` §5; `PLAN.md` M34).
-- v1-v4 are frozen readers/writers with canonical v4 output. A draft-v5 may be developed before M61 but is unsupported and must not silently extend any existing schema (`docs/API_COMPATIBILITY.md` §§Persistence and API tiers).
+- v1-v4 are frozen readers/writers with canonical v4 output. A draft-v5 may be developed before M62 but is unsupported and must not silently extend any existing schema (`docs/API_COMPATIBILITY.md` §§Persistence and API tiers).
 
 ## Current model
 
@@ -25,7 +25,7 @@ Profiles already treat suppression as an eligibility input: coincident constrain
 
 `DocumentElementId` already names the whole persistent graph—document, point, scalar, curve, contact, constraint, dimension, and source—and intentionally does not use runtime IDs (`document.rs:1081-1144`). It is the correct identity seam for activation diagnostics/dependency edges. `DocumentSourceOwner` remains narrower (constraint or dimension), so source audit information cannot by itself represent entity/contact/association activity (`document.rs:1146-1160`).
 
-Working constraint: retain v1-v4 byte-for-byte semantics. `SketchDocumentV4` serializes its exact v4 graph fields under `deny_unknown_fields` (`document.rs:1783-1837`); API policy forbids extending persisted types within a schema version and requires a new schema for fields/variants (`docs/API_COMPATIBILITY.md:52-55,70-97`). New role/activation fields therefore belong only in an explicitly draft-v5 envelope/DTO (or a separately versioned additive M41 state envelope), never in a v1-v4 request/document type. M61 is the freeze point, so any draft-v5 representation remains unsupported until then (`API_COMPATIBILITY.md:15-23`).
+Working constraint: retain v1-v4 byte-for-byte semantics. `SketchDocumentV4` serializes its exact v4 graph fields under `deny_unknown_fields` (`document.rs:1783-1837`); API policy forbids extending persisted types within a schema version and requires a new schema for fields/variants (`docs/API_COMPATIBILITY.md:52-55,70-97`). New role/activation fields therefore belong only in an explicitly draft-v5 envelope/DTO (or a separately versioned additive M41 state envelope), never in a v1-v4 request/document type. M62 is the freeze point, so any draft-v5 representation remains unsupported until then (`API_COMPATIBILITY.md:15-23`).
 
 The persisted role must apply beyond sources because the plan explicitly generalizes activation over entities, constraints, dimensions, and associations (`PLAN.md:1854-1858`). A public activity report should be keyed by `DocumentElementId`, with source mappings reporting the derived activity of their owners, rather than attempting to overload `DocumentSourceRef::suppressed`.
 
@@ -64,8 +64,8 @@ The existing lifecycle regression is the immediate baseline: after a failed `Set
 - Compute one immutable, ordered effective-activity snapshot before lowering, profile analysis, branch-enforcement checks, or ownership-dependent edits. Every consumer must use that snapshot so an inactive dependency cannot be evaluated through a side path.
 - Construction is a geometry role, not deactivation: construction geometry remains eligible for solver constraints. Default profile scope excludes it, but a future explicitly declared scope may include it.
 - Do not alter `visible_interval`, trim, contact, branch, sweep, winding, or association ownership merely because an element is inactive. Reactivation restores the retained explicit state; it does not project or choose from coordinates.
-- Keep visual profile analysis/read-only behavior separate from M58 production topology. M41 supplies eligibility/role information to the existing profile policy; it does not create B-rep topology or persistent profile entities.
-- **Persistence decision:** evolve the in-memory document model and add an explicitly unsupported draft-v5 DTO/codec for M41 state. Frozen v1-v4 readers and canonical v4 bytes remain unchanged for documents whose roles and requested activation are representable by v4; supported v4 encoding must reject rather than silently discard non-default M41 state. M61 alone may freeze the draft language.
+- Keep visual profile analysis/read-only behavior separate from M59 production topology. M41 supplies eligibility/role information to the existing profile policy; it does not create B-rep topology or persistent profile entities.
+- **Persistence decision:** evolve the in-memory document model and add an explicitly unsupported draft-v5 DTO/codec for M41 state. Frozen v1-v4 readers and canonical v4 bytes remain unchanged for documents whose roles and requested activation are representable by v4; supported v4 encoding must reject rather than silently discard non-default M41 state. M62 alone may freeze the draft language.
 - **Role decision:** use a closed `Profile`/`Construction` geometry-role enum keyed by persistent curve identity. `Profile` is the deterministic migration/default for every v1-v4 curve. Role does not imply activity and never removes a curve from lowering.
 - **Activation decision:** keep user-requested state separate from immutable host configuration input and from derived effective activity. Existing `suppressed: bool` maps exactly to user suppression for v1-v4 compatibility. The M41 activation payload carries a monotone revision plus canonical digest and finite, bounded persistent-element overrides; an absent payload has canonical empty identity as required by ADR 0025.
 - **Reason decision:** the closed effective reason vocabulary is `UserSuppressed`, `HostConfigurationInactive`, `UnavailableDependency`, and `UnavailableExternalReference`. Reports include the affected persistent `DocumentElementId` and, where applicable, the direct unavailable dependency identity. Deterministic closure order follows canonical persistent element order, never hash-map iteration.
@@ -76,13 +76,13 @@ The existing lifecycle regression is the immediate baseline: after a failed `Set
 - M42 typed parameter identities/batches and bindings, except for the M41 activation-input boundary and immutable-stamp requirements.
 - M43 external-reference snapshot implementation, except for reporting its required `unavailable external reference` inactivity cause.
 - M44 desktop/workbench controls and presentation; the editor consumes typed M41 domain APIs rather than defining closure semantics.
-- M58 production topology, B-rep conversion, and geometry-operation behavior.
+- M59 production topology, B-rep conversion, and geometry-operation behavior.
 
 ## Risks and open questions
 
-- Draft-v5 remains deliberately unsupported and may evolve through M60; tests must distinguish its private codec from supported v1-v4 import/export.
+- Draft-v5 remains deliberately unsupported and may evolve through M61; tests must distinguish its private codec from supported v1-v4 import/export.
 - M42 activation-parameter bindings and M43 external binding records must extend the M41 payload and reserved external-unavailability seam without changing the four public reason categories.
-- Complete input-stamp propagation reaches later M42/M43/M55 surfaces. M41 must establish activation revision/digest identity now, but must not fabricate parameter or external-snapshot revisions before their milestones.
+- Complete input-stamp propagation reaches later M42/M43/M56 surfaces. M41 must establish activation revision/digest identity now, but must not fabricate parameter or external-snapshot revisions before their milestones.
 
 ## Completion report
 
@@ -108,5 +108,5 @@ The existing lifecycle regression is the immediate baseline: after a failed `Set
    activation revision/digest publication checks, exact discrete-state reactivation,
    deterministic characterization and frozen supported persistence all passed.
 5. **Known limitations/next blocker:** draft-v5 remains deliberately unsupported until
-   M61. M42 must add parameter revision/digest input stamps and bindings without
+   M62. M42 must add parameter revision/digest input stamps and bindings without
    changing M41's four reason categories; M43 later owns external snapshot records.

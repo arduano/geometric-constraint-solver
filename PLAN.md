@@ -34,7 +34,7 @@ The library must support independently editable 2D sketch geometry, including:
 M22 completed the built-in curve and generic differential-constraint surface, not
 the complete production embedding contract. M33-M45 close the first ordinary-CAD,
 host-integration and interaction-consumer cut; M46-M53 perform the cleanup rebase and approved
-host-semantics UAT; M54-M63 complete the later functional/release work. This deliverable
+host-semantics UAT; M54-M64 complete the later functional/release work. This deliverable
 does not include a solid B-rep kernel, meshing or 3D sketch curves.
 
 ### Deliverable 2: 2D and 3D rigid-body kinematics
@@ -111,7 +111,7 @@ engine that a real CAD host can use. The accepted personality is:
 - an embedding UI may map a platform pointer or 3D camera ray onto a sketch plane and
   render returned DTOs, but it must not recreate the editor's interaction state machine
   or infer geometric assistance independently;
-- supported embedding targets are Rust and WASM only through M63;
+- supported embedding targets are Rust and WASM only through M64;
 - the reusable library remains `GPL-3.0-or-later`;
 - the web consumer is a desktop demo of sketch-constraint workflows, not a mobile
   product or solid modeller.
@@ -134,7 +134,7 @@ engine that a real CAD host can use. The accepted personality is:
   geometry enter one attempt as immutable revisioned values.
 - Keep cross-system expressions, B-rep projection, topological naming, feature
   history and application undo outside the sketch solver contract.
-- Keep human acceptance limited to completed M40.7 and M53, plus the planned M60 and M62 gates.
+- Keep human acceptance limited to completed M40.7 and M53, plus the planned M61 and M63 gates.
   Every objective correctness, persistence,
   compatibility and presentation-adapter assertion must pass through direct unit or
   integration tests at its owning layer before a human checkpoint begins; old CDP E2E
@@ -1359,7 +1359,7 @@ for profile cancellation, `2.687691 ms` for the bounded QR window and `7.323588 
 for the bounded rank-SVD window. Nineteen focused M35 regressions cover cancellation,
 work exhaustion, checkpoint placement, rollback, constructor/compile/session parity,
 dense-cap boundaries and operation reports. Frozen sketch v1-v4 remains unchanged;
-M55 prepared jobs and compare-and-swap concurrency remain deferred. Formatting,
+M56 prepared jobs and compare-and-swap concurrency remain deferred. Formatting,
 warnings-denied locked workspace Clippy/rustdoc, full locked workspace tests, locked
 WASM, release Trunk and the complete release gate pass.
 
@@ -1869,7 +1869,7 @@ Completion note (2026-07-27): M41 added closed profile/construction roles, immut
 revisioned host activation, one deterministic typed dependency closure, activity-aware
 lowering/profile/branch/ownership consumers and activation revision/digest lifecycle
 stamps. Frozen v1-v4 bytes remain unchanged for representable state; supported v4
-encoding rejects non-default M41 state and the pre-M61 draft-v5 codec remains explicitly
+encoding rejects non-default M41 state and the pre-M62 draft-v5 codec remains explicitly
 unsupported. Focused M41 tests, independent verification, locked all-feature workspace
 tests, warnings-denied workspace Clippy, the WASM check and the release Trunk build all
 passed. M42 and M43 subsequently completed.
@@ -2020,9 +2020,11 @@ M45; the M46 follow-up cleared it without changing behavior.
 
 ## Post-cleanup numbering record
 
-M46-M53 are the completed cleanup and host-semantics UAT sequence. After M53 approval, the
-temporary ten-entry future sequence was finalized consecutively as M54-M63 without changing its
-dependency order or scope. M54 is therefore the next executable milestone.
+M46-M53 are the completed cleanup and host-semantics UAT sequence. After M53 approval, the future
+sequence was finalized from M54 onward. A subsequent supervising-user decision inserted the
+constraint/dimension/branch-action parity gate at M55, shifting the preserved later sequence by one
+number through M64 without changing its dependency order or scope. M54 remains the next executable
+milestone.
 
 ## Pre-cleanup phase
 
@@ -2265,7 +2267,7 @@ Execution record (2026-07-28): `docs/M53_UAT.md` is the consolidated durable M53
 change-request and retest ledger. Every observation or UI request must be recorded and classified
 before implementation. Objective defects require direct regressions and targeted requalification;
 clarity/layout changes require an identified candidate rebuild and affected human retest; future
-scope remains in M54-M63 or an explicit open question. One request did not shadow or silently
+scope remains in M54-M64 or an explicit open question. One request did not shadow or silently
 close another development concern, question or plan. Candidate identities and any temporary
 human-only access details belong exclusively in the M53 ledger; they are not automated gates,
 retained server infrastructure or product routes.
@@ -2309,71 +2311,98 @@ Scope: publish stable sketch-owned diagnostics, revision identities, structural/
 rank and mobility evidence, bounded conflict/repair information, and move direct core
 reports behind an unstable seam.
 
-### M55: prepared jobs and concurrency contract
+### M55: alpha constraint, dimension and branch-action parity
 
 Status: planned; begins after M54 passes.
+
+Goal: expose the complete preserved M13-M14 alpha constraint, dimension and explicit branch-action
+surface early through reusable headless-editor policy and the sole visible workbench, without
+restoring the deleted playground or moving equations into presentation code.
+
+- [ ] Freeze one applicability/action matrix covering the existing core actions plus point-on-curve,
+  equal-radius, midpoint, symmetry, generic contact and generic tangency.
+- [ ] Expose distance, segment-length, radius, diameter and oriented-angle dimensions in both
+  driving and reference modes wherever the public document applicability rules permit them.
+- [ ] Add typed editor actions for every required tangent orientation, contact neighborhood,
+  parameter-domain, span and winding choice; never infer a discrete branch from coordinates.
+- [ ] Render the returned actions, disabled reasons, glyphs, annotations and branch controls in the
+  workbench without browser-owned applicability, equations or audit interpretation.
+- [ ] Add deterministic reusable scenarios for ordinary line/point relations, circular dimensions,
+  midpoint/symmetry, point-on-curve and generic contact/tangency with branch editing and rejection
+  recovery.
+- [ ] Directly qualify the complete matrix through native editor/coordinator tests, the WASM adapter
+  and focused presentation tests; do not restore old browser E2E, CDP, `/#/dev/lab` or legacy
+  harnesses.
+
+Gate: every preserved alpha constraint, dimension and branch action is discoverable and executable
+through the headless editor and sole workbench using public sketch APIs, with accepted-state
+retention and typed diagnostics on rejection. This is action-surface parity, not restoration of the
+old application, mobile behavior or browser-owned solver semantics.
+
+### M56: prepared jobs and concurrency contract
+
+Status: planned; begins after M55 passes.
 
 Scope: immutable accepted snapshots, exact-revision prepared jobs, non-mutating candidate
 patches, compare-and-swap commit, host-managed scheduling and safe Rust `Send`/`Sync`
 contracts for native and single-threaded WASM consumers.
 
-### M56: incremental solving and production scale
+### M57: incremental solving and production scale
 
-Status: planned; begins after M55 passes.
+Status: planned; begins after M56 passes.
 
 Scope: persistent runtime mappings, dependency-closure rebuilds, indexed/history storage,
 profile caches, workload envelopes, sparse-rank evaluation and full fresh validation on
 every optimized return path.
 
-### M57: sketch operations companion
+### M58: sketch operations companion
 
-Status: planned; begins after M56 passes.
+Status: planned; begins after M57 passes.
 
 Scope: a separate no-residual-formula transaction companion for split/break/trim/extend,
 mirror, chamfer, grouped rectangle/polygon/slot/pattern expansion and multi-interval visible
 topology.
 
-### M58: production topology companion
+### M59: production topology companion
 
-Status: planned; begins after M57 passes.
+Status: planned; begins after M58 passes.
 
 Scope: revision-stamped complete wires/profiles, nesting/holes/provenance, explicit
 ambiguity policy, declared construction/external filtering and typed incomplete outcomes.
 
-### M59: advanced workbench completion
+### M60: advanced workbench completion
 
-Status: planned; begins after M58 passes.
+Status: planned; begins after M59 passes.
 
-Scope: first expose at least the complete preserved M13-M14 alpha constraint, dimension and branch
-action surface through the headless editor and visible workbench, then add advanced curves/branches,
-companion operations, production profiles, stable diagnostics, cancellation/stale presentation and
-a versioned desktop workspace envelope to the already-clean single workbench. Qualification remains
+Scope: build on the completed M55 action surface by adding advanced curves/branches, companion
+operations, production profiles, stable diagnostics, cancellation/stale presentation and a
+versioned desktop workspace envelope to the already-clean single workbench. Qualification remains
 direct; no old playground or CDP E2E may return.
 
-### M60: human UAT 3 - advanced geometry and topology
+### M61: human UAT 3 - advanced geometry and topology
 
-Status: planned; human approval required after M59 qualification.
+Status: planned; human approval required after M60 qualification.
 
 Scope: advanced authoring, operations, topology, branch clarity and interaction-performance
 review after objective direct qualification.
 
-### M61: API and schema release-candidate freeze
+### M62: API and schema release-candidate freeze
 
-Status: planned; begins after M60 passes.
+Status: planned; begins after M61 passes.
 
 Scope: final sketch v5 migration, parameter/external/workspace schemas, supported Rust/WASM
 facade, package/SemVer/schema gates and removal of unstable fixture/compiler surfaces.
 
-### M62: human UAT 4 - integrated release candidate
+### M63: human UAT 4 - integrated release candidate
 
-Status: planned; human approval required after the M61 candidate freezes.
+Status: planned; human approval required after the M62 candidate freezes.
 
 Scope: one integrated frozen-candidate workflow, conflict recovery, production profiles,
 persistence/history, exploratory authoring and explicit sign-off.
 
-### M63: production embedding release gate
+### M64: production embedding release gate
 
-Status: planned; begins after M62 passes.
+Status: planned; begins after M63 passes.
 
 Scope: mock CAD host, public-API-only embedding, fuzz/resource limits, Linux/Windows/macOS/
 WASM consumers, packaged examples and one reproducible release command covering every
@@ -2381,7 +2410,7 @@ renumbered automated gate and recorded human approval.
 
 ## Explicit non-goals
 
-The following are not part of the program through M63:
+The following are not part of the program through M64:
 
 - solid modeling, B-rep booleans, meshing or a production rendering system;
 - 3D sketch curves or a unified 2D/3D sketch entity model;

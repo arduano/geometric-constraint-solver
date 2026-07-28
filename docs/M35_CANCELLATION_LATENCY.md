@@ -44,7 +44,7 @@ only a representative evidence workload. `OperationController` clamps each confi
 row and column limit to 256; callers may choose lower limits but cannot raise this bound. A
 controlled dense factorization or rank kernel whose row or column dimension exceeds its
 effective limit returns typed `WorkExhausted` evidence before entering the kernel and cannot
-publish a result. Legacy operations without an `OperationControl` remain unrestricted. M56 may
+publish a result. Legacy operations without an `OperationControl` remain unrestricted. M57 may
 replace or broaden this policy only with new bounded-kernel evidence and contract updates.
 
 ## Reference run

@@ -87,9 +87,10 @@ are complete, growing the catalog to eight scenarios. The complete clean release
 build-source commit `f72116b`; `docs/M53_UAT.md` records the frozen M53-S5 manifest and temporary
 human endpoint. The targeted attribution review passed as part of final M53-S5 approval.
 
-The finalized M54-M63 functional/release roadmap covers stable diagnostics, prepared jobs,
-incremental scale, operations, production topology, advanced workbench, advanced UAT, API/schema
-freeze, integrated UAT and the production embedding release.
+The finalized M54-M64 functional/release roadmap covers stable diagnostics, early alpha
+constraint/dimension/branch-action parity, prepared jobs, incremental scale, operations,
+production topology, advanced workbench, advanced UAT, API/schema freeze, integrated UAT and the
+production embedding release.
 
 Durable cleanup records:
 

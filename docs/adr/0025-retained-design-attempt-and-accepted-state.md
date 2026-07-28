@@ -13,7 +13,7 @@ old accepted geometry as if it solved the new intent would make audit, persisten
 and stale-work checks ambiguous.
 
 M34 therefore needs distinct design, attempt and accepted-state identities before
-M41-M43 add activation and immutable host inputs and M55 later adds
+M41-M43 add activation and immutable host inputs and M56 later adds
 prepared work. Those identities must also allow an underconstrained but independently
 hard-valid state to remain a legitimate parent state. Zero mobility is not a condition
 of acceptance.
@@ -84,7 +84,7 @@ by an omitted or process-default field.
 The stamp is immutable during an attempt. Every result repeats it, and publication
 compares every member rather than checking only the design revision. A revision
 provides ordering and stale-work evidence; a digest provides exact payload identity.
-Neither substitutes for validating the corresponding input. M55 compare-and-swap
+Neither substitutes for validating the corresponding input. M56 compare-and-swap
 publication must reject a candidate if any stamped member differs from current
 session input.
 
@@ -106,13 +106,13 @@ Sketch wire languages v1 through v4 remain frozen. Their fields and variants are
 expanded to encode retained unsolved intent, attempt identity or host-input stamps.
 They continue to mean exactly the accepted-document languages already released.
 
-M34 implements the three-view lifecycle and identity rules. From M34 through M60,
+M34 implements the three-view lifecycle and identity rules. From M34 through M61,
 any draft-v5 representation is private, explicitly unsupported and free to change
 without migration or compatibility guarantees. A draft-v5 payload is not a released
 wire language, supported import or canonical public output, and relabeling draft-v5
 syntax as v1-v4 must reject.
 
-M61 alone freezes one final sketch v5 language, its direct deterministic migrations
+M62 alone freezes one final sketch v5 language, its direct deterministic migrations
 from frozen v1-v4 and the separate parameter, external-snapshot and desktop-workspace
 envelopes. Until that gate passes, v1-v4 remain the only supported sketch wire
 languages.
@@ -120,7 +120,8 @@ languages.
 This ADR is an M33 contract decision only. M33 introduces no Rust API, public or
 private schema API, session behavior or draft-v5 reader/writer.
 
-M54-M63 are the final post-M53 milestone numbers assigned after the M53 human gate passed.
+M54-M64 are the current post-M53 milestone numbers; M55 was later inserted for early alpha
+action-surface parity while the preserved release sequence shifted by one number.
 
 ## Consequences
 

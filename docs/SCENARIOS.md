@@ -1259,7 +1259,7 @@ instruction or a supported persistence format.
 
 M33-M44 add the current production-embedding fixtures without replacing the frozen
 scenarios above. Cleanup M46-M53 preserves their durable behavior through direct tests and
-approved post-cleanup UAT. M54-M63 own the later executable functional/release scope. Every
+approved post-cleanup UAT. M54-M64 own the later executable functional/release scope. Every
 new fixture must name its exact design, parameter, external-snapshot, activation and
 accepted-state revisions. The workbench remains a desktop-only public-API consumer; no
 mobile scenario is required.
@@ -1267,7 +1267,7 @@ mobile scenario is required.
 Objective geometry, residual, derivative, rank, branch, persistence, migration, resource,
 cancellation, presentation-adapter and topology assertions are directly automated at their
 owning Rust/WASM layer. Old browser E2E is not a qualification path. Human review is
-limited to completed M40.7 and M53 plus planned M60/M62 after direct
+limited to completed M40.7 and M53 plus planned M61/M63 after direct
 automated qualification.
 
 ### M40-ES1 - Headless persistent line selection and relation action
@@ -1402,7 +1402,28 @@ top-right marker without highlighting unrelated geometry. A subsequent valid len
 accepted state and clears the marker. Both examples expose the same message in non-mutating
 hover/focus tooltips and the canonical Problems panel.
 
-### UAT-C3 - Advanced geometry and topology at M60
+### M55-AP1 - Alpha action-surface parity matrix
+
+The headless qualification corpus and reusable workbench scenario catalog jointly cover every
+preserved M13-M14 constraint, dimension and explicit branch action without restoring the old
+application. The matrix includes:
+
+- one-point, two-point, point-curve, line-line, circle/arc and generic curve-pair applicability;
+- fixed, coincident, horizontal, vertical, point-on-curve, parallel, perpendicular, equal-length,
+  equal-radius, midpoint, symmetry, contact and tangency actions;
+- distance, segment-length, radius, diameter and oriented-angle dimensions in applicable
+  driving/reference modes; and
+- tangent orientation, contact neighborhood, parameter-domain, span and winding edits, including
+  incompatible/rejected attempts that retain the prior accepted scene and current branch.
+
+Native editor/coordinator replay is authoritative for applicability, typed effects, disabled
+reasons and branch transitions. Direct workbench tests own labels, control visibility, glyphs,
+annotations and accessibility; the WASM adapter must emit the same action identities. Scenario
+definitions may construct deterministic alpha operands that ordinary core tools do not yet author,
+but accepted geometry and outcomes still come exclusively from public sketch/editor APIs. No
+scenario contains an equation, expected-coordinate shortcut or browser-owned compatibility rule.
+
+### UAT-C3 - Advanced geometry and topology at M61
 
 Prepared advanced scenes cover conics, Bezier/B-spline/NURBS controls, weights,
 knots, periodic transitions, explicit branch edits, fillet/trim/mirror/pattern
@@ -1411,7 +1432,7 @@ topology. One medium sketch exercises rapid edit and cancellation. The 45-60 min
 review judges local predictability, branch clarity, coherent associated motion,
 topology trust and perceived responsiveness.
 
-### UAT-C4 - Integrated release candidate at M62
+### UAT-C4 - Integrated release candidate at M63
 
 The frozen candidate starts from an empty workspace and proceeds through ordinary
 and construction geometry, constraints, host parameters, an external reference, an
@@ -1430,7 +1451,7 @@ workspace input, action transcript and accepted/attempted diagnostics from publi
 human may attach an OS screenshot for a visual finding. Objective defects receive direct
 owning-layer regressions. A targeted human recheck is preferred; a full checkpoint repeats
 only after a material API, schema or primary-workflow change. Completed M40.7 and M53 required
-explicit supervising-human sign-off; planned M60/M62 require the same.
+explicit supervising-human sign-off; planned M61/M63 require the same.
 
 ## Frozen near-singular fixtures
 

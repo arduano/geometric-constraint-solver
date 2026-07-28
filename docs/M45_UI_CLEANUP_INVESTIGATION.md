@@ -81,7 +81,7 @@ ownership and M50 deleted the legacy runtime.
 - Advanced sketch and spatial **semantics** stay in native domain tests. Their old browser
   controls/views retire; no replacement diagnostic route or UI parity is required.
 - Finding capture is deterministic cleanup/UAT infrastructure over public APIs, not a
-  stable product API. M61 may revisit release-surface ownership.
+  stable product API. M62 may revisit release-surface ownership.
 
 ## Out of scope
 

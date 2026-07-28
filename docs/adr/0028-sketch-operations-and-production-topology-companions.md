@@ -24,7 +24,7 @@ M33 accepts this crate and product-boundary contract only. It does not add eithe
 crate, operation, topology result or implemented capability, and documentation must
 continue to describe them as target behavior until their gates pass.
 
-M57 implements `geosolve-sketch-ops`. M58 implements
+M58 implements `geosolve-sketch-ops`. M59 implements
 `geosolve-sketch-topology`. Their APIs and tests may be designed earlier, but no
 implementation status is claimed before those milestones.
 
@@ -95,7 +95,7 @@ dependencies, equations, branches and independent accepted-state validation rema
 authoritative. Applying a stale proposal fails under ADR 0027 rather than rebasing by
 coordinate similarity.
 
-M57 owns general split/break, trim, extend, exact family-supported mirror, chamfer,
+M58 owns general split/break, trim, extend, exact family-supported mirror, chamfer,
 existing fillet ownership integration and ordinary rectangle/polygon/slot/pattern
 expansion. These operations may generalize public visible topology to several explicit
 intervals per immutable support. They preserve an existing persistent identity when
@@ -106,7 +106,7 @@ silently rewritten into sampled geometry.
 Macros and associations expand to ordinary sketch geometry, source definitions and
 explicit ownership. They are not privileged residuals. Approximate general
 spline/conic offsets and a persistent pattern-object personality remain outside the
-M63 contract; an unsupported exact transformation returns a typed unsupported outcome
+M64 contract; an unsupported exact transformation returns a typed unsupported outcome
 rather than an approximation.
 
 For the same stamped input, operation policy and public ID-allocation context, a
@@ -165,7 +165,7 @@ the overall result is `Truncated`. Its faces are pointer-transparent, non-persis
 and unsuitable as CAD feature input.
 
 Production topology is exposed only by `geosolve-sketch-topology` under the stricter
-M58 query contract. It uses distinct result types and requires full resolution of the
+M59 query contract. It uses distinct result types and requires full resolution of the
 declared production scope before exposing consumable wires. A visual `Complete` face
 is not implicitly a production wire, and there is no unchecked conversion or status
 relabeling between the APIs. Production analysis must evaluate or freshly validate
@@ -189,4 +189,4 @@ in both.
 - Hosts still own B-rep entities, projection, feature history, application undo and
   cross-revision naming.
 - Separate crates add packaging and API surface, but make forbidden dependency and
-  ownership edges mechanically reviewable at M57 and M58.
+  ownership edges mechanically reviewable at M58 and M59.

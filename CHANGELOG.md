@@ -28,7 +28,8 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - Rebased the post-M44 roadmap: M45 preserves cleanup evidence without human approval;
   M46-M53 replace and purge legacy browser E2E/playground infrastructure, consolidate one
   directly tested workbench and perform post-cleanup host-semantics UAT. M53 received explicit
-  supervising-human approval, and the later functional/release sequence is finalized as M54-M63.
+  supervising-human approval. The later functional/release sequence is M54-M64, with a dedicated
+  M55 alpha constraint/dimension/branch-action parity gate inserted before concurrency and scale.
 - Completed the M46 ownership freeze: every old M14/M40/M44 browser/static assertion and
   legacy inline test has a named direct-test owner or reviewed retirement, while no old
   fixture, E2E script or playground code was deleted early.

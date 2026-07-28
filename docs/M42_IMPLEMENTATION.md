@@ -68,7 +68,7 @@ entries are typed unsolved-design/attempt outcomes, never implicit defaults.
 
 The existing supported v4 JSON codec remains frozen. `to_canonical_json` rejects
 non-default M41/M42 state rather than dropping it. The additive, explicitly unstable
-draft-v5 DTO round-trips M42 declarations, bindings and outputs canonically; M61 remains
+draft-v5 DTO round-trips M42 declarations, bindings and outputs canonically; M62 remains
 the persistence freeze point.
 
 ## Immutable batch canonicalization and digest
@@ -221,8 +221,8 @@ replacement for design, attempt, or accepted revision.
 
 ## Open questions
 
-- None blocking implementation. M55 owns prepared asynchronous CAS jobs; M42 provides synchronous stale-input checks
-  without precommitting M55's public job API.
+- None blocking implementation. M56 owns prepared asynchronous CAS jobs; M42 provides synchronous stale-input checks
+  without precommitting M56's public job API.
 
 ## Completion evidence
 
@@ -253,7 +253,7 @@ replacement for design, attempt, or accepted revision.
 - M43 external snapshots and M44 editor/browser workflows.
 - New constraint primitives, residual equations, solver variables, weighted-priority
   semantics, or core solver changes.
-- M54 stable diagnostics and M55 concurrency/prepared-job APIs beyond the input-stamp
+- M54 stable diagnostics and M56 concurrency/prepared-job APIs beyond the input-stamp
   evidence needed to avoid incompatible future designs.
 
 ## Evidence and source pointers

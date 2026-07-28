@@ -310,7 +310,7 @@ The nine M14 E2E E-groups are likewise resolved by the final direct-owner/retire
 in `docs/M46_DIRECT_TEST_REPLACEMENT.md`: durable domain, editor, persistence and adapter
 claims move to the named M47-M49 owners; old authoring UI, mobile/profile presentation,
 browser timing and file delivery retire. M50 removes the legacy runtime only after those
-replacement tests pass. M61 owns any later stable release-surface decision.
+replacement tests pass. M62 owns any later stable release-surface decision.
 
 ## Out of scope
 

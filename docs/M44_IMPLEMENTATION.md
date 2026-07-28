@@ -132,7 +132,7 @@ None blocking. Parent-owned scope decisions are:
   action and does not become canonical sketch history or browser-owned policy.
 - M44 stale-input automation exercises the existing synchronous revision rejection and typed
   retained attempts only. Captured asynchronous jobs and compare-and-swap publication remain
-  exclusively M55; M44 adds no synthetic CAS state.
+  exclusively M56; M44 adds no synthetic CAS state.
 
 ## Qualification evidence and deferred carry-forward gate
 

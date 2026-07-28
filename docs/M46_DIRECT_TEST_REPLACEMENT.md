@@ -195,7 +195,7 @@ checks remain mandatory after the final ownership-ledger review.
 
 During cleanup, finding capture is deterministic test/UAT infrastructure over public
 domain and audit APIs, not a stable product API. It records typed inputs and
-accepted/attempted evidence. M61 may later decide whether any minimized
+accepted/attempted evidence. M62 may later decide whether any minimized
 adapter belongs in the supported release surface.
 
 ## Ownership-freeze conclusion
