@@ -1259,7 +1259,8 @@ instruction or a supported persistence format.
 
 M33-M44 add the current production-embedding fixtures without replacing the frozen
 scenarios above. Cleanup M46-M53 preserves their durable behavior through direct tests and
-approved post-cleanup UAT. M54-M64 own the later executable functional/release scope. Every
+approved post-cleanup UAT. M54-M55 complete stable diagnostics and early alpha action parity;
+M56-M64 own the remaining executable concurrency/scale/operations/release scope. Every
 new fixture must name its exact design, parameter, external-snapshot, activation and
 accepted-state revisions. The workbench remains a desktop-only public-API consumer; no
 mobile scenario is required.
@@ -1423,6 +1424,30 @@ definitions may construct deterministic alpha operands that ordinary core tools 
 but accepted geometry and outcomes still come exclusively from public sketch/editor APIs. No
 scenario contains an equation, expected-coordinate shortcut or browser-owned compatibility rule.
 
+The reusable catalog root is now `uat-scenarios` (**GeoSolve scenarios**). It retains the complete
+eight-leaf `m53-host-semantics` subtree and adds this independent M55 subtree:
+
+| Selector group | Stable scenario ID | Scenario title | Direct purpose |
+| --- | --- | --- | --- |
+| `m55-action-parity` (**M55 Action parity**) | `alpha-parity-catalog` | Alpha relation & dimension catalog | Inspect the accepted public alpha corpus, semantic relation glyphs and all five dimension annotations without a legacy app. |
+| `m55-action-parity` (**M55 Action parity**) | `alpha-branch-recovery` | Contact branch & rejection recovery | Exercise typed A3 tangent-orientation state, a retained impossible fixed contact, accepted-state truth and bounded Undo recovery. |
+
+`alpha-parity-catalog` uses `AlphaScenarioKind::Corpus` through the public sketch scenario
+constructor. It adds no workbench-owned fixture equation or expected-coordinate shortcut. The
+ordinary workbench action surface remains usable outside scenario mode and is the executable owner
+of the same 13 relation and five dimension identities.
+
+`alpha-branch-recovery` begins from accepted A3 line-circle tangency plus two separate fixed
+parallel lines. **Flip tangent orientation** applies one complete two-contact branch transaction:
+the bounded and periodic contacts retain their persistent IDs, the periodic parameter advances by
+half a turn and both tangent-orientation fields change together. That explicit candidate may be
+retained rejected; it must never be presented as accepted geometry. **Submit impossible contact**
+adds an explicitly bounded generic contact between the fixed parallel lines and retains the prior
+accepted scene. **Undo rejected contact** performs bounded history recovery until current problem
+metadata clears. Direct editor tests additionally prove accepted same-curve semantic-span
+End-to-Start migration, bounded-to-supporting-line domain replacement, parameter scalar identity,
+periodic winding edits and oriented-angle direction changes.
+
 ### UAT-C3 - Advanced geometry and topology at M61
 
 Prepared advanced scenes cover conics, Bezier/B-spline/NURBS controls, weights,
@@ -1444,8 +1469,9 @@ matrix.
 ### UAT evidence and recheck policy
 
 Each checkpoint provides one manual entry point, deterministic resets and concise
-instructions. M53 uses one top **Scenarios** entry point with the eight stable leaves above;
-the catalog machinery may host UAT-C3/UAT-C4 only after their preceding milestones are executed.
+instructions. The top **Scenarios** entry now contains the eight stable M53 leaves and two
+direct-qualified M55 leaves; the M53 subtree and approval record are unchanged. The catalog
+machinery may host UAT-C3/UAT-C4 only after their preceding milestones are executed.
 Findings capture the candidate revision, selected scenario,
 workspace input, action transcript and accepted/attempted diagnostics from public APIs; a
 human may attach an OS screenshot for a visual finding. Objective defects receive direct

@@ -14,7 +14,8 @@ M39-M44 established a desktop-only CAD-like workbench. Cleanup M46-M50 replaced 
 retained assertion with direct owning-layer tests and removed the separately routed legacy
 application and browser E2E stack. M51 hardened the one surviving workbench; M52 completed the
 direct-qualified post-cleanup host-semantics candidate, M53 received supervising-human approval,
-M54 completed stable sketch-owned diagnostics and M55 is now active. The workbench is a
+M54 completed stable sketch-owned diagnostics, M55 completed the preserved alpha
+constraint/dimension/branch-action surface, and M56 is now active. The workbench is a
 non-authoritative demo consumer, not a production UI or third solver. Mobile support and
 physics remain outside future acceptance.
 
@@ -64,8 +65,10 @@ verification. M53 is complete: the supervising human rated every M53-S5 scorecar
 reported no concern or blocker and explicitly approved the host-semantics gate on 2026-07-28. Its
 objective state claims remain backed by M52 tests and the final direct-qualified candidate. M54
 then completed persistent-ID diagnostic DTOs, separated rank/mobility evidence and isolated raw
-core reports behind explicitly unstable seams. The active milestone is **M55: alpha constraint,
-dimension and branch-action parity**. Old Chromium/CDP, HTTP
+core reports behind explicitly unstable seams. M55 then completed the closed 13-relation and
+five-dimension alpha action matrix, persistent contact/angle branch editing, typed disabled
+reasons, direct native/WASM presentation qualification and two reusable scenario leaves. The
+active milestone is **M56: prepared jobs and concurrency contract**. Old Chromium/CDP, HTTP
 serving, DOM-scraping, screenshot, wall-clock browser-timing and source-substring-scan gates remain
 retired.
 
@@ -89,8 +92,8 @@ are complete, growing the catalog to eight scenarios. The complete clean release
 build-source commit `f72116b`; `docs/M53_UAT.md` records the frozen M53-S5 manifest and temporary
 human endpoint. The targeted attribution review passed as part of final M53-S5 approval.
 
-The finalized M54-M64 functional/release roadmap covers stable diagnostics, early alpha
-constraint/dimension/branch-action parity, prepared jobs, incremental scale, operations,
+The finalized M54-M64 functional/release roadmap covers completed stable diagnostics and early
+alpha constraint/dimension/branch-action parity, then prepared jobs, incremental scale, operations,
 production topology, advanced workbench, advanced UAT, API/schema freeze, integrated UAT and the
 production embedding release.
 
@@ -109,6 +112,7 @@ Durable cleanup records:
 - `docs/M51_IMPLEMENTATION.md`
 - `docs/M52_IMPLEMENTATION.md`
 - `docs/M54_IMPLEMENTATION.md`
+- `docs/M55_IMPLEMENTATION.md`
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

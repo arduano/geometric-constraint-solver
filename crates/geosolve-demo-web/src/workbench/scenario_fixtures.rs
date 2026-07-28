@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 
-use geosolve_constraint_editor::{CoordinatorError, RetainedEditorCoordinator, SelectionItem};
+use geosolve_constraint_editor::{
+    BranchAction, ConstraintActionRequest, ConstraintKind, ContactActionChoice, CoordinatorError,
+    RetainedEditorCoordinator, SelectionItem,
+};
 use geosolve_core::SolverConfig;
 use geosolve_sketch::{
-    CurveDefinition, CurveSpan, DocumentConstraintDefinition, DocumentDimensionDefinition,
+    AlphaScenarioIds, AlphaScenarioKind, ContactDomain, ContactNeighborhood, CurveDefinition,
+    CurveSpan, DocumentConstraintDefinition, DocumentCurveSpanRef, DocumentDimensionDefinition,
     DocumentDimensionMode, DocumentDirectionSense, DocumentEdit, DocumentElementId,
     DocumentExternalLineSupportRef, DocumentId, DocumentLineSupportRef, DocumentParameterKind,
     DocumentParameterTarget, DocumentSessionError, DocumentSolveRequest, ExternalFeatureKindV1,
@@ -12,7 +16,8 @@ use geosolve_sketch::{
     ExternalSnapshotFeatureV1, ExternalSnapshotResourcesV1, ExternalSnapshotSet,
     ExternalTopologyDigest, GeometryRole, HostActivationOverride, HostConfigurationActivation,
     ParameterBatch, ParameterBatchEntry, ParameterValue, PersistentId,
-    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
+    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument, TangentOrientation,
+    alpha_scenario,
 };
 
 use super::evidence::{parameter_batch_json, serialize_scenario_typed_host_evidence};
@@ -28,6 +33,8 @@ pub(crate) enum ScenarioFixture {
     ExternalRebind,
     LifecycleEvidence,
     ErrorAttribution,
+    AlphaParity,
+    AlphaBranchRecovery,
 }
 
 impl ScenarioFixture {
@@ -38,6 +45,8 @@ impl ScenarioFixture {
             Self::ExternalRebind => "External reference and rebind",
             Self::LifecycleEvidence => "Lifecycle and evidence",
             Self::ErrorAttribution => "Canvas error attribution",
+            Self::AlphaParity => "Alpha relation and dimension parity",
+            Self::AlphaBranchRecovery => "Explicit contact branches and recovery",
         }
     }
 }
@@ -64,6 +73,9 @@ pub(crate) enum ScenarioAction {
     LifecycleRecovery,
     AttributedConflict,
     AttributedRecovery,
+    AlphaFlipTangency,
+    AlphaRejectedContact,
+    AlphaRecovery,
     CaptureEvidence,
 }
 
@@ -90,6 +102,9 @@ impl ScenarioAction {
             "lifecycle-recovery" => Self::LifecycleRecovery,
             "attributed-conflict" => Self::AttributedConflict,
             "attributed-recovery" => Self::AttributedRecovery,
+            "alpha-flip-tangency" => Self::AlphaFlipTangency,
+            "alpha-rejected-contact" => Self::AlphaRejectedContact,
+            "alpha-recovery" => Self::AlphaRecovery,
             "capture" => Self::CaptureEvidence,
             _ => return None,
         })
@@ -117,6 +132,9 @@ impl ScenarioAction {
             Self::LifecycleRecovery => "lifecycle-recovery",
             Self::AttributedConflict => "attributed-conflict",
             Self::AttributedRecovery => "attributed-recovery",
+            Self::AlphaFlipTangency => "alpha-flip-tangency",
+            Self::AlphaRejectedContact => "alpha-rejected-contact",
+            Self::AlphaRecovery => "alpha-recovery",
             Self::CaptureEvidence => "capture",
         }
     }
@@ -143,6 +161,9 @@ impl ScenarioAction {
             Self::LifecycleRecovery => "Submit valid recovery",
             Self::AttributedConflict => "Create attributed conflict",
             Self::AttributedRecovery => "Recover as reference",
+            Self::AlphaFlipTangency => "Flip tangent orientation",
+            Self::AlphaRejectedContact => "Submit impossible contact",
+            Self::AlphaRecovery => "Undo rejected contact",
             Self::CaptureEvidence => "Capture typed evidence",
         }
     }
@@ -168,6 +189,9 @@ impl ScenarioAction {
             Self::LifecycleRejected | Self::LifecycleRecovery => ScenarioFixture::LifecycleEvidence,
             Self::AttributedConflict | Self::AttributedRecovery => {
                 ScenarioFixture::ErrorAttribution
+            }
+            Self::AlphaFlipTangency | Self::AlphaRejectedContact | Self::AlphaRecovery => {
+                ScenarioFixture::AlphaBranchRecovery
             }
             Self::CaptureEvidence => return None,
         })
@@ -273,6 +297,12 @@ struct ErrorAttributionFixture {
     dimension: geosolve_sketch::DocumentDimensionId,
 }
 
+struct AlphaBranchFixture {
+    coordinator: RetainedEditorCoordinator,
+    tangency: geosolve_sketch::DocumentConstraintId,
+    impossible_lines: [CurveSpan; 2],
+}
+
 #[derive(Default)]
 struct ScenarioTransition {
     explicit_declaration: bool,
@@ -286,6 +316,8 @@ pub(crate) struct ScenarioCandidate {
     external: Box<ExternalFixture>,
     lifecycle: Box<LifecycleFixture>,
     error_attribution: Box<ErrorAttributionFixture>,
+    alpha_parity: Box<RetainedEditorCoordinator>,
+    alpha_branch: Box<AlphaBranchFixture>,
     transcript: Vec<ScenarioObservation>,
     evidence_text: String,
 }
@@ -299,6 +331,8 @@ impl ScenarioCandidate {
             external: Box::new(external_fixture()?),
             lifecycle: Box::new(lifecycle_fixture()?),
             error_attribution: Box::new(error_attribution_fixture()?),
+            alpha_parity: Box::new(alpha_parity_fixture()?),
+            alpha_branch: Box::new(alpha_branch_fixture()?),
             transcript: Vec::new(),
             evidence_text: "Capture has not been requested.".into(),
         })
@@ -323,6 +357,8 @@ impl ScenarioCandidate {
             ScenarioFixture::ExternalRebind => &self.external.coordinator,
             ScenarioFixture::LifecycleEvidence => &self.lifecycle.coordinator,
             ScenarioFixture::ErrorAttribution => &self.error_attribution.coordinator,
+            ScenarioFixture::AlphaParity => &self.alpha_parity,
+            ScenarioFixture::AlphaBranchRecovery => &self.alpha_branch.coordinator,
         }
     }
 
@@ -568,6 +604,106 @@ impl ScenarioCandidate {
                     )
                     .map_err(|error| error.to_string())?;
             }
+            ScenarioAction::AlphaFlipTangency => {
+                self.alpha_branch
+                    .coordinator
+                    .editor_mut()
+                    .set_selection([SelectionItem::Constraint(self.alpha_branch.tangency)]);
+                let edits = self
+                    .alpha_branch
+                    .coordinator
+                    .branch_actions()
+                    .into_iter()
+                    .map(|branch| {
+                        let BranchAction::Contact(branch) = branch else {
+                            return Err("tangency contact branch metadata is missing".to_owned());
+                        };
+                        let orientation = match branch.current.tangent_orientation {
+                            Some(TangentOrientation::Aligned) => TangentOrientation::Opposed,
+                            Some(TangentOrientation::Opposed) => TangentOrientation::Aligned,
+                            None => {
+                                return Err(
+                                    "tangency contact orientation is unexpectedly absent".into()
+                                );
+                            }
+                        };
+                        let mut edit = geosolve_sketch::ContactBranchEdit {
+                            tangent_orientation: Some(orientation),
+                            ..branch.current
+                        };
+                        if let ContactDomain::Periodic { period } = edit.domain {
+                            edit.value = (edit.value + period * 0.5).rem_euclid(period);
+                        }
+                        Ok(edit)
+                    })
+                    .collect::<Result<Vec<_>, String>>()?;
+                let expected = self.alpha_branch.coordinator.session().design_identity();
+                self.alpha_branch
+                    .coordinator
+                    .set_contact_branches(expected, edits)
+                    .map_err(|error| error.to_string())?;
+            }
+            ScenarioAction::AlphaRejectedContact => {
+                self.alpha_branch
+                    .coordinator
+                    .editor_mut()
+                    .set_selection(self.alpha_branch.impossible_lines.map(SelectionItem::Curve));
+                let expected = self.alpha_branch.coordinator.session().design_identity();
+                let outcome = self
+                    .alpha_branch
+                    .coordinator
+                    .apply_constraint_action(
+                        expected,
+                        ConstraintActionRequest {
+                            kind: ConstraintKind::GenericContact,
+                            label: "Scenario impossible contact".into(),
+                            contacts: self
+                                .alpha_branch
+                                .impossible_lines
+                                .into_iter()
+                                .map(|span| ContactActionChoice {
+                                    support: DocumentCurveSpanRef { span, winding: 0 },
+                                    domain: ContactDomain::Bounded {
+                                        lower: 0.0,
+                                        upper: 1.0,
+                                    },
+                                    parameter: 0.5,
+                                    neighborhood: ContactNeighborhood::Interior,
+                                    tangent_orientation: None,
+                                })
+                                .collect(),
+                        },
+                    )
+                    .map_err(|error| error.to_string())?;
+                if outcome.published_accepted.is_some() {
+                    return Err("impossible fixed contact unexpectedly accepted".into());
+                }
+            }
+            ScenarioAction::AlphaRecovery => {
+                for _ in 0..8 {
+                    if self
+                        .alpha_branch
+                        .coordinator
+                        .current_problem_metadata()
+                        .is_none()
+                    {
+                        break;
+                    }
+                    if self.alpha_branch.coordinator.can_undo() {
+                        self.alpha_branch
+                            .coordinator
+                            .undo()
+                            .map_err(|error| error.to_string())?;
+                    } else {
+                        let expected = self.alpha_branch.coordinator.session().design_identity();
+                        self.alpha_branch
+                            .coordinator
+                            .reattempt(expected)
+                            .map_err(|error| error.to_string())?;
+                        break;
+                    }
+                }
+            }
             ScenarioAction::CaptureEvidence => {}
         }
         Ok(transition)
@@ -577,9 +713,9 @@ impl ScenarioCandidate {
         let serialize = |label: &str, coordinator: &RetainedEditorCoordinator| {
             serialize_scenario_typed_host_evidence(
                 coordinator,
-                "M53-SCENARIO-FIXED-CAPTURE",
+                "SCENARIO-CATALOG-FIXED-CAPTURE",
                 label,
-                "geosolve-m53-scenario-catalog",
+                "geosolve-scenario-catalog",
                 &host_state_markup(coordinator.session()),
             )
         };
@@ -597,7 +733,7 @@ impl ScenarioCandidate {
             .collect::<Vec<_>>()
             .join("\n");
         Ok(format!(
-            "M53 SCENARIO EVIDENCE\nprovenance=fixed-scenario-not-runtime-platform\nobjective_checks=direct Rust/WASM state transitions\nhuman_clarity_and_trust=M53 judgment only\nSCENARIO_TRANSCRIPT\n{}\nROLE_ACTIVITY\n{}\nPARAMETER\n{}\nSUBMITTED_PARAMETER_TYPED\n{}\nEXTERNAL\n{}\nSUBMITTED_EXTERNAL_TYPED\n{}\nLIFECYCLE\n{}\nERROR_ATTRIBUTION\n{}",
+            "SCENARIO CATALOG EVIDENCE\nprovenance=fixed-scenario-not-runtime-platform\nobjective_checks=direct Rust/WASM state transitions\nhuman_clarity_and_trust=human-UAT judgment only\nSCENARIO_TRANSCRIPT\n{}\nROLE_ACTIVITY\n{}\nPARAMETER\n{}\nSUBMITTED_PARAMETER_TYPED\n{}\nEXTERNAL\n{}\nSUBMITTED_EXTERNAL_TYPED\n{}\nLIFECYCLE\n{}\nERROR_ATTRIBUTION\n{}\nALPHA_PARITY\n{}\nALPHA_BRANCH_RECOVERY\n{}",
             scenario_transcript,
             serialize("scenario://role-activity", &self.role.coordinator)?,
             serialize(
@@ -611,6 +747,11 @@ impl ScenarioCandidate {
             serialize(
                 "scenario://canvas-error-attribution",
                 &self.error_attribution.coordinator
+            )?,
+            serialize("scenario://alpha-parity", &self.alpha_parity)?,
+            serialize(
+                "scenario://alpha-branch-recovery",
+                &self.alpha_branch.coordinator
             )?,
         ))
     }
@@ -744,6 +885,86 @@ fn error_attribution_fixture() -> Result<ErrorAttributionFixture, String> {
             ExternalSnapshotSet::default(),
         )?,
         dimension,
+    })
+}
+
+fn alpha_parity_fixture() -> Result<RetainedEditorCoordinator, String> {
+    let fixture =
+        alpha_scenario(AlphaScenarioKind::Corpus, 1.0).map_err(|error| error.to_string())?;
+    let session = RetainedSketchDocumentSession::new(
+        fixture.document,
+        fixture.request,
+        SolverConfig::default(),
+    )
+    .map_err(|error| error.to_string())?;
+    RetainedEditorCoordinator::new(session).map_err(|error| error.to_string())
+}
+
+fn alpha_branch_fixture() -> Result<AlphaBranchFixture, String> {
+    let fixture = alpha_scenario(AlphaScenarioKind::A3, 1.0).map_err(|error| error.to_string())?;
+    let AlphaScenarioIds::A3(ids) = fixture.ids else {
+        return Err("A3 scenario IDs are unavailable".into());
+    };
+    let mut document = fixture.document;
+    let points = [
+        document
+            .add_point("Impossible contact A", [-2.0, 8.0])
+            .map_err(|error| error.to_string())?,
+        document
+            .add_point("Impossible contact B", [2.0, 8.0])
+            .map_err(|error| error.to_string())?,
+        document
+            .add_point("Impossible contact C", [-2.0, 10.0])
+            .map_err(|error| error.to_string())?,
+        document
+            .add_point("Impossible contact D", [2.0, 10.0])
+            .map_err(|error| error.to_string())?,
+    ];
+    let impossible_lines = [
+        CurveSpan::line(
+            document
+                .add_curve(
+                    "Impossible fixed line 1",
+                    CurveDefinition::Line {
+                        start: points[0],
+                        end: points[1],
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .map_err(|error| error.to_string())?,
+        ),
+        CurveSpan::line(
+            document
+                .add_curve(
+                    "Impossible fixed line 2",
+                    CurveDefinition::Line {
+                        start: points[2],
+                        end: points[3],
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .map_err(|error| error.to_string())?,
+        ),
+    ];
+    for point in points {
+        let target = document
+            .point(point)
+            .ok_or_else(|| "scenario point disappeared".to_owned())?
+            .position;
+        document
+            .add_constraint(
+                format!("Fix impossible contact {point}"),
+                DocumentConstraintDefinition::FixedPoint { point, target },
+            )
+            .map_err(|error| error.to_string())?;
+    }
+    let session =
+        RetainedSketchDocumentSession::new(document, fixture.request, SolverConfig::default())
+            .map_err(|error| error.to_string())?;
+    Ok(AlphaBranchFixture {
+        coordinator: RetainedEditorCoordinator::new(session).map_err(|error| error.to_string())?,
+        tangency: ids.tangency,
+        impossible_lines,
     })
 }
 
@@ -899,7 +1120,7 @@ fn accepted_evidence(coordinator: &RetainedEditorCoordinator) -> String {
 
 #[cfg(test)]
 mod tests {
-    use geosolve_constraint_editor::{EditorProblemScope, EditorProblemTarget};
+    use geosolve_constraint_editor::{EditorProblemScope, EditorProblemTarget, SelectionItem};
 
     use super::{
         ScenarioAction, ScenarioBoundary, ScenarioCandidate, ScenarioFixture, ScenarioRejection,
@@ -1059,6 +1280,68 @@ mod tests {
     }
 
     #[test]
+    fn alpha_branch_scenario_uses_typed_orientation_rejection_and_recovery() {
+        let mut candidate = ScenarioCandidate::new(ScenarioFixture::AlphaBranchRecovery).unwrap();
+        let tangency = candidate.alpha_branch.tangency;
+        candidate
+            .alpha_branch
+            .coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::Constraint(tangency)]);
+        let before = candidate.alpha_branch.coordinator.branch_actions();
+        candidate
+            .perform(ScenarioAction::AlphaFlipTangency)
+            .unwrap();
+        candidate
+            .alpha_branch
+            .coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::Constraint(tangency)]);
+        let after = candidate.alpha_branch.coordinator.branch_actions();
+        assert_ne!(before, after);
+
+        let accepted = candidate
+            .alpha_branch
+            .coordinator
+            .session()
+            .accepted_state()
+            .unwrap()
+            .identity();
+        let rejected = candidate
+            .perform(ScenarioAction::AlphaRejectedContact)
+            .unwrap();
+        assert_eq!(rejected.boundary, ScenarioBoundary::RetainedAccepted);
+        assert_eq!(
+            candidate
+                .alpha_branch
+                .coordinator
+                .session()
+                .accepted_state()
+                .unwrap()
+                .identity(),
+            accepted
+        );
+        assert!(
+            candidate
+                .alpha_branch
+                .coordinator
+                .current_problem_metadata()
+                .is_some()
+        );
+        candidate.perform(ScenarioAction::AlphaRecovery).unwrap();
+        let remaining = candidate
+            .alpha_branch
+            .coordinator
+            .current_problem_metadata();
+        assert!(
+            remaining.is_none(),
+            "remaining={remaining:?}, history={}, can_undo={}",
+            candidate.alpha_branch.coordinator.history_len(),
+            candidate.alpha_branch.coordinator.can_undo(),
+        );
+    }
+
+    #[test]
     fn parameter_and_lifecycle_transcript_retains_until_typed_recovery() {
         let mut candidate = ScenarioCandidate::new(ScenarioFixture::ParameterProposal).unwrap();
         assert_eq!(
@@ -1210,7 +1493,7 @@ mod tests {
         replay.perform(ScenarioAction::CaptureEvidence).unwrap();
         assert_eq!(replay.evidence_text, first);
         for expected in [
-            "M53-SCENARIO-FIXED-CAPTURE",
+            "SCENARIO-CATALOG-FIXED-CAPTURE",
             "scenario://role-activity",
             "scenario://parameter-binding-proposal",
             "scenario://external-rebind",
@@ -1224,7 +1507,9 @@ mod tests {
             "design_revision",
             "accepted_audit",
             "attempted_audit",
-            "human_clarity_and_trust=M53 judgment only",
+            "human_clarity_and_trust=human-UAT judgment only",
+            "scenario://alpha-parity",
+            "scenario://alpha-branch-recovery",
         ] {
             assert!(first.contains(expected), "missing evidence {expected}");
         }
@@ -1237,6 +1522,8 @@ mod tests {
             &candidate.parameter.coordinator,
             &candidate.external.coordinator,
             &candidate.lifecycle.coordinator,
+            &candidate.alpha_parity,
+            &candidate.alpha_branch.coordinator,
         ] {
             let checkpoint = coordinator.checkpoint();
             assert!(!first.contains(checkpoint.design_json()));

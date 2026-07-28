@@ -56,6 +56,7 @@ characterized_enum!(CurrentDocumentCommandKind {
     TransitionNurbsContact => "transition_nurbs_contact",
     SetNurbsWeightGauge => "set_nurbs_weight_gauge",
     SetContactStates => "set_contact_states",
+    SetContactBranches => "set_contact_branches",
     SetCircleTangencyBranch => "set_circle_tangency_branch",
     SetDimensionMode => "set_dimension_mode",
     SetOrientedAngleOrientation => "set_oriented_angle_orientation",
@@ -175,6 +176,7 @@ impl DocumentEdit {
             }
             Self::SetNurbsWeightGauge { .. } => CurrentDocumentCommandKind::SetNurbsWeightGauge,
             Self::SetContactStates { .. } => CurrentDocumentCommandKind::SetContactStates,
+            Self::SetContactBranches { .. } => CurrentDocumentCommandKind::SetContactBranches,
             Self::SetCircleTangencyBranch { .. } => {
                 CurrentDocumentCommandKind::SetCircleTangencyBranch
             }

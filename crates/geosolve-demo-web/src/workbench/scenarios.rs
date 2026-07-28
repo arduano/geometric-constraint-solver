@@ -24,11 +24,13 @@ pub(crate) enum VerificationPointId {
     P10,
     P11,
     P12,
+    P13,
+    P14,
 }
 
 impl VerificationPointId {
     #[cfg(test)]
-    pub(crate) const ALL: [Self; 12] = [
+    pub(crate) const ALL: [Self; 14] = [
         Self::P1,
         Self::P2,
         Self::P3,
@@ -41,6 +43,8 @@ impl VerificationPointId {
         Self::P10,
         Self::P11,
         Self::P12,
+        Self::P13,
+        Self::P14,
     ];
 
     pub(crate) const fn number(self) -> u8 {
@@ -57,6 +61,8 @@ impl VerificationPointId {
             Self::P10 => 10,
             Self::P11 => 11,
             Self::P12 => 12,
+            Self::P13 => 13,
+            Self::P14 => 14,
         }
     }
 }
@@ -92,11 +98,13 @@ pub(crate) enum ScenarioId {
     LifecycleEvidenceNaturalPass,
     AttributedCanvasError,
     GlobalCanvasError,
+    AlphaParityCatalog,
+    AlphaBranchRecovery,
 }
 
 impl ScenarioId {
     #[cfg(test)]
-    pub(crate) const ALL: [Self; 8] = [
+    pub(crate) const ALL: [Self; 10] = [
         Self::RoleProfileParticipation,
         Self::ActivationDimensionMode,
         Self::SharedParameterProposal,
@@ -105,6 +113,8 @@ impl ScenarioId {
         Self::LifecycleEvidenceNaturalPass,
         Self::AttributedCanvasError,
         Self::GlobalCanvasError,
+        Self::AlphaParityCatalog,
+        Self::AlphaBranchRecovery,
     ];
 
     pub(crate) fn from_key(value: &str) -> Option<Self> {
@@ -117,6 +127,8 @@ impl ScenarioId {
             "lifecycle-evidence-natural-pass" => Self::LifecycleEvidenceNaturalPass,
             "attributed-canvas-error" => Self::AttributedCanvasError,
             "global-canvas-error" => Self::GlobalCanvasError,
+            "alpha-parity-catalog" => Self::AlphaParityCatalog,
+            "alpha-branch-recovery" => Self::AlphaBranchRecovery,
             _ => return None,
         })
     }
@@ -131,6 +143,8 @@ impl ScenarioId {
             Self::LifecycleEvidenceNaturalPass => "lifecycle-evidence-natural-pass",
             Self::AttributedCanvasError => "attributed-canvas-error",
             Self::GlobalCanvasError => "global-canvas-error",
+            Self::AlphaParityCatalog => "alpha-parity-catalog",
+            Self::AlphaBranchRecovery => "alpha-branch-recovery",
         }
     }
 
@@ -143,7 +157,9 @@ impl ScenarioId {
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub(crate) enum ScenarioGroupId {
+    Root,
     M53HostSemantics,
+    M55ActionParity,
     GeometryIntent,
     HostOwnedInputs,
     TruthEvidence,
@@ -153,7 +169,9 @@ pub(crate) enum ScenarioGroupId {
 impl ScenarioGroupId {
     pub(crate) const fn key(self) -> &'static str {
         match self {
+            Self::Root => "uat-scenarios",
             Self::M53HostSemantics => "m53-host-semantics",
+            Self::M55ActionParity => "m55-action-parity",
             Self::GeometryIntent => "geometry-intent",
             Self::HostOwnedInputs => "host-owned-inputs",
             Self::TruthEvidence => "truth-evidence",
@@ -297,7 +315,7 @@ impl ScenarioCatalog {
 }
 
 #[cfg(test)]
-pub(crate) const ALL_SCENARIO_ACTIONS: [ScenarioAction; 21] = [
+pub(crate) const ALL_SCENARIO_ACTIONS: [ScenarioAction; 24] = [
     ScenarioAction::RoleConstruction,
     ScenarioAction::RoleProfile,
     ScenarioAction::SuppressDimension,
@@ -318,10 +336,13 @@ pub(crate) const ALL_SCENARIO_ACTIONS: [ScenarioAction; 21] = [
     ScenarioAction::LifecycleRecovery,
     ScenarioAction::AttributedConflict,
     ScenarioAction::AttributedRecovery,
+    ScenarioAction::AlphaFlipTangency,
+    ScenarioAction::AlphaRejectedContact,
+    ScenarioAction::AlphaRecovery,
     ScenarioAction::CaptureEvidence,
 ];
 
-const VERIFICATION_POINTS: [VerificationPoint; 12] = [
+const VERIFICATION_POINTS: [VerificationPoint; 14] = [
     VerificationPoint {
         id: VerificationPointId::P1,
         objective: "Role changes profile participation while geometry remains solver-active and accepted.",
@@ -382,6 +403,16 @@ const VERIFICATION_POINTS: [VerificationPoint; 12] = [
         objective: "An input failure with no defensible element attribution remains a global canvas error and clears only after valid recovery.",
         human_judgment: "Judge whether the global marker is noticeable and truthful without implying blame on an unrelated element.",
     },
+    VerificationPoint {
+        id: VerificationPointId::P13,
+        objective: "The preserved alpha relation and dimension families render from one accepted public-domain scenario without a legacy application.",
+        human_judgment: "Judge whether relation glyphs, dimension annotations, and persistent operands make the family catalog understandable.",
+    },
+    VerificationPoint {
+        id: VerificationPointId::P14,
+        objective: "Explicit tangent orientation changes and an impossible fixed contact retain typed branch state, accepted truth, and deterministic recovery.",
+        human_judgment: "Judge whether branch choice, rejection attribution, and undo recovery are clear and trustworthy.",
+    },
 ];
 
 const ROLE_PROFILE_POINTS: [VerificationPointId; 1] = [VerificationPointId::P1];
@@ -398,6 +429,8 @@ const LIFECYCLE_EVIDENCE_POINTS: [VerificationPointId; 3] = [
 ];
 const ATTRIBUTED_ERROR_POINTS: [VerificationPointId; 1] = [VerificationPointId::P11];
 const GLOBAL_ERROR_POINTS: [VerificationPointId; 1] = [VerificationPointId::P12];
+const ALPHA_PARITY_POINTS: [VerificationPointId; 1] = [VerificationPointId::P13];
+const ALPHA_BRANCH_POINTS: [VerificationPointId; 1] = [VerificationPointId::P14];
 
 const ROLE_PROFILE_STEPS: [ScenarioStep; 3] = [
     ScenarioStep {
@@ -618,7 +651,48 @@ const GLOBAL_ERROR_STEPS: [ScenarioStep; 4] = [
     },
 ];
 
-const SCENARIOS: [ScenarioDefinition; 8] = [
+const ALPHA_PARITY_STEPS: [ScenarioStep; 3] = [
+    ScenarioStep {
+        instruction: "Inspect the accepted alpha family corpus on the canvas and in the sketch tree.",
+        action: None,
+        expected: "Ordinary relations, midpoint/symmetry, point/curve contacts, circular dimensions and explicit tangency branches retain persistent selectable identities.",
+    },
+    ScenarioStep {
+        instruction: "Compare relation glyph kinds and driving/reference dimension annotations.",
+        action: None,
+        expected: "The workbench renders domain-owned definitions and values without a legacy route, equation, or browser applicability rule.",
+    },
+    ScenarioStep {
+        instruction: "Open diagnostics and capture typed evidence if useful.",
+        action: None,
+        expected: "Accepted provenance, rank, mobility and source identities agree with the visible accepted catalog.",
+    },
+];
+
+const ALPHA_BRANCH_STEPS: [ScenarioStep; 4] = [
+    ScenarioStep {
+        instruction: "Flip the A3 tangent orientation through the typed contact branch action.",
+        action: Some(ScenarioAction::AlphaFlipTangency),
+        expected: "Both source contacts change one explicit orientation together; no coordinate heuristic chooses the branch.",
+    },
+    ScenarioStep {
+        instruction: "Submit generic contact between two distinct fixed parallel spans.",
+        action: Some(ScenarioAction::AlphaRejectedContact),
+        expected: "The retained design records the impossible contact while the prior accepted scene and branch evidence remain authoritative.",
+    },
+    ScenarioStep {
+        instruction: "Inspect the canvas markers, Problems, lifecycle identities, and stable diagnostics.",
+        action: None,
+        expected: "The current rejected source is attributed without presenting attempted geometry as accepted.",
+    },
+    ScenarioStep {
+        instruction: "Undo the rejected contact and any incompatible branch candidate.",
+        action: Some(ScenarioAction::AlphaRecovery),
+        expected: "Rejected sources are removed, accepted state advances from fresh recovery attempts, and the current problem clears.",
+    },
+];
+
+const SCENARIOS: [ScenarioDefinition; 10] = [
     ScenarioDefinition {
         id: ScenarioId::RoleProfileParticipation,
         title: "Role & profile participation",
@@ -691,6 +765,24 @@ const SCENARIOS: [ScenarioDefinition; 8] = [
         points: &GLOBAL_ERROR_POINTS,
         steps: &GLOBAL_ERROR_STEPS,
     },
+    ScenarioDefinition {
+        id: ScenarioId::AlphaParityCatalog,
+        title: "Alpha relation & dimension catalog",
+        description: "Inspect the preserved ordinary relation, point/curve, circular-dimension and explicit tangency families through the sole workbench.",
+        human_question: "Do the selectable glyphs, annotations, operands and domain diagnostics form a coherent reusable alpha action catalog?",
+        fixture: ScenarioFixture::AlphaParity,
+        points: &ALPHA_PARITY_POINTS,
+        steps: &ALPHA_PARITY_STEPS,
+    },
+    ScenarioDefinition {
+        id: ScenarioId::AlphaBranchRecovery,
+        title: "Contact branch & rejection recovery",
+        description: "Edit explicit tangent orientation, submit an impossible fixed contact, inspect retained accepted truth, and recover deterministically.",
+        human_question: "Is explicit branch ownership clear before, during, and after a rejected contact action?",
+        fixture: ScenarioFixture::AlphaBranchRecovery,
+        points: &ALPHA_BRANCH_POINTS,
+        steps: &ALPHA_BRANCH_STEPS,
+    },
 ];
 
 const GEOMETRY_INTENT_CHILDREN: [ScenarioNode; 2] = [
@@ -755,8 +847,32 @@ const M53_HOST_SEMANTICS_GROUP: ScenarioGroup = ScenarioGroup {
     children: &M53_HOST_SEMANTICS_CHILDREN,
 };
 
+const M55_ACTION_PARITY_CHILDREN: [ScenarioNode; 2] = [
+    ScenarioNode::Scenario(ScenarioId::AlphaParityCatalog),
+    ScenarioNode::Scenario(ScenarioId::AlphaBranchRecovery),
+];
+
+const M55_ACTION_PARITY_GROUP: ScenarioGroup = ScenarioGroup {
+    id: ScenarioGroupId::M55ActionParity,
+    title: "M55 Action parity",
+    description: "Reusable alpha relation, dimension, contact-branch and rejection-recovery scenarios.",
+    children: &M55_ACTION_PARITY_CHILDREN,
+};
+
+const ROOT_CHILDREN: [ScenarioNode; 2] = [
+    ScenarioNode::Group(M53_HOST_SEMANTICS_GROUP),
+    ScenarioNode::Group(M55_ACTION_PARITY_GROUP),
+];
+
+const ROOT_GROUP: ScenarioGroup = ScenarioGroup {
+    id: ScenarioGroupId::Root,
+    title: "GeoSolve scenarios",
+    description: "Versioned reusable review scenarios over public domain and editor APIs.",
+    children: &ROOT_CHILDREN,
+};
+
 pub(crate) const SCENARIO_CATALOG: ScenarioCatalog = ScenarioCatalog {
-    root: &M53_HOST_SEMANTICS_GROUP,
+    root: &ROOT_GROUP,
     scenarios: &SCENARIOS,
     verification_points: &VERIFICATION_POINTS,
 };
@@ -1096,8 +1212,8 @@ mod tests {
         let mut scenarios = Vec::new();
         collect_catalog(*SCENARIO_CATALOG.root(), &mut groups, &mut scenarios);
 
-        assert_eq!(SCENARIO_CATALOG.root().title(), "M53 Host semantics");
-        assert_eq!(groups.len(), 5);
+        assert_eq!(SCENARIO_CATALOG.root().title(), "GeoSolve scenarios");
+        assert_eq!(groups.len(), 7);
         assert_eq!(scenarios.len(), ScenarioId::ALL.len());
         let unique_groups: HashSet<_> = groups.iter().copied().collect();
         let unique_scenarios: HashSet<_> = scenarios.iter().copied().collect();
@@ -1169,9 +1285,9 @@ mod tests {
             .unwrap();
         let markup = state.menu_markup();
 
-        assert_eq!(markup.matches("data-scenario-group-trigger=").count(), 4);
-        assert_eq!(markup.matches("class=\"wb-scenario-flyout\"").count(), 4);
-        assert_eq!(markup.matches("data-scenario-id=").count(), 8);
+        assert_eq!(markup.matches("data-scenario-group-trigger=").count(), 6);
+        assert_eq!(markup.matches("class=\"wb-scenario-flyout\"").count(), 6);
+        assert_eq!(markup.matches("data-scenario-id=").count(), 10);
         assert!(markup.contains("class=\"wb-scenario-catalog-header\""));
         assert!(markup.contains("aria-expanded=\"false\""));
         assert!(markup.contains("aria-controls=\"wb-scenario-flyout-host-owned-inputs\""));

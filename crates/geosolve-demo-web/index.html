@@ -69,13 +69,25 @@
         </section>
         <section class="wb-inspector-section">
           <label class="wb-field-label" for="wb-constraint-kind">Constraint</label>
-          <select id="wb-constraint-kind"><option value="fixed">Fixed</option><option value="coincident">Coincident</option><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option><option value="parallel">Parallel</option><option value="perpendicular">Perpendicular</option><option value="equal-length">Equal length</option></select>
+          <select id="wb-constraint-kind"><option value="fixed">Fixed</option><option value="coincident">Coincident</option><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option><option value="point-on-curve">Point on curve</option><option value="parallel">Parallel</option><option value="perpendicular">Perpendicular</option><option value="equal-length">Equal length</option><option value="equal-radius">Equal radius</option><option value="midpoint">Midpoint</option><option value="symmetry">Symmetry</option><option value="generic-contact">Generic contact</option><option value="generic-tangency">Generic tangency</option></select>
+          <div id="wb-contact-choices" class="wb-branch-choices" aria-label="Explicit contact branch choices">
+            <fieldset id="wb-contact-choice-0" hidden><legend>First contact branch</legend><span id="wb-contact-span-0"></span><label>Domain<select id="wb-contact-domain-0"></select></label><label>Parameter<input id="wb-contact-parameter-0" type="number" step="any" value="0.5" /></label><label>Neighborhood<select id="wb-contact-neighborhood-0"></select></label><label>Winding<input id="wb-contact-winding-0" type="number" step="1" value="0" /></label><label>Orientation<select id="wb-contact-orientation-0"></select></label></fieldset>
+            <fieldset id="wb-contact-choice-1" hidden><legend>Second contact branch</legend><span id="wb-contact-span-1"></span><label>Domain<select id="wb-contact-domain-1"></select></label><label>Parameter<input id="wb-contact-parameter-1" type="number" step="any" value="0.5" /></label><label>Neighborhood<select id="wb-contact-neighborhood-1"></select></label><label>Winding<input id="wb-contact-winding-1" type="number" step="1" value="0" /></label><label>Orientation<select id="wb-contact-orientation-1"></select></label></fieldset>
+          </div>
           <button type="button" data-wb-action="constraint">Apply constraint</button>
         </section>
         <section class="wb-inspector-section">
           <span class="wb-field-label">Dimension at current accepted value</span>
+          <select id="wb-dimension-kind"><option value="point-distance">Point distance</option><option value="segment-length">Segment length</option><option value="radius">Radius</option><option value="diameter">Diameter</option><option value="oriented-angle">Oriented angle</option></select>
           <select id="wb-dimension-mode"><option value="driving">Driving</option><option value="reference">Reference</option></select>
+          <select id="wb-angle-orientation" aria-label="Oriented angle direction"><option value="counter-clockwise">Counter-clockwise</option><option value="clockwise">Clockwise</option></select>
           <button type="button" data-wb-action="dimension">Create dimension</button>
+        </section>
+        <section id="wb-branch-editor" class="wb-inspector-section wb-branch-editor" hidden>
+          <span class="wb-field-label">Explicit branch state</span>
+          <div id="wb-branch-editor-controls"></div>
+          <button id="wb-apply-contact-branches" type="button" data-wb-action="contact-branches" hidden>Apply contact branches</button>
+          <button id="wb-apply-angle-orientation" type="button" data-wb-action="angle-orientation" hidden>Apply angle orientation</button>
         </section>
         <section id="wb-host-state" class="wb-inspector-section wb-host-state" aria-live="polite" aria-label="Host-state evidence"></section>
         <section id="wb-redundancy" class="wb-inspector-section wb-redundancy" aria-live="polite" aria-label="Accepted redundancy"></section>

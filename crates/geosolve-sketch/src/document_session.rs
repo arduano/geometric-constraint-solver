@@ -9,18 +9,18 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::document::{
-    ActivationDigest, ContactDefinition, ContactId, ContactStateEdit, CurveCurveFilletIds,
-    CurveCurveFilletRequest, CurveDefinition, CurveId, CurveSpan, DesignPointId, DesignScalarId,
-    DocumentAngleOrientation, DocumentArcSweep, DocumentBSplineInsertion,
-    DocumentBSplineSpanDirection, DocumentCircleTangencyMode, DocumentConstraintDefinition,
-    DocumentConstraintId, DocumentCurveNormalSide, DocumentDimensionDefinition,
-    DocumentDimensionId, DocumentDimensionMode, DocumentElementId, DocumentError,
-    DocumentExternalBindingId, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint,
-    DocumentHyperbolaBranch, DocumentMirroredBSplineInsertion, DocumentNurbsInsertion,
-    DocumentObjectId, DocumentParameterId, DocumentParameterKind, DocumentParameterTarget,
-    DocumentSourceId, ExternalFeatureKindV1, ExternalTopologyDigest, GeometryRole,
-    HostConfigurationActivation, LineLineFilletIds, LineLineFilletRequest, MirroredCurveIds,
-    PersistentId, RectangleIds, ScalarDomain, ScalarUnit, SketchDocument,
+    ActivationDigest, ContactBranchEdit, ContactDefinition, ContactId, ContactStateEdit,
+    CurveCurveFilletIds, CurveCurveFilletRequest, CurveDefinition, CurveId, CurveSpan,
+    DesignPointId, DesignScalarId, DocumentAngleOrientation, DocumentArcSweep,
+    DocumentBSplineInsertion, DocumentBSplineSpanDirection, DocumentCircleTangencyMode,
+    DocumentConstraintDefinition, DocumentConstraintId, DocumentCurveNormalSide,
+    DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode, DocumentElementId,
+    DocumentError, DocumentExternalBindingId, DocumentFilletEndpointOrder,
+    DocumentFilletTrimEndpoint, DocumentHyperbolaBranch, DocumentMirroredBSplineInsertion,
+    DocumentNurbsInsertion, DocumentObjectId, DocumentParameterId, DocumentParameterKind,
+    DocumentParameterTarget, DocumentSourceId, ExternalFeatureKindV1, ExternalTopologyDigest,
+    GeometryRole, HostConfigurationActivation, LineLineFilletIds, LineLineFilletRequest,
+    MirroredCurveIds, PersistentId, RectangleIds, ScalarDomain, ScalarUnit, SketchDocument,
 };
 use crate::document_lowering::{
     DocumentRuntimeMap, ResolvedDocumentParameters, ResolvedParameterBinding, RuntimeSource,
@@ -1768,6 +1768,9 @@ pub enum DocumentEdit {
     },
     SetContactStates {
         edits: Vec<ContactStateEdit>,
+    },
+    SetContactBranches {
+        edits: Vec<ContactBranchEdit>,
     },
     SetCircleTangencyBranch {
         constraint: DocumentConstraintId,
@@ -4897,7 +4900,9 @@ fn seed_from_accepted_parent(
             continue;
         };
         if scalar.value.to_bits() == parent_design.value.to_bits() {
-            seed.set_scalar_value(scalar.id, parent_accepted.value)?;
+            seed.scalar_mut(scalar.id)
+                .expect("scalar came from this document")
+                .value = parent_accepted.value;
         }
     }
     for curve in design.curves() {
@@ -5396,6 +5401,11 @@ fn apply_edit(
         DocumentEdit::SetContactStates { edits } => {
             let contacts = edits.iter().map(|edit| edit.contact).collect();
             document.set_contact_states(&edits)?;
+            DocumentCommandEffect::UpdatedContacts(contacts)
+        }
+        DocumentEdit::SetContactBranches { edits } => {
+            let contacts = edits.iter().map(|edit| edit.contact).collect();
+            document.set_contact_branches(&edits)?;
             DocumentCommandEffect::UpdatedContacts(contacts)
         }
         DocumentEdit::SetCircleTangencyBranch {

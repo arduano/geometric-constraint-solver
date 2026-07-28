@@ -152,7 +152,9 @@ Baseline candidate vectors do not yet carry M8 completeness metadata. Until the 
 
 M8 is ready for review only when every item below is objectively present. These checkboxes are acceptance criteria and do not mark `PLAN.md` complete.
 
-The checked wording below is the preserved M8 completion record. Its then-current M8-M22 allocations are historical; `PLAN.md` now governs completed work through M54 and the executable M55-M64 sequence.
+The checked wording below is the preserved M8 completion record. Its then-current M8-M22
+allocations are historical; `PLAN.md` now governs completed work through M55 and the executable
+M56-M64 sequence.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -947,6 +949,9 @@ Status: complete (2026-07-29); direct evidence is recorded in `docs/M54_IMPLEMEN
 
 ### M55: alpha constraint, dimension and branch-action parity
 
+Status: complete (2026-07-29); direct evidence is recorded in
+`docs/M55_IMPLEMENTATION.md`.
+
 - The headless editor and sole workbench expose the complete preserved M13-M14 alpha action matrix:
   fixed, coincident, horizontal, vertical, point-on-curve, parallel, perpendicular, equal-length,
   equal-radius, midpoint, symmetry, generic contact and generic tangency.
@@ -960,6 +965,20 @@ Status: complete (2026-07-29); direct evidence is recorded in `docs/M54_IMPLEMEN
   incompatible, redundant and rejected actions, including accepted-state retention and recovery.
 - Reusable scenarios demonstrate each family without restoring the playground, `/#/dev/lab`, CDP,
   browser E2E or legacy harnesses. Mobile and complete advanced-curve authoring remain outside M55.
+
+Completion record (2026-07-29): the headless editor publishes and executes one deterministic
+13-relation/five-dimension matrix with typed selection applicability, explicit construction
+choices, complete persistent contact branch edits and oriented-angle direction changes. All five
+dimension identities execute in driving and reference modes. Accepted contact span/domain changes
+and retained rejected tangent-orientation/winding candidates preserve persistent contact/scalar
+identity, retain the prior accepted state and recover through bounded Undo.
+
+The sole workbench consumes a reusable action identity catalog, headless disabled reasons and
+branch DTOs; its glyphs and dimensions carry semantic kind metadata. The nested scenario catalog
+adds `alpha-parity-catalog` and `alpha-branch-recovery` without changing ordinary workspace
+persistence or restoring any retired route/harness. Focused native editor, sketch and presentation
+tests, full locked workspace tests, warnings-denied Clippy, all-feature WASM and release Trunk pass.
+No browser equation, branch heuristic, browser E2E or human-approval claim is part of this gate.
 
 ### M56: prepared jobs and concurrency
 

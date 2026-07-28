@@ -2023,8 +2023,8 @@ M45; the M46 follow-up cleared it without changing behavior.
 M46-M53 are the completed cleanup and host-semantics UAT sequence. After M53 approval, the future
 sequence was finalized from M54 onward. A subsequent supervising-user decision inserted the
 constraint/dimension/branch-action parity gate at M55, shifting the preserved later sequence by one
-number through M64 without changing its dependency order or scope. M54 remains the next executable
-milestone.
+number through M64 without changing its dependency order or scope. M54 and M55 are now complete;
+M56 is the next executable milestone.
 
 ## Pre-cleanup phase
 
@@ -2325,24 +2325,24 @@ all-feature workspace test suite, all-feature WASM check and Trunk 0.21.14 relea
 
 ### M55: alpha constraint, dimension and branch-action parity
 
-Status: active.
+Status: complete as of 2026-07-29.
 
 Goal: expose the complete preserved M13-M14 alpha constraint, dimension and explicit branch-action
 surface early through reusable headless-editor policy and the sole visible workbench, without
 restoring the deleted playground or moving equations into presentation code.
 
-- [ ] Freeze one applicability/action matrix covering the existing core actions plus point-on-curve,
+- [x] Freeze one applicability/action matrix covering the existing core actions plus point-on-curve,
   equal-radius, midpoint, symmetry, generic contact and generic tangency.
-- [ ] Expose distance, segment-length, radius, diameter and oriented-angle dimensions in both
+- [x] Expose distance, segment-length, radius, diameter and oriented-angle dimensions in both
   driving and reference modes wherever the public document applicability rules permit them.
-- [ ] Add typed editor actions for every required tangent orientation, contact neighborhood,
+- [x] Add typed editor actions for every required tangent orientation, contact neighborhood,
   parameter-domain, span and winding choice; never infer a discrete branch from coordinates.
-- [ ] Render the returned actions, disabled reasons, glyphs, annotations and branch controls in the
+- [x] Render the returned actions, disabled reasons, glyphs, annotations and branch controls in the
   workbench without browser-owned applicability, equations or audit interpretation.
-- [ ] Add deterministic reusable scenarios for ordinary line/point relations, circular dimensions,
+- [x] Add deterministic reusable scenarios for ordinary line/point relations, circular dimensions,
   midpoint/symmetry, point-on-curve and generic contact/tangency with branch editing and rejection
   recovery.
-- [ ] Directly qualify the complete matrix through native editor/coordinator tests, the WASM adapter
+- [x] Directly qualify the complete matrix through native editor/coordinator tests, the WASM adapter
   and focused presentation tests; do not restore old browser E2E, CDP, `/#/dev/lab` or legacy
   harnesses.
 
@@ -2351,9 +2351,26 @@ through the headless editor and sole workbench using public sketch APIs, with ac
 retention and typed diagnostics on rejection. This is action-surface parity, not restoration of the
 old application, mobile behavior or browser-owned solver semantics.
 
+Completion notes (2026-07-29): `geosolve-constraint-editor` now owns one closed, ordered matrix
+for 13 alpha relations and five dimension identities in driving/reference modes, including typed
+wrong-arity/wrong-kind reasons, explicit contact construction choices and selection-scoped contact
+and oriented-angle branch edits. `geosolve-sketch` adds an atomic persistent-ID-preserving complete
+contact-branch transaction over semantic span, domain/value, winding, neighborhood and tangent
+orientation; accepted-parent seeding restores solver-owned contact scalar values without routing
+them through an ordinary scalar edit.
+
+The sole workbench renders and dispatches only those typed actions, choices and reasons, publishes
+semantic glyph/dimension attributes and adds the reusable `alpha-parity-catalog` and
+`alpha-branch-recovery` leaves under **M55 Action parity**. Seven focused M55 editor tests cover
+the complete relation/dimension matrices, driving/reference execution, accepted span/domain
+transitions, retained rejected orientation/winding candidates, stable identities, accepted-state
+retention and bounded undo recovery. Editor, sketch, workbench, full workspace, all-feature WASM
+and release Trunk qualification pass; `docs/M55_IMPLEMENTATION.md` records exact commands and
+limitations. No residual equation, schema version, legacy route/harness or mobile claim was added.
+
 ### M56: prepared jobs and concurrency contract
 
-Status: planned; begins after M55 passes.
+Status: active.
 
 Scope: immutable accepted snapshots, exact-revision prepared jobs, non-mutating candidate
 patches, compare-and-swap commit, host-managed scheduling and safe Rust `Send`/`Sync`

@@ -5,22 +5,25 @@
 use std::collections::{BTreeSet, HashSet};
 
 use geosolve_sketch::{
-    CurveDefinition, CurveId, CurveSpan, DesignPointId, DocumentCommandEffect,
-    DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode, DocumentEdit,
-    DocumentElementId, DocumentExternalBindingId, DocumentMeasurementCatalog,
-    DocumentMeasurementProvenance, DocumentMeasurementValue, DocumentObjectId, DocumentRuntimeMap,
-    DocumentSessionError, DocumentSolveRequest, DocumentSourceId, DocumentSourceOwner,
-    ExternalFeatureKindV1, ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole,
-    ParameterBatch, RetainedSketchDocumentSession, RuntimeCurve, ScalarDomain, ScalarUnit,
-    SketchAcceptedDocumentRedundancy, SketchAcceptedStateIdentity, SketchAttemptFailure,
-    SketchAttemptFailureKind, SketchAttemptIdentity, SketchBound, SketchDesignIdentity,
-    SketchDocument, SketchLifecycleRevisionHighWater, SketchSolveResult, SketchSource,
-    SolveRejection,
+    ContactBranchEdit, ContactDomain, ContactId, ContactNeighborhood, CurveDefinition, CurveId,
+    CurveSpan, DesignPointId, DocumentAngleOrientation, DocumentCommandEffect,
+    DocumentConstraintDefinition, DocumentDimensionDefinition, DocumentDimensionId,
+    DocumentDimensionMode, DocumentEdit, DocumentElementId, DocumentExternalBindingId,
+    DocumentMeasurementCatalog, DocumentMeasurementProvenance, DocumentMeasurementValue,
+    DocumentObjectId, DocumentRuntimeMap, DocumentSessionError, DocumentSolveRequest,
+    DocumentSourceId, DocumentSourceOwner, ExternalFeatureKindV1, ExternalSnapshotSet,
+    ExternalTopologyDigest, GeometryRole, ParameterBatch, RetainedSketchDocumentSession,
+    RuntimeCurve, ScalarDomain, ScalarUnit, SketchAcceptedDocumentRedundancy,
+    SketchAcceptedStateIdentity, SketchAttemptFailure, SketchAttemptFailureKind,
+    SketchAttemptIdentity, SketchBound, SketchDesignIdentity, SketchDocument,
+    SketchLifecycleRevisionHighWater, SketchSolveResult, SketchSource, SolveRejection,
+    TangentOrientation,
 };
 use thiserror::Error;
 
 use crate::{
-    ConstraintEditor, ConstraintKind, ConstructionProposal, ConstructionResult, EditorEffect,
+    ActionChoice, ConstraintActionRequest, ConstraintEditor, ConstraintKind, ConstructionProposal,
+    ConstructionResult, DimensionActionRequest, DimensionKind, EditorEffect,
     ProvisionalInferenceCandidate, SelectionItem,
 };
 
@@ -173,9 +176,10 @@ pub enum ActionState {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CoordinatorActionKind {
     Constraint(ConstraintKind),
-    PointDistance(DocumentDimensionMode),
-    SegmentLength(DocumentDimensionMode),
+    Dimension(DimensionKind, DocumentDimensionMode),
     SetDimensionMode(DocumentDimensionMode),
+    EditContactBranch,
+    SetAngleOrientation(DocumentAngleOrientation),
     Delete,
     Suppress,
     Unsuppress,
@@ -189,6 +193,26 @@ pub enum CoordinatorActionKind {
 pub struct ActionAvailability {
     pub action: CoordinatorActionKind,
     pub state: ActionState,
+}
+
+/// Complete current branch state and legal same-curve choices for one contact.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ContactBranchAction {
+    pub current: ContactBranchEdit,
+    pub spans: Vec<CurveSpan>,
+    pub domains: Vec<ContactDomain>,
+    pub neighborhoods: Vec<ContactNeighborhood>,
+    pub tangent_orientations: Vec<Option<TangentOrientation>>,
+}
+
+/// Selection-scoped explicit branch controls returned to presentation adapters.
+#[derive(Clone, Debug, PartialEq)]
+pub enum BranchAction {
+    Contact(ContactBranchAction),
+    AngleOrientation {
+        dimension: DocumentDimensionId,
+        current: DocumentAngleOrientation,
+    },
 }
 
 /// Identity-only outcome from a retained mutation.
@@ -229,6 +253,16 @@ pub enum ReplayAction {
         expected: SketchDesignIdentity,
         proposal: ConstructionProposal,
     },
+    ConstraintAction {
+        expected: SketchDesignIdentity,
+        selection: Vec<SelectionItem>,
+        request: ConstraintActionRequest,
+    },
+    DimensionAction {
+        expected: SketchDesignIdentity,
+        selection: Vec<SelectionItem>,
+        request: DimensionActionRequest,
+    },
     PointDistance {
         expected: SketchDesignIdentity,
         points: [DesignPointId; 2],
@@ -245,6 +279,16 @@ pub enum ReplayAction {
         expected: SketchDesignIdentity,
         dimension: DocumentDimensionId,
         mode: DocumentDimensionMode,
+    },
+    SetContactBranches {
+        expected: SketchDesignIdentity,
+        selection: Vec<SelectionItem>,
+        edits: Vec<ContactBranchEdit>,
+    },
+    SetAngleOrientation {
+        expected: SketchDesignIdentity,
+        dimension: DocumentDimensionId,
+        orientation: DocumentAngleOrientation,
     },
     RebindExternalBinding {
         expected: SketchDesignIdentity,
@@ -275,8 +319,12 @@ pub enum CoordinatorError {
     Session(#[from] DocumentSessionError),
     #[error(transparent)]
     Document(#[from] geosolve_sketch::DocumentError),
+    #[error(transparent)]
+    Editor(#[from] crate::EditorError),
     #[error("selected operands cannot construct the requested dimension")]
     IncompatibleDimension,
+    #[error("invalid typed action input: {0}")]
+    InvalidActionInput(&'static str),
     #[error("action is unavailable: {0:?}")]
     ActionUnavailable(DisabledReason),
     #[error("preview session belongs to a different document")]
@@ -747,45 +795,34 @@ impl RetainedEditorCoordinator {
     pub fn actions(&self) -> Vec<ActionAvailability> {
         let document = self.session.design_document();
         let selection = self.editor.selection();
-        let kinds = [
-            ConstraintKind::Fixed,
-            ConstraintKind::Coincident,
-            ConstraintKind::Horizontal,
-            ConstraintKind::Vertical,
-            ConstraintKind::Parallel,
-            ConstraintKind::Perpendicular,
-            ConstraintKind::EqualLength,
-        ];
         let enabled_constraints = self.editor.available_constraints(document);
-        let mut actions = kinds
-            .into_iter()
-            .map(|kind| ActionAvailability {
-                action: CoordinatorActionKind::Constraint(kind),
-                state: if enabled_constraints.contains(&kind) {
-                    ActionState::Enabled
-                } else {
-                    ActionState::Disabled(selection_reason(document, selection))
-                },
-            })
-            .collect::<Vec<_>>();
-        for mode in [
-            DocumentDimensionMode::Driving,
-            DocumentDimensionMode::Reference,
-        ] {
-            actions.push(ActionAvailability {
-                action: CoordinatorActionKind::PointDistance(mode),
-                state: availability(point_distance_target(document, selection)),
-            });
-            actions.push(ActionAvailability {
-                action: CoordinatorActionKind::SegmentLength(mode),
-                state: availability(segment_length_target(document, selection)),
-            });
-            actions.push(ActionAvailability {
-                action: CoordinatorActionKind::SetDimensionMode(mode),
-                state: dimension_mode_availability(document, selection, mode),
-            });
-        }
+        let mut actions = constraint_action_matrix(document, selection, &enabled_constraints);
+        actions.extend(dimension_action_matrix(document, selection));
         actions.extend([
+            ActionAvailability {
+                action: CoordinatorActionKind::EditContactBranch,
+                state: contact_branch_availability(document, selection),
+            },
+            ActionAvailability {
+                action: CoordinatorActionKind::SetAngleOrientation(
+                    DocumentAngleOrientation::CounterClockwise,
+                ),
+                state: angle_orientation_availability(
+                    document,
+                    selection,
+                    DocumentAngleOrientation::CounterClockwise,
+                ),
+            },
+            ActionAvailability {
+                action: CoordinatorActionKind::SetAngleOrientation(
+                    DocumentAngleOrientation::Clockwise,
+                ),
+                state: angle_orientation_availability(
+                    document,
+                    selection,
+                    DocumentAngleOrientation::Clockwise,
+                ),
+            },
             ActionAvailability {
                 action: CoordinatorActionKind::Delete,
                 state: availability(selected_objects(document, selection)),
@@ -820,6 +857,113 @@ impl RetainedEditorCoordinator {
             },
         ]);
         actions
+    }
+
+    /// Returns explicit branch-choice metadata for one action.
+    ///
+    /// Defaults are fixed semantic values, never coordinate-derived root choices.
+    #[must_use]
+    pub fn action_choices(&self, action: CoordinatorActionKind) -> Vec<ActionChoice> {
+        let document = self.session.design_document();
+        let selection = self.editor.selection();
+        match action {
+            CoordinatorActionKind::Constraint(ConstraintKind::PointOnCurve) => {
+                selected_curve_spans(selection)
+                    .into_iter()
+                    .take(1)
+                    .enumerate()
+                    .filter_map(|(operand, span)| {
+                        contact_action_choice(document, u8::try_from(operand).ok()?, span, false)
+                    })
+                    .collect()
+            }
+            CoordinatorActionKind::Constraint(
+                ConstraintKind::GenericContact | ConstraintKind::GenericTangency,
+            ) => selected_curve_spans(selection)
+                .into_iter()
+                .enumerate()
+                .filter_map(|(operand, span)| {
+                    contact_action_choice(
+                        document,
+                        u8::try_from(operand).ok()?,
+                        span,
+                        matches!(
+                            action,
+                            CoordinatorActionKind::Constraint(ConstraintKind::GenericTangency)
+                        ),
+                    )
+                })
+                .collect(),
+            CoordinatorActionKind::Dimension(DimensionKind::OrientedAngle, _) => {
+                vec![ActionChoice::AngleOrientation {
+                    values: vec![
+                        DocumentAngleOrientation::CounterClockwise,
+                        DocumentAngleOrientation::Clockwise,
+                    ],
+                }]
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// Returns complete selection-scoped branch controls with persistent identities.
+    #[must_use]
+    pub fn branch_actions(&self) -> Vec<BranchAction> {
+        let document = self.session.design_document();
+        if let Some(contacts) = selected_contact_ids(document, self.editor.selection()) {
+            return contacts
+                .into_iter()
+                .filter_map(|id| {
+                    let contact = document
+                        .contacts()
+                        .iter()
+                        .find(|contact| contact.id == id)?;
+                    let value = document.scalar(contact.parameter)?.value;
+                    Some(BranchAction::Contact(ContactBranchAction {
+                        current: ContactBranchEdit {
+                            contact: id,
+                            curve: contact.curve,
+                            domain: contact.domain,
+                            value,
+                            winding: contact.winding,
+                            neighborhood: contact.neighborhood,
+                            tangent_orientation: contact.tangent_orientation,
+                        },
+                        spans: document.curve_spans(contact.curve.curve).ok()?,
+                        domains: document.curve_contact_domains(contact.curve).ok()?,
+                        neighborhoods: contact_neighborhood_options(contact.domain, value),
+                        tangent_orientations: if contact.tangent_orientation.is_some() {
+                            vec![
+                                Some(TangentOrientation::Aligned),
+                                Some(TangentOrientation::Opposed),
+                            ]
+                        } else {
+                            vec![None]
+                        },
+                    }))
+                })
+                .collect();
+        }
+        let [SelectionItem::Dimension(id)] = self.editor.selection() else {
+            return Vec::new();
+        };
+        document
+            .dimensions()
+            .iter()
+            .find(|dimension| dimension.id == *id)
+            .and_then(|dimension| {
+                let DocumentDimensionDefinition::OrientedAngle { orientation, .. } =
+                    &dimension.definition
+                else {
+                    return None;
+                };
+                Some(BranchAction::AngleOrientation {
+                    dimension: *id,
+                    current: *orientation,
+                })
+            })
+            .into_iter()
+            .collect()
     }
 
     /// Applies one exact revision-checked closed edit and records valid retained mutations.
@@ -973,6 +1117,292 @@ impl RetainedEditorCoordinator {
             published_accepted: outcome.published_accepted_identity(),
         };
         self.record_mutation(replay)?;
+        Ok(result)
+    }
+
+    /// Applies one complete alpha relation action over the current selection.
+    ///
+    /// Contact-based actions require explicit domain, span, parameter,
+    /// neighborhood, winding and tangent-orientation state. No root or branch is
+    /// inferred from coordinates.
+    ///
+    /// # Errors
+    ///
+    /// Returns an applicability, branch-input, stale-design, document,
+    /// solve-setup, or checkpoint error.
+    pub fn apply_constraint_action(
+        &mut self,
+        expected: SketchDesignIdentity,
+        request: ConstraintActionRequest,
+    ) -> Result<MutationOutcome<geosolve_sketch::DocumentConstraintId>, CoordinatorError> {
+        self.ensure_expected(expected)?;
+        if !self
+            .editor
+            .available_constraints(self.session.design_document())
+            .contains(&request.kind)
+        {
+            return Err(CoordinatorError::ActionUnavailable(
+                constraint_disabled_reason(
+                    self.session.design_document(),
+                    self.editor.selection(),
+                    request.kind,
+                ),
+            ));
+        }
+        let replay_request = request.clone();
+        let selection = self.editor.selection().to_vec();
+        let outcome = match request.kind {
+            ConstraintKind::PointOnCurve => self.apply_point_curve_action(
+                expected,
+                &selection,
+                request.label,
+                &request.contacts,
+            )?,
+            ConstraintKind::GenericContact | ConstraintKind::GenericTangency => self
+                .apply_curve_pair_action(
+                    expected,
+                    &selection,
+                    request.kind,
+                    request.label,
+                    &request.contacts,
+                )?,
+            _ => {
+                if !request.contacts.is_empty() {
+                    return Err(CoordinatorError::InvalidActionInput(
+                        "this relation action accepts no contact choices",
+                    ));
+                }
+                let edit = self.editor.constraint_edit(
+                    self.session.design_document(),
+                    request.kind,
+                    request.label,
+                )?;
+                let DocumentEdit::CreateConstraint { label, definition } = edit else {
+                    unreachable!("simple relation policy emits one constraint creation");
+                };
+                self.session.transact(expected, move |document| {
+                    document.add_constraint(label, definition)
+                })?
+            }
+        };
+        let result = mutation_from(&outcome);
+        self.record_mutation(ReplayAction::ConstraintAction {
+            expected,
+            selection,
+            request: replay_request,
+        })?;
+        Ok(result)
+    }
+
+    fn apply_point_curve_action(
+        &mut self,
+        expected: SketchDesignIdentity,
+        selection: &[SelectionItem],
+        label: String,
+        contacts: &[crate::ContactActionChoice],
+    ) -> Result<
+        geosolve_sketch::RetainedDocumentTransactionOutcome<geosolve_sketch::DocumentConstraintId>,
+        CoordinatorError,
+    > {
+        let (point, span) =
+            selected_point_curve(selection).ok_or(CoordinatorError::InvalidActionInput(
+                "point-on-curve requires one point and one curve span",
+            ))?;
+        let [choice] = contacts else {
+            return Err(CoordinatorError::InvalidActionInput(
+                "point-on-curve requires one explicit contact choice",
+            ));
+        };
+        validate_contact_choice(span, choice, false)?;
+        let choice = *choice;
+        Ok(self.session.transact(expected, move |document| {
+            let contact = add_action_contact(document, &label, 0, choice)?;
+            document.add_constraint(
+                label,
+                DocumentConstraintDefinition::PointOnCurve { point, contact },
+            )
+        })?)
+    }
+
+    fn apply_curve_pair_action(
+        &mut self,
+        expected: SketchDesignIdentity,
+        selection: &[SelectionItem],
+        kind: ConstraintKind,
+        label: String,
+        contacts: &[crate::ContactActionChoice],
+    ) -> Result<
+        geosolve_sketch::RetainedDocumentTransactionOutcome<geosolve_sketch::DocumentConstraintId>,
+        CoordinatorError,
+    > {
+        let spans = selected_curve_pair(selection).ok_or(CoordinatorError::InvalidActionInput(
+            "generic relations require two curve spans",
+        ))?;
+        let [first, second] = contacts else {
+            return Err(CoordinatorError::InvalidActionInput(
+                "generic relations require two explicit contact choices",
+            ));
+        };
+        let tangency = kind == ConstraintKind::GenericTangency;
+        validate_contact_choice(spans[0], first, tangency)?;
+        validate_contact_choice(spans[1], second, tangency)?;
+        if tangency && first.tangent_orientation != second.tangent_orientation {
+            return Err(CoordinatorError::InvalidActionInput(
+                "tangency contacts must share one explicit orientation",
+            ));
+        }
+        let first = *first;
+        let second = *second;
+        Ok(self.session.transact(expected, move |document| {
+            let first_contact = add_action_contact(document, &label, 0, first)?;
+            let second_contact = add_action_contact(document, &label, 1, second)?;
+            let definition = if tangency {
+                DocumentConstraintDefinition::CurveCurveTangency {
+                    first_contact,
+                    second_contact,
+                }
+            } else {
+                DocumentConstraintDefinition::CurveCurveContact {
+                    first_contact,
+                    second_contact,
+                }
+            };
+            document.add_constraint(label, definition)
+        })?)
+    }
+
+    /// Applies one complete alpha dimension action at the current accepted value.
+    ///
+    /// # Errors
+    ///
+    /// Returns an applicability, stale-design, document, solve-setup, or
+    /// checkpoint error.
+    pub fn apply_dimension_action(
+        &mut self,
+        expected: SketchDesignIdentity,
+        request: DimensionActionRequest,
+    ) -> Result<MutationOutcome<DocumentDimensionId>, CoordinatorError> {
+        self.ensure_expected(expected)?;
+        let selection = self.editor.selection().to_vec();
+        let target = dimension_target(
+            self.session.design_document(),
+            self.editor.selection(),
+            request.kind,
+            request.angle_orientation,
+        )
+        .map_err(CoordinatorError::ActionUnavailable)?;
+        let definition = dimension_operands(
+            self.session.design_document(),
+            self.editor.selection(),
+            request.kind,
+        )?;
+        let replay_request = request.clone();
+        let label = request.label;
+        let mode = request.mode;
+        let angle_orientation = request.angle_orientation;
+        let unit = if request.kind == DimensionKind::OrientedAngle {
+            ScalarUnit::Angle
+        } else {
+            ScalarUnit::Length
+        };
+        let outcome = self.session.transact(expected, move |document| {
+            let scalar = document.add_scalar(
+                format!("{label} target"),
+                target,
+                unit,
+                ScalarDomain::Positive,
+            )?;
+            document.add_dimension(
+                label,
+                definition.definition(scalar, angle_orientation),
+                mode,
+            )
+        })?;
+        let result = mutation_from(&outcome);
+        self.record_mutation(ReplayAction::DimensionAction {
+            expected,
+            selection,
+            request: replay_request,
+        })?;
+        Ok(result)
+    }
+
+    /// Applies complete explicit branch edits for one selected contact source.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stale-design, source-membership, document, solve-setup, or
+    /// checkpoint error.
+    pub fn set_contact_branches(
+        &mut self,
+        expected: SketchDesignIdentity,
+        edits: Vec<ContactBranchEdit>,
+    ) -> Result<MutationOutcome<DocumentCommandEffect>, CoordinatorError> {
+        self.ensure_expected(expected)?;
+        let selection = self.editor.selection().to_vec();
+        let selected =
+            selected_contact_ids(self.session.design_document(), self.editor.selection()).ok_or(
+                CoordinatorError::ActionUnavailable(DisabledReason::WrongOperandKind),
+            )?;
+        if selected != edits.iter().map(|edit| edit.contact).collect::<Vec<_>>() {
+            return Err(CoordinatorError::InvalidActionInput(
+                "branch edits must cover the selected source contacts in semantic order",
+            ));
+        }
+        let replay_edits = edits.clone();
+        let outcome = self
+            .session
+            .apply(expected, DocumentEdit::SetContactBranches { edits })?;
+        let result = mutation_from(&outcome);
+        self.record_mutation(ReplayAction::SetContactBranches {
+            expected,
+            selection,
+            edits: replay_edits,
+        })?;
+        Ok(result)
+    }
+
+    /// Changes one selected oriented-angle dimension's explicit direction.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stale-design, applicability, document, solve-setup, or
+    /// checkpoint error.
+    pub fn set_selected_angle_orientation(
+        &mut self,
+        expected: SketchDesignIdentity,
+        orientation: DocumentAngleOrientation,
+    ) -> Result<MutationOutcome<DocumentCommandEffect>, CoordinatorError> {
+        self.ensure_expected(expected)?;
+        let [SelectionItem::Dimension(dimension)] = self.editor.selection() else {
+            return Err(CoordinatorError::ActionUnavailable(
+                DisabledReason::WrongOperandKind,
+            ));
+        };
+        if angle_orientation_availability(
+            self.session.design_document(),
+            self.editor.selection(),
+            orientation,
+        ) != ActionState::Enabled
+        {
+            return Err(CoordinatorError::ActionUnavailable(
+                DisabledReason::AlreadyInRequestedState,
+            ));
+        }
+        let dimension = *dimension;
+        let outcome = self.session.apply(
+            expected,
+            DocumentEdit::SetOrientedAngleOrientation {
+                dimension,
+                orientation,
+            },
+        )?;
+        let result = mutation_from(&outcome);
+        self.record_mutation(ReplayAction::SetAngleOrientation {
+            expected,
+            dimension,
+            orientation,
+        })?;
         Ok(result)
     }
 
@@ -1323,6 +1753,9 @@ impl RetainedEditorCoordinator {
         if let Some(expected) = action.expected_design() {
             self.ensure_expected(expected)?;
         }
+        if self.replay_m55_action(action)? {
+            return Ok(());
+        }
         match action {
             ReplayAction::Edit { expected, edit } => {
                 self.apply_edit(*expected, edit.clone())?;
@@ -1391,8 +1824,54 @@ impl RetainedEditorCoordinator {
             }
             ReplayAction::Undo => self.undo()?,
             ReplayAction::Redo => self.redo()?,
+            ReplayAction::ConstraintAction { .. }
+            | ReplayAction::DimensionAction { .. }
+            | ReplayAction::SetContactBranches { .. }
+            | ReplayAction::SetAngleOrientation { .. } => {
+                unreachable!("M55 replay actions were handled above")
+            }
         }
         Ok(())
+    }
+
+    fn replay_m55_action(&mut self, action: &ReplayAction) -> Result<bool, CoordinatorError> {
+        match action {
+            ReplayAction::ConstraintAction {
+                expected,
+                selection,
+                request,
+            } => {
+                self.editor.set_selection(selection.iter().copied());
+                self.apply_constraint_action(*expected, request.clone())?;
+            }
+            ReplayAction::DimensionAction {
+                expected,
+                selection,
+                request,
+            } => {
+                self.editor.set_selection(selection.iter().copied());
+                self.apply_dimension_action(*expected, request.clone())?;
+            }
+            ReplayAction::SetContactBranches {
+                expected,
+                selection,
+                edits,
+            } => {
+                self.editor.set_selection(selection.iter().copied());
+                self.set_contact_branches(*expected, edits.clone())?;
+            }
+            ReplayAction::SetAngleOrientation {
+                expected,
+                dimension,
+                orientation,
+            } => {
+                self.editor
+                    .set_selection([SelectionItem::Dimension(*dimension)]);
+                self.set_selected_angle_orientation(*expected, *orientation)?;
+            }
+            _ => return Ok(false),
+        }
+        Ok(true)
     }
 
     /// Restores the prior retained checkpoint with fresh lifecycle revisions.
@@ -1783,9 +2262,13 @@ impl ReplayAction {
         match self {
             Self::Edit { expected, .. }
             | Self::Construction { expected, .. }
+            | Self::ConstraintAction { expected, .. }
+            | Self::DimensionAction { expected, .. }
             | Self::PointDistance { expected, .. }
             | Self::SegmentLength { expected, .. }
             | Self::SetDimensionMode { expected, .. }
+            | Self::SetContactBranches { expected, .. }
+            | Self::SetAngleOrientation { expected, .. }
             | Self::RebindExternalBinding { expected, .. }
             | Self::Delete { expected, .. }
             | Self::SetSuppressed { expected, .. }
@@ -1850,6 +2333,72 @@ fn availability<T>(result: Result<T, DisabledReason>) -> ActionState {
     result.map_or_else(ActionState::Disabled, |_| ActionState::Enabled)
 }
 
+fn constraint_action_matrix(
+    document: &SketchDocument,
+    selection: &[SelectionItem],
+    enabled: &[ConstraintKind],
+) -> Vec<ActionAvailability> {
+    [
+        ConstraintKind::Fixed,
+        ConstraintKind::Coincident,
+        ConstraintKind::Horizontal,
+        ConstraintKind::Vertical,
+        ConstraintKind::PointOnCurve,
+        ConstraintKind::Parallel,
+        ConstraintKind::Perpendicular,
+        ConstraintKind::EqualLength,
+        ConstraintKind::EqualRadius,
+        ConstraintKind::Midpoint,
+        ConstraintKind::Symmetry,
+        ConstraintKind::GenericContact,
+        ConstraintKind::GenericTangency,
+    ]
+    .into_iter()
+    .map(|kind| ActionAvailability {
+        action: CoordinatorActionKind::Constraint(kind),
+        state: if enabled.contains(&kind) {
+            ActionState::Enabled
+        } else {
+            ActionState::Disabled(constraint_disabled_reason(document, selection, kind))
+        },
+    })
+    .collect()
+}
+
+fn dimension_action_matrix(
+    document: &SketchDocument,
+    selection: &[SelectionItem],
+) -> Vec<ActionAvailability> {
+    let mut actions = Vec::new();
+    for mode in [
+        DocumentDimensionMode::Driving,
+        DocumentDimensionMode::Reference,
+    ] {
+        for kind in [
+            DimensionKind::PointDistance,
+            DimensionKind::SegmentLength,
+            DimensionKind::Radius,
+            DimensionKind::Diameter,
+            DimensionKind::OrientedAngle,
+        ] {
+            actions.push(ActionAvailability {
+                action: CoordinatorActionKind::Dimension(kind, mode),
+                state: availability(dimension_target(
+                    document,
+                    selection,
+                    kind,
+                    DocumentAngleOrientation::CounterClockwise,
+                )),
+            });
+        }
+        actions.push(ActionAvailability {
+            action: CoordinatorActionKind::SetDimensionMode(mode),
+            state: dimension_mode_availability(document, selection, mode),
+        });
+    }
+    actions
+}
+
 fn selection_reason(document: &SketchDocument, selection: &[SelectionItem]) -> DisabledReason {
     if selection.is_empty() {
         DisabledReason::EmptySelection
@@ -1860,6 +2409,40 @@ fn selection_reason(document: &SketchDocument, selection: &[SelectionItem]) -> D
         DisabledReason::MissingObject
     } else {
         DisabledReason::WrongOperandKind
+    }
+}
+
+fn constraint_disabled_reason(
+    document: &SketchDocument,
+    selection: &[SelectionItem],
+    kind: ConstraintKind,
+) -> DisabledReason {
+    if selection.is_empty() {
+        return DisabledReason::EmptySelection;
+    }
+    if selection
+        .iter()
+        .any(|item| !selection_exists(document, *item))
+    {
+        return DisabledReason::MissingObject;
+    }
+    let expected = match kind {
+        ConstraintKind::Fixed | ConstraintKind::Horizontal | ConstraintKind::Vertical => 1,
+        ConstraintKind::Coincident
+        | ConstraintKind::PointOnCurve
+        | ConstraintKind::Parallel
+        | ConstraintKind::Perpendicular
+        | ConstraintKind::EqualLength
+        | ConstraintKind::EqualRadius
+        | ConstraintKind::Midpoint
+        | ConstraintKind::GenericContact
+        | ConstraintKind::GenericTangency => 2,
+        ConstraintKind::Symmetry => 3,
+    };
+    if selection.len() == expected {
+        DisabledReason::WrongOperandKind
+    } else {
+        DisabledReason::WrongArity
     }
 }
 
@@ -1945,6 +2528,377 @@ fn line_endpoints(
             }
         }
         _ => Err(DisabledReason::WrongOperandKind),
+    }
+}
+
+fn dimension_target(
+    document: &SketchDocument,
+    selection: &[SelectionItem],
+    kind: DimensionKind,
+    orientation: DocumentAngleOrientation,
+) -> Result<f64, DisabledReason> {
+    match kind {
+        DimensionKind::PointDistance => point_distance_target(document, selection),
+        DimensionKind::SegmentLength => segment_length_target(document, selection),
+        DimensionKind::Radius | DimensionKind::Diameter => {
+            let [SelectionItem::Curve(span)] = selection else {
+                return Err(if selection.len() == 1 {
+                    DisabledReason::WrongOperandKind
+                } else {
+                    DisabledReason::WrongArity
+                });
+            };
+            let curve = document
+                .curve(span.curve)
+                .ok_or(DisabledReason::MissingObject)?;
+            let radius = match curve.definition {
+                CurveDefinition::Circle { radius, .. }
+                | CurveDefinition::CircularArc { radius, .. } => {
+                    document
+                        .scalar(radius)
+                        .ok_or(DisabledReason::MissingObject)?
+                        .value
+                }
+                _ => return Err(DisabledReason::WrongOperandKind),
+            };
+            let value = if kind == DimensionKind::Diameter {
+                radius * 2.0
+            } else {
+                radius
+            };
+            (value.is_finite() && value > 0.0)
+                .then_some(value)
+                .ok_or(DisabledReason::WrongOperandKind)
+        }
+        DimensionKind::OrientedAngle => {
+            let [SelectionItem::Curve(first), SelectionItem::Curve(second)] = selection else {
+                return Err(if selection.len() == 2 {
+                    DisabledReason::WrongOperandKind
+                } else {
+                    DisabledReason::WrongArity
+                });
+            };
+            if first == second {
+                return Err(DisabledReason::WrongOperandKind);
+            }
+            let first = line_vector(document, *first)?;
+            let second = line_vector(document, *second)?;
+            let cross = first[0].mul_add(second[1], -first[1] * second[0]);
+            let dot = first[0].mul_add(second[0], first[1] * second[1]);
+            let signed = match orientation {
+                DocumentAngleOrientation::CounterClockwise => cross.atan2(dot),
+                DocumentAngleOrientation::Clockwise => (-cross).atan2(dot),
+            };
+            let value = signed.rem_euclid(std::f64::consts::TAU);
+            (value.is_finite() && value > 0.0)
+                .then_some(value)
+                .ok_or(DisabledReason::WrongOperandKind)
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum DimensionOperands {
+    PointDistance(DesignPointId, DesignPointId),
+    CurveLength(CurveSpan),
+    Radius(CurveId),
+    Diameter(CurveId),
+    OrientedAngle(CurveSpan, CurveSpan),
+}
+
+impl DimensionOperands {
+    const fn definition(
+        self,
+        target: geosolve_sketch::DesignScalarId,
+        orientation: DocumentAngleOrientation,
+    ) -> DocumentDimensionDefinition {
+        match self {
+            Self::PointDistance(first, second) => DocumentDimensionDefinition::PointDistance {
+                first,
+                second,
+                target,
+            },
+            Self::CurveLength(curve) => DocumentDimensionDefinition::CurveLength { curve, target },
+            Self::Radius(curve) => DocumentDimensionDefinition::Radius { curve, target },
+            Self::Diameter(curve) => DocumentDimensionDefinition::Diameter { curve, target },
+            Self::OrientedAngle(first, second) => DocumentDimensionDefinition::OrientedAngle {
+                first,
+                second,
+                target,
+                orientation,
+            },
+        }
+    }
+}
+
+fn dimension_operands(
+    document: &SketchDocument,
+    selection: &[SelectionItem],
+    kind: DimensionKind,
+) -> Result<DimensionOperands, CoordinatorError> {
+    let operands = match (kind, selection) {
+        (
+            DimensionKind::PointDistance,
+            [SelectionItem::Point(first), SelectionItem::Point(second)],
+        ) => DimensionOperands::PointDistance(*first, *second),
+        (DimensionKind::SegmentLength, [SelectionItem::Curve(curve)]) => {
+            DimensionOperands::CurveLength(*curve)
+        }
+        (DimensionKind::Radius, [SelectionItem::Curve(curve)]) => {
+            DimensionOperands::Radius(curve.curve)
+        }
+        (DimensionKind::Diameter, [SelectionItem::Curve(curve)]) => {
+            DimensionOperands::Diameter(curve.curve)
+        }
+        (
+            DimensionKind::OrientedAngle,
+            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
+        ) => DimensionOperands::OrientedAngle(*first, *second),
+        _ => return Err(CoordinatorError::IncompatibleDimension),
+    };
+    dimension_target(
+        document,
+        selection,
+        kind,
+        DocumentAngleOrientation::CounterClockwise,
+    )
+    .map_err(CoordinatorError::ActionUnavailable)?;
+    Ok(operands)
+}
+
+fn line_vector(document: &SketchDocument, span: CurveSpan) -> Result<[f64; 2], DisabledReason> {
+    let (start, end) = line_endpoints(document, span)?;
+    let start = document
+        .point(start)
+        .ok_or(DisabledReason::MissingObject)?
+        .position;
+    let end = document
+        .point(end)
+        .ok_or(DisabledReason::MissingObject)?
+        .position;
+    let vector = [end[0] - start[0], end[1] - start[1]];
+    (vector.into_iter().all(f64::is_finite)
+        && vector[0].mul_add(vector[0], vector[1] * vector[1]) > 0.0)
+        .then_some(vector)
+        .ok_or(DisabledReason::WrongOperandKind)
+}
+
+fn selected_curve_spans(selection: &[SelectionItem]) -> Vec<CurveSpan> {
+    selection
+        .iter()
+        .filter_map(|item| match item {
+            SelectionItem::Curve(span) => Some(*span),
+            _ => None,
+        })
+        .collect()
+}
+
+fn selected_curve_pair(selection: &[SelectionItem]) -> Option<[CurveSpan; 2]> {
+    let [SelectionItem::Curve(first), SelectionItem::Curve(second)] = selection else {
+        return None;
+    };
+    Some([*first, *second])
+}
+
+fn selected_point_curve(selection: &[SelectionItem]) -> Option<(DesignPointId, CurveSpan)> {
+    match selection {
+        [SelectionItem::Point(point), SelectionItem::Curve(curve)]
+        | [SelectionItem::Curve(curve), SelectionItem::Point(point)] => Some((*point, *curve)),
+        _ => None,
+    }
+}
+
+fn contact_action_choice(
+    document: &SketchDocument,
+    operand: u8,
+    span: CurveSpan,
+    tangency: bool,
+) -> Option<ActionChoice> {
+    let domains = document.curve_contact_domains(span).ok()?;
+    let first = *domains.first()?;
+    let default_parameter = match first {
+        ContactDomain::Bounded { lower, upper } => (lower + upper) * 0.5,
+        ContactDomain::SupportingLine | ContactDomain::Periodic { .. } => 0.0,
+    };
+    let neighborhoods = contact_neighborhood_options(first, default_parameter);
+    Some(ActionChoice::Contact {
+        operand,
+        span,
+        domains,
+        default_parameter,
+        neighborhoods,
+        tangent_orientations: if tangency {
+            vec![TangentOrientation::Aligned, TangentOrientation::Opposed]
+        } else {
+            Vec::new()
+        },
+        default_winding: 0,
+    })
+}
+
+fn contact_neighborhood_options(domain: ContactDomain, value: f64) -> Vec<ContactNeighborhood> {
+    match domain {
+        ContactDomain::Bounded { lower, upper } => vec![
+            ContactNeighborhood::Interior,
+            ContactNeighborhood::Local {
+                lower: lower + (upper - lower) * 0.25,
+                upper: lower + (upper - lower) * 0.75,
+            },
+            ContactNeighborhood::Start,
+            ContactNeighborhood::End,
+        ],
+        ContactDomain::SupportingLine => vec![
+            ContactNeighborhood::Interior,
+            ContactNeighborhood::Local {
+                lower: value - 0.5,
+                upper: value + 0.5,
+            },
+        ],
+        ContactDomain::Periodic { period } => vec![
+            ContactNeighborhood::Interior,
+            ContactNeighborhood::Local {
+                lower: value - period * 0.25,
+                upper: value + period * 0.25,
+            },
+        ],
+    }
+}
+
+fn validate_contact_choice(
+    selected_span: CurveSpan,
+    choice: &crate::ContactActionChoice,
+    tangency: bool,
+) -> Result<(), CoordinatorError> {
+    if choice.support.span != selected_span {
+        return Err(CoordinatorError::InvalidActionInput(
+            "contact span must match the selected semantic span",
+        ));
+    }
+    if tangency != choice.tangent_orientation.is_some() {
+        return Err(CoordinatorError::InvalidActionInput(
+            "tangent orientation must be present only for tangency actions",
+        ));
+    }
+    Ok(())
+}
+
+fn add_action_contact(
+    document: &mut SketchDocument,
+    label: &str,
+    operand: u8,
+    choice: crate::ContactActionChoice,
+) -> Result<ContactId, geosolve_sketch::DocumentError> {
+    document.add_curve_contact_with_domain(
+        format!("{label} contact {}", usize::from(operand) + 1),
+        choice.support.span,
+        choice.domain,
+        choice.parameter,
+        choice.support.winding,
+        choice.neighborhood,
+        choice.tangent_orientation,
+    )
+}
+
+fn selected_contact_ids(
+    document: &SketchDocument,
+    selection: &[SelectionItem],
+) -> Option<Vec<ContactId>> {
+    let [SelectionItem::Constraint(id)] = selection else {
+        return None;
+    };
+    let definition = &document
+        .constraints()
+        .iter()
+        .find(|constraint| constraint.id == *id)?
+        .definition;
+    Some(match definition {
+        DocumentConstraintDefinition::PointOnCurve { contact, .. }
+        | DocumentConstraintDefinition::LineCurveTangency {
+            curve_contact: contact,
+            ..
+        }
+        | DocumentConstraintDefinition::CurveDirection {
+            curve_contact: contact,
+            ..
+        } => vec![*contact],
+        DocumentConstraintDefinition::LineCircleTangency {
+            line_contact,
+            circle_contact,
+            ..
+        } => vec![*line_contact, *circle_contact],
+        DocumentConstraintDefinition::CircleArcTangency {
+            circle_contact,
+            arc_contact,
+            ..
+        } => vec![*circle_contact, *arc_contact],
+        DocumentConstraintDefinition::CurveCurveContact {
+            first_contact,
+            second_contact,
+        }
+        | DocumentConstraintDefinition::CurveCurveTangency {
+            first_contact,
+            second_contact,
+        }
+        | DocumentConstraintDefinition::EqualCurvature {
+            first_contact,
+            second_contact,
+            ..
+        }
+        | DocumentConstraintDefinition::EndpointContinuity {
+            first_contact,
+            second_contact,
+            ..
+        }
+        | DocumentConstraintDefinition::LineLineFillet {
+            first_contact,
+            second_contact,
+            ..
+        }
+        | DocumentConstraintDefinition::CurveCurveFillet {
+            first_contact,
+            second_contact,
+            ..
+        } => vec![*first_contact, *second_contact],
+        _ => return None,
+    })
+}
+
+fn contact_branch_availability(
+    document: &SketchDocument,
+    selection: &[SelectionItem],
+) -> ActionState {
+    selected_contact_ids(document, selection).map_or_else(
+        || ActionState::Disabled(selection_reason(document, selection)),
+        |_| ActionState::Enabled,
+    )
+}
+
+fn angle_orientation_availability(
+    document: &SketchDocument,
+    selection: &[SelectionItem],
+    orientation: DocumentAngleOrientation,
+) -> ActionState {
+    let [SelectionItem::Dimension(id)] = selection else {
+        return ActionState::Disabled(selection_reason(document, selection));
+    };
+    let Some(dimension) = document
+        .dimensions()
+        .iter()
+        .find(|dimension| dimension.id == *id)
+    else {
+        return ActionState::Disabled(DisabledReason::MissingObject);
+    };
+    let DocumentDimensionDefinition::OrientedAngle {
+        orientation: current,
+        ..
+    } = &dimension.definition
+    else {
+        return ActionState::Disabled(DisabledReason::WrongOperandKind);
+    };
+    if *current == orientation {
+        ActionState::Disabled(DisabledReason::AlreadyInRequestedState)
+    } else {
+        ActionState::Enabled
     }
 }
 
@@ -3121,7 +4075,10 @@ mod tests {
             .editor_mut()
             .set_selection(points.map(SelectionItem::Point));
         assert!(coordinator.actions().contains(&ActionAvailability {
-            action: CoordinatorActionKind::PointDistance(DocumentDimensionMode::Reference),
+            action: CoordinatorActionKind::Dimension(
+                DimensionKind::PointDistance,
+                DocumentDimensionMode::Reference,
+            ),
             state: ActionState::Enabled,
         }));
         let expected = coordinator.session().design_identity();
@@ -3143,7 +4100,10 @@ mod tests {
             .editor_mut()
             .set_selection([SelectionItem::Curve(span)]);
         assert!(replay.actions().contains(&ActionAvailability {
-            action: CoordinatorActionKind::SegmentLength(DocumentDimensionMode::Driving),
+            action: CoordinatorActionKind::Dimension(
+                DimensionKind::SegmentLength,
+                DocumentDimensionMode::Driving,
+            ),
             state: ActionState::Enabled,
         }));
     }

@@ -8,8 +8,8 @@ use geosolve_constraint_editor::{
     EditorProblemScope, EditorProblemTarget, EditorScene, ScreenPoint, SelectionItem, Viewport,
 };
 use geosolve_sketch::{
-    DesignScalarId, DocumentDimensionDefinition, DocumentDimensionMode, GeometryRole,
-    SketchAcceptedDocumentState,
+    DesignScalarId, DocumentConstraintDefinition, DocumentDimensionDefinition,
+    DocumentDimensionMode, GeometryRole, SketchAcceptedDocumentState,
 };
 
 pub(crate) fn viewport() -> Viewport {
@@ -180,9 +180,10 @@ fn annotations(
         let selected = selection.contains(&SelectionItem::Constraint(constraint.id));
         let target = EditorProblemTarget::Constraint(constraint.id);
         let has_problem = problem.is_some_and(|problem| problem.targets.contains(&target));
+        let (kind, glyph) = constraint_glyph(&constraint.definition);
         let _ = write!(
             output,
-            "<text class=\"wb-glyph{}{}\" x=\"{x}\" y=\"32\" data-persistent-id=\"{}\">C</text>",
+            "<text class=\"wb-glyph{}{}\" x=\"{x}\" y=\"32\" data-persistent-id=\"{}\" data-constraint-kind=\"{kind}\">{glyph}</text>",
             if selected { " selected" } else { "" },
             if has_problem { " has-problem" } else { "" },
             constraint.id,
@@ -215,10 +216,11 @@ fn annotations(
         let displayed = value.map_or_else(|| "unavailable".into(), |value| value.to_string());
         let selected = selection.contains(&SelectionItem::Dimension(dimension.id));
         let target = EditorProblemTarget::Dimension(dimension.id);
+        let kind = dimension_kind(&dimension.definition);
         let has_problem = problem.is_some_and(|problem| problem.targets.contains(&target));
         let _ = write!(
             output,
-            "<text class=\"wb-dimension{}{}\" x=\"26\" y=\"{y}\" data-persistent-id=\"{}\" data-dimension-mode=\"{mode}\" data-dimension-value=\"{value_attribute}\">{label} = {displayed}</text>",
+            "<text class=\"wb-dimension{}{}\" x=\"26\" y=\"{y}\" data-persistent-id=\"{}\" data-dimension-kind=\"{kind}\" data-dimension-mode=\"{mode}\" data-dimension-value=\"{value_attribute}\">{label} = {displayed}</text>",
             if selected { " selected" } else { "" },
             if has_problem { " has-problem" } else { "" },
             dimension.id,
@@ -234,6 +236,52 @@ fn annotations(
                 problem.expect("targeted marker has problem metadata"),
                 false,
             );
+        }
+    }
+}
+
+const fn constraint_glyph(
+    definition: &DocumentConstraintDefinition,
+) -> (&'static str, &'static str) {
+    match definition {
+        DocumentConstraintDefinition::FixedPoint { .. }
+        | DocumentConstraintDefinition::FixedCoordinate { .. } => ("fixed", "Fix"),
+        DocumentConstraintDefinition::Coincident { .. }
+        | DocumentConstraintDefinition::ExternalPointCoincident { .. } => ("coincident", "Coin"),
+        DocumentConstraintDefinition::Horizontal { .. } => ("horizontal", "H"),
+        DocumentConstraintDefinition::Vertical { .. } => ("vertical", "V"),
+        DocumentConstraintDefinition::PointOnCurve { .. } => ("point-on-curve", "On"),
+        DocumentConstraintDefinition::Parallel { .. } => ("parallel", "∥"),
+        DocumentConstraintDefinition::Perpendicular { .. } => ("perpendicular", "⊥"),
+        DocumentConstraintDefinition::ExternalLineCollinear { .. } => ("collinear", "Col"),
+        DocumentConstraintDefinition::EqualLength { .. } => ("equal-length", "L="),
+        DocumentConstraintDefinition::EqualRadius { .. } => ("equal-radius", "R="),
+        DocumentConstraintDefinition::Midpoint { .. } => ("midpoint", "Mid"),
+        DocumentConstraintDefinition::SymmetricAboutLine { .. } => ("symmetry", "Sym"),
+        DocumentConstraintDefinition::CurveCurveContact { .. } => ("generic-contact", "Touch"),
+        DocumentConstraintDefinition::CurveCurveTangency { .. } => ("generic-tangency", "Tan"),
+        DocumentConstraintDefinition::LineCircleTangency { .. }
+        | DocumentConstraintDefinition::CircleCircleTangency { .. }
+        | DocumentConstraintDefinition::CircleArcTangency { .. }
+        | DocumentConstraintDefinition::LineCurveTangency { .. } => ("tangency", "Tan"),
+        DocumentConstraintDefinition::CurveDirection { .. } => ("curve-direction", "Dir"),
+        DocumentConstraintDefinition::EqualCurvature { .. } => ("equal-curvature", "K="),
+        DocumentConstraintDefinition::EndpointContinuity { .. } => ("continuity", "G"),
+        DocumentConstraintDefinition::LineLineFillet { .. }
+        | DocumentConstraintDefinition::CurveCurveFillet { .. } => ("fillet", "Fil"),
+    }
+}
+
+const fn dimension_kind(definition: &DocumentDimensionDefinition) -> &'static str {
+    match definition {
+        DocumentDimensionDefinition::PointDistance { .. } => "point-distance",
+        DocumentDimensionDefinition::CurveLength { .. } => "segment-length",
+        DocumentDimensionDefinition::Radius { .. } => "radius",
+        DocumentDimensionDefinition::Diameter { .. } => "diameter",
+        DocumentDimensionDefinition::OrientedAngle { .. } => "oriented-angle",
+        DocumentDimensionDefinition::SupportingLineOffset { .. } => "supporting-line-offset",
+        DocumentDimensionDefinition::ExactTranslatedSegmentOffset { .. } => {
+            "translated-segment-offset"
         }
     }
 }
@@ -442,13 +490,16 @@ mod tests {
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
-        CurveDefinition, CurveSpan, DocumentConstraintDefinition, DocumentDimensionDefinition,
-        DocumentDimensionMode, DocumentEdit, DocumentParameterId, DocumentParameterKind,
-        DocumentParameterTarget, DocumentSolveRequest, ParameterBatch, ParameterBatchEntry,
-        ParameterValue, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
+        ContactId, CurveDefinition, CurveId, CurveSpan, DesignPointId, DesignScalarId,
+        DocumentConstraintDefinition, DocumentDimensionDefinition, DocumentDimensionMode,
+        DocumentEdit, DocumentParameterId, DocumentParameterKind, DocumentParameterTarget,
+        DocumentSolveRequest, ParameterBatch, ParameterBatchEntry, ParameterValue, PersistentId,
+        RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
     };
 
-    use super::{construction_geometry_markup, svg_markup, viewport};
+    use super::{
+        constraint_glyph, construction_geometry_markup, dimension_kind, svg_markup, viewport,
+    };
     use crate::workbench::panels::{
         accepted_redundancy_markup, host_state_markup, lifecycle_presentation, problem_markup,
     };
@@ -488,6 +539,130 @@ mod tests {
         );
         assert!(minor.contains("A 50.000 50.000 0 0 0"));
         assert!(major.contains("A 50.000 50.000 0 1 0"));
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the complete relation and dimension presentation matrix is clearer in one test"
+    )]
+    fn m55_required_glyph_and_dimension_labels_cover_the_complete_action_surface() {
+        let point = |value| DesignPointId(PersistentId::from_u128(value));
+        let curve = |value| CurveId(PersistentId::from_u128(value));
+        let contact = |value| ContactId(PersistentId::from_u128(value));
+        let line = |value| CurveSpan::line(curve(value));
+        let definitions = [
+            DocumentConstraintDefinition::FixedPoint {
+                point: point(1),
+                target: [0.0, 0.0],
+            },
+            DocumentConstraintDefinition::Coincident {
+                first: point(1),
+                second: point(2),
+            },
+            DocumentConstraintDefinition::Horizontal { line: line(3) },
+            DocumentConstraintDefinition::Vertical { line: line(3) },
+            DocumentConstraintDefinition::PointOnCurve {
+                point: point(1),
+                contact: contact(4),
+            },
+            DocumentConstraintDefinition::Parallel {
+                first: line(3),
+                second: line(5),
+            },
+            DocumentConstraintDefinition::Perpendicular {
+                first: line(3),
+                second: line(5),
+            },
+            DocumentConstraintDefinition::EqualLength {
+                first: line(3),
+                second: line(5),
+            },
+            DocumentConstraintDefinition::EqualRadius {
+                first: curve(6),
+                second: curve(7),
+            },
+            DocumentConstraintDefinition::Midpoint {
+                point: point(1),
+                line: line(3),
+            },
+            DocumentConstraintDefinition::SymmetricAboutLine {
+                first: point(1),
+                second: point(2),
+                line: line(3),
+            },
+            DocumentConstraintDefinition::CurveCurveContact {
+                first_contact: contact(4),
+                second_contact: contact(8),
+            },
+            DocumentConstraintDefinition::CurveCurveTangency {
+                first_contact: contact(4),
+                second_contact: contact(8),
+            },
+        ];
+        let expected = [
+            "fixed",
+            "coincident",
+            "horizontal",
+            "vertical",
+            "point-on-curve",
+            "parallel",
+            "perpendicular",
+            "equal-length",
+            "equal-radius",
+            "midpoint",
+            "symmetry",
+            "generic-contact",
+            "generic-tangency",
+        ];
+        assert_eq!(
+            definitions
+                .iter()
+                .map(|definition| {
+                    let (kind, glyph) = constraint_glyph(definition);
+                    assert!(!glyph.is_empty());
+                    kind
+                })
+                .collect::<Vec<_>>(),
+            expected
+        );
+
+        let target = DesignScalarId(PersistentId::from_u128(9));
+        let dimensions = [
+            DocumentDimensionDefinition::PointDistance {
+                first: point(1),
+                second: point(2),
+                target,
+            },
+            DocumentDimensionDefinition::CurveLength {
+                curve: line(3),
+                target,
+            },
+            DocumentDimensionDefinition::Radius {
+                curve: curve(6),
+                target,
+            },
+            DocumentDimensionDefinition::Diameter {
+                curve: curve(6),
+                target,
+            },
+            DocumentDimensionDefinition::OrientedAngle {
+                first: line(3),
+                second: line(5),
+                target,
+                orientation: geosolve_sketch::DocumentAngleOrientation::CounterClockwise,
+            },
+        ];
+        assert_eq!(
+            dimensions.iter().map(dimension_kind).collect::<Vec<_>>(),
+            [
+                "point-distance",
+                "segment-length",
+                "radius",
+                "diameter",
+                "oriented-angle",
+            ]
+        );
     }
 
     #[test]
@@ -533,11 +708,11 @@ mod tests {
             );
         }
         assert!(markup.contains(&format!(
-            "data-persistent-id=\"{}\" data-dimension-mode=\"driving\" data-dimension-value=\"4\"",
+            "data-persistent-id=\"{}\" data-dimension-kind=\"segment-length\" data-dimension-mode=\"driving\" data-dimension-value=\"4\"",
             rectangle.dimensions[0]
         )));
         assert!(markup.contains(&format!(
-            "data-persistent-id=\"{}\" data-dimension-mode=\"reference\" data-dimension-value=\"3\"",
+            "data-persistent-id=\"{}\" data-dimension-kind=\"segment-length\" data-dimension-mode=\"reference\" data-dimension-value=\"3\"",
             rectangle.dimensions[1]
         )));
     }

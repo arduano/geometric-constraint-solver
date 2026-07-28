@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #[cfg(any(target_arch = "wasm32", test))]
+mod action_surface;
+#[cfg(any(target_arch = "wasm32", test))]
 mod effect_adapter;
 #[cfg(any(target_arch = "wasm32", test))]
 mod evidence;
@@ -25,22 +27,24 @@ pub(crate) mod wasm {
     use std::str::FromStr as _;
 
     use geosolve_constraint_editor::{
-        ActionState, ConstraintKind, ConstructionPreview, CoordinatorActionKind, EditorEffect,
-        EditorScene, EditorTool, Modifiers, PointerInput, ProvisionalInferenceCandidate,
-        RetainedEditorCoordinator, SelectionItem,
+        ActionChoice, ActionState, BranchAction, ConstraintActionRequest, ConstraintKind,
+        ConstructionPreview, ContactActionChoice, CoordinatorActionKind, DimensionActionRequest,
+        DimensionKind, DisabledReason, EditorEffect, EditorScene, EditorTool, Modifiers,
+        PointerInput, ProvisionalInferenceCandidate, RetainedEditorCoordinator, SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
-        CurveId, CurveSpan, DesignPointId, DocumentConstraintId, DocumentDimensionId,
+        ContactBranchEdit, ContactDomain, ContactNeighborhood, CurveId, CurveSpan, DesignPointId,
+        DocumentAngleOrientation, DocumentConstraintId, DocumentCurveSpanRef, DocumentDimensionId,
         DocumentDimensionMode, DocumentSolveRequest, PersistentId, RetainedSketchDocumentSession,
-        SketchDocument,
+        SketchDocument, TangentOrientation,
     };
     use wasm_bindgen::JsCast;
     use wasm_bindgen::closure::Closure;
     use wasm_bindgen::prelude::JsValue;
     use web_sys::{
-        Document, Element, Event, HtmlElement, HtmlSelectElement, KeyboardEvent, MouseEvent,
-        PointerEvent,
+        Document, Element, Event, HtmlElement, HtmlInputElement, HtmlSelectElement, KeyboardEvent,
+        MouseEvent, PointerEvent,
     };
 
     use super::persistence::{STORAGE_KEY, WorkspaceSnapshot};
@@ -267,7 +271,15 @@ pub(crate) mod wasm {
         callback.forget();
         let change_document = document.clone();
         let change_workbench = Rc::clone(workbench);
-        let change = Closure::<dyn FnMut(Event)>::new(move |_event: Event| {
+        let change = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
+            if event
+                .target()
+                .and_then(|target| target.dyn_into::<Element>().ok())
+                .and_then(|target| target.closest(".wb-branch-editor").ok().flatten())
+                .is_some()
+            {
+                return;
+            }
             let _ = render(&change_document, &change_workbench);
         });
         required(document, "workbench-root")?
@@ -596,6 +608,8 @@ pub(crate) mod wasm {
             }
             "constraint" => apply_constraint(document, wb),
             "dimension" => apply_dimension(document, wb),
+            "contact-branches" => apply_contact_branches(document, wb),
+            "angle-orientation" => apply_angle_orientation(document, wb),
             "problems" => {
                 wb.problems_open = !wb.problems_open;
                 Ok(())
@@ -659,30 +673,203 @@ pub(crate) mod wasm {
         let kind =
             constraint_from_key(&key).ok_or_else(|| "unknown constraint action".to_owned())?;
         let expected = wb.coordinator.session().design_identity();
-        let edit = wb
+        let action = CoordinatorActionKind::Constraint(kind);
+        let contacts = wb
             .coordinator
-            .editor()
-            .constraint_edit(
-                wb.coordinator.session().design_document(),
-                kind,
-                key.replace('-', " "),
-            )
-            .map_err(|error| error.to_string())?;
+            .action_choices(action)
+            .iter()
+            .filter_map(|choice| match choice {
+                ActionChoice::Contact { .. } => Some(contact_choice(document, choice)),
+                ActionChoice::AngleOrientation { .. } => None,
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         wb.coordinator
-            .apply_edit(expected, edit)
+            .apply_constraint_action(
+                expected,
+                ConstraintActionRequest {
+                    kind,
+                    label: key.replace('-', " "),
+                    contacts,
+                },
+            )
             .map(|_| ())
             .map_err(|error| error.to_string())
     }
 
     fn apply_dimension(document: &Document, wb: &mut Workbench) -> Result<(), String> {
+        let kind = select_value(document, "wb-dimension-kind")
+            .as_deref()
+            .and_then(dimension_from_key)
+            .ok_or_else(|| "unknown dimension action".to_owned())?;
         let mode = if select_value(document, "wb-dimension-mode").as_deref() == Some("reference") {
             DocumentDimensionMode::Reference
         } else {
             DocumentDimensionMode::Driving
         };
+        let angle_orientation =
+            if select_value(document, "wb-angle-orientation").as_deref() == Some("clockwise") {
+                DocumentAngleOrientation::Clockwise
+            } else {
+                DocumentAngleOrientation::CounterClockwise
+            };
         let expected = wb.coordinator.session().design_identity();
         wb.coordinator
-            .add_selected_dimension(expected, mode, "Dimension")
+            .apply_dimension_action(
+                expected,
+                DimensionActionRequest {
+                    kind,
+                    mode,
+                    label: dimension_key(kind).replace('-', " "),
+                    angle_orientation,
+                },
+            )
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }
+
+    fn contact_choice(
+        document: &Document,
+        choice: &ActionChoice,
+    ) -> Result<ContactActionChoice, String> {
+        let ActionChoice::Contact {
+            operand,
+            span,
+            domains,
+            neighborhoods,
+            tangent_orientations,
+            ..
+        } = choice
+        else {
+            return Err("contact branch metadata expected".into());
+        };
+        let suffix = operand.to_string();
+        let domain_key = select_value(document, &format!("wb-contact-domain-{suffix}"))
+            .ok_or_else(|| "contact domain control is missing".to_owned())?;
+        let domain = domains
+            .iter()
+            .copied()
+            .find(|domain| contact_domain_key(*domain) == domain_key)
+            .ok_or_else(|| "selected contact domain is unavailable".to_owned())?;
+        let neighborhood_key = select_value(document, &format!("wb-contact-neighborhood-{suffix}"))
+            .ok_or_else(|| "contact neighborhood control is missing".to_owned())?;
+        let neighborhood = neighborhoods
+            .iter()
+            .copied()
+            .find(|value| contact_neighborhood_key(*value) == neighborhood_key)
+            .ok_or_else(|| "selected contact neighborhood is unavailable".to_owned())?;
+        let parameter = input_value(document, &format!("wb-contact-parameter-{suffix}"))
+            .and_then(|value| value.parse::<f64>().ok())
+            .filter(|value| value.is_finite())
+            .ok_or_else(|| "contact parameter must be finite".to_owned())?;
+        let winding = input_value(document, &format!("wb-contact-winding-{suffix}"))
+            .and_then(|value| value.parse::<i32>().ok())
+            .ok_or_else(|| "contact winding must be an integer".to_owned())?;
+        let tangent_orientation = if tangent_orientations.is_empty() {
+            None
+        } else {
+            let key = select_value(document, &format!("wb-contact-orientation-{suffix}"))
+                .ok_or_else(|| "tangent orientation control is missing".to_owned())?;
+            tangent_orientations
+                .iter()
+                .copied()
+                .find(|orientation| tangent_orientation_key(*orientation) == key)
+        };
+        if !tangent_orientations.is_empty() && tangent_orientation.is_none() {
+            return Err("selected tangent orientation is unavailable".into());
+        }
+        Ok(ContactActionChoice {
+            support: DocumentCurveSpanRef {
+                span: *span,
+                winding,
+            },
+            domain,
+            parameter,
+            neighborhood,
+            tangent_orientation,
+        })
+    }
+
+    fn apply_contact_branches(document: &Document, wb: &mut Workbench) -> Result<(), String> {
+        let actions = wb.coordinator.branch_actions();
+        let mut edits = Vec::new();
+        for (index, action) in actions.iter().enumerate() {
+            let BranchAction::Contact(action) = action else {
+                continue;
+            };
+            let segment = select_value(document, &format!("wb-edit-span-{index}"))
+                .and_then(|value| value.parse::<u32>().ok())
+                .ok_or_else(|| "contact span must be a valid semantic span".to_owned())?;
+            let curve = action
+                .spans
+                .iter()
+                .copied()
+                .find(|span| span.segment == segment)
+                .ok_or_else(|| "selected contact span is unavailable".to_owned())?;
+            let domain_key = select_value(document, &format!("wb-edit-domain-{index}"))
+                .ok_or_else(|| "contact domain control is missing".to_owned())?;
+            let domain = action
+                .domains
+                .iter()
+                .copied()
+                .find(|domain| contact_domain_key(*domain) == domain_key)
+                .ok_or_else(|| "selected contact domain is unavailable".to_owned())?;
+            let neighborhood_key = select_value(document, &format!("wb-edit-neighborhood-{index}"))
+                .ok_or_else(|| "contact neighborhood control is missing".to_owned())?;
+            let neighborhood = action
+                .neighborhoods
+                .iter()
+                .copied()
+                .find(|value| contact_neighborhood_key(*value) == neighborhood_key)
+                .ok_or_else(|| "selected contact neighborhood is unavailable".to_owned())?;
+            let value = input_value(document, &format!("wb-edit-parameter-{index}"))
+                .and_then(|value| value.parse::<f64>().ok())
+                .filter(|value| value.is_finite())
+                .ok_or_else(|| "contact parameter must be finite".to_owned())?;
+            let winding = input_value(document, &format!("wb-edit-winding-{index}"))
+                .and_then(|value| value.parse::<i32>().ok())
+                .ok_or_else(|| "contact winding must be an integer".to_owned())?;
+            let orientation_key =
+                select_value(document, &format!("wb-edit-orientation-{index}"))
+                    .ok_or_else(|| "contact orientation control is missing".to_owned())?;
+            let tangent_orientation = action
+                .tangent_orientations
+                .iter()
+                .copied()
+                .find(|orientation| {
+                    orientation.map_or("none", tangent_orientation_key) == orientation_key
+                })
+                .ok_or_else(|| "selected tangent orientation is unavailable".to_owned())?;
+            edits.push(ContactBranchEdit {
+                contact: action.current.contact,
+                curve,
+                domain,
+                value,
+                winding,
+                neighborhood,
+                tangent_orientation,
+            });
+        }
+        if edits.is_empty() {
+            return Err("select a contact-owning relation first".into());
+        }
+        let expected = wb.coordinator.session().design_identity();
+        wb.coordinator
+            .set_contact_branches(expected, edits)
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }
+
+    fn apply_angle_orientation(document: &Document, wb: &mut Workbench) -> Result<(), String> {
+        let orientation = if select_value(document, "wb-edit-angle-orientation").as_deref()
+            == Some("clockwise")
+        {
+            DocumentAngleOrientation::Clockwise
+        } else {
+            DocumentAngleOrientation::CounterClockwise
+        };
+        let expected = wb.coordinator.session().design_identity();
+        wb.coordinator
+            .set_selected_angle_orientation(expected, orientation)
             .map(|_| ())
             .map_err(|error| error.to_string())
     }
@@ -790,6 +977,7 @@ pub(crate) mod wasm {
             }
         }
         render_action_availability(document, coordinator, wb.scenarios.is_active())?;
+        render_branch_editor(document, coordinator, wb.scenarios.is_active())?;
         required(document, "workbench-root")?
             .set_attribute("data-editor-adapter", "retained-coordinator")?;
         Ok(())
@@ -800,20 +988,40 @@ pub(crate) mod wasm {
         coordinator: &RetainedEditorCoordinator,
         scenario_active: bool,
     ) -> Result<(), JsValue> {
+        set_select_options(
+            document,
+            "wb-constraint-kind",
+            super::action_surface::CONSTRAINT_ACTIONS
+                .into_iter()
+                .map(|(key, label, _)| (key, label)),
+        )?;
+        set_select_options(
+            document,
+            "wb-dimension-kind",
+            super::action_surface::DIMENSION_ACTIONS
+                .into_iter()
+                .map(|(key, label, _)| (key, label)),
+        )?;
         for key in ["new", "finish", "cancel", "clear-selection"] {
             if let Some(button) = document.query_selector(&format!("[data-wb-action=\"{key}\"]"))? {
                 set_disabled(&button, scenario_active)?;
             }
         }
-        for id in ["wb-constraint-kind", "wb-dimension-mode"] {
+        for id in [
+            "wb-constraint-kind",
+            "wb-dimension-kind",
+            "wb-dimension-mode",
+            "wb-angle-orientation",
+        ] {
             set_disabled(&required(document, id)?, scenario_active)?;
         }
         let actions = coordinator.actions();
-        let enabled = |action| {
+        let state = |action| {
             actions
                 .iter()
                 .find(|value| value.action == action)
-                .is_some_and(|value| value.state == ActionState::Enabled)
+                .map(|value| value.state)
+                .unwrap_or(ActionState::Disabled(DisabledReason::WrongOperandKind))
         };
         for (key, action) in [
             ("undo", CoordinatorActionKind::Undo),
@@ -821,7 +1029,7 @@ pub(crate) mod wasm {
             ("delete", CoordinatorActionKind::Delete),
         ] {
             if let Some(button) = document.query_selector(&format!("[data-wb-action=\"{key}\"]"))? {
-                set_disabled(&button, scenario_active || !enabled(action))?;
+                set_action_state(&button, state(action), scenario_active)?;
             }
         }
         let constraint_key =
@@ -829,21 +1037,264 @@ pub(crate) mod wasm {
         if let Some(kind) = constraint_from_key(&constraint_key)
             && let Some(button) = document.query_selector("[data-wb-action=\"constraint\"]")?
         {
-            set_disabled(
+            set_action_state(
                 &button,
-                scenario_active || !enabled(CoordinatorActionKind::Constraint(kind)),
+                state(CoordinatorActionKind::Constraint(kind)),
+                scenario_active,
+            )?;
+            render_action_choices(
+                document,
+                &coordinator.action_choices(CoordinatorActionKind::Constraint(kind)),
+                scenario_active,
             )?;
         }
+        let dimension_kind = select_value(document, "wb-dimension-kind")
+            .as_deref()
+            .and_then(dimension_from_key)
+            .unwrap_or(DimensionKind::PointDistance);
         let mode = if select_value(document, "wb-dimension-mode").as_deref() == Some("reference") {
             DocumentDimensionMode::Reference
         } else {
             DocumentDimensionMode::Driving
         };
-        let dimension_enabled = enabled(CoordinatorActionKind::PointDistance(mode))
-            || enabled(CoordinatorActionKind::SegmentLength(mode));
         if let Some(button) = document.query_selector("[data-wb-action=\"dimension\"]")? {
-            set_disabled(&button, scenario_active || !dimension_enabled)?;
+            set_action_state(
+                &button,
+                state(CoordinatorActionKind::Dimension(dimension_kind, mode)),
+                scenario_active,
+            )?;
         }
+        set_disabled(
+            &required(document, "wb-angle-orientation")?,
+            scenario_active || dimension_kind != DimensionKind::OrientedAngle,
+        )?;
+        Ok(())
+    }
+
+    fn render_action_choices(
+        document: &Document,
+        choices: &[ActionChoice],
+        scenario_active: bool,
+    ) -> Result<(), JsValue> {
+        for operand in 0..=1_u8 {
+            required(document, &format!("wb-contact-choice-{operand}"))?
+                .set_attribute("hidden", "")?;
+        }
+        for choice in choices {
+            let ActionChoice::Contact {
+                operand,
+                span,
+                domains,
+                default_parameter,
+                neighborhoods,
+                tangent_orientations,
+                default_winding,
+            } = choice
+            else {
+                continue;
+            };
+            let section = required(document, &format!("wb-contact-choice-{operand}"))?;
+            section.remove_attribute("hidden")?;
+            set_disabled(&section, scenario_active)?;
+            required(document, &format!("wb-contact-span-{operand}"))?.set_text_content(Some(
+                &format!("Curve {} · span {}", span.curve, span.segment),
+            ));
+            set_select_options(
+                document,
+                &format!("wb-contact-domain-{operand}"),
+                domains
+                    .iter()
+                    .copied()
+                    .map(|domain| (contact_domain_key(domain), contact_domain_label(domain))),
+            )?;
+            set_select_options(
+                document,
+                &format!("wb-contact-neighborhood-{operand}"),
+                neighborhoods.iter().copied().map(|neighborhood| {
+                    (
+                        contact_neighborhood_key(neighborhood),
+                        contact_neighborhood_label(neighborhood),
+                    )
+                }),
+            )?;
+            set_select_options(
+                document,
+                &format!("wb-contact-orientation-{operand}"),
+                tangent_orientations.iter().copied().map(|orientation| {
+                    (
+                        tangent_orientation_key(orientation),
+                        tangent_orientation_label(orientation),
+                    )
+                }),
+            )?;
+            set_input_default(
+                document,
+                &format!("wb-contact-parameter-{operand}"),
+                *default_parameter,
+            )?;
+            set_input_default(
+                document,
+                &format!("wb-contact-winding-{operand}"),
+                *default_winding,
+            )?;
+        }
+        Ok(())
+    }
+
+    fn render_branch_editor(
+        document: &Document,
+        coordinator: &RetainedEditorCoordinator,
+        scenario_active: bool,
+    ) -> Result<(), JsValue> {
+        let actions = coordinator.branch_actions();
+        let editor = required(document, "wb-branch-editor")?;
+        let controls = required(document, "wb-branch-editor-controls")?;
+        let contact_button = required(document, "wb-apply-contact-branches")?;
+        let angle_button = required(document, "wb-apply-angle-orientation")?;
+        if actions.is_empty() {
+            editor.set_attribute("hidden", "")?;
+            controls.set_inner_html("");
+            contact_button.set_attribute("hidden", "")?;
+            angle_button.set_attribute("hidden", "")?;
+            return Ok(());
+        }
+        editor.remove_attribute("hidden")?;
+        let mut markup = String::new();
+        for (index, action) in actions.iter().enumerate() {
+            match action {
+                BranchAction::Contact(action) => {
+                    let current = action.current;
+                    let span_options = action
+                        .spans
+                        .iter()
+                        .map(|span| {
+                            format!(
+                                "<option value=\"{}\"{}>Span {}</option>",
+                                span.segment,
+                                if *span == current.curve {
+                                    " selected"
+                                } else {
+                                    ""
+                                },
+                                span.segment
+                            )
+                        })
+                        .collect::<String>();
+                    let domain_options = action
+                        .domains
+                        .iter()
+                        .copied()
+                        .map(|domain| {
+                            format!(
+                                "<option value=\"{}\"{}>{}</option>",
+                                contact_domain_key(domain),
+                                if domain == current.domain {
+                                    " selected"
+                                } else {
+                                    ""
+                                },
+                                contact_domain_label(domain),
+                            )
+                        })
+                        .collect::<String>();
+                    let neighborhood_options = action
+                        .neighborhoods
+                        .iter()
+                        .copied()
+                        .map(|neighborhood| {
+                            format!(
+                                "<option value=\"{}\"{}>{}</option>",
+                                contact_neighborhood_key(neighborhood),
+                                if contact_neighborhood_key(neighborhood)
+                                    == contact_neighborhood_key(current.neighborhood)
+                                {
+                                    " selected"
+                                } else {
+                                    ""
+                                },
+                                contact_neighborhood_label(neighborhood),
+                            )
+                        })
+                        .collect::<String>();
+                    let orientation_options = action
+                        .tangent_orientations
+                        .iter()
+                        .map(|orientation| {
+                            let (key, label) =
+                                orientation.map_or(("none", "Not applicable"), |value| {
+                                    (
+                                        tangent_orientation_key(value),
+                                        tangent_orientation_label(value),
+                                    )
+                                });
+                            format!(
+                                "<option value=\"{key}\"{}>{label}</option>",
+                                if *orientation == current.tangent_orientation {
+                                    " selected"
+                                } else {
+                                    ""
+                                }
+                            )
+                        })
+                        .collect::<String>();
+                    markup.push_str(&format!(
+                        concat!(
+                            "<fieldset data-branch-contact=\"{}\"><legend>Contact {}</legend>",
+                            "<label>Span<select id=\"wb-edit-span-{}\">{}</select></label>",
+                            "<label>Domain<select id=\"wb-edit-domain-{}\">{}</select></label>",
+                            "<label>Parameter<input id=\"wb-edit-parameter-{}\" type=\"number\" step=\"any\" value=\"{}\"/></label>",
+                            "<label>Neighborhood<select id=\"wb-edit-neighborhood-{}\">{}</select></label>",
+                            "<label>Winding<input id=\"wb-edit-winding-{}\" type=\"number\" step=\"1\" value=\"{}\"/></label>",
+                            "<label>Orientation<select id=\"wb-edit-orientation-{}\">{}</select></label></fieldset>"
+                        ),
+                        current.contact,
+                        index + 1,
+                        index,
+                        span_options,
+                        index,
+                        domain_options,
+                        index,
+                        current.value,
+                        index,
+                        neighborhood_options,
+                        index,
+                        current.winding,
+                        index,
+                        orientation_options,
+                    ));
+                }
+                BranchAction::AngleOrientation { current, .. } => {
+                    markup.push_str(&format!(
+                        concat!(
+                            "<label>Angle direction<select id=\"wb-edit-angle-orientation\">",
+                            "<option value=\"counter-clockwise\"{}>Counter-clockwise</option>",
+                            "<option value=\"clockwise\"{}>Clockwise</option></select></label>"
+                        ),
+                        if *current == DocumentAngleOrientation::CounterClockwise {
+                            " selected"
+                        } else {
+                            ""
+                        },
+                        if *current == DocumentAngleOrientation::Clockwise {
+                            " selected"
+                        } else {
+                            ""
+                        },
+                    ));
+                }
+            }
+        }
+        controls.set_inner_html(&markup);
+        let has_contacts = actions
+            .iter()
+            .any(|action| matches!(action, BranchAction::Contact(_)));
+        let has_angle = actions
+            .iter()
+            .any(|action| matches!(action, BranchAction::AngleOrientation { .. }));
+        set_hidden(&contact_button, !has_contacts)?;
+        set_hidden(&angle_button, !has_angle)?;
+        set_disabled(&contact_button, scenario_active)?;
+        set_disabled(&angle_button, scenario_active)?;
         Ok(())
     }
 
@@ -891,6 +1342,70 @@ pub(crate) mod wasm {
             element.set_attribute("disabled", "")
         } else {
             element.remove_attribute("disabled")
+        }
+    }
+
+    fn set_hidden(element: &Element, hidden: bool) -> Result<(), JsValue> {
+        if hidden {
+            element.set_attribute("hidden", "")
+        } else {
+            element.remove_attribute("hidden")
+        }
+    }
+
+    fn set_action_state(
+        element: &Element,
+        state: ActionState,
+        scenario_active: bool,
+    ) -> Result<(), JsValue> {
+        let disabled = scenario_active || state != ActionState::Enabled;
+        set_disabled(element, disabled)?;
+        if scenario_active {
+            element.set_attribute("data-disabled-reason", "scenario-active")
+        } else if let ActionState::Disabled(reason) = state {
+            element.set_attribute("data-disabled-reason", disabled_reason_key(reason))
+        } else {
+            element.remove_attribute("data-disabled-reason")
+        }
+    }
+
+    fn set_select_options<I>(document: &Document, id: &str, options: I) -> Result<(), JsValue>
+    where
+        I: IntoIterator<Item = (&'static str, &'static str)>,
+    {
+        let element = required(document, id)?;
+        let markup = options
+            .into_iter()
+            .map(|(value, label)| format!("<option value=\"{value}\">{label}</option>"))
+            .collect::<String>();
+        if element.inner_html() != markup {
+            element.set_inner_html(&markup);
+        }
+        Ok(())
+    }
+
+    fn set_input_default<T: ToString>(
+        document: &Document,
+        id: &str,
+        value: T,
+    ) -> Result<(), JsValue> {
+        let input = required(document, id)?.dyn_into::<HtmlInputElement>()?;
+        if input.value().is_empty() {
+            input.set_value(&value.to_string());
+        }
+        Ok(())
+    }
+
+    const fn disabled_reason_key(reason: DisabledReason) -> &'static str {
+        match reason {
+            DisabledReason::EmptySelection => "empty-selection",
+            DisabledReason::WrongArity => "wrong-arity",
+            DisabledReason::WrongOperandKind => "wrong-operand-kind",
+            DisabledReason::MissingObject => "missing-object",
+            DisabledReason::InvalidSpan => "invalid-span",
+            DisabledReason::AlreadyInRequestedState => "already-in-requested-state",
+            DisabledReason::NothingToUndo => "nothing-to-undo",
+            DisabledReason::NothingToRedo => "nothing-to-redo",
         }
     }
 
@@ -981,22 +1496,70 @@ pub(crate) mod wasm {
         }
     }
     fn constraint_from_key(key: &str) -> Option<ConstraintKind> {
-        Some(match key {
-            "fixed" => ConstraintKind::Fixed,
-            "coincident" => ConstraintKind::Coincident,
-            "horizontal" => ConstraintKind::Horizontal,
-            "vertical" => ConstraintKind::Vertical,
-            "parallel" => ConstraintKind::Parallel,
-            "perpendicular" => ConstraintKind::Perpendicular,
-            "equal-length" => ConstraintKind::EqualLength,
-            _ => return None,
-        })
+        super::action_surface::constraint_from_key(key)
+    }
+    fn dimension_from_key(key: &str) -> Option<DimensionKind> {
+        super::action_surface::dimension_from_key(key)
+    }
+    fn dimension_key(kind: DimensionKind) -> &'static str {
+        super::action_surface::dimension_key(kind)
+    }
+    const fn contact_domain_key(domain: ContactDomain) -> &'static str {
+        match domain {
+            ContactDomain::SupportingLine => "supporting-line",
+            ContactDomain::Bounded { .. } => "bounded",
+            ContactDomain::Periodic { .. } => "periodic",
+        }
+    }
+    const fn contact_domain_label(domain: ContactDomain) -> &'static str {
+        match domain {
+            ContactDomain::SupportingLine => "Supporting line",
+            ContactDomain::Bounded { .. } => "Bounded span",
+            ContactDomain::Periodic { .. } => "Periodic",
+        }
+    }
+    const fn contact_neighborhood_key(neighborhood: ContactNeighborhood) -> &'static str {
+        match neighborhood {
+            ContactNeighborhood::Interior => "interior",
+            ContactNeighborhood::Local { .. } => "local",
+            ContactNeighborhood::Start => "start",
+            ContactNeighborhood::End => "end",
+        }
+    }
+    const fn contact_neighborhood_label(neighborhood: ContactNeighborhood) -> &'static str {
+        match neighborhood {
+            ContactNeighborhood::Interior => "Interior",
+            ContactNeighborhood::Local { .. } => "Local interval",
+            ContactNeighborhood::Start => "Start endpoint",
+            ContactNeighborhood::End => "End endpoint",
+        }
+    }
+    const fn tangent_orientation_key(orientation: TangentOrientation) -> &'static str {
+        match orientation {
+            TangentOrientation::Aligned => "aligned",
+            TangentOrientation::Opposed => "opposed",
+        }
+    }
+    const fn tangent_orientation_label(orientation: TangentOrientation) -> &'static str {
+        match orientation {
+            TangentOrientation::Aligned => "Aligned",
+            TangentOrientation::Opposed => "Opposed",
+        }
     }
     fn select_value(document: &Document, id: &str) -> Option<String> {
         Some(
             document
                 .get_element_by_id(id)?
                 .dyn_into::<HtmlSelectElement>()
+                .ok()?
+                .value(),
+        )
+    }
+    fn input_value(document: &Document, id: &str) -> Option<String> {
+        Some(
+            document
+                .get_element_by_id(id)?
+                .dyn_into::<HtmlInputElement>()
                 .ok()?
                 .value(),
         )

@@ -423,6 +423,25 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-field-label { color: #8d9896; font-size: 0.67rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
 .wb-inspector input,
 .wb-inspector select { min-height: 2rem; width: 100%; padding: 0.3rem 0.45rem; }
+.wb-branch-choices,
+.wb-branch-editor-controls { display: grid; gap: 0.55rem; }
+.wb-branch-choices fieldset,
+.wb-branch-editor fieldset {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.55rem;
+  border: 1px solid #3c4545;
+  border-radius: 4px;
+}
+.wb-branch-choices legend,
+.wb-branch-editor legend,
+.wb-branch-choices label,
+.wb-branch-editor label {
+  color: #9ba8a6;
+  font-size: 0.67rem;
+}
+.wb-branch-choices span { color: #788583; font: 0.62rem ui-monospace, monospace; }
 .wb-danger { color: #e7a69a !important; }
 .wb-inspector-note { margin: 0; padding: 0.8rem; color: #7f8987; font-size: 0.7rem; line-height: 1.5; }
 .wb-scenario-guide {

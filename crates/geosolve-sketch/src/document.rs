@@ -897,6 +897,21 @@ pub struct ContactStateEdit {
     pub tangent_orientation: Option<TangentOrientation>,
 }
 
+/// One complete explicit branch update for a persistent contact.
+///
+/// Unlike [`ContactStateEdit`], this form may change the selected semantic span
+/// and parameter-domain topology while retaining the contact and parameter IDs.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ContactBranchEdit {
+    pub contact: ContactId,
+    pub curve: CurveSpan,
+    pub domain: ContactDomain,
+    pub value: f64,
+    pub winding: i32,
+    pub neighborhood: ContactNeighborhood,
+    pub tangent_orientation: Option<TangentOrientation>,
+}
+
 /// Cartesian coordinate selected by a persistent fixed-coordinate source.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -5035,31 +5050,64 @@ impl SketchDocument {
             .definition
             .clone();
         self.validate_span(curve)?;
-        let (unit, scalar_domain, contact_domain) = if matches!(
+        let contact_domain = if matches!(
             definition,
             CurveDefinition::Circle { .. } | CurveDefinition::Ellipse { .. }
         ) {
-            (
-                ScalarUnit::Angle,
-                ScalarDomain::Periodic {
-                    period: std::f64::consts::TAU,
-                },
-                ContactDomain::Periodic {
-                    period: std::f64::consts::TAU,
-                },
-            )
+            ContactDomain::Periodic {
+                period: std::f64::consts::TAU,
+            }
         } else {
-            (
+            ContactDomain::Bounded {
+                lower: 0.0,
+                upper: 1.0,
+            }
+        };
+        self.add_curve_contact_with_domain(
+            label,
+            curve,
+            contact_domain,
+            parameter,
+            winding,
+            neighborhood,
+            tangent_orientation,
+        )
+    }
+
+    /// Atomically creates a parameter scalar and contact slot in one explicitly
+    /// selected domain supported by the curve span.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an unsupported domain, invalid span, parameter,
+    /// neighborhood, winding, or tangent orientation.
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_curve_contact_with_domain(
+        &mut self,
+        label: impl Into<String>,
+        curve: CurveSpan,
+        domain: ContactDomain,
+        parameter: f64,
+        winding: i32,
+        neighborhood: ContactNeighborhood,
+        tangent_orientation: Option<TangentOrientation>,
+    ) -> Result<ContactId, DocumentError> {
+        let label = label.into();
+        if !self.curve_contact_domains(curve)?.contains(&domain) {
+            return invalid(
+                "contact domain",
+                "selected parameter domain is unsupported by the curve span",
+            );
+        }
+        let (unit, scalar_domain) = match domain {
+            ContactDomain::SupportingLine => (ScalarUnit::Parameter, ScalarDomain::Finite),
+            ContactDomain::Bounded { lower, upper } => (
                 ScalarUnit::Parameter,
-                ScalarDomain::Bounded {
-                    lower: 0.0,
-                    upper: 1.0,
-                },
-                ContactDomain::Bounded {
-                    lower: 0.0,
-                    upper: 1.0,
-                },
-            )
+                ScalarDomain::Bounded { lower, upper },
+            ),
+            ContactDomain::Periodic { period } => {
+                (ScalarUnit::Angle, ScalarDomain::Periodic { period })
+            }
         };
         let mut candidate = self.clone();
         let scalar =
@@ -5069,7 +5117,7 @@ impl SketchDocument {
             ContactDefinition {
                 curve,
                 parameter: scalar,
-                domain: contact_domain,
+                domain,
                 winding,
                 neighborhood,
                 tangent_orientation,
@@ -5077,6 +5125,40 @@ impl SketchDocument {
         )?;
         *self = candidate;
         Ok(contact)
+    }
+
+    /// Returns every parameter-domain topology supported by one semantic curve span.
+    ///
+    /// Linear spans deliberately expose both their finite segment and unbounded
+    /// supporting line. Periodic curves expose only their periodic domain; every
+    /// other alpha curve span exposes its finite unit interval.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a missing curve or invalid span.
+    pub fn curve_contact_domains(
+        &self,
+        curve: CurveSpan,
+    ) -> Result<Vec<ContactDomain>, DocumentError> {
+        let definition = &self.validate_span(curve)?.definition;
+        Ok(match definition {
+            CurveDefinition::Line { .. } | CurveDefinition::Polyline { .. } => vec![
+                ContactDomain::Bounded {
+                    lower: 0.0,
+                    upper: 1.0,
+                },
+                ContactDomain::SupportingLine,
+            ],
+            CurveDefinition::Circle { .. } | CurveDefinition::Ellipse { .. } => {
+                vec![ContactDomain::Periodic {
+                    period: std::f64::consts::TAU,
+                }]
+            }
+            _ => vec![ContactDomain::Bounded {
+                lower: 0.0,
+                upper: 1.0,
+            }],
+        })
     }
 
     /// Returns the ordinary explicit neighborhood for a picked alpha-curve parameter.
@@ -6623,6 +6705,95 @@ impl SketchDocument {
                 .ok_or_else(|| unknown("scalar", parameter.0))?;
             validate_scalar_value(edit.value, scalar.domain)?;
             scalar.value = edit.value;
+        }
+        candidate.validate_after_mutation()?;
+        *self = candidate;
+        Ok(())
+    }
+
+    /// Atomically replaces complete explicit branch state for one point contact or
+    /// both contacts of one contact/tangency source.
+    ///
+    /// Contact and parameter identities are retained. A span edit may move only
+    /// between semantic spans of the same owning curve; rebinding a relation to a
+    /// different curve remains a topology operation rather than a branch edit.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for missing/repeated contacts, unrelated source contacts,
+    /// a cross-curve rebind, an unsupported domain, or invalid resulting state.
+    pub fn set_contact_branches(
+        &mut self,
+        edits: &[ContactBranchEdit],
+    ) -> Result<(), DocumentError> {
+        if edits.is_empty() || edits.len() > 2 {
+            return invalid(
+                "contact branch edits",
+                "must contain one point contact or two relation contacts",
+            );
+        }
+        let requested = edits
+            .iter()
+            .map(|edit| edit.contact)
+            .collect::<BTreeSet<_>>();
+        if requested.len() != edits.len() {
+            return invalid("contact branch edits", "contact IDs must be distinct");
+        }
+        self.ordered_source_contacts(&requested.iter().copied().collect::<Vec<_>>())?;
+
+        let mut candidate = self.clone();
+        for edit in edits {
+            let current = candidate
+                .contacts
+                .iter()
+                .find(|contact| contact.id == edit.contact)
+                .ok_or_else(|| unknown("contact", edit.contact.0))?
+                .clone();
+            if current.curve.curve != edit.curve.curve {
+                return invalid(
+                    "contact branch curve",
+                    "branch edits must retain the owning curve",
+                );
+            }
+            if !candidate
+                .curve_contact_domains(edit.curve)?
+                .contains(&edit.domain)
+            {
+                return invalid(
+                    "contact branch domain",
+                    "selected parameter domain is unsupported by the curve span",
+                );
+            }
+            let (unit, scalar_domain) = match edit.domain {
+                ContactDomain::SupportingLine => (ScalarUnit::Parameter, ScalarDomain::Finite),
+                ContactDomain::Bounded { lower, upper } => (
+                    ScalarUnit::Parameter,
+                    ScalarDomain::Bounded { lower, upper },
+                ),
+                ContactDomain::Periodic { period } => {
+                    (ScalarUnit::Angle, ScalarDomain::Periodic { period })
+                }
+            };
+            {
+                let contact = candidate
+                    .contacts
+                    .iter_mut()
+                    .find(|contact| contact.id == edit.contact)
+                    .ok_or_else(|| unknown("contact", edit.contact.0))?;
+                contact.curve = edit.curve;
+                contact.domain = edit.domain;
+                contact.winding = edit.winding;
+                contact.neighborhood = edit.neighborhood;
+                contact.tangent_orientation = edit.tangent_orientation;
+            }
+            let scalar = candidate
+                .scalars
+                .iter_mut()
+                .find(|scalar| scalar.id == current.parameter)
+                .ok_or_else(|| unknown("scalar", current.parameter.0))?;
+            scalar.value = edit.value;
+            scalar.unit = unit;
+            scalar.domain = scalar_domain;
         }
         candidate.validate_after_mutation()?;
         *self = candidate;

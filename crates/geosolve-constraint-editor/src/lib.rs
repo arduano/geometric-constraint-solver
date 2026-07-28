@@ -11,10 +11,11 @@ mod coordinator;
 mod qualification;
 
 pub use coordinator::{
-    ActionAvailability, ActionState, AuditDto, AuditProvenance, CoordinatorActionKind,
-    CoordinatorError, DisabledReason, EditorMutation, EditorProblemCategory, EditorProblemMetadata,
-    EditorProblemScope, EditorProblemTarget, LifecycleDto, LifecycleStatus, MeasurementPublication,
-    MutationOutcome, ProblemsDto, ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator,
+    ActionAvailability, ActionState, AuditDto, AuditProvenance, BranchAction, ContactBranchAction,
+    CoordinatorActionKind, CoordinatorError, DisabledReason, EditorMutation, EditorProblemCategory,
+    EditorProblemMetadata, EditorProblemScope, EditorProblemTarget, LifecycleDto, LifecycleStatus,
+    MeasurementPublication, MutationOutcome, ProblemsDto, ReplayAction, RestoreCheckpoint,
+    RetainedEditorCoordinator,
 };
 pub use geosolve_sketch::SketchAcceptedDocumentRedundancy;
 #[doc(hidden)]
@@ -26,9 +27,11 @@ pub use qualification::{
 use std::cmp::Ordering;
 
 use geosolve_sketch::{
-    CurveDefinition, CurveId, CurveSpan, DesignPointId, DesignScalarId, DocumentArcSweep,
-    DocumentConstraintDefinition, DocumentConstraintId, DocumentDimensionId, DocumentEdit,
-    DocumentObjectId, ScalarDomain, ScalarUnit, SketchDesignIdentity, SketchDocument,
+    ContactDomain, ContactNeighborhood, CurveDefinition, CurveId, CurveSpan, DesignPointId,
+    DesignScalarId, DocumentAngleOrientation, DocumentArcSweep, DocumentConstraintDefinition,
+    DocumentConstraintId, DocumentCurveSpanRef, DocumentDimensionId, DocumentDimensionMode,
+    DocumentEdit, DocumentObjectId, ScalarDomain, ScalarUnit, SketchDesignIdentity, SketchDocument,
+    TangentOrientation,
 };
 use thiserror::Error;
 
@@ -1193,16 +1196,76 @@ fn commit_construction(
     ]
 }
 
-/// Core relation actions implemented by the first headless editor slice.
+/// Complete M55 alpha relation action vocabulary.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ConstraintKind {
     Fixed,
     Coincident,
     Horizontal,
     Vertical,
+    PointOnCurve,
     Parallel,
     Perpendicular,
     EqualLength,
+    EqualRadius,
+    Midpoint,
+    Symmetry,
+    GenericContact,
+    GenericTangency,
+}
+
+/// Complete M55 alpha dimension action vocabulary.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DimensionKind {
+    PointDistance,
+    SegmentLength,
+    Radius,
+    Diameter,
+    OrientedAngle,
+}
+
+/// Explicit branch state for one newly constructed curve contact.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ContactActionChoice {
+    pub support: DocumentCurveSpanRef,
+    pub domain: ContactDomain,
+    pub parameter: f64,
+    pub neighborhood: ContactNeighborhood,
+    pub tangent_orientation: Option<TangentOrientation>,
+}
+
+/// Typed request for one relation action over the coordinator's current selection.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ConstraintActionRequest {
+    pub kind: ConstraintKind,
+    pub label: String,
+    pub contacts: Vec<ContactActionChoice>,
+}
+
+/// Typed request for one dimension action over the coordinator's current selection.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DimensionActionRequest {
+    pub kind: DimensionKind,
+    pub mode: DocumentDimensionMode,
+    pub label: String,
+    pub angle_orientation: DocumentAngleOrientation,
+}
+
+/// Headless branch-choice metadata for one action operand.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ActionChoice {
+    Contact {
+        operand: u8,
+        span: CurveSpan,
+        domains: Vec<ContactDomain>,
+        default_parameter: f64,
+        neighborhoods: Vec<ContactNeighborhood>,
+        tangent_orientations: Vec<TangentOrientation>,
+        default_winding: i32,
+    },
+    AngleOrientation {
+        values: Vec<DocumentAngleOrientation>,
+    },
 }
 
 /// Headless editor validation or public scene-evaluation failure.
@@ -1483,18 +1546,44 @@ fn available_constraints(
     match selection {
         [SelectionItem::Point(_)] => vec![ConstraintKind::Fixed],
         [SelectionItem::Point(_), SelectionItem::Point(_)] => vec![ConstraintKind::Coincident],
+        [SelectionItem::Point(_), SelectionItem::Curve(span)]
+        | [SelectionItem::Curve(span), SelectionItem::Point(_)]
+            if supports_contact(document, *span) =>
+        {
+            let mut kinds = vec![ConstraintKind::PointOnCurve];
+            if is_linear_span(document, *span) {
+                kinds.push(ConstraintKind::Midpoint);
+            }
+            kinds
+        }
         [SelectionItem::Curve(span)] if is_linear_span(document, *span) => {
             vec![ConstraintKind::Horizontal, ConstraintKind::Vertical]
         }
-        [SelectionItem::Curve(first), SelectionItem::Curve(second)]
-            if is_linear_span(document, *first) && is_linear_span(document, *second) =>
-        {
-            vec![
-                ConstraintKind::Parallel,
-                ConstraintKind::Perpendicular,
-                ConstraintKind::EqualLength,
-            ]
+        [SelectionItem::Curve(first), SelectionItem::Curve(second)] => {
+            let mut kinds = Vec::new();
+            if is_linear_span(document, *first) && is_linear_span(document, *second) {
+                kinds.extend([
+                    ConstraintKind::Parallel,
+                    ConstraintKind::Perpendicular,
+                    ConstraintKind::EqualLength,
+                ]);
+            }
+            if is_radius_curve(document, first.curve) && is_radius_curve(document, second.curve) {
+                kinds.push(ConstraintKind::EqualRadius);
+            }
+            if supports_contact(document, *first) && supports_contact(document, *second) {
+                kinds.extend([
+                    ConstraintKind::GenericContact,
+                    ConstraintKind::GenericTangency,
+                ]);
+            }
+            kinds
         }
+        [
+            SelectionItem::Point(_),
+            SelectionItem::Point(_),
+            SelectionItem::Curve(line),
+        ] if is_linear_span(document, *line) => vec![ConstraintKind::Symmetry],
         _ => Vec::new(),
     }
 }
@@ -1552,9 +1641,49 @@ fn constraint_edit(
             first: *first,
             second: *second,
         },
+        (
+            ConstraintKind::EqualRadius,
+            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
+        ) => DocumentConstraintDefinition::EqualRadius {
+            first: first.curve,
+            second: second.curve,
+        },
+        (
+            ConstraintKind::Midpoint,
+            [SelectionItem::Point(point), SelectionItem::Curve(line)]
+            | [SelectionItem::Curve(line), SelectionItem::Point(point)],
+        ) => DocumentConstraintDefinition::Midpoint {
+            point: *point,
+            line: *line,
+        },
+        (
+            ConstraintKind::Symmetry,
+            [
+                SelectionItem::Point(first),
+                SelectionItem::Point(second),
+                SelectionItem::Curve(line),
+            ],
+        ) => DocumentConstraintDefinition::SymmetricAboutLine {
+            first: *first,
+            second: *second,
+            line: *line,
+        },
         _ => return Err(EditorError::IncompatibleConstraint(kind)),
     };
     Ok(DocumentEdit::CreateConstraint { label, definition })
+}
+
+fn supports_contact(document: &SketchDocument, span: CurveSpan) -> bool {
+    document.curve_contact_domains(span).is_ok()
+}
+
+fn is_radius_curve(document: &SketchDocument, curve: CurveId) -> bool {
+    document.curve(curve).is_some_and(|curve| {
+        matches!(
+            curve.definition,
+            CurveDefinition::Circle { .. } | CurveDefinition::CircularArc { .. }
+        )
+    })
 }
 
 fn is_linear_span(document: &SketchDocument, span: CurveSpan) -> bool {
@@ -1742,7 +1871,9 @@ mod tests {
             vec![
                 ConstraintKind::Parallel,
                 ConstraintKind::Perpendicular,
-                ConstraintKind::EqualLength
+                ConstraintKind::EqualLength,
+                ConstraintKind::GenericContact,
+                ConstraintKind::GenericTangency,
             ]
         );
         let edit = editor

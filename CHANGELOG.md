@@ -25,6 +25,11 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - Stable sketch-owned diagnostic snapshots with exact attempt/accepted provenance, persistent
   source/component/dependency identities, separate structural/numerical rank and
   equality/bounded/one-sided mobility, typed host-input failures and non-mutating repair hints.
+- Complete headless alpha action DTOs for 13 relation families, five driving/reference dimension
+  families, explicit contact span/domain/parameter/winding/neighborhood/orientation edits and
+  oriented-angle branch changes with deterministic replay.
+- Two reusable M55 scenario leaves for the accepted alpha family catalog and explicit
+  branch/rejection recovery, under the existing recursive right-expanding scenario selector.
 
 ### Changed
 
@@ -63,6 +68,9 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - Moved raw sketch core reports and bound reports behind explicitly named unstable compatibility
   seams; the headless editor and workbench now consume stable sketch diagnostics without
   interpreting runtime core IDs or audit enums.
+- Completed M55 action-surface parity in the sole workbench. Applicability and disabled reasons
+  remain headless; glyphs, dimensions and branch controls render typed domain/editor metadata;
+  the deleted playground, `/#/dev/lab`, browser E2E and legacy harnesses remain absent.
 
 ## [0.2.0] - 2026-07-22
 
