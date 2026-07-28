@@ -22,7 +22,7 @@ pub(crate) fn serialize_typed_host_evidence(
     )
 }
 
-pub(crate) fn serialize_m52_typed_host_evidence(
+pub(crate) fn serialize_scenario_typed_host_evidence(
     coordinator: &RetainedEditorCoordinator,
     captured_unix_ms: &str,
     location: &str,
@@ -55,18 +55,7 @@ fn serialize_typed_host_evidence_with_workspace_detail(
     workspace_detail: WorkspaceDetail,
 ) -> Result<String, String> {
     let batch = coordinator.session().parameter_batch();
-    let entries = batch
-        .entries()
-        .iter()
-        .map(|entry| {
-            format!(
-                "{{\"parameter\":{},\"value\":{}}}",
-                json_string(&entry.parameter.to_string()),
-                parameter_value_json(entry.value)
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(",");
+    let parameter_batch = parameter_batch_json(batch);
     let external_snapshot_set = coordinator
         .session()
         .external_snapshot_set()
@@ -95,7 +84,7 @@ fn serialize_typed_host_evidence_with_workspace_detail(
     let payload = format!(
         concat!(
             "{{\"candidate\":{},\"captured_unix_ms\":{},\"location\":{},\"user_agent\":{},",
-            "\"workspace\":{},\"parameter_batch\":{{\"revision\":{},\"digest\":{},\"entries\":[{}]}},",
+            "\"workspace\":{},\"parameter_batch\":{},",
             "\"external_snapshot_set\":{},\"lifecycle\":{},\"transcript\":[{}],",
             "\"accepted_audit\":{},\"attempted_audit\":{},\"host_state_evidence\":{}}}"
         ),
@@ -104,9 +93,7 @@ fn serialize_typed_host_evidence_with_workspace_detail(
         json_string(location),
         json_string(user_agent),
         workspace,
-        batch.revision(),
-        json_string(&hex_digest(batch.digest().bytes())),
-        entries,
+        parameter_batch,
         external_snapshot_set,
         json_string(&format!("{:?}", coordinator.lifecycle())),
         transcript,
@@ -118,6 +105,27 @@ fn serialize_typed_host_evidence_with_workspace_detail(
         "{{\"format\":\"geosolve-typed-host-finding-v1\",\"checksum\":{},\"payload\":{payload}}}",
         json_string(&checksum(payload.as_bytes()))
     ))
+}
+
+pub(crate) fn parameter_batch_json(batch: &geosolve_sketch::ParameterBatch) -> String {
+    let entries = batch
+        .entries()
+        .iter()
+        .map(|entry| {
+            format!(
+                "{{\"parameter\":{},\"value\":{}}}",
+                json_string(&entry.parameter.to_string()),
+                parameter_value_json(entry.value)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        "{{\"revision\":{},\"digest\":{},\"entries\":[{}]}}",
+        batch.revision(),
+        json_string(&hex_digest(batch.digest().bytes())),
+        entries,
+    )
 }
 
 fn workspace_json(coordinator: &RetainedEditorCoordinator, detail: WorkspaceDetail) -> String {

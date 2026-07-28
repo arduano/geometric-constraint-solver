@@ -70,6 +70,12 @@ request, related candidate change and retest must first be preserved in the dura
 `docs/M53_UAT.md`; future scope remains owned by the literal `PLAN.md` placeholders rather than
 silently broadening M53.
 
+Active M53 finding M53-P011 replaces only the M52 candidate's one-off launcher and overlay with
+six reusable typed scenario definitions, a nested **Scenarios** selector and a contextual guide
+sidebar. The four fixed fixture families, ten objective points and ordinary-workspace isolation
+retain their direct M52 qualification; the integrated selector still requires requalification and
+a new candidate, neither of which constitutes a human rating or approval.
+
 The displaced functional/release roadmap is preserved as literal placeholders
 M100X-M109X: stable diagnostics, prepared jobs, incremental scale, operations, production
 topology, advanced workbench, advanced UAT, API/schema freeze, integrated UAT and the

@@ -904,7 +904,15 @@ acceptance is complete; only M53 supervising-human judgment remains.
 
 ## M53 acceptance: human UAT 2
 
-- The supervising human completes and explicitly approves the rewritten 30-45 minute host-semantics scorecard.
+- The supervising human completes and explicitly approves the selector-led 30-45 minute
+  host-semantics scorecard.
+- Exactly six typed scenarios cover preserved objective points P1-P10 under **Geometry intent**,
+  **Host-owned inputs** and **Truth & evidence**; selecting, switching and resetting reconstruct
+  deterministic ephemeral state, while global evidence capture and exit preserve the ordinary
+  workspace.
+- The selected-scenario guide exposes its description, objective points, human questions, steps,
+  expected outcome and recent transcript/evidence. Direct tests qualify catalog completeness and
+  isolation; grouping and presentation add no browser-owned domain logic.
 - Construction, suppression, parameters, external references and unsolved-state recovery are understandable and trustworthy.
 - No unresolved ownership, stale-data, recovery or state-trust blocker remains; objective findings have direct regressions.
 - Every UAT request/finding has a durable identifier, classification, disposition and applicable

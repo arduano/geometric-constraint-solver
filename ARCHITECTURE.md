@@ -211,6 +211,13 @@ primary purpose is interactive sanity checking:
   not implementation or acceptance targets;
 - it remains non-authoritative and replaceable.
 
+For active M53 review, a crate-private scenario catalog owns stable scenario identities,
+presentation grouping, objective links and guide copy. Selecting, switching or resetting a
+scenario delegates to typed candidate constructors and actions; accepted geometry, lifecycle and
+evidence still come from public domain/audit APIs. Selector expansion and the selected guide are
+ephemeral presentation state: they do not enter the ordinary workspace snapshot, any public API or
+schema, and they add no equation or host callback.
+
 Historically, M13 implemented the disposable alpha playground interactions and M14 hardened
 its E2E, import/error recovery and performance. M46-M50 replaced every retained semantic
 claim with a direct owner or reviewed retirement and then removed that runtime. None of the
@@ -515,7 +522,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
 - M49-M50: legacy semantic extraction followed by deletion of all remaining old E2E and the legacy application.
 - M51: completed single-workbench consolidation and direct-qualification hardening.
 - M52: completed direct-qualified post-cleanup candidate preparation.
-- M53: active supervising-human UAT 2 gate.
+- M53: active selector-led supervising-human UAT 2 gate.
 - M100X-M102X: placeholder stable diagnostics, prepared jobs and incremental production-scale solving.
 - M103X-M104X: placeholder sketch-operation and production-topology companions.
 - M105X-M106X: placeholder advanced workbench and human advanced/topology UAT.

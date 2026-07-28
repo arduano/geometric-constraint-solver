@@ -11,9 +11,11 @@ mod persistence;
 #[cfg(target_arch = "wasm32")]
 mod platform;
 #[cfg(any(target_arch = "wasm32", test))]
-mod scene;
+mod scenario_fixtures;
 #[cfg(any(target_arch = "wasm32", test))]
-mod uat;
+mod scenarios;
+#[cfg(any(target_arch = "wasm32", test))]
+mod scene;
 
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod wasm {
@@ -45,7 +47,7 @@ pub(crate) mod wasm {
 
     struct Workbench {
         coordinator: RetainedEditorCoordinator,
-        uat: super::uat::UatWorkbenchState,
+        scenarios: super::scenarios::ScenarioWorkbenchState,
         construction_preview: Option<ConstructionPreview>,
         inference_preview: Option<ProvisionalInferenceCandidate>,
         notice: String,
@@ -71,7 +73,7 @@ pub(crate) mod wasm {
         };
         let workbench = Rc::new(RefCell::new(Workbench {
             coordinator,
-            uat: super::uat::UatWorkbenchState::new(),
+            scenarios: super::scenarios::ScenarioWorkbenchState::new(),
             construction_preview: None,
             inference_preview: None,
             notice,
@@ -139,17 +141,22 @@ pub(crate) mod wasm {
                 return;
             };
             let target = origin
-                .closest("[data-wb-tool], [data-editor-item], [data-wb-action], [data-uat-action]")
+                .closest(concat!(
+                    "[data-wb-tool], [data-editor-item], [data-wb-action], ",
+                    "[data-scenario-id], [data-scenario-action], [data-scenario-control]"
+                ))
                 .ok()
                 .flatten()
                 .unwrap_or(origin);
+            let mut selected_scenario = false;
+            let mut exited_scenarios = false;
             if let Some(tool) = target
                 .get_attribute("data-wb-tool")
                 .and_then(|key| tool_from_key(&key))
             {
                 let mut wb = callback_workbench.borrow_mut();
-                if wb.uat.is_active() {
-                    wb.notice = "Exit disposable M52 UAT before ordinary editing".into();
+                if wb.scenarios.is_active() {
+                    wb.notice = "Exit the active review scenario before ordinary editing".into();
                     drop(wb);
                     let _ = render(&callback_document, &callback_workbench);
                     return;
@@ -158,7 +165,7 @@ pub(crate) mod wasm {
                 dispatch_effects(&mut wb, effects);
                 wb.notice = format!("{} tool active", tool_key(tool));
             } else if target.has_attribute("data-editor-item") {
-                if callback_workbench.borrow().uat.is_active() {
+                if callback_workbench.borrow().scenarios.is_active() {
                     return;
                 }
                 if let Some(item) = selection_item(&target) {
@@ -176,8 +183,14 @@ pub(crate) mod wasm {
                         .editor_mut()
                         .select_item(item, modifiers);
                 }
-            } else if let Some(action) = target.get_attribute("data-uat-action") {
-                perform_uat_action(&mut callback_workbench.borrow_mut(), &action);
+            } else if let Some(key) = target.get_attribute("data-scenario-id") {
+                let mut wb = callback_workbench.borrow_mut();
+                selected_scenario = select_scenario(&mut wb, &key);
+            } else if let Some(action) = target.get_attribute("data-scenario-action") {
+                perform_scenario_action(&mut callback_workbench.borrow_mut(), &action);
+            } else if let Some(control) = target.get_attribute("data-scenario-control") {
+                exited_scenarios =
+                    perform_scenario_control(&mut callback_workbench.borrow_mut(), &control);
             } else if let Some(action) = target.get_attribute("data-wb-action") {
                 perform_action(
                     &callback_document,
@@ -187,6 +200,12 @@ pub(crate) mod wasm {
             }
             save(&callback_workbench.borrow());
             let _ = render(&callback_document, &callback_workbench);
+            if selected_scenario {
+                close_scenario_selector(&callback_document);
+                focus_scenario_guide(&callback_document);
+            } else if exited_scenarios {
+                focus_by_id(&callback_document, "wb-scenario-trigger");
+            }
         });
         required(document, "workbench-root")?
             .add_event_listener_with_callback("click", callback.as_ref().unchecked_ref())?;
@@ -238,7 +257,7 @@ pub(crate) mod wasm {
         let cancel_workbench = Rc::clone(workbench);
         let cancel = Closure::<dyn FnMut(PointerEvent)>::new(move |_event| {
             let mut wb = cancel_workbench.borrow_mut();
-            if wb.uat.is_active() {
+            if wb.scenarios.is_active() {
                 return;
             }
             let effects = wb.coordinator.editor_mut().cancel();
@@ -256,7 +275,7 @@ pub(crate) mod wasm {
         let double = Closure::<dyn FnMut(MouseEvent)>::new(move |event: MouseEvent| {
             event.prevent_default();
             let mut wb = double_workbench.borrow_mut();
-            if wb.uat.is_active() {
+            if wb.scenarios.is_active() {
                 return;
             }
             let expected = wb.coordinator.session().design_identity();
@@ -283,7 +302,7 @@ pub(crate) mod wasm {
         let callback_viewport = viewport.clone();
         let callback = Closure::<dyn FnMut(PointerEvent)>::new(move |event| {
             let mut wb = callback_workbench.borrow_mut();
-            if wb.uat.is_active() {
+            if wb.scenarios.is_active() {
                 return;
             }
             let Some(scene) = editor_scene(&wb) else {
@@ -310,14 +329,26 @@ pub(crate) mod wasm {
         let callback_document = document.clone();
         let callback_workbench = Rc::clone(workbench);
         let callback = Closure::<dyn FnMut(KeyboardEvent)>::new(move |event: KeyboardEvent| {
-            if event.key() == "Enter"
-                && let Some(target) = event
-                    .target()
-                    .and_then(|target| target.dyn_into::<Element>().ok())
-                && matches!(target.tag_name().as_str(), "BUTTON" | "SELECT" | "INPUT")
+            if event.key() == "Escape"
+                && required(&callback_document, "wb-scenario-selector")
+                    .is_ok_and(|selector| selector.has_attribute("open"))
             {
-                if let Ok(button) = target.dyn_into::<HtmlElement>()
-                    && button.tag_name() == "BUTTON"
+                event.prevent_default();
+                close_scenario_selector(&callback_document);
+                focus_by_id(&callback_document, "wb-scenario-trigger");
+                return;
+            }
+            if let Some(target) = event
+                .target()
+                .and_then(|target| target.dyn_into::<Element>().ok())
+                && matches!(
+                    target.tag_name().as_str(),
+                    "A" | "BUTTON" | "INPUT" | "SELECT" | "SUMMARY" | "TEXTAREA"
+                )
+            {
+                if event.key() == "Enter"
+                    && target.tag_name() == "BUTTON"
+                    && let Ok(button) = target.dyn_into::<HtmlElement>()
                 {
                     event.prevent_default();
                     button.click();
@@ -325,7 +356,7 @@ pub(crate) mod wasm {
                 return;
             }
             let mut wb = callback_workbench.borrow_mut();
-            if wb.uat.is_active() {
+            if wb.scenarios.is_active() {
                 return;
             }
             if matches!(event.key().as_str(), "Delete" | "Backspace") {
@@ -449,14 +480,13 @@ pub(crate) mod wasm {
     }
 
     fn perform_action(document: &Document, wb: &mut Workbench, action: &str) {
-        if !wb.uat.ordinary_action_allowed(action) {
-            wb.notice = "Exit disposable M52 UAT before ordinary editing".into();
+        if !wb.scenarios.ordinary_action_allowed(action) {
+            wb.notice = "Exit the active review scenario before ordinary editing".into();
             return;
         }
         let result = match action {
             "new" => empty_coordinator().map(|coordinator| {
                 wb.coordinator = coordinator;
-                wb.uat.exit();
                 wb.construction_preview = None;
                 wb.inference_preview = None;
             }),
@@ -501,31 +531,47 @@ pub(crate) mod wasm {
         );
     }
 
-    fn perform_uat_action(wb: &mut Workbench, action: &str) {
-        use super::uat::UatAction;
-
-        if action == "load" {
-            match wb.uat.load() {
-                Ok(()) => {
-                    wb.notice =
-                        "Disposable M52 UAT candidate loaded; ordinary save is disabled".into();
-                }
-                Err(error) => wb.notice = error,
+    fn select_scenario(wb: &mut Workbench, key: &str) -> bool {
+        match wb.scenarios.select_key(key) {
+            Ok(()) => {
+                wb.notice = format!(
+                    "{} loaded; this review state is ephemeral and ordinary save is disabled",
+                    wb.scenarios.selected_title().unwrap_or("Scenario")
+                );
+                true
             }
-            return;
+            Err(error) => {
+                wb.notice = error;
+                false
+            }
         }
-        if action == "exit" {
-            wb.uat.exit();
-            wb.notice = "Exited M52 UAT; ordinary pre-existing workspace restored".into();
-            return;
-        }
-        let Some(action) = UatAction::from_browser_key(action) else {
-            return;
-        };
+    }
+
+    fn perform_scenario_action(wb: &mut Workbench, action: &str) {
         wb.notice = wb
-            .uat
-            .perform(action)
+            .scenarios
+            .perform_key(action)
             .map_or_else(|error| error, |observation| observation.summary());
+    }
+
+    fn perform_scenario_control(wb: &mut Workbench, control: &str) -> bool {
+        match control {
+            "reset" => {
+                wb.notice = wb.scenarios.reset().map_or_else(
+                    |error| error,
+                    |()| "Selected scenario reset to its deterministic starting state".into(),
+                );
+                false
+            }
+            "exit" => {
+                wb.scenarios.exit();
+                wb.notice =
+                    "Exited review scenarios; the ordinary pre-existing workspace is restored"
+                        .into();
+                true
+            }
+            _ => false,
+        }
     }
 
     fn apply_constraint(document: &Document, wb: &mut Workbench) -> Result<(), String> {
@@ -562,7 +608,7 @@ pub(crate) mod wasm {
     }
 
     fn editor_scene(wb: &Workbench) -> Option<EditorScene> {
-        let coordinator = wb.uat.coordinator_for_render(&wb.coordinator);
+        let coordinator = wb.scenarios.coordinator_for_render(&wb.coordinator);
         let source = coordinator
             .solved_preview_session()
             .unwrap_or(coordinator.session());
@@ -580,7 +626,7 @@ pub(crate) mod wasm {
 
     fn render(document: &Document, workbench: &Rc<RefCell<Workbench>>) -> Result<(), JsValue> {
         let wb = workbench.borrow();
-        let coordinator = wb.uat.coordinator_for_render(&wb.coordinator);
+        let coordinator = wb.scenarios.coordinator_for_render(&wb.coordinator);
         required(document, "workbench-root")?.set_attribute(
             "data-history-length",
             &coordinator.history_len().to_string(),
@@ -591,11 +637,16 @@ pub(crate) mod wasm {
             .unwrap_or(coordinator.session());
         let accepted = source.accepted_state();
         let selection = coordinator.editor().selection();
+        let construction_preview = if wb.scenarios.is_active() {
+            None
+        } else {
+            wb.construction_preview.as_ref()
+        };
         required(document, "wb-viewport")?.set_inner_html(&super::scene::svg_markup(
             scene.as_ref(),
             accepted,
             selection,
-            wb.construction_preview.as_ref(),
+            construction_preview,
         ));
         let design = coordinator.session().design_document();
         required(document, "wb-tree")?
@@ -621,14 +672,7 @@ pub(crate) mod wasm {
         );
         required(document, "wb-host-state")?
             .set_inner_html(&super::panels::host_state_markup(coordinator.session()));
-        let uat_panel = required(document, "wb-uat-panel")?;
-        if let Some(markup) = wb.uat.panel_markup() {
-            uat_panel.set_inner_html(&markup);
-            uat_panel.set_attribute("data-uat-active", "true")?;
-        } else {
-            uat_panel.set_inner_html(super::uat::inactive_panel_markup());
-            uat_panel.remove_attribute("data-uat-active")?;
-        }
+        render_scenario_ui(document, &wb.scenarios)?;
         let problems = required(document, "wb-problems")?;
         if wb.problems_open || problem != "No current solver problem" {
             problems.remove_attribute("hidden")?;
@@ -653,7 +697,7 @@ pub(crate) mod wasm {
             if let Some(button) =
                 document.query_selector(&format!("[data-wb-tool=\"{}\"]", tool_key(tool)))?
             {
-                set_disabled(&button, wb.uat.is_active())?;
+                set_disabled(&button, wb.scenarios.is_active())?;
                 button.set_attribute(
                     "aria-pressed",
                     if tool == coordinator.editor().tool() {
@@ -664,7 +708,7 @@ pub(crate) mod wasm {
                 )?;
             }
         }
-        render_action_availability(document, coordinator, wb.uat.is_active())?;
+        render_action_availability(document, coordinator, wb.scenarios.is_active())?;
         required(document, "workbench-root")?
             .set_attribute("data-editor-adapter", "retained-coordinator")?;
         Ok(())
@@ -673,12 +717,15 @@ pub(crate) mod wasm {
     fn render_action_availability(
         document: &Document,
         coordinator: &RetainedEditorCoordinator,
-        uat_active: bool,
+        scenario_active: bool,
     ) -> Result<(), JsValue> {
         for key in ["new", "finish", "cancel", "clear-selection"] {
             if let Some(button) = document.query_selector(&format!("[data-wb-action=\"{key}\"]"))? {
-                set_disabled(&button, uat_active)?;
+                set_disabled(&button, scenario_active)?;
             }
+        }
+        for id in ["wb-constraint-kind", "wb-dimension-mode"] {
+            set_disabled(&required(document, id)?, scenario_active)?;
         }
         let actions = coordinator.actions();
         let enabled = |action| {
@@ -693,7 +740,7 @@ pub(crate) mod wasm {
             ("delete", CoordinatorActionKind::Delete),
         ] {
             if let Some(button) = document.query_selector(&format!("[data-wb-action=\"{key}\"]"))? {
-                set_disabled(&button, uat_active || !enabled(action))?;
+                set_disabled(&button, scenario_active || !enabled(action))?;
             }
         }
         let constraint_key =
@@ -703,7 +750,7 @@ pub(crate) mod wasm {
         {
             set_disabled(
                 &button,
-                uat_active || !enabled(CoordinatorActionKind::Constraint(kind)),
+                scenario_active || !enabled(CoordinatorActionKind::Constraint(kind)),
             )?;
         }
         let mode = if select_value(document, "wb-dimension-mode").as_deref() == Some("reference") {
@@ -714,7 +761,46 @@ pub(crate) mod wasm {
         let dimension_enabled = enabled(CoordinatorActionKind::PointDistance(mode))
             || enabled(CoordinatorActionKind::SegmentLength(mode));
         if let Some(button) = document.query_selector("[data-wb-action=\"dimension\"]")? {
-            set_disabled(&button, uat_active || !dimension_enabled)?;
+            set_disabled(&button, scenario_active || !dimension_enabled)?;
+        }
+        Ok(())
+    }
+
+    fn render_scenario_ui(
+        document: &Document,
+        scenarios: &super::scenarios::ScenarioWorkbenchState,
+    ) -> Result<(), JsValue> {
+        let selected_key = scenarios.selected_key().unwrap_or("");
+        let menu = required(document, "wb-scenario-menu")?;
+        if menu.get_attribute("data-selected-scenario").as_deref() != Some(selected_key) {
+            menu.set_inner_html(&scenarios.menu_markup());
+            menu.set_attribute("data-selected-scenario", selected_key)?;
+        }
+        required(document, "wb-scenario-current")?.set_text_content(Some(
+            scenarios
+                .selected_title()
+                .unwrap_or("Choose a review scenario"),
+        ));
+
+        let guide = required(document, "wb-scenario-guide")?;
+        if let Some(markup) = scenarios.guide_markup() {
+            if guide.get_attribute("data-selected-scenario").as_deref() != Some(selected_key) {
+                guide.set_inner_html(&format!(
+                    "{markup}<div id=\"wb-scenario-transcript\"></div><div id=\"wb-scenario-evidence\"></div>"
+                ));
+                guide.set_attribute("data-selected-scenario", selected_key)?;
+            }
+            guide.remove_attribute("hidden")?;
+            required(document, "wb-scenario-transcript")?
+                .set_inner_html(&scenarios.transcript_markup());
+            required(document, "wb-scenario-evidence")?
+                .set_inner_html(&scenarios.evidence_markup());
+        } else {
+            if guide.has_attribute("data-selected-scenario") {
+                guide.set_inner_html("");
+                guide.remove_attribute("data-selected-scenario")?;
+            }
+            guide.set_attribute("hidden", "")?;
         }
         Ok(())
     }
@@ -739,7 +825,7 @@ pub(crate) mod wasm {
     }
 
     fn save(wb: &Workbench) {
-        let Some(snapshot) = wb.uat.persistence_snapshot(&wb.coordinator) else {
+        let Some(snapshot) = wb.scenarios.persistence_snapshot(&wb.coordinator) else {
             return;
         };
         let Ok(json) = snapshot.encode() else {
@@ -838,6 +924,31 @@ pub(crate) mod wasm {
                 .value(),
         )
     }
+
+    fn close_scenario_selector(document: &Document) {
+        if let Ok(selector) = required(document, "wb-scenario-selector") {
+            let _ = selector.remove_attribute("open");
+        }
+    }
+
+    fn focus_scenario_guide(document: &Document) {
+        if let Ok(heading) = required(document, "wb-scenario-title") {
+            focus(heading);
+        }
+    }
+
+    fn focus_by_id(document: &Document, id: &str) {
+        if let Ok(element) = required(document, id) {
+            focus(element);
+        }
+    }
+
+    fn focus(element: Element) {
+        if let Ok(element) = element.dyn_into::<HtmlElement>() {
+            let _ = element.focus();
+        }
+    }
+
     fn required(document: &Document, id: &str) -> Result<Element, JsValue> {
         document
             .get_element_by_id(id)

@@ -20,6 +20,10 @@
           <button type="button" data-wb-action="undo">Undo</button>
           <button type="button" data-wb-action="redo">Redo</button>
         </div>
+        <details id="wb-scenario-selector" class="wb-scenario-selector">
+          <summary id="wb-scenario-trigger"><span>Scenarios</span><strong id="wb-scenario-current">Choose a review scenario</strong></summary>
+          <div id="wb-scenario-menu" class="wb-scenario-menu"></div>
+        </details>
         <div class="wb-command-context">
           <span id="wb-lifecycle" data-state="accepted">Accepted</span>
           <span class="wb-document-name">Untitled sketch</span>
@@ -57,6 +61,7 @@
 
       <aside class="wb-inspector" aria-label="Property inspector">
         <div class="wb-panel-title"><span>Inspector</span><button type="button" data-wb-action="clear-selection">Clear</button></div>
+        <section id="wb-scenario-guide" class="wb-inspector-section wb-scenario-guide" aria-labelledby="wb-scenario-title" hidden></section>
         <section class="wb-inspector-section">
           <span class="wb-field-label">Selection</span>
           <strong id="wb-selection">0 selected</strong>
@@ -85,10 +90,8 @@
       <footer class="wb-status-bar">
         <button type="button" data-wb-action="problems">Problems</button>
         <span id="wb-status-message" aria-live="polite">Ready</span>
-        <button type="button" data-uat-action="load">Load disposable M52 UAT</button>
         <span>Desktop workbench · GPL-3.0-or-later</span>
       </footer>
-      <aside id="wb-uat-panel" class="wb-uat-panel" aria-label="Disposable M52 host-semantics UAT"></aside>
     </main>
   </body>
 </html>

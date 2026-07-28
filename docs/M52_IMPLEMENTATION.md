@@ -9,6 +9,14 @@ qualification, final parent gates and independent read-only verification pass. T
 records objective M52 evidence only; it records no human UAT rating or approval. Active M53
 exclusively owns clarity, trust and sign-off.
 
+> **Historical successor note (M53):** this record describes the UI and private symbols exactly as
+> qualified at M52, including the then-current **Load disposable M52 UAT** button and overlay.
+> Active finding M53-P011 later replaces only that one-off presentation with a private typed
+> six-scenario catalog, top **Scenarios** selector and guide sidebar. The four fixture families,
+> ten objective points, typed transitions/evidence and ordinary-workspace isolation remain; current
+> selector qualification, candidate identity and human findings belong in `docs/M53_UAT.md`. This
+> note does not reopen M52 acceptance or record M53 approval.
+
 ## Implemented boundary
 
 M52 adds one explicitly labelled in-memory sidecar to the sole workbench. It composes four small
@@ -115,6 +123,11 @@ all-feature `wasm32-unknown-unknown` check and release Trunk build qualify that 
 they do not claim browser interaction, DOM observation or a new public adapter.
 
 ## Qualification commands
+
+The commands below are the exact historical M52 qualification record. M53-P011 later removed the
+private `workbench::uat` module and migrated its fixtures into the reusable scenario catalog, so
+the focused `workbench::uat::` filter is no longer a current runnable M53 command. Use
+`docs/M53_UAT.md` and the current release gate for M53 qualification.
 
 Focused commands:
 

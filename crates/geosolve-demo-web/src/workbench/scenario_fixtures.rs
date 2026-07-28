@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 
-use geosolve_constraint_editor::{RetainedEditorCoordinator, SelectionItem};
+use geosolve_constraint_editor::{CoordinatorError, RetainedEditorCoordinator, SelectionItem};
 use geosolve_core::SolverConfig;
 use geosolve_sketch::{
     CurveDefinition, CurveSpan, DocumentConstraintDefinition, DocumentDimensionDefinition,
     DocumentDimensionMode, DocumentDirectionSense, DocumentEdit, DocumentElementId,
     DocumentExternalLineSupportRef, DocumentId, DocumentLineSupportRef, DocumentParameterKind,
-    DocumentParameterTarget, DocumentSolveRequest, ExternalFeatureKindV1,
+    DocumentParameterTarget, DocumentSessionError, DocumentSolveRequest, ExternalFeatureKindV1,
     ExternalLineOrientationV1, ExternalSnapshotDigest, ExternalSnapshotEntry,
     ExternalSnapshotFeatureV1, ExternalSnapshotResourcesV1, ExternalSnapshotSet,
     ExternalTopologyDigest, GeometryRole, HostActivationOverride, HostConfigurationActivation,
@@ -15,23 +15,33 @@ use geosolve_sketch::{
     RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
 };
 
-use super::evidence::serialize_m52_typed_host_evidence;
+use super::evidence::{parameter_batch_json, serialize_scenario_typed_host_evidence};
 use super::panels::host_state_markup;
-use super::persistence::WorkspaceSnapshot;
 
 const TOPOLOGY_A: ExternalTopologyDigest = ExternalTopologyDigest::from_bytes([0x41; 32]);
 const TOPOLOGY_B: ExternalTopologyDigest = ExternalTopologyDigest::from_bytes([0x42; 32]);
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum UatFixture {
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) enum ScenarioFixture {
     RoleActivity,
     ParameterProposal,
     ExternalRebind,
     LifecycleEvidence,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum UatAction {
+impl ScenarioFixture {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::RoleActivity => "Role and activity",
+            Self::ParameterProposal => "Parameter and proposal",
+            Self::ExternalRebind => "External reference and rebind",
+            Self::LifecycleEvidence => "Lifecycle and evidence",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) enum ScenarioAction {
     RoleConstruction,
     RoleProfile,
     SuppressDimension,
@@ -53,8 +63,8 @@ pub(crate) enum UatAction {
     CaptureEvidence,
 }
 
-impl UatAction {
-    pub(crate) fn from_browser_key(value: &str) -> Option<Self> {
+impl ScenarioAction {
+    pub(crate) fn from_key(value: &str) -> Option<Self> {
         Some(match value {
             "role-construction" => Self::RoleConstruction,
             "role-profile" => Self::RoleProfile,
@@ -79,138 +89,145 @@ impl UatAction {
         })
     }
 
-    const fn fixture(self) -> UatFixture {
+    pub(crate) const fn key(self) -> &'static str {
         match self {
+            Self::RoleConstruction => "role-construction",
+            Self::RoleProfile => "role-profile",
+            Self::SuppressDimension => "suppress",
+            Self::ReactivateDimension => "reactivate",
+            Self::ReferenceDimension => "reference",
+            Self::HostInactive => "host-inactive",
+            Self::MissingDependency => "missing-dependency",
+            Self::ParameterValid => "parameter-valid",
+            Self::ParameterInvalidKind => "parameter-invalid",
+            Self::ParameterStale => "parameter-stale",
+            Self::ParameterRecovery => "parameter-recovery",
+            Self::ExternalMissing => "external-missing",
+            Self::ExternalStale => "external-stale",
+            Self::ExternalTopologyChange => "external-topology",
+            Self::ExternalExplicitRebind => "external-rebind",
+            Self::ExternalFreshRecovery => "external-fresh",
+            Self::LifecycleRejected => "lifecycle-rejected",
+            Self::LifecycleRecovery => "lifecycle-recovery",
+            Self::CaptureEvidence => "capture",
+        }
+    }
+
+    pub(crate) const fn label(self) -> &'static str {
+        match self {
+            Self::RoleConstruction => "Use construction role",
+            Self::RoleProfile => "Restore profile role",
+            Self::SuppressDimension => "Suppress dimension",
+            Self::ReactivateDimension => "Reactivate dimension",
+            Self::ReferenceDimension => "Make dimension reference",
+            Self::HostInactive => "Set host inactive",
+            Self::MissingDependency => "Remove dependency",
+            Self::ParameterValid => "Submit valid parameter",
+            Self::ParameterInvalidKind => "Submit invalid kind",
+            Self::ParameterStale => "Submit stale parameter",
+            Self::ParameterRecovery => "Submit recovery parameter",
+            Self::ExternalMissing => "Remove external snapshot",
+            Self::ExternalStale => "Submit stale snapshot",
+            Self::ExternalTopologyChange => "Change topology",
+            Self::ExternalExplicitRebind => "Declare explicit rebind",
+            Self::ExternalFreshRecovery => "Submit fresh snapshot",
+            Self::LifecycleRejected => "Submit rejected attempt",
+            Self::LifecycleRecovery => "Submit valid recovery",
+            Self::CaptureEvidence => "Capture typed evidence",
+        }
+    }
+
+    pub(crate) const fn fixture(self) -> Option<ScenarioFixture> {
+        Some(match self {
             Self::RoleConstruction
             | Self::RoleProfile
             | Self::SuppressDimension
             | Self::ReactivateDimension
             | Self::ReferenceDimension
             | Self::HostInactive
-            | Self::MissingDependency => UatFixture::RoleActivity,
+            | Self::MissingDependency => ScenarioFixture::RoleActivity,
             Self::ParameterValid
             | Self::ParameterInvalidKind
             | Self::ParameterStale
-            | Self::ParameterRecovery => UatFixture::ParameterProposal,
+            | Self::ParameterRecovery => ScenarioFixture::ParameterProposal,
             Self::ExternalMissing
             | Self::ExternalStale
             | Self::ExternalTopologyChange
             | Self::ExternalExplicitRebind
-            | Self::ExternalFreshRecovery => UatFixture::ExternalRebind,
-            Self::LifecycleRejected | Self::LifecycleRecovery | Self::CaptureEvidence => {
-                UatFixture::LifecycleEvidence
-            }
-        }
+            | Self::ExternalFreshRecovery => ScenarioFixture::ExternalRebind,
+            Self::LifecycleRejected | Self::LifecycleRecovery => ScenarioFixture::LifecycleEvidence,
+            Self::CaptureEvidence => return None,
+        })
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum UatBoundary {
+pub(crate) enum ScenarioBoundary {
     RetainedAccepted,
     AdvancedAccepted,
     ExplicitDeclarationOnly,
     EvidenceCapture,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ScenarioRejection {
+    StaleParameter { submitted: u64, retained: u64 },
+    StaleExternal { submitted: u64, retained: u64 },
+}
+
+impl ScenarioRejection {
+    fn summary(self) -> String {
+        match self {
+            Self::StaleParameter {
+                submitted,
+                retained,
+            } => format!(
+                "typed stale-parameter rejection: submitted revision {submitted}, retained revision {retained}"
+            ),
+            Self::StaleExternal {
+                submitted,
+                retained,
+            } => format!(
+                "typed stale-external rejection: submitted revision {submitted}, retained revision {retained}"
+            ),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct UatObservation {
-    pub action: UatAction,
-    pub fixture: UatFixture,
-    pub boundary: UatBoundary,
+pub(crate) struct ScenarioObservation {
+    pub action: ScenarioAction,
+    pub fixture: ScenarioFixture,
+    pub boundary: ScenarioBoundary,
     pub accepted_before: String,
     pub accepted_after: String,
     pub accepted_evidence_before: String,
     pub accepted_evidence_after: String,
+    pub rejection: Option<ScenarioRejection>,
 }
 
-impl UatObservation {
+impl ScenarioObservation {
     pub(crate) fn summary(&self) -> String {
-        format!(
-            "M52 UAT {:?}: {:?} ({})",
-            self.fixture,
-            self.action,
+        let boundary = format!(
+            "{} · {} ({})",
+            self.action.label(),
+            self.fixture.label(),
             match self.boundary {
-                UatBoundary::RetainedAccepted => "accepted identity/evidence retained",
-                UatBoundary::AdvancedAccepted => "typed recovery published accepted state",
-                UatBoundary::ExplicitDeclarationOnly => {
+                ScenarioBoundary::RetainedAccepted => "accepted identity/evidence retained",
+                ScenarioBoundary::AdvancedAccepted => "accepted state advanced",
+                ScenarioBoundary::ExplicitDeclarationOnly => {
                     "explicit declaration changed; accepted state retained"
                 }
-                UatBoundary::EvidenceCapture => "deterministic evidence refreshed",
+                ScenarioBoundary::EvidenceCapture => "deterministic evidence refreshed",
             }
-        )
+        );
+        self.rejection
+            .as_ref()
+            .map_or(boundary.clone(), |rejection| {
+                format!("{boundary}: {}", rejection.summary())
+            })
     }
 }
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct UatPoint {
-    pub number: u8,
-    pub instruction: &'static str,
-    pub objective_check: &'static str,
-    pub human_judgment: &'static str,
-}
-
-pub(crate) const UAT_POINTS: [UatPoint; 10] = [
-    UatPoint {
-        number: 1,
-        instruction: "Use Construction, then Profile.",
-        objective_check: "Role changes profile participation while geometry remains solver-active.",
-        human_judgment: "M53 judges whether role and participation are clear.",
-    },
-    UatPoint {
-        number: 2,
-        instruction: "Use Suppress, Reactivate, then Reference.",
-        objective_check: "Suppression/reactivation and driving/reference mode are separate typed transitions.",
-        human_judgment: "M53 judges whether recovery is discoverable.",
-    },
-    UatPoint {
-        number: 3,
-        instruction: "Use Host inactive, then Missing dependency.",
-        objective_check: "Typed inactivity reasons remain distinct and accepted geometry is not replaced.",
-        human_judgment: "M53 judges whether the reasons read clearly.",
-    },
-    UatPoint {
-        number: 4,
-        instruction: "Use Parameter valid.",
-        objective_check: "One shared typed input updates two bindings and accepted proposal provenance atomically.",
-        human_judgment: "M53 judges ownership/proposal clarity.",
-    },
-    UatPoint {
-        number: 5,
-        instruction: "Use Invalid kind, Stale, then Recovery.",
-        objective_check: "Invalid/stale input retains accepted evidence; complete typed recovery advances it.",
-        human_judgment: "M53 judges recovery clarity.",
-    },
-    UatPoint {
-        number: 6,
-        instruction: "Use External missing, Stale, then Topology change.",
-        objective_check: "All three typed failures retain accepted external evidence without repair.",
-        human_judgment: "M53 judges stale-data trust.",
-    },
-    UatPoint {
-        number: 7,
-        instruction: "Use Explicit rebind, then Fresh recovery.",
-        objective_check: "Declaration-only rebind retains accepted state; fresh compatible input advances it.",
-        human_judgment: "M53 judges explicit ownership clarity.",
-    },
-    UatPoint {
-        number: 8,
-        instruction: "Use Lifecycle rejected, inspect tree/Problems/canvas, then Lifecycle recovery.",
-        objective_check: "Design, latest attempt, and accepted identities remain separate; scene is accepted-only.",
-        human_judgment: "M53 judges visual distinction.",
-    },
-    UatPoint {
-        number: 9,
-        instruction: "Use Capture evidence before reset.",
-        objective_check: "Fixed-provenance text contains exact typed inputs and accepted/attempted evidence.",
-        human_judgment: "M53 adds an OS screenshot only for a visual finding.",
-    },
-    UatPoint {
-        number: 10,
-        instruction: "Repeat role/activity and parameter/external recovery naturally.",
-        objective_check: "The same typed state machine drives every transition; reload restores only ordinary persisted work.",
-        human_judgment: "M53 alone judges overall coherence and trust.",
-    },
-];
 
 struct RoleFixture {
     coordinator: RetainedEditorCoordinator,
@@ -223,6 +240,7 @@ struct RoleFixture {
 struct ParameterFixture {
     coordinator: RetainedEditorCoordinator,
     parameter: geosolve_sketch::DocumentParameterId,
+    last_submitted: ParameterBatch,
 }
 
 struct ExternalFixture {
@@ -237,80 +255,28 @@ struct LifecycleFixture {
     parameter: geosolve_sketch::DocumentParameterId,
 }
 
-pub(crate) struct UatCandidate {
-    active: UatFixture,
+#[derive(Default)]
+struct ScenarioTransition {
+    explicit_declaration: bool,
+    rejection: Option<ScenarioRejection>,
+}
+
+pub(crate) struct ScenarioCandidate {
+    active: ScenarioFixture,
     role: RoleFixture,
     parameter: ParameterFixture,
     external: ExternalFixture,
     lifecycle: LifecycleFixture,
-    transcript: Vec<UatObservation>,
+    transcript: Vec<ScenarioObservation>,
     evidence_text: String,
 }
 
-/// Crate-private isolation boundary between the ordinary workbench and the disposable UAT.
-///
-/// The sidecar owns only the candidate. Ordinary workspace state remains with the caller, and
-/// this type is the single authority for UAT admission and persistence suppression.
-pub(crate) struct UatWorkbenchState {
-    candidate: Option<UatCandidate>,
-}
-
-impl UatWorkbenchState {
-    pub(crate) const fn new() -> Self {
-        Self { candidate: None }
-    }
-
-    pub(crate) fn load(&mut self) -> Result<(), String> {
-        self.candidate = Some(UatCandidate::new()?);
-        Ok(())
-    }
-
-    pub(crate) fn exit(&mut self) {
-        self.candidate = None;
-    }
-
-    pub(crate) fn perform(&mut self, action: UatAction) -> Result<UatObservation, String> {
-        self.candidate
-            .as_mut()
-            .ok_or_else(|| "Load the disposable M52 UAT candidate first".to_owned())?
-            .perform(action)
-    }
-
-    pub(crate) const fn is_active(&self) -> bool {
-        self.candidate.is_some()
-    }
-
-    pub(crate) fn coordinator_for_render<'a>(
-        &'a self,
-        ordinary: &'a RetainedEditorCoordinator,
-    ) -> &'a RetainedEditorCoordinator {
-        self.candidate
-            .as_ref()
-            .map_or(ordinary, UatCandidate::active_coordinator)
-    }
-
-    pub(crate) fn panel_markup(&self) -> Option<String> {
-        self.candidate.as_ref().map(UatCandidate::panel_markup)
-    }
-
-    pub(crate) fn ordinary_action_allowed(&self, action: &str) -> bool {
-        !self.is_active() || action == "problems"
-    }
-
-    pub(crate) fn persistence_snapshot(
-        &self,
-        ordinary: &RetainedEditorCoordinator,
-    ) -> Option<WorkspaceSnapshot> {
-        (!self.is_active()).then(|| WorkspaceSnapshot::from_checkpoint(ordinary.checkpoint()))
-    }
-}
-
-impl UatCandidate {
-    pub(crate) fn new() -> Result<Self, String> {
+impl ScenarioCandidate {
+    pub(crate) fn new(active: ScenarioFixture) -> Result<Self, String> {
         Ok(Self {
-            active: UatFixture::RoleActivity,
+            active,
             role: role_fixture()?,
-            parameter: parameter_fixture("M52 shared parameter", 2)?,
+            parameter: parameter_fixture("Scenario shared parameter", 2)?,
             external: external_fixture()?,
             lifecycle: lifecycle_fixture()?,
             transcript: Vec::new(),
@@ -322,36 +288,47 @@ impl UatCandidate {
         self.coordinator(self.active)
     }
 
-    fn coordinator(&self, fixture: UatFixture) -> &RetainedEditorCoordinator {
+    pub(crate) fn transcript(&self) -> &[ScenarioObservation] {
+        &self.transcript
+    }
+
+    pub(crate) fn evidence_text(&self) -> &str {
+        &self.evidence_text
+    }
+
+    fn coordinator(&self, fixture: ScenarioFixture) -> &RetainedEditorCoordinator {
         match fixture {
-            UatFixture::RoleActivity => &self.role.coordinator,
-            UatFixture::ParameterProposal => &self.parameter.coordinator,
-            UatFixture::ExternalRebind => &self.external.coordinator,
-            UatFixture::LifecycleEvidence => &self.lifecycle.coordinator,
+            ScenarioFixture::RoleActivity => &self.role.coordinator,
+            ScenarioFixture::ParameterProposal => &self.parameter.coordinator,
+            ScenarioFixture::ExternalRebind => &self.external.coordinator,
+            ScenarioFixture::LifecycleEvidence => &self.lifecycle.coordinator,
         }
     }
 
-    pub(crate) fn perform(&mut self, action: UatAction) -> Result<UatObservation, String> {
-        let fixture = action.fixture();
+    pub(crate) fn perform(
+        &mut self,
+        action: ScenarioAction,
+    ) -> Result<ScenarioObservation, String> {
+        let fixture = action.fixture().unwrap_or(self.active);
         self.active = fixture;
         let before = accepted_stamp(self.coordinator(fixture));
         let evidence_before = accepted_evidence(self.coordinator(fixture));
-        let explicit_declaration = self.apply(action)?;
-        if action == UatAction::CaptureEvidence {
+        let transition = self.apply(action)?;
+        if action == ScenarioAction::CaptureEvidence {
             self.evidence_text = self.capture_text()?;
         }
         let after = accepted_stamp(self.coordinator(fixture));
         let evidence_after = accepted_evidence(self.coordinator(fixture));
-        let boundary = if action == UatAction::CaptureEvidence {
-            UatBoundary::EvidenceCapture
-        } else if explicit_declaration {
-            UatBoundary::ExplicitDeclarationOnly
-        } else if before == after {
-            UatBoundary::RetainedAccepted
+        let boundary = if action == ScenarioAction::CaptureEvidence {
+            ScenarioBoundary::EvidenceCapture
+        } else if before != after {
+            ScenarioBoundary::AdvancedAccepted
+        } else if transition.explicit_declaration {
+            ScenarioBoundary::ExplicitDeclarationOnly
         } else {
-            UatBoundary::AdvancedAccepted
+            ScenarioBoundary::RetainedAccepted
         };
-        let observation = UatObservation {
+        let observation = ScenarioObservation {
             action,
             fixture,
             boundary,
@@ -359,22 +336,24 @@ impl UatCandidate {
             accepted_after: after,
             accepted_evidence_before: evidence_before,
             accepted_evidence_after: evidence_after,
+            rejection: transition.rejection,
         };
         self.transcript.push(observation.clone());
         Ok(observation)
     }
 
     #[allow(clippy::too_many_lines)]
-    fn apply(&mut self, action: UatAction) -> Result<bool, String> {
+    fn apply(&mut self, action: ScenarioAction) -> Result<ScenarioTransition, String> {
+        let mut transition = ScenarioTransition::default();
         match action {
-            UatAction::RoleConstruction | UatAction::RoleProfile => {
+            ScenarioAction::RoleConstruction | ScenarioAction::RoleProfile => {
                 let expected = self.role.coordinator.session().design_identity();
                 self.role
                     .coordinator
                     .set_geometry_role(
                         expected,
                         self.role.role_curve,
-                        if action == UatAction::RoleConstruction {
+                        if action == ScenarioAction::RoleConstruction {
                             GeometryRole::Construction
                         } else {
                             GeometryRole::Profile
@@ -382,7 +361,7 @@ impl UatCandidate {
                     )
                     .map_err(|error| error.to_string())?;
             }
-            UatAction::SuppressDimension | UatAction::ReactivateDimension => {
+            ScenarioAction::SuppressDimension | ScenarioAction::ReactivateDimension => {
                 self.role
                     .coordinator
                     .editor_mut()
@@ -390,10 +369,10 @@ impl UatCandidate {
                 let expected = self.role.coordinator.session().design_identity();
                 self.role
                     .coordinator
-                    .set_selected_suppressed(expected, action == UatAction::SuppressDimension)
+                    .set_selected_suppressed(expected, action == ScenarioAction::SuppressDimension)
                     .map_err(|error| error.to_string())?;
             }
-            UatAction::ReferenceDimension => {
+            ScenarioAction::ReferenceDimension => {
                 let expected = self.role.coordinator.session().design_identity();
                 self.role
                     .coordinator
@@ -404,9 +383,9 @@ impl UatCandidate {
                     )
                     .map_err(|error| error.to_string())?;
             }
-            UatAction::HostInactive | UatAction::MissingDependency => {
+            ScenarioAction::HostInactive | ScenarioAction::MissingDependency => {
                 self.role.activation_revision += 1;
-                let override_value = if action == UatAction::HostInactive {
+                let override_value = if action == ScenarioAction::HostInactive {
                     HostActivationOverride::Inactive(DocumentElementId::Dimension(
                         self.role.mode_dimension,
                     ))
@@ -429,45 +408,63 @@ impl UatCandidate {
                     )
                     .map_err(|error| error.to_string())?;
             }
-            UatAction::ParameterValid
-            | UatAction::ParameterInvalidKind
-            | UatAction::ParameterStale
-            | UatAction::ParameterRecovery => {
+            ScenarioAction::ParameterValid
+            | ScenarioAction::ParameterInvalidKind
+            | ScenarioAction::ParameterStale
+            | ScenarioAction::ParameterRecovery => {
                 let (revision, value) = match action {
-                    UatAction::ParameterValid => (11, ParameterValue::Length(5.0)),
-                    UatAction::ParameterInvalidKind => (12, ParameterValue::Angle(5.0)),
-                    UatAction::ParameterStale => (1, ParameterValue::Length(5.0)),
-                    UatAction::ParameterRecovery => (13, ParameterValue::Length(6.0)),
+                    ScenarioAction::ParameterValid => (11, ParameterValue::Length(5.0)),
+                    ScenarioAction::ParameterInvalidKind => (12, ParameterValue::Angle(5.0)),
+                    ScenarioAction::ParameterStale => (1, ParameterValue::Length(5.0)),
+                    ScenarioAction::ParameterRecovery => (13, ParameterValue::Length(6.0)),
                     _ => unreachable!(),
                 };
                 let batch = parameter_batch(self.parameter.parameter, revision, value)?;
                 let expected = self.parameter.coordinator.session().design_identity();
+                self.parameter.last_submitted = batch.clone();
                 let result = self.parameter.coordinator.replace_parameter_batch(
                     expected,
                     batch,
                     DocumentSolveRequest::default(),
                 );
-                if action != UatAction::ParameterStale {
+                if action == ScenarioAction::ParameterStale {
+                    match result {
+                        Err(CoordinatorError::Session(
+                            DocumentSessionError::StaleParameterRevision { actual, retained },
+                        )) => {
+                            transition.rejection = Some(ScenarioRejection::StaleParameter {
+                                submitted: actual,
+                                retained,
+                            });
+                        }
+                        Err(error) => {
+                            return Err(format!(
+                                "expected typed stale-parameter rejection, received: {error}"
+                            ));
+                        }
+                        Ok(_) => {
+                            return Err("stale parameter candidate unexpectedly succeeded".into());
+                        }
+                    }
+                } else {
                     result.map_err(|error| error.to_string())?;
-                } else if result.is_ok() {
-                    return Err("stale parameter candidate unexpectedly succeeded".into());
                 }
             }
-            UatAction::ExternalMissing
-            | UatAction::ExternalStale
-            | UatAction::ExternalTopologyChange
-            | UatAction::ExternalFreshRecovery => {
+            ScenarioAction::ExternalMissing
+            | ScenarioAction::ExternalStale
+            | ScenarioAction::ExternalTopologyChange
+            | ScenarioAction::ExternalFreshRecovery => {
                 let snapshots = match action {
-                    UatAction::ExternalMissing => {
+                    ScenarioAction::ExternalMissing => {
                         line_snapshot(11, self.external.spare, TOPOLOGY_A)?
                     }
-                    UatAction::ExternalStale => {
+                    ScenarioAction::ExternalStale => {
                         line_snapshot(1, self.external.binding, TOPOLOGY_A)?
                     }
-                    UatAction::ExternalTopologyChange => {
+                    ScenarioAction::ExternalTopologyChange => {
                         line_snapshot(12, self.external.binding, TOPOLOGY_B)?
                     }
-                    UatAction::ExternalFreshRecovery => {
+                    ScenarioAction::ExternalFreshRecovery => {
                         line_snapshot(13, self.external.binding, TOPOLOGY_B)?
                     }
                     _ => unreachable!(),
@@ -479,13 +476,33 @@ impl UatCandidate {
                     snapshots,
                     DocumentSolveRequest::default(),
                 );
-                if action != UatAction::ExternalStale {
+                if action == ScenarioAction::ExternalStale {
+                    match result {
+                        Err(CoordinatorError::Session(
+                            DocumentSessionError::StaleExternalSnapshotRevision {
+                                actual,
+                                retained,
+                            },
+                        )) => {
+                            transition.rejection = Some(ScenarioRejection::StaleExternal {
+                                submitted: actual,
+                                retained,
+                            });
+                        }
+                        Err(error) => {
+                            return Err(format!(
+                                "expected typed stale-external rejection, received: {error}"
+                            ));
+                        }
+                        Ok(_) => {
+                            return Err("stale external candidate unexpectedly succeeded".into());
+                        }
+                    }
+                } else {
                     result.map_err(|error| error.to_string())?;
-                } else if result.is_ok() {
-                    return Err("stale external candidate unexpectedly succeeded".into());
                 }
             }
-            UatAction::ExternalExplicitRebind => {
+            ScenarioAction::ExternalExplicitRebind => {
                 let expected = self.external.coordinator.session().design_identity();
                 self.external
                     .coordinator
@@ -496,10 +513,10 @@ impl UatCandidate {
                         Some(TOPOLOGY_B),
                     )
                     .map_err(|error| error.to_string())?;
-                return Ok(true);
+                transition.explicit_declaration = true;
             }
-            UatAction::LifecycleRejected | UatAction::LifecycleRecovery => {
-                let (revision, value) = if action == UatAction::LifecycleRejected {
+            ScenarioAction::LifecycleRejected | ScenarioAction::LifecycleRecovery => {
+                let (revision, value) = if action == ScenarioAction::LifecycleRejected {
                     (22, ParameterValue::Angle(4.0))
                 } else {
                     (23, ParameterValue::Length(5.0))
@@ -511,77 +528,54 @@ impl UatCandidate {
                     .replace_parameter_batch(expected, batch, DocumentSolveRequest::default())
                     .map_err(|error| error.to_string())?;
             }
-            UatAction::CaptureEvidence => {}
+            ScenarioAction::CaptureEvidence => {}
         }
-        Ok(false)
+        Ok(transition)
     }
 
     fn capture_text(&self) -> Result<String, String> {
         let serialize = |label: &str, coordinator: &RetainedEditorCoordinator| {
-            serialize_m52_typed_host_evidence(
+            serialize_scenario_typed_host_evidence(
                 coordinator,
-                "M52-UAT-FIXED-CAPTURE",
+                "M53-SCENARIO-FIXED-CAPTURE",
                 label,
-                "geosolve-m52-disposable-uat",
+                "geosolve-m53-scenario-catalog",
                 &host_state_markup(coordinator.session()),
             )
         };
+        let submitted_parameter = parameter_batch_json(&self.parameter.last_submitted);
         let submitted_external = self
             .external
             .last_submitted
             .to_canonical_json()
             .map_err(|error| error.to_string())?;
+        let scenario_transcript = self
+            .transcript
+            .iter()
+            .filter(|observation| observation.action != ScenarioAction::CaptureEvidence)
+            .map(ScenarioObservation::summary)
+            .collect::<Vec<_>>()
+            .join("\n");
         Ok(format!(
-            "M52 DISPOSABLE UAT EVIDENCE\nprovenance=fixed-candidate-not-runtime-platform\nobjective_checks=direct Rust/WASM state transitions\nhuman_clarity_and_trust=M53 judgment only\nPARAMETER\n{}\nEXTERNAL\n{}\nSUBMITTED_EXTERNAL_TYPED\n{}\nLIFECYCLE\n{}",
+            "M53 SCENARIO EVIDENCE\nprovenance=fixed-scenario-not-runtime-platform\nobjective_checks=direct Rust/WASM state transitions\nhuman_clarity_and_trust=M53 judgment only\nSCENARIO_TRANSCRIPT\n{}\nROLE_ACTIVITY\n{}\nPARAMETER\n{}\nSUBMITTED_PARAMETER_TYPED\n{}\nEXTERNAL\n{}\nSUBMITTED_EXTERNAL_TYPED\n{}\nLIFECYCLE\n{}",
+            scenario_transcript,
+            serialize("scenario://role-activity", &self.role.coordinator)?,
             serialize(
-                "m52://parameter-binding-proposal",
+                "scenario://parameter-binding-proposal",
                 &self.parameter.coordinator
             )?,
-            serialize("m52://external-rebind", &self.external.coordinator)?,
+            submitted_parameter,
+            serialize("scenario://external-rebind", &self.external.coordinator)?,
             submitted_external,
-            serialize("m52://lifecycle-evidence", &self.lifecycle.coordinator)?,
+            serialize("scenario://lifecycle-evidence", &self.lifecycle.coordinator)?,
         ))
     }
-
-    pub(crate) fn panel_markup(&self) -> String {
-        let mut instructions = String::new();
-        for point in UAT_POINTS {
-            use std::fmt::Write as _;
-            let _ = write!(
-                instructions,
-                "<li><strong>{}.</strong> {} <span>{}</span></li>",
-                point.number, point.instruction, point.human_judgment
-            );
-        }
-        format!(
-            concat!(
-                "<h2>M52 disposable host-semantics UAT candidate</h2>",
-                "<p><strong>Ephemeral:</strong> save is disabled while active. This sidecar never enters workspace/canonical persistence. Exit restores the pre-existing ordinary workspace; reload also restores only that workspace.</p>",
-                "<div class=\"wb-uat-controls\">",
-                "<button data-uat-action=\"role-construction\">Construction</button><button data-uat-action=\"role-profile\">Profile</button>",
-                "<button data-uat-action=\"suppress\">Suppress</button><button data-uat-action=\"reactivate\">Reactivate</button><button data-uat-action=\"reference\">Reference</button>",
-                "<button data-uat-action=\"host-inactive\">Host inactive</button><button data-uat-action=\"missing-dependency\">Missing dependency</button>",
-                "<button data-uat-action=\"parameter-valid\">Parameter valid</button><button data-uat-action=\"parameter-invalid\">Invalid kind</button><button data-uat-action=\"parameter-stale\">Parameter stale</button><button data-uat-action=\"parameter-recovery\">Parameter recovery</button>",
-                "<button data-uat-action=\"external-missing\">External missing</button><button data-uat-action=\"external-stale\">External stale</button><button data-uat-action=\"external-topology\">Topology change</button><button data-uat-action=\"external-rebind\">Explicit rebind</button><button data-uat-action=\"external-fresh\">Fresh recovery</button>",
-                "<button data-uat-action=\"lifecycle-rejected\">Lifecycle rejected</button><button data-uat-action=\"lifecycle-recovery\">Lifecycle recovery</button>",
-                "<button data-uat-action=\"capture\">Capture typed evidence</button><button data-uat-action=\"load\">Reset candidate</button><button data-uat-action=\"exit\">Exit UAT</button></div>",
-                "<ol class=\"wb-uat-instructions\">{}</ol>",
-                "<h3>Copyable fixed-provenance evidence</h3><pre class=\"wb-uat-evidence\">{}</pre>"
-            ),
-            instructions,
-            escape(&self.evidence_text),
-        )
-    }
-}
-
-pub(crate) fn inactive_panel_markup() -> &'static str {
-    ""
 }
 
 fn role_fixture() -> Result<RoleFixture, String> {
     let mut document = fixed_document(8.0, 1)?;
     let rectangle = document
-        .add_rectangle("M52 role/activity", [0.0, 0.0], 4.0, 3.0)
+        .add_rectangle("Scenario role/activity", [0.0, 0.0], 4.0, 3.0)
         .map_err(|error| error.to_string())?;
     Ok(RoleFixture {
         coordinator: make_coordinator(
@@ -602,7 +596,7 @@ fn parameter_fixture(label: &str, namespace: u128) -> Result<ParameterFixture, S
         .add_rectangle(label, [0.0, 0.0], 4.0, 4.0)
         .map_err(|error| error.to_string())?;
     let parameter = document
-        .add_parameter("M52 shared size", DocumentParameterKind::Length)
+        .add_parameter("Scenario shared size", DocumentParameterKind::Length)
         .map_err(|error| error.to_string())?;
     for dimension in rectangle.dimensions {
         document
@@ -614,7 +608,7 @@ fn parameter_fixture(label: &str, namespace: u128) -> Result<ParameterFixture, S
     }
     let target = document
         .add_scalar(
-            "M52 reported size",
+            "Scenario reported size",
             1.0,
             ScalarUnit::Length,
             ScalarDomain::Finite,
@@ -622,7 +616,7 @@ fn parameter_fixture(label: &str, namespace: u128) -> Result<ParameterFixture, S
         .map_err(|error| error.to_string())?;
     let reference = document
         .add_dimension(
-            "M52 output proposal",
+            "Scenario output proposal",
             DocumentDimensionDefinition::CurveLength {
                 curve: CurveSpan::line(rectangle.curves[2]),
                 target,
@@ -631,20 +625,21 @@ fn parameter_fixture(label: &str, namespace: u128) -> Result<ParameterFixture, S
         )
         .map_err(|error| error.to_string())?;
     let output = document
-        .add_parameter("M52 output", DocumentParameterKind::Length)
+        .add_parameter("Scenario output", DocumentParameterKind::Length)
         .map_err(|error| error.to_string())?;
     document
         .add_parameter_output(output, reference)
         .map_err(|error| error.to_string())?;
     let batch = parameter_batch(parameter, 10, ParameterValue::Length(4.0))?;
     Ok(ParameterFixture {
-        coordinator: make_coordinator(document, batch, ExternalSnapshotSet::default())?,
+        coordinator: make_coordinator(document, batch.clone(), ExternalSnapshotSet::default())?,
         parameter,
+        last_submitted: batch,
     })
 }
 
 fn lifecycle_fixture() -> Result<LifecycleFixture, String> {
-    let fixture = parameter_fixture("M52 lifecycle", 4)?;
+    let fixture = parameter_fixture("Scenario lifecycle", 4)?;
     Ok(LifecycleFixture {
         coordinator: fixture.coordinator,
         parameter: fixture.parameter,
@@ -661,7 +656,7 @@ fn external_fixture() -> Result<ExternalFixture, String> {
         .map_err(|e| e.to_string())?;
     let line = document
         .add_curve(
-            "M52 external line",
+            "Scenario external line",
             CurveDefinition::Line {
                 start,
                 end,
@@ -671,21 +666,21 @@ fn external_fixture() -> Result<ExternalFixture, String> {
         .map_err(|error| error.to_string())?;
     let binding = document
         .add_external_binding(
-            "M52 datum",
+            "Scenario datum",
             ExternalFeatureKindV1::LineSegment,
             Some(TOPOLOGY_A),
         )
         .map_err(|error| error.to_string())?;
     let spare = document
         .add_external_binding(
-            "M52 spare",
+            "Scenario spare",
             ExternalFeatureKindV1::LineSegment,
             Some(TOPOLOGY_A),
         )
         .map_err(|error| error.to_string())?;
     document
         .add_constraint(
-            "M52 external collinearity",
+            "Scenario external collinearity",
             DocumentConstraintDefinition::ExternalLineCollinear {
                 line: DocumentLineSupportRef {
                     span: CurveSpan::line(line),
@@ -712,7 +707,7 @@ fn external_fixture() -> Result<ExternalFixture, String> {
 }
 
 fn fixed_document(model_scale: f64, fixture: u128) -> Result<SketchDocument, String> {
-    let namespace = 0x5200_0000_0000_0000_0000_0000_0000_0000_u128 | fixture;
+    let namespace = 0x5300_0000_0000_0000_0000_0000_0000_0000_u128 | fixture;
     SketchDocument::with_id(model_scale, DocumentId(PersistentId::from_u128(namespace)))
         .map_err(|error| error.to_string())
 }
@@ -801,68 +796,16 @@ fn accepted_evidence(coordinator: &RetainedEditorCoordinator) -> String {
     )
 }
 
-fn escape(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{UAT_POINTS, UatAction, UatBoundary, UatCandidate, UatWorkbenchState};
+    use super::{
+        ScenarioAction, ScenarioBoundary, ScenarioCandidate, ScenarioFixture, ScenarioRejection,
+    };
     use crate::workbench::panels::{host_state_markup, tree_markup};
 
     #[test]
-    fn m52_candidate_composes_all_ten_preserved_points_without_persistence() {
-        let mut candidate = UatCandidate::new().unwrap();
-        assert_eq!(
-            UAT_POINTS.map(|point| point.number),
-            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-        );
-        for point in UAT_POINTS {
-            assert!(!point.objective_check.is_empty());
-            assert!(point.human_judgment.contains("M53"));
-        }
-        for action in [
-            UatAction::RoleConstruction,
-            UatAction::RoleProfile,
-            UatAction::SuppressDimension,
-            UatAction::ReactivateDimension,
-            UatAction::ReferenceDimension,
-            UatAction::HostInactive,
-            UatAction::MissingDependency,
-            UatAction::ParameterValid,
-            UatAction::ParameterInvalidKind,
-            UatAction::ParameterStale,
-            UatAction::ParameterRecovery,
-            UatAction::ExternalMissing,
-            UatAction::ExternalStale,
-            UatAction::ExternalTopologyChange,
-            UatAction::ExternalExplicitRebind,
-            UatAction::ExternalFreshRecovery,
-            UatAction::LifecycleRejected,
-            UatAction::LifecycleRecovery,
-            UatAction::CaptureEvidence,
-        ] {
-            candidate.perform(action).unwrap();
-        }
-        let panel = candidate.panel_markup();
-        assert!(panel.contains("save is disabled while active"));
-        assert!(panel.contains("M53 alone judges overall coherence and trust"));
-        for forbidden in [
-            "localStorage",
-            "WorkspaceSnapshot",
-            "storage_key",
-            "canonical sketch JSON fixture",
-        ] {
-            assert!(!panel.contains(forbidden));
-        }
-    }
-
-    #[test]
-    fn m52_candidate_directly_qualifies_role_activity_and_mode_distinctions() {
-        let mut candidate = UatCandidate::new().unwrap();
+    fn scenario_candidate_directly_qualifies_role_activity_and_mode_distinctions() {
+        let mut candidate = ScenarioCandidate::new(ScenarioFixture::RoleActivity).unwrap();
         let role_curve = candidate.role.role_curve;
         let dependency = candidate.role.activity_dependency;
         let dimension = candidate.role.mode_dimension;
@@ -880,7 +823,7 @@ mod tests {
                 .contains(&format!("data-profile-curve=\"{role_curve}\""))
         );
 
-        candidate.perform(UatAction::RoleConstruction).unwrap();
+        candidate.perform(ScenarioAction::RoleConstruction).unwrap();
         let construction = host_state_markup(candidate.role.coordinator.session());
         assert!(!construction.contains(&format!("data-profile-curve=\"{role_curve}\"")));
         assert!(construction.contains(&format!(
@@ -897,29 +840,37 @@ mod tests {
                 .geometry,
             accepted_geometry
         );
-        candidate.perform(UatAction::RoleProfile).unwrap();
+        candidate.perform(ScenarioAction::RoleProfile).unwrap();
         assert!(
             host_state_markup(candidate.role.coordinator.session())
                 .contains(&format!("data-profile-curve=\"{role_curve}\""))
         );
 
-        candidate.perform(UatAction::SuppressDimension).unwrap();
+        candidate
+            .perform(ScenarioAction::SuppressDimension)
+            .unwrap();
         assert!(host_state_markup(candidate.role.coordinator.session()).contains(&format!(
             "data-activity-element=\"{dimension}\" data-activity-state=\"inactive\" data-activity-reason=\"user-suppressed\""
         )));
-        candidate.perform(UatAction::ReactivateDimension).unwrap();
-        candidate.perform(UatAction::ReferenceDimension).unwrap();
+        candidate
+            .perform(ScenarioAction::ReactivateDimension)
+            .unwrap();
+        candidate
+            .perform(ScenarioAction::ReferenceDimension)
+            .unwrap();
         assert!(
             tree_markup(candidate.role.coordinator.session().design_document(), &[]).contains(
                 &format!("data-persistent-id=\"{dimension}\" data-dimension-mode=\"reference\"")
             )
         );
 
-        candidate.perform(UatAction::HostInactive).unwrap();
+        candidate.perform(ScenarioAction::HostInactive).unwrap();
         assert!(host_state_markup(candidate.role.coordinator.session()).contains(&format!(
             "data-activity-element=\"{dimension}\" data-activity-state=\"inactive\" data-activity-reason=\"host-configuration-inactive\""
         )));
-        candidate.perform(UatAction::MissingDependency).unwrap();
+        candidate
+            .perform(ScenarioAction::MissingDependency)
+            .unwrap();
         let unavailable = host_state_markup(candidate.role.coordinator.session());
         assert!(unavailable.contains(&format!(
             "data-activity-element=\"{dependency}\" data-activity-state=\"inactive\" data-activity-reason=\"unavailable-external-reference\""
@@ -930,14 +881,14 @@ mod tests {
     }
 
     #[test]
-    fn m52_candidate_transcript_retains_and_advances_only_at_typed_recovery_boundaries() {
-        let mut candidate = UatCandidate::new().unwrap();
+    fn parameter_and_lifecycle_transcript_retains_until_typed_recovery() {
+        let mut candidate = ScenarioCandidate::new(ScenarioFixture::ParameterProposal).unwrap();
         assert_eq!(
             candidate
-                .perform(UatAction::ParameterValid)
+                .perform(ScenarioAction::ParameterValid)
                 .unwrap()
                 .boundary,
-            UatBoundary::AdvancedAccepted
+            ScenarioBoundary::AdvancedAccepted
         );
         let accepted = candidate
             .parameter
@@ -953,24 +904,33 @@ mod tests {
                 .count(),
             2
         );
-        let invalid = candidate.perform(UatAction::ParameterInvalidKind).unwrap();
-        assert_eq!(invalid.boundary, UatBoundary::RetainedAccepted);
+        let invalid = candidate
+            .perform(ScenarioAction::ParameterInvalidKind)
+            .unwrap();
+        assert_eq!(invalid.boundary, ScenarioBoundary::RetainedAccepted);
         assert_eq!(
             invalid.accepted_evidence_before,
             invalid.accepted_evidence_after
         );
-        let stale = candidate.perform(UatAction::ParameterStale).unwrap();
-        assert_eq!(stale.boundary, UatBoundary::RetainedAccepted);
+        let stale = candidate.perform(ScenarioAction::ParameterStale).unwrap();
+        assert_eq!(stale.boundary, ScenarioBoundary::RetainedAccepted);
+        assert_eq!(
+            stale.rejection,
+            Some(ScenarioRejection::StaleParameter {
+                submitted: 1,
+                retained: 12,
+            })
+        );
         assert_eq!(
             stale.accepted_evidence_before,
             stale.accepted_evidence_after
         );
         assert_eq!(
             candidate
-                .perform(UatAction::ParameterRecovery)
+                .perform(ScenarioAction::ParameterRecovery)
                 .unwrap()
                 .boundary,
-            UatBoundary::AdvancedAccepted
+            ScenarioBoundary::AdvancedAccepted
         );
         assert_eq!(
             candidate
@@ -984,13 +944,38 @@ mod tests {
             13
         );
 
+        let rejected = candidate
+            .perform(ScenarioAction::LifecycleRejected)
+            .unwrap();
+        assert_eq!(rejected.boundary, ScenarioBoundary::RetainedAccepted);
+        assert_eq!(
+            candidate
+                .perform(ScenarioAction::LifecycleRecovery)
+                .unwrap()
+                .boundary,
+            ScenarioBoundary::AdvancedAccepted
+        );
+    }
+
+    #[test]
+    fn external_transcript_distinguishes_stale_declaration_and_repeated_rebind() {
+        let mut candidate = ScenarioCandidate::new(ScenarioFixture::ExternalRebind).unwrap();
         for action in [
-            UatAction::ExternalMissing,
-            UatAction::ExternalStale,
-            UatAction::ExternalTopologyChange,
+            ScenarioAction::ExternalMissing,
+            ScenarioAction::ExternalStale,
+            ScenarioAction::ExternalTopologyChange,
         ] {
             let observation = candidate.perform(action).unwrap();
-            assert_eq!(observation.boundary, UatBoundary::RetainedAccepted);
+            assert_eq!(observation.boundary, ScenarioBoundary::RetainedAccepted);
+            if action == ScenarioAction::ExternalStale {
+                assert_eq!(
+                    observation.rejection,
+                    Some(ScenarioRejection::StaleExternal {
+                        submitted: 1,
+                        retained: 10,
+                    })
+                );
+            }
             assert_eq!(
                 observation.accepted_evidence_before,
                 observation.accepted_evidence_after
@@ -998,50 +983,64 @@ mod tests {
         }
         assert_eq!(
             candidate
-                .perform(UatAction::ExternalExplicitRebind)
+                .perform(ScenarioAction::ExternalExplicitRebind)
                 .unwrap()
                 .boundary,
-            UatBoundary::ExplicitDeclarationOnly
+            ScenarioBoundary::ExplicitDeclarationOnly
         );
         assert_eq!(
             candidate
-                .perform(UatAction::ExternalFreshRecovery)
+                .perform(ScenarioAction::ExternalFreshRecovery)
                 .unwrap()
                 .boundary,
-            UatBoundary::AdvancedAccepted
+            ScenarioBoundary::AdvancedAccepted
         );
-        let rejected = candidate.perform(UatAction::LifecycleRejected).unwrap();
-        assert_eq!(rejected.boundary, UatBoundary::RetainedAccepted);
-        assert_eq!(
-            candidate
-                .perform(UatAction::LifecycleRecovery)
-                .unwrap()
-                .boundary,
-            UatBoundary::AdvancedAccepted
+        let repeated_rebind = candidate
+            .perform(ScenarioAction::ExternalExplicitRebind)
+            .unwrap();
+        assert_eq!(repeated_rebind.boundary, ScenarioBoundary::AdvancedAccepted);
+        assert_ne!(
+            repeated_rebind.accepted_before,
+            repeated_rebind.accepted_after
         );
     }
 
     #[test]
-    fn m52_candidate_evidence_is_deterministic_and_contains_typed_inputs() {
-        let mut candidate = UatCandidate::new().unwrap();
-        candidate.perform(UatAction::ParameterInvalidKind).unwrap();
-        candidate.perform(UatAction::ExternalMissing).unwrap();
-        candidate.perform(UatAction::LifecycleRejected).unwrap();
-        candidate.perform(UatAction::CaptureEvidence).unwrap();
+    fn scenario_candidate_evidence_is_deterministic_and_contains_typed_inputs() {
+        let mut candidate = ScenarioCandidate::new(ScenarioFixture::RoleActivity).unwrap();
+        candidate
+            .perform(ScenarioAction::ParameterInvalidKind)
+            .unwrap();
+        candidate.perform(ScenarioAction::ParameterStale).unwrap();
+        candidate.perform(ScenarioAction::ExternalMissing).unwrap();
+        candidate.perform(ScenarioAction::ExternalStale).unwrap();
+        candidate
+            .perform(ScenarioAction::LifecycleRejected)
+            .unwrap();
+        candidate.perform(ScenarioAction::CaptureEvidence).unwrap();
         let first = candidate.evidence_text.clone();
-        candidate.perform(UatAction::CaptureEvidence).unwrap();
+        candidate.perform(ScenarioAction::CaptureEvidence).unwrap();
         assert_eq!(candidate.evidence_text, first);
-        let mut replay = UatCandidate::new().unwrap();
-        replay.perform(UatAction::ParameterInvalidKind).unwrap();
-        replay.perform(UatAction::ExternalMissing).unwrap();
-        replay.perform(UatAction::LifecycleRejected).unwrap();
-        replay.perform(UatAction::CaptureEvidence).unwrap();
+        let mut replay = ScenarioCandidate::new(ScenarioFixture::RoleActivity).unwrap();
+        replay
+            .perform(ScenarioAction::ParameterInvalidKind)
+            .unwrap();
+        replay.perform(ScenarioAction::ParameterStale).unwrap();
+        replay.perform(ScenarioAction::ExternalMissing).unwrap();
+        replay.perform(ScenarioAction::ExternalStale).unwrap();
+        replay.perform(ScenarioAction::LifecycleRejected).unwrap();
+        replay.perform(ScenarioAction::CaptureEvidence).unwrap();
         assert_eq!(replay.evidence_text, first);
         for expected in [
-            "M52-UAT-FIXED-CAPTURE",
-            "m52://parameter-binding-proposal",
-            "m52://external-rebind",
+            "M53-SCENARIO-FIXED-CAPTURE",
+            "scenario://role-activity",
+            "scenario://parameter-binding-proposal",
+            "scenario://external-rebind",
             "\"kind\":\"angle\"",
+            "SUBMITTED_PARAMETER_TYPED\n{\"revision\":1",
+            "SUBMITTED_EXTERNAL_TYPED\n{\"version\":1,\"revision\":1",
+            "typed stale-parameter rejection: submitted revision 1, retained revision 12",
+            "typed stale-external rejection: submitted revision 1, retained revision 10",
             "external_snapshot_set",
             "design_identity",
             "design_revision",
@@ -1067,69 +1066,5 @@ mod tests {
                 assert!(!first.contains(accepted_json));
             }
         }
-    }
-
-    #[test]
-    fn m52_sidecar_isolates_the_production_workspace_snapshot_flow() {
-        let ordinary = super::make_coordinator(
-            super::fixed_document(8.0, 99).unwrap(),
-            geosolve_sketch::ParameterBatch::default(),
-            geosolve_sketch::ExternalSnapshotSet::default(),
-        )
-        .unwrap();
-        let mut sidecar = UatWorkbenchState::new();
-        let before = sidecar.persistence_snapshot(&ordinary).unwrap();
-        let ordinary_checkpoint = ordinary.checkpoint();
-
-        sidecar.load().unwrap();
-        assert!(sidecar.is_active());
-        assert_ne!(
-            sidecar
-                .coordinator_for_render(&ordinary)
-                .session()
-                .design_identity(),
-            ordinary.session().design_identity()
-        );
-        sidecar.perform(UatAction::ParameterInvalidKind).unwrap();
-        sidecar.perform(UatAction::ExternalMissing).unwrap();
-        sidecar.perform(UatAction::LifecycleRejected).unwrap();
-        for action in [
-            "new",
-            "undo",
-            "redo",
-            "finish",
-            "cancel",
-            "clear-selection",
-            "delete",
-            "constraint",
-            "dimension",
-        ] {
-            assert!(!sidecar.ordinary_action_allowed(action));
-        }
-        assert!(sidecar.ordinary_action_allowed("problems"));
-        assert!(sidecar.persistence_snapshot(&ordinary).is_none());
-        let unchanged_checkpoint = ordinary.checkpoint();
-        assert_eq!(
-            unchanged_checkpoint.design_json(),
-            ordinary_checkpoint.design_json()
-        );
-        assert_eq!(
-            unchanged_checkpoint.accepted_json(),
-            ordinary_checkpoint.accepted_json()
-        );
-        assert_eq!(
-            unchanged_checkpoint.revisions(),
-            ordinary_checkpoint.revisions()
-        );
-
-        sidecar.exit();
-        assert!(!sidecar.is_active());
-        let after = sidecar.persistence_snapshot(&ordinary).unwrap();
-        assert_eq!(after, before);
-
-        let reloaded =
-            crate::workbench::persistence::WorkspaceSnapshot::decode(&after.encode().unwrap())
-                .unwrap();
-        assert_eq!(reloaded, before);
     }
 }

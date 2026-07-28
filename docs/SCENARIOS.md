@@ -1353,12 +1353,32 @@ without selecting from coordinates.
 
 ### UAT-C2 - CAD host semantics at M53
 
-One minimal post-cleanup composition covers construction-role conversion, suppression and
-reactivation, one parameter driving several dimensions, invalid parameter recovery, an
-immutable external reference becoming stale/missing/valid and retained unsolved design
-over prior accepted geometry. The prepared 30-45 minute review judges state, ownership and
-recovery clarity; revisions, digests and atomicity remain directly automated. M45 preserved
-these points but recorded no human approval; M52 prepared this candidate.
+M52 directly qualified four fixed fixture families and ten objective points without
+recording human approval. Active M53 presents that same behavior as six typed scenarios
+under the stable root `m53-host-semantics` (**M53 Host semantics**):
+
+| Selector group | Stable scenario ID | Scenario title | Objective points |
+| --- | --- | --- | --- |
+| `geometry-intent` (**Geometry intent**) | `role-profile-participation` | Role & profile participation | P1 |
+| `geometry-intent` (**Geometry intent**) | `activation-dimension-mode` | Activation & dimension mode | P2-P3 |
+| `host-owned-inputs` (**Host-owned inputs**) | `shared-parameter-proposal` | Shared parameter & proposal | P4 |
+| `host-owned-inputs` (**Host-owned inputs**) | `invalid-stale-parameter-recovery` | Invalid/stale parameter recovery | P5 |
+| `host-owned-inputs` (**Host-owned inputs**) | `external-loss-explicit-recovery` | External loss & explicit recovery | P6-P7 |
+| `truth-evidence` (**Truth & evidence**) | `lifecycle-evidence-natural-pass` | Lifecycle, evidence & natural pass | P8-P10 |
+
+Here P1-P10 identify the preserved objective verification points in `docs/M53_UAT.md`,
+not its `M53-Pxxx` finding and process identifiers. Selecting a scenario constructs and
+activates its deterministic ephemeral candidate; switching selects a fresh candidate and
+**Reset scenario** reconstructs the selected one. Global **Capture typed evidence** remains
+available across scenarios, while **Exit scenario** discards all scenario state and restores
+the unchanged ordinary workspace.
+
+The guide sidebar publishes the selected scenario's description, objective points, human
+questions, typed steps, expected outcome and recent transcript/evidence. Stable definitions
+may group and present typed candidate actions, but the browser does not derive equations,
+accepted state, revisions, digests or recovery semantics. Those remain products of the
+direct-qualified fixture transitions and public domain/audit APIs. The prepared 30-45 minute
+review judges discoverability, state, ownership and recovery clarity.
 
 ### UAT-C3 - Advanced geometry and topology at placeholder M106X
 
@@ -1381,12 +1401,14 @@ matrix.
 ### UAT evidence and recheck policy
 
 Each checkpoint provides one manual entry point, deterministic resets and concise
-instructions. Findings capture the candidate revision, workspace input, action transcript
-and accepted/attempted diagnostics from public APIs; a human may attach an OS screenshot
-for a visual finding. Objective defects receive direct owning-layer regressions. A targeted
-human recheck is preferred; a full checkpoint repeats only after a material API, schema or
-primary-workflow change. Completed M40.7, M53 and eventual renumbered M106X/M108X require
-explicit supervising-human sign-off.
+instructions. M53 uses one top **Scenarios** entry point with the six stable leaves above;
+the catalog machinery may host UAT-C3/UAT-C4 only after their placeholder milestones are
+renumbered and executed. Findings capture the candidate revision, selected scenario,
+workspace input, action transcript and accepted/attempted diagnostics from public APIs; a
+human may attach an OS screenshot for a visual finding. Objective defects receive direct
+owning-layer regressions. A targeted human recheck is preferred; a full checkpoint repeats
+only after a material API, schema or primary-workflow change. Completed M40.7 required explicit
+supervising-human sign-off; active M53 and eventual renumbered M106X/M108X require the same.
 
 ## Frozen near-singular fixtures
 

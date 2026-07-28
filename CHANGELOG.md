@@ -44,6 +44,10 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - Completed M51 by removing the survivor's design-only storage migration, duplicate M40
   report/evidence fixtures and stale M32 distribution copy; one workspace snapshot and directly
   tested presentation, persistence, effect and typed-evidence transformations remain.
+- Replaced the M52 candidate's one-off bottom launcher and overlay for active M53 review with a
+  reusable typed six-scenario catalog, a top nested **Scenarios** selector and a contextual guide
+  sidebar. The same ten objective points, deterministic reset/evidence behavior and ordinary
+  workspace isolation remain, with no new public API, schema or browser-owned domain semantics.
 - Consolidated the WASM consumer to one directly tested workbench and removed the legacy
   playground, routes, browser E2E, serving/download glue and browser-owned qualification path.
 

@@ -2241,6 +2241,10 @@ Status: active; human approval required.
 Goal: retire trust and comprehension risks around construction, activation, parameters,
 external references and retained unsolved intent on the post-cleanup workbench.
 
+- [x] Replace the one-off M52 launcher/action wall with six typed scenario definitions, a nested
+  selector and a contextual guide while preserving P1-P10 and ordinary-workspace isolation.
+- [ ] Requalify the integrated demo-web/WASM/release candidate and record its new identity before
+  targeted human review.
 - [ ] Assess role/profile and suppression/mode distinctions.
 - [ ] Assess parameter ownership, proposal provenance and invalid/stale recovery.
 - [ ] Assess missing/stale/topology/rebind external-reference recovery.
@@ -2259,6 +2263,11 @@ scope remains in M100X-M109X or an explicit open question. One request must not 
 close another development concern, question or plan. Candidate identities and any temporary
 human-only access details belong exclusively in the M53 ledger; they are not automated gates,
 retained server infrastructure or product routes.
+
+M53-P011 owns the selector change: the typed catalog and focused native catalog regressions are
+implemented, while integrated qualification, a newly identified candidate and the targeted human
+discoverability/guidance retest remain pending. The change presents the already qualified M52
+fixture behavior and adds no new host semantic.
 
 ## Placeholder future functional sequence
 
