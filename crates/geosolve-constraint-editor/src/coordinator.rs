@@ -2,18 +2,20 @@
 
 //! Retained-design lifecycle coordination for presentation adapters.
 
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 
 use geosolve_sketch::{
     CurveDefinition, CurveId, CurveSpan, DesignPointId, DocumentCommandEffect,
     DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode, DocumentEdit,
-    DocumentExternalBindingId, DocumentMeasurementCatalog, DocumentMeasurementProvenance,
-    DocumentMeasurementValue, DocumentObjectId, DocumentRuntimeMap, DocumentSessionError,
-    DocumentSolveRequest, DocumentSourceId, ExternalFeatureKindV1, ExternalSnapshotSet,
-    ExternalTopologyDigest, GeometryRole, ParameterBatch, RetainedSketchDocumentSession,
-    ScalarDomain, ScalarUnit, SketchAcceptedDocumentRedundancy, SketchAcceptedStateIdentity,
-    SketchAttemptFailure, SketchAttemptIdentity, SketchDesignIdentity, SketchDocument,
-    SketchLifecycleRevisionHighWater, SketchSolveResult, SolveRejection,
+    DocumentElementId, DocumentExternalBindingId, DocumentMeasurementCatalog,
+    DocumentMeasurementProvenance, DocumentMeasurementValue, DocumentObjectId, DocumentRuntimeMap,
+    DocumentSessionError, DocumentSolveRequest, DocumentSourceId, DocumentSourceOwner,
+    ExternalFeatureKindV1, ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole,
+    ParameterBatch, RetainedSketchDocumentSession, RuntimeCurve, ScalarDomain, ScalarUnit,
+    SketchAcceptedDocumentRedundancy, SketchAcceptedStateIdentity, SketchAttemptFailure,
+    SketchAttemptFailureKind, SketchAttemptIdentity, SketchBound, SketchDesignIdentity,
+    SketchDocument, SketchLifecycleRevisionHighWater, SketchSolveResult, SketchSource,
+    SolveRejection,
 };
 use thiserror::Error;
 
@@ -88,6 +90,47 @@ pub struct ProblemsDto<'a> {
     pub parent_accepted: Option<SketchAcceptedStateIdentity>,
     pub failure: Option<&'a SketchAttemptFailure>,
     pub rejection: Option<&'a SolveRejection>,
+}
+
+/// Stable high-level classification for one current editor problem.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EditorProblemCategory {
+    Input,
+    Lowering,
+    Solver,
+    Validation,
+    Geometry,
+    Constraint,
+    Dimension,
+    Bound,
+    Publication,
+}
+
+/// Whether a current problem has defensible persistent presentation targets.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EditorProblemScope {
+    Global,
+    Targeted,
+}
+
+/// Persistent canvas-addressable identity associated with one current problem.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum EditorProblemTarget {
+    Point(DesignPointId),
+    Curve(CurveId),
+    Constraint(geosolve_sketch::DocumentConstraintId),
+    Dimension(DocumentDimensionId),
+}
+
+/// Presentation-neutral metadata for the latest failed or rejected retained-design attempt.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EditorProblemMetadata {
+    pub attempt: SketchAttemptIdentity,
+    pub design: SketchDesignIdentity,
+    pub category: EditorProblemCategory,
+    pub scope: EditorProblemScope,
+    pub message: String,
+    pub targets: Vec<EditorProblemTarget>,
 }
 
 /// Provenance of an audit evidence reference.
@@ -495,6 +538,58 @@ impl RetainedEditorCoordinator {
                 .solve_result()
                 .and_then(|solve| solve.rejection.as_ref()),
         }
+    }
+
+    /// Returns structured presentation metadata for only the latest failed or rejected attempt.
+    ///
+    /// Attribution uses attempted runtime mappings and persistent document dependencies. When no
+    /// individual persistent element is defensible, the problem remains explicitly global.
+    #[must_use]
+    pub fn current_problem_metadata(&self) -> Option<EditorProblemMetadata> {
+        let attempt = self.session.last_attempt();
+        if let Some(failure) = attempt.failure() {
+            return Some(EditorProblemMetadata {
+                attempt: attempt.identity(),
+                design: attempt.design_identity(),
+                category: failure_category(failure.kind()),
+                scope: EditorProblemScope::Global,
+                message: failure.message().to_owned(),
+                targets: Vec::new(),
+            });
+        }
+        let solve = attempt.solve_result()?;
+        let rejection = solve.rejection.as_ref()?;
+        let document = self.session.design_document();
+        let mut elements = BTreeSet::new();
+
+        for source in &solve.core_report.conflicting_sources {
+            if let Some(source) = attempt.persistent_core_source(*source) {
+                insert_source_owner(&mut elements, document, source);
+            }
+        }
+        insert_rejection_elements(&mut elements, attempt, document, rejection);
+
+        let roots = elements.iter().copied().collect::<Vec<_>>();
+        for root in roots {
+            elements.extend(document.dependency_closure(root));
+        }
+        let targets = elements
+            .into_iter()
+            .filter_map(problem_target)
+            .collect::<Vec<_>>();
+        let scope = if targets.is_empty() {
+            EditorProblemScope::Global
+        } else {
+            EditorProblemScope::Targeted
+        };
+        Some(EditorProblemMetadata {
+            attempt: attempt.identity(),
+            design: attempt.design_identity(),
+            category: rejection_category(rejection),
+            scope,
+            message: rejection_message(rejection),
+            targets,
+        })
     }
 
     /// Accepted audit is returned only from the coherent accepted state.
@@ -1396,6 +1491,290 @@ impl RetainedEditorCoordinator {
     }
 }
 
+const fn failure_category(kind: SketchAttemptFailureKind) -> EditorProblemCategory {
+    match kind {
+        SketchAttemptFailureKind::ParameterInput
+        | SketchAttemptFailureKind::ExternalSnapshotInput => EditorProblemCategory::Input,
+        SketchAttemptFailureKind::Lowering => EditorProblemCategory::Lowering,
+        SketchAttemptFailureKind::Request | SketchAttemptFailureKind::Solve => {
+            EditorProblemCategory::Solver
+        }
+        SketchAttemptFailureKind::Publication => EditorProblemCategory::Publication,
+        _ => EditorProblemCategory::Validation,
+    }
+}
+
+const fn rejection_category(rejection: &SolveRejection) -> EditorProblemCategory {
+    match rejection {
+        SolveRejection::CoreTermination(_) | SolveRejection::HardResidual { .. } => {
+            EditorProblemCategory::Solver
+        }
+        SolveRejection::SegmentBranchFlipped(_)
+        | SolveRejection::NonPositiveCircleRadius(_)
+        | SolveRejection::NonPositiveArcRadius(_)
+        | SolveRejection::DegenerateSegment(_)
+        | SolveRejection::InvalidConicEntity(_)
+        | SolveRejection::InvalidNurbsEntity { .. } => EditorProblemCategory::Geometry,
+        SolveRejection::DegenerateCurve(_)
+        | SolveRejection::NurbsEvaluation { .. }
+        | SolveRejection::IndependentConstraintResidual { .. }
+        | SolveRejection::InvalidFilletGeometry(_)
+        | SolveRejection::FilletSideFlipped(_)
+        | SolveRejection::ContactParameterOutOfDomain(_)
+        | SolveRejection::AmbiguousContactNeighborhood(_)
+        | SolveRejection::LineSideFlipped(_)
+        | SolveRejection::InvalidTangencyMode(_)
+        | SolveRejection::AmbiguousTangencyScale(_)
+        | SolveRejection::CenterDirectionFlipped(_) => EditorProblemCategory::Constraint,
+        SolveRejection::IndependentDimensionResidual { .. }
+        | SolveRejection::LineOffsetBranchFlipped(_) => EditorProblemCategory::Dimension,
+        SolveRejection::BoundViolation(_) => EditorProblemCategory::Bound,
+        _ => EditorProblemCategory::Validation,
+    }
+}
+
+#[allow(clippy::too_many_lines)]
+fn rejection_message(rejection: &SolveRejection) -> String {
+    match rejection {
+        SolveRejection::CoreTermination(_) => {
+            "Solver stopped before producing an acceptable validated result.".into()
+        }
+        SolveRejection::HardResidual { maximum, tolerance } => format!(
+            "Hard residual validation failed: maximum {maximum:.3e}, tolerance {tolerance:.3e}."
+        ),
+        SolveRejection::IndependentValidationFailed(message) => {
+            format!("Independent validation failed: {message}")
+        }
+        SolveRejection::SegmentBranchFlipped(_) => {
+            "A line segment crossed its retained branch.".into()
+        }
+        SolveRejection::NonPositiveCircleRadius(_) => {
+            "A circle radius was not positive after solving.".into()
+        }
+        SolveRejection::NonPositiveArcRadius(_) => {
+            "An arc radius was not positive after solving.".into()
+        }
+        SolveRejection::DegenerateSegment(_) => "A line segment became degenerate.".into(),
+        SolveRejection::DegenerateCurve(_) => "A constrained curve became degenerate.".into(),
+        SolveRejection::InvalidConicEntity(_) => "A conic became invalid after solving.".into(),
+        SolveRejection::InvalidNurbsEntity { source, .. } => {
+            format!("A NURBS definition became invalid: {source}")
+        }
+        SolveRejection::NurbsEvaluation { source, .. } => {
+            format!("A constrained NURBS could not be evaluated: {source}")
+        }
+        SolveRejection::IndependentConstraintResidual {
+            maximum, tolerance, ..
+        } => format!(
+            "Independent constraint validation failed: maximum {maximum:.3e}, tolerance {tolerance:.3e}."
+        ),
+        SolveRejection::IndependentDimensionResidual {
+            maximum, tolerance, ..
+        } => format!(
+            "Independent dimension validation failed: maximum {maximum:.3e}, tolerance {tolerance:.3e}."
+        ),
+        SolveRejection::LineOffsetBranchFlipped(_) => {
+            "A line-offset dimension crossed its retained orientation branch.".into()
+        }
+        SolveRejection::InvalidFilletGeometry(_) => {
+            "A fillet no longer has valid derived geometry.".into()
+        }
+        SolveRejection::FilletSideFlipped(_) => "A fillet crossed its retained side.".into(),
+        SolveRejection::ContactParameterOutOfDomain(_) => {
+            "A constrained contact left its permitted curve interval.".into()
+        }
+        SolveRejection::AmbiguousContactNeighborhood(_) => {
+            "A constrained contact neighborhood became ambiguous.".into()
+        }
+        SolveRejection::LineSideFlipped(_) => "A line contact crossed its retained side.".into(),
+        SolveRejection::InvalidTangencyMode(_) => {
+            "A tangency no longer satisfies its retained mode.".into()
+        }
+        SolveRejection::AmbiguousTangencyScale(_) => "A tangency scale became ambiguous.".into(),
+        SolveRejection::CenterDirectionFlipped(_) => {
+            "A center/contact direction crossed its retained branch.".into()
+        }
+        SolveRejection::BoundViolation(_) => {
+            "A solved coordinate violated its retained bound.".into()
+        }
+        _ => "Independent validation rejected the attempted design.".into(),
+    }
+}
+
+fn insert_source_owner(
+    elements: &mut BTreeSet<DocumentElementId>,
+    document: &SketchDocument,
+    source: DocumentSourceId,
+) {
+    let Some(source) = document.source(source) else {
+        return;
+    };
+    elements.insert(match source.owner {
+        DocumentSourceOwner::Constraint(id) => DocumentElementId::Constraint(id),
+        DocumentSourceOwner::Dimension(id) => DocumentElementId::Dimension(id),
+    });
+}
+
+fn insert_runtime_source(
+    elements: &mut BTreeSet<DocumentElementId>,
+    attempt: &geosolve_sketch::SketchDocumentAttempt,
+    document: &SketchDocument,
+    source: SketchSource,
+) {
+    if let Some(source) = attempt.persistent_source(source) {
+        insert_source_owner(elements, document, source);
+    }
+}
+
+#[allow(clippy::too_many_lines)]
+fn insert_rejection_elements(
+    elements: &mut BTreeSet<DocumentElementId>,
+    attempt: &geosolve_sketch::SketchDocumentAttempt,
+    document: &SketchDocument,
+    rejection: &SolveRejection,
+) {
+    match rejection {
+        SolveRejection::SegmentBranchFlipped(id) | SolveRejection::DegenerateSegment(id) => {
+            insert_runtime_curve(elements, attempt, |curve| match curve {
+                RuntimeCurve::Line(candidate) => candidate == id,
+                RuntimeCurve::Polyline(segments) => segments.contains(id),
+                _ => false,
+            });
+        }
+        SolveRejection::NonPositiveCircleRadius(id) => {
+            insert_runtime_curve(
+                elements,
+                attempt,
+                |curve| matches!(curve, RuntimeCurve::Circle(candidate) if candidate == id),
+            );
+        }
+        SolveRejection::NonPositiveArcRadius(id) => {
+            insert_runtime_curve(
+                elements,
+                attempt,
+                |curve| matches!(curve, RuntimeCurve::CircularArc(candidate) if candidate == id),
+            );
+        }
+        SolveRejection::InvalidConicEntity(id) => {
+            insert_runtime_curve(
+                elements,
+                attempt,
+                |curve| matches!(curve, RuntimeCurve::Conic(candidate) if candidate == id),
+            );
+        }
+        SolveRejection::InvalidNurbsEntity { nurbs, .. } => {
+            insert_runtime_curve(
+                elements,
+                attempt,
+                |curve| matches!(curve, RuntimeCurve::Nurbs { nurbs: candidate, .. } if candidate == nurbs),
+            );
+        }
+        SolveRejection::NurbsEvaluation {
+            constraint, nurbs, ..
+        } => {
+            insert_runtime_source(
+                elements,
+                attempt,
+                document,
+                SketchSource::Constraint(*constraint),
+            );
+            insert_runtime_curve(
+                elements,
+                attempt,
+                |curve| matches!(curve, RuntimeCurve::Nurbs { nurbs: candidate, .. } if candidate == nurbs),
+            );
+        }
+        SolveRejection::DegenerateCurve(id)
+        | SolveRejection::InvalidFilletGeometry(id)
+        | SolveRejection::FilletSideFlipped(id)
+        | SolveRejection::ContactParameterOutOfDomain(id)
+        | SolveRejection::AmbiguousContactNeighborhood(id)
+        | SolveRejection::LineSideFlipped(id)
+        | SolveRejection::InvalidTangencyMode(id)
+        | SolveRejection::AmbiguousTangencyScale(id)
+        | SolveRejection::CenterDirectionFlipped(id)
+        | SolveRejection::IndependentConstraintResidual { constraint: id, .. } => {
+            insert_runtime_source(elements, attempt, document, SketchSource::Constraint(*id));
+        }
+        SolveRejection::LineOffsetBranchFlipped(id)
+        | SolveRejection::IndependentDimensionResidual { dimension: id, .. } => {
+            insert_runtime_source(elements, attempt, document, SketchSource::Dimension(*id));
+        }
+        SolveRejection::BoundViolation(bound) => {
+            let mapping = attempt.solve_result().and_then(|solve| {
+                solve
+                    .bound_mappings
+                    .iter()
+                    .find(|mapping| mapping.bound_id == *bound)
+            });
+            if let Some(mapping) = mapping {
+                match mapping.bound {
+                    SketchBound::CircleRadius(id) => {
+                        insert_runtime_curve(
+                            elements,
+                            attempt,
+                            |curve| matches!(curve, RuntimeCurve::Circle(candidate) if *candidate == id),
+                        );
+                    }
+                    SketchBound::ArcRadius(id) => {
+                        insert_runtime_curve(
+                            elements,
+                            attempt,
+                            |curve| matches!(curve, RuntimeCurve::CircularArc(candidate) if *candidate == id),
+                        );
+                    }
+                    SketchBound::ConicScalar { conic_id, .. } => {
+                        insert_runtime_curve(
+                            elements,
+                            attempt,
+                            |curve| matches!(curve, RuntimeCurve::Conic(candidate) if *candidate == conic_id),
+                        );
+                    }
+                    SketchBound::NurbsWeight { nurbs_id, .. } => {
+                        insert_runtime_curve(
+                            elements,
+                            attempt,
+                            |curve| matches!(curve, RuntimeCurve::Nurbs { nurbs, .. } if *nurbs == nurbs_id),
+                        );
+                    }
+                    SketchBound::Contact { constraint_id, .. } => insert_runtime_source(
+                        elements,
+                        attempt,
+                        document,
+                        SketchSource::Constraint(constraint_id),
+                    ),
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn insert_runtime_curve(
+    elements: &mut BTreeSet<DocumentElementId>,
+    attempt: &geosolve_sketch::SketchDocumentAttempt,
+    matches: impl Fn(&RuntimeCurve) -> bool,
+) {
+    let Some(mappings) = attempt.mappings() else {
+        return;
+    };
+    for mapping in mappings.curve_mappings() {
+        if matches(&mapping.runtime) {
+            elements.insert(DocumentElementId::Curve(mapping.persistent));
+        }
+    }
+}
+
+const fn problem_target(element: DocumentElementId) -> Option<EditorProblemTarget> {
+    match element {
+        DocumentElementId::Point(id) => Some(EditorProblemTarget::Point(id)),
+        DocumentElementId::Curve(id) => Some(EditorProblemTarget::Curve(id)),
+        DocumentElementId::Constraint(id) => Some(EditorProblemTarget::Constraint(id)),
+        DocumentElementId::Dimension(id) => Some(EditorProblemTarget::Dimension(id)),
+        _ => None,
+    }
+}
+
 impl ReplayAction {
     const fn expected_design(&self) -> Option<SketchDesignIdentity> {
         match self {
@@ -2245,6 +2624,196 @@ mod tests {
         assert_eq!(editor.design_identity(), accepted.design_identity());
         assert_eq!(editor.fully_redundant_sources(), [duplicate]);
         assert_eq!(editor.sources_containing_redundant_rows(), [duplicate]);
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn current_problem_metadata_uses_attempted_owner_dependencies_and_clears_on_recovery() {
+        let (session, points, span, target) = fixed_line_session();
+        let accepted_identity = session.accepted_state().expect("accepted").identity();
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        assert!(coordinator.current_problem_metadata().is_none());
+
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::CreateDimension {
+                    label: "incompatible line length".into(),
+                    definition: DocumentDimensionDefinition::CurveLength {
+                        curve: span,
+                        target,
+                    },
+                    mode: DocumentDimensionMode::Driving,
+                },
+            )
+            .expect("retain rejected dimension");
+
+        let dimension = coordinator.session().design_document().dimensions()[0].id;
+        assert!(
+            coordinator
+                .session()
+                .accepted_state()
+                .expect("retained accepted")
+                .document()
+                .dimension(dimension)
+                .is_none(),
+            "the rejected owner must exist only in the attempted design"
+        );
+        assert_eq!(
+            coordinator
+                .session()
+                .accepted_state()
+                .expect("retained accepted")
+                .identity(),
+            accepted_identity
+        );
+
+        let metadata = coordinator
+            .current_problem_metadata()
+            .expect("rejected attempt metadata");
+        assert_eq!(
+            metadata.attempt,
+            coordinator.session().last_attempt().identity()
+        );
+        assert_eq!(metadata.design, coordinator.session().design_identity());
+        assert_eq!(metadata.scope, EditorProblemScope::Targeted);
+        assert_eq!(metadata.category, EditorProblemCategory::Solver);
+        assert!(
+            metadata
+                .targets
+                .contains(&EditorProblemTarget::Dimension(dimension))
+        );
+        assert!(
+            metadata
+                .targets
+                .contains(&EditorProblemTarget::Curve(span.curve))
+        );
+        for point in points {
+            assert!(
+                metadata
+                    .targets
+                    .contains(&EditorProblemTarget::Point(point))
+            );
+        }
+        assert!(!metadata.message.is_empty());
+
+        let closure = coordinator
+            .session()
+            .design_document()
+            .dependency_closure(dimension);
+        assert_eq!(
+            closure,
+            coordinator
+                .session()
+                .design_document()
+                .dependency_closure(dimension),
+            "dependency ordering must be deterministic"
+        );
+        assert!(closure.contains(&DocumentElementId::Curve(span.curve)));
+        assert!(closure.contains(&DocumentElementId::Point(points[0])));
+        assert!(closure.contains(&DocumentElementId::Point(points[1])));
+        assert!(closure.contains(&DocumentElementId::Scalar(target)));
+
+        coordinator
+            .set_dimension_mode(
+                coordinator.session().design_identity(),
+                dimension,
+                DocumentDimensionMode::Reference,
+            )
+            .expect("reference recovery");
+        assert!(coordinator.current_problem_metadata().is_none());
+        assert_eq!(
+            coordinator
+                .session()
+                .accepted_state()
+                .expect("recovered accepted")
+                .document()
+                .dimension(dimension)
+                .expect("recovered dimension")
+                .mode,
+            DocumentDimensionMode::Reference
+        );
+    }
+
+    #[test]
+    #[allow(clippy::default_trait_access)]
+    fn current_problem_metadata_keeps_wrong_kind_parameter_failure_global() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let rectangle = document
+            .add_rectangle("parameter input", [0.0, 0.0], 4.0, 3.0)
+            .expect("rectangle");
+        let parameter = document
+            .add_parameter("length input", DocumentParameterKind::Length)
+            .expect("parameter");
+        document
+            .add_parameter_binding(
+                parameter,
+                geosolve_sketch::DocumentParameterTarget::DrivingDimension(rectangle.dimensions[0]),
+            )
+            .expect("parameter binding");
+        let initial = ParameterBatch::new(
+            1,
+            vec![ParameterBatchEntry {
+                parameter,
+                value: ParameterValue::Length(4.0),
+            }],
+        )
+        .expect("initial input");
+        let session = RetainedSketchDocumentSession::new_with_parameter_batch(
+            document,
+            initial,
+            DocumentSolveRequest::default(),
+            Default::default(),
+        )
+        .expect("session");
+        let accepted = session.accepted_state().expect("accepted").identity();
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+
+        coordinator
+            .replace_parameter_batch(
+                coordinator.session().design_identity(),
+                ParameterBatch::new(
+                    2,
+                    vec![ParameterBatchEntry {
+                        parameter,
+                        value: ParameterValue::Angle(1.0),
+                    }],
+                )
+                .expect("wrong-kind input"),
+                DocumentSolveRequest::default(),
+            )
+            .expect("record failed attempt");
+        let metadata = coordinator
+            .current_problem_metadata()
+            .expect("failed-attempt metadata");
+        assert_eq!(metadata.category, EditorProblemCategory::Input);
+        assert_eq!(metadata.scope, EditorProblemScope::Global);
+        assert!(metadata.targets.is_empty());
+        assert!(metadata.message.contains("wrong kind"));
+        assert_eq!(
+            coordinator
+                .session()
+                .accepted_state()
+                .expect("retained accepted")
+                .identity(),
+            accepted
+        );
+
+        coordinator
+            .replace_parameter_batch(
+                coordinator.session().design_identity(),
+                ParameterBatch::new(
+                    3,
+                    vec![ParameterBatchEntry {
+                        parameter,
+                        value: ParameterValue::Length(2.0),
+                    }],
+                )
+                .expect("recovery input"),
+                DocumentSolveRequest::default(),
+            )
+            .expect("recover");
+        assert!(coordinator.current_problem_metadata().is_none());
     }
 
     #[test]

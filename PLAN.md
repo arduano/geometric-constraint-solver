@@ -2248,9 +2248,9 @@ external references and retained unsolved intent on the post-cleanup workbench.
 - [x] Replace nested per-group disclosures with recursive right-expanding hover/focus flyouts,
   retaining an inline narrow-screen fallback and the same stable scenario definitions.
 - [x] Requalify the flyout selector and record M53-S4 before targeted human review.
-- [ ] Publish current-attempt error attribution through the headless editor in persistent identities,
+- [x] Publish current-attempt error attribution through the headless editor in persistent identities,
   using a global scope whenever the domain evidence cannot identify individual elements cleanly.
-- [ ] Render targeted canvas icons/highlights and global fallback, and add two reusable scenarios
+- [x] Render targeted canvas icons/highlights and global fallback, and add two reusable scenarios
   demonstrating attributed conflict and unattributable input failure with recovery.
 - [ ] Requalify canvas error attribution and record M53-S5 before targeted human review.
 - [ ] Assess role/profile and suppression/mode distinctions.
@@ -2286,8 +2286,11 @@ remains pending.
 
 M53-P013 supersedes S4 before ratings. It owns structured current-error metadata at the public
 headless-editor/UI seam, owner-and-operand canvas attribution, global fallback, accessible
-non-mutating tooltips and two reusable demonstration scenarios. Accepted geometry remains the
-only rendered geometry; clean qualification and M53-S5 identity are pending.
+non-mutating tooltips and two reusable demonstration scenarios under **Error attribution**. The
+implementation and direct native/WASM regressions are complete: conflict targets come only from
+attempt mappings/core sources and document dependencies, wrong-kind input remains global, recovery
+clears metadata, and accepted geometry remains the only rendered geometry. Clean qualification and
+M53-S5 identity are pending.
 
 ## Placeholder future functional sequence
 

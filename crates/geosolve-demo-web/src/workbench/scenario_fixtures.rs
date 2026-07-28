@@ -27,6 +27,7 @@ pub(crate) enum ScenarioFixture {
     ParameterProposal,
     ExternalRebind,
     LifecycleEvidence,
+    ErrorAttribution,
 }
 
 impl ScenarioFixture {
@@ -36,6 +37,7 @@ impl ScenarioFixture {
             Self::ParameterProposal => "Parameter and proposal",
             Self::ExternalRebind => "External reference and rebind",
             Self::LifecycleEvidence => "Lifecycle and evidence",
+            Self::ErrorAttribution => "Canvas error attribution",
         }
     }
 }
@@ -60,6 +62,8 @@ pub(crate) enum ScenarioAction {
     ExternalFreshRecovery,
     LifecycleRejected,
     LifecycleRecovery,
+    AttributedConflict,
+    AttributedRecovery,
     CaptureEvidence,
 }
 
@@ -84,6 +88,8 @@ impl ScenarioAction {
             "external-fresh" => Self::ExternalFreshRecovery,
             "lifecycle-rejected" => Self::LifecycleRejected,
             "lifecycle-recovery" => Self::LifecycleRecovery,
+            "attributed-conflict" => Self::AttributedConflict,
+            "attributed-recovery" => Self::AttributedRecovery,
             "capture" => Self::CaptureEvidence,
             _ => return None,
         })
@@ -109,6 +115,8 @@ impl ScenarioAction {
             Self::ExternalFreshRecovery => "external-fresh",
             Self::LifecycleRejected => "lifecycle-rejected",
             Self::LifecycleRecovery => "lifecycle-recovery",
+            Self::AttributedConflict => "attributed-conflict",
+            Self::AttributedRecovery => "attributed-recovery",
             Self::CaptureEvidence => "capture",
         }
     }
@@ -133,6 +141,8 @@ impl ScenarioAction {
             Self::ExternalFreshRecovery => "Submit fresh snapshot",
             Self::LifecycleRejected => "Submit rejected attempt",
             Self::LifecycleRecovery => "Submit valid recovery",
+            Self::AttributedConflict => "Create attributed conflict",
+            Self::AttributedRecovery => "Recover as reference",
             Self::CaptureEvidence => "Capture typed evidence",
         }
     }
@@ -156,6 +166,9 @@ impl ScenarioAction {
             | Self::ExternalExplicitRebind
             | Self::ExternalFreshRecovery => ScenarioFixture::ExternalRebind,
             Self::LifecycleRejected | Self::LifecycleRecovery => ScenarioFixture::LifecycleEvidence,
+            Self::AttributedConflict | Self::AttributedRecovery => {
+                ScenarioFixture::ErrorAttribution
+            }
             Self::CaptureEvidence => return None,
         })
     }
@@ -255,6 +268,11 @@ struct LifecycleFixture {
     parameter: geosolve_sketch::DocumentParameterId,
 }
 
+struct ErrorAttributionFixture {
+    coordinator: RetainedEditorCoordinator,
+    dimension: geosolve_sketch::DocumentDimensionId,
+}
+
 #[derive(Default)]
 struct ScenarioTransition {
     explicit_declaration: bool,
@@ -263,10 +281,11 @@ struct ScenarioTransition {
 
 pub(crate) struct ScenarioCandidate {
     active: ScenarioFixture,
-    role: RoleFixture,
-    parameter: ParameterFixture,
-    external: ExternalFixture,
-    lifecycle: LifecycleFixture,
+    role: Box<RoleFixture>,
+    parameter: Box<ParameterFixture>,
+    external: Box<ExternalFixture>,
+    lifecycle: Box<LifecycleFixture>,
+    error_attribution: Box<ErrorAttributionFixture>,
     transcript: Vec<ScenarioObservation>,
     evidence_text: String,
 }
@@ -275,10 +294,11 @@ impl ScenarioCandidate {
     pub(crate) fn new(active: ScenarioFixture) -> Result<Self, String> {
         Ok(Self {
             active,
-            role: role_fixture()?,
-            parameter: parameter_fixture("Scenario shared parameter", 2)?,
-            external: external_fixture()?,
-            lifecycle: lifecycle_fixture()?,
+            role: Box::new(role_fixture()?),
+            parameter: Box::new(parameter_fixture("Scenario shared parameter", 2)?),
+            external: Box::new(external_fixture()?),
+            lifecycle: Box::new(lifecycle_fixture()?),
+            error_attribution: Box::new(error_attribution_fixture()?),
             transcript: Vec::new(),
             evidence_text: "Capture has not been requested.".into(),
         })
@@ -302,6 +322,7 @@ impl ScenarioCandidate {
             ScenarioFixture::ParameterProposal => &self.parameter.coordinator,
             ScenarioFixture::ExternalRebind => &self.external.coordinator,
             ScenarioFixture::LifecycleEvidence => &self.lifecycle.coordinator,
+            ScenarioFixture::ErrorAttribution => &self.error_attribution.coordinator,
         }
     }
 
@@ -528,6 +549,25 @@ impl ScenarioCandidate {
                     .replace_parameter_batch(expected, batch, DocumentSolveRequest::default())
                     .map_err(|error| error.to_string())?;
             }
+            ScenarioAction::AttributedConflict | ScenarioAction::AttributedRecovery => {
+                let expected = self
+                    .error_attribution
+                    .coordinator
+                    .session()
+                    .design_identity();
+                self.error_attribution
+                    .coordinator
+                    .set_dimension_mode(
+                        expected,
+                        self.error_attribution.dimension,
+                        if action == ScenarioAction::AttributedConflict {
+                            DocumentDimensionMode::Driving
+                        } else {
+                            DocumentDimensionMode::Reference
+                        },
+                    )
+                    .map_err(|error| error.to_string())?;
+            }
             ScenarioAction::CaptureEvidence => {}
         }
         Ok(transition)
@@ -557,7 +597,7 @@ impl ScenarioCandidate {
             .collect::<Vec<_>>()
             .join("\n");
         Ok(format!(
-            "M53 SCENARIO EVIDENCE\nprovenance=fixed-scenario-not-runtime-platform\nobjective_checks=direct Rust/WASM state transitions\nhuman_clarity_and_trust=M53 judgment only\nSCENARIO_TRANSCRIPT\n{}\nROLE_ACTIVITY\n{}\nPARAMETER\n{}\nSUBMITTED_PARAMETER_TYPED\n{}\nEXTERNAL\n{}\nSUBMITTED_EXTERNAL_TYPED\n{}\nLIFECYCLE\n{}",
+            "M53 SCENARIO EVIDENCE\nprovenance=fixed-scenario-not-runtime-platform\nobjective_checks=direct Rust/WASM state transitions\nhuman_clarity_and_trust=M53 judgment only\nSCENARIO_TRANSCRIPT\n{}\nROLE_ACTIVITY\n{}\nPARAMETER\n{}\nSUBMITTED_PARAMETER_TYPED\n{}\nEXTERNAL\n{}\nSUBMITTED_EXTERNAL_TYPED\n{}\nLIFECYCLE\n{}\nERROR_ATTRIBUTION\n{}",
             scenario_transcript,
             serialize("scenario://role-activity", &self.role.coordinator)?,
             serialize(
@@ -568,6 +608,10 @@ impl ScenarioCandidate {
             serialize("scenario://external-rebind", &self.external.coordinator)?,
             submitted_external,
             serialize("scenario://lifecycle-evidence", &self.lifecycle.coordinator)?,
+            serialize(
+                "scenario://canvas-error-attribution",
+                &self.error_attribution.coordinator
+            )?,
         ))
     }
 }
@@ -643,6 +687,63 @@ fn lifecycle_fixture() -> Result<LifecycleFixture, String> {
     Ok(LifecycleFixture {
         coordinator: fixture.coordinator,
         parameter: fixture.parameter,
+    })
+}
+
+fn error_attribution_fixture() -> Result<ErrorAttributionFixture, String> {
+    let mut document = fixed_document(1.0, 5)?;
+    let first = document
+        .add_point("Error first", [0.0, 0.0])
+        .map_err(|error| error.to_string())?;
+    let second = document
+        .add_point("Error second", [2.0, 0.0])
+        .map_err(|error| error.to_string())?;
+    let line = document
+        .add_curve(
+            "Error line",
+            CurveDefinition::Line {
+                start: first,
+                end: second,
+                branch_direction: [1.0, 0.0],
+            },
+        )
+        .map_err(|error| error.to_string())?;
+    for (label, point, target) in [
+        ("Fix error first", first, [0.0, 0.0]),
+        ("Fix error second", second, [2.0, 0.0]),
+    ] {
+        document
+            .add_constraint(
+                label,
+                DocumentConstraintDefinition::FixedPoint { point, target },
+            )
+            .map_err(|error| error.to_string())?;
+    }
+    let target = document
+        .add_scalar(
+            "Requested incompatible length",
+            3.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .map_err(|error| error.to_string())?;
+    let dimension = document
+        .add_dimension(
+            "Error line length",
+            DocumentDimensionDefinition::CurveLength {
+                curve: CurveSpan::line(line),
+                target,
+            },
+            DocumentDimensionMode::Reference,
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(ErrorAttributionFixture {
+        coordinator: make_coordinator(
+            document,
+            ParameterBatch::default(),
+            ExternalSnapshotSet::default(),
+        )?,
+        dimension,
     })
 }
 
@@ -798,6 +899,8 @@ fn accepted_evidence(coordinator: &RetainedEditorCoordinator) -> String {
 
 #[cfg(test)]
 mod tests {
+    use geosolve_constraint_editor::{EditorProblemScope, EditorProblemTarget};
+
     use super::{
         ScenarioAction, ScenarioBoundary, ScenarioCandidate, ScenarioFixture, ScenarioRejection,
     };
@@ -878,6 +981,81 @@ mod tests {
         assert!(unavailable.contains(&format!(
             "data-activity-element=\"{dimension}\" data-activity-state=\"inactive\" data-activity-reason=\"unavailable-dependency\""
         )));
+    }
+
+    #[test]
+    fn scenario_candidate_qualifies_targeted_and_global_error_recovery() {
+        let mut candidate = ScenarioCandidate::new(ScenarioFixture::ErrorAttribution).unwrap();
+        let dimension = candidate.error_attribution.dimension;
+        let accepted_before = candidate
+            .error_attribution
+            .coordinator
+            .session()
+            .accepted_state()
+            .unwrap()
+            .identity();
+
+        let conflict = candidate
+            .perform(ScenarioAction::AttributedConflict)
+            .unwrap();
+        assert_eq!(conflict.boundary, ScenarioBoundary::RetainedAccepted);
+        let targeted = candidate
+            .error_attribution
+            .coordinator
+            .current_problem_metadata()
+            .unwrap();
+        assert_eq!(targeted.scope, EditorProblemScope::Targeted);
+        assert!(
+            targeted
+                .targets
+                .contains(&EditorProblemTarget::Dimension(dimension))
+        );
+        assert_eq!(
+            candidate
+                .error_attribution
+                .coordinator
+                .session()
+                .accepted_state()
+                .unwrap()
+                .identity(),
+            accepted_before
+        );
+
+        assert_eq!(
+            candidate
+                .perform(ScenarioAction::AttributedRecovery)
+                .unwrap()
+                .boundary,
+            ScenarioBoundary::AdvancedAccepted
+        );
+        assert!(
+            candidate
+                .error_attribution
+                .coordinator
+                .current_problem_metadata()
+                .is_none()
+        );
+
+        candidate
+            .perform(ScenarioAction::ParameterInvalidKind)
+            .unwrap();
+        let global = candidate
+            .parameter
+            .coordinator
+            .current_problem_metadata()
+            .unwrap();
+        assert_eq!(global.scope, EditorProblemScope::Global);
+        assert!(global.targets.is_empty());
+        candidate
+            .perform(ScenarioAction::ParameterRecovery)
+            .unwrap();
+        assert!(
+            candidate
+                .parameter
+                .coordinator
+                .current_problem_metadata()
+                .is_none()
+        );
     }
 
     #[test]

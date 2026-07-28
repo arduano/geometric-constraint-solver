@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 
-use std::fmt::Write as _;
+use std::{collections::BTreeSet, fmt::Write as _};
 
 use geosolve_constraint_editor::{
-    ConstructionPreview, ConstructionPreviewGeometry, EditorScene, ScreenPoint, SelectionItem,
-    Viewport,
+    ConstructionPreview, ConstructionPreviewGeometry, EditorProblemCategory, EditorProblemMetadata,
+    EditorProblemScope, EditorProblemTarget, EditorScene, ScreenPoint, SelectionItem, Viewport,
 };
 use geosolve_sketch::{
     DesignScalarId, DocumentDimensionDefinition, DocumentDimensionMode, GeometryRole,
@@ -16,13 +16,17 @@ pub(crate) fn viewport() -> Viewport {
     Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("static viewport is valid")
 }
 
+#[allow(clippy::too_many_lines)]
 pub(crate) fn svg_markup(
     scene: Option<&EditorScene>,
     accepted: Option<&SketchAcceptedDocumentState>,
     selection: &[SelectionItem],
     construction_preview: Option<&ConstructionPreview>,
+    problem: Option<&EditorProblemMetadata>,
 ) -> String {
     let mut output = String::new();
+    let mut problem_markers = String::new();
+    let mut resolved_targets = BTreeSet::new();
     if let Some(accepted) = accepted {
         let identity = accepted.identity();
         let input = accepted.input();
@@ -51,18 +55,21 @@ pub(crate) fn svg_markup(
             }
             let path = polyline_path(&curve.screen_polyline);
             let selected = selection.contains(&SelectionItem::Curve(curve.span));
+            let target = EditorProblemTarget::Curve(curve.span.curve);
+            let has_problem = problem.is_some_and(|problem| problem.targets.contains(&target));
             let role = accepted
                 .and_then(|state| state.document().geometry_role(curve.span.curve))
                 .unwrap_or(GeometryRole::Profile);
             let _ = write!(
                 output,
-                "<path class=\"wb-curve{}{}\" d=\"{path}\" data-persistent-id=\"{}\" data-editor-segment=\"{}\" data-role=\"{}\"/>",
+                "<path class=\"wb-curve{}{}{}\" d=\"{path}\" data-persistent-id=\"{}\" data-editor-segment=\"{}\" data-role=\"{}\"/>",
                 if selected { " selected" } else { "" },
                 if role == GeometryRole::Construction {
                     " construction"
                 } else {
                     ""
                 },
+                if has_problem { " has-problem" } else { "" },
                 curve.span.curve,
                 curve.span.segment,
                 if role == GeometryRole::Construction {
@@ -71,29 +78,80 @@ pub(crate) fn svg_markup(
                     "profile"
                 },
             );
+            if has_problem && resolved_targets.insert(target) {
+                let anchor = curve.screen_polyline[curve.screen_polyline.len() / 2];
+                problem_marker(
+                    &mut problem_markers,
+                    anchor,
+                    Some(target),
+                    problem.expect("targeted marker has problem metadata"),
+                    false,
+                );
+            }
         }
         output.push_str("</g><g class=\"wb-points\">");
         for point in &scene.points {
             let selected = selection.contains(&SelectionItem::Point(point.id));
+            let target = EditorProblemTarget::Point(point.id);
+            let has_problem = problem.is_some_and(|problem| problem.targets.contains(&target));
             let _ = write!(
                 output,
-                "<circle class=\"wb-point{}\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"5\" data-persistent-id=\"{}\"/>",
+                "<circle class=\"wb-point{}{}\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"5\" data-persistent-id=\"{}\"/>",
                 if selected { " selected" } else { "" },
+                if has_problem { " has-problem" } else { "" },
                 point.screen_position.x,
                 point.screen_position.y,
                 point.id,
             );
+            if has_problem && resolved_targets.insert(target) {
+                problem_marker(
+                    &mut problem_markers,
+                    point.screen_position,
+                    Some(target),
+                    problem.expect("targeted marker has problem metadata"),
+                    false,
+                );
+            }
         }
     } else {
         output.push_str("</g><g class=\"wb-points\">");
     }
     output.push_str("</g><g class=\"wb-annotations\">");
     if let Some(accepted) = accepted {
-        annotations(&mut output, accepted, selection);
+        annotations(
+            &mut output,
+            &mut problem_markers,
+            &mut resolved_targets,
+            accepted,
+            selection,
+            problem,
+        );
     }
     output.push_str("</g>");
     if let Some(preview) = construction_preview {
         output.push_str(&construction_markup(preview, viewport()));
+    }
+    if let Some(problem) = problem {
+        if problem.scope == EditorProblemScope::Global || resolved_targets.is_empty() {
+            problem_marker(
+                &mut problem_markers,
+                ScreenPoint { x: 970.0, y: 28.0 },
+                None,
+                problem,
+                true,
+            );
+        }
+        let _ = write!(
+            output,
+            "<g class=\"wb-error-overlay\" data-problem-attempt=\"{}\" data-problem-scope=\"{}\" data-problem-category=\"{}\">{problem_markers}</g>",
+            problem.attempt.revision().get(),
+            if problem.scope == EditorProblemScope::Global {
+                "global"
+            } else {
+                "targeted"
+            },
+            problem_category_key(problem.category),
+        );
     }
     output.push_str("</g>");
     output
@@ -110,19 +168,34 @@ fn digest(bytes: [u8; 32]) -> String {
 #[allow(clippy::cast_precision_loss)]
 fn annotations(
     output: &mut String,
+    problem_markers: &mut String,
+    resolved_targets: &mut BTreeSet<EditorProblemTarget>,
     accepted: &SketchAcceptedDocumentState,
     selection: &[SelectionItem],
+    problem: Option<&EditorProblemMetadata>,
 ) {
     let document = accepted.document();
     for (index, constraint) in document.constraints().iter().enumerate() {
         let x = 26.0 + (index % 8) as f64 * 24.0;
         let selected = selection.contains(&SelectionItem::Constraint(constraint.id));
+        let target = EditorProblemTarget::Constraint(constraint.id);
+        let has_problem = problem.is_some_and(|problem| problem.targets.contains(&target));
         let _ = write!(
             output,
-            "<text class=\"wb-glyph{}\" x=\"{x}\" y=\"32\" data-persistent-id=\"{}\">C</text>",
+            "<text class=\"wb-glyph{}{}\" x=\"{x}\" y=\"32\" data-persistent-id=\"{}\">C</text>",
             if selected { " selected" } else { "" },
+            if has_problem { " has-problem" } else { "" },
             constraint.id,
         );
+        if has_problem && resolved_targets.insert(target) {
+            problem_marker(
+                problem_markers,
+                ScreenPoint { x, y: 18.0 },
+                Some(target),
+                problem.expect("targeted marker has problem metadata"),
+                false,
+            );
+        }
     }
     for (index, dimension) in document.dimensions().iter().enumerate() {
         let y = 58.0 + index as f64 * 20.0;
@@ -141,12 +214,85 @@ fn annotations(
         let value_attribute = value.map_or_else(String::new, |value| value.to_string());
         let displayed = value.map_or_else(|| "unavailable".into(), |value| value.to_string());
         let selected = selection.contains(&SelectionItem::Dimension(dimension.id));
+        let target = EditorProblemTarget::Dimension(dimension.id);
+        let has_problem = problem.is_some_and(|problem| problem.targets.contains(&target));
         let _ = write!(
             output,
-            "<text class=\"wb-dimension{}\" x=\"26\" y=\"{y}\" data-persistent-id=\"{}\" data-dimension-mode=\"{mode}\" data-dimension-value=\"{value_attribute}\">{label} = {displayed}</text>",
+            "<text class=\"wb-dimension{}{}\" x=\"26\" y=\"{y}\" data-persistent-id=\"{}\" data-dimension-mode=\"{mode}\" data-dimension-value=\"{value_attribute}\">{label} = {displayed}</text>",
             if selected { " selected" } else { "" },
+            if has_problem { " has-problem" } else { "" },
             dimension.id,
         );
+        if has_problem && resolved_targets.insert(target) {
+            problem_marker(
+                problem_markers,
+                ScreenPoint {
+                    x: 14.0,
+                    y: y - 5.0,
+                },
+                Some(target),
+                problem.expect("targeted marker has problem metadata"),
+                false,
+            );
+        }
+    }
+}
+
+fn problem_marker(
+    output: &mut String,
+    anchor: ScreenPoint,
+    target: Option<EditorProblemTarget>,
+    problem: &EditorProblemMetadata,
+    global: bool,
+) {
+    let message = escape(&problem.message);
+    let target_key = if global {
+        "global".to_owned()
+    } else {
+        match target.expect("targeted error marker must have a persistent target") {
+            EditorProblemTarget::Point(id) => format!("point:{id}"),
+            EditorProblemTarget::Curve(id) => format!("curve:{id}"),
+            EditorProblemTarget::Constraint(id) => format!("constraint:{id}"),
+            EditorProblemTarget::Dimension(id) => format!("dimension:{id}"),
+        }
+    };
+    let tooltip_x = if global || anchor.x > 610.0 {
+        -370.0
+    } else {
+        14.0
+    };
+    let tooltip_y = if anchor.y > 610.0 { -82.0 } else { 14.0 };
+    let _ = write!(
+        output,
+        concat!(
+            "<g class=\"wb-error-marker{}\" transform=\"translate({:.3} {:.3})\" ",
+            "tabindex=\"0\" role=\"img\" aria-label=\"{}\" data-problem-marker=\"{}\">",
+            "<circle r=\"10\"/><text class=\"wb-error-marker-icon\" x=\"0\" y=\"4\">!</text>",
+            "<foreignObject class=\"wb-error-tooltip\" x=\"{}\" y=\"{}\" width=\"360\" height=\"72\">",
+            "<div xmlns=\"http://www.w3.org/1999/xhtml\">{}</div></foreignObject></g>"
+        ),
+        if global { " global" } else { "" },
+        anchor.x,
+        anchor.y,
+        message,
+        target_key,
+        tooltip_x,
+        tooltip_y,
+        message,
+    );
+}
+
+const fn problem_category_key(category: EditorProblemCategory) -> &'static str {
+    match category {
+        EditorProblemCategory::Input => "input",
+        EditorProblemCategory::Lowering => "lowering",
+        EditorProblemCategory::Solver => "solver",
+        EditorProblemCategory::Validation => "validation",
+        EditorProblemCategory::Geometry => "geometry",
+        EditorProblemCategory::Constraint => "constraint",
+        EditorProblemCategory::Dimension => "dimension",
+        EditorProblemCategory::Bound => "bound",
+        EditorProblemCategory::Publication => "publication",
     }
 }
 
@@ -296,9 +442,10 @@ mod tests {
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
-        DocumentDimensionMode, DocumentParameterId, DocumentParameterKind, DocumentParameterTarget,
-        DocumentSolveRequest, ParameterBatch, ParameterBatchEntry, ParameterValue,
-        RetainedSketchDocumentSession, SketchDocument,
+        CurveDefinition, CurveSpan, DocumentConstraintDefinition, DocumentDimensionDefinition,
+        DocumentDimensionMode, DocumentEdit, DocumentParameterId, DocumentParameterKind,
+        DocumentParameterTarget, DocumentSolveRequest, ParameterBatch, ParameterBatchEntry,
+        ParameterValue, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
     };
 
     use super::{construction_geometry_markup, svg_markup, viewport};
@@ -369,7 +516,7 @@ mod tests {
         )
         .unwrap();
         let selection = [SelectionItem::Point(rectangle.points[0])];
-        let markup = svg_markup(Some(&scene), Some(accepted), &selection, None);
+        let markup = svg_markup(Some(&scene), Some(accepted), &selection, None, None);
         let tree = crate::workbench::panels::tree_markup(accepted.document(), &selection);
         let point_identity = format!("data-persistent-id=\"{}\"", rectangle.points[0]);
         assert!(markup.contains("class=\"wb-point selected\""));
@@ -396,6 +543,86 @@ mod tests {
     }
 
     #[test]
+    fn rejected_line_dimension_highlights_resolved_accepted_operands_and_exposes_tooltips() {
+        let mut document = SketchDocument::new(1.0).unwrap();
+        let first = document.add_point("first", [0.0, 0.0]).unwrap();
+        let second = document.add_point("second", [2.0, 0.0]).unwrap();
+        let line = document
+            .add_curve(
+                "line",
+                CurveDefinition::Line {
+                    start: first,
+                    end: second,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .unwrap();
+        for (label, point, target) in [
+            ("fix first", first, [0.0, 0.0]),
+            ("fix second", second, [2.0, 0.0]),
+        ] {
+            document
+                .add_constraint(
+                    label,
+                    DocumentConstraintDefinition::FixedPoint { point, target },
+                )
+                .unwrap();
+        }
+        let target = document
+            .add_scalar(
+                "incompatible target",
+                3.0,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .unwrap();
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .unwrap();
+        let mut coordinator = RetainedEditorCoordinator::new(session).unwrap();
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::CreateDimension {
+                    label: "conflicting length".into(),
+                    definition: DocumentDimensionDefinition::CurveLength {
+                        curve: CurveSpan::line(line),
+                        target,
+                    },
+                    mode: DocumentDimensionMode::Driving,
+                },
+            )
+            .unwrap();
+        let accepted = coordinator.session().accepted_state().unwrap();
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            coordinator.session().design_identity(),
+            accepted.document(),
+            coordinator.session().design_document(),
+            viewport(),
+            0.8,
+        )
+        .unwrap();
+        let problem = coordinator.current_problem_metadata().unwrap();
+        let markup = svg_markup(Some(&scene), Some(accepted), &[], None, Some(&problem));
+
+        assert!(markup.contains("data-problem-scope=\"targeted\""));
+        assert!(markup.contains(&format!(
+            "class=\"wb-curve has-problem\" d=\"M 500.000 350.000 L 600.000 350.000 \" data-persistent-id=\"{line}\""
+        )));
+        assert!(markup.contains(&format!("data-problem-marker=\"curve:{line}\"")));
+        assert!(markup.contains(&format!("data-problem-marker=\"point:{first}\"")));
+        assert!(markup.contains(&format!("data-problem-marker=\"point:{second}\"")));
+        assert!(markup.contains("tabindex=\"0\" role=\"img\" aria-label="));
+        assert!(markup.contains("class=\"wb-error-tooltip\""));
+        assert!(!markup.contains("data-problem-marker=\"global\""));
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
     fn m47_lifecycle_attempt_and_accepted_identity_never_leak_attempt_into_scene() {
         let mut document = SketchDocument::new(8.0).unwrap();
         let rectangle = document
@@ -462,7 +689,8 @@ mod tests {
             0.8,
         )
         .unwrap();
-        let markup = svg_markup(Some(&scene), Some(accepted), &[], None);
+        let problem = coordinator.current_problem_metadata().unwrap();
+        let markup = svg_markup(Some(&scene), Some(accepted), &[], None, Some(&problem));
         assert!(markup.contains("data-scene-provenance=\"accepted\""));
         assert!(markup.contains(&format!(
             "data-accepted-revision=\"{}\"",
@@ -474,6 +702,9 @@ mod tests {
             "data-accepted-revision=\"{}\"",
             attempt.revision().get()
         )));
+        assert!(markup.contains("data-problem-scope=\"global\""));
+        assert!(markup.contains("data-problem-marker=\"global\""));
+        assert!(!markup.contains("has-problem"));
         assert_eq!(accepted.solve_result().geometry, accepted_geometry);
         assert_eq!(
             lifecycle_presentation(coordinator.lifecycle().status),

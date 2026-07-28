@@ -2491,6 +2491,30 @@ impl SketchDocument {
         self.compute_effective_activity()
     }
 
+    /// Returns the deterministic transitive dependency closure for one persistent element.
+    ///
+    /// The queried element itself is excluded. The result contains only persistent identities,
+    /// is deduplicated, and follows canonical document identity order. Consumers may use this
+    /// read-only graph to explain ownership without reproducing constraint definitions.
+    #[must_use]
+    pub fn dependency_closure(
+        &self,
+        element: impl Into<DocumentElementId>,
+    ) -> Vec<DocumentElementId> {
+        let root = element.into();
+        let mut discovered = BTreeSet::new();
+        let mut pending = self.direct_dependencies(root);
+        while let Some(candidate) = pending.pop() {
+            if candidate == root || !discovered.insert(candidate) {
+                continue;
+            }
+            pending.extend(self.direct_dependencies(candidate));
+        }
+        let mut closure = discovered.into_iter().collect::<Vec<_>>();
+        closure.sort_by_key(|dependency| canonical_element_key(*dependency));
+        closure
+    }
+
     pub(crate) fn effective_activity_with_input_overlays(
         &self,
         parameter_inactive: &BTreeSet<DocumentElementId>,

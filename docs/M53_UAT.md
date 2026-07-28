@@ -91,7 +91,7 @@ that records this session changes no demo-web product input or frozen distributi
 | M53-P010 | Exact staged editor release build, before human setup observation | The supported Trunk 0.21 build must not reject the conventional inherited `NO_COLOR=1` environment value before compiling the candidate. | objective defect | complete in `66fd90d`: the release gate unsets `NO_COLOR` only for its Trunk subprocess; this changes no product bytes or solver/editor behavior | the complete clean release gate passed, including editor 58/58, demo-web 24/24, all-feature WASM check and Trunk 0.21.14 release build | not a product rating |
 | M53-P011 | M53-S2, before any scored human section | Replace the easily lost bottom UAT launcher/action wall with a reusable scenario-definition system: a nested scenario selector near the top of the UI, grouped scenarios, scenario-specific descriptions/guidance in a sidebar, and clean removal of superseded one-off harnesses while preserving every current scenario for future reuse. | human clarity/layout | in progress awaiting human retest: implementation is complete in `17a4a25` with six typed scenario definitions under three nested groups, contextual objectives/questions/steps/expected results, recent transcript and typed evidence in the inspector; exact stale-input variants/revisions and last-submitted typed inputs remain observable; selection/switch/reset reconstruct deterministic ephemeral state, Exit restores the ordinary workspace, and the old launcher/overlay/action wall is deleted without restoring M44/playground/E2E infrastructure | catalog 6/6, preserved fixture semantics 4/4 and complete demo-web 29/29 pass; the clean full release gate passed from `17a4a25`, M53-S3 records manifest `213b8f41b18af239738eb0336651216fa4693a8f1ecbefa0f2f7bf7d6b675518`, and all seven served files match local SHA-256. Earlier local headless interaction was exploratory visual inspection only, is not retained browser qualification and does not replace human UAT | targeted human retest required for scenario discoverability, grouping, guidance and natural-use flow; no rating recorded yet |
 | M53-P012 | M53-S3, before any scored human section | Replace the nested per-group collapsible disclosures with a right-expanding flyout menu: hovering or focusing a group item shows its submenu immediately on the right for quicker scenario navigation, while retaining the top **Scenarios** dropdown, stable scenario definitions and sidebar guidance. | human clarity/layout | in progress awaiting human retest: implementation is complete in `49ddcb8`; recursive plain-list branches open immediately to the right on hover or focus, group clicks cause no workspace save/render, `aria-expanded` follows visual state, and narrow layouts expose the same branches inline; fixture semantics, stable IDs, guidance and isolation are unchanged | focused catalog 6/6 and complete demo-web 29/29 pass with warnings-denied Clippy and locked all-feature WASM. The complete clean release gate passed from `49ddcb8`; M53-S4 records manifest `d2d91ff200a7e55d0e04bb90e863d9c771f10325cb286b5147790bdb8e192b33`, and all seven served files match local SHA-256. Exploratory headless interaction also verified hover bridge, focus/Tab selection, ARIA state, rightward placement at 1440/1024, inline fallback at 800 and no console errors; this is visual inspection only, not retained browser qualification | targeted human retest required for flyout speed, discoverability and navigation clarity; no rating recorded yet |
-| M53-P013 | M53-S4, before any scored human section | Expose current solver errors on the accepted canvas: use icons and highlights for cleanly attributable persistent elements, preserve unattributable failures as global errors, publish the attribution as structured headless-editor metadata, and add reusable scenarios demonstrating both paths. | human clarity/layout plus public presentation metadata | open: request and agreed scope recorded before implementation; S4 is retired and its server is stopped. Only current failed/rejected attempts are in scope; targeted errors include the owning constraint/dimension and visible operands, markers expose non-mutating hover/focus tooltips, and the Problems panel remains canonical | pending direct dependency/attribution DTO tests, targeted/global canvas markup tests, two scenario regressions, complete clean release gate and M53-S5 identity | targeted human retest required for attribution clarity, global fallback, tooltip accessibility and recovery; no rating recorded yet |
+| M53-P013 | M53-S4, before any scored human section | Expose current solver errors on the accepted canvas: use icons and highlights for cleanly attributable persistent elements, preserve unattributable failures as global errors, publish the attribution as structured headless-editor metadata, and add reusable scenarios demonstrating both paths. | human clarity/layout plus public presentation metadata | implementation complete awaiting clean qualification: only current failed/rejected attempts publish metadata; attempted source mappings and persistent dependencies target owner/operands, unresolved input remains global, accepted geometry stays authoritative, markers expose non-mutating hover/focus tooltips, Problems remains canonical, recovery clears the overlay, and two typed leaves live under **Error attribution** | direct metadata/dependency/recovery tests, targeted/global canvas markup tests, 8/8 catalog checks, 12/12 verification-point ownership, two scenario transition regressions, demo-web 31/31, focused warnings-denied Clippy and all-feature WASM check pass; complete clean release gate and M53-S5 identity pending | targeted human retest required for attribution clarity, global fallback, tooltip accessibility and recovery; no rating recorded yet |
 
 ### Preserved development continuity
 
@@ -132,12 +132,17 @@ discovered non-UAT work to this table and its roadmap owner before starting anot
    evidence. A normal browser/OS screenshot is added only when a finding concerns visual layout.
 10. Natural role/activation and parameter/external-recovery flows communicate one coherent,
     trustworthy host-state story without stale displays or unexpected geometry movement.
+11. A rejected dimension conflict identifies its persistent owner and visible accepted operands
+    through canvas highlights and accessible markers without rendering attempted geometry.
+12. A failure with no defensible individual element target remains visibly global and never
+    highlights an unrelated element; successful recovery clears the current error.
 
-Objective ownership for each point is recorded in `docs/M52_IMPLEMENTATION.md`. The human review
+Objective ownership for P1-P10 is recorded in `docs/M52_IMPLEMENTATION.md`; direct M53-P013
+regressions own P11-P12. The human review
 must not attempt to prove revisions, digests, atomicity, solver validity or persistence isolation
 by visual observation.
 
-In the selector and guide, **P1-P10** mean the ten objective verification points above, not the
+In the selector and guide, **P1-P12** mean the twelve verification points above, not the
 `M53-P001`-style finding/process identifiers in the ledger:
 
 | Selector path | Scenario | Points |
@@ -148,6 +153,8 @@ In the selector and guide, **P1-P10** mean the ten objective verification points
 | **M53 Host semantics → Host-owned inputs** | **Invalid/stale parameter recovery** | P5 |
 | **M53 Host semantics → Host-owned inputs** | **External loss & explicit recovery** | P6-P7 |
 | **M53 Host semantics → Truth & evidence** | **Lifecycle, evidence & natural pass** | P8-P10 |
+| **M53 Host semantics → Error attribution** | **Attributed canvas error** | P11 |
+| **M53 Host semantics → Error attribution** | **Global canvas error** | P12 |
 
 ## Archived pre-cleanup record
 
@@ -167,7 +174,7 @@ automated qualification or retained product state.
 The private M53 selector is presentation over the direct-qualified M52 fixture state. It is not a
 restoration of the deleted M44 fixture controls, playground, browser E2E or serving machinery.
 
-## Post-cleanup M53 procedure (30–45 minutes)
+## Post-cleanup M53 procedure (35–50 minutes)
 
 ### Setup and reset
 
@@ -252,6 +259,26 @@ capture a finding before reset and rate the area Concern or Blocker.
 - Judge whether labels, accepted-only canvas and evidence communicate one coherent trustworthy
   state story without stale display or unexpected movement.
 
+### 7. Attributed canvas error (4–5 minutes)
+
+- Select **Scenarios → M53 Host semantics → Error attribution → Attributed canvas error**.
+- Choose **Create attributed conflict**. Confirm the accepted fixed line remains authoritative
+  while its relevant points/curve, constraint glyphs and dimension annotation show red highlights
+  and focusable `!` markers.
+- Hover a marker and then reach markers by keyboard focus. Compare each tooltip with Problems and
+  confirm the interaction changes neither selection nor accepted geometry.
+- Choose **Recover as reference** and confirm the accepted recovery clears every error overlay.
+- Judge whether attribution is immediate, specific and honest about the retained accepted scene.
+
+### 8. Global canvas error (3–4 minutes)
+
+- Select **Scenarios → M53 Host semantics → Error attribution → Global canvas error**.
+- Choose **Submit invalid kind**. Confirm one global top-right marker appears, no unrelated element
+  is highlighted, and the accepted canvas/input evidence remains unchanged.
+- Hover and keyboard-focus the global marker, compare its tooltip with Problems, then choose
+  **Submit recovery parameter** and confirm the marker clears.
+- Judge whether the fallback is noticeable and actionable without implying false element blame.
+
 ## Finding capture
 
 For every Concern or Blocker, stop before reset and:
@@ -283,6 +310,8 @@ direct assertions.
 | Invalid/stale parameter recovery and retained intent |  |  |
 | External missing/stale/topology/rebind recovery |  |  |
 | Design/latest-attempt/accepted distinction |  |  |
+| Targeted canvas error attribution and tooltip accessibility |  | M53-P013 targeted retest required |
+| Global error fallback and recovery |  | M53-P013 targeted retest required |
 | Finding evidence usefulness |  |  |
 | Overall host-semantics trust |  |  |
 
@@ -303,4 +332,5 @@ during review must first become a direct regression and pass targeted requalific
 affected human observations need repeating unless the candidate changes materially. Every ledger
 row must also have an explicit disposition; deferred future scope must have a durable `PLAN.md` or
 open-question owner rather than disappearing from M53. M53-P011 additionally requires the targeted
-selector discoverability, grouping, guidance and natural-use retest recorded in its ledger row.
+selector discoverability, grouping, guidance and natural-use retest recorded in its ledger row;
+M53-P013 requires targeted attribution/global fallback/tooltips/recovery retest.

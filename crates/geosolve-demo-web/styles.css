@@ -301,6 +301,16 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-point.selected { stroke: #efb856; filter: drop-shadow(0 0 3px rgb(239 184 86 / 45%)); }
 .wb-curve[data-role="construction"] { stroke: #86a0a2; stroke-dasharray: 7 5; }
 .wb-point { fill: #131718; stroke: #8fd2ca; stroke-width: 2; cursor: grab; }
+.wb-curve.has-problem,
+.wb-curve.has-problem[data-role="construction"] {
+  stroke: #ff7666;
+  filter: drop-shadow(0 0 5px rgb(255 82 69 / 65%));
+}
+.wb-point.has-problem {
+  fill: #4a1d1b;
+  stroke: #ff7666;
+  filter: drop-shadow(0 0 5px rgb(255 82 69 / 65%));
+}
 .wb-draft { pointer-events: none; }
 .wb-draft > path,
 .wb-draft > rect,
@@ -341,6 +351,52 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-dimension { fill: #79bfc4; font-weight: 500; }
 .wb-glyph.selected,
 .wb-dimension.selected { fill: #fff2c8; }
+.wb-glyph.has-problem,
+.wb-dimension.has-problem {
+  fill: #ff8b7d;
+  filter: drop-shadow(0 0 4px rgb(255 82 69 / 60%));
+}
+.wb-error-overlay { pointer-events: none; }
+.wb-error-marker {
+  cursor: help;
+  pointer-events: auto;
+}
+.wb-error-marker > circle {
+  fill: #b83d32;
+  stroke: #ffd7d1;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.wb-error-marker.global > circle { fill: #d14b3f; }
+.wb-error-marker-icon {
+  fill: #fff;
+  font: 800 13px ui-monospace, monospace;
+  pointer-events: none;
+  text-anchor: middle;
+}
+.wb-error-marker:focus-visible { outline: none; }
+.wb-error-marker:focus-visible > circle {
+  stroke: #8de2ea;
+  stroke-width: 3;
+}
+.wb-error-tooltip {
+  opacity: 0;
+  overflow: visible;
+  pointer-events: none;
+  transition: opacity 80ms ease-out;
+}
+.wb-error-tooltip div {
+  max-width: 22rem;
+  padding: 0.48rem 0.58rem;
+  border: 1px solid #a55a51;
+  border-radius: 4px;
+  color: #ffe5e1;
+  background: rgb(53 29 27 / 98%);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+  font: 0.7rem/1.35 Inter, "IBM Plex Sans", system-ui, sans-serif;
+}
+.wb-error-marker:hover .wb-error-tooltip,
+.wb-error-marker:focus-visible .wb-error-tooltip { opacity: 1; }
 .wb-canvas-hud { position: absolute; right: 0.65rem; bottom: 0.55rem; display: flex; gap: 0.8rem; color: #7c8886; font: 0.65rem ui-monospace, monospace; }
 
 .wb-host-controls,

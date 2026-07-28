@@ -20,6 +20,8 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   immutable external 2D snapshot/rebind contracts.
 - A disposable, non-persisted M52 host-semantics UAT sidecar over the sole workbench,
   with deterministic typed evidence and direct owning-layer regressions.
+- Structured current-attempt problem metadata at the headless-editor seam, including persistent
+  element targets and an explicit global fallback for unattributable failures.
 
 ### Changed
 
@@ -45,11 +47,14 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   report/evidence fixtures and stale M32 distribution copy; one workspace snapshot and directly
   tested presentation, persistence, effect and typed-evidence transformations remain.
 - Replaced the M52 candidate's one-off bottom launcher and overlay for active M53 review with a
-  reusable typed six-scenario catalog, a top nested **Scenarios** selector and a contextual guide
-  sidebar. The same ten objective points, deterministic reset/evidence behavior and ordinary
-  workspace isolation remain, with no new public API, schema or browser-owned domain semantics.
+  reusable typed scenario catalog, a top nested **Scenarios** selector and a contextual guide
+  sidebar. The original six scenarios preserve the same ten objective points, deterministic
+  reset/evidence behavior and ordinary workspace isolation, with no browser-owned domain semantics.
   Nested groups now open as right-expanding hover/focus flyouts, with an inline narrow-screen
   fallback, instead of requiring a separate disclosure toggle at each level.
+- Extended the M53 catalog to eight scenarios with attributed-conflict and global-input-error
+  recovery examples. The accepted canvas now presents separate current-error highlights and
+  accessible non-mutating markers while the Problems panel remains canonical.
 - Consolidated the WASM consumer to one directly tested workbench and removed the legacy
   playground, routes, browser E2E, serving/download glue and browser-owned qualification path.
 

@@ -904,10 +904,11 @@ acceptance is complete; only M53 supervising-human judgment remains.
 
 ## M53 acceptance: human UAT 2
 
-- The supervising human completes and explicitly approves the selector-led 30-45 minute
+- The supervising human completes and explicitly approves the selector-led 35-50 minute
   host-semantics scorecard.
-- Exactly six typed scenarios cover preserved objective points P1-P10 under **Geometry intent**,
-  **Host-owned inputs** and **Truth & evidence**; selecting, switching and resetting reconstruct
+- Exactly eight typed scenarios cover preserved host-semantics points P1-P10 and error-presentation
+  points P11-P12 under **Geometry intent**, **Host-owned inputs**, **Truth & evidence** and
+  **Error attribution**; selecting, switching and resetting reconstruct
   deterministic ephemeral state, while global evidence capture and exit preserve the ordinary
   workspace.
 - The selected-scenario guide exposes its description, objective points, human questions, steps,
@@ -915,6 +916,12 @@ acceptance is complete; only M53 supervising-human judgment remains.
   isolation; grouping and presentation add no browser-owned domain logic.
 - Nested scenario groups open immediately as right-expanding flyouts on hover or keyboard focus;
   narrow layouts keep every branch reachable inline without restoring per-group disclosure state.
+- The headless editor exposes only current failed/rejected attempts as structured persistent-ID
+  problem metadata. Defensible source owners and visible operands are targeted through attempted
+  mappings and document dependencies; unattributable failures remain explicitly global.
+- The accepted canvas remains authoritative beneath a separate overlay. Targeted points, curves,
+  constraints and dimensions receive highlights and focusable tooltip markers; a global marker is
+  used when scope is global or no target resolves. Marker interaction never mutates selection.
 - Construction, suppression, parameters, external references and unsolved-state recovery are understandable and trustworthy.
 - No unresolved ownership, stale-data, recovery or state-trust blocker remains; objective findings have direct regressions.
 - Every UAT request/finding has a durable identifier, classification, disposition and applicable

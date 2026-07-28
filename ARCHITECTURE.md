@@ -220,6 +220,15 @@ schema, and they add no equation or host callback. Within the top dropdown, recu
 group branches use right-expanding hover/focus flyouts; narrow layouts present the same branches
 inline without changing catalog identity or scenario state.
 
+The public headless editor publishes only the latest failed/rejected attempt as structured
+`EditorProblemMetadata`: attempt/design identity, high-level category, explicit global/targeted
+scope, human-readable message and deterministic persistent point/curve/constraint/dimension
+targets. Targeting maps core conflict sources and typed rejection identities through the attempted
+document mappings, then expands document-owned operands; it never derives blame from labels,
+geometry proximity or residual magnitude. The workbench renders that metadata as a separate
+overlay over the authoritative accepted scene. Missing or non-resolving attribution becomes a
+global marker, and the Problems panel remains the canonical complete presentation.
+
 Historically, M13 implemented the disposable alpha playground interactions and M14 hardened
 its E2E, import/error recovery and performance. M46-M50 replaced every retained semantic
 claim with a direct owner or reviewed retirement and then removed that runtime. None of the

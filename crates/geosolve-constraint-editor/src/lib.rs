@@ -12,9 +12,9 @@ mod qualification;
 
 pub use coordinator::{
     ActionAvailability, ActionState, AuditDto, AuditProvenance, CoordinatorActionKind,
-    CoordinatorError, DisabledReason, EditorMutation, LifecycleDto, LifecycleStatus,
-    MeasurementPublication, MutationOutcome, ProblemsDto, ReplayAction, RestoreCheckpoint,
-    RetainedEditorCoordinator,
+    CoordinatorError, DisabledReason, EditorMutation, EditorProblemCategory, EditorProblemMetadata,
+    EditorProblemScope, EditorProblemTarget, LifecycleDto, LifecycleStatus, MeasurementPublication,
+    MutationOutcome, ProblemsDto, ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator,
 };
 pub use geosolve_sketch::SketchAcceptedDocumentRedundancy;
 #[doc(hidden)]

@@ -1354,8 +1354,9 @@ without selecting from coordinates.
 ### UAT-C2 - CAD host semantics at M53
 
 M52 directly qualified four fixed fixture families and ten objective points without
-recording human approval. Active M53 presents that same behavior as six typed scenarios
-under the stable root `m53-host-semantics` (**M53 Host semantics**):
+recording human approval. Active M53 presents that same behavior as six typed scenarios and adds
+two M53-P013 error-presentation scenarios under the stable root `m53-host-semantics`
+(**M53 Host semantics**):
 
 | Selector group | Stable scenario ID | Scenario title | Objective points |
 | --- | --- | --- | --- |
@@ -1365,8 +1366,11 @@ under the stable root `m53-host-semantics` (**M53 Host semantics**):
 | `host-owned-inputs` (**Host-owned inputs**) | `invalid-stale-parameter-recovery` | Invalid/stale parameter recovery | P5 |
 | `host-owned-inputs` (**Host-owned inputs**) | `external-loss-explicit-recovery` | External loss & explicit recovery | P6-P7 |
 | `truth-evidence` (**Truth & evidence**) | `lifecycle-evidence-natural-pass` | Lifecycle, evidence & natural pass | P8-P10 |
+| `error-attribution` (**Error attribution**) | `attributed-canvas-error` | Attributed canvas error | P11 |
+| `error-attribution` (**Error attribution**) | `global-canvas-error` | Global canvas error | P12 |
 
-Here P1-P10 identify the preserved objective verification points in `docs/M53_UAT.md`,
+Here P1-P10 identify the preserved M52 objective verification points and P11-P12 identify the
+M53-P013 canvas-presentation checks in `docs/M53_UAT.md`,
 not its `M53-Pxxx` finding and process identifiers. Selecting a scenario constructs and
 activates its deterministic ephemeral candidate; switching selects a fresh candidate and
 **Reset scenario** reconstructs the selected one. Global **Capture typed evidence** remains
@@ -1381,8 +1385,22 @@ The guide sidebar publishes the selected scenario's description, objective point
 questions, typed steps, expected outcome and recent transcript/evidence. Stable definitions
 may group and present typed candidate actions, but the browser does not derive equations,
 accepted state, revisions, digests or recovery semantics. Those remain products of the
-direct-qualified fixture transitions and public domain/audit APIs. The prepared 30-45 minute
+direct-qualified fixture transitions and public domain/audit APIs. The prepared human
 review judges discoverability, state, ownership and recovery clarity.
+
+`attributed-canvas-error` begins with an accepted fixed two-point line and a reference
+line-length dimension whose stored target is intentionally incompatible with the fixed geometry.
+Changing the dimension to driving creates a retained rejected design. The headless-editor problem
+metadata targets the attempted dimension owner and persistent visible operands through attempted
+source mappings and the document dependency graph. The renderer keeps the prior accepted line
+authoritative while highlighting resolvable points, curve, constraints and dimension annotations;
+returning the dimension to reference mode accepts and clears the current problem.
+
+`global-canvas-error` submits an angle value to a length parameter. The typed input failure has no
+defensible individual canvas target, so its metadata scope is global and the canvas presents one
+top-right marker without highlighting unrelated geometry. A subsequent valid length batch advances
+accepted state and clears the marker. Both examples expose the same message in non-mutating
+hover/focus tooltips and the canonical Problems panel.
 
 ### UAT-C3 - Advanced geometry and topology at placeholder M106X
 
@@ -1405,7 +1423,7 @@ matrix.
 ### UAT evidence and recheck policy
 
 Each checkpoint provides one manual entry point, deterministic resets and concise
-instructions. M53 uses one top **Scenarios** entry point with the six stable leaves above;
+instructions. M53 uses one top **Scenarios** entry point with the eight stable leaves above;
 the catalog machinery may host UAT-C3/UAT-C4 only after their placeholder milestones are
 renumbered and executed. Findings capture the candidate revision, selected scenario,
 workspace input, action transcript and accepted/attempted diagnostics from public APIs; a

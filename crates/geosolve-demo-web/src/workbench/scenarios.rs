@@ -22,11 +22,13 @@ pub(crate) enum VerificationPointId {
     P8,
     P9,
     P10,
+    P11,
+    P12,
 }
 
 impl VerificationPointId {
     #[cfg(test)]
-    pub(crate) const ALL: [Self; 10] = [
+    pub(crate) const ALL: [Self; 12] = [
         Self::P1,
         Self::P2,
         Self::P3,
@@ -37,6 +39,8 @@ impl VerificationPointId {
         Self::P8,
         Self::P9,
         Self::P10,
+        Self::P11,
+        Self::P12,
     ];
 
     pub(crate) const fn number(self) -> u8 {
@@ -51,6 +55,8 @@ impl VerificationPointId {
             Self::P8 => 8,
             Self::P9 => 9,
             Self::P10 => 10,
+            Self::P11 => 11,
+            Self::P12 => 12,
         }
     }
 }
@@ -84,17 +90,21 @@ pub(crate) enum ScenarioId {
     InvalidStaleParameterRecovery,
     ExternalLossExplicitRecovery,
     LifecycleEvidenceNaturalPass,
+    AttributedCanvasError,
+    GlobalCanvasError,
 }
 
 impl ScenarioId {
     #[cfg(test)]
-    pub(crate) const ALL: [Self; 6] = [
+    pub(crate) const ALL: [Self; 8] = [
         Self::RoleProfileParticipation,
         Self::ActivationDimensionMode,
         Self::SharedParameterProposal,
         Self::InvalidStaleParameterRecovery,
         Self::ExternalLossExplicitRecovery,
         Self::LifecycleEvidenceNaturalPass,
+        Self::AttributedCanvasError,
+        Self::GlobalCanvasError,
     ];
 
     pub(crate) fn from_key(value: &str) -> Option<Self> {
@@ -105,6 +115,8 @@ impl ScenarioId {
             "invalid-stale-parameter-recovery" => Self::InvalidStaleParameterRecovery,
             "external-loss-explicit-recovery" => Self::ExternalLossExplicitRecovery,
             "lifecycle-evidence-natural-pass" => Self::LifecycleEvidenceNaturalPass,
+            "attributed-canvas-error" => Self::AttributedCanvasError,
+            "global-canvas-error" => Self::GlobalCanvasError,
             _ => return None,
         })
     }
@@ -117,6 +129,8 @@ impl ScenarioId {
             Self::InvalidStaleParameterRecovery => "invalid-stale-parameter-recovery",
             Self::ExternalLossExplicitRecovery => "external-loss-explicit-recovery",
             Self::LifecycleEvidenceNaturalPass => "lifecycle-evidence-natural-pass",
+            Self::AttributedCanvasError => "attributed-canvas-error",
+            Self::GlobalCanvasError => "global-canvas-error",
         }
     }
 
@@ -133,6 +147,7 @@ pub(crate) enum ScenarioGroupId {
     GeometryIntent,
     HostOwnedInputs,
     TruthEvidence,
+    ErrorAttribution,
 }
 
 impl ScenarioGroupId {
@@ -142,6 +157,7 @@ impl ScenarioGroupId {
             Self::GeometryIntent => "geometry-intent",
             Self::HostOwnedInputs => "host-owned-inputs",
             Self::TruthEvidence => "truth-evidence",
+            Self::ErrorAttribution => "error-attribution",
         }
     }
 }
@@ -281,7 +297,7 @@ impl ScenarioCatalog {
 }
 
 #[cfg(test)]
-pub(crate) const ALL_SCENARIO_ACTIONS: [ScenarioAction; 19] = [
+pub(crate) const ALL_SCENARIO_ACTIONS: [ScenarioAction; 21] = [
     ScenarioAction::RoleConstruction,
     ScenarioAction::RoleProfile,
     ScenarioAction::SuppressDimension,
@@ -300,10 +316,12 @@ pub(crate) const ALL_SCENARIO_ACTIONS: [ScenarioAction; 19] = [
     ScenarioAction::ExternalFreshRecovery,
     ScenarioAction::LifecycleRejected,
     ScenarioAction::LifecycleRecovery,
+    ScenarioAction::AttributedConflict,
+    ScenarioAction::AttributedRecovery,
     ScenarioAction::CaptureEvidence,
 ];
 
-const VERIFICATION_POINTS: [VerificationPoint; 10] = [
+const VERIFICATION_POINTS: [VerificationPoint; 12] = [
     VerificationPoint {
         id: VerificationPointId::P1,
         objective: "Role changes profile participation while geometry remains solver-active and accepted.",
@@ -354,6 +372,16 @@ const VERIFICATION_POINTS: [VerificationPoint; 10] = [
         objective: "The same typed state machine drives natural role, activity, parameter, and external-recovery transitions.",
         human_judgment: "Judge overall coherence and trust without relying on step-by-step instructions.",
     },
+    VerificationPoint {
+        id: VerificationPointId::P11,
+        objective: "A rejected dimension conflict highlights its persistent owner and visible accepted operands without rendering attempted geometry.",
+        human_judgment: "Judge whether the highlighted line, points, dimension, and focusable error markers make attribution immediately understandable.",
+    },
+    VerificationPoint {
+        id: VerificationPointId::P12,
+        objective: "An input failure with no defensible element attribution remains a global canvas error and clears only after valid recovery.",
+        human_judgment: "Judge whether the global marker is noticeable and truthful without implying blame on an unrelated element.",
+    },
 ];
 
 const ROLE_PROFILE_POINTS: [VerificationPointId; 1] = [VerificationPointId::P1];
@@ -368,6 +396,8 @@ const LIFECYCLE_EVIDENCE_POINTS: [VerificationPointId; 3] = [
     VerificationPointId::P9,
     VerificationPointId::P10,
 ];
+const ATTRIBUTED_ERROR_POINTS: [VerificationPointId; 1] = [VerificationPointId::P11];
+const GLOBAL_ERROR_POINTS: [VerificationPointId; 1] = [VerificationPointId::P12];
 
 const ROLE_PROFILE_STEPS: [ScenarioStep; 3] = [
     ScenarioStep {
@@ -542,7 +572,53 @@ const LIFECYCLE_EVIDENCE_STEPS: [ScenarioStep; 6] = [
     },
 ];
 
-const SCENARIOS: [ScenarioDefinition; 6] = [
+const ATTRIBUTED_ERROR_STEPS: [ScenarioStep; 4] = [
+    ScenarioStep {
+        instruction: "Change the accepted reference line length into an incompatible driving dimension.",
+        action: Some(ScenarioAction::AttributedConflict),
+        expected: "The attempt rejects while the accepted line stays visible; the dimension owner, line, and endpoint operands receive error highlights and focusable markers.",
+    },
+    ScenarioStep {
+        instruction: "Hover each error icon, then reach the same icons by keyboard focus.",
+        action: None,
+        expected: "Every marker presents the same current problem without changing selection, history, or accepted geometry.",
+    },
+    ScenarioStep {
+        instruction: "Compare the canvas attribution with the canonical Problems panel.",
+        action: None,
+        expected: "Both surfaces describe the same latest attempt while the canvas remains explicitly accepted-only.",
+    },
+    ScenarioStep {
+        instruction: "Recover by returning the dimension to reference mode.",
+        action: Some(ScenarioAction::AttributedRecovery),
+        expected: "The recovery accepts and all current-error highlights and markers clear.",
+    },
+];
+
+const GLOBAL_ERROR_STEPS: [ScenarioStep; 4] = [
+    ScenarioStep {
+        instruction: "Submit an angle value to the length parameter.",
+        action: Some(ScenarioAction::ParameterInvalidKind),
+        expected: "The failed input retains accepted geometry and produces one global top-right error marker without highlighting unrelated elements.",
+    },
+    ScenarioStep {
+        instruction: "Hover and keyboard-focus the global marker, then compare it with Problems.",
+        action: None,
+        expected: "The global tooltip and Problems panel expose the same actionable input failure without claiming element attribution.",
+    },
+    ScenarioStep {
+        instruction: "Confirm the accepted canvas and accepted parameter evidence did not advance.",
+        action: None,
+        expected: "Only latest-attempt metadata changes; no attempted geometry becomes authoritative.",
+    },
+    ScenarioStep {
+        instruction: "Submit the valid length recovery.",
+        action: Some(ScenarioAction::ParameterRecovery),
+        expected: "The accepted state advances and the global marker clears.",
+    },
+];
+
+const SCENARIOS: [ScenarioDefinition; 8] = [
     ScenarioDefinition {
         id: ScenarioId::RoleProfileParticipation,
         title: "Role & profile participation",
@@ -597,6 +673,24 @@ const SCENARIOS: [ScenarioDefinition; 6] = [
         points: &LIFECYCLE_EVIDENCE_POINTS,
         steps: &LIFECYCLE_EVIDENCE_STEPS,
     },
+    ScenarioDefinition {
+        id: ScenarioId::AttributedCanvasError,
+        title: "Attributed canvas error",
+        description: "Reject an incompatible line-length dimension and inspect owner-and-operand highlights over retained accepted geometry.",
+        human_question: "Can a host user identify what is involved in the failure without mistaking attempted geometry for accepted truth?",
+        fixture: ScenarioFixture::ErrorAttribution,
+        points: &ATTRIBUTED_ERROR_POINTS,
+        steps: &ATTRIBUTED_ERROR_STEPS,
+    },
+    ScenarioDefinition {
+        id: ScenarioId::GlobalCanvasError,
+        title: "Global canvas error",
+        description: "Submit a wrong-kind host parameter that cannot be defensibly attributed to an individual canvas element.",
+        human_question: "Is the global fallback clear and noticeable without falsely highlighting unrelated geometry?",
+        fixture: ScenarioFixture::ParameterProposal,
+        points: &GLOBAL_ERROR_POINTS,
+        steps: &GLOBAL_ERROR_STEPS,
+    },
 ];
 
 const GEOMETRY_INTENT_CHILDREN: [ScenarioNode; 2] = [
@@ -613,6 +707,11 @@ const HOST_OWNED_INPUTS_CHILDREN: [ScenarioNode; 3] = [
 const TRUTH_EVIDENCE_CHILDREN: [ScenarioNode; 1] = [ScenarioNode::Scenario(
     ScenarioId::LifecycleEvidenceNaturalPass,
 )];
+
+const ERROR_ATTRIBUTION_CHILDREN: [ScenarioNode; 2] = [
+    ScenarioNode::Scenario(ScenarioId::AttributedCanvasError),
+    ScenarioNode::Scenario(ScenarioId::GlobalCanvasError),
+];
 
 const GEOMETRY_INTENT_GROUP: ScenarioGroup = ScenarioGroup {
     id: ScenarioGroupId::GeometryIntent,
@@ -635,10 +734,18 @@ const TRUTH_EVIDENCE_GROUP: ScenarioGroup = ScenarioGroup {
     children: &TRUTH_EVIDENCE_CHILDREN,
 };
 
-const M53_HOST_SEMANTICS_CHILDREN: [ScenarioNode; 3] = [
+const ERROR_ATTRIBUTION_GROUP: ScenarioGroup = ScenarioGroup {
+    id: ScenarioGroupId::ErrorAttribution,
+    title: "Error attribution",
+    description: "Element-targeted and honest global current-error presentation.",
+    children: &ERROR_ATTRIBUTION_CHILDREN,
+};
+
+const M53_HOST_SEMANTICS_CHILDREN: [ScenarioNode; 4] = [
     ScenarioNode::Group(GEOMETRY_INTENT_GROUP),
     ScenarioNode::Group(HOST_OWNED_INPUTS_GROUP),
     ScenarioNode::Group(TRUTH_EVIDENCE_GROUP),
+    ScenarioNode::Group(ERROR_ATTRIBUTION_GROUP),
 ];
 
 const M53_HOST_SEMANTICS_GROUP: ScenarioGroup = ScenarioGroup {
@@ -990,7 +1097,7 @@ mod tests {
         collect_catalog(*SCENARIO_CATALOG.root(), &mut groups, &mut scenarios);
 
         assert_eq!(SCENARIO_CATALOG.root().title(), "M53 Host semantics");
-        assert_eq!(groups.len(), 4);
+        assert_eq!(groups.len(), 5);
         assert_eq!(scenarios.len(), ScenarioId::ALL.len());
         let unique_groups: HashSet<_> = groups.iter().copied().collect();
         let unique_scenarios: HashSet<_> = scenarios.iter().copied().collect();
@@ -1062,9 +1169,9 @@ mod tests {
             .unwrap();
         let markup = state.menu_markup();
 
-        assert_eq!(markup.matches("data-scenario-group-trigger=").count(), 3);
-        assert_eq!(markup.matches("class=\"wb-scenario-flyout\"").count(), 3);
-        assert_eq!(markup.matches("data-scenario-id=").count(), 6);
+        assert_eq!(markup.matches("data-scenario-group-trigger=").count(), 4);
+        assert_eq!(markup.matches("class=\"wb-scenario-flyout\"").count(), 4);
+        assert_eq!(markup.matches("data-scenario-id=").count(), 8);
         assert!(markup.contains("class=\"wb-scenario-catalog-header\""));
         assert!(markup.contains("aria-expanded=\"false\""));
         assert!(markup.contains("aria-controls=\"wb-scenario-flyout-host-owned-inputs\""));

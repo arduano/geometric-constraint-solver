@@ -186,6 +186,12 @@ pub(crate) mod wasm {
             else {
                 return;
             };
+            if origin
+                .closest("[data-problem-marker]")
+                .is_ok_and(|marker| marker.is_some())
+            {
+                return;
+            }
             let target = origin
                 .closest(concat!(
                     "[data-wb-tool], [data-editor-item], [data-wb-action], ",
@@ -322,6 +328,14 @@ pub(crate) mod wasm {
         let double_document = document.clone();
         let double_workbench = Rc::clone(workbench);
         let double = Closure::<dyn FnMut(MouseEvent)>::new(move |event: MouseEvent| {
+            if event
+                .target()
+                .and_then(|target| target.dyn_into::<Element>().ok())
+                .and_then(|target| target.closest("[data-problem-marker]").ok().flatten())
+                .is_some()
+            {
+                return;
+            }
             event.prevent_default();
             let mut wb = double_workbench.borrow_mut();
             if wb.scenarios.is_active() {
@@ -349,7 +363,15 @@ pub(crate) mod wasm {
         let callback_document = document.clone();
         let callback_workbench = Rc::clone(workbench);
         let callback_viewport = viewport.clone();
-        let callback = Closure::<dyn FnMut(PointerEvent)>::new(move |event| {
+        let callback = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
+            if event
+                .target()
+                .and_then(|target| target.dyn_into::<Element>().ok())
+                .and_then(|target| target.closest("[data-problem-marker]").ok().flatten())
+                .is_some()
+            {
+                return;
+            }
             let mut wb = callback_workbench.borrow_mut();
             if wb.scenarios.is_active() {
                 return;
@@ -385,6 +407,15 @@ pub(crate) mod wasm {
                 event.prevent_default();
                 close_scenario_selector(&callback_document);
                 focus_by_id(&callback_document, "wb-scenario-trigger");
+                return;
+            }
+            if let Some(target) = event
+                .target()
+                .and_then(|target| target.dyn_into::<Element>().ok())
+                && target
+                    .closest("[data-problem-marker]")
+                    .is_ok_and(|marker| marker.is_some())
+            {
                 return;
             }
             if let Some(target) = event
@@ -696,6 +727,7 @@ pub(crate) mod wasm {
             accepted,
             selection,
             construction_preview,
+            coordinator.current_problem_metadata().as_ref(),
         ));
         let design = coordinator.session().design_document();
         required(document, "wb-tree")?
@@ -863,13 +895,9 @@ pub(crate) mod wasm {
     }
 
     fn problem_text(coordinator: &RetainedEditorCoordinator) -> String {
-        let problems = coordinator.problems();
-        if let Some(failure) = problems.failure {
-            return failure.message().to_owned();
-        }
-        problems.rejection.map_or_else(
+        coordinator.current_problem_metadata().map_or_else(
             || "No current solver problem".into(),
-            |value| format!("{value:?}"),
+            |problem| problem.message,
         )
     }
 
