@@ -28,10 +28,11 @@ use std::cmp::Ordering;
 
 use geosolve_sketch::{
     ContactDomain, ContactNeighborhood, CurveDefinition, CurveId, CurveSpan, DesignPointId,
-    DesignScalarId, DocumentAngleOrientation, DocumentArcSweep, DocumentConstraintDefinition,
-    DocumentConstraintId, DocumentCurveSpanRef, DocumentDimensionId, DocumentDimensionMode,
-    DocumentEdit, DocumentObjectId, ScalarDomain, ScalarUnit, SketchDesignIdentity, SketchDocument,
-    TangentOrientation,
+    DesignScalarId, DocumentAngleOrientation, DocumentArcSweep, DocumentBSplineForm,
+    DocumentConstraintDefinition, DocumentConstraintId, DocumentCurveSpanRef, DocumentDimensionId,
+    DocumentDimensionMode, DocumentEdit, DocumentHyperbolaBranch, DocumentObjectId,
+    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, ScalarDomain, ScalarUnit, SketchDesignIdentity,
+    SketchDocument, TangentOrientation,
 };
 use thiserror::Error;
 
@@ -463,6 +464,100 @@ pub enum ConstructionProposal {
         start: [f64; 2],
         end: [f64; 2],
     },
+    QuadraticBezier {
+        controls: [ConstructionPoint; 3],
+    },
+    CubicBezier {
+        controls: [ConstructionPoint; 4],
+    },
+    Ellipse {
+        center: ConstructionPoint,
+        major_axis_point: ConstructionPoint,
+        minor_axis_ratio: f64,
+    },
+    EllipticalArc {
+        center: ConstructionPoint,
+        major_axis_point: ConstructionPoint,
+        minor_axis_ratio: f64,
+        start_angle: f64,
+        end_angle: f64,
+        sweep: DocumentArcSweep,
+    },
+    RationalQuadraticConic {
+        start: ConstructionPoint,
+        weighted_middle: [f64; 2],
+        middle_weight: f64,
+        end: ConstructionPoint,
+    },
+    Parabola {
+        vertex: ConstructionPoint,
+        focus: ConstructionPoint,
+        trim_start: f64,
+        trim_end: f64,
+    },
+    Hyperbola {
+        center: ConstructionPoint,
+        transverse_axis_point: ConstructionPoint,
+        semi_conjugate: f64,
+        branch: DocumentHyperbolaBranch,
+        trim_start: f64,
+        trim_end: f64,
+    },
+    Nurbs {
+        controls: Vec<ConstructionPoint>,
+        options: NurbsConstructionOptions,
+    },
+}
+
+/// Explicit authoring state for conic construction tools.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ConicConstructionOptions {
+    pub minor_axis_ratio: f64,
+    pub arc_start: f64,
+    pub arc_end: f64,
+    pub arc_sweep: DocumentArcSweep,
+    pub middle_weight: f64,
+    pub trim_start: f64,
+    pub trim_end: f64,
+    pub semi_conjugate: f64,
+    pub hyperbola_branch: DocumentHyperbolaBranch,
+}
+
+impl Default for ConicConstructionOptions {
+    fn default() -> Self {
+        Self {
+            minor_axis_ratio: 0.5,
+            arc_start: 0.0,
+            arc_end: std::f64::consts::FRAC_PI_2,
+            arc_sweep: DocumentArcSweep::CounterClockwise,
+            middle_weight: 1.0,
+            trim_start: -1.0,
+            trim_end: 1.0,
+            semi_conjugate: 1.0,
+            hyperbola_branch: DocumentHyperbolaBranch::Positive,
+        }
+    }
+}
+
+/// Explicit NURBS creation topology and homogeneous weights.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NurbsConstructionOptions {
+    pub form: DocumentBSplineForm,
+    pub degree: u32,
+    /// Empty means one unit weight per control. Otherwise the count must match.
+    pub weights: Vec<f64>,
+    pub gauge_index: usize,
+}
+
+impl Default for NurbsConstructionOptions {
+    fn default() -> Self {
+        Self {
+            form: DocumentBSplineForm::Clamped,
+            degree: 3,
+            weights: Vec::new(),
+            gauge_index: 0,
+        }
+    }
 }
 
 /// A typed non-authoritative construction preview.
@@ -471,6 +566,10 @@ pub enum ConstructionProposal {
 /// never committable. Complete previews retain the exact proposal operands that
 /// will be emitted on the terminal interaction.
 #[derive(Clone, Debug, PartialEq)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "a complete preview deliberately carries its exact typed proposal beside resolved geometry"
+)]
 pub enum ConstructionPreview {
     Complete {
         /// The exact proposal emitted by terminal completion.
@@ -485,6 +584,22 @@ pub enum ConstructionPreview {
         center: [f64; 2],
         start: [f64; 2],
     },
+    ControlPolygon {
+        kind: AdvancedConstructionKind,
+        points: Vec<[f64; 2]>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AdvancedConstructionKind {
+    QuadraticBezier,
+    CubicBezier,
+    Ellipse,
+    EllipticalArc,
+    RationalQuadraticConic,
+    Parabola,
+    Hyperbola,
+    Nurbs,
 }
 
 /// Fully resolved model-space geometry for a complete construction preview.
@@ -512,6 +627,11 @@ pub enum ConstructionPreviewGeometry {
         /// Explicit finite counterclockwise sweep in `(0, TAU)`.
         sweep_radians: f64,
         large_arc: bool,
+    },
+    AdvancedCurve {
+        kind: AdvancedConstructionKind,
+        control_points: Vec<[f64; 2]>,
+        curve_points: Vec<[f64; 2]>,
     },
 }
 
@@ -664,6 +784,242 @@ impl ConstructionProposal {
                     },
                 )?);
             }
+            Self::QuadraticBezier { controls } => {
+                let controls = [
+                    point(controls[0])?,
+                    point(controls[1])?,
+                    point(controls[2])?,
+                ];
+                result.curves.push(document.add_curve(
+                    "quadratic Bezier",
+                    CurveDefinition::QuadraticBezier { controls },
+                )?);
+            }
+            Self::CubicBezier { controls } => {
+                let controls = [
+                    point(controls[0])?,
+                    point(controls[1])?,
+                    point(controls[2])?,
+                    point(controls[3])?,
+                ];
+                result.curves.push(
+                    document
+                        .add_curve("cubic Bezier", CurveDefinition::CubicBezier { controls })?,
+                );
+            }
+            Self::Ellipse {
+                center,
+                major_axis_point,
+                minor_axis_ratio,
+            } => {
+                let center = point(*center)?;
+                let major_axis_point = point(*major_axis_point)?;
+                let minor_axis_ratio = document.add_scalar(
+                    "ellipse minor-axis ratio",
+                    *minor_axis_ratio,
+                    ScalarUnit::Parameter,
+                    ScalarDomain::Bounded {
+                        lower: f64::from_bits(1),
+                        upper: 1.0,
+                    },
+                )?;
+                result.scalars.push(minor_axis_ratio);
+                result.curves.push(document.add_curve(
+                    "ellipse",
+                    CurveDefinition::Ellipse {
+                        center,
+                        major_axis_point,
+                        minor_axis_ratio,
+                    },
+                )?);
+            }
+            Self::EllipticalArc {
+                center,
+                major_axis_point,
+                minor_axis_ratio,
+                start_angle,
+                end_angle,
+                sweep,
+            } => {
+                let center = point(*center)?;
+                let major_axis_point = point(*major_axis_point)?;
+                let minor_axis_ratio = document.add_scalar(
+                    "elliptical arc minor-axis ratio",
+                    *minor_axis_ratio,
+                    ScalarUnit::Parameter,
+                    ScalarDomain::Bounded {
+                        lower: f64::from_bits(1),
+                        upper: 1.0,
+                    },
+                )?;
+                let start_angle = document.add_scalar(
+                    "elliptical arc start",
+                    *start_angle,
+                    ScalarUnit::Angle,
+                    ScalarDomain::Finite,
+                )?;
+                let end_angle = document.add_scalar(
+                    "elliptical arc end",
+                    *end_angle,
+                    ScalarUnit::Angle,
+                    ScalarDomain::Finite,
+                )?;
+                result
+                    .scalars
+                    .extend([minor_axis_ratio, start_angle, end_angle]);
+                result.curves.push(document.add_curve(
+                    "elliptical arc",
+                    CurveDefinition::EllipticalArc {
+                        center,
+                        major_axis_point,
+                        minor_axis_ratio,
+                        start_angle,
+                        end_angle,
+                        sweep: *sweep,
+                    },
+                )?);
+            }
+            Self::RationalQuadraticConic {
+                start,
+                weighted_middle,
+                middle_weight,
+                end,
+            } => {
+                let start = point(*start)?;
+                let end = point(*end)?;
+                let middle_weight = document.add_scalar(
+                    "rational conic middle weight",
+                    *middle_weight,
+                    ScalarUnit::Parameter,
+                    ScalarDomain::Bounded {
+                        lower: MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT,
+                        upper: f64::MAX,
+                    },
+                )?;
+                result.scalars.push(middle_weight);
+                result.curves.push(document.add_curve(
+                    "rational quadratic conic",
+                    CurveDefinition::RationalQuadraticConic {
+                        start,
+                        weighted_middle: *weighted_middle,
+                        middle_weight,
+                        end,
+                    },
+                )?);
+            }
+            Self::Parabola {
+                vertex,
+                focus,
+                trim_start,
+                trim_end,
+            } => {
+                let vertex = point(*vertex)?;
+                let focus = point(*focus)?;
+                let trim_start = document.add_scalar(
+                    "parabola trim start",
+                    *trim_start,
+                    ScalarUnit::Parameter,
+                    ScalarDomain::Finite,
+                )?;
+                let trim_end = document.add_scalar(
+                    "parabola trim end",
+                    *trim_end,
+                    ScalarUnit::Parameter,
+                    ScalarDomain::Finite,
+                )?;
+                result.scalars.extend([trim_start, trim_end]);
+                result.curves.push(document.add_curve(
+                    "parabola",
+                    CurveDefinition::ParabolaSegment {
+                        vertex,
+                        focus,
+                        trim_start,
+                        trim_end,
+                    },
+                )?);
+            }
+            Self::Hyperbola {
+                center,
+                transverse_axis_point,
+                semi_conjugate,
+                branch,
+                trim_start,
+                trim_end,
+            } => {
+                let center = point(*center)?;
+                let transverse_axis_point = point(*transverse_axis_point)?;
+                let semi_conjugate = document.add_scalar(
+                    "hyperbola semi-conjugate",
+                    *semi_conjugate,
+                    ScalarUnit::Length,
+                    ScalarDomain::Positive,
+                )?;
+                let trim_start = document.add_scalar(
+                    "hyperbola trim start",
+                    *trim_start,
+                    ScalarUnit::Parameter,
+                    ScalarDomain::Finite,
+                )?;
+                let trim_end = document.add_scalar(
+                    "hyperbola trim end",
+                    *trim_end,
+                    ScalarUnit::Parameter,
+                    ScalarDomain::Finite,
+                )?;
+                result
+                    .scalars
+                    .extend([semi_conjugate, trim_start, trim_end]);
+                result.curves.push(document.add_curve(
+                    "hyperbola",
+                    CurveDefinition::HyperbolaSegment {
+                        center,
+                        transverse_axis_point,
+                        semi_conjugate,
+                        branch: *branch,
+                        trim_start,
+                        trim_end,
+                    },
+                )?);
+            }
+            Self::Nurbs { controls, options } => {
+                let control_count = controls.len();
+                validate_nurbs_for_controls(options, control_count)?;
+                let mut control_ids = Vec::with_capacity(control_count);
+                for control in controls {
+                    control_ids.push(point(*control)?);
+                }
+                let values = if options.weights.is_empty() {
+                    vec![1.0; control_count]
+                } else {
+                    options.weights.clone()
+                };
+                let mut weights = Vec::with_capacity(values.len());
+                for (index, value) in values.into_iter().enumerate() {
+                    let weight = document.add_scalar(
+                        format!("NURBS weight {}", index + 1),
+                        value,
+                        ScalarUnit::Parameter,
+                        ScalarDomain::Positive,
+                    )?;
+                    result.scalars.push(weight);
+                    weights.push(weight);
+                }
+                let (knots, span_ids, next_span_id) =
+                    nurbs_topology(options.form, options.degree, control_count)?;
+                result.curves.push(document.add_curve(
+                    "NURBS",
+                    CurveDefinition::Nurbs {
+                        form: options.form,
+                        degree: options.degree,
+                        controls: control_ids,
+                        gauge_weight: weights[options.gauge_index],
+                        weights,
+                        knots,
+                        span_ids,
+                        next_span_id,
+                    },
+                )?);
+            }
         }
         Ok(result)
     }
@@ -712,6 +1068,14 @@ pub enum EditorTool {
     Rectangle,
     Circle,
     CounterClockwiseArc,
+    QuadraticBezier,
+    CubicBezier,
+    Ellipse,
+    EllipticalArc,
+    RationalQuadraticConic,
+    Parabola,
+    Hyperbola,
+    Nurbs,
 }
 
 /// Configurable deterministic endpoint snapping policy.
@@ -738,6 +1102,8 @@ struct Draft {
     pointer_id: u64,
     points: Vec<ConstructionPoint>,
     positions: Vec<[f64; 2]>,
+    conic_options: ConicConstructionOptions,
+    nurbs_options: NurbsConstructionOptions,
 }
 
 /// Headless deterministic selection and point-gesture state machine.
@@ -749,6 +1115,8 @@ pub struct ConstraintEditor {
     point_gesture: Option<PointGesture>,
     tool: EditorTool,
     snap_tolerance: SnapTolerance,
+    conic_options: ConicConstructionOptions,
+    nurbs_options: NurbsConstructionOptions,
     draft: Option<Draft>,
     last_valid_drag_preview: Option<(u64, u64, DesignPointId, [f64; 2])>,
     next_projection_request: u64,
@@ -764,6 +1132,8 @@ impl Default for ConstraintEditor {
             point_gesture: None,
             tool: EditorTool::Select,
             snap_tolerance: SnapTolerance::default(),
+            conic_options: ConicConstructionOptions::default(),
+            nurbs_options: NurbsConstructionOptions::default(),
             draft: None,
             last_valid_drag_preview: None,
             next_projection_request: 0,
@@ -829,6 +1199,55 @@ impl ConstraintEditor {
     #[must_use]
     pub const fn snap_tolerance(&self) -> SnapTolerance {
         self.snap_tolerance
+    }
+
+    /// Replaces explicit conic authoring values and updates a retained conic draft.
+    ///
+    /// # Errors
+    ///
+    /// Rejects non-finite or out-of-domain values without changing editor state.
+    pub fn set_conic_options(
+        &mut self,
+        options: ConicConstructionOptions,
+    ) -> Result<(), EditorError> {
+        validate_conic_options(options)?;
+        self.conic_options = options;
+        if let Some(draft) = self.draft.as_mut()
+            && is_conic_tool(draft.tool)
+        {
+            draft.conic_options = options;
+        }
+        Ok(())
+    }
+
+    #[must_use]
+    pub const fn conic_options(&self) -> ConicConstructionOptions {
+        self.conic_options
+    }
+
+    /// Replaces explicit NURBS topology/weight authoring state.
+    ///
+    /// # Errors
+    ///
+    /// Rejects zero degree, non-positive/non-finite weights, or a gauge index
+    /// outside a non-empty weight list.
+    pub fn set_nurbs_options(
+        &mut self,
+        options: NurbsConstructionOptions,
+    ) -> Result<(), EditorError> {
+        validate_nurbs_options(&options)?;
+        self.nurbs_options = options.clone();
+        if let Some(draft) = self.draft.as_mut()
+            && draft.tool == EditorTool::Nurbs
+        {
+            draft.nurbs_options = options;
+        }
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn nurbs_options(&self) -> &NurbsConstructionOptions {
+        &self.nurbs_options
     }
 
     #[must_use]
@@ -1011,14 +1430,16 @@ impl ConstraintEditor {
         }]
     }
 
-    /// Completes a polyline draft. Other tools have no explicit completion action.
+    /// Completes a variable-length polyline or NURBS draft.
     pub fn complete_draft(&mut self, expected: SketchDesignIdentity) -> Vec<EditorEffect> {
         let Some(draft) = self.draft.take() else {
             return Vec::new();
         };
-        let proposal = (draft.tool == EditorTool::Polyline)
-            .then(|| polyline_proposal(&draft))
-            .flatten();
+        let proposal = match draft.tool {
+            EditorTool::Polyline => polyline_proposal(&draft),
+            EditorTool::Nurbs => nurbs_proposal(&draft),
+            _ => None,
+        };
         proposal
             .map(|proposal| commit_construction(expected, proposal))
             .unwrap_or_default()
@@ -1027,8 +1448,10 @@ impl ConstraintEditor {
     /// Whether the current retained draft can be completed by an explicit Finish action.
     #[must_use]
     pub fn can_complete_draft(&self) -> bool {
-        self.draft.as_ref().is_some_and(|draft| {
-            draft.tool == EditorTool::Polyline && polyline_proposal(draft).is_some()
+        self.draft.as_ref().is_some_and(|draft| match draft.tool {
+            EditorTool::Polyline => polyline_proposal(draft).is_some(),
+            EditorTool::Nurbs => nurbs_proposal(draft).is_some(),
+            _ => false,
         })
     }
 
@@ -1071,6 +1494,8 @@ impl ConstraintEditor {
             pointer_id: input.pointer_id,
             points: Vec::new(),
             positions: Vec::new(),
+            conic_options: self.conic_options,
+            nurbs_options: self.nurbs_options.clone(),
         });
         if draft.tool != self.tool {
             return Vec::new();
@@ -1088,8 +1513,15 @@ impl ConstraintEditor {
                 | EditorTool::Rectangle
                 | EditorTool::Circle
                 | EditorTool::CounterClockwiseArc
+                | EditorTool::QuadraticBezier
+                | EditorTool::CubicBezier
+                | EditorTool::Ellipse
+                | EditorTool::EllipticalArc
+                | EditorTool::RationalQuadraticConic
+                | EditorTool::Parabola
+                | EditorTool::Hyperbola
         ) && proposal.is_none()
-            || draft.tool == EditorTool::Polyline;
+            || matches!(draft.tool, EditorTool::Polyline | EditorTool::Nurbs);
         if keep {
             let preview = draft_preview(&draft);
             self.draft = Some(draft);
@@ -1277,6 +1709,8 @@ pub enum EditorError {
     InvalidViewport,
     #[error("interaction tolerances must be finite and non-negative")]
     InvalidTolerance,
+    #[error("invalid construction options: {0}")]
+    InvalidConstructionOptions(&'static str),
     #[error("selected operands are incompatible with {0:?}")]
     IncompatibleConstraint(ConstraintKind),
     #[error(transparent)]
@@ -1397,18 +1831,39 @@ fn polyline_proposal(draft: &Draft) -> Option<ConstructionProposal> {
     })
 }
 
+fn nurbs_proposal(draft: &Draft) -> Option<ConstructionProposal> {
+    let minimum = usize::try_from(draft.nurbs_options.degree)
+        .ok()?
+        .checked_add(1)?;
+    (draft.points.len() >= minimum
+        && draft.positions.windows(2).all(nonzero_segment)
+        && validate_nurbs_for_controls(&draft.nurbs_options, draft.points.len()).is_ok())
+    .then(|| ConstructionProposal::Nurbs {
+        controls: draft.points.clone(),
+        options: draft.nurbs_options.clone(),
+    })
+}
+
 fn valid_draft_stage(draft: &Draft) -> bool {
     match draft.tool {
         EditorTool::Point => draft.positions.len() == 1,
         EditorTool::Line | EditorTool::Rectangle | EditorTool::Circle => {
             draft.positions.len() < 2 || draft_proposal(draft).is_some()
         }
-        EditorTool::Polyline => draft.positions.windows(2).all(nonzero_segment),
+        EditorTool::Polyline | EditorTool::Nurbs => draft.positions.windows(2).all(nonzero_segment),
         EditorTool::CounterClockwiseArc => {
             let start_is_valid =
                 draft.positions.len() < 2 || nonzero_segment(&draft.positions[..2]);
             start_is_valid && (draft.positions.len() < 3 || draft_proposal(draft).is_some())
         }
+        EditorTool::QuadraticBezier | EditorTool::RationalQuadraticConic => {
+            draft.positions.len() < 3 || draft_proposal(draft).is_some()
+        }
+        EditorTool::CubicBezier => draft.positions.len() < 4 || draft_proposal(draft).is_some(),
+        EditorTool::Ellipse
+        | EditorTool::EllipticalArc
+        | EditorTool::Parabola
+        | EditorTool::Hyperbola => draft.positions.len() < 2 || draft_proposal(draft).is_some(),
         EditorTool::Select => false,
     }
 }
@@ -1421,6 +1876,10 @@ fn nonzero_segment(segment: &[[f64; 2]]) -> bool {
     length.is_finite() && length > 0.0
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive table keeps every tool-to-proposal completion rule auditable"
+)]
 fn draft_proposal(draft: &Draft) -> Option<ConstructionProposal> {
     match draft.tool {
         EditorTool::Point => draft
@@ -1475,6 +1934,76 @@ fn draft_proposal(draft: &Draft) -> Option<ConstructionProposal> {
                 },
             )
         }
+        EditorTool::QuadraticBezier if draft.points.len() == 3 => {
+            Some(ConstructionProposal::QuadraticBezier {
+                controls: [draft.points[0], draft.points[1], draft.points[2]],
+            })
+        }
+        EditorTool::CubicBezier if draft.points.len() == 4 => {
+            Some(ConstructionProposal::CubicBezier {
+                controls: [
+                    draft.points[0],
+                    draft.points[1],
+                    draft.points[2],
+                    draft.points[3],
+                ],
+            })
+        }
+        EditorTool::Ellipse
+            if draft.points.len() == 2 && nonzero_segment(&draft.positions[..2]) =>
+        {
+            Some(ConstructionProposal::Ellipse {
+                center: draft.points[0],
+                major_axis_point: draft.points[1],
+                minor_axis_ratio: draft.conic_options.minor_axis_ratio,
+            })
+        }
+        EditorTool::EllipticalArc
+            if draft.points.len() == 2 && nonzero_segment(&draft.positions[..2]) =>
+        {
+            Some(ConstructionProposal::EllipticalArc {
+                center: draft.points[0],
+                major_axis_point: draft.points[1],
+                minor_axis_ratio: draft.conic_options.minor_axis_ratio,
+                start_angle: draft.conic_options.arc_start,
+                end_angle: draft.conic_options.arc_end,
+                sweep: draft.conic_options.arc_sweep,
+            })
+        }
+        EditorTool::RationalQuadraticConic
+            if draft.points.len() == 3
+                && nonzero_segment(&[draft.positions[0], draft.positions[2]]) =>
+        {
+            Some(ConstructionProposal::RationalQuadraticConic {
+                start: draft.points[0],
+                weighted_middle: draft.positions[1],
+                middle_weight: draft.conic_options.middle_weight,
+                end: draft.points[2],
+            })
+        }
+        EditorTool::Parabola
+            if draft.points.len() == 2 && nonzero_segment(&draft.positions[..2]) =>
+        {
+            Some(ConstructionProposal::Parabola {
+                vertex: draft.points[0],
+                focus: draft.points[1],
+                trim_start: draft.conic_options.trim_start,
+                trim_end: draft.conic_options.trim_end,
+            })
+        }
+        EditorTool::Hyperbola
+            if draft.points.len() == 2 && nonzero_segment(&draft.positions[..2]) =>
+        {
+            Some(ConstructionProposal::Hyperbola {
+                center: draft.points[0],
+                transverse_axis_point: draft.points[1],
+                semi_conjugate: draft.conic_options.semi_conjugate,
+                branch: draft.conic_options.hyperbola_branch,
+                trim_start: draft.conic_options.trim_start,
+                trim_end: draft.conic_options.trim_end,
+            })
+        }
+        EditorTool::Nurbs => nurbs_proposal(draft),
         _ => None,
     }
 }
@@ -1494,6 +2023,12 @@ fn draft_preview(draft: &Draft) -> Option<ConstructionPreview> {
             }),
             _ => complete_preview(draft),
         },
+        tool if advanced_kind(tool).is_some() && draft_proposal(draft).is_none() => {
+            Some(ConstructionPreview::ControlPolygon {
+                kind: advanced_kind(tool).expect("guarded advanced tool"),
+                points: draft.positions.clone(),
+            })
+        }
         _ => complete_preview(draft),
     }
 }
@@ -1536,8 +2071,301 @@ fn complete_preview(draft: &Draft) -> Option<ConstructionPreview> {
                 large_arc: sweep_radians > std::f64::consts::PI,
             }
         }
+        ConstructionProposal::QuadraticBezier { .. }
+        | ConstructionProposal::CubicBezier { .. }
+        | ConstructionProposal::Ellipse { .. }
+        | ConstructionProposal::EllipticalArc { .. }
+        | ConstructionProposal::RationalQuadraticConic { .. }
+        | ConstructionProposal::Parabola { .. }
+        | ConstructionProposal::Hyperbola { .. }
+        | ConstructionProposal::Nurbs { .. } => {
+            advanced_curve_preview(&proposal, &draft.positions, draft.tool)?
+        }
     };
     Some(ConstructionPreview::Complete { proposal, geometry })
+}
+
+fn advanced_kind(tool: EditorTool) -> Option<AdvancedConstructionKind> {
+    Some(match tool {
+        EditorTool::QuadraticBezier => AdvancedConstructionKind::QuadraticBezier,
+        EditorTool::CubicBezier => AdvancedConstructionKind::CubicBezier,
+        EditorTool::Ellipse => AdvancedConstructionKind::Ellipse,
+        EditorTool::EllipticalArc => AdvancedConstructionKind::EllipticalArc,
+        EditorTool::RationalQuadraticConic => AdvancedConstructionKind::RationalQuadraticConic,
+        EditorTool::Parabola => AdvancedConstructionKind::Parabola,
+        EditorTool::Hyperbola => AdvancedConstructionKind::Hyperbola,
+        EditorTool::Nurbs => AdvancedConstructionKind::Nurbs,
+        _ => return None,
+    })
+}
+
+const fn is_conic_tool(tool: EditorTool) -> bool {
+    matches!(
+        tool,
+        EditorTool::Ellipse
+            | EditorTool::EllipticalArc
+            | EditorTool::RationalQuadraticConic
+            | EditorTool::Parabola
+            | EditorTool::Hyperbola
+    )
+}
+
+fn advanced_curve_preview(
+    proposal: &ConstructionProposal,
+    control_points: &[[f64; 2]],
+    tool: EditorTool,
+) -> Option<ConstructionPreviewGeometry> {
+    let local = localize_proposal(proposal, control_points)?;
+    let mut document = SketchDocument::new(1.0).ok()?;
+    let result = local.apply(&mut document).ok()?;
+    let curve = *result.curves.first()?;
+    let mut curve_points = Vec::new();
+    for span in document.curve_spans(curve).ok()? {
+        for interval in document.visible_intervals(span).ok()? {
+            for step in 0..=24 {
+                let ratio = f64::from(step) / 24.0;
+                let parameter = (interval.end - interval.start).mul_add(ratio, interval.start);
+                let jet = document.evaluate_curve_jet(span, parameter).ok()?;
+                curve_points.push([jet.position.x, jet.position.y]);
+            }
+        }
+    }
+    Some(ConstructionPreviewGeometry::AdvancedCurve {
+        kind: advanced_kind(tool)?,
+        control_points: control_points.to_vec(),
+        curve_points,
+    })
+}
+
+fn localize_proposal(
+    proposal: &ConstructionProposal,
+    positions: &[[f64; 2]],
+) -> Option<ConstructionProposal> {
+    let point = |index: usize| positions.get(index).copied().map(ConstructionPoint::New);
+    Some(match proposal {
+        ConstructionProposal::QuadraticBezier { .. } => ConstructionProposal::QuadraticBezier {
+            controls: [point(0)?, point(1)?, point(2)?],
+        },
+        ConstructionProposal::CubicBezier { .. } => ConstructionProposal::CubicBezier {
+            controls: [point(0)?, point(1)?, point(2)?, point(3)?],
+        },
+        ConstructionProposal::Ellipse {
+            minor_axis_ratio, ..
+        } => ConstructionProposal::Ellipse {
+            center: point(0)?,
+            major_axis_point: point(1)?,
+            minor_axis_ratio: *minor_axis_ratio,
+        },
+        ConstructionProposal::EllipticalArc {
+            minor_axis_ratio,
+            start_angle,
+            end_angle,
+            sweep,
+            ..
+        } => ConstructionProposal::EllipticalArc {
+            center: point(0)?,
+            major_axis_point: point(1)?,
+            minor_axis_ratio: *minor_axis_ratio,
+            start_angle: *start_angle,
+            end_angle: *end_angle,
+            sweep: *sweep,
+        },
+        ConstructionProposal::RationalQuadraticConic { middle_weight, .. } => {
+            ConstructionProposal::RationalQuadraticConic {
+                start: point(0)?,
+                weighted_middle: *positions.get(1)?,
+                middle_weight: *middle_weight,
+                end: point(2)?,
+            }
+        }
+        ConstructionProposal::Parabola {
+            trim_start,
+            trim_end,
+            ..
+        } => ConstructionProposal::Parabola {
+            vertex: point(0)?,
+            focus: point(1)?,
+            trim_start: *trim_start,
+            trim_end: *trim_end,
+        },
+        ConstructionProposal::Hyperbola {
+            semi_conjugate,
+            branch,
+            trim_start,
+            trim_end,
+            ..
+        } => ConstructionProposal::Hyperbola {
+            center: point(0)?,
+            transverse_axis_point: point(1)?,
+            semi_conjugate: *semi_conjugate,
+            branch: *branch,
+            trim_start: *trim_start,
+            trim_end: *trim_end,
+        },
+        ConstructionProposal::Nurbs { options, .. } => ConstructionProposal::Nurbs {
+            controls: positions
+                .iter()
+                .copied()
+                .map(ConstructionPoint::New)
+                .collect(),
+            options: options.clone(),
+        },
+        _ => return None,
+    })
+}
+
+fn validate_conic_options(options: ConicConstructionOptions) -> Result<(), EditorError> {
+    let finite = [
+        options.minor_axis_ratio,
+        options.arc_start,
+        options.arc_end,
+        options.middle_weight,
+        options.trim_start,
+        options.trim_end,
+        options.semi_conjugate,
+    ]
+    .into_iter()
+    .all(f64::is_finite);
+    if !finite {
+        return Err(EditorError::InvalidConstructionOptions(
+            "conic values must be finite",
+        ));
+    }
+    if options.minor_axis_ratio <= 0.0 || options.minor_axis_ratio > 1.0 {
+        return Err(EditorError::InvalidConstructionOptions(
+            "minor-axis ratio must be in (0, 1]",
+        ));
+    }
+    if options.middle_weight < MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT {
+        return Err(EditorError::InvalidConstructionOptions(
+            "rational middle weight is outside its supported domain",
+        ));
+    }
+    if options.semi_conjugate <= 0.0 {
+        return Err(EditorError::InvalidConstructionOptions(
+            "hyperbola semi-conjugate length must be positive",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_nurbs_options(options: &NurbsConstructionOptions) -> Result<(), EditorError> {
+    if options.degree == 0 {
+        return Err(EditorError::InvalidConstructionOptions(
+            "NURBS degree must be positive",
+        ));
+    }
+    if options
+        .weights
+        .iter()
+        .any(|weight| !weight.is_finite() || *weight <= 0.0)
+    {
+        return Err(EditorError::InvalidConstructionOptions(
+            "NURBS weights must be finite and positive",
+        ));
+    }
+    if !options.weights.is_empty() && options.gauge_index >= options.weights.len() {
+        return Err(EditorError::InvalidConstructionOptions(
+            "NURBS gauge index is outside the weight list",
+        ));
+    }
+    if !options.weights.is_empty()
+        && options.weights[options.gauge_index].to_bits() != 1.0_f64.to_bits()
+    {
+        return Err(EditorError::InvalidConstructionOptions(
+            "the selected NURBS gauge weight must be exactly one",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_nurbs_for_controls(
+    options: &NurbsConstructionOptions,
+    control_count: usize,
+) -> Result<(), geosolve_sketch::DocumentError> {
+    let degree = usize::try_from(options.degree).map_err(|_| {
+        construction_document_error("NURBS degree", "degree does not fit this platform")
+    })?;
+    if degree == 0 || control_count <= degree {
+        return Err(construction_document_error(
+            "NURBS controls",
+            "control count must be greater than the positive degree",
+        ));
+    }
+    if !options.weights.is_empty() && options.weights.len() != control_count {
+        return Err(construction_document_error(
+            "NURBS weights",
+            "provide no weights for unit defaults or exactly one per control",
+        ));
+    }
+    if options.gauge_index >= control_count {
+        return Err(construction_document_error(
+            "NURBS gauge",
+            "gauge index is outside the control/weight list",
+        ));
+    }
+    if options
+        .weights
+        .iter()
+        .any(|weight| !weight.is_finite() || *weight <= 0.0)
+    {
+        return Err(construction_document_error(
+            "NURBS weights",
+            "weights must be finite and positive",
+        ));
+    }
+    if !options.weights.is_empty()
+        && options.weights[options.gauge_index].to_bits() != 1.0_f64.to_bits()
+    {
+        return Err(construction_document_error(
+            "NURBS gauge",
+            "the selected gauge weight must be exactly one",
+        ));
+    }
+    Ok(())
+}
+
+fn nurbs_topology(
+    form: DocumentBSplineForm,
+    degree: u32,
+    control_count: usize,
+) -> Result<(Vec<f64>, Vec<u32>, u32), geosolve_sketch::DocumentError> {
+    let degree = usize::try_from(degree).map_err(|_| {
+        construction_document_error("NURBS degree", "degree does not fit this platform")
+    })?;
+    let span_count = match form {
+        DocumentBSplineForm::Clamped => control_count.checked_sub(degree).ok_or_else(|| {
+            construction_document_error("NURBS topology", "degree exceeds control count")
+        })?,
+        DocumentBSplineForm::Periodic => control_count,
+    };
+    let span_count_u32 = u32::try_from(span_count).map_err(|_| {
+        construction_document_error("NURBS topology", "span count exceeds persistent limits")
+    })?;
+    let span_ids = (1..=span_count_u32).collect::<Vec<_>>();
+    let next_span_id = span_count_u32.checked_add(1).ok_or_else(|| {
+        construction_document_error("NURBS topology", "span identity high-water overflow")
+    })?;
+    let knots = match form {
+        DocumentBSplineForm::Clamped => {
+            let mut knots = vec![0.0; degree + 1];
+            knots.extend((1..span_count_u32).map(f64::from));
+            knots.extend(std::iter::repeat_n(f64::from(span_count_u32), degree + 1));
+            knots
+        }
+        DocumentBSplineForm::Periodic => (0..=span_count_u32).map(f64::from).collect(),
+    };
+    Ok((knots, span_ids, next_span_id))
+}
+
+fn construction_document_error(
+    field: &'static str,
+    message: &'static str,
+) -> geosolve_sketch::DocumentError {
+    geosolve_sketch::DocumentError::InvalidField {
+        field,
+        message: message.into(),
+    }
 }
 
 fn available_constraints(
@@ -2509,6 +3337,313 @@ mod tests {
             .is_err()
         );
         assert_eq!(document, before);
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the all-family atomicity matrix is clearer as one directly comparable regression"
+    )]
+    fn advanced_curve_proposals_apply_atomically_through_public_document_geometry() {
+        let conic = ConicConstructionOptions {
+            minor_axis_ratio: 0.6,
+            arc_start: -0.4,
+            arc_end: 1.7,
+            arc_sweep: DocumentArcSweep::Clockwise,
+            middle_weight: 0.8,
+            trim_start: -1.2,
+            trim_end: 1.4,
+            semi_conjugate: 1.3,
+            hyperbola_branch: DocumentHyperbolaBranch::Negative,
+        };
+        let proposals = vec![
+            ConstructionProposal::QuadraticBezier {
+                controls: [
+                    ConstructionPoint::New([0.0, 0.0]),
+                    ConstructionPoint::New([1.0, 2.0]),
+                    ConstructionPoint::New([3.0, 0.0]),
+                ],
+            },
+            ConstructionProposal::CubicBezier {
+                controls: [
+                    ConstructionPoint::New([0.0, 0.0]),
+                    ConstructionPoint::New([1.0, 2.0]),
+                    ConstructionPoint::New([2.0, -1.0]),
+                    ConstructionPoint::New([4.0, 0.0]),
+                ],
+            },
+            ConstructionProposal::Ellipse {
+                center: ConstructionPoint::New([0.0, 0.0]),
+                major_axis_point: ConstructionPoint::New([3.0, 0.5]),
+                minor_axis_ratio: conic.minor_axis_ratio,
+            },
+            ConstructionProposal::EllipticalArc {
+                center: ConstructionPoint::New([0.0, 0.0]),
+                major_axis_point: ConstructionPoint::New([3.0, 0.5]),
+                minor_axis_ratio: conic.minor_axis_ratio,
+                start_angle: conic.arc_start,
+                end_angle: conic.arc_end,
+                sweep: conic.arc_sweep,
+            },
+            ConstructionProposal::RationalQuadraticConic {
+                start: ConstructionPoint::New([0.0, 0.0]),
+                weighted_middle: [1.0, 2.0],
+                middle_weight: conic.middle_weight,
+                end: ConstructionPoint::New([3.0, 0.0]),
+            },
+            ConstructionProposal::Parabola {
+                vertex: ConstructionPoint::New([0.0, 0.0]),
+                focus: ConstructionPoint::New([1.0, 0.5]),
+                trim_start: conic.trim_start,
+                trim_end: conic.trim_end,
+            },
+            ConstructionProposal::Hyperbola {
+                center: ConstructionPoint::New([0.0, 0.0]),
+                transverse_axis_point: ConstructionPoint::New([2.0, 0.5]),
+                semi_conjugate: conic.semi_conjugate,
+                branch: conic.hyperbola_branch,
+                trim_start: conic.trim_start,
+                trim_end: conic.trim_end,
+            },
+            ConstructionProposal::Nurbs {
+                controls: vec![
+                    ConstructionPoint::New([0.0, 0.0]),
+                    ConstructionPoint::New([1.0, 2.0]),
+                    ConstructionPoint::New([3.0, 2.0]),
+                    ConstructionPoint::New([4.0, 0.0]),
+                ],
+                options: NurbsConstructionOptions {
+                    form: DocumentBSplineForm::Clamped,
+                    degree: 3,
+                    weights: vec![1.0, 0.8, 1.0, 1.2],
+                    gauge_index: 2,
+                },
+            },
+            ConstructionProposal::Nurbs {
+                controls: vec![
+                    ConstructionPoint::New([0.0, 0.0]),
+                    ConstructionPoint::New([2.0, 0.0]),
+                    ConstructionPoint::New([2.0, 2.0]),
+                    ConstructionPoint::New([0.0, 2.0]),
+                ],
+                options: NurbsConstructionOptions {
+                    form: DocumentBSplineForm::Periodic,
+                    degree: 2,
+                    weights: Vec::new(),
+                    gauge_index: 0,
+                },
+            },
+        ];
+
+        for proposal in proposals {
+            let mut document = SketchDocument::new(10.0).expect("document");
+            let result = proposal.apply(&mut document).expect("advanced proposal");
+            assert_eq!(result.curves.len(), 1);
+            let curve = result.curves[0];
+            #[allow(clippy::default_trait_access)]
+            let session = geosolve_sketch::RetainedSketchDocumentSession::new(
+                document.clone(),
+                geosolve_sketch::DocumentSolveRequest::default(),
+                Default::default(),
+            )
+            .expect("advanced proposal solves through the retained public session");
+            assert!(session.accepted_state().is_some());
+            let spans = document.curve_spans(curve).expect("semantic spans");
+            assert!(!spans.is_empty());
+            for span in spans {
+                let intervals = document.visible_intervals(span).expect("visible intervals");
+                assert!(!intervals.is_empty());
+                for interval in intervals {
+                    let parameter = (interval.start + interval.end) * 0.5;
+                    let jet = document
+                        .evaluate_curve_jet(span, parameter)
+                        .expect("public curve evaluation");
+                    assert!(jet.position.coords.iter().all(|value| value.is_finite()));
+                    assert!(jet.first_derivative.iter().all(|value| value.is_finite()));
+                }
+            }
+            if let CurveDefinition::Nurbs {
+                form,
+                controls,
+                weights,
+                gauge_weight,
+                knots,
+                span_ids,
+                next_span_id,
+                ..
+            } = &document.curve(curve).expect("curve").definition
+            {
+                assert_eq!(controls.len(), weights.len());
+                assert!(weights.contains(gauge_weight));
+                assert_eq!(
+                    span_ids.len(),
+                    match form {
+                        DocumentBSplineForm::Clamped => controls.len() - 3,
+                        DocumentBSplineForm::Periodic => controls.len(),
+                    }
+                );
+                assert_eq!(
+                    *next_span_id,
+                    u32::try_from(span_ids.len()).expect("bounded spans") + 1
+                );
+                assert!(knots.windows(2).all(|pair| pair[0] <= pair[1]));
+            }
+        }
+    }
+
+    #[test]
+    fn invalid_advanced_options_and_topology_retain_editor_and_document_state() {
+        let mut editor = ConstraintEditor::default();
+        let conic_before = editor.conic_options();
+        let mut invalid_conic = conic_before;
+        invalid_conic.minor_axis_ratio = 0.0;
+        assert!(matches!(
+            editor.set_conic_options(invalid_conic),
+            Err(EditorError::InvalidConstructionOptions(_))
+        ));
+        assert_eq!(editor.conic_options(), conic_before);
+
+        let nurbs_before = editor.nurbs_options().clone();
+        for options in [
+            NurbsConstructionOptions {
+                degree: 0,
+                ..nurbs_before.clone()
+            },
+            NurbsConstructionOptions {
+                weights: vec![1.0, 0.0],
+                ..nurbs_before.clone()
+            },
+            NurbsConstructionOptions {
+                weights: vec![1.0, 1.0],
+                gauge_index: 2,
+                ..nurbs_before.clone()
+            },
+        ] {
+            assert!(matches!(
+                editor.set_nurbs_options(options),
+                Err(EditorError::InvalidConstructionOptions(_))
+            ));
+            assert_eq!(editor.nurbs_options(), &nurbs_before);
+        }
+
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let before = document.clone();
+        for options in [
+            NurbsConstructionOptions {
+                form: DocumentBSplineForm::Clamped,
+                degree: 3,
+                weights: Vec::new(),
+                gauge_index: 0,
+            },
+            NurbsConstructionOptions {
+                form: DocumentBSplineForm::Periodic,
+                degree: 2,
+                weights: vec![1.0, 1.0],
+                gauge_index: 0,
+            },
+            NurbsConstructionOptions {
+                form: DocumentBSplineForm::Clamped,
+                degree: 2,
+                weights: vec![1.0, 1.0, 1.0],
+                gauge_index: 3,
+            },
+        ] {
+            let controls = vec![
+                ConstructionPoint::New([0.0, 0.0]),
+                ConstructionPoint::New([1.0, 1.0]),
+                ConstructionPoint::New([2.0, 0.0]),
+            ];
+            assert!(
+                ConstructionProposal::Nurbs { controls, options }
+                    .apply(&mut document)
+                    .is_err()
+            );
+            assert_eq!(document, before);
+        }
+    }
+
+    #[test]
+    fn advanced_drafts_preview_public_curve_geometry_and_nurbs_finishes_explicitly() {
+        let document = SketchDocument::new(10.0).expect("document");
+        let scene = scene(&document);
+        let click = |editor: &mut ConstraintEditor, pointer_id, model: [f64; 2]| {
+            let screen = scene.viewport.model_to_screen(model);
+            editor.pointer_down(
+                &scene,
+                pointer(pointer_id, screen.x, screen.y, Modifiers::default()),
+            )
+        };
+
+        let mut bezier = ConstraintEditor::default();
+        bezier.activate_tool(EditorTool::QuadraticBezier);
+        click(&mut bezier, 1, [0.0, 0.0]);
+        click(&mut bezier, 1, [1.0, 2.0]);
+        let effects = click(&mut bezier, 1, [3.0, 0.0]);
+        let EditorEffect::CommitConstruction { proposal, .. } = &effects[0] else {
+            panic!("quadratic completion");
+        };
+        let mut applied = document.clone();
+        let result = proposal
+            .apply(&mut applied)
+            .expect("preview proposal applies");
+        let span = applied.curve_spans(result.curves[0]).expect("spans")[0];
+        let start = applied
+            .evaluate_curve_jet(span, 0.0)
+            .expect("public start")
+            .position;
+        let end = applied
+            .evaluate_curve_jet(span, 1.0)
+            .expect("public end")
+            .position;
+        let mut preview_editor = ConstraintEditor::default();
+        preview_editor.activate_tool(EditorTool::QuadraticBezier);
+        click(&mut preview_editor, 2, [0.0, 0.0]);
+        click(&mut preview_editor, 2, [1.0, 2.0]);
+        let end_screen = scene.viewport.model_to_screen([3.0, 0.0]);
+        let preview = preview_editor.pointer_move(
+            &scene,
+            pointer(2, end_screen.x, end_screen.y, Modifiers::default()),
+        );
+        assert!(matches!(
+            preview.as_slice(),
+            [EditorEffect::PreviewConstruction(ConstructionPreview::Complete {
+                geometry: ConstructionPreviewGeometry::AdvancedCurve {
+                    kind: AdvancedConstructionKind::QuadraticBezier,
+                    curve_points,
+                    ..
+                },
+                ..
+            })] if curve_points.first() == Some(&[start.x, start.y])
+                && curve_points.last() == Some(&[end.x, end.y])
+                && curve_points.iter().flatten().all(|value| value.is_finite())
+        ));
+
+        let mut nurbs = ConstraintEditor::default();
+        nurbs
+            .set_nurbs_options(NurbsConstructionOptions {
+                form: DocumentBSplineForm::Periodic,
+                degree: 2,
+                weights: vec![1.0, 0.8, 1.0, 1.2],
+                gauge_index: 2,
+            })
+            .expect("NURBS options");
+        nurbs.activate_tool(EditorTool::Nurbs);
+        for point in [[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]] {
+            click(&mut nurbs, 3, point);
+        }
+        assert!(nurbs.can_complete_draft());
+        assert!(matches!(
+            nurbs.complete_draft(scene.design_identity).as_slice(),
+            [
+                EditorEffect::CommitConstruction {
+                    proposal: ConstructionProposal::Nurbs { controls, options },
+                    ..
+                },
+                EditorEffect::ClearConstructionPreview
+            ] if controls.len() == 4
+                && options.form == DocumentBSplineForm::Periodic
+                && options.gauge_index == 2
+        ));
     }
 
     #[test]

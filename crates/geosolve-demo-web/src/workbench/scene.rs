@@ -4,8 +4,9 @@
 use std::{collections::BTreeSet, fmt::Write as _};
 
 use geosolve_constraint_editor::{
-    ConstructionPreview, ConstructionPreviewGeometry, EditorProblemCategory, EditorProblemMetadata,
-    EditorProblemScope, EditorProblemTarget, EditorScene, ScreenPoint, SelectionItem, Viewport,
+    AdvancedConstructionKind, ConstructionPreview, ConstructionPreviewGeometry,
+    EditorProblemCategory, EditorProblemMetadata, EditorProblemScope, EditorProblemTarget,
+    EditorScene, ScreenPoint, SelectionItem, Viewport,
 };
 use geosolve_sketch::{
     DesignScalarId, DocumentConstraintDefinition, DocumentDimensionDefinition,
@@ -499,6 +500,9 @@ fn construction_markup(preview: &ConstructionPreview, viewport: Viewport) -> Str
             marker(&mut output, viewport, *center, "wb-draft-center");
             marker(&mut output, viewport, *start, "wb-draft-start");
         }
+        ConstructionPreview::ControlPolygon { kind, points } => {
+            advanced_control_polygon(&mut output, viewport, *kind, points);
+        }
     }
     output.push_str("</g>");
     output
@@ -560,6 +564,67 @@ fn construction_geometry_markup(
             marker(output, viewport, *start, "wb-draft-start");
             marker(output, viewport, *end, "wb-draft-end");
         }
+        ConstructionPreviewGeometry::AdvancedCurve {
+            kind,
+            control_points,
+            curve_points,
+        } => {
+            advanced_control_polygon(output, viewport, *kind, control_points);
+            let points = curve_points
+                .iter()
+                .copied()
+                .map(|point| viewport.model_to_screen(point))
+                .collect::<Vec<_>>();
+            if points.len() >= 2 {
+                let _ = write!(
+                    output,
+                    "<path class=\"wb-draft-advanced-curve\" data-draft-kind=\"{}\" d=\"{}\"/>",
+                    advanced_kind_key(*kind),
+                    polyline_path(&points),
+                );
+            }
+        }
+    }
+}
+
+fn advanced_control_polygon(
+    output: &mut String,
+    viewport: Viewport,
+    kind: AdvancedConstructionKind,
+    points: &[[f64; 2]],
+) {
+    let points = points
+        .iter()
+        .copied()
+        .map(|point| viewport.model_to_screen(point))
+        .collect::<Vec<_>>();
+    if points.len() >= 2 {
+        let _ = write!(
+            output,
+            "<path class=\"wb-draft-control-polygon\" data-draft-kind=\"{}\" d=\"{}\"/>",
+            advanced_kind_key(kind),
+            polyline_path(&points),
+        );
+    }
+    for (index, point) in points.iter().enumerate() {
+        let _ = write!(
+            output,
+            "<circle class=\"wb-draft-point\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"4\" data-draft-control=\"{index}\"/>",
+            point.x, point.y,
+        );
+    }
+}
+
+const fn advanced_kind_key(kind: AdvancedConstructionKind) -> &'static str {
+    match kind {
+        AdvancedConstructionKind::QuadraticBezier => "quadratic-bezier",
+        AdvancedConstructionKind::CubicBezier => "cubic-bezier",
+        AdvancedConstructionKind::Ellipse => "ellipse",
+        AdvancedConstructionKind::EllipticalArc => "elliptical-arc",
+        AdvancedConstructionKind::RationalQuadraticConic => "rational-conic",
+        AdvancedConstructionKind::Parabola => "parabola",
+        AdvancedConstructionKind::Hyperbola => "hyperbola",
+        AdvancedConstructionKind::Nurbs => "nurbs",
     }
 }
 

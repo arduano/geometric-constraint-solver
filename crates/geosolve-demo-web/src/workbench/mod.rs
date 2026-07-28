@@ -27,17 +27,19 @@ pub(crate) mod wasm {
     use std::str::FromStr as _;
 
     use geosolve_constraint_editor::{
-        ActionChoice, ActionState, BranchAction, ConstraintActionRequest, ConstraintKind,
-        ConstructionPreview, ContactActionChoice, CoordinatorActionKind, DimensionActionRequest,
-        DimensionKind, DisabledReason, EditorEffect, EditorScene, EditorTool, Modifiers,
-        PointerInput, ProvisionalInferenceCandidate, RetainedEditorCoordinator, SelectionItem,
+        ActionChoice, ActionState, BranchAction, ConicConstructionOptions, ConstraintActionRequest,
+        ConstraintKind, ConstructionPreview, ContactActionChoice, CoordinatorActionKind,
+        DimensionActionRequest, DimensionKind, DisabledReason, EditorEffect, EditorScene,
+        EditorTool, Modifiers, NurbsConstructionOptions, PointerInput,
+        ProvisionalInferenceCandidate, RetainedEditorCoordinator, SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
         ContactBranchEdit, ContactDomain, ContactNeighborhood, CurveId, CurveSpan, DesignPointId,
-        DocumentAngleOrientation, DocumentConstraintId, DocumentCurveSpanRef, DocumentDimensionId,
-        DocumentDimensionMode, DocumentSolveRequest, PersistentId, RetainedSketchDocumentSession,
-        SketchDocument, TangentOrientation,
+        DocumentAngleOrientation, DocumentArcSweep, DocumentBSplineForm, DocumentConstraintId,
+        DocumentCurveSpanRef, DocumentDimensionId, DocumentDimensionMode, DocumentHyperbolaBranch,
+        DocumentSolveRequest, PersistentId, RetainedSketchDocumentSession, SketchDocument,
+        TangentOrientation,
     };
     use wasm_bindgen::JsCast;
     use wasm_bindgen::closure::Closure;
@@ -58,6 +60,13 @@ pub(crate) mod wasm {
         inference_preview: Option<ProvisionalInferenceCandidate>,
         notice: String,
         problems_open: bool,
+    }
+
+    impl Workbench {
+        fn interaction_coordinator_mut(&mut self) -> &mut RetainedEditorCoordinator {
+            self.scenarios
+                .coordinator_for_interaction_mut(&mut self.coordinator)
+        }
     }
 
     #[derive(Clone, Copy)]
@@ -234,13 +243,18 @@ pub(crate) mod wasm {
                     let _ = render(&callback_document, &callback_workbench);
                     return;
                 }
+                if let Err(error) =
+                    update_construction_options(&callback_document, wb.coordinator.editor_mut())
+                {
+                    wb.notice = error;
+                    drop(wb);
+                    let _ = render(&callback_document, &callback_workbench);
+                    return;
+                }
                 let effects = wb.coordinator.editor_mut().activate_tool(tool);
                 dispatch_effects(&mut wb, effects);
                 wb.notice = format!("{} tool active", tool_key(tool));
             } else if target.has_attribute("data-editor-item") {
-                if callback_workbench.borrow().scenarios.is_active() {
-                    return;
-                }
                 if let Some(item) = selection_item(&target) {
                     let modifiers = event
                         .dyn_ref::<MouseEvent>()
@@ -250,11 +264,9 @@ pub(crate) mod wasm {
                             command: event.meta_key(),
                         })
                         .unwrap_or_default();
-                    callback_workbench
-                        .borrow_mut()
-                        .coordinator
-                        .editor_mut()
-                        .select_item(item, modifiers);
+                    let mut wb = callback_workbench.borrow_mut();
+                    let coordinator = wb.interaction_coordinator_mut();
+                    coordinator.editor_mut().select_item(item, modifiers);
                 }
             } else if let Some(key) = target.get_attribute("data-scenario-id") {
                 let mut wb = callback_workbench.borrow_mut();
@@ -286,13 +298,28 @@ pub(crate) mod wasm {
         let change_document = document.clone();
         let change_workbench = Rc::clone(workbench);
         let change = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-            if event
+            if let Some(target) = event
                 .target()
                 .and_then(|target| target.dyn_into::<Element>().ok())
-                .and_then(|target| target.closest(".wb-branch-editor").ok().flatten())
-                .is_some()
             {
-                return;
+                if target.closest(".wb-branch-editor").ok().flatten().is_some() {
+                    return;
+                }
+                if target
+                    .closest(".wb-construction-options")
+                    .ok()
+                    .flatten()
+                    .is_some()
+                {
+                    let mut wb = change_workbench.borrow_mut();
+                    let result =
+                        update_construction_options(&change_document, wb.coordinator.editor_mut());
+                    wb.notice = result.map_or_else(
+                        |error| error,
+                        |()| "Advanced construction options updated".into(),
+                    );
+                    drop(wb);
+                }
             }
             let _ = render(&change_document, &change_workbench);
         });
@@ -313,25 +340,23 @@ pub(crate) mod wasm {
             workbench,
             &viewport,
             "pointerdown",
-            |wb, scene, input| wb.coordinator.editor_mut().pointer_down(scene, input),
+            |coordinator, scene, input| coordinator.editor_mut().pointer_down(scene, input),
         )?;
         install_pointer_listener(
             document,
             workbench,
             &viewport,
             "pointermove",
-            |wb, scene, input| wb.coordinator.editor_mut().pointer_move(scene, input),
+            |coordinator, scene, input| coordinator.editor_mut().pointer_move(scene, input),
         )?;
         install_pointer_listener(
             document,
             workbench,
             &viewport,
             "pointerup",
-            |wb, scene, input| {
-                let expected = wb.coordinator.session().design_identity();
-                wb.coordinator
-                    .editor_mut()
-                    .pointer_up(scene, expected, input)
+            |coordinator, scene, input| {
+                let expected = coordinator.session().design_identity();
+                coordinator.editor_mut().pointer_up(scene, expected, input)
             },
         )?;
 
@@ -339,10 +364,7 @@ pub(crate) mod wasm {
         let cancel_workbench = Rc::clone(workbench);
         let cancel = Closure::<dyn FnMut(PointerEvent)>::new(move |_event| {
             let mut wb = cancel_workbench.borrow_mut();
-            if wb.scenarios.is_active() {
-                return;
-            }
-            let effects = wb.coordinator.editor_mut().cancel();
+            let effects = wb.interaction_coordinator_mut().editor_mut().cancel();
             dispatch_effects(&mut wb, effects);
             wb.notice = "Interaction canceled".into();
             drop(wb);
@@ -486,7 +508,11 @@ pub(crate) mod wasm {
         workbench: &Rc<RefCell<Workbench>>,
         viewport: &Element,
         name: &str,
-        transition: fn(&mut Workbench, &EditorScene, PointerInput) -> Vec<EditorEffect>,
+        transition: fn(
+            &mut RetainedEditorCoordinator,
+            &EditorScene,
+            PointerInput,
+        ) -> Vec<EditorEffect>,
     ) -> Result<(), JsValue> {
         let callback_document = document.clone();
         let callback_workbench = Rc::clone(workbench);
@@ -504,16 +530,16 @@ pub(crate) mod wasm {
             if wb.pan_gesture.is_some() {
                 return;
             }
-            if wb.scenarios.is_active() {
-                return;
-            }
             let Some(scene) = editor_scene(&wb) else {
                 return;
             };
             let Some(input) = pointer_input(&callback_viewport, scene.viewport, &event) else {
                 return;
             };
-            let effects = transition(&mut wb, &scene, input);
+            let effects = {
+                let coordinator = wb.interaction_coordinator_mut();
+                transition(coordinator, &scene, input)
+            };
             dispatch_effects(&mut wb, effects);
             save(&wb);
             drop(wb);
@@ -613,7 +639,9 @@ pub(crate) mod wasm {
                 &mut failed_construction_commit,
             ) {
                 ConstructionDispatch::ApplyCommit => {
-                    let result = wb.coordinator.apply_editor_effect(&effect);
+                    let result = wb
+                        .interaction_coordinator_mut()
+                        .apply_editor_effect(&effect);
                     dispatch_construction_effect(
                         &mut wb.construction_preview,
                         &effect,
@@ -632,7 +660,10 @@ pub(crate) mod wasm {
             }
             match dispatch_inference_effect(&mut wb.inference_preview, &effect) {
                 InferenceDispatch::ApplyCommit => {
-                    match wb.coordinator.apply_editor_effect(&effect) {
+                    match wb
+                        .interaction_coordinator_mut()
+                        .apply_editor_effect(&effect)
+                    {
                         Ok(Some(_)) => wb.notice = "Inference retained".into(),
                         Ok(None) => {}
                         Err(error) => wb.notice = error.to_string(),
@@ -654,23 +685,28 @@ pub(crate) mod wasm {
                     point,
                     model_position,
                 } => {
-                    let next = wb.coordinator.resolve_projected_point_move(
-                        *pointer_id,
-                        *request_id,
-                        *point,
-                        *model_position,
-                    );
+                    let next = wb
+                        .interaction_coordinator_mut()
+                        .resolve_projected_point_move(
+                            *pointer_id,
+                            *request_id,
+                            *point,
+                            *model_position,
+                        );
                     pending.extend(next);
                 }
                 EditorEffect::PreviewPointMove { .. } => {
                     wb.notice = "Projected drag preview".into();
                 }
                 EditorEffect::ClearPointPreview => {
-                    wb.coordinator.clear_transient();
+                    wb.interaction_coordinator_mut().clear_transient();
                 }
                 EditorEffect::SelectionChanged(_) => {}
                 EditorEffect::CommitPointMove { .. } => {
-                    match wb.coordinator.apply_editor_effect(&effect) {
+                    match wb
+                        .interaction_coordinator_mut()
+                        .apply_editor_effect(&effect)
+                    {
                         Ok(Some(_)) => wb.notice = "Edit retained".into(),
                         Ok(None) => {}
                         Err(error) => wb.notice = error.to_string(),
@@ -1104,11 +1140,15 @@ pub(crate) mod wasm {
             problems.set_attribute("hidden", "")?;
         }
         let guide = required(document, "wb-draft-guide")?;
-        if coordinator.editor().can_complete_draft() {
+        if coordinator.editor().can_complete_draft()
+            || (!wb.scenarios.is_active() && wb.construction_preview.is_some())
+        {
             guide.remove_attribute("hidden")?;
         } else {
             guide.set_attribute("hidden", "")?;
         }
+        required(document, "wb-draft-guide-text")?
+            .set_text_content(Some(draft_guide_text(coordinator.editor().tool())));
         for tool in [
             EditorTool::Select,
             EditorTool::Point,
@@ -1117,6 +1157,14 @@ pub(crate) mod wasm {
             EditorTool::Rectangle,
             EditorTool::Circle,
             EditorTool::CounterClockwiseArc,
+            EditorTool::QuadraticBezier,
+            EditorTool::CubicBezier,
+            EditorTool::Ellipse,
+            EditorTool::EllipticalArc,
+            EditorTool::RationalQuadraticConic,
+            EditorTool::Parabola,
+            EditorTool::Hyperbola,
+            EditorTool::Nurbs,
         ] {
             if let Some(button) =
                 document.query_selector(&format!("[data-wb-tool=\"{}\"]", tool_key(tool)))?
@@ -1651,8 +1699,24 @@ pub(crate) mod wasm {
             "rectangle" => EditorTool::Rectangle,
             "circle" => EditorTool::Circle,
             "arc" => EditorTool::CounterClockwiseArc,
+            "quadratic-bezier" => EditorTool::QuadraticBezier,
+            "cubic-bezier" => EditorTool::CubicBezier,
+            "ellipse" => EditorTool::Ellipse,
+            "elliptical-arc" => EditorTool::EllipticalArc,
+            "rational-conic" => EditorTool::RationalQuadraticConic,
+            "parabola" => EditorTool::Parabola,
+            "hyperbola" => EditorTool::Hyperbola,
+            "nurbs" => EditorTool::Nurbs,
             _ => return None,
         })
+    }
+
+    const fn draft_guide_text(tool: EditorTool) -> &'static str {
+        match tool {
+            EditorTool::Polyline => "Add another vertex or Finish the polyline",
+            EditorTool::Nurbs => "Add another control or Finish the NURBS",
+            _ => "Click to add the next control",
+        }
     }
     const fn tool_key(tool: EditorTool) -> &'static str {
         match tool {
@@ -1663,7 +1727,88 @@ pub(crate) mod wasm {
             EditorTool::Rectangle => "rectangle",
             EditorTool::Circle => "circle",
             EditorTool::CounterClockwiseArc => "arc",
+            EditorTool::QuadraticBezier => "quadratic-bezier",
+            EditorTool::CubicBezier => "cubic-bezier",
+            EditorTool::Ellipse => "ellipse",
+            EditorTool::EllipticalArc => "elliptical-arc",
+            EditorTool::RationalQuadraticConic => "rational-conic",
+            EditorTool::Parabola => "parabola",
+            EditorTool::Hyperbola => "hyperbola",
+            EditorTool::Nurbs => "nurbs",
         }
+    }
+
+    fn update_construction_options(
+        document: &Document,
+        editor: &mut geosolve_constraint_editor::ConstraintEditor,
+    ) -> Result<(), String> {
+        let number = |id: &str, label: &'static str| {
+            input_value(document, id)
+                .and_then(|value| value.parse::<f64>().ok())
+                .filter(|value| value.is_finite())
+                .ok_or_else(|| format!("{label} must be a finite number"))
+        };
+        editor
+            .set_conic_options(ConicConstructionOptions {
+                minor_axis_ratio: number("wb-conic-ratio", "Minor-axis ratio")?,
+                arc_start: number("wb-conic-arc-start", "Arc start")?.to_radians(),
+                arc_end: number("wb-conic-arc-end", "Arc end")?.to_radians(),
+                arc_sweep: if select_value(document, "wb-conic-arc-sweep").as_deref()
+                    == Some("clockwise")
+                {
+                    DocumentArcSweep::Clockwise
+                } else {
+                    DocumentArcSweep::CounterClockwise
+                },
+                middle_weight: number("wb-conic-weight", "Rational weight")?,
+                trim_start: number("wb-conic-trim-start", "Trim start")?,
+                trim_end: number("wb-conic-trim-end", "Trim end")?,
+                semi_conjugate: number("wb-conic-semi-conjugate", "Semi-conjugate length")?,
+                hyperbola_branch: if select_value(document, "wb-conic-hyperbola-branch").as_deref()
+                    == Some("negative")
+                {
+                    DocumentHyperbolaBranch::Negative
+                } else {
+                    DocumentHyperbolaBranch::Positive
+                },
+            })
+            .map_err(|error| error.to_string())?;
+
+        let degree = input_value(document, "wb-nurbs-degree")
+            .and_then(|value| value.parse::<u32>().ok())
+            .ok_or_else(|| "NURBS degree must be a positive integer".to_owned())?;
+        let gauge_index = input_value(document, "wb-nurbs-gauge")
+            .and_then(|value| value.parse::<usize>().ok())
+            .ok_or_else(|| "NURBS gauge index must be a non-negative integer".to_owned())?;
+        let weights_text = input_value(document, "wb-nurbs-weights").unwrap_or_default();
+        let weights = if weights_text.trim().is_empty() {
+            Vec::new()
+        } else {
+            weights_text
+                .split(',')
+                .map(|part| {
+                    part.trim()
+                        .parse::<f64>()
+                        .ok()
+                        .filter(|value| value.is_finite())
+                        .ok_or_else(|| {
+                            "NURBS weights must be comma-separated finite numbers".to_owned()
+                        })
+                })
+                .collect::<Result<Vec<_>, _>>()?
+        };
+        editor
+            .set_nurbs_options(NurbsConstructionOptions {
+                form: if select_value(document, "wb-nurbs-form").as_deref() == Some("periodic") {
+                    DocumentBSplineForm::Periodic
+                } else {
+                    DocumentBSplineForm::Clamped
+                },
+                degree,
+                weights,
+                gauge_index,
+            })
+            .map_err(|error| error.to_string())
     }
     fn constraint_from_key(key: &str) -> Option<ConstraintKind> {
         super::action_surface::constraint_from_key(key)

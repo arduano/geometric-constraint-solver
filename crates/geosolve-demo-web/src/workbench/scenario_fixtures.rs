@@ -43,6 +43,16 @@ pub(crate) enum ScenarioFixture {
     NurbsBranches,
     Operations,
     ProductionTopology,
+    StressCompass,
+    StressBridge,
+    MotionCam,
+    MotionOrbit,
+    MotionTrammel,
+    MotionScotchYoke,
+    MotionRotatingSquare,
+    MotionScissor,
+    MotionScissorTower,
+    MotionPeaucellier,
 }
 
 impl ScenarioFixture {
@@ -59,7 +69,33 @@ impl ScenarioFixture {
             Self::NurbsBranches => "NURBS topology and branch state",
             Self::Operations => "Associative and companion operations",
             Self::ProductionTopology => "Production topology and cancellation",
+            Self::StressCompass => "Drafting compass",
+            Self::StressBridge => "Bezier C1 bridge",
+            Self::MotionCam => "Twin-roller Bezier cam",
+            Self::MotionOrbit => "Tangent orbit",
+            Self::MotionTrammel => "Elliptic trammel",
+            Self::MotionScotchYoke => "Scotch yoke",
+            Self::MotionRotatingSquare => "Rotating square",
+            Self::MotionScissor => "Scissor jack",
+            Self::MotionScissorTower => "Five-stage scissor tower",
+            Self::MotionPeaucellier => "Peaucellier straight-line linkage",
         }
+    }
+
+    const fn motion_kind(self) -> Option<AlphaScenarioKind> {
+        Some(match self {
+            Self::StressCompass => AlphaScenarioKind::StressCompass,
+            Self::StressBridge => AlphaScenarioKind::StressBridge,
+            Self::MotionCam => AlphaScenarioKind::MotionCam,
+            Self::MotionOrbit => AlphaScenarioKind::MotionOrbit,
+            Self::MotionTrammel => AlphaScenarioKind::MotionTrammel,
+            Self::MotionScotchYoke => AlphaScenarioKind::MotionScotchYoke,
+            Self::MotionRotatingSquare => AlphaScenarioKind::MotionRotatingSquare,
+            Self::MotionScissor => AlphaScenarioKind::MotionScissor,
+            Self::MotionScissorTower => AlphaScenarioKind::MotionScissorTower,
+            Self::MotionPeaucellier => AlphaScenarioKind::MotionPeaucellier,
+            _ => return None,
+        })
     }
 }
 
@@ -389,12 +425,18 @@ pub(crate) struct ScenarioCandidate {
     nurbs_branches: Box<NurbsBranchFixture>,
     operations: Box<OperationFixture>,
     production_topology: Box<ProductionTopologyFixture>,
+    motion: Option<Box<RetainedEditorCoordinator>>,
     transcript: Vec<ScenarioObservation>,
     evidence_text: String,
 }
 
 impl ScenarioCandidate {
     pub(crate) fn new(active: ScenarioFixture) -> Result<Self, String> {
+        let motion = active
+            .motion_kind()
+            .map(motion_fixture)
+            .transpose()?
+            .map(Box::new);
         Ok(Self {
             active,
             role: Box::new(role_fixture()?),
@@ -408,6 +450,7 @@ impl ScenarioCandidate {
             nurbs_branches: Box::new(nurbs_branch_fixture()?),
             operations: Box::new(operation_fixture()?),
             production_topology: Box::new(production_topology_fixture()?),
+            motion,
             transcript: Vec::new(),
             evidence_text: "Capture has not been requested.".into(),
         })
@@ -415,6 +458,10 @@ impl ScenarioCandidate {
 
     pub(crate) fn active_coordinator(&self) -> &RetainedEditorCoordinator {
         self.coordinator(self.active)
+    }
+
+    pub(crate) fn active_coordinator_mut(&mut self) -> &mut RetainedEditorCoordinator {
+        self.coordinator_mut(self.active)
     }
 
     pub(crate) fn transcript(&self) -> &[ScenarioObservation] {
@@ -438,6 +485,32 @@ impl ScenarioCandidate {
             ScenarioFixture::NurbsBranches => &self.nurbs_branches.coordinator,
             ScenarioFixture::Operations => &self.operations.coordinator,
             ScenarioFixture::ProductionTopology => &self.production_topology.coordinator,
+            fixture if fixture.motion_kind().is_some() => self
+                .motion
+                .as_deref()
+                .expect("active motion fixture exists"),
+            _ => unreachable!("all scenario fixtures are matched"),
+        }
+    }
+
+    fn coordinator_mut(&mut self, fixture: ScenarioFixture) -> &mut RetainedEditorCoordinator {
+        match fixture {
+            ScenarioFixture::RoleActivity => &mut self.role.coordinator,
+            ScenarioFixture::ParameterProposal => &mut self.parameter.coordinator,
+            ScenarioFixture::ExternalRebind => &mut self.external.coordinator,
+            ScenarioFixture::LifecycleEvidence => &mut self.lifecycle.coordinator,
+            ScenarioFixture::ErrorAttribution => &mut self.error_attribution.coordinator,
+            ScenarioFixture::AlphaParity => &mut self.alpha_parity,
+            ScenarioFixture::AlphaBranchRecovery => &mut self.alpha_branch.coordinator,
+            ScenarioFixture::AdvancedGallery => &mut self.advanced_gallery,
+            ScenarioFixture::NurbsBranches => &mut self.nurbs_branches.coordinator,
+            ScenarioFixture::Operations => &mut self.operations.coordinator,
+            ScenarioFixture::ProductionTopology => &mut self.production_topology.coordinator,
+            fixture if fixture.motion_kind().is_some() => self
+                .motion
+                .as_deref_mut()
+                .expect("active motion fixture exists"),
+            _ => unreachable!("all scenario fixtures are matched"),
         }
     }
 
@@ -912,8 +985,9 @@ impl ScenarioCandidate {
             .collect::<Vec<_>>()
             .join("\n");
         Ok(format!(
-            "SCENARIO CATALOG EVIDENCE\nprovenance=fixed-scenario-not-runtime-platform\nobjective_checks=direct Rust/WASM state transitions\nhuman_clarity_and_trust=human-UAT judgment only\nSCENARIO_TRANSCRIPT\n{}\nROLE_ACTIVITY\n{}\nPARAMETER\n{}\nSUBMITTED_PARAMETER_TYPED\n{}\nEXTERNAL\n{}\nSUBMITTED_EXTERNAL_TYPED\n{}\nLIFECYCLE\n{}\nERROR_ATTRIBUTION\n{}\nALPHA_PARITY\n{}\nALPHA_BRANCH_RECOVERY\n{}\nADVANCED_ALL_FAMILIES\n{}\nNURBS_BRANCH_TOPOLOGY\n{}\nASSOCIATIVE_COMPANION_OPERATIONS\n{}\nPRODUCTION_TOPOLOGY\n{}\nPRODUCTION_TOPOLOGY_PRESENTATION\n{}",
+            "SCENARIO CATALOG EVIDENCE\nprovenance=fixed-scenario-not-runtime-platform\nobjective_checks=direct Rust/WASM state transitions\nhuman_clarity_and_trust=human-UAT judgment only\nSCENARIO_TRANSCRIPT\n{}\nACTIVE_RENDERED_SCENARIO\n{}\nROLE_ACTIVITY\n{}\nPARAMETER\n{}\nSUBMITTED_PARAMETER_TYPED\n{}\nEXTERNAL\n{}\nSUBMITTED_EXTERNAL_TYPED\n{}\nLIFECYCLE\n{}\nERROR_ATTRIBUTION\n{}\nALPHA_PARITY\n{}\nALPHA_BRANCH_RECOVERY\n{}\nADVANCED_ALL_FAMILIES\n{}\nNURBS_BRANCH_TOPOLOGY\n{}\nASSOCIATIVE_COMPANION_OPERATIONS\n{}\nPRODUCTION_TOPOLOGY\n{}\nPRODUCTION_TOPOLOGY_PRESENTATION\n{}",
             scenario_transcript,
+            serialize("scenario://active-rendered", self.active_coordinator())?,
             serialize("scenario://role-activity", &self.role.coordinator)?,
             serialize(
                 "scenario://parameter-binding-proposal",
@@ -1113,6 +1187,35 @@ fn alpha_parity_fixture() -> Result<RetainedEditorCoordinator, String> {
     )
     .map_err(|error| error.to_string())?;
     RetainedEditorCoordinator::new(session).map_err(|error| error.to_string())
+}
+
+fn motion_fixture(kind: AlphaScenarioKind) -> Result<RetainedEditorCoordinator, String> {
+    let fixture = alpha_scenario(kind, 1.0).map_err(|error| error.to_string())?;
+    let driver = match &fixture.ids {
+        AlphaScenarioIds::StressCompass(ids) => ids.first_tip,
+        AlphaScenarioIds::StressBridge(ids) => ids.left_seam,
+        AlphaScenarioIds::MotionCam(ids) => ids.left_center,
+        AlphaScenarioIds::MotionOrbit(ids) => ids.moving_center,
+        AlphaScenarioIds::MotionTrammel(ids) => ids.horizontal_slider,
+        AlphaScenarioIds::MotionScotchYoke(ids) => ids.crank_pin,
+        AlphaScenarioIds::MotionRotatingSquare(ids) => ids.corners[1],
+        AlphaScenarioIds::MotionScissor(ids) => ids.slider,
+        AlphaScenarioIds::MotionScissorTower(ids) => ids.right_levels[0],
+        AlphaScenarioIds::MotionPeaucellier(ids) => ids.input,
+        _ => return Err(format!("{} is not a motion fixture", kind.key())),
+    };
+    let session = RetainedSketchDocumentSession::new(
+        fixture.document,
+        fixture.request,
+        SolverConfig::default(),
+    )
+    .map_err(|error| error.to_string())?;
+    let mut coordinator =
+        RetainedEditorCoordinator::new(session).map_err(|error| error.to_string())?;
+    coordinator
+        .editor_mut()
+        .set_selection([SelectionItem::Point(driver)]);
+    Ok(coordinator)
 }
 
 fn advanced_gallery_fixture() -> Result<RetainedEditorCoordinator, String> {

@@ -30,7 +30,7 @@
         </div>
       </header>
 
-      <aside class="wb-tool-palette" aria-label="Core sketch tools">
+      <aside class="wb-tool-palette" aria-label="Sketch authoring tools">
         <button type="button" data-wb-tool="select" aria-pressed="true"><kbd>V</kbd><span>Select</span></button>
         <div class="wb-tool-rule"></div>
         <button type="button" data-wb-tool="point" aria-pressed="false"><kbd>·</kbd><span>Point</span></button>
@@ -39,6 +39,15 @@
         <button type="button" data-wb-tool="rectangle" aria-pressed="false"><kbd>R</kbd><span>Rectangle</span></button>
         <button type="button" data-wb-tool="circle" aria-pressed="false"><kbd>C</kbd><span>Circle</span></button>
         <button type="button" data-wb-tool="arc" aria-pressed="false"><kbd>A</kbd><span>Arc</span></button>
+        <div class="wb-tool-rule"></div>
+        <button type="button" data-wb-tool="quadratic-bezier" aria-pressed="false"><kbd>Q</kbd><span>Bezier²</span></button>
+        <button type="button" data-wb-tool="cubic-bezier" aria-pressed="false"><kbd>B</kbd><span>Bezier³</span></button>
+        <button type="button" data-wb-tool="ellipse" aria-pressed="false"><kbd>E</kbd><span>Ellipse</span></button>
+        <button type="button" data-wb-tool="elliptical-arc" aria-pressed="false"><kbd>EA</kbd><span>Ellipse arc</span></button>
+        <button type="button" data-wb-tool="rational-conic" aria-pressed="false"><kbd>RQ</kbd><span>Rational</span></button>
+        <button type="button" data-wb-tool="parabola" aria-pressed="false"><kbd>∪</kbd><span>Parabola</span></button>
+        <button type="button" data-wb-tool="hyperbola" aria-pressed="false"><kbd>)(</kbd><span>Hyperbola</span></button>
+        <button type="button" data-wb-tool="nurbs" aria-pressed="false"><kbd>N</kbd><span>NURBS</span></button>
         <div class="wb-tool-rule"></div>
         <button type="button" data-wb-action="finish"><kbd>↵</kbd><span>Finish</span></button>
         <button type="button" data-wb-action="cancel"><kbd>Esc</kbd><span>Cancel</span></button>
@@ -53,7 +62,7 @@
         <svg id="wb-viewport" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet" role="application" aria-label="Editable sketch canvas"></svg>
         <div id="wb-draft-guide" class="wb-draft-guide" hidden>
           <span id="wb-draft-guide-text">Click to add the next point</span>
-          <button type="button" data-wb-action="finish">Finish polyline</button>
+          <button type="button" data-wb-action="finish">Finish curve</button>
           <button type="button" data-wb-action="cancel">Cancel</button>
         </div>
         <div class="wb-canvas-hud">
@@ -75,6 +84,34 @@
           <span class="wb-field-label">Selection</span>
           <strong id="wb-selection">0 selected</strong>
           <button type="button" class="wb-danger" data-wb-action="delete">Delete selected</button>
+        </section>
+        <section id="wb-advanced-construction-options" class="wb-inspector-section wb-construction-options">
+          <span class="wb-field-label">Advanced curve authoring</span>
+          <p>Values are explicit authoring state. Choose a curve tool, then place its labelled controls on the canvas.</p>
+          <details>
+            <summary>Conic options</summary>
+            <div class="wb-option-grid">
+              <label>Minor-axis ratio<input id="wb-conic-ratio" type="number" min="0" max="1" step="any" value="0.5" /></label>
+              <label>Rational weight<input id="wb-conic-weight" type="number" min="0" step="any" value="1" /></label>
+              <label>Arc start (degrees)<input id="wb-conic-arc-start" type="number" step="any" value="0" /></label>
+              <label>Arc end (degrees)<input id="wb-conic-arc-end" type="number" step="any" value="90" /></label>
+              <label>Arc sweep<select id="wb-conic-arc-sweep"><option value="counter-clockwise">Counter-clockwise</option><option value="clockwise">Clockwise</option></select></label>
+              <label>Trim start<input id="wb-conic-trim-start" type="number" step="any" value="-1" /></label>
+              <label>Trim end<input id="wb-conic-trim-end" type="number" step="any" value="1" /></label>
+              <label>Semi-conjugate<input id="wb-conic-semi-conjugate" type="number" min="0" step="any" value="1" /></label>
+              <label>Hyperbola branch<select id="wb-conic-hyperbola-branch"><option value="positive">Positive</option><option value="negative">Negative</option></select></label>
+            </div>
+          </details>
+          <details>
+            <summary>NURBS options</summary>
+            <div class="wb-option-grid">
+              <label>Form<select id="wb-nurbs-form"><option value="clamped">Clamped</option><option value="periodic">Periodic</option></select></label>
+              <label>Degree<input id="wb-nurbs-degree" type="number" min="1" step="1" value="3" /></label>
+              <label>Weights<input id="wb-nurbs-weights" type="text" placeholder="empty = unit; or 1, 0.8, 1, 1" /></label>
+              <label>Gauge index<input id="wb-nurbs-gauge" type="number" min="0" step="1" value="0" /></label>
+            </div>
+            <p>Add more than <em>degree</em> controls, then use Finish. Explicit weights must match the final control count.</p>
+          </details>
         </section>
         <section class="wb-inspector-section">
           <label class="wb-field-label" for="wb-constraint-kind">Constraint</label>

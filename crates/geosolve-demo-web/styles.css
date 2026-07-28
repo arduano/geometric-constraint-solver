@@ -221,13 +221,14 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   grid-row: 2 / 4;
   flex-direction: column;
   gap: 0.35rem;
+  overflow-y: auto;
   padding: 0.55rem 0.35rem;
   border-right: 1px solid #353b3c;
   background: #1e2223;
 }
 .wb-tool-palette button {
   display: flex;
-  min-height: 3.45rem;
+  min-height: 3rem;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -442,6 +443,34 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-field-label { color: #8d9896; font-size: 0.67rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
 .wb-inspector input,
 .wb-inspector select { min-height: 2rem; width: 100%; padding: 0.3rem 0.45rem; }
+.wb-construction-options p {
+  margin: 0;
+  color: #899492;
+  font-size: 0.66rem;
+  line-height: 1.4;
+}
+.wb-construction-options details {
+  padding: 0.45rem;
+  border: 1px solid #3c4545;
+  border-radius: 4px;
+}
+.wb-construction-options summary {
+  color: #b8c4c2;
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.wb-option-grid {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+}
+.wb-option-grid label {
+  display: grid;
+  gap: 0.2rem;
+  color: #8d9896;
+  font-size: 0.64rem;
+}
 .wb-branch-choices,
 .wb-branch-editor-controls { display: grid; gap: 0.55rem; }
 .wb-branch-choices fieldset,

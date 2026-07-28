@@ -30,11 +30,21 @@ pub(crate) enum VerificationPointId {
     P16,
     P17,
     P18,
+    P19,
+    P20,
+    P21,
+    P22,
+    P23,
+    P24,
+    P25,
+    P26,
+    P27,
+    P28,
 }
 
 impl VerificationPointId {
     #[cfg(test)]
-    pub(crate) const ALL: [Self; 18] = [
+    pub(crate) const ALL: [Self; 28] = [
         Self::P1,
         Self::P2,
         Self::P3,
@@ -53,6 +63,16 @@ impl VerificationPointId {
         Self::P16,
         Self::P17,
         Self::P18,
+        Self::P19,
+        Self::P20,
+        Self::P21,
+        Self::P22,
+        Self::P23,
+        Self::P24,
+        Self::P25,
+        Self::P26,
+        Self::P27,
+        Self::P28,
     ];
 
     pub(crate) const fn number(self) -> u8 {
@@ -75,6 +95,16 @@ impl VerificationPointId {
             Self::P16 => 16,
             Self::P17 => 17,
             Self::P18 => 18,
+            Self::P19 => 19,
+            Self::P20 => 20,
+            Self::P21 => 21,
+            Self::P22 => 22,
+            Self::P23 => 23,
+            Self::P24 => 24,
+            Self::P25 => 25,
+            Self::P26 => 26,
+            Self::P27 => 27,
+            Self::P28 => 28,
         }
     }
 }
@@ -116,11 +146,21 @@ pub(crate) enum ScenarioId {
     NurbsBranchTopology,
     AssociativeCompanionOperations,
     ProductionTopologyTrust,
+    DraftingCompass,
+    BezierBridge,
+    TwinRollerCam,
+    TangentOrbit,
+    EllipticTrammel,
+    ScotchYoke,
+    RotatingSquare,
+    ScissorJack,
+    ScissorTower,
+    PeaucellierLinkage,
 }
 
 impl ScenarioId {
     #[cfg(test)]
-    pub(crate) const ALL: [Self; 14] = [
+    pub(crate) const ALL: [Self; 24] = [
         Self::RoleProfileParticipation,
         Self::ActivationDimensionMode,
         Self::SharedParameterProposal,
@@ -135,6 +175,16 @@ impl ScenarioId {
         Self::NurbsBranchTopology,
         Self::AssociativeCompanionOperations,
         Self::ProductionTopologyTrust,
+        Self::DraftingCompass,
+        Self::BezierBridge,
+        Self::TwinRollerCam,
+        Self::TangentOrbit,
+        Self::EllipticTrammel,
+        Self::ScotchYoke,
+        Self::RotatingSquare,
+        Self::ScissorJack,
+        Self::ScissorTower,
+        Self::PeaucellierLinkage,
     ];
 
     pub(crate) fn from_key(value: &str) -> Option<Self> {
@@ -153,6 +203,16 @@ impl ScenarioId {
             "nurbs-branch-topology" => Self::NurbsBranchTopology,
             "associative-companion-operations" => Self::AssociativeCompanionOperations,
             "production-topology-trust" => Self::ProductionTopologyTrust,
+            "drafting-compass" => Self::DraftingCompass,
+            "bezier-c1-bridge" => Self::BezierBridge,
+            "twin-roller-bezier-cam" => Self::TwinRollerCam,
+            "tangent-orbit" => Self::TangentOrbit,
+            "elliptic-trammel" => Self::EllipticTrammel,
+            "scotch-yoke" => Self::ScotchYoke,
+            "rotating-square" => Self::RotatingSquare,
+            "scissor-jack" => Self::ScissorJack,
+            "five-stage-scissor-tower" => Self::ScissorTower,
+            "peaucellier-linkage" => Self::PeaucellierLinkage,
             _ => return None,
         })
     }
@@ -173,6 +233,16 @@ impl ScenarioId {
             Self::NurbsBranchTopology => "nurbs-branch-topology",
             Self::AssociativeCompanionOperations => "associative-companion-operations",
             Self::ProductionTopologyTrust => "production-topology-trust",
+            Self::DraftingCompass => "drafting-compass",
+            Self::BezierBridge => "bezier-c1-bridge",
+            Self::TwinRollerCam => "twin-roller-bezier-cam",
+            Self::TangentOrbit => "tangent-orbit",
+            Self::EllipticTrammel => "elliptic-trammel",
+            Self::ScotchYoke => "scotch-yoke",
+            Self::RotatingSquare => "rotating-square",
+            Self::ScissorJack => "scissor-jack",
+            Self::ScissorTower => "five-stage-scissor-tower",
+            Self::PeaucellierLinkage => "peaucellier-linkage",
         }
     }
 
@@ -193,6 +263,10 @@ pub(crate) enum ScenarioGroupId {
     HostOwnedInputs,
     TruthEvidence,
     ErrorAttribution,
+    InteractiveMechanisms,
+    CompactMechanisms,
+    LinkageMechanisms,
+    AdvancedCurvesTopology,
 }
 
 impl ScenarioGroupId {
@@ -206,6 +280,10 @@ impl ScenarioGroupId {
             Self::HostOwnedInputs => "host-owned-inputs",
             Self::TruthEvidence => "truth-evidence",
             Self::ErrorAttribution => "error-attribution",
+            Self::InteractiveMechanisms => "interactive-mechanisms",
+            Self::CompactMechanisms => "compact-mechanisms",
+            Self::LinkageMechanisms => "linkage-mechanisms",
+            Self::AdvancedCurvesTopology => "advanced-curves-topology",
         }
     }
 }
@@ -380,7 +458,7 @@ pub(crate) const ALL_SCENARIO_ACTIONS: [ScenarioAction; 32] = [
     ScenarioAction::CaptureEvidence,
 ];
 
-const VERIFICATION_POINTS: [VerificationPoint; 18] = [
+const VERIFICATION_POINTS: [VerificationPoint; 28] = [
     VerificationPoint {
         id: VerificationPointId::P1,
         objective: "Role changes profile participation while geometry remains solver-active and accepted.",
@@ -471,6 +549,56 @@ const VERIFICATION_POINTS: [VerificationPoint; 18] = [
         objective: "Only independently complete topology is presented as consumable; open support and cancellation remain explicit non-profile outcomes and recovery is deterministic.",
         human_judgment: "Judge whether complete, incomplete, cancelled, and recovered topology states are immediately trustworthy.",
     },
+    VerificationPoint {
+        id: VerificationPointId::P19,
+        objective: "The drafting compass reports one equality DOF and projected tip drag preserves its symmetric equal-arm construction.",
+        human_judgment: "Judge whether the selected driver and symmetric motion make the reported DOF credible.",
+    },
+    VerificationPoint {
+        id: VerificationPointId::P20,
+        objective: "The two-Bezier C1 bridge exposes one bounded seam-sliding DOF without collapsing either endpoint jet.",
+        human_judgment: "Judge whether the seam driver and associated curve motion are predictable.",
+    },
+    VerificationPoint {
+        id: VerificationPointId::P21,
+        objective: "The twin-roller cam reports two DOF and projects one selected roller along the fixed Bezier normal offset.",
+        human_judgment: "Judge whether independent roller mobility and the selected driver are understandable.",
+    },
+    VerificationPoint {
+        id: VerificationPointId::P22,
+        objective: "The tangent satellite reports one orbital DOF and retains its explicit external-tangency branch around the full locus.",
+        human_judgment: "Judge whether orbit motion remains smooth and branch-stable.",
+    },
+    VerificationPoint {
+        id: VerificationPointId::P23,
+        objective: "The trammel reports one DOF and produces its elliptic tracer path from ordinary bar and rail constraints.",
+        human_judgment: "Judge whether dependent tracer motion convincingly reflects the underlying constraints.",
+    },
+    VerificationPoint {
+        id: VerificationPointId::P24,
+        objective: "The Scotch yoke reports one DOF and converts crank rotation into guided slider travel.",
+        human_judgment: "Judge whether the crank-pin driver produces coherent mechanism motion.",
+    },
+    VerificationPoint {
+        id: VerificationPointId::P25,
+        objective: "The constraint-built square reports one rotational DOF around its fixed corner while retaining equal/perpendicular/parallel relations.",
+        human_judgment: "Judge whether a non-privileged square behaves like a rigid rotating body.",
+    },
+    VerificationPoint {
+        id: VerificationPointId::P26,
+        objective: "The scissor jack reports one DOF and projected base-slider drag opens and closes its mirrored linkage.",
+        human_judgment: "Judge whether the scissor motion and selected base driver are clear and stable.",
+    },
+    VerificationPoint {
+        id: VerificationPointId::P27,
+        objective: "The five-stage scissor tower reports one DOF and synchronously propagates base motion through all stages.",
+        human_judgment: "Judge whether zoom/pan and projected drag make the large linked motion inspectable.",
+    },
+    VerificationPoint {
+        id: VerificationPointId::P28,
+        objective: "The Peaucellier linkage reports one DOF and maps circular input motion to straight output motion using ordinary bars.",
+        human_judgment: "Judge whether the dependent output path makes the solver behavior trustworthy.",
+    },
 ];
 
 const ROLE_PROFILE_POINTS: [VerificationPointId; 1] = [VerificationPointId::P1];
@@ -493,6 +621,16 @@ const ADVANCED_ALL_FAMILIES_POINTS: [VerificationPointId; 1] = [VerificationPoin
 const NURBS_BRANCH_POINTS: [VerificationPointId; 1] = [VerificationPointId::P16];
 const OPERATIONS_POINTS: [VerificationPointId; 1] = [VerificationPointId::P17];
 const PRODUCTION_TOPOLOGY_POINTS: [VerificationPointId; 1] = [VerificationPointId::P18];
+const COMPASS_POINTS: [VerificationPointId; 1] = [VerificationPointId::P19];
+const BRIDGE_POINTS: [VerificationPointId; 1] = [VerificationPointId::P20];
+const CAM_POINTS: [VerificationPointId; 1] = [VerificationPointId::P21];
+const ORBIT_POINTS: [VerificationPointId; 1] = [VerificationPointId::P22];
+const TRAMMEL_POINTS: [VerificationPointId; 1] = [VerificationPointId::P23];
+const SCOTCH_YOKE_POINTS: [VerificationPointId; 1] = [VerificationPointId::P24];
+const ROTATING_SQUARE_POINTS: [VerificationPointId; 1] = [VerificationPointId::P25];
+const SCISSOR_POINTS: [VerificationPointId; 1] = [VerificationPointId::P26];
+const SCISSOR_TOWER_POINTS: [VerificationPointId; 1] = [VerificationPointId::P27];
+const PEAUCELLIER_POINTS: [VerificationPointId; 1] = [VerificationPointId::P28];
 
 const ROLE_PROFILE_STEPS: [ScenarioStep; 3] = [
     ScenarioStep {
@@ -866,7 +1004,30 @@ const PRODUCTION_TOPOLOGY_STEPS: [ScenarioStep; 6] = [
     },
 ];
 
-const SCENARIOS: [ScenarioDefinition; 14] = [
+const INTERACTIVE_MOTION_STEPS: [ScenarioStep; 4] = [
+    ScenarioStep {
+        instruction: "Confirm the selected point is the documented primary driver and inspect the nonzero mobility in accepted diagnostics.",
+        action: None,
+        expected: "The accepted scene starts with a selected persistent point and reports the scenario's documented equality and bounded mobility.",
+    },
+    ScenarioStep {
+        instruction: "Drag the selected driver through several nearby targets on the canvas.",
+        action: None,
+        expected: "Projected motion follows only solver-permitted directions while connected geometry moves coherently and every hard residual remains valid.",
+    },
+    ScenarioStep {
+        instruction: "Use wheel zoom, middle-drag pan, and Fit while inspecting the mechanism at different configurations.",
+        action: None,
+        expected: "Camera changes do not alter geometry, branch state, history, diagnostics, or the ordinary saved workspace.",
+    },
+    ScenarioStep {
+        instruction: "Reset and repeat the first drag.",
+        action: None,
+        expected: "Reset restores the deterministic starting geometry, selected driver, accepted identity shape, and nonzero DOF.",
+    },
+];
+
+const SCENARIOS: [ScenarioDefinition; 24] = [
     ScenarioDefinition {
         id: ScenarioId::RoleProfileParticipation,
         title: "Role & profile participation",
@@ -993,6 +1154,96 @@ const SCENARIOS: [ScenarioDefinition; 14] = [
         points: &PRODUCTION_TOPOLOGY_POINTS,
         steps: &PRODUCTION_TOPOLOGY_STEPS,
     },
+    ScenarioDefinition {
+        id: ScenarioId::DraftingCompass,
+        title: "Drafting compass · 1 DOF",
+        description: "Drag the preselected first tip; equal-length arms remain symmetric about a fixed 30-degree bisector.",
+        human_question: "Does projected tip motion make the compass's single rotational freedom and symmetry obvious?",
+        fixture: ScenarioFixture::StressCompass,
+        points: &COMPASS_POINTS,
+        steps: &INTERACTIVE_MOTION_STEPS,
+    },
+    ScenarioDefinition {
+        id: ScenarioId::BezierBridge,
+        title: "Bezier C1 bridge · 1 bounded DOF",
+        description: "Drag the preselected left seam of two tangent cubic Beziers while the suppressed equal-handle row leaves one bounded seam freedom.",
+        human_question: "Is the one-DOF seam motion smooth, regular, and visibly associated across both curves?",
+        fixture: ScenarioFixture::StressBridge,
+        points: &BRIDGE_POINTS,
+        steps: &INTERACTIVE_MOTION_STEPS,
+    },
+    ScenarioDefinition {
+        id: ScenarioId::TwinRollerCam,
+        title: "Twin-roller Bezier cam · 2 DOF",
+        description: "Drag the preselected left roller around its normal-offset path; the second roller retains its independent freedom.",
+        human_question: "Can you distinguish the two independent roller freedoms and trust each projected contact?",
+        fixture: ScenarioFixture::MotionCam,
+        points: &CAM_POINTS,
+        steps: &INTERACTIVE_MOTION_STEPS,
+    },
+    ScenarioDefinition {
+        id: ScenarioId::TangentOrbit,
+        title: "Tangent orbit · 1 DOF",
+        description: "Drag the preselected satellite center around the complete external-tangency locus with explicit periodic branch state.",
+        human_question: "Does the satellite traverse the full orbit without a branch flip or discontinuity?",
+        fixture: ScenarioFixture::MotionOrbit,
+        points: &ORBIT_POINTS,
+        steps: &INTERACTIVE_MOTION_STEPS,
+    },
+    ScenarioDefinition {
+        id: ScenarioId::EllipticTrammel,
+        title: "Elliptic trammel · 1 DOF",
+        description: "Drag the preselected horizontal slider; the perpendicular rail sliders drive a quarter-point tracer along an exact ellipse.",
+        human_question: "Does the emergent tracer path make the ordinary rail and bar constraints believable?",
+        fixture: ScenarioFixture::MotionTrammel,
+        points: &TRAMMEL_POINTS,
+        steps: &INTERACTIVE_MOTION_STEPS,
+    },
+    ScenarioDefinition {
+        id: ScenarioId::ScotchYoke,
+        title: "Scotch yoke · 1 DOF",
+        description: "Drag the preselected crank pin; the fixed crank and vertical slot produce sinusoidal horizontal slider travel.",
+        human_question: "Is rotational-to-linear motion coherent throughout the usable crank range?",
+        fixture: ScenarioFixture::MotionScotchYoke,
+        points: &SCOTCH_YOKE_POINTS,
+        steps: &INTERACTIVE_MOTION_STEPS,
+    },
+    ScenarioDefinition {
+        id: ScenarioId::RotatingSquare,
+        title: "Constraint-built rotating square · 1 DOF",
+        description: "Drag the preselected corner; four ordinary lines remain a rigid square rotating about their fixed corner.",
+        human_question: "Does the relation-built square preserve rigidity without relying on a privileged rectangle primitive?",
+        fixture: ScenarioFixture::MotionRotatingSquare,
+        points: &ROTATING_SQUARE_POINTS,
+        steps: &INTERACTIVE_MOTION_STEPS,
+    },
+    ScenarioDefinition {
+        id: ScenarioId::ScissorJack,
+        title: "Scissor jack · 1 DOF",
+        description: "Drag the preselected horizontal base slider to open and close a mirrored equal-arm scissor mechanism.",
+        human_question: "Is the base-driven mirrored motion stable, predictable, and easy to inspect?",
+        fixture: ScenarioFixture::MotionScissor,
+        points: &SCISSOR_POINTS,
+        steps: &INTERACTIVE_MOTION_STEPS,
+    },
+    ScenarioDefinition {
+        id: ScenarioId::ScissorTower,
+        title: "Five-stage scissor tower · 1 DOF",
+        description: "Drag the preselected right base pivot; one base freedom synchronously raises or lowers all five X stages.",
+        human_question: "Can you zoom, pan, and drag the large tower while seeing coherent motion propagate through every stage?",
+        fixture: ScenarioFixture::MotionScissorTower,
+        points: &SCISSOR_TOWER_POINTS,
+        steps: &INTERACTIVE_MOTION_STEPS,
+    },
+    ScenarioDefinition {
+        id: ScenarioId::PeaucellierLinkage,
+        title: "Peaucellier straight-line linkage · 1 DOF",
+        description: "Drag the preselected input crank; the seven-bar inversor maps circular input motion to an exact straight output path.",
+        human_question: "Does the dependent output motion convincingly demonstrate the one-DOF bar system?",
+        fixture: ScenarioFixture::MotionPeaucellier,
+        points: &PEAUCELLIER_POINTS,
+        steps: &INTERACTIVE_MOTION_STEPS,
+    },
 ];
 
 const GEOMETRY_INTENT_CHILDREN: [ScenarioNode; 2] = [
@@ -1069,11 +1320,65 @@ const M55_ACTION_PARITY_GROUP: ScenarioGroup = ScenarioGroup {
     children: &M55_ACTION_PARITY_CHILDREN,
 };
 
-const M61_ADVANCED_TOPOLOGY_CHILDREN: [ScenarioNode; 4] = [
+const COMPACT_MECHANISM_CHILDREN: [ScenarioNode; 7] = [
+    ScenarioNode::Scenario(ScenarioId::DraftingCompass),
+    ScenarioNode::Scenario(ScenarioId::BezierBridge),
+    ScenarioNode::Scenario(ScenarioId::TwinRollerCam),
+    ScenarioNode::Scenario(ScenarioId::TangentOrbit),
+    ScenarioNode::Scenario(ScenarioId::EllipticTrammel),
+    ScenarioNode::Scenario(ScenarioId::ScotchYoke),
+    ScenarioNode::Scenario(ScenarioId::RotatingSquare),
+];
+
+const COMPACT_MECHANISMS_GROUP: ScenarioGroup = ScenarioGroup {
+    id: ScenarioGroupId::CompactMechanisms,
+    title: "Compact mechanisms",
+    description: "One- and two-DOF curve/contact and ordinary-constraint mechanisms.",
+    children: &COMPACT_MECHANISM_CHILDREN,
+};
+
+const LINKAGE_MECHANISM_CHILDREN: [ScenarioNode; 3] = [
+    ScenarioNode::Scenario(ScenarioId::ScissorJack),
+    ScenarioNode::Scenario(ScenarioId::ScissorTower),
+    ScenarioNode::Scenario(ScenarioId::PeaucellierLinkage),
+];
+
+const LINKAGE_MECHANISMS_GROUP: ScenarioGroup = ScenarioGroup {
+    id: ScenarioGroupId::LinkageMechanisms,
+    title: "Linkage mechanisms",
+    description: "Representative one-DOF scissor and exact straight-line bar linkages.",
+    children: &LINKAGE_MECHANISM_CHILDREN,
+};
+
+const INTERACTIVE_MECHANISM_CHILDREN: [ScenarioNode; 2] = [
+    ScenarioNode::Group(COMPACT_MECHANISMS_GROUP),
+    ScenarioNode::Group(LINKAGE_MECHANISMS_GROUP),
+];
+
+const INTERACTIVE_MECHANISMS_GROUP: ScenarioGroup = ScenarioGroup {
+    id: ScenarioGroupId::InteractiveMechanisms,
+    title: "Interactive mechanisms",
+    description: "Movable accepted scenarios with a preselected primary driver and documented nonzero DOF.",
+    children: &INTERACTIVE_MECHANISM_CHILDREN,
+};
+
+const ADVANCED_CURVES_TOPOLOGY_CHILDREN: [ScenarioNode; 4] = [
     ScenarioNode::Scenario(ScenarioId::AdvancedAllFamilies),
     ScenarioNode::Scenario(ScenarioId::NurbsBranchTopology),
     ScenarioNode::Scenario(ScenarioId::AssociativeCompanionOperations),
     ScenarioNode::Scenario(ScenarioId::ProductionTopologyTrust),
+];
+
+const ADVANCED_CURVES_TOPOLOGY_GROUP: ScenarioGroup = ScenarioGroup {
+    id: ScenarioGroupId::AdvancedCurvesTopology,
+    title: "Advanced curves & topology",
+    description: "Accepted curve families, explicit NURBS branches, operations, and production topology.",
+    children: &ADVANCED_CURVES_TOPOLOGY_CHILDREN,
+};
+
+const M61_ADVANCED_TOPOLOGY_CHILDREN: [ScenarioNode; 2] = [
+    ScenarioNode::Group(INTERACTIVE_MECHANISMS_GROUP),
+    ScenarioNode::Group(ADVANCED_CURVES_TOPOLOGY_GROUP),
 ];
 
 const M61_ADVANCED_TOPOLOGY_GROUP: ScenarioGroup = ScenarioGroup {
@@ -1175,6 +1480,15 @@ impl ScenarioWorkbenchState {
         self.runner
             .as_ref()
             .map_or(ordinary, |runner| runner.candidate.active_coordinator())
+    }
+
+    pub(crate) fn coordinator_for_interaction_mut<'a>(
+        &'a mut self,
+        ordinary: &'a mut RetainedEditorCoordinator,
+    ) -> &'a mut RetainedEditorCoordinator {
+        self.runner
+            .as_mut()
+            .map_or(ordinary, |runner| runner.candidate.active_coordinator_mut())
     }
 
     pub(crate) fn ordinary_action_allowed(&self, action: &str) -> bool {
@@ -1412,6 +1726,8 @@ fn push_escaped_text(output: &mut String, value: &str) {
 mod tests {
     use std::collections::{HashMap, HashSet};
 
+    use geosolve_constraint_editor::{EditorEffect, SelectionItem};
+
     use super::{
         ALL_SCENARIO_ACTIONS, SCENARIO_CATALOG, ScenarioAction, ScenarioCandidate, ScenarioFixture,
         ScenarioGroup, ScenarioId, ScenarioNode, ScenarioWorkbenchState, VerificationPointId,
@@ -1438,7 +1754,7 @@ mod tests {
         collect_catalog(*SCENARIO_CATALOG.root(), &mut groups, &mut scenarios);
 
         assert_eq!(SCENARIO_CATALOG.root().title(), "GeoSolve scenarios");
-        assert_eq!(groups.len(), 8);
+        assert_eq!(groups.len(), 12);
         assert_eq!(scenarios.len(), ScenarioId::ALL.len());
         let unique_groups: HashSet<_> = groups.iter().copied().collect();
         let unique_scenarios: HashSet<_> = scenarios.iter().copied().collect();
@@ -1536,9 +1852,9 @@ mod tests {
             .unwrap();
         let markup = state.menu_markup();
 
-        assert_eq!(markup.matches("data-scenario-group-trigger=").count(), 7);
-        assert_eq!(markup.matches("class=\"wb-scenario-flyout\"").count(), 7);
-        assert_eq!(markup.matches("data-scenario-id=").count(), 14);
+        assert_eq!(markup.matches("data-scenario-group-trigger=").count(), 11);
+        assert_eq!(markup.matches("class=\"wb-scenario-flyout\"").count(), 11);
+        assert_eq!(markup.matches("data-scenario-id=").count(), 24);
         assert!(markup.contains("class=\"wb-scenario-catalog-header\""));
         assert!(markup.contains("aria-expanded=\"false\""));
         assert!(markup.contains("aria-controls=\"wb-scenario-flyout-host-owned-inputs\""));
@@ -1548,6 +1864,10 @@ mod tests {
             "data-scenario-id=\"external-loss-explicit-recovery\" aria-current=\"true\""
         ));
         assert!(markup.contains("data-scenario-group=\"m61-advanced-topology\""));
+        assert!(markup.contains("data-scenario-group=\"interactive-mechanisms\""));
+        assert!(markup.contains("data-scenario-group=\"compact-mechanisms\""));
+        assert!(markup.contains("data-scenario-group=\"linkage-mechanisms\""));
+        assert!(markup.contains("data-scenario-id=\"five-stage-scissor-tower\""));
         assert!(markup.contains("data-scenario-id=\"production-topology-trust\""));
         assert!(!markup.contains("role=\"tree"));
         assert!(!markup.contains("role=\"menu"));
@@ -1683,5 +2003,138 @@ mod tests {
         assert_eq!(state.selected_id(), None);
         assert_eq!(state.persistence_snapshot(ordinary).unwrap(), before);
         assert!(state.ordinary_action_allowed("new"));
+    }
+
+    #[test]
+    fn interactive_mechanisms_publish_nonzero_mobility_and_preselect_their_driver() {
+        let ordinary_candidate = ScenarioCandidate::new(ScenarioFixture::RoleActivity).unwrap();
+        let ordinary = ordinary_candidate.active_coordinator();
+        for (id, equality_dof, bounded_dof) in [
+            (ScenarioId::DraftingCompass, 1, 1),
+            (ScenarioId::BezierBridge, 3, 1),
+            (ScenarioId::TwinRollerCam, 2, 2),
+            (ScenarioId::TangentOrbit, 1, 1),
+            (ScenarioId::EllipticTrammel, 1, 1),
+            (ScenarioId::ScotchYoke, 1, 1),
+            (ScenarioId::RotatingSquare, 1, 1),
+            (ScenarioId::ScissorJack, 1, 1),
+            (ScenarioId::ScissorTower, 1, 1),
+            (ScenarioId::PeaucellierLinkage, 1, 1),
+        ] {
+            let mut state = ScenarioWorkbenchState::new();
+            state.select(id).unwrap();
+            let coordinator = state.coordinator_for_render(ordinary);
+            assert!(matches!(
+                coordinator.editor().selection(),
+                [SelectionItem::Point(driver)]
+                    if coordinator.session().design_document().point(*driver).is_some()
+            ));
+            let mobility = coordinator
+                .session()
+                .accepted_diagnostics()
+                .unwrap()
+                .mobility
+                .unwrap();
+            assert_eq!(
+                mobility.equality_degrees_of_freedom,
+                Some(equality_dof),
+                "{}",
+                id.key()
+            );
+            assert_eq!(
+                mobility.bidirectional_bounded_degrees_of_freedom,
+                Some(bounded_dof),
+                "{}",
+                id.key()
+            );
+        }
+    }
+
+    #[test]
+    fn scissor_projected_drag_moves_dependents_and_reset_restores_exact_start() {
+        let ordinary_candidate = ScenarioCandidate::new(ScenarioFixture::RoleActivity).unwrap();
+        let mut ordinary = ScenarioCandidate::new(ScenarioFixture::RoleActivity).unwrap();
+        let ordinary_before = ordinary
+            .active_coordinator()
+            .session()
+            .design_document()
+            .to_canonical_json()
+            .unwrap();
+        let mut state = ScenarioWorkbenchState::new();
+        state.select(ScenarioId::ScissorJack).unwrap();
+        let initial = state
+            .coordinator_for_render(ordinary_candidate.active_coordinator())
+            .session()
+            .accepted_state()
+            .unwrap()
+            .document()
+            .clone();
+        let driver = match state
+            .coordinator_for_render(ordinary_candidate.active_coordinator())
+            .editor()
+            .selection()
+        {
+            [SelectionItem::Point(driver)] => *driver,
+            _ => panic!("one selected scissor driver"),
+        };
+
+        let coordinator = state.coordinator_for_interaction_mut(ordinary.active_coordinator_mut());
+        let mut preview = coordinator.session().clone();
+        let request = preview
+            .last_attempt()
+            .input()
+            .candidate_request()
+            .without_previous_state_preferences()
+            .with_drag(driver, [3.5, 0.0]);
+        let attempt = preview
+            .reattempt(preview.design_identity(), request)
+            .expect("projected scissor preview");
+        assert!(attempt.accepted_state_identity().is_some());
+        let preview_document = preview
+            .accepted_state()
+            .expect("preview accepted")
+            .document()
+            .clone();
+        let accepted_driver = preview_document.point(driver).unwrap().position;
+        coordinator
+            .mark_solved_preview(&preview)
+            .expect("publish solved preview");
+        coordinator
+            .apply_editor_effect(&EditorEffect::CommitPointMove {
+                expected: coordinator.session().design_identity(),
+                point: driver,
+                model_position: accepted_driver,
+            })
+            .expect("commit projected move")
+            .expect("accepted mutation");
+        let moved = coordinator.session().accepted_state().unwrap().document();
+        assert!(moved.points().iter().any(|point| {
+            point.id != driver
+                && initial.point(point.id).is_some_and(|before| {
+                    (before.position[0] - point.position[0])
+                        .hypot(before.position[1] - point.position[1])
+                        > 1.0e-6
+                })
+        }));
+
+        state.reset().unwrap();
+        assert_eq!(
+            state
+                .coordinator_for_render(ordinary_candidate.active_coordinator())
+                .session()
+                .accepted_state()
+                .unwrap()
+                .document(),
+            &initial
+        );
+        assert_eq!(
+            ordinary
+                .active_coordinator()
+                .session()
+                .design_document()
+                .to_canonical_json()
+                .unwrap(),
+            ordinary_before
+        );
     }
 }
