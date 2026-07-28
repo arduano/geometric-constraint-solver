@@ -1,8 +1,8 @@
 use geosolve_core::{HardValidity, SolverConfig};
 use geosolve_sketch::{
-    CurveSpan, DocumentCommandEffect, DocumentDimensionDefinition, DocumentDimensionMode,
-    DocumentEdit, DocumentSolveRequest, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
-    SketchDocument,
+    CurveDefinition, CurveSpan, DesignPointId, DocumentCommandEffect, DocumentConstraintDefinition,
+    DocumentDimensionDefinition, DocumentDimensionMode, DocumentEdit, DocumentSessionError,
+    DocumentSolveRequest, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
 };
 
 fn rectangle_design() -> (SketchDocument, geosolve_sketch::RectangleIds) {
@@ -39,6 +39,214 @@ fn add_width_five_dimension(
             DocumentDimensionMode::Driving,
         )
         .unwrap()
+}
+
+fn duplicate_distance_design() -> (
+    SketchDocument,
+    geosolve_sketch::DesignScalarId,
+    geosolve_sketch::DocumentSourceId,
+    geosolve_sketch::DocumentSourceId,
+) {
+    let mut document = SketchDocument::new(4.0).unwrap();
+    let first = document.add_point("first", [0.0, 0.0]).unwrap();
+    let second = document.add_point("second", [2.0, 0.0]).unwrap();
+    document
+        .add_constraint(
+            "fix first",
+            DocumentConstraintDefinition::FixedPoint {
+                point: first,
+                target: [0.0, 0.0],
+            },
+        )
+        .unwrap();
+    let first_target = document
+        .add_scalar(
+            "first distance two",
+            2.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .unwrap();
+    let duplicate_target = document
+        .add_scalar(
+            "duplicate distance two",
+            2.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .unwrap();
+    let add_distance =
+        |document: &mut SketchDocument, label: &str, target: geosolve_sketch::DesignScalarId| {
+            let dimension = document
+                .add_dimension(
+                    label,
+                    DocumentDimensionDefinition::PointDistance {
+                        first,
+                        second,
+                        target,
+                    },
+                    DocumentDimensionMode::Driving,
+                )
+                .unwrap();
+            document.dimension(dimension).unwrap().source_id
+        };
+    let first_distance = add_distance(&mut document, "first distance", first_target);
+    let duplicate_distance = add_distance(&mut document, "duplicate distance", duplicate_target);
+    (document, first_target, first_distance, duplicate_distance)
+}
+
+fn two_link_session() -> (
+    RetainedSketchDocumentSession,
+    [DesignPointId; 3],
+    [geosolve_sketch::CurveId; 2],
+) {
+    let mut document = SketchDocument::new(1.0).unwrap();
+    let base = document.add_point("base", [0.0, 0.0]).unwrap();
+    let elbow = document.add_point("elbow", [1.0, 1.0]).unwrap();
+    let end = document.add_point("end", [2.0, 0.0]).unwrap();
+    let diagonal = 0.5_f64.sqrt();
+    let first_link = document
+        .add_curve(
+            "first link",
+            CurveDefinition::Line {
+                start: base,
+                end: elbow,
+                branch_direction: [diagonal, diagonal],
+            },
+        )
+        .unwrap();
+    let second_link = document
+        .add_curve(
+            "second link",
+            CurveDefinition::Line {
+                start: elbow,
+                end,
+                branch_direction: [0.0, -1.0],
+            },
+        )
+        .unwrap();
+    document
+        .add_constraint(
+            "fixed base",
+            DocumentConstraintDefinition::FixedPoint {
+                point: base,
+                target: [0.0, 0.0],
+            },
+        )
+        .unwrap();
+    for (label, first, second) in [("first length", base, elbow), ("second length", elbow, end)] {
+        let target = document
+            .add_scalar(
+                label,
+                2.0_f64.sqrt(),
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .unwrap();
+        document
+            .add_dimension(
+                label,
+                DocumentDimensionDefinition::PointDistance {
+                    first,
+                    second,
+                    target,
+                },
+                DocumentDimensionMode::Driving,
+            )
+            .unwrap();
+    }
+    (
+        RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .unwrap(),
+        [base, elbow, end],
+        [first_link, second_link],
+    )
+}
+
+fn accepted_two_link_preview(
+    session: &RetainedSketchDocumentSession,
+    end: DesignPointId,
+) -> RetainedSketchDocumentSession {
+    let mut preview = session.clone();
+    preview
+        .reattempt(
+            preview.design_identity(),
+            DocumentSolveRequest::default()
+                .without_previous_state_preferences()
+                .with_drag(end, [0.0, 0.0]),
+        )
+        .unwrap();
+    assert!(preview.last_attempt().accepted_state_identity().is_some());
+    preview
+}
+
+#[test]
+fn accepted_redundancy_is_persistent_provenance_and_survives_rejected_attempt() {
+    let (document, first_target, first_distance, duplicate_distance) = duplicate_distance_design();
+    let mut session = RetainedSketchDocumentSession::new(
+        document,
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .unwrap();
+    let accepted = session.accepted_state().unwrap();
+    let redundancy = accepted.accepted_redundancy().clone();
+    assert_eq!(redundancy.accepted_state_identity(), accepted.identity());
+    assert_eq!(redundancy.design_identity(), accepted.design_identity());
+    assert_eq!(redundancy.fully_redundant_sources(), [duplicate_distance]);
+    assert_eq!(
+        redundancy.sources_containing_redundant_rows(),
+        [duplicate_distance]
+    );
+    assert!(
+        !redundancy
+            .fully_redundant_sources()
+            .contains(&first_distance)
+    );
+
+    session
+        .apply(
+            session.design_identity(),
+            DocumentEdit::SetScalarValue {
+                scalar: first_target,
+                value: 3.0,
+            },
+        )
+        .unwrap();
+    assert!(
+        session
+            .last_attempt()
+            .solve_result()
+            .unwrap()
+            .accepted_redundancy()
+            .is_none()
+    );
+    assert_eq!(
+        session.accepted_state().unwrap().accepted_redundancy(),
+        &redundancy
+    );
+}
+
+#[test]
+fn accepted_nonredundant_state_publishes_empty_source_sets() {
+    let mut document = SketchDocument::new(1.0).unwrap();
+    document.add_point("free", [0.0, 0.0]).unwrap();
+    let session = RetainedSketchDocumentSession::new(
+        document,
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .unwrap();
+    let accepted = session.accepted_state().unwrap();
+    let redundancy = accepted.accepted_redundancy();
+    assert_eq!(redundancy.accepted_state_identity(), accepted.identity());
+    assert_eq!(redundancy.design_identity(), accepted.design_identity());
+    assert!(redundancy.fully_redundant_sources().is_empty());
+    assert!(redundancy.sources_containing_redundant_rows().is_empty());
 }
 
 #[test]
@@ -399,6 +607,209 @@ fn point_edit_records_both_candidate_and_publication_requests() {
         session.accepted_state().unwrap().input(),
         input,
         "accepted publication must repeat the complete implemented attempt input"
+    );
+}
+
+#[test]
+fn preview_seeded_point_apply_preserves_the_accepted_mechanism_configuration() {
+    let (mut session, points, curves) = two_link_session();
+    let preview = accepted_two_link_preview(&session, points[2]);
+    let preview_document = preview.accepted_state().unwrap().document().clone();
+    let position = preview_document.point(points[2]).unwrap().position;
+
+    let outcome = session
+        .apply_point_position_from_preview(session.design_identity(), points[2], position, &preview)
+        .unwrap();
+
+    assert!(outcome.published_accepted_identity().is_some());
+    let committed = session.accepted_state().unwrap().document();
+    for point in points {
+        let expected = preview_document.point(point).unwrap().position;
+        let actual = committed.point(point).unwrap().position;
+        for axis in 0..2 {
+            assert!((expected[axis] - actual[axis]).abs() <= 1.0e-10);
+        }
+    }
+    for curve in curves {
+        let branch = |document: &SketchDocument| match &document.curve(curve).unwrap().definition {
+            CurveDefinition::Line {
+                branch_direction, ..
+            } => *branch_direction,
+            _ => panic!("line expected"),
+        };
+        assert_eq!(
+            branch(committed).map(f64::to_bits),
+            branch(&preview_document).map(f64::to_bits)
+        );
+    }
+}
+
+#[test]
+fn preview_seeded_point_apply_rejects_mismatched_point_and_position_without_mutation() {
+    let (session, points, _) = two_link_session();
+    let preview = accepted_two_link_preview(&session, points[2]);
+    let preview_document = preview.accepted_state().unwrap().document();
+    let end_position = preview_document.point(points[2]).unwrap().position;
+
+    for (point, position) in [
+        (
+            points[1],
+            preview_document.point(points[1]).unwrap().position,
+        ),
+        (
+            points[2],
+            [
+                f64::from_bits(end_position[0].to_bits() + 1),
+                end_position[1],
+            ],
+        ),
+    ] {
+        let mut attempt = session.clone();
+        let before = (
+            attempt.design_identity(),
+            attempt.last_attempt().identity(),
+            attempt.accepted_state().unwrap().identity(),
+            attempt.export_design_json().unwrap(),
+            attempt.export_accepted_json().unwrap(),
+        );
+        assert!(matches!(
+            attempt.apply_point_position_from_preview(
+                attempt.design_identity(),
+                point,
+                position,
+                &preview
+            ),
+            Err(DocumentSessionError::PreviewPointMismatch)
+        ));
+        assert_eq!(attempt.design_identity(), before.0);
+        assert_eq!(attempt.last_attempt().identity(), before.1);
+        assert_eq!(attempt.accepted_state().unwrap().identity(), before.2);
+        assert_eq!(attempt.export_design_json().unwrap(), before.3);
+        assert_eq!(attempt.export_accepted_json().unwrap(), before.4);
+    }
+}
+
+#[test]
+fn preview_seeded_point_apply_rejects_stale_and_foreign_preview_without_mutation() {
+    let (mut session, points, _) = two_link_session();
+    let stale = accepted_two_link_preview(&session, points[2]);
+    session
+        .apply(
+            session.design_identity(),
+            DocumentEdit::CreatePoint {
+                label: "advance".into(),
+                position: [3.0, 3.0],
+            },
+        )
+        .unwrap();
+    let before_design = session.design_identity();
+    let before_attempt = session.last_attempt().identity();
+    let before_accepted = session.accepted_state().unwrap().identity();
+    let before_design_json = session.export_design_json().unwrap();
+    let before_accepted_json = session.export_accepted_json().unwrap();
+    let position = stale
+        .accepted_state()
+        .unwrap()
+        .document()
+        .point(points[2])
+        .unwrap()
+        .position;
+    assert!(matches!(
+        session.apply_point_position_from_preview(
+            session.design_identity(),
+            points[2],
+            position,
+            &stale
+        ),
+        Err(DocumentSessionError::PreviewStaleDesign)
+    ));
+    assert_eq!(session.design_identity(), before_design);
+    assert_eq!(session.last_attempt().identity(), before_attempt);
+    assert_eq!(
+        session.accepted_state().unwrap().identity(),
+        before_accepted
+    );
+    assert_eq!(session.export_design_json().unwrap(), before_design_json);
+    assert_eq!(
+        session.export_accepted_json().unwrap(),
+        before_accepted_json
+    );
+
+    let (foreign_base, foreign_points, _) = two_link_session();
+    let foreign = accepted_two_link_preview(&foreign_base, foreign_points[2]);
+    assert!(matches!(
+        session.apply_point_position_from_preview(
+            session.design_identity(),
+            points[2],
+            position,
+            &foreign
+        ),
+        Err(DocumentSessionError::PreviewForeignDocument)
+    ));
+    assert_eq!(session.design_identity(), before_design);
+    assert_eq!(session.last_attempt().identity(), before_attempt);
+    assert_eq!(
+        session.accepted_state().unwrap().identity(),
+        before_accepted
+    );
+    assert_eq!(session.export_design_json().unwrap(), before_design_json);
+    assert_eq!(
+        session.export_accepted_json().unwrap(),
+        before_accepted_json
+    );
+}
+
+#[test]
+fn preview_seeded_point_apply_rejects_rejected_latest_preview_without_mutation() {
+    let (mut session, points, _) = two_link_session();
+    let mut rejected = session.clone();
+    let conflict = DocumentEdit::CreateConstraint {
+        label: "impossible fixed end".into(),
+        definition: DocumentConstraintDefinition::FixedPoint {
+            point: points[2],
+            target: [5.0, 5.0],
+        },
+    };
+    session
+        .apply(session.design_identity(), conflict.clone())
+        .unwrap();
+    rejected
+        .apply(rejected.design_identity(), conflict)
+        .unwrap();
+    assert_eq!(session.design_identity(), rejected.design_identity());
+    assert!(rejected.last_attempt().accepted_state_identity().is_none());
+    let before_design = session.design_identity();
+    let before_attempt = session.last_attempt().identity();
+    let before_accepted = session.accepted_state().unwrap().identity();
+    let before_design_json = session.export_design_json().unwrap();
+    let before_accepted_json = session.export_accepted_json().unwrap();
+    let position = rejected
+        .accepted_state()
+        .unwrap()
+        .document()
+        .point(points[2])
+        .unwrap()
+        .position;
+
+    assert!(matches!(
+        session.apply_point_position_from_preview(
+            session.design_identity(),
+            points[2],
+            position,
+            &rejected
+        ),
+        Err(DocumentSessionError::PreviewNotAccepted)
+    ));
+    assert_eq!(session.design_identity(), before_design);
+    assert_eq!(session.last_attempt().identity(), before_attempt);
+    assert_eq!(
+        session.accepted_state().unwrap().identity(),
+        before_accepted
+    );
+    assert_eq!(session.export_design_json().unwrap(), before_design_json);
+    assert_eq!(
+        session.export_accepted_json().unwrap(),
+        before_accepted_json
     );
 }
 

@@ -179,6 +179,496 @@ pub(crate) struct GenericCurveFilletResidual {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub(crate) struct CircularSweepResidual {
+    pub(crate) start_angle: usize,
+    pub(crate) end_angle: usize,
+    pub(crate) turn_offset: i32,
+    pub(crate) target: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct CircularArcLengthResidual {
+    pub(crate) radius: usize,
+    pub(crate) start_angle: usize,
+    pub(crate) end_angle: usize,
+    pub(crate) turn_offset: i32,
+    pub(crate) target: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum ConicPropertyResidualKind {
+    Ellipse {
+        center: usize,
+        axis: usize,
+        ratio: usize,
+        property: crate::model::M38ConicProperty,
+    },
+    ParabolaFocalDistance {
+        vertex: usize,
+        focus: usize,
+    },
+    Hyperbola {
+        center: usize,
+        axis: usize,
+        semi_conjugate: usize,
+        property: crate::model::M38ConicProperty,
+    },
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ConicPropertyResidual {
+    pub(crate) kind: ConicPropertyResidualKind,
+    pub(crate) target: f64,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct GenericPathLengthResidual {
+    pub(crate) first: GenericCurveIncidence,
+    pub(crate) first_interval: [f64; 2],
+    pub(crate) second: Option<(GenericCurveIncidence, [f64; 2])>,
+    pub(crate) target: f64,
+    pub(crate) tolerance: f64,
+    pub(crate) max_evaluations: usize,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum M38DimensionResidual {
+    CircularSweep(CircularSweepResidual),
+    CircularArcLength(CircularArcLengthResidual),
+    ConicProperty(ConicPropertyResidual),
+    PathLength(Box<GenericPathLengthResidual>),
+}
+
+impl ResidualEvaluator for M38DimensionResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        match self {
+            Self::CircularSweep(value) => value.evaluate(variables),
+            Self::CircularArcLength(value) => value.evaluate(variables),
+            Self::ConicProperty(value) => value.evaluate(variables),
+            Self::PathLength(value) => value.evaluate(variables),
+        }
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        match self {
+            Self::CircularSweep(value) => value.jacobian(variables),
+            Self::CircularArcLength(value) => value.jacobian(variables),
+            Self::ConicProperty(value) => value.jacobian(variables),
+            Self::PathLength(value) => value.jacobian(variables),
+        }
+    }
+}
+
+macro_rules! impl_sketch_ad_residual {
+    ($type:ty) => {
+        impl ResidualEvaluator for $type {
+            fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+                evaluate_sketch_ad(self, variables, false).map(|(values, _)| values)
+            }
+
+            fn jacobian(
+                &self,
+                variables: &[VariableValue],
+            ) -> Result<Vec<LocalJacobian>, EvaluationError> {
+                evaluate_sketch_ad(self, variables, true).map(|(_, jacobians)| jacobians)
+            }
+        }
+    };
+}
+
+impl_sketch_ad_residual!(CircularSweepResidual);
+impl_sketch_ad_residual!(CircularArcLengthResidual);
+impl_sketch_ad_residual!(ConicPropertyResidual);
+impl_sketch_ad_residual!(GenericPathLengthResidual);
+
+impl SketchAdFormula for CircularSweepResidual {
+    fn evaluate_dual(
+        &self,
+        variables: &[SketchAdValue],
+    ) -> Result<Vec<DualDVec64>, EvaluationError> {
+        let sweep = ad_scalar(variables, self.end_angle, "circular sweep")?
+            - ad_scalar(variables, self.start_angle, "circular sweep")?
+            + f64::from(self.turn_offset) * std::f64::consts::TAU;
+        if !sweep.re.is_finite() || sweep.re == 0.0 || sweep.re.abs() >= std::f64::consts::TAU {
+            return Err(EvaluationError::invalid_geometry(
+                "circular sweep must retain a finite nonzero branch",
+            ));
+        }
+        Ok(vec![sweep - self.target])
+    }
+}
+
+impl SketchAdFormula for CircularArcLengthResidual {
+    fn evaluate_dual(
+        &self,
+        variables: &[SketchAdValue],
+    ) -> Result<Vec<DualDVec64>, EvaluationError> {
+        let radius = ad_scalar(variables, self.radius, "circular arc length")?;
+        let sweep = ad_scalar(variables, self.end_angle, "circular arc length")?
+            - ad_scalar(variables, self.start_angle, "circular arc length")?
+            + f64::from(self.turn_offset) * std::f64::consts::TAU;
+        if radius.re <= 0.0
+            || !radius.re.is_finite()
+            || !sweep.re.is_finite()
+            || sweep.re == 0.0
+            || sweep.re.abs() >= std::f64::consts::TAU
+        {
+            return Err(EvaluationError::invalid_geometry(
+                "circular arc length requires a positive radius and retained sweep",
+            ));
+        }
+        let sign = sweep.re.signum();
+        Ok(vec![radius * sweep * sign - self.target])
+    }
+}
+
+impl SketchAdFormula for ConicPropertyResidual {
+    fn evaluate_dual(
+        &self,
+        variables: &[SketchAdValue],
+    ) -> Result<Vec<DualDVec64>, EvaluationError> {
+        let point_distance = |first: usize, second: usize| -> Result<DualDVec64, EvaluationError> {
+            let first = ad_point(variables, first, "conic property")?;
+            let second = ad_point(variables, second, "conic property")?;
+            Ok(((&second[0] - &first[0]).powi(2) + (&second[1] - &first[1]).powi(2)).sqrt())
+        };
+        let value = match self.kind {
+            ConicPropertyResidualKind::Ellipse {
+                center,
+                axis,
+                ratio,
+                property,
+            } => {
+                let a = point_distance(center, axis)?;
+                let ratio = ad_scalar(variables, ratio, "ellipse property")?;
+                if a.re <= 0.0 || ratio.re <= 0.0 || ratio.re > 1.0 {
+                    return Err(EvaluationError::invalid_geometry(
+                        "ellipse property requires observable positive axes",
+                    ));
+                }
+                match property {
+                    crate::model::M38ConicProperty::MajorAxisLength => a * 2.0,
+                    crate::model::M38ConicProperty::MinorAxisLength => a * ratio * 2.0,
+                    crate::model::M38ConicProperty::LinearEccentricity => {
+                        a * (DualDVec64::from_re(1.0) - ratio.powi(2)).sqrt()
+                    }
+                    _ => {
+                        return Err(EvaluationError::invalid_geometry(
+                            "unsupported ellipse property residual",
+                        ));
+                    }
+                }
+            }
+            ConicPropertyResidualKind::ParabolaFocalDistance { vertex, focus } => {
+                point_distance(vertex, focus)?
+            }
+            ConicPropertyResidualKind::Hyperbola {
+                center,
+                axis,
+                semi_conjugate,
+                property,
+            } => {
+                let a = point_distance(center, axis)?;
+                let b = ad_scalar(variables, semi_conjugate, "hyperbola property")?;
+                if a.re <= 0.0 || b.re <= 0.0 {
+                    return Err(EvaluationError::invalid_geometry(
+                        "hyperbola property requires positive semiaxes",
+                    ));
+                }
+                match property {
+                    crate::model::M38ConicProperty::FocalDistance => (a.powi(2) + b.powi(2)).sqrt(),
+                    crate::model::M38ConicProperty::TransverseAxisLength => a * 2.0,
+                    crate::model::M38ConicProperty::ConjugateAxisLength => b.clone() * 2.0,
+                    _ => {
+                        return Err(EvaluationError::invalid_geometry(
+                            "unsupported hyperbola property residual",
+                        ));
+                    }
+                }
+            }
+        };
+        Ok(vec![value - self.target])
+    }
+}
+
+impl SketchAdFormula for GenericPathLengthResidual {
+    fn evaluate_dual(
+        &self,
+        variables: &[SketchAdValue],
+    ) -> Result<Vec<DualDVec64>, EvaluationError> {
+        let mut evaluations = 0;
+        let first = integrate_ad_curve_length(
+            variables,
+            &self.first,
+            self.first_interval,
+            self.tolerance,
+            self.max_evaluations,
+            &mut evaluations,
+        )?;
+        let value = if let Some((second, interval)) = &self.second {
+            first
+                - integrate_ad_curve_length(
+                    variables,
+                    second,
+                    *interval,
+                    self.tolerance,
+                    self.max_evaluations,
+                    &mut evaluations,
+                )?
+        } else {
+            first
+        };
+        Ok(vec![value - self.target])
+    }
+}
+
+fn integrate_ad_curve_length(
+    variables: &[SketchAdValue],
+    curve: &GenericCurveIncidence,
+    [start, end]: [f64; 2],
+    tolerance: f64,
+    max_evaluations: usize,
+    evaluations: &mut usize,
+) -> Result<DualDVec64, EvaluationError> {
+    let speed = |parameter: f64, evaluations: &mut usize| {
+        *evaluations = evaluations.saturating_add(1);
+        if *evaluations > max_evaluations {
+            return Err(EvaluationError::out_of_domain(
+                "path-length derivative work bound exhausted",
+            ));
+        }
+        let jet = evaluate_ad_curve(variables, &curve_at_parameter(curve, parameter))?;
+        let speed = (jet.first[0].clone().powi(2) + jet.first[1].clone().powi(2)).sqrt();
+        if !speed.re.is_finite() || speed.re <= 0.0 {
+            return Err(EvaluationError::degenerate(
+                "path-length integrand must be finite and regular",
+            ));
+        }
+        Ok(speed)
+    };
+    let middle = (start + end) * 0.5;
+    let first = speed(start, evaluations)?;
+    let center = speed(middle, evaluations)?;
+    let last = speed(end, evaluations)?;
+    let whole = simpson_dual(start, end, &first, &center, &last);
+    adaptive_simpson_dual(
+        &speed,
+        start,
+        end,
+        first,
+        center,
+        last,
+        whole,
+        tolerance,
+        0,
+        evaluations,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn adaptive_simpson_dual<F>(
+    speed: &F,
+    start: f64,
+    end: f64,
+    first: DualDVec64,
+    center: DualDVec64,
+    last: DualDVec64,
+    whole: DualDVec64,
+    tolerance: f64,
+    depth: u32,
+    evaluations: &mut usize,
+) -> Result<DualDVec64, EvaluationError>
+where
+    F: Fn(f64, &mut usize) -> Result<DualDVec64, EvaluationError>,
+{
+    if depth >= 24 {
+        return Err(EvaluationError::out_of_domain(
+            "path-length integration depth exhausted",
+        ));
+    }
+    let middle = (start + end) * 0.5;
+    let left_middle = (start + middle) * 0.5;
+    let right_middle = (middle + end) * 0.5;
+    let left_value = speed(left_middle, evaluations)?;
+    let right_value = speed(right_middle, evaluations)?;
+    let left = simpson_dual(start, middle, &first, &left_value, &center);
+    let right = simpson_dual(middle, end, &center, &right_value, &last);
+    let refined = &left + &right;
+    let error = (refined.re - whole.re).abs() / 15.0;
+    if error <= tolerance {
+        return Ok(&refined + (&refined - whole) / 15.0);
+    }
+    Ok(adaptive_simpson_dual(
+        speed,
+        start,
+        middle,
+        first,
+        left_value,
+        center.clone(),
+        left,
+        tolerance * 0.5,
+        depth + 1,
+        evaluations,
+    )? + adaptive_simpson_dual(
+        speed,
+        middle,
+        end,
+        center,
+        right_value,
+        last,
+        right,
+        tolerance * 0.5,
+        depth + 1,
+        evaluations,
+    )?)
+}
+
+fn simpson_dual(
+    start: f64,
+    end: f64,
+    first: &DualDVec64,
+    center: &DualDVec64,
+    last: &DualDVec64,
+) -> DualDVec64 {
+    (first + center.clone() * 4.0 + last) * ((end - start) / 6.0)
+}
+
+#[allow(clippy::too_many_lines)]
+fn curve_at_parameter(curve: &GenericCurveIncidence, parameter: f64) -> GenericCurveIncidence {
+    let fixed = CurveParameterIncidence::Fixed(parameter);
+    match curve {
+        GenericCurveIncidence::Line {
+            points, bounded, ..
+        } => GenericCurveIncidence::Line {
+            points: *points,
+            parameter: fixed,
+            bounded: *bounded,
+        },
+        GenericCurveIncidence::Circle { center, radius, .. } => GenericCurveIncidence::Circle {
+            center: *center,
+            radius: *radius,
+            parameter: fixed,
+        },
+        GenericCurveIncidence::Arc {
+            center,
+            radius,
+            start_angle,
+            end_angle,
+            turn_offset,
+            sweep,
+            ..
+        } => GenericCurveIncidence::Arc {
+            center: *center,
+            radius: *radius,
+            start_angle: *start_angle,
+            end_angle: *end_angle,
+            turn_offset: *turn_offset,
+            sweep: *sweep,
+            parameter: fixed,
+        },
+        GenericCurveIncidence::QuadraticBezier { controls, .. } => {
+            GenericCurveIncidence::QuadraticBezier {
+                controls: *controls,
+                parameter: fixed,
+            }
+        }
+        GenericCurveIncidence::CubicBezier { controls, .. } => GenericCurveIncidence::CubicBezier {
+            controls: *controls,
+            parameter: fixed,
+        },
+        GenericCurveIncidence::Ellipse {
+            center,
+            major_axis_point,
+            minor_axis_ratio,
+            ..
+        } => GenericCurveIncidence::Ellipse {
+            center: *center,
+            major_axis_point: *major_axis_point,
+            minor_axis_ratio: *minor_axis_ratio,
+            parameter: fixed,
+        },
+        GenericCurveIncidence::EllipticalArc {
+            center,
+            major_axis_point,
+            minor_axis_ratio,
+            start_angle,
+            signed_sweep,
+            ..
+        } => GenericCurveIncidence::EllipticalArc {
+            center: *center,
+            major_axis_point: *major_axis_point,
+            minor_axis_ratio: *minor_axis_ratio,
+            start_angle: *start_angle,
+            signed_sweep: *signed_sweep,
+            parameter: fixed,
+        },
+        GenericCurveIncidence::RationalQuadratic {
+            start,
+            weighted_middle,
+            middle_weight,
+            end,
+            ..
+        } => GenericCurveIncidence::RationalQuadratic {
+            start: *start,
+            weighted_middle: *weighted_middle,
+            middle_weight: *middle_weight,
+            end: *end,
+            parameter: fixed,
+        },
+        GenericCurveIncidence::ParabolaSegment {
+            vertex,
+            focus,
+            trim,
+            ..
+        } => GenericCurveIncidence::ParabolaSegment {
+            vertex: *vertex,
+            focus: *focus,
+            trim: *trim,
+            parameter: fixed,
+        },
+        GenericCurveIncidence::HyperbolaSegment {
+            center,
+            transverse_axis_point,
+            semi_conjugate,
+            branch,
+            trim,
+            ..
+        } => GenericCurveIncidence::HyperbolaSegment {
+            center: *center,
+            transverse_axis_point: *transverse_axis_point,
+            semi_conjugate: *semi_conjugate,
+            branch: *branch,
+            trim: *trim,
+            parameter: fixed,
+        },
+        GenericCurveIncidence::BSpline {
+            basis,
+            span,
+            controls,
+            ..
+        } => GenericCurveIncidence::BSpline {
+            basis: basis.clone(),
+            span: *span,
+            controls: controls.clone(),
+            parameter: fixed,
+        },
+        GenericCurveIncidence::Nurbs {
+            basis,
+            span,
+            controls,
+            weights,
+            ..
+        } => GenericCurveIncidence::Nurbs {
+            basis: basis.clone(),
+            span: *span,
+            controls: controls.clone(),
+            weights: weights.clone(),
+            parameter: fixed,
+        },
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct PointOnBezierResidual {
     pub(crate) point: usize,
     pub(crate) controls: BezierIncidence,
@@ -1525,9 +2015,57 @@ pub(crate) struct AxisDifferenceResidual {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub(crate) struct AxisDimensionResidual {
+    pub(crate) coordinate: usize,
+    pub(crate) target: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct CollinearResidual {
     pub(crate) first: [usize; 2],
     pub(crate) second: [usize; 2],
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ExternalLineCollinearResidual {
+    pub(crate) native: [usize; 2],
+    pub(crate) external_start: [f64; 2],
+    pub(crate) external_end: [f64; 2],
+}
+
+impl SketchAdFormula for ExternalLineCollinearResidual {
+    fn evaluate_dual(
+        &self,
+        variables: &[SketchAdValue],
+    ) -> Result<Vec<DualDVec64>, EvaluationError> {
+        let a = ad_point(variables, self.native[0], "native collinear support")?;
+        let b = ad_point(variables, self.native[1], "native collinear support")?;
+        let native = ad_unit(&[&b[0] - &a[0], &b[1] - &a[1]], "native collinear support")?;
+        let dx = self.external_end[0] - self.external_start[0];
+        let dy = self.external_end[1] - self.external_start[1];
+        let norm = dx.hypot(dy);
+        if !norm.is_finite() || norm <= f64::EPSILON {
+            return Err(EvaluationError::degenerate(
+                "external collinear support is degenerate",
+            ));
+        }
+        let external = [dx / norm, dy / norm];
+        Ok(vec![
+            native[0].clone() * external[1] - native[1].clone() * external[0],
+            native[0].clone() * (DualDVec64::from_re(self.external_start[1]) - a[1].clone())
+                - native[1].clone() * (DualDVec64::from_re(self.external_start[0]) - a[0].clone()),
+        ])
+    }
+}
+
+impl ResidualEvaluator for ExternalLineCollinearResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, false).map(|(values, _)| values)
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        evaluate_sketch_ad(self, variables, true).map(|(_, jacobians)| jacobians)
+    }
 }
 
 impl SketchAdFormula for CollinearResidual {
@@ -1647,6 +2185,28 @@ impl ResidualEvaluator for AxisDifferenceResidual {
 
     fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
         two_points(variables, "axis-difference")?;
+        let (start, end) = if self.coordinate == 0 {
+            (vec![-1.0, 0.0], vec![1.0, 0.0])
+        } else {
+            (vec![0.0, -1.0], vec![0.0, 1.0])
+        };
+        Ok(vec![
+            LocalJacobian::new(1, 2, start),
+            LocalJacobian::new(1, 2, end),
+        ])
+    }
+}
+
+impl ResidualEvaluator for AxisDimensionResidual {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        let (start, end) = two_points(variables, "axis-dimension")?;
+        Ok(vec![
+            end[self.coordinate] - start[self.coordinate] - self.target,
+        ])
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        two_points(variables, "axis-dimension")?;
         let (start, end) = if self.coordinate == 0 {
             (vec![-1.0, 0.0], vec![1.0, 0.0])
         } else {
@@ -2744,6 +3304,135 @@ mod tests {
 
     fn row(name: &str) -> ResidualRowAudit {
         ResidualRowAudit::new(name, vec![AuditBinding::new("fixture", name)], "model-unit")
+    }
+
+    #[test]
+    fn signed_axis_dimension_has_a_finite_difference_checked_jacobian() {
+        let mut problem = Problem::new();
+        let first = problem.add_variable(VariableBlock::vec2([4.0, -3.0], [2.0, 2.0]).unwrap());
+        let second = problem.add_variable(VariableBlock::vec2([1.0, 5.0], [2.0, 2.0]).unwrap());
+        let source = problem.add_source(SourceConstraint::new("signed axis dimension").unwrap());
+        problem
+            .add_residual(
+                ResidualBlock::new(
+                    source,
+                    ResidualCategory::Hard,
+                    vec![first, second],
+                    1,
+                    vec![2.0],
+                    vec![row("signed x difference")],
+                    AxisDimensionResidual {
+                        coordinate: 0,
+                        target: -3.0,
+                    },
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        let report = problem.check_jacobians(1.0e-6).unwrap();
+        assert!(report.all_within(1.0e-9), "{report:#?}");
+    }
+
+    #[test]
+    fn m38_dimension_residuals_match_central_differences() {
+        let mut problem = Problem::new();
+        let sweep_start = problem.add_variable(VariableBlock::scalar(0.2, 1.0).unwrap());
+        let sweep_end = problem.add_variable(VariableBlock::scalar(1.4, 1.0).unwrap());
+        let radius = problem.add_variable(VariableBlock::scalar(2.4, 2.0).unwrap());
+        let arc_start = problem.add_variable(VariableBlock::scalar(-0.4, 1.0).unwrap());
+        let arc_end = problem.add_variable(VariableBlock::scalar(1.2, 1.0).unwrap());
+        let center = problem.add_variable(VariableBlock::vec2([1.0, -2.0], [3.0, 3.0]).unwrap());
+        let axis = problem.add_variable(VariableBlock::vec2([4.0, 0.0], [3.0, 3.0]).unwrap());
+        let ratio = problem.add_variable(VariableBlock::scalar(0.4, 1.0).unwrap());
+        let p0 = problem.add_variable(VariableBlock::vec2([0.0, 0.0], [2.0, 2.0]).unwrap());
+        let p1 = problem.add_variable(VariableBlock::vec2([1.0, 2.0], [2.0, 2.0]).unwrap());
+        let p2 = problem.add_variable(VariableBlock::vec2([4.0, 0.5], [2.0, 2.0]).unwrap());
+
+        let cases = [
+            (
+                "M38 circular sweep",
+                vec![sweep_start, sweep_end],
+                M38DimensionResidual::CircularSweep(CircularSweepResidual {
+                    start_angle: 0,
+                    end_angle: 1,
+                    turn_offset: 0,
+                    target: 1.1,
+                }),
+                "radian",
+            ),
+            (
+                "M38 circular arc length",
+                vec![radius, arc_start, arc_end],
+                M38DimensionResidual::CircularArcLength(CircularArcLengthResidual {
+                    radius: 0,
+                    start_angle: 1,
+                    end_angle: 2,
+                    turn_offset: 0,
+                    target: 3.5,
+                }),
+                "model-unit",
+            ),
+            (
+                "M38 conic property",
+                vec![center, axis, ratio],
+                M38DimensionResidual::ConicProperty(ConicPropertyResidual {
+                    kind: ConicPropertyResidualKind::Ellipse {
+                        center: 0,
+                        axis: 1,
+                        ratio: 2,
+                        property: crate::M38ConicProperty::LinearEccentricity,
+                    },
+                    target: 2.5,
+                }),
+                "model-unit",
+            ),
+            (
+                "M38 bounded path length",
+                vec![p0, p1, p2],
+                M38DimensionResidual::PathLength(Box::new(GenericPathLengthResidual {
+                    first: GenericCurveIncidence::QuadraticBezier {
+                        controls: [0, 1, 2],
+                        parameter: CurveParameterIncidence::Fixed(0.0),
+                    },
+                    first_interval: [0.1, 0.9],
+                    second: None,
+                    target: 3.0,
+                    tolerance: 1.0e-11,
+                    max_evaluations: 8_193,
+                })),
+                "model-unit",
+            ),
+        ];
+
+        for (label, incidence, evaluator, unit) in cases {
+            let source = problem.add_source(SourceConstraint::new(label).unwrap());
+            problem
+                .add_residual(
+                    ResidualBlock::new(
+                        source,
+                        ResidualCategory::Hard,
+                        incidence,
+                        1,
+                        vec![2.0],
+                        vec![ResidualRowAudit::new(
+                            label,
+                            vec![AuditBinding::new("dimension", label)],
+                            unit,
+                        )],
+                        evaluator,
+                    )
+                    .unwrap(),
+                )
+                .unwrap();
+        }
+
+        let report = problem.check_jacobians(1.0e-6).unwrap();
+        assert!(
+            report.all_within(1.0e-6),
+            "M38 residual error={:e}: {report:#?}",
+            report.max_relative_error()
+        );
     }
 
     #[test]

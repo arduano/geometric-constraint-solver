@@ -20,9 +20,9 @@ const STATUSES: [&str; 7] = [
     "implemented_m32",
     "implemented_m36",
     "implemented_m37",
-    "planned_m38",
-    "planned_m49",
-    "unsupported_through_m55",
+    "implemented_m38",
+    "planned_m103x",
+    "unsupported_through_m109x",
     "conditional",
 ];
 
@@ -114,9 +114,9 @@ fn assert_status_contract(table: &Table) {
             "implemented_m32" => "M32",
             "implemented_m36" => "M36",
             "implemented_m37" => "M37",
-            "planned_m38" => "M38",
-            "planned_m49" => "M49",
-            "unsupported_through_m55" | "conditional" => "M55",
+            "implemented_m38" => "M38",
+            "planned_m103x" => "M103X",
+            "unsupported_through_m109x" | "conditional" => "M109X",
             status => panic!("unknown M33 status {status:?}"),
         };
         assert_eq!(row[target_column], expected_target, "row {}", row[0]);
@@ -138,9 +138,9 @@ fn marked_capability_tables_are_complete_deterministic_and_typed() {
             "implemented_m32" => "M32",
             "implemented_m36" => "M36",
             "implemented_m37" => "M37",
-            "planned_m38" => "M38",
-            "planned_m49" => "M49",
-            "unsupported_through_m55" | "conditional" => "M55",
+            "implemented_m38" => "M38",
+            "planned_m103x" => "M103X",
+            "unsupported_through_m109x" | "conditional" => "M109X",
             status => panic!("unknown status {status:?}"),
         };
         assert_eq!(row[1], expected_target);
@@ -536,6 +536,8 @@ fn relation_kind(definition: &DocumentConstraintDefinition) -> &'static str {
         DocumentConstraintDefinition::EndpointContinuity { .. } => "endpoint_continuity",
         DocumentConstraintDefinition::LineLineFillet { .. } => "line_line_fillet",
         DocumentConstraintDefinition::CurveCurveFillet { .. } => "curve_curve_fillet",
+        DocumentConstraintDefinition::ExternalPointCoincident { .. } => "external_point_coincident",
+        DocumentConstraintDefinition::ExternalLineCollinear { .. } => "external_line_collinear",
     }
 }
 

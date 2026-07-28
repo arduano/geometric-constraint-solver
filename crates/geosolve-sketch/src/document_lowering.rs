@@ -11,10 +11,43 @@ use crate::document::{
     DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation,
     DocumentCurveNormalSide, DocumentDimension, DocumentDimensionDefinition, DocumentDimensionId,
     DocumentDimensionMode, DocumentError, DocumentFilletEndpointOrder,
-    DocumentLineOffsetOrientation, DocumentLineSide, DocumentSourceId, FeatureEndpoint,
-    PersistentId, SketchDocument, TangentOrientation, document_arc_signed_sweep,
+    DocumentLineOffsetOrientation, DocumentLineSide, DocumentParameterId, DocumentParameterTarget,
+    DocumentSourceId, EffectiveActivity, FeatureEndpoint, PersistentId, SketchDocument,
+    TangentOrientation, canonical_parameter_target_key, document_arc_signed_sweep,
     document_hyperbola_branch,
 };
+use crate::document_session::{ExternalSnapshotEntry, ExternalSnapshotSetDigest, ParameterDigest};
+
+/// One resolved fixed coefficient and its immutable host-input provenance.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DocumentParameterRuntimeBinding {
+    pub parameter: DocumentParameterId,
+    pub target: DocumentParameterTarget,
+    pub runtime: RuntimeSource,
+    pub value: f64,
+    pub parameter_revision: u64,
+    pub parameter_digest: ParameterDigest,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ResolvedParameterBinding {
+    pub parameter: DocumentParameterId,
+    pub target: DocumentParameterTarget,
+    pub value: f64,
+    pub parameter_revision: u64,
+    pub parameter_digest: ParameterDigest,
+}
+
+/// Complete immutable M42 input view captured before lowering.
+#[derive(Clone, Debug)]
+pub(crate) struct ResolvedDocumentParameters {
+    pub activity: EffectiveActivity,
+    pub dimensions: BTreeMap<DocumentDimensionId, ResolvedParameterBinding>,
+    pub dimensionless: BTreeMap<DesignScalarId, ResolvedParameterBinding>,
+    pub external_revision: u64,
+    pub external_digest: ExternalSnapshotSetDigest,
+    pub external: BTreeMap<crate::DocumentExternalBindingId, ExternalSnapshotEntry>,
+}
 use crate::{
     AngleOrientation, ArcCircleTangencySide, ArcId, ArcSweep, BSplineId, CenterDirectionBranch,
     CircleContainment, CircleId, CircleTangencyMode, ConicId, ConicKind, ContactState,
@@ -104,6 +137,7 @@ pub struct DocumentRuntimeMap {
     curves: Vec<CurveRuntimeMapping>,
     sources: Vec<DocumentSourceRuntimeMapping>,
     contacts: Vec<ContactRuntimeMapping>,
+    parameter_bindings: Vec<DocumentParameterRuntimeBinding>,
 }
 
 impl DocumentRuntimeMap {
@@ -125,6 +159,12 @@ impl DocumentRuntimeMap {
     #[must_use]
     pub fn contact_mappings(&self) -> &[ContactRuntimeMapping] {
         &self.contacts
+    }
+
+    /// Returns every active parameter-supplied numeric target with exact runtime/input provenance.
+    #[must_use]
+    pub fn parameter_bindings(&self) -> &[DocumentParameterRuntimeBinding] {
+        &self.parameter_bindings
     }
 
     #[must_use]
@@ -292,19 +332,54 @@ impl SketchDocument {
         self.lower_inner(Some(controller))
     }
 
+    pub(crate) fn lower_with_resolved_parameters(
+        &self,
+        resolved: &ResolvedDocumentParameters,
+    ) -> Result<LoweredDocument, DocumentError> {
+        self.lower_inner_with_parameters(None, Some(resolved))
+            .map(|lowered| lowered.expect("uncontrolled lowering cannot be interrupted"))
+    }
+
+    pub(crate) fn lower_with_resolved_parameters_with_controller(
+        &self,
+        resolved: &ResolvedDocumentParameters,
+        controller: &mut OperationController,
+    ) -> Result<Option<LoweredDocument>, DocumentError> {
+        self.lower_inner_with_parameters(Some(controller), Some(resolved))
+    }
+
     fn lower_inner(
         &self,
+        controller: Option<&mut OperationController>,
+    ) -> Result<Option<LoweredDocument>, DocumentError> {
+        self.lower_inner_with_parameters(controller, None)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn lower_inner_with_parameters(
+        &self,
         mut controller: Option<&mut OperationController>,
+        resolved: Option<&ResolvedDocumentParameters>,
     ) -> Result<Option<LoweredDocument>, DocumentError> {
         if !self.validate_with_controller(controller.as_deref_mut())? {
             return Ok(None);
         }
+        let default_activity;
+        let activity = if let Some(resolved) = resolved {
+            &resolved.activity
+        } else {
+            default_activity = self.effective_activity();
+            &default_activity
+        };
         let mut sketch = Sketch::new(self.model_scale())?;
         let mut mappings = DocumentRuntimeMap::default();
 
         let mut points: Vec<_> = self.points().iter().collect();
         points.sort_by_key(|point| point.id);
         for point in points {
+            if !activity.is_active(point.id) {
+                continue;
+            }
             if lowering_item(&mut controller).is_err() {
                 return Ok(None);
             }
@@ -321,10 +396,13 @@ impl SketchDocument {
         let mut curves: Vec<_> = self.curves().iter().collect();
         curves.sort_by_key(|curve| curve.id);
         for curve in curves {
+            if !activity.is_active(curve.id) {
+                continue;
+            }
             if lowering_item(&mut controller).is_err() {
                 return Ok(None);
             }
-            let runtime = lower_curve(self, &mut sketch, &mappings, curve)?;
+            let runtime = lower_curve(self, &mut sketch, &mappings, curve, activity)?;
             mappings.curves.push(CurveRuntimeMapping {
                 persistent: curve.id,
                 runtime,
@@ -346,13 +424,13 @@ impl SketchDocument {
                 return Ok(None);
             }
             if let Some(constraint) = constraints.get(source) {
-                let runtime = if constraint.suppressed {
-                    None
-                } else {
+                let runtime = if activity.is_active(constraint.id) {
                     let (runtime, contacts) =
-                        lower_constraint(self, &mut sketch, &mappings, constraint)?;
+                        lower_constraint(self, &mut sketch, &mappings, constraint, resolved)?;
                     mappings.contacts.extend(contacts);
                     Some(RuntimeSource::Constraint(runtime))
+                } else {
+                    None
                 };
                 mappings.sources.push(DocumentSourceRuntimeMapping {
                     source_id: *source,
@@ -360,15 +438,31 @@ impl SketchDocument {
                     runtime,
                 });
             } else if let Some(dimension) = dimensions.get(source) {
-                let runtime = if dimension.suppressed {
-                    None
-                } else {
-                    Some(RuntimeSource::Dimension(lower_dimension(
+                let runtime = if activity.is_active(dimension.id) {
+                    let runtime = RuntimeSource::Dimension(lower_dimension(
                         self,
                         &mut sketch,
                         &mappings,
                         dimension,
-                    )?))
+                        resolved.and_then(|values| values.dimensions.get(&dimension.id)),
+                    )?);
+                    if let Some(binding) =
+                        resolved.and_then(|values| values.dimensions.get(&dimension.id))
+                    {
+                        mappings
+                            .parameter_bindings
+                            .push(DocumentParameterRuntimeBinding {
+                                parameter: binding.parameter,
+                                target: binding.target,
+                                runtime,
+                                value: binding.value,
+                                parameter_revision: binding.parameter_revision,
+                                parameter_digest: binding.parameter_digest,
+                            });
+                    }
+                    Some(runtime)
+                } else {
+                    None
                 };
                 mappings.sources.push(DocumentSourceRuntimeMapping {
                     source_id: *source,
@@ -376,6 +470,41 @@ impl SketchDocument {
                     runtime,
                 });
             }
+        }
+        if let Some(resolved) = resolved {
+            for binding in resolved.dimensionless.values() {
+                if lowering_item(&mut controller).is_err() {
+                    return Ok(None);
+                }
+                let DocumentParameterTarget::DimensionlessFixedScalar(property) = binding.target
+                else {
+                    return invalid_runtime("resolved dimensionless target kind changed");
+                };
+                let runtime =
+                    RuntimeSource::Constraint(crate::semantic::add_parameter_fixed_scalar(
+                        self,
+                        &mappings,
+                        &mut sketch,
+                        property,
+                        binding.value,
+                    )?);
+                mappings
+                    .parameter_bindings
+                    .push(DocumentParameterRuntimeBinding {
+                        parameter: binding.parameter,
+                        target: binding.target,
+                        runtime,
+                        value: binding.value,
+                        parameter_revision: binding.parameter_revision,
+                        parameter_digest: binding.parameter_digest,
+                    });
+            }
+            mappings.parameter_bindings.sort_by_key(|binding| {
+                (
+                    binding.parameter,
+                    canonical_parameter_target_key(binding.target),
+                )
+            });
         }
         Ok(Some(LoweredDocument { sketch, mappings }))
     }
@@ -594,6 +723,7 @@ fn lower_curve(
     sketch: &mut Sketch,
     mappings: &DocumentRuntimeMap,
     curve: &crate::document::DesignCurve,
+    activity: &EffectiveActivity,
 ) -> Result<RuntimeCurve, DocumentError> {
     let runtime = match &curve.definition {
         CurveDefinition::Line {
@@ -602,7 +732,7 @@ fn lower_curve(
             branch_direction,
         } => {
             let span = CurveSpan::line(curve.id);
-            let direction = if document.curve_branch_is_enforced(span) {
+            let direction = if document.curve_branch_is_enforced_with_activity(span, activity) {
                 *branch_direction
             } else {
                 document.current_curve_span_direction(span)?
@@ -635,7 +765,7 @@ fn lower_curve(
                         limit: u32::MAX as usize,
                     })?,
                 };
-                let direction = if document.curve_branch_is_enforced(span) {
+                let direction = if document.curve_branch_is_enforced_with_activity(span, activity) {
                     branch_directions[index]
                 } else {
                     document.current_curve_span_direction(span)?
@@ -976,386 +1106,420 @@ fn lower_constraint(
     sketch: &mut Sketch,
     mappings: &DocumentRuntimeMap,
     constraint: &DocumentConstraint,
+    resolved: Option<&ResolvedDocumentParameters>,
 ) -> Result<(SketchConstraintId, Vec<ContactRuntimeMapping>), DocumentError> {
     use DocumentConstraintDefinition as C;
     let mut contacts = Vec::new();
-    let runtime =
-        match &constraint.definition {
-            C::FixedPoint { point, target } => sketch.add_fixed_point_at(
+    let runtime = match &constraint.definition {
+        C::FixedPoint { point, target } => sketch.add_fixed_point_at(
+            runtime_point(mappings, *point)?,
+            Point2::new(target[0], target[1]),
+        )?,
+        C::FixedCoordinate {
+            point,
+            axis,
+            target,
+        } => sketch.add_fixed_coordinate(
+            runtime_point(mappings, *point)?,
+            match axis {
+                DocumentCoordinateAxis::X => CoordinateAxis::X,
+                DocumentCoordinateAxis::Y => CoordinateAxis::Y,
+            },
+            *target,
+        )?,
+        C::Coincident { first, second } => sketch.add_coincident(
+            runtime_point(mappings, *first)?,
+            runtime_point(mappings, *second)?,
+        )?,
+        C::ExternalPointCoincident { point, external } => {
+            let inputs = resolved.ok_or_else(missing_external_input)?;
+            let entry = resolved_external(inputs, external.binding)?;
+            let crate::ExternalSnapshotFeatureV1::Point { position, .. } = &entry.feature else {
+                return invalid_runtime("resolved external point kind changed");
+            };
+            sketch.add_external_point(
                 runtime_point(mappings, *point)?,
-                Point2::new(target[0], target[1]),
-            )?,
-            C::FixedCoordinate {
-                point,
-                axis,
-                target,
-            } => sketch.add_fixed_coordinate(
-                runtime_point(mappings, *point)?,
-                match axis {
-                    DocumentCoordinateAxis::X => CoordinateAxis::X,
-                    DocumentCoordinateAxis::Y => CoordinateAxis::Y,
+                Point2::new(position[0], position[1]),
+                external_provenance(document, entry, inputs),
+            )?
+        }
+        C::ExternalLineCollinear { line, external } => {
+            let inputs = resolved.ok_or_else(missing_external_input)?;
+            let entry = resolved_external(inputs, external.binding)?;
+            let crate::ExternalSnapshotFeatureV1::LineSegment { start, end, .. } = &entry.feature
+            else {
+                return invalid_runtime("resolved external line kind changed");
+            };
+            let (start, end) =
+                if matches!(external.direction, crate::DocumentDirectionSense::Forward) {
+                    (start, end)
+                } else {
+                    (end, start)
+                };
+            sketch.add_external_line_collinear(
+                runtime_segment(mappings, line.span)?,
+                Point2::new(start[0], start[1]),
+                Point2::new(end[0], end[1]),
+                external_provenance(document, entry, inputs),
+            )?
+        }
+        C::Horizontal { line } => sketch.add_horizontal(runtime_segment(mappings, *line)?)?,
+        C::Vertical { line } => sketch.add_vertical(runtime_segment(mappings, *line)?)?,
+        C::PointOnCurve { point, contact } => {
+            let slot = document
+                .contact(*contact)
+                .ok_or_else(|| unknown_runtime("contact", contact.0))?;
+            let runtime_contact = runtime_curve_contact(document, mappings, slot)?;
+            let id =
+                sketch.add_point_on_curve(runtime_point(mappings, *point)?, runtime_contact)?;
+            contacts.push(contact_mapping(*contact, id, contact_role(mappings, slot)?));
+            id
+        }
+        C::Parallel { first, second } => sketch.add_parallel(
+            runtime_segment(mappings, *first)?,
+            runtime_segment(mappings, *second)?,
+        )?,
+        C::Perpendicular { first, second } => sketch.add_perpendicular(
+            runtime_segment(mappings, *first)?,
+            runtime_segment(mappings, *second)?,
+        )?,
+        C::EqualLength { first, second } => sketch.add_equal_segment_length(
+            runtime_segment(mappings, *first)?,
+            runtime_segment(mappings, *second)?,
+        )?,
+        C::EqualRadius { first, second } => sketch.add_equal_circle_radius(
+            runtime_circle(mappings, *first)?,
+            runtime_circle(mappings, *second)?,
+        )?,
+        C::Midpoint { point, line } => sketch.add_midpoint(
+            runtime_point(mappings, *point)?,
+            runtime_segment(mappings, *line)?,
+        )?,
+        C::SymmetricAboutLine {
+            first,
+            second,
+            line,
+        } => sketch.add_symmetric_about_line(
+            runtime_point(mappings, *first)?,
+            runtime_point(mappings, *second)?,
+            runtime_segment(mappings, *line)?,
+        )?,
+        C::LineCircleTangency {
+            line_contact,
+            circle_contact,
+            side,
+        } => {
+            let line = document
+                .contact(*line_contact)
+                .ok_or_else(|| unknown_runtime("contact", line_contact.0))?;
+            let circle = document
+                .contact(*circle_contact)
+                .ok_or_else(|| unknown_runtime("contact", circle_contact.0))?;
+            let id = sketch.add_line_circle_tangency(
+                runtime_segment(mappings, line.curve)?,
+                runtime_circle(mappings, circle.curve.curve)?,
+                line_domain(line.domain)?,
+                match side {
+                    DocumentLineSide::Left => LineSide::Left,
+                    DocumentLineSide::Right => LineSide::Right,
                 },
-                *target,
-            )?,
-            C::Coincident { first, second } => sketch.add_coincident(
-                runtime_point(mappings, *first)?,
-                runtime_point(mappings, *second)?,
-            )?,
-            C::Horizontal { line } => sketch.add_horizontal(runtime_segment(mappings, *line)?)?,
-            C::Vertical { line } => sketch.add_vertical(runtime_segment(mappings, *line)?)?,
-            C::PointOnCurve { point, contact } => {
-                let slot = document
-                    .contact(*contact)
-                    .ok_or_else(|| unknown_runtime("contact", contact.0))?;
-                let runtime_contact = runtime_curve_contact(document, mappings, slot)?;
-                let id =
-                    sketch.add_point_on_curve(runtime_point(mappings, *point)?, runtime_contact)?;
-                contacts.push(contact_mapping(*contact, id, contact_role(mappings, slot)?));
-                id
-            }
-            C::Parallel { first, second } => sketch.add_parallel(
-                runtime_segment(mappings, *first)?,
-                runtime_segment(mappings, *second)?,
-            )?,
-            C::Perpendicular { first, second } => sketch.add_perpendicular(
-                runtime_segment(mappings, *first)?,
-                runtime_segment(mappings, *second)?,
-            )?,
-            C::EqualLength { first, second } => sketch.add_equal_segment_length(
-                runtime_segment(mappings, *first)?,
-                runtime_segment(mappings, *second)?,
-            )?,
-            C::EqualRadius { first, second } => sketch.add_equal_circle_radius(
-                runtime_circle(mappings, *first)?,
-                runtime_circle(mappings, *second)?,
-            )?,
-            C::Midpoint { point, line } => sketch.add_midpoint(
-                runtime_point(mappings, *point)?,
-                runtime_segment(mappings, *line)?,
-            )?,
-            C::SymmetricAboutLine {
-                first,
-                second,
-                line,
-            } => sketch.add_symmetric_about_line(
-                runtime_point(mappings, *first)?,
-                runtime_point(mappings, *second)?,
-                runtime_segment(mappings, *line)?,
-            )?,
-            C::LineCircleTangency {
-                line_contact,
-                circle_contact,
-                side,
-            } => {
-                let line = document
-                    .contact(*line_contact)
-                    .ok_or_else(|| unknown_runtime("contact", line_contact.0))?;
-                let circle = document
-                    .contact(*circle_contact)
-                    .ok_or_else(|| unknown_runtime("contact", circle_contact.0))?;
-                let id = sketch.add_line_circle_tangency(
-                    runtime_segment(mappings, line.curve)?,
-                    runtime_circle(mappings, circle.curve.curve)?,
-                    line_domain(line.domain)?,
-                    match side {
-                        DocumentLineSide::Left => LineSide::Left,
-                        DocumentLineSide::Right => LineSide::Right,
-                    },
-                    contact_value(document, line)?,
-                    contact_value(document, circle)?,
-                )?;
-                contacts.push(contact_mapping(
-                    *line_contact,
-                    id,
-                    DocumentContactRole::LineParameter,
-                ));
-                contacts.push(contact_mapping(
-                    *circle_contact,
-                    id,
-                    DocumentContactRole::CircleAngle,
-                ));
-                id
-            }
-            C::CircleCircleTangency {
-                first,
-                second,
-                mode,
-                center_direction,
-            } => sketch.add_circle_circle_tangency(
-                runtime_circle(mappings, *first)?,
-                runtime_circle(mappings, *second)?,
-                circle_mode(*mode),
-                CenterDirectionBranch::new(*center_direction)?,
-            )?,
-            C::CircleArcTangency {
-                circle_contact,
-                arc_contact,
-                side,
-            } => {
-                let circle = document
-                    .contact(*circle_contact)
-                    .ok_or_else(|| unknown_runtime("contact", circle_contact.0))?;
-                let arc = document
-                    .contact(*arc_contact)
-                    .ok_or_else(|| unknown_runtime("contact", arc_contact.0))?;
-                let id = sketch.add_circle_arc_tangency(
-                    runtime_circle(mappings, circle.curve.curve)?,
-                    runtime_arc(mappings, arc.curve.curve)?,
-                    match side {
-                        DocumentArcTangencySide::OutsideArc => ArcCircleTangencySide::OutsideArc,
-                        DocumentArcTangencySide::InsideArc => ArcCircleTangencySide::InsideArc,
-                    },
-                    contact_value(document, arc)?,
-                    contact_value(document, circle)?,
-                )?;
-                contacts.push(contact_mapping(
-                    *circle_contact,
-                    id,
-                    DocumentContactRole::CircleAngle,
-                ));
-                contacts.push(contact_mapping(
-                    *arc_contact,
-                    id,
-                    DocumentContactRole::ArcSpanParameter,
-                ));
-                id
-            }
-            C::LineCurveTangency {
-                line,
-                endpoint,
-                curve_contact,
-            } => {
-                let contact = document
-                    .contact(*curve_contact)
-                    .ok_or_else(|| unknown_runtime("contact", curve_contact.0))?;
-                let orientation = match contact.tangent_orientation.ok_or_else(|| {
-                    DocumentError::InvalidField {
+                contact_value(document, line)?,
+                contact_value(document, circle)?,
+            )?;
+            contacts.push(contact_mapping(
+                *line_contact,
+                id,
+                DocumentContactRole::LineParameter,
+            ));
+            contacts.push(contact_mapping(
+                *circle_contact,
+                id,
+                DocumentContactRole::CircleAngle,
+            ));
+            id
+        }
+        C::CircleCircleTangency {
+            first,
+            second,
+            mode,
+            center_direction,
+        } => sketch.add_circle_circle_tangency(
+            runtime_circle(mappings, *first)?,
+            runtime_circle(mappings, *second)?,
+            circle_mode(*mode),
+            CenterDirectionBranch::new(*center_direction)?,
+        )?,
+        C::CircleArcTangency {
+            circle_contact,
+            arc_contact,
+            side,
+        } => {
+            let circle = document
+                .contact(*circle_contact)
+                .ok_or_else(|| unknown_runtime("contact", circle_contact.0))?;
+            let arc = document
+                .contact(*arc_contact)
+                .ok_or_else(|| unknown_runtime("contact", arc_contact.0))?;
+            let id = sketch.add_circle_arc_tangency(
+                runtime_circle(mappings, circle.curve.curve)?,
+                runtime_arc(mappings, arc.curve.curve)?,
+                match side {
+                    DocumentArcTangencySide::OutsideArc => ArcCircleTangencySide::OutsideArc,
+                    DocumentArcTangencySide::InsideArc => ArcCircleTangencySide::InsideArc,
+                },
+                contact_value(document, arc)?,
+                contact_value(document, circle)?,
+            )?;
+            contacts.push(contact_mapping(
+                *circle_contact,
+                id,
+                DocumentContactRole::CircleAngle,
+            ));
+            contacts.push(contact_mapping(
+                *arc_contact,
+                id,
+                DocumentContactRole::ArcSpanParameter,
+            ));
+            id
+        }
+        C::LineCurveTangency {
+            line,
+            endpoint,
+            curve_contact,
+        } => {
+            let contact = document
+                .contact(*curve_contact)
+                .ok_or_else(|| unknown_runtime("contact", curve_contact.0))?;
+            let orientation =
+                match contact
+                    .tangent_orientation
+                    .ok_or_else(|| DocumentError::InvalidField {
                         field: "contact.tangent_orientation",
                         message: "line-curve tangency requires orientation".into(),
-                    }
-                })? {
+                    })? {
                     TangentOrientation::Aligned => CurveTangentOrientation::Aligned,
                     TangentOrientation::Opposed => CurveTangentOrientation::Opposed,
                 };
-                let id = sketch.add_line_curve_tangency(
-                    runtime_segment(mappings, *line)?,
-                    match endpoint {
-                        FeatureEndpoint::Start => SegmentEndpoint::Start,
-                        FeatureEndpoint::End => SegmentEndpoint::End,
-                    },
-                    runtime_curve_contact(document, mappings, contact)?,
-                    orientation,
-                )?;
-                contacts.push(contact_mapping(
-                    *curve_contact,
-                    id,
-                    contact_role(mappings, contact)?,
-                ));
-                id
-            }
-            C::CurveCurveContact {
-                first_contact,
-                second_contact,
-            }
-            | C::CurveCurveTangency {
-                first_contact,
-                second_contact,
-            } => {
-                let first = document
-                    .contact(*first_contact)
-                    .ok_or_else(|| unknown_runtime("contact", first_contact.0))?;
-                let second = document
-                    .contact(*second_contact)
-                    .ok_or_else(|| unknown_runtime("contact", second_contact.0))?;
-                let first_runtime = runtime_curve_contact(document, mappings, first)?;
-                let second_runtime = runtime_curve_contact(document, mappings, second)?;
-                let id = match &constraint.definition {
-                    C::CurveCurveContact { .. } => {
-                        sketch.add_curve_curve_contact(first_runtime, second_runtime)?
-                    }
-                    C::CurveCurveTangency { .. } => {
-                        let orientation = first.tangent_orientation.ok_or_else(|| {
-                            DocumentError::InvalidField {
+            let id = sketch.add_line_curve_tangency(
+                runtime_segment(mappings, *line)?,
+                match endpoint {
+                    FeatureEndpoint::Start => SegmentEndpoint::Start,
+                    FeatureEndpoint::End => SegmentEndpoint::End,
+                },
+                runtime_curve_contact(document, mappings, contact)?,
+                orientation,
+            )?;
+            contacts.push(contact_mapping(
+                *curve_contact,
+                id,
+                contact_role(mappings, contact)?,
+            ));
+            id
+        }
+        C::CurveCurveContact {
+            first_contact,
+            second_contact,
+        }
+        | C::CurveCurveTangency {
+            first_contact,
+            second_contact,
+        } => {
+            let first = document
+                .contact(*first_contact)
+                .ok_or_else(|| unknown_runtime("contact", first_contact.0))?;
+            let second = document
+                .contact(*second_contact)
+                .ok_or_else(|| unknown_runtime("contact", second_contact.0))?;
+            let first_runtime = runtime_curve_contact(document, mappings, first)?;
+            let second_runtime = runtime_curve_contact(document, mappings, second)?;
+            let id = match &constraint.definition {
+                C::CurveCurveContact { .. } => {
+                    sketch.add_curve_curve_contact(first_runtime, second_runtime)?
+                }
+                C::CurveCurveTangency { .. } => {
+                    let orientation =
+                        first
+                            .tangent_orientation
+                            .ok_or_else(|| DocumentError::InvalidField {
                                 field: "contact.tangent_orientation",
                                 message: "curve tangency requires orientation".into(),
-                            }
-                        })?;
-                        sketch.add_curve_curve_tangency(
-                            first_runtime,
-                            second_runtime,
-                            match orientation {
-                                TangentOrientation::Aligned => CurveTangentOrientation::Aligned,
-                                TangentOrientation::Opposed => CurveTangentOrientation::Opposed,
-                            },
-                        )?
+                            })?;
+                    sketch.add_curve_curve_tangency(
+                        first_runtime,
+                        second_runtime,
+                        match orientation {
+                            TangentOrientation::Aligned => CurveTangentOrientation::Aligned,
+                            TangentOrientation::Opposed => CurveTangentOrientation::Opposed,
+                        },
+                    )?
+                }
+                _ => unreachable!(),
+            };
+            contacts.push(contact_mapping(
+                *first_contact,
+                id,
+                DocumentContactRole::FirstCurveParameter,
+            ));
+            contacts.push(contact_mapping(
+                *second_contact,
+                id,
+                DocumentContactRole::SecondCurveParameter,
+            ));
+            id
+        }
+        C::CurveDirection {
+            line,
+            curve_contact,
+            relation,
+        } => {
+            let contact = document
+                .contact(*curve_contact)
+                .ok_or_else(|| unknown_runtime("contact", curve_contact.0))?;
+            let id = sketch.add_curve_direction(
+                runtime_segment(mappings, *line)?,
+                runtime_curve_contact(document, mappings, contact)?,
+                runtime_curve_direction(*relation),
+            )?;
+            contacts.push(contact_mapping(
+                *curve_contact,
+                id,
+                DocumentContactRole::CurveParameter,
+            ));
+            id
+        }
+        C::EqualCurvature {
+            first_contact,
+            second_contact,
+            relation,
+        } => {
+            let first = document
+                .contact(*first_contact)
+                .ok_or_else(|| unknown_runtime("contact", first_contact.0))?;
+            let second = document
+                .contact(*second_contact)
+                .ok_or_else(|| unknown_runtime("contact", second_contact.0))?;
+            let id = sketch.add_equal_curvature(
+                runtime_curve_contact(document, mappings, first)?,
+                runtime_curve_contact(document, mappings, second)?,
+                runtime_curvature_relation(*relation),
+            )?;
+            contacts.push(contact_mapping(
+                *first_contact,
+                id,
+                DocumentContactRole::FirstCurveParameter,
+            ));
+            contacts.push(contact_mapping(
+                *second_contact,
+                id,
+                DocumentContactRole::SecondCurveParameter,
+            ));
+            id
+        }
+        C::EndpointContinuity {
+            first_contact,
+            second_contact,
+            continuity,
+        } => {
+            let first = document
+                .contact(*first_contact)
+                .ok_or_else(|| unknown_runtime("contact", first_contact.0))?;
+            let second = document
+                .contact(*second_contact)
+                .ok_or_else(|| unknown_runtime("contact", second_contact.0))?;
+            let id = sketch.add_endpoint_continuity(
+                runtime_curve_contact(document, mappings, first)?,
+                runtime_curve_contact(document, mappings, second)?,
+                runtime_curve_continuity(*continuity),
+            )?;
+            contacts.push(contact_mapping(
+                *first_contact,
+                id,
+                DocumentContactRole::FirstCurveParameter,
+            ));
+            contacts.push(contact_mapping(
+                *second_contact,
+                id,
+                DocumentContactRole::SecondCurveParameter,
+            ));
+            id
+        }
+        C::LineLineFillet {
+            arc,
+            first_contact,
+            first_side,
+            second_contact,
+            second_side,
+            endpoint_order,
+        } => {
+            let first = document
+                .contact(*first_contact)
+                .ok_or_else(|| unknown_runtime("contact", first_contact.0))?;
+            let second = document
+                .contact(*second_contact)
+                .ok_or_else(|| unknown_runtime("contact", second_contact.0))?;
+            let id = sketch.add_line_line_fillet(
+                runtime_arc(mappings, *arc)?,
+                runtime_curve_contact(document, mappings, first)?,
+                runtime_curve_normal_side(*first_side),
+                runtime_curve_contact(document, mappings, second)?,
+                runtime_curve_normal_side(*second_side),
+                match endpoint_order {
+                    DocumentFilletEndpointOrder::FirstThenSecond => {
+                        FilletEndpointOrder::FirstThenSecond
                     }
-                    _ => unreachable!(),
-                };
-                contacts.push(contact_mapping(
-                    *first_contact,
-                    id,
-                    DocumentContactRole::FirstCurveParameter,
-                ));
-                contacts.push(contact_mapping(
-                    *second_contact,
-                    id,
-                    DocumentContactRole::SecondCurveParameter,
-                ));
-                id
-            }
-            C::CurveDirection {
-                line,
-                curve_contact,
-                relation,
-            } => {
-                let contact = document
-                    .contact(*curve_contact)
-                    .ok_or_else(|| unknown_runtime("contact", curve_contact.0))?;
-                let id = sketch.add_curve_direction(
-                    runtime_segment(mappings, *line)?,
-                    runtime_curve_contact(document, mappings, contact)?,
-                    runtime_curve_direction(*relation),
-                )?;
-                contacts.push(contact_mapping(
-                    *curve_contact,
-                    id,
-                    DocumentContactRole::CurveParameter,
-                ));
-                id
-            }
-            C::EqualCurvature {
-                first_contact,
-                second_contact,
-                relation,
-            } => {
-                let first = document
-                    .contact(*first_contact)
-                    .ok_or_else(|| unknown_runtime("contact", first_contact.0))?;
-                let second = document
-                    .contact(*second_contact)
-                    .ok_or_else(|| unknown_runtime("contact", second_contact.0))?;
-                let id = sketch.add_equal_curvature(
-                    runtime_curve_contact(document, mappings, first)?,
-                    runtime_curve_contact(document, mappings, second)?,
-                    runtime_curvature_relation(*relation),
-                )?;
-                contacts.push(contact_mapping(
-                    *first_contact,
-                    id,
-                    DocumentContactRole::FirstCurveParameter,
-                ));
-                contacts.push(contact_mapping(
-                    *second_contact,
-                    id,
-                    DocumentContactRole::SecondCurveParameter,
-                ));
-                id
-            }
-            C::EndpointContinuity {
-                first_contact,
-                second_contact,
-                continuity,
-            } => {
-                let first = document
-                    .contact(*first_contact)
-                    .ok_or_else(|| unknown_runtime("contact", first_contact.0))?;
-                let second = document
-                    .contact(*second_contact)
-                    .ok_or_else(|| unknown_runtime("contact", second_contact.0))?;
-                let id = sketch.add_endpoint_continuity(
-                    runtime_curve_contact(document, mappings, first)?,
-                    runtime_curve_contact(document, mappings, second)?,
-                    runtime_curve_continuity(*continuity),
-                )?;
-                contacts.push(contact_mapping(
-                    *first_contact,
-                    id,
-                    DocumentContactRole::FirstCurveParameter,
-                ));
-                contacts.push(contact_mapping(
-                    *second_contact,
-                    id,
-                    DocumentContactRole::SecondCurveParameter,
-                ));
-                id
-            }
-            C::LineLineFillet {
-                arc,
-                first_contact,
-                first_side,
-                second_contact,
-                second_side,
-                endpoint_order,
-            } => {
-                let first = document
-                    .contact(*first_contact)
-                    .ok_or_else(|| unknown_runtime("contact", first_contact.0))?;
-                let second = document
-                    .contact(*second_contact)
-                    .ok_or_else(|| unknown_runtime("contact", second_contact.0))?;
-                let id = sketch.add_line_line_fillet(
-                    runtime_arc(mappings, *arc)?,
-                    runtime_curve_contact(document, mappings, first)?,
-                    runtime_curve_normal_side(*first_side),
-                    runtime_curve_contact(document, mappings, second)?,
-                    runtime_curve_normal_side(*second_side),
-                    match endpoint_order {
-                        DocumentFilletEndpointOrder::FirstThenSecond => {
-                            FilletEndpointOrder::FirstThenSecond
-                        }
-                        DocumentFilletEndpointOrder::SecondThenFirst => {
-                            FilletEndpointOrder::SecondThenFirst
-                        }
-                    },
-                )?;
-                contacts.push(contact_mapping(
-                    *first_contact,
-                    id,
-                    DocumentContactRole::FirstCurveParameter,
-                ));
-                contacts.push(contact_mapping(
-                    *second_contact,
-                    id,
-                    DocumentContactRole::SecondCurveParameter,
-                ));
-                id
-            }
-            C::CurveCurveFillet {
-                arc,
-                first_contact,
-                first_side,
-                second_contact,
-                second_side,
-                endpoint_order,
-                ..
-            } => {
-                let first = document
-                    .contact(*first_contact)
-                    .ok_or_else(|| unknown_runtime("contact", first_contact.0))?;
-                let second = document
-                    .contact(*second_contact)
-                    .ok_or_else(|| unknown_runtime("contact", second_contact.0))?;
-                let id = sketch.add_curve_curve_fillet(
-                    runtime_arc(mappings, *arc)?,
-                    runtime_curve_contact(document, mappings, first)?,
-                    runtime_curve_normal_side(*first_side),
-                    runtime_curve_contact(document, mappings, second)?,
-                    runtime_curve_normal_side(*second_side),
-                    runtime_fillet_endpoint_order(*endpoint_order),
-                )?;
-                contacts.push(contact_mapping(
-                    *first_contact,
-                    id,
-                    DocumentContactRole::FirstCurveParameter,
-                ));
-                contacts.push(contact_mapping(
-                    *second_contact,
-                    id,
-                    DocumentContactRole::SecondCurveParameter,
-                ));
-                id
-            }
-        };
+                    DocumentFilletEndpointOrder::SecondThenFirst => {
+                        FilletEndpointOrder::SecondThenFirst
+                    }
+                },
+            )?;
+            contacts.push(contact_mapping(
+                *first_contact,
+                id,
+                DocumentContactRole::FirstCurveParameter,
+            ));
+            contacts.push(contact_mapping(
+                *second_contact,
+                id,
+                DocumentContactRole::SecondCurveParameter,
+            ));
+            id
+        }
+        C::CurveCurveFillet {
+            arc,
+            first_contact,
+            first_side,
+            second_contact,
+            second_side,
+            endpoint_order,
+            ..
+        } => {
+            let first = document
+                .contact(*first_contact)
+                .ok_or_else(|| unknown_runtime("contact", first_contact.0))?;
+            let second = document
+                .contact(*second_contact)
+                .ok_or_else(|| unknown_runtime("contact", second_contact.0))?;
+            let id = sketch.add_curve_curve_fillet(
+                runtime_arc(mappings, *arc)?,
+                runtime_curve_contact(document, mappings, first)?,
+                runtime_curve_normal_side(*first_side),
+                runtime_curve_contact(document, mappings, second)?,
+                runtime_curve_normal_side(*second_side),
+                runtime_fillet_endpoint_order(*endpoint_order),
+            )?;
+            contacts.push(contact_mapping(
+                *first_contact,
+                id,
+                DocumentContactRole::FirstCurveParameter,
+            ));
+            contacts.push(contact_mapping(
+                *second_contact,
+                id,
+                DocumentContactRole::SecondCurveParameter,
+            ));
+            id
+        }
+    };
     Ok((runtime, contacts))
 }
 
@@ -1364,11 +1528,18 @@ fn lower_dimension(
     sketch: &mut Sketch,
     mappings: &DocumentRuntimeMap,
     dimension: &DocumentDimension,
+    parameter: Option<&ResolvedParameterBinding>,
 ) -> Result<SketchDimensionId, DocumentError> {
     use DocumentDimensionDefinition as D;
     let mode = match dimension.mode {
         DocumentDimensionMode::Driving => DimensionMode::Driving,
         DocumentDimensionMode::Reference => DimensionMode::Reference,
+    };
+    let target_value = |target| {
+        parameter.map_or_else(
+            || scalar_value(document, target),
+            |binding| Ok(binding.value),
+        )
     };
     let runtime = match dimension.definition {
         D::PointDistance {
@@ -1378,12 +1549,12 @@ fn lower_dimension(
         } => sketch.add_point_distance(
             runtime_point(mappings, first)?,
             runtime_point(mappings, second)?,
-            scalar_value(document, target)?,
+            target_value(target)?,
             mode,
         )?,
         D::CurveLength { curve, target } => sketch.add_segment_length(
             runtime_segment(mappings, curve)?,
-            scalar_value(document, target)?,
+            target_value(target)?,
             mode,
         )?,
         D::Radius { curve, target } => match mappings
@@ -1391,10 +1562,10 @@ fn lower_dimension(
             .ok_or_else(|| unknown_runtime("curve", curve.0))?
         {
             RuntimeCurve::Circle(circle) => {
-                sketch.add_circle_radius(*circle, scalar_value(document, target)?, mode)?
+                sketch.add_circle_radius(*circle, target_value(target)?, mode)?
             }
             RuntimeCurve::CircularArc(arc) => {
-                sketch.add_arc_radius(*arc, scalar_value(document, target)?, mode)?
+                sketch.add_arc_radius(*arc, target_value(target)?, mode)?
             }
             _ => return invalid_runtime("radius dimension requires a radial curve"),
         },
@@ -1403,10 +1574,10 @@ fn lower_dimension(
             .ok_or_else(|| unknown_runtime("curve", curve.0))?
         {
             RuntimeCurve::Circle(circle) => {
-                sketch.add_circle_diameter(*circle, scalar_value(document, target)?, mode)?
+                sketch.add_circle_diameter(*circle, target_value(target)?, mode)?
             }
             RuntimeCurve::CircularArc(arc) => {
-                sketch.add_arc_diameter(*arc, scalar_value(document, target)?, mode)?
+                sketch.add_arc_diameter(*arc, target_value(target)?, mode)?
             }
             _ => return invalid_runtime("diameter dimension requires a radial curve"),
         },
@@ -1418,7 +1589,7 @@ fn lower_dimension(
         } => sketch.add_oriented_angle(
             runtime_segment(mappings, first)?,
             runtime_segment(mappings, second)?,
-            scalar_value(document, target)?,
+            target_value(target)?,
             match orientation {
                 DocumentAngleOrientation::CounterClockwise => AngleOrientation::CounterClockwise,
                 DocumentAngleOrientation::Clockwise => AngleOrientation::Clockwise,
@@ -1434,7 +1605,7 @@ fn lower_dimension(
         } => sketch.add_supporting_line_offset(
             runtime_segment(mappings, source)?,
             runtime_segment(mappings, target_segment)?,
-            scalar_value(document, target)?,
+            target_value(target)?,
             document_line_side(side),
             document_line_offset_orientation(orientation),
             mode,
@@ -1448,7 +1619,7 @@ fn lower_dimension(
         } => sketch.add_exact_translated_segment_offset(
             runtime_segment(mappings, source)?,
             runtime_segment(mappings, target_segment)?,
-            scalar_value(document, target)?,
+            target_value(target)?,
             document_line_side(side),
             document_line_offset_orientation(orientation),
             mode,
@@ -1480,6 +1651,62 @@ fn runtime_point(
     mappings
         .runtime_point(id)
         .ok_or_else(|| unknown_runtime("point", id.0))
+}
+
+fn missing_external_input() -> DocumentError {
+    DocumentError::InvalidField {
+        field: "external snapshot",
+        message: "external constraints require resolved immutable snapshot input".into(),
+    }
+}
+
+fn resolved_external(
+    resolved: &ResolvedDocumentParameters,
+    binding: crate::DocumentExternalBindingId,
+) -> Result<&ExternalSnapshotEntry, DocumentError> {
+    resolved
+        .external
+        .get(&binding)
+        .ok_or_else(missing_external_input)
+}
+
+fn external_provenance(
+    document: &SketchDocument,
+    entry: &ExternalSnapshotEntry,
+    resolved: &ResolvedDocumentParameters,
+) -> crate::ExternalConstraintProvenance {
+    let declaration = document
+        .external_binding(entry.binding)
+        .expect("validated external binding exists");
+    let (feature_scale, line_domain, line_orientation, line_topology_digest) = match &entry.feature
+    {
+        crate::ExternalSnapshotFeatureV1::Point { scale, .. } => (*scale, None, None, None),
+        crate::ExternalSnapshotFeatureV1::LineSegment {
+            domain,
+            orientation,
+            scale,
+            topology_digest,
+            ..
+        } => (
+            *scale,
+            Some(*domain),
+            Some(*orientation),
+            Some(*topology_digest),
+        ),
+    };
+    crate::ExternalConstraintProvenance {
+        binding: entry.binding,
+        expected_kind: declaration.expected_kind,
+        actual_kind: entry.feature.kind(),
+        feature_scale,
+        line_domain,
+        line_orientation,
+        line_topology_digest,
+        set_revision: resolved.external_revision,
+        set_digest: resolved.external_digest,
+        source_revision: entry.source_revision,
+        source_digest: entry.source_digest,
+    }
 }
 
 fn runtime_segment(
@@ -1574,6 +1801,39 @@ pub(crate) fn runtime_curve_contact(
             crate::ContactNeighborhood::End => CurveContactNeighborhood::End,
         },
     })
+}
+
+pub(crate) fn runtime_bounded_curve(
+    mappings: &DocumentRuntimeMap,
+    span: CurveSpan,
+) -> Result<SketchCurve, DocumentError> {
+    match mappings
+        .runtime_curve(span.curve)
+        .ok_or_else(|| unknown_runtime("curve", span.curve.0))?
+    {
+        RuntimeCurve::Line(_) | RuntimeCurve::Polyline(_) => Ok(SketchCurve::Line {
+            segment: runtime_segment(mappings, span)?,
+            domain: LineParameterDomain::BoundedSegment,
+        }),
+        RuntimeCurve::Circle(circle) => Ok(SketchCurve::Circle(*circle)),
+        RuntimeCurve::CircularArc(arc) => Ok(SketchCurve::Arc(*arc)),
+        RuntimeCurve::QuadraticBezier(bezier) | RuntimeCurve::CubicBezier(bezier) => {
+            Ok(SketchCurve::Bezier(*bezier))
+        }
+        RuntimeCurve::Conic(conic) => Ok(SketchCurve::Conic(*conic)),
+        RuntimeCurve::BSpline { .. } => {
+            let (spline, span) = mappings
+                .runtime_bspline_span(span)
+                .ok_or_else(|| unknown_runtime("B-spline span", span.curve.0))?;
+            Ok(SketchCurve::BSpline { spline, span })
+        }
+        RuntimeCurve::Nurbs { .. } => {
+            let (nurbs, span) = mappings
+                .runtime_nurbs_span(span)
+                .ok_or_else(|| unknown_runtime("NURBS span", span.curve.0))?;
+            Ok(SketchCurve::Nurbs { nurbs, span })
+        }
+    }
 }
 
 pub(crate) fn runtime_endpoint_contact(

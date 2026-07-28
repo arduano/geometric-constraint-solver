@@ -1,10 +1,12 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+
 # M33 CAD capability matrix
 
 This document freezes the planar sketch capability vocabulary at M33. It is a
 contract artifact, not an implementation claim and not a replacement for the
-milestone order in `PLAN.md`. `implemented_m32` means available in the released
-baseline through M32. A `planned_*` row remains unavailable until that milestone's
-gate passes. Frozen sketch wire languages v1-v4 are unchanged.
+milestone order in `PLAN.md`. An `implemented_*` row identifies the milestone that
+completed the public behavior; a `planned_*` row remains unavailable until that
+milestone's gate passes. Frozen sketch wire languages v1-v4 are unchanged.
 
 Marked tables are machine-readable. Cells contain no escaped pipes; identifiers are
 lowercase snake case; comma-separated sets have no spaces; `none` is an explicit
@@ -21,10 +23,10 @@ persistent semantic source.
 | implemented_m32 | M32 | Public behavior implemented and released in the baseline through M32 |
 | implemented_m36 | M36 | Public closed semantic operands scalar row foundations and characterization implemented at M36 |
 | implemented_m37 | M37 | Public standard planar relation catalog and characterization implemented at M37 |
-| planned_m38 | M38 | Contract target for dimensions and persistent measurements only |
-| planned_m49 | M49 | Contract target for the separate sketch-operations companion only |
-| unsupported_through_m55 | M55 | Deliberately outside the supported product through M55 |
-| conditional | M55 | Available only when the stated finite domain regularity branch and work conditions hold |
+| implemented_m38 | M38 | Public dimensions and persistent measurements catalog implemented at M38 |
+| planned_m103x | M103X | Contract target for the separate sketch-operations companion only |
+| unsupported_through_m109x | M109X | Deliberately outside the supported product through M109X |
+| conditional | M109X | Available only when the stated finite domain regularity branch and work conditions hold |
 <!-- M33_TABLE:status_vocabulary:END -->
 
 ## Curve families
@@ -127,7 +129,7 @@ relation state and do not introduce an undocumented residual formula.
 | equal_angle | equal_angle_relation | angle_operand,angle_operand | angle | directed | orientation,winding | 1_hard | implemented_m37 | M37 | Both angle operands carry explicit orientation and unwrapping state |
 | contact_constructor | high_level_contact_constructor | point_or_curve_operands | length | property_defined | allocated_domain,span,winding,neighborhood | delegates_2_hard | implemented_m37 | M37 | Constructor allocates explicit latent contact state then emits the existing contact relation |
 | tangent_constructor | high_level_tangent_constructor | curve_operands | mixed_length_dimensionless | orientation_selected | allocated_domain,span,winding,neighborhood,tangent_orientation,side_or_containment | delegates_3_hard | implemented_m37 | M37 | Constructor allocates branch state then emits the existing tangent relation |
-| equal_path_length | equal_path_length_relation | bounded_curve_interval,bounded_curve_interval | length | unsigned_magnitude | interval_endpoints,span,winding | 1_hard | planned_m38 | M38 | Equality is permitted only with bounded value derivative and work evidence |
+| equal_path_length | equal_path_length_relation | bounded_curve_interval,bounded_curve_interval | length | unsigned_magnitude | interval_endpoints,span,winding | 1_hard | implemented_m38 | M38 | Equality is permitted only with bounded value derivative and work evidence |
 <!-- M33_TABLE:relations:END -->
 
 ## Dimensions and measurements
@@ -156,27 +158,27 @@ targets remain one semantic source in both driving and reference mode.
 | measurement_conic_focal_distance | DocumentConicMeasurement::FocalDistance | measurement | parabola_or_hyperbola | length | positive_magnitude | hyperbola_branch | 0_measurement | implemented_m32 | M32 | Immutable conic query with no persistent measurement identity |
 | measurement_conic_transverse_axis_length | DocumentConicMeasurement::TransverseAxisLength | measurement | hyperbola | length | positive_magnitude | hyperbola_branch | 0_measurement | implemented_m32 | M32 | Immutable selected-hyperbola query with no persistent measurement identity |
 | measurement_conic_conjugate_axis_length | DocumentConicMeasurement::ConjugateAxisLength | measurement | hyperbola | length | positive_magnitude | hyperbola_branch | 0_measurement | implemented_m32 | M32 | Immutable selected-hyperbola query with no persistent measurement identity |
-| dimension_relative_horizontal | relative_horizontal_dimension | dimension | point,point | length | signed | point_order | driving=1,reference=0 | planned_m38 | M38 | Ordered point operands define the sign without coordinate inference |
-| dimension_relative_vertical | relative_vertical_dimension | dimension | point,point | length | signed | point_order | driving=1,reference=0 | planned_m38 | M38 | Ordered point operands define the sign without coordinate inference |
-| dimension_datum_coordinate | datum_coordinate_dimension | dimension | point,datum_axis | length | signed | coordinate_axis,datum_identity | driving=1,reference=0 | planned_m38 | M38 | Absolute coordinate is relative to an explicit datum rather than an implicit UI origin |
-| dimension_point_line_distance | point_line_distance_dimension | dimension | point,line_support | length | signed | line_orientation,side | driving=1,reference=0 | planned_m38 | M38 | Directed support and side define one smooth signed distance |
-| dimension_parallel_line_separation | parallel_line_separation_dimension | dimension | line_support,line_support | length | signed | support_order,orientation,side | driving=2,reference=0 | planned_m38 | M38 | Driving form includes parallelism and signed separation in one source |
-| dimension_two_line_angle | two_line_angle_dimension | dimension | line_support,line_support | angle | directed | orientation,winding | driving=1,reference=0 | planned_m38 | M38 | Ordered directed supports retain angle branch state |
-| dimension_three_point_angle | three_point_angle_dimension | dimension | point,vertex,point | angle | directed | endpoint_order,orientation,winding | driving=1,reference=0 | planned_m38 | M38 | Vertex and ray order are semantic operands |
-| dimension_circular_sweep | circular_sweep_dimension | dimension | circular_arc | angle | directed | sweep,winding | driving=1,reference=0 | planned_m38 | M38 | Sweep uses explicit traversal rather than endpoint-only inference |
-| dimension_circular_arc_length | circular_arc_length_dimension | dimension | circular_arc | length | positive_magnitude | sweep,winding | driving=1,reference=0 | planned_m38 | M38 | Radius and explicit sweep define the same driving and reference value |
-| dimension_ellipse_major_axis | ellipse_major_axis_dimension | dimension | ellipse_or_elliptical_arc | length | positive_magnitude | axis_observability | driving=1,reference=0 | planned_m38 | M38 | Uses the same immutable property as the current query |
-| dimension_ellipse_minor_axis | ellipse_minor_axis_dimension | dimension | ellipse_or_elliptical_arc | length | positive_magnitude | axis_observability | driving=1,reference=0 | planned_m38 | M38 | Uses the same immutable property as the current query |
-| dimension_conic_linear_eccentricity | conic_linear_eccentricity_dimension | dimension | ellipse_or_elliptical_arc | length | unsigned_nonnegative | axis_observability | driving=1,reference=0 | planned_m38 | M38 | Supported conic property receives persistent driving and reference forms |
-| dimension_conic_focal_distance | conic_focal_distance_dimension | dimension | parabola_or_hyperbola | length | positive_magnitude | hyperbola_branch | driving=1,reference=0 | planned_m38 | M38 | Supported conic property receives persistent driving and reference forms |
-| dimension_conic_transverse_axis_length | conic_transverse_axis_length_dimension | dimension | hyperbola | length | positive_magnitude | hyperbola_branch | driving=1,reference=0 | planned_m38 | M38 | Supported selected-branch property receives persistent forms |
-| dimension_conic_conjugate_axis_length | conic_conjugate_axis_length_dimension | dimension | hyperbola | length | positive_magnitude | hyperbola_branch | driving=1,reference=0 | planned_m38 | M38 | Supported selected-branch property receives persistent forms |
-| measurement_persistent_signed_curvature | persistent_signed_curvature_measurement | measurement | curve_contact | curvature | signed_by_parameter_orientation | span,winding,neighborhood,provenance | 0_measurement | planned_m38 | M38 | Persists typed identity provenance and accepted input stamp |
-| measurement_persistent_unsigned_curvature | persistent_unsigned_curvature_measurement | measurement | curve_contact | curvature | unsigned_nonnegative | span,winding,neighborhood,provenance | 0_measurement | planned_m38 | M38 | Persists typed identity provenance and accepted input stamp |
-| measurement_persistent_osculating_radius | persistent_osculating_radius_measurement | measurement | curve_contact | length | positive_magnitude | span,winding,neighborhood,provenance | 0_measurement | planned_m38 | M38 | Persists typed identity and typed undefined curvature outcomes |
-| measurement_bounded_curve_length | bounded_curve_length_measurement | measurement | bounded_curve_interval | length | unsigned_nonnegative | interval_endpoints,span,winding,provenance | 0_measurement | planned_m38 | M38 | Equation-free value requires certified finite integration work |
-| dimension_path_length | path_length_dimension | dimension | bounded_curve_interval | length | positive_magnitude | interval_endpoints,span,winding | driving=1,reference=0 | planned_m38 | M38 | Driving form requires bounded value and derivative work before emission |
-| dimension_segment_length | segment_length_dimension | dimension | line_support | length | positive_magnitude | directed_line_span | driving=1,reference=0 | planned_m38 | M38 | Migration-safe name replaces the misleading line-only CurveLength meaning |
+| dimension_relative_horizontal | relative_horizontal_dimension | dimension | point,point | length | signed | point_order | driving=1,reference=0 | implemented_m38 | M38 | Ordered point operands define the sign without coordinate inference |
+| dimension_relative_vertical | relative_vertical_dimension | dimension | point,point | length | signed | point_order | driving=1,reference=0 | implemented_m38 | M38 | Ordered point operands define the sign without coordinate inference |
+| dimension_datum_coordinate | datum_coordinate_dimension | dimension | point,datum_axis | length | signed | coordinate_axis,datum_identity | driving=1,reference=0 | implemented_m38 | M38 | Absolute coordinate is relative to an explicit datum rather than an implicit UI origin |
+| dimension_point_line_distance | point_line_distance_dimension | dimension | point,line_support | length | signed | line_orientation,side | driving=1,reference=0 | implemented_m38 | M38 | Directed support and side define one smooth signed distance |
+| dimension_parallel_line_separation | parallel_line_separation_dimension | dimension | line_support,line_support | length | signed | support_order,orientation,side | driving=2,reference=0 | implemented_m38 | M38 | Driving form includes parallelism and signed separation in one source |
+| dimension_two_line_angle | two_line_angle_dimension | dimension | line_support,line_support | angle | directed | orientation,winding | driving=1,reference=0 | implemented_m38 | M38 | Ordered directed supports retain angle branch state |
+| dimension_three_point_angle | three_point_angle_dimension | dimension | point,vertex,point | angle | directed | endpoint_order,orientation,winding | driving=1,reference=0 | implemented_m38 | M38 | Vertex and ray order are semantic operands |
+| dimension_circular_sweep | circular_sweep_dimension | dimension | circular_arc | angle | directed | sweep,winding | driving=1,reference=0 | implemented_m38 | M38 | Sweep uses explicit traversal rather than endpoint-only inference |
+| dimension_circular_arc_length | circular_arc_length_dimension | dimension | circular_arc | length | positive_magnitude | sweep,winding | driving=1,reference=0 | implemented_m38 | M38 | Radius and explicit sweep define the same driving and reference value |
+| dimension_ellipse_major_axis | ellipse_major_axis_dimension | dimension | ellipse_or_elliptical_arc | length | positive_magnitude | axis_observability | driving=1,reference=0 | implemented_m38 | M38 | Uses the same immutable property as the current query |
+| dimension_ellipse_minor_axis | ellipse_minor_axis_dimension | dimension | ellipse_or_elliptical_arc | length | positive_magnitude | axis_observability | driving=1,reference=0 | implemented_m38 | M38 | Uses the same immutable property as the current query |
+| dimension_conic_linear_eccentricity | conic_linear_eccentricity_dimension | dimension | ellipse_or_elliptical_arc | length | unsigned_nonnegative | axis_observability | driving=1,reference=0 | implemented_m38 | M38 | Supported conic property receives persistent driving and reference forms |
+| dimension_conic_focal_distance | conic_focal_distance_dimension | dimension | parabola_or_hyperbola | length | positive_magnitude | hyperbola_branch | driving=1,reference=0 | implemented_m38 | M38 | Supported conic property receives persistent driving and reference forms |
+| dimension_conic_transverse_axis_length | conic_transverse_axis_length_dimension | dimension | hyperbola | length | positive_magnitude | hyperbola_branch | driving=1,reference=0 | implemented_m38 | M38 | Supported selected-branch property receives persistent forms |
+| dimension_conic_conjugate_axis_length | conic_conjugate_axis_length_dimension | dimension | hyperbola | length | positive_magnitude | hyperbola_branch | driving=1,reference=0 | implemented_m38 | M38 | Supported selected-branch property receives persistent forms |
+| measurement_persistent_signed_curvature | persistent_signed_curvature_measurement | measurement | curve_contact | curvature | signed_by_parameter_orientation | span,winding,neighborhood,provenance | 0_measurement | implemented_m38 | M38 | Persists typed identity provenance and accepted input stamp |
+| measurement_persistent_unsigned_curvature | persistent_unsigned_curvature_measurement | measurement | curve_contact | curvature | unsigned_nonnegative | span,winding,neighborhood,provenance | 0_measurement | implemented_m38 | M38 | Persists typed identity provenance and accepted input stamp |
+| measurement_persistent_osculating_radius | persistent_osculating_radius_measurement | measurement | curve_contact | length | positive_magnitude | span,winding,neighborhood,provenance | 0_measurement | implemented_m38 | M38 | Persists typed identity and typed undefined curvature outcomes |
+| measurement_bounded_curve_length | bounded_curve_length_measurement | measurement | bounded_curve_interval | length | unsigned_nonnegative | interval_endpoints,span,winding,provenance | 0_measurement | implemented_m38 | M38 | Equation-free value requires certified finite integration work |
+| dimension_path_length | path_length_dimension | dimension | bounded_curve_interval | length | positive_magnitude | interval_endpoints,span,winding | driving=1,reference=0 | implemented_m38 | M38 | Driving form requires bounded value and derivative work before emission |
+| dimension_segment_length | segment_length_dimension | dimension | line_support | length | positive_magnitude | directed_line_span | driving=1,reference=0 | implemented_m38 | M38 | Migration-safe name replaces the misleading line-only CurveLength meaning |
 <!-- M33_TABLE:dimensions_measurements:END -->
 
 ## Scalar units and domains
@@ -214,42 +216,42 @@ a target row elsewhere in this document.
 <!-- M33_TABLE:unsupported_combinations:BEGIN -->
 | id | capability | operands | status | target | reason |
 | --- | --- | --- | --- | --- | --- |
-| periodic_curve_endpoint | endpoint_feature | circle,ellipse,periodic_b_spline,periodic_nurbs | unsupported_through_m55 | M55 | Periodic topology has no distinguished start or end feature |
-| center_without_semantic_center | center_feature | line,polyline,rational_quadratic_conic,parabola,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m55 | M55 | These definitions carry no unique semantic center |
-| focus_without_semantic_focus | focus_feature | line,polyline,circle,circular_arc,rational_quadratic_conic,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m55 | M55 | These definitions carry no unique conic focus |
-| axis_without_semantic_axis | axis_feature | circle,circular_arc,rational_quadratic_conic,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m55 | M55 | An axis cannot be selected from incidental coordinates |
+| periodic_curve_endpoint | endpoint_feature | circle,ellipse,periodic_b_spline,periodic_nurbs | unsupported_through_m109x | M109X | Periodic topology has no distinguished start or end feature |
+| center_without_semantic_center | center_feature | line,polyline,rational_quadratic_conic,parabola,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m109x | M109X | These definitions carry no unique semantic center |
+| focus_without_semantic_focus | focus_feature | line,polyline,circle,circular_arc,rational_quadratic_conic,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m109x | M109X | These definitions carry no unique conic focus |
+| axis_without_semantic_axis | axis_feature | circle,circular_arc,rational_quadratic_conic,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m109x | M109X | An axis cannot be selected from incidental coordinates |
 | spline_control_feature_current_gap | DocumentControlRef | clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | implemented_m36 | M36 | The capability-specific operand uses owning curve plus persistent point membership and survives knot insertion; legacy FeatureRef retains its frozen index language |
-| public_curve_plugin | curve_family | arbitrary_trait_object | unsupported_through_m55 | M55 | Built-in and external snapshot curve languages remain closed and serializable |
-| implicit_coefficient_conic | curve_family | implicit_polynomial_coefficients | unsupported_through_m55 | M55 | Unnormalized implicit coefficient gauges are outside the explicit parametric model |
-| spatial_sketch_curve | curve_family | three_dimensional_curve | unsupported_through_m55 | M55 | Sketch geometry remains planar and host projection is external input |
-| contact_invalid_domain | point_or_curve_contact | escaped_parameter,ambiguous_neighborhood,invalid_span | conditional | M55 | Contact succeeds only for the explicit valid domain span winding and neighborhood |
-| tangency_zero_speed | tangent_relation | zero_speed_or_nondifferentiable_jet | conditional | M55 | A finite nonzero first derivative is required for tangent orientation |
-| curvature_insufficient_regularity | curvature_relation_or_measurement | zero_speed_or_missing_second_derivative | conditional | M55 | Curvature needs a regular second-order jet and finite conditioning |
-| c2_insufficient_regularity | parametric_c2_relation | span_without_guaranteed_c2 | conditional | M55 | Parametric C2 cannot be claimed across an insufficiently continuous knot |
-| fillet_parallel_parents | fillet_relation | parallel_or_unresolved_parent_tangents | conditional | M55 | The selected local offset intersection is not uniquely regular |
-| fillet_singular_offset | fillet_relation | one_minus_side_radius_curvature_near_zero | conditional | M55 | The selected normal offset is singular or numerically unresolved |
-| radius_non_circular | radius_dimension | ellipse,elliptical_arc,rational_quadratic_conic,parabola,hyperbola,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m55 | M55 | Noncircular curves do not have one CAD radius property |
-| diameter_non_circular | diameter_dimension | ellipse,elliptical_arc,rational_quadratic_conic,parabola,hyperbola,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m55 | M55 | Axis and conic-property dimensions replace an ambiguous diameter |
-| equal_radius_non_circular | equal_circular_radius_relation | ellipse,elliptical_arc,rational_quadratic_conic,parabola,hyperbola,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m55 | M55 | Equal circular radius applies only to circles and circular arcs |
-| concentric_without_centers | concentric_relation | any_operand_without_curve_center | unsupported_through_m55 | M55 | Concentricity requires two explicit semantic center features |
-| collinear_non_linear | collinear_relation | any_non_line_support | unsupported_through_m55 | M55 | Collinearity is a relation between explicit supporting lines |
-| horizontal_whole_non_linear | horizontal_relation | any_non_line_support | unsupported_through_m55 | M55 | Whole-curve horizontal is ambiguous and a contact tangent direction must be used instead |
-| vertical_whole_non_linear | vertical_relation | any_non_line_support | unsupported_through_m55 | M55 | Whole-curve vertical is ambiguous and a contact tangent direction must be used instead |
-| parallel_whole_non_linear | parallel_relation | any_non_line_support | unsupported_through_m55 | M55 | Parallelism needs line supports and not sampled curve chords |
-| perpendicular_whole_non_linear | perpendicular_relation | any_non_line_support | unsupported_through_m55 | M55 | Perpendicularity needs line supports or explicit contact directions |
-| midpoint_non_linear | midpoint_relation | any_non_line_support | unsupported_through_m55 | M55 | Parametric half value and half arc length are not interchangeable midpoint meanings |
-| symmetry_axis_non_linear | symmetry_relation | non_line_axis | unsupported_through_m55 | M55 | Reflection requires an explicit line support and not a sampled curve tangent |
-| equal_length_non_linear_current_gap | equal_length_relation | bounded_non_line_curve_interval | planned_m38 | M38 | Generic equality waits for bounded path value derivative and work contracts |
-| curve_length_non_linear_current_gap | curve_length_dimension | bounded_non_line_curve_interval | planned_m38 | M38 | Current CurveLength is line-only and M38 introduces explicit path length semantics |
-| generic_curve_angle | angle_dimension | tangent_of_arbitrary_curve,tangent_of_arbitrary_curve | unsupported_through_m55 | M55 | M38 angles are two-line or three-point and curve tangents require explicit contact operands |
-| arbitrary_curve_offset | offset_dimension | any_non_line_support | unsupported_through_m55 | M55 | Only supporting-line and exact translated-segment offsets are solver dimensions |
-| rational_conic_property_dimension | conic_property_dimension | rational_quadratic_conic | unsupported_through_m55 | M55 | A generic rational segment has no canonical ellipse parabola or hyperbola property identity |
-| driving_curvature | curvature_dimension | curve_contact,target_curvature | unsupported_through_m55 | M55 | M38 persists curvature measurements but does not promise a driving curvature dimension |
-| path_length_unbounded | path_length_dimension_or_relation | supporting_line_or_unbounded_interval | conditional | M55 | Path length requires an explicit finite bounded interval |
-| path_length_invalid_derivative | path_length_dimension_or_relation | pole,zero_speed,nonfinite_derivative | conditional | M55 | Value and derivative evaluation must both be finite and complete |
-| path_length_work_exhausted | path_length_dimension_or_relation | exhausted_integration_or_derivative_budget | conditional | M55 | Work exhaustion is a typed non-success outcome and emits no accepted row |
-| arbitrary_multi_fragment_trim | trim_view | multiple_visible_intervals_per_support_span | planned_m49 | M49 | M49 generalizes visible topology through the separate operations companion |
-| solid_or_brep_operand | sketch_relation_or_dimension | face,edge,surface,solid | unsupported_through_m55 | M55 | B-rep topology and projection remain host or companion concerns rather than sketch equations |
+| public_curve_plugin | curve_family | arbitrary_trait_object | unsupported_through_m109x | M109X | Built-in and external snapshot curve languages remain closed and serializable |
+| implicit_coefficient_conic | curve_family | implicit_polynomial_coefficients | unsupported_through_m109x | M109X | Unnormalized implicit coefficient gauges are outside the explicit parametric model |
+| spatial_sketch_curve | curve_family | three_dimensional_curve | unsupported_through_m109x | M109X | Sketch geometry remains planar and host projection is external input |
+| contact_invalid_domain | point_or_curve_contact | escaped_parameter,ambiguous_neighborhood,invalid_span | conditional | M109X | Contact succeeds only for the explicit valid domain span winding and neighborhood |
+| tangency_zero_speed | tangent_relation | zero_speed_or_nondifferentiable_jet | conditional | M109X | A finite nonzero first derivative is required for tangent orientation |
+| curvature_insufficient_regularity | curvature_relation_or_measurement | zero_speed_or_missing_second_derivative | conditional | M109X | Curvature needs a regular second-order jet and finite conditioning |
+| c2_insufficient_regularity | parametric_c2_relation | span_without_guaranteed_c2 | conditional | M109X | Parametric C2 cannot be claimed across an insufficiently continuous knot |
+| fillet_parallel_parents | fillet_relation | parallel_or_unresolved_parent_tangents | conditional | M109X | The selected local offset intersection is not uniquely regular |
+| fillet_singular_offset | fillet_relation | one_minus_side_radius_curvature_near_zero | conditional | M109X | The selected normal offset is singular or numerically unresolved |
+| radius_non_circular | radius_dimension | ellipse,elliptical_arc,rational_quadratic_conic,parabola,hyperbola,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m109x | M109X | Noncircular curves do not have one CAD radius property |
+| diameter_non_circular | diameter_dimension | ellipse,elliptical_arc,rational_quadratic_conic,parabola,hyperbola,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m109x | M109X | Axis and conic-property dimensions replace an ambiguous diameter |
+| equal_radius_non_circular | equal_circular_radius_relation | ellipse,elliptical_arc,rational_quadratic_conic,parabola,hyperbola,quadratic_bezier,cubic_bezier,clamped_b_spline,periodic_b_spline,clamped_nurbs,periodic_nurbs | unsupported_through_m109x | M109X | Equal circular radius applies only to circles and circular arcs |
+| concentric_without_centers | concentric_relation | any_operand_without_curve_center | unsupported_through_m109x | M109X | Concentricity requires two explicit semantic center features |
+| collinear_non_linear | collinear_relation | any_non_line_support | unsupported_through_m109x | M109X | Collinearity is a relation between explicit supporting lines |
+| horizontal_whole_non_linear | horizontal_relation | any_non_line_support | unsupported_through_m109x | M109X | Whole-curve horizontal is ambiguous and a contact tangent direction must be used instead |
+| vertical_whole_non_linear | vertical_relation | any_non_line_support | unsupported_through_m109x | M109X | Whole-curve vertical is ambiguous and a contact tangent direction must be used instead |
+| parallel_whole_non_linear | parallel_relation | any_non_line_support | unsupported_through_m109x | M109X | Parallelism needs line supports and not sampled curve chords |
+| perpendicular_whole_non_linear | perpendicular_relation | any_non_line_support | unsupported_through_m109x | M109X | Perpendicularity needs line supports or explicit contact directions |
+| midpoint_non_linear | midpoint_relation | any_non_line_support | unsupported_through_m109x | M109X | Parametric half value and half arc length are not interchangeable midpoint meanings |
+| symmetry_axis_non_linear | symmetry_relation | non_line_axis | unsupported_through_m109x | M109X | Reflection requires an explicit line support and not a sampled curve tangent |
+| equal_length_non_linear_current_gap | equal_length_relation | bounded_non_line_curve_interval | unsupported_through_m109x | M109X | Frozen legacy EqualLength is not broadened; implemented M38 EqualPathLength owns bounded-curve equality |
+| curve_length_non_linear_current_gap | curve_length_dimension | bounded_non_line_curve_interval | unsupported_through_m109x | M109X | Frozen v4 CurveLength remains line-only; implemented M38 PathLength owns bounded non-line intervals |
+| generic_curve_angle | angle_dimension | tangent_of_arbitrary_curve,tangent_of_arbitrary_curve | unsupported_through_m109x | M109X | M38 angles are two-line or three-point and curve tangents require explicit contact operands |
+| arbitrary_curve_offset | offset_dimension | any_non_line_support | unsupported_through_m109x | M109X | Only supporting-line and exact translated-segment offsets are solver dimensions |
+| rational_conic_property_dimension | conic_property_dimension | rational_quadratic_conic | unsupported_through_m109x | M109X | A generic rational segment has no canonical ellipse parabola or hyperbola property identity |
+| driving_curvature | curvature_dimension | curve_contact,target_curvature | unsupported_through_m109x | M109X | M38 persists curvature measurements but does not promise a driving curvature dimension |
+| path_length_unbounded | path_length_dimension_or_relation | supporting_line_or_unbounded_interval | conditional | M109X | Path length requires an explicit finite bounded interval |
+| path_length_invalid_derivative | path_length_dimension_or_relation | pole,zero_speed,nonfinite_derivative | conditional | M109X | Value and derivative evaluation must both be finite and complete |
+| path_length_work_exhausted | path_length_dimension_or_relation | exhausted_integration_or_derivative_budget | conditional | M109X | Work exhaustion is a typed non-success outcome and emits no accepted row |
+| arbitrary_multi_fragment_trim | trim_view | multiple_visible_intervals_per_support_span | planned_m103x | M103X | M103X generalizes visible topology through the separate operations companion |
+| solid_or_brep_operand | sketch_relation_or_dimension | face,edge,surface,solid | unsupported_through_m109x | M109X | B-rep topology and projection remain host or companion concerns rather than sketch equations |
 <!-- M33_TABLE:unsupported_combinations:END -->
 
 ## Ownership consequences

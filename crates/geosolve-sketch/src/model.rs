@@ -448,6 +448,12 @@ pub enum SketchConstraintKind {
         point: PointId,
         target: Point2<f64>,
     },
+    /// Native point against an immutable external coefficient.
+    ExternalPoint {
+        point: PointId,
+        target: Point2<f64>,
+        provenance: ExternalConstraintProvenance,
+    },
     FixedCoordinate {
         point: PointId,
         axis: CoordinateAxis,
@@ -503,6 +509,13 @@ pub enum SketchConstraintKind {
     Collinear {
         first: SegmentId,
         second: SegmentId,
+    },
+    /// Native line support against one immutable directed external support.
+    ExternalLineCollinear {
+        segment: SegmentId,
+        external_start: Point2<f64>,
+        external_end: Point2<f64>,
+        provenance: ExternalConstraintProvenance,
     },
     Perpendicular {
         first: SegmentId,
@@ -633,6 +646,22 @@ pub enum SketchConstraintKind {
     },
 }
 
+/// Exact immutable external-input evidence attached to one runtime source.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ExternalConstraintProvenance {
+    pub binding: crate::DocumentExternalBindingId,
+    pub expected_kind: crate::ExternalFeatureKindV1,
+    pub actual_kind: crate::ExternalFeatureKindV1,
+    pub feature_scale: f64,
+    pub line_domain: Option<[f64; 2]>,
+    pub line_orientation: Option<crate::ExternalLineOrientationV1>,
+    pub line_topology_digest: Option<crate::ExternalTopologyDigest>,
+    pub set_revision: u64,
+    pub set_digest: crate::ExternalSnapshotSetDigest,
+    pub source_revision: u64,
+    pub source_digest: crate::ExternalSnapshotDigest,
+}
+
 /// One stable high-level geometric constraint.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SketchConstraint {
@@ -662,6 +691,40 @@ pub enum DimensionMode {
 /// Supported first-slice dimensions.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum DimensionKind {
+    CoordinateDifference {
+        first: PointId,
+        second: PointId,
+        axis: CoordinateAxis,
+        target: f64,
+    },
+    CircularSweep {
+        arc: ArcId,
+        target: f64,
+    },
+    CircularArcLength {
+        arc: ArcId,
+        target: f64,
+    },
+    ConicProperty {
+        conic: ConicId,
+        property: M38ConicProperty,
+        target: f64,
+    },
+    PathLength {
+        curve: SketchCurve,
+        start: f64,
+        end: f64,
+        target: f64,
+    },
+    EqualPathLength {
+        first: SketchCurve,
+        first_start: f64,
+        first_end: f64,
+        second: SketchCurve,
+        second_start: f64,
+        second_end: f64,
+        target: f64,
+    },
     PointDistance {
         first: PointId,
         second: PointId,
@@ -707,6 +770,17 @@ pub enum DimensionKind {
         side: LineSide,
         orientation: LineOffsetOrientation,
     },
+}
+
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum M38ConicProperty {
+    MajorAxisLength,
+    MinorAxisLength,
+    LinearEccentricity,
+    FocalDistance,
+    TransverseAxisLength,
+    ConjugateAxisLength,
 }
 
 /// One stable driving/reference dimension.
@@ -1189,6 +1263,65 @@ impl Sketch {
         Ok(self.insert_constraint(SketchConstraintKind::Collinear { first, second }))
     }
 
+    /// Constrains a native point to one immutable external point coefficient.
+    ///
+    /// # Errors
+    /// Returns an error for a missing native point or non-finite target.
+    pub fn add_external_point(
+        &mut self,
+        point: PointId,
+        target: Point2<f64>,
+        provenance: ExternalConstraintProvenance,
+    ) -> Result<SketchConstraintId, SketchError> {
+        self.point_position(point)?;
+        if !target.x.is_finite() || !target.y.is_finite() {
+            return Err(SketchError::NonFinitePoint {
+                context: "external point coefficient",
+                x: target.x,
+                y: target.y,
+            });
+        }
+        Ok(self.insert_constraint(SketchConstraintKind::ExternalPoint {
+            point,
+            target,
+            provenance,
+        }))
+    }
+
+    /// Constrains a native line to one immutable external directed support.
+    ///
+    /// # Errors
+    /// Returns an error for a missing or degenerate native or external support.
+    pub fn add_external_line_collinear(
+        &mut self,
+        segment: SegmentId,
+        external_start: Point2<f64>,
+        external_end: Point2<f64>,
+        provenance: ExternalConstraintProvenance,
+    ) -> Result<SketchConstraintId, SketchError> {
+        self.validate_segment_geometry(segment)?;
+        let dx = external_end.x - external_start.x;
+        let dy = external_end.y - external_start.y;
+        if !external_start.x.is_finite()
+            || !external_start.y.is_finite()
+            || !external_end.x.is_finite()
+            || !external_end.y.is_finite()
+            || !dx.is_finite()
+            || !dy.is_finite()
+            || dx.hypot(dy) <= f64::EPSILON
+        {
+            return Err(SketchError::DegenerateSegment);
+        }
+        Ok(
+            self.insert_constraint(SketchConstraintKind::ExternalLineCollinear {
+                segment,
+                external_start,
+                external_end,
+                provenance,
+            }),
+        )
+    }
+
     /// Constrains the midpoint of two points to an explicit center point.
     ///
     /// # Errors
@@ -1414,6 +1547,119 @@ impl Sketch {
         ))
     }
 
+    pub(crate) fn add_coordinate_difference_dimension(
+        &mut self,
+        first: PointId,
+        second: PointId,
+        axis: CoordinateAxis,
+        target: f64,
+        mode: DimensionMode,
+    ) -> Result<SketchDimensionId, SketchError> {
+        self.validate_point_pair(first, second)?;
+        validate_finite(target, "coordinate difference target")?;
+        Ok(self.insert_dimension(
+            DimensionKind::CoordinateDifference {
+                first,
+                second,
+                axis,
+                target,
+            },
+            mode,
+        ))
+    }
+
+    pub(crate) fn add_circular_sweep_dimension(
+        &mut self,
+        arc: ArcId,
+        target: f64,
+    ) -> Result<SketchDimensionId, SketchError> {
+        self.arc_value(arc)?;
+        validate_finite(target, "circular sweep target")?;
+        Ok(self.insert_dimension(
+            DimensionKind::CircularSweep { arc, target },
+            DimensionMode::Driving,
+        ))
+    }
+
+    pub(crate) fn add_circular_arc_length_dimension(
+        &mut self,
+        arc: ArcId,
+        target: f64,
+    ) -> Result<SketchDimensionId, SketchError> {
+        self.arc_value(arc)?;
+        validate_dimension_value(target)?;
+        Ok(self.insert_dimension(
+            DimensionKind::CircularArcLength { arc, target },
+            DimensionMode::Driving,
+        ))
+    }
+
+    pub(crate) fn add_conic_property_dimension(
+        &mut self,
+        conic: ConicId,
+        property: M38ConicProperty,
+        target: f64,
+    ) -> Result<SketchDimensionId, SketchError> {
+        self.conic_value(conic)?;
+        validate_dimension_value(target)?;
+        Ok(self.insert_dimension(
+            DimensionKind::ConicProperty {
+                conic,
+                property,
+                target,
+            },
+            DimensionMode::Driving,
+        ))
+    }
+
+    pub(crate) fn add_path_length_dimension(
+        &mut self,
+        curve: SketchCurve,
+        start: f64,
+        end: f64,
+        target: f64,
+    ) -> Result<SketchDimensionId, SketchError> {
+        validate_path_interval(start, end)?;
+        validate_dimension_value(target)?;
+        Ok(self.insert_dimension(
+            DimensionKind::PathLength {
+                curve,
+                start,
+                end,
+                target,
+            },
+            DimensionMode::Driving,
+        ))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn add_equal_path_length_dimension(
+        &mut self,
+        first: SketchCurve,
+        first_start: f64,
+        first_end: f64,
+        second: SketchCurve,
+        second_start: f64,
+        second_end: f64,
+        target: f64,
+    ) -> Result<SketchDimensionId, SketchError> {
+        validate_path_interval(first_start, first_end)?;
+        validate_path_interval(second_start, second_end)?;
+        validate_finite(target, "equal path length target")?;
+        Ok(self.insert_dimension(
+            DimensionKind::EqualPathLength {
+                first,
+                first_start,
+                first_end,
+                second,
+                second_start,
+                second_end,
+                target,
+            },
+            DimensionMode::Driving,
+        ))
+    }
+
     /// Adds a segment-length driving or reference dimension.
     ///
     /// # Errors
@@ -1477,7 +1723,25 @@ impl Sketch {
             .ok_or(SketchError::UnknownDimension(dimension))?
             .kind;
         match kind {
-            DimensionKind::PointDistance {
+            DimensionKind::CoordinateDifference {
+                target: current, ..
+            }
+            | DimensionKind::CircularSweep {
+                target: current, ..
+            }
+            | DimensionKind::CircularArcLength {
+                target: current, ..
+            }
+            | DimensionKind::ConicProperty {
+                target: current, ..
+            }
+            | DimensionKind::PathLength {
+                target: current, ..
+            }
+            | DimensionKind::EqualPathLength {
+                target: current, ..
+            }
+            | DimensionKind::PointDistance {
                 target: current, ..
             }
             | DimensionKind::SegmentLength {
@@ -1557,8 +1821,44 @@ impl Sketch {
         Ok(())
     }
 
+    #[allow(clippy::too_many_lines)]
     pub(crate) fn dimension_value(&self, dimension: &SketchDimension) -> Result<f64, SketchError> {
         let value = match dimension.kind {
+            DimensionKind::CoordinateDifference {
+                first,
+                second,
+                axis,
+                ..
+            } => {
+                let coordinate = match axis {
+                    CoordinateAxis::X => 0,
+                    CoordinateAxis::Y => 1,
+                };
+                self.point_position(second)?[coordinate] - self.point_position(first)?[coordinate]
+            }
+            DimensionKind::CircularSweep { arc, .. } => self.arc_value(arc)?.signed_sweep(),
+            DimensionKind::CircularArcLength { arc, .. } => {
+                let arc = self.arc_value(arc)?;
+                arc.radius() * arc.signed_sweep().abs()
+            }
+            DimensionKind::ConicProperty {
+                conic, property, ..
+            } => self.m38_conic_property(conic, property)?,
+            DimensionKind::PathLength {
+                curve, start, end, ..
+            } => self.path_length_value(curve, start, end)?,
+            DimensionKind::EqualPathLength {
+                first,
+                first_start,
+                first_end,
+                second,
+                second_start,
+                second_end,
+                ..
+            } => {
+                self.path_length_value(first, first_start, first_end)?
+                    - self.path_length_value(second, second_start, second_end)?
+            }
             DimensionKind::PointDistance { first, second, .. } => {
                 (self.point_position(second)? - self.point_position(first)?).norm()
             }
@@ -1627,6 +1927,124 @@ impl Sketch {
         Ok(value)
     }
 
+    fn m38_conic_property(
+        &self,
+        conic: ConicId,
+        property: M38ConicProperty,
+    ) -> Result<f64, SketchError> {
+        let value = self.conic_value(conic)?;
+        let distance = |first, second| -> Result<f64, SketchError> {
+            Ok((self.point_position(second)? - self.point_position(first)?).norm())
+        };
+        match (value.kind(), property) {
+            (
+                crate::ConicKind::Ellipse {
+                    center,
+                    major_axis_point,
+                    ..
+                }
+                | crate::ConicKind::EllipticalArc {
+                    center,
+                    major_axis_point,
+                    ..
+                },
+                M38ConicProperty::MajorAxisLength,
+            ) => Ok(2.0 * distance(center, major_axis_point)?),
+            (
+                crate::ConicKind::Ellipse {
+                    center,
+                    major_axis_point,
+                    minor_axis_ratio,
+                }
+                | crate::ConicKind::EllipticalArc {
+                    center,
+                    major_axis_point,
+                    minor_axis_ratio,
+                    ..
+                },
+                M38ConicProperty::MinorAxisLength,
+            ) => Ok(2.0 * distance(center, major_axis_point)? * minor_axis_ratio),
+            (
+                crate::ConicKind::Ellipse {
+                    center,
+                    major_axis_point,
+                    minor_axis_ratio,
+                }
+                | crate::ConicKind::EllipticalArc {
+                    center,
+                    major_axis_point,
+                    minor_axis_ratio,
+                    ..
+                },
+                M38ConicProperty::LinearEccentricity,
+            ) => Ok(distance(center, major_axis_point)?
+                * (1.0 - minor_axis_ratio * minor_axis_ratio).sqrt()),
+            (
+                crate::ConicKind::ParabolaSegment { vertex, focus, .. },
+                M38ConicProperty::FocalDistance,
+            ) => distance(vertex, focus),
+            (
+                crate::ConicKind::HyperbolaSegment {
+                    center,
+                    transverse_axis_point,
+                    semi_conjugate,
+                    ..
+                },
+                M38ConicProperty::FocalDistance,
+            ) => Ok(distance(center, transverse_axis_point)?.hypot(semi_conjugate)),
+            (
+                crate::ConicKind::HyperbolaSegment {
+                    center,
+                    transverse_axis_point,
+                    ..
+                },
+                M38ConicProperty::TransverseAxisLength,
+            ) => Ok(2.0 * distance(center, transverse_axis_point)?),
+            (
+                crate::ConicKind::HyperbolaSegment { semi_conjugate, .. },
+                M38ConicProperty::ConjugateAxisLength,
+            ) => Ok(2.0 * semi_conjugate),
+            _ => Err(SketchError::InvalidCurveContact(
+                "conic property is not supported for this family",
+            )),
+        }
+    }
+
+    fn path_length_value(
+        &self,
+        curve: SketchCurve,
+        start: f64,
+        end: f64,
+    ) -> Result<f64, SketchError> {
+        const PANELS: u32 = 64;
+        let h = (end - start) / f64::from(PANELS);
+        let mut sum = 0.0;
+        for index in 0..=PANELS {
+            let parameter = start + f64::from(index) * h;
+            let speed = self
+                .evaluate_curve_contact(SketchCurveContact {
+                    curve,
+                    parameter,
+                    neighborhood: CurveContactNeighborhood::Interior,
+                })?
+                .first_derivative
+                .norm();
+            if !speed.is_finite() || speed == 0.0 {
+                return Err(SketchError::InvalidCurveContact(
+                    "path-length curve is not regular",
+                ));
+            }
+            sum += if index == 0 || index == PANELS {
+                speed
+            } else if index % 2 == 0 {
+                2.0 * speed
+            } else {
+                4.0 * speed
+            };
+        }
+        Ok(h * sum / 3.0)
+    }
+
     fn validate_point_pair(&self, first: PointId, second: PointId) -> Result<(), SketchError> {
         self.point_position(first)?;
         self.point_position(second)?;
@@ -1671,6 +2089,7 @@ fn constraint_references_point(
 ) -> bool {
     match kind {
         SketchConstraintKind::FixedPoint { point: id, .. }
+        | SketchConstraintKind::ExternalPoint { point: id, .. }
         | SketchConstraintKind::FixedCoordinate { point: id, .. } => id == point,
         SketchConstraintKind::Coincident { first, second }
         | SketchConstraintKind::HorizontalPoints { first, second }
@@ -1739,6 +2158,9 @@ fn constraint_references_point(
             .into_iter()
             .filter_map(|segment| sketch.segment_endpoints(segment).ok())
             .any(|(start, end)| start == point || end == point),
+        SketchConstraintKind::ExternalLineCollinear { segment, .. } => sketch
+            .segment_endpoints(segment)
+            .is_ok_and(|(start, end)| start == point || end == point),
         SketchConstraintKind::EqualCircleRadius { first, second }
         | SketchConstraintKind::CircleCircleTangency { first, second, .. } => [first, second]
             .into_iter()
@@ -1876,7 +2298,8 @@ fn scalar_ref_references_point(property: SketchScalarRef, point: PointId, sketch
 
 fn dimension_references_point(kind: DimensionKind, point: PointId, sketch: &Sketch) -> bool {
     match kind {
-        DimensionKind::PointDistance { first, second, .. } => first == point || second == point,
+        DimensionKind::CoordinateDifference { first, second, .. }
+        | DimensionKind::PointDistance { first, second, .. } => first == point || second == point,
         DimensionKind::SegmentLength { segment, .. } => sketch
             .segment_endpoints(segment)
             .is_ok_and(|(first, second)| first == point || second == point),
@@ -1889,6 +2312,20 @@ fn dimension_references_point(kind: DimensionKind, point: PointId, sketch: &Sket
             .arcs
             .get(arc)
             .is_some_and(|arc| arc.center() == point),
+        DimensionKind::CircularSweep { arc, .. } | DimensionKind::CircularArcLength { arc, .. } => {
+            sketch
+                .arcs
+                .get(arc)
+                .is_some_and(|arc| arc.center() == point)
+        }
+        DimensionKind::ConicProperty { conic, .. } => sketch
+            .conics
+            .get(conic)
+            .is_some_and(|curve| curve.points().contains(&point)),
+        DimensionKind::PathLength { curve, .. } => curve.references_point(sketch, point),
+        DimensionKind::EqualPathLength { first, second, .. } => {
+            first.references_point(sketch, point) || second.references_point(sketch, point)
+        }
         DimensionKind::OrientedAngle { first, second, .. } => [first, second]
             .into_iter()
             .filter_map(|segment| sketch.segment_endpoints(segment).ok())
@@ -2030,6 +2467,16 @@ pub(crate) fn validate_dimension_value(value: f64) -> Result<(), SketchError> {
         Ok(())
     } else {
         Err(SketchError::InvalidDimensionValue(value))
+    }
+}
+
+fn validate_path_interval(start: f64, end: f64) -> Result<(), SketchError> {
+    if start.is_finite() && end.is_finite() && 0.0 <= start && start < end && end <= 1.0 {
+        Ok(())
+    } else {
+        Err(SketchError::InvalidCurveContact(
+            "path interval must satisfy 0 <= start < end <= 1",
+        ))
     }
 }
 

@@ -367,7 +367,7 @@ impl Sketch {
         }
     }
 
-    fn evaluate_curve_contact(
+    pub(crate) fn evaluate_curve_contact(
         &self,
         contact: SketchCurveContact,
     ) -> Result<geosolve_geometry::CurveJet2, SketchError> {

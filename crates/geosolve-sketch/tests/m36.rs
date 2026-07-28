@@ -225,8 +225,8 @@ fn spline_and_nurbs_controls_are_persistent_point_features() {
 
 #[test]
 fn current_command_effect_and_measurement_characterization_is_exhaustive_and_stable() {
-    assert_eq!(CurrentDocumentCommandKind::ALL.len(), 30);
-    assert_eq!(CurrentDocumentEffectKind::ALL.len(), 28);
+    assert_eq!(CurrentDocumentCommandKind::ALL.len(), 38);
+    assert_eq!(CurrentDocumentEffectKind::ALL.len(), 36);
     assert_eq!(CurrentMeasurementKind::ALL.len(), 16);
 
     let command_codes = CurrentDocumentCommandKind::ALL
@@ -247,10 +247,32 @@ fn current_command_effect_and_measurement_characterization_is_exhaustive_and_sta
 
     assert!(command_codes.contains("create_point"));
     assert!(command_codes.contains("set_curve_curve_fillet_branch"));
+    let m41_command_codes = [
+        "set_geometry_role",
+        "set_element_user_suppressed",
+        "set_host_configuration_activation",
+    ];
+    assert_eq!(m41_command_codes.len(), 3);
+    assert!(
+        m41_command_codes
+            .iter()
+            .all(|code| command_codes.contains(code))
+    );
     assert!(command_codes.contains("delete"));
     assert!(effect_codes.contains("created_rectangle"));
     assert!(effect_codes.contains("transaction"));
     assert!(effect_codes.contains("redo"));
+    let m41_effect_codes = [
+        "updated_geometry_role",
+        "updated_element_user_suppression",
+        "updated_host_configuration_activation",
+    ];
+    assert_eq!(m41_effect_codes.len(), 3);
+    assert!(
+        m41_effect_codes
+            .iter()
+            .all(|code| effect_codes.contains(code))
+    );
     assert!(measurement_codes.contains("dimension_curve_length"));
     assert!(measurement_codes.contains("curve_signed_curvature"));
     assert!(measurement_codes.contains("conic_conjugate_axis_length"));

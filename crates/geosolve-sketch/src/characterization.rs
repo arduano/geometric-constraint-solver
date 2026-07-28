@@ -32,6 +32,11 @@ characterized_enum!(CurrentDocumentCommandKind {
     CreateContact => "create_contact",
     CreateConstraint => "create_constraint",
     CreateDimension => "create_dimension",
+    CreateParameter => "create_parameter",
+    AddParameterBinding => "add_parameter_binding",
+    RemoveParameterBinding => "remove_parameter_binding",
+    AddParameterOutput => "add_parameter_output",
+    RemoveParameterOutput => "remove_parameter_output",
     CreateRectangle => "create_rectangle",
     CreateMirroredCurve => "create_mirrored_curve",
     CreateLineLineFillet => "create_line_line_fillet",
@@ -55,6 +60,9 @@ characterized_enum!(CurrentDocumentCommandKind {
     SetDimensionMode => "set_dimension_mode",
     SetOrientedAngleOrientation => "set_oriented_angle_orientation",
     SetSourceSuppressed => "set_source_suppressed",
+    SetGeometryRole => "set_geometry_role",
+    SetElementUserSuppressed => "set_element_user_suppressed",
+    SetHostConfigurationActivation => "set_host_configuration_activation",
     Delete => "delete",
 });
 
@@ -65,6 +73,11 @@ characterized_enum!(CurrentDocumentEffectKind {
     CreatedContact => "created_contact",
     CreatedConstraint => "created_constraint",
     CreatedDimension => "created_dimension",
+    CreatedParameter => "created_parameter",
+    AddedParameterBinding => "added_parameter_binding",
+    RemovedParameterBinding => "removed_parameter_binding",
+    AddedParameterOutput => "added_parameter_output",
+    RemovedParameterOutput => "removed_parameter_output",
     CreatedRectangle => "created_rectangle",
     CreatedMirroredCurve => "created_mirrored_curve",
     CreatedLineLineFillet => "created_line_line_fillet",
@@ -82,6 +95,9 @@ characterized_enum!(CurrentDocumentEffectKind {
     UpdatedConstraint => "updated_constraint",
     UpdatedDimension => "updated_dimension",
     UpdatedSource => "updated_source",
+    UpdatedGeometryRole => "updated_geometry_role",
+    UpdatedElementUserSuppression => "updated_element_user_suppression",
+    UpdatedHostConfigurationActivation => "updated_host_configuration_activation",
     Deleted => "deleted",
     Transaction => "transaction",
     Imported => "imported",
@@ -119,6 +135,13 @@ impl DocumentEdit {
             Self::CreateContact { .. } => CurrentDocumentCommandKind::CreateContact,
             Self::CreateConstraint { .. } => CurrentDocumentCommandKind::CreateConstraint,
             Self::CreateDimension { .. } => CurrentDocumentCommandKind::CreateDimension,
+            Self::CreateParameter { .. } => CurrentDocumentCommandKind::CreateParameter,
+            Self::AddParameterBinding { .. } => CurrentDocumentCommandKind::AddParameterBinding,
+            Self::RemoveParameterBinding { .. } => {
+                CurrentDocumentCommandKind::RemoveParameterBinding
+            }
+            Self::AddParameterOutput { .. } => CurrentDocumentCommandKind::AddParameterOutput,
+            Self::RemoveParameterOutput { .. } => CurrentDocumentCommandKind::RemoveParameterOutput,
             Self::CreateRectangle { .. } => CurrentDocumentCommandKind::CreateRectangle,
             Self::CreateMirroredCurve { .. } => CurrentDocumentCommandKind::CreateMirroredCurve,
             Self::CreateLineLineFillet { .. } => CurrentDocumentCommandKind::CreateLineLineFillet,
@@ -160,6 +183,13 @@ impl DocumentEdit {
                 CurrentDocumentCommandKind::SetOrientedAngleOrientation
             }
             Self::SetSourceSuppressed { .. } => CurrentDocumentCommandKind::SetSourceSuppressed,
+            Self::SetGeometryRole { .. } => CurrentDocumentCommandKind::SetGeometryRole,
+            Self::SetElementUserSuppressed { .. } => {
+                CurrentDocumentCommandKind::SetElementUserSuppressed
+            }
+            Self::SetHostConfigurationActivation { .. } => {
+                CurrentDocumentCommandKind::SetHostConfigurationActivation
+            }
             Self::Delete { .. } => CurrentDocumentCommandKind::Delete,
         }
     }
@@ -176,6 +206,15 @@ impl DocumentCommandEffect {
             Self::CreatedContact(_) => CurrentDocumentEffectKind::CreatedContact,
             Self::CreatedConstraint(_) => CurrentDocumentEffectKind::CreatedConstraint,
             Self::CreatedDimension(_) => CurrentDocumentEffectKind::CreatedDimension,
+            Self::CreatedParameter(_) => CurrentDocumentEffectKind::CreatedParameter,
+            Self::AddedParameterBinding { .. } => CurrentDocumentEffectKind::AddedParameterBinding,
+            Self::RemovedParameterBinding { .. } => {
+                CurrentDocumentEffectKind::RemovedParameterBinding
+            }
+            Self::AddedParameterOutput { .. } => CurrentDocumentEffectKind::AddedParameterOutput,
+            Self::RemovedParameterOutput { .. } => {
+                CurrentDocumentEffectKind::RemovedParameterOutput
+            }
             Self::CreatedRectangle(_) => CurrentDocumentEffectKind::CreatedRectangle,
             Self::CreatedMirroredCurve(_) => CurrentDocumentEffectKind::CreatedMirroredCurve,
             Self::CreatedLineLineFillet(_) => CurrentDocumentEffectKind::CreatedLineLineFillet,
@@ -197,6 +236,13 @@ impl DocumentCommandEffect {
             Self::UpdatedConstraint(_) => CurrentDocumentEffectKind::UpdatedConstraint,
             Self::UpdatedDimension(_) => CurrentDocumentEffectKind::UpdatedDimension,
             Self::UpdatedSource(_) => CurrentDocumentEffectKind::UpdatedSource,
+            Self::UpdatedGeometryRole(_) => CurrentDocumentEffectKind::UpdatedGeometryRole,
+            Self::UpdatedElementUserSuppression(_) => {
+                CurrentDocumentEffectKind::UpdatedElementUserSuppression
+            }
+            Self::UpdatedHostConfigurationActivation => {
+                CurrentDocumentEffectKind::UpdatedHostConfigurationActivation
+            }
             Self::Deleted(_) => CurrentDocumentEffectKind::Deleted,
             Self::Transaction(_) => CurrentDocumentEffectKind::Transaction,
             Self::Imported => CurrentDocumentEffectKind::Imported,

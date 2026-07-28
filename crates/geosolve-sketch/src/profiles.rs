@@ -16,7 +16,8 @@ use pieces::{Box2, CurvePiece, PieceEvaluationError, PieceKind, piece_for_span};
 use crate::{
     ContactDomain, ContactId, CurveDefinition, CurveId, CurveSpan, DesignPointId,
     DocumentBSplineForm, DocumentConstraintDefinition, DocumentFilletEndpointOrder,
-    DocumentTrimBoundary, DocumentVisibleCurveInterval, FeatureEndpoint, SketchDocument,
+    DocumentTrimBoundary, DocumentVisibleCurveInterval, EffectiveActivity, FeatureEndpoint,
+    GeometryRole, InactivityReason, SketchDocument,
 };
 use geosolve_core::{
     OperationCheckpoint, OperationControl, OperationController, OperationOutcome,
@@ -559,7 +560,8 @@ fn analyze_visual_profiles_with_work(
     mut work: Work,
 ) -> VisualProfileAnalysis {
     let options = work.options;
-    let welded = match welded_points(document, &work) {
+    let activity = document.effective_activity();
+    let welded = match welded_points(document, &activity, &work) {
         Ok(value) => value,
         Err(ProfileSetupError::Analysis((first, second))) => {
             return skipped_analysis(
@@ -570,7 +572,7 @@ fn analyze_visual_profiles_with_work(
         }
         Err(ProfileSetupError::Interrupted) => return interrupted_profile_analysis(&work),
     };
-    let mut sources = match source_pieces(document, &welded, &work) {
+    let mut sources = match source_pieces(document, &activity, &welded, &work) {
         Ok(value) => value,
         Err(ProfileSetupError::Analysis((support, kind))) => {
             return skipped_analysis(&work, kind, vec![support]);
@@ -584,13 +586,14 @@ fn analyze_visual_profiles_with_work(
         .into_iter()
         .collect::<Vec<_>>();
 
-    let explicit_fillet_joins = match apply_explicit_joins(document, &welded, &mut sources, &work) {
-        Ok(value) => value,
-        Err(ProfileSetupError::Analysis((kind, affected))) => {
-            return skipped_analysis(&work, kind, affected);
-        }
-        Err(ProfileSetupError::Interrupted) => return interrupted_profile_analysis(&work),
-    };
+    let explicit_fillet_joins =
+        match apply_explicit_joins(document, &activity, &welded, &mut sources, &work) {
+            Ok(value) => value,
+            Err(ProfileSetupError::Analysis((kind, affected))) => {
+                return skipped_analysis(&work, kind, affected);
+            }
+            Err(ProfileSetupError::Interrupted) => return interrupted_profile_analysis(&work),
+        };
 
     for source in &sources {
         if !work.checkpoint(OperationCheckpoint::ProfileSubdivision) {
@@ -1177,6 +1180,7 @@ struct WeldedPoints {
 
 fn welded_points(
     document: &SketchDocument,
+    activity: &EffectiveActivity,
     work: &Work,
 ) -> Result<WeldedPoints, ProfileSetupError<(DesignPointId, DesignPointId)>> {
     let mut points = document
@@ -1194,7 +1198,7 @@ fn welded_points(
     for constraint in document
         .constraints()
         .iter()
-        .filter(|constraint| !constraint.suppressed)
+        .filter(|constraint| activity.is_active(constraint.id))
     {
         if !work.checkpoint(OperationCheckpoint::ProfileCandidate) {
             return Err(ProfileSetupError::Interrupted);
@@ -1205,7 +1209,7 @@ fn welded_points(
             sets.union(*first, *second);
         }
     }
-    let profile_points = profile_point_ids(document);
+    let profile_points = profile_point_ids(document, activity);
     let profile_roots = points
         .iter()
         .enumerate()
@@ -1243,10 +1247,17 @@ fn welded_points(
     Ok(WeldedPoints { roots })
 }
 
-fn profile_point_ids(document: &SketchDocument) -> BTreeSet<DesignPointId> {
+fn profile_point_ids(
+    document: &SketchDocument,
+    activity: &EffectiveActivity,
+) -> BTreeSet<DesignPointId> {
     document
         .curves()
         .iter()
+        .filter(|curve| {
+            activity.is_active(curve.id)
+                && document.geometry_role(curve.id) == Some(GeometryRole::Profile)
+        })
         .flat_map(|curve| match &curve.definition {
             CurveDefinition::Line { start, end, .. }
             | CurveDefinition::RationalQuadraticConic { start, end, .. } => {
@@ -1271,13 +1282,20 @@ fn profile_point_ids(document: &SketchDocument) -> BTreeSet<DesignPointId> {
         .collect()
 }
 
+#[allow(clippy::too_many_lines)]
 fn source_pieces(
     document: &SketchDocument,
+    activity: &EffectiveActivity,
     welded: &WeldedPoints,
     work: &Work,
 ) -> Result<Vec<SourcePiece>, ProfileSetupError<(CurveSpan, VisualProfileIssueKind)>> {
     let mut sources = Vec::new();
     for curve in document.curves() {
+        if !activity.is_active(curve.id)
+            || document.geometry_role(curve.id) != Some(GeometryRole::Profile)
+        {
+            continue;
+        }
         if !work.checkpoint(OperationCheckpoint::ProfileCandidate) {
             return Err(ProfileSetupError::Interrupted);
         }
@@ -1524,12 +1542,13 @@ fn build_source_piece(
 #[allow(clippy::too_many_lines)]
 fn apply_explicit_joins(
     document: &SketchDocument,
+    activity: &EffectiveActivity,
     welded: &WeldedPoints,
     sources: &mut Vec<SourcePiece>,
     work: &Work,
 ) -> Result<BTreeSet<ExplicitFilletJoin>, ProfileSetupError<(VisualProfileIssueKind, Vec<CurveSpan>)>>
 {
-    apply_explicit_contact_splits(document, welded, sources, work)?;
+    apply_explicit_contact_splits(document, activity, welded, sources, work)?;
     let join_tolerance = document.model_scale() * 1.0e-9;
     let keys = sources
         .iter()
@@ -1554,12 +1573,13 @@ fn apply_explicit_joins(
         if !work.checkpoint(OperationCheckpoint::ProfileCandidate) {
             return Err(ProfileSetupError::Interrupted);
         }
-        if constraint.suppressed
-            && !matches!(
+        let frozen_suppressed_fillet = activity.reason(constraint.id)
+            == Some(InactivityReason::UserSuppressed)
+            && matches!(
                 constraint.definition,
                 DocumentConstraintDefinition::CurveCurveFillet { .. }
-            )
-        {
+            );
+        if !activity.is_active(constraint.id) && !frozen_suppressed_fillet {
             continue;
         }
         match constraint.definition {
@@ -1718,6 +1738,7 @@ fn apply_explicit_joins(
 
 fn apply_explicit_contact_splits(
     document: &SketchDocument,
+    activity: &EffectiveActivity,
     welded: &WeldedPoints,
     sources: &mut Vec<SourcePiece>,
     work: &Work,
@@ -1725,7 +1746,7 @@ fn apply_explicit_contact_splits(
     let contacts = document
         .constraints()
         .iter()
-        .filter(|constraint| !constraint.suppressed)
+        .filter(|constraint| activity.is_active(constraint.id))
         .filter_map(|constraint| match constraint.definition {
             DocumentConstraintDefinition::PointOnCurve { point, contact } => Some((point, contact)),
             _ => None,

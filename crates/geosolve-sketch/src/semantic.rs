@@ -12,8 +12,8 @@ use crate::{
     AngleOrientation, ContactNeighborhood, CurveDefinition, CurveId, DesignPointId, DesignScalarId,
     DocumentAngleOrientation, DocumentBSplineForm, DocumentCoordinateAxis, DocumentCurveNormalSide,
     DocumentCurveSpanRef, DocumentError, DocumentId, DocumentLineSide, DocumentLineSupportRef,
-    DocumentSourceId, ScalarDomain, ScalarUnit, SketchDocument, SketchSolveRequest,
-    SketchSolveResult,
+    DocumentSourceId, EffectiveActivity, ScalarDomain, ScalarUnit, SketchDocument,
+    SketchSolveRequest, SketchSolveResult,
 };
 
 /// One explicitly oriented and unwrapped angle between directed line supports.
@@ -228,6 +228,44 @@ pub struct DocumentCircleArcTangentRequest {
 }
 
 impl SketchDocument {
+    /// Validates the deliberately narrow dimensionless host-parameter target set.
+    pub(crate) fn validate_dimensionless_parameter_property(
+        &self,
+        property: DocumentScalarPropertyRef,
+    ) -> Result<(), DocumentError> {
+        self.validate_scalar_property_ref(property)?;
+        if property.unit != DocumentScalarUnit::Dimensionless
+            || property.branch != DocumentScalarBranch::Dimensionless
+        {
+            return invalid(
+                "parameter binding",
+                "dimensionless targets cannot reinterpret unit or branch semantics",
+            );
+        }
+        self.validate_parameter_scalar_value(
+            property.scalar,
+            scalar_value(self, property.scalar)?,
+        )?;
+        if !is_dimensionless_runtime_curve_scalar(self, property.scalar) {
+            return invalid(
+                "parameter binding",
+                "scalar is not an executable dimensionless curve property",
+            );
+        }
+        Ok(())
+    }
+
+    pub(crate) fn dimensionless_parameter_target_is_active(
+        &self,
+        property: DocumentScalarPropertyRef,
+        activity: &EffectiveActivity,
+    ) -> bool {
+        self.curves().iter().any(|curve| {
+            activity.is_active(curve.id)
+                && curve_has_dimensionless_runtime_scalar(&curve.definition, property.scalar)
+        })
+    }
+
     /// Atomically allocates two explicit latent contacts and their common-jet contact source.
     ///
     /// # Errors
@@ -2189,7 +2227,7 @@ fn resolve_point_ref(
     }
 }
 
-fn runtime_point_ref(
+pub(crate) fn runtime_point_ref(
     document: &SketchDocument,
     mappings: &crate::DocumentRuntimeMap,
     point: crate::DocumentPointRef,
@@ -2638,6 +2676,50 @@ fn add_fixed_document_scalar(
     };
     sketch.add_fixed_scalar(property, target, scale)?;
     Ok(())
+}
+
+pub(crate) fn add_parameter_fixed_scalar(
+    document: &SketchDocument,
+    mappings: &crate::DocumentRuntimeMap,
+    sketch: &mut crate::Sketch,
+    property: DocumentScalarPropertyRef,
+    target: f64,
+) -> Result<crate::SketchConstraintId, DocumentError> {
+    document.validate_dimensionless_parameter_property(property)?;
+    document.validate_parameter_scalar_value(property.scalar, target)?;
+    let runtime = runtime_scalar_ref(document, mappings, property.scalar)?;
+    Ok(sketch.add_fixed_scalar(runtime, target, 1.0)?)
+}
+
+fn is_dimensionless_runtime_curve_scalar(
+    document: &SketchDocument,
+    scalar: DesignScalarId,
+) -> bool {
+    document
+        .curves()
+        .iter()
+        .any(|curve| curve_has_dimensionless_runtime_scalar(&curve.definition, scalar))
+}
+
+fn curve_has_dimensionless_runtime_scalar(
+    definition: &CurveDefinition,
+    scalar: DesignScalarId,
+) -> bool {
+    match definition {
+        CurveDefinition::Ellipse {
+            minor_axis_ratio, ..
+        }
+        | CurveDefinition::EllipticalArc {
+            minor_axis_ratio, ..
+        } => *minor_axis_ratio == scalar,
+        CurveDefinition::RationalQuadraticConic { middle_weight, .. } => *middle_weight == scalar,
+        CurveDefinition::Nurbs {
+            weights,
+            gauge_weight,
+            ..
+        } => weights.contains(&scalar) && *gauge_weight != scalar,
+        _ => false,
+    }
 }
 
 fn lower_executable_scalar_sources(

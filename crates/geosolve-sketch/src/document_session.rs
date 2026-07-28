@@ -1,28 +1,851 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use geosolve_core::{
     HardValidity, OperationCheckpoint, OperationControl, OperationController, OperationOutcome,
     SolveTermination, SolverConfig,
 };
 use geosolve_geometry::Point2;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::document::{
-    ContactDefinition, ContactId, ContactStateEdit, CurveCurveFilletIds, CurveCurveFilletRequest,
-    CurveDefinition, CurveId, CurveSpan, DesignPointId, DesignScalarId, DocumentAngleOrientation,
-    DocumentArcSweep, DocumentBSplineInsertion, DocumentBSplineSpanDirection,
-    DocumentCircleTangencyMode, DocumentConstraintDefinition, DocumentConstraintId,
-    DocumentCurveNormalSide, DocumentDimensionDefinition, DocumentDimensionId,
-    DocumentDimensionMode, DocumentError, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint,
+    ActivationDigest, ContactDefinition, ContactId, ContactStateEdit, CurveCurveFilletIds,
+    CurveCurveFilletRequest, CurveDefinition, CurveId, CurveSpan, DesignPointId, DesignScalarId,
+    DocumentAngleOrientation, DocumentArcSweep, DocumentBSplineInsertion,
+    DocumentBSplineSpanDirection, DocumentCircleTangencyMode, DocumentConstraintDefinition,
+    DocumentConstraintId, DocumentCurveNormalSide, DocumentDimensionDefinition,
+    DocumentDimensionId, DocumentDimensionMode, DocumentElementId, DocumentError,
+    DocumentExternalBindingId, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint,
     DocumentHyperbolaBranch, DocumentMirroredBSplineInsertion, DocumentNurbsInsertion,
-    DocumentObjectId, DocumentSourceId, LineLineFilletIds, LineLineFilletRequest, MirroredCurveIds,
+    DocumentObjectId, DocumentParameterId, DocumentParameterKind, DocumentParameterTarget,
+    DocumentSourceId, ExternalFeatureKindV1, ExternalTopologyDigest, GeometryRole,
+    HostConfigurationActivation, LineLineFilletIds, LineLineFilletRequest, MirroredCurveIds,
     PersistentId, RectangleIds, ScalarDomain, ScalarUnit, SketchDocument,
 };
-use crate::document_lowering::{DocumentRuntimeMap, RuntimeSource};
-use crate::{
-    SketchSession, SketchSessionError, SketchSolveRequest, SketchSolveResult, SketchSource,
-    SolveRejection,
+use crate::document_lowering::{
+    DocumentRuntimeMap, ResolvedDocumentParameters, ResolvedParameterBinding, RuntimeSource,
 };
+use crate::{
+    DocumentMeasurementProvenance, DocumentScalarUnit, SketchSession, SketchSessionError,
+    SketchSolveRequest, SketchSolveResult, SketchSource, SolveRejection,
+};
+
+/// Unstable pre-M107X external snapshot wire version.
+pub const EXTERNAL_SNAPSHOT_SET_VERSION_V1: u32 = 1;
+/// Defensive bound for one immutable external snapshot set.
+pub const MAX_EXTERNAL_SNAPSHOT_ENTRIES: usize = crate::MAX_EXTERNAL_BINDINGS;
+/// Defensive M43 resource-evidence bounds.
+pub const MAX_EXTERNAL_SNAPSHOT_POINTS: u32 = 2;
+pub const MAX_EXTERNAL_SNAPSHOT_CONTROLS: u32 = 2;
+pub const MAX_EXTERNAL_SNAPSHOT_SPANS: u32 = 1;
+
+/// Canonical digest of host-provided bytes for one external feature.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[serde(transparent)]
+pub struct ExternalSnapshotDigest([u8; 32]);
+
+impl ExternalSnapshotDigest {
+    #[must_use]
+    pub const fn from_bytes(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+
+    #[must_use]
+    pub const fn bytes(self) -> [u8; 32] {
+        self.0
+    }
+}
+
+/// Canonical identity of a complete immutable external snapshot set.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[serde(transparent)]
+pub struct ExternalSnapshotSetDigest([u8; 32]);
+
+impl ExternalSnapshotSetDigest {
+    #[must_use]
+    pub const fn bytes(self) -> [u8; 32] {
+        self.0
+    }
+}
+
+/// Bounded resource evidence carried by every snapshot feature.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExternalSnapshotResourcesV1 {
+    pub point_count: u32,
+    pub control_count: u32,
+    pub span_count: u32,
+}
+
+/// Closed directed orientation contract for an external line span.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExternalLineOrientationV1 {
+    StartToEnd,
+}
+
+/// Closed finite external geometry language for M43.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum ExternalSnapshotFeatureV1 {
+    Point {
+        position: [f64; 2],
+        scale: f64,
+        resources: ExternalSnapshotResourcesV1,
+    },
+    LineSegment {
+        start: [f64; 2],
+        end: [f64; 2],
+        domain: [f64; 2],
+        orientation: ExternalLineOrientationV1,
+        scale: f64,
+        topology_digest: ExternalTopologyDigest,
+        resources: ExternalSnapshotResourcesV1,
+    },
+}
+
+impl ExternalSnapshotFeatureV1 {
+    #[must_use]
+    pub const fn kind(&self) -> ExternalFeatureKindV1 {
+        match self {
+            Self::Point { .. } => ExternalFeatureKindV1::Point,
+            Self::LineSegment { .. } => ExternalFeatureKindV1::LineSegment,
+        }
+    }
+}
+
+/// One binding-keyed entry in an immutable external snapshot set.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExternalSnapshotEntry {
+    pub binding: DocumentExternalBindingId,
+    pub source_revision: u64,
+    pub source_digest: ExternalSnapshotDigest,
+    pub feature: ExternalSnapshotFeatureV1,
+}
+
+/// Typed rejection of malformed or stale external input evidence.
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum ExternalSnapshotInputError {
+    #[error("unsupported external snapshot set version {actual}; expected 1")]
+    UnsupportedVersion { actual: u32 },
+    #[error("nonempty external snapshot sets require a positive revision")]
+    InvalidSetRevision,
+    #[error("external snapshot entry {binding} requires a positive source revision")]
+    InvalidSourceRevision { binding: DocumentExternalBindingId },
+    #[error("duplicate external snapshot binding {binding}")]
+    DuplicateBinding { binding: DocumentExternalBindingId },
+    #[error("external snapshot set has {actual} entries; limit is {limit}")]
+    ResourceLimit { actual: usize, limit: usize },
+    #[error("invalid external snapshot feature for binding {binding}: {reason}")]
+    InvalidFeature {
+        binding: DocumentExternalBindingId,
+        reason: &'static str,
+    },
+    #[error("claimed external snapshot set digest does not match canonical bytes")]
+    DigestMismatch,
+    #[error("external snapshot entry names unknown binding {binding}")]
+    UnknownBinding { binding: DocumentExternalBindingId },
+    #[error("required external snapshot binding {binding} is missing")]
+    MissingBinding { binding: DocumentExternalBindingId },
+    #[error("external snapshot binding {binding} has kind {actual:?}; expected {expected:?}")]
+    WrongKind {
+        binding: DocumentExternalBindingId,
+        expected: ExternalFeatureKindV1,
+        actual: ExternalFeatureKindV1,
+    },
+    #[error("external line topology for binding {binding} does not match its retained declaration")]
+    TopologyMismatch { binding: DocumentExternalBindingId },
+    #[error("invalid external snapshot JSON: {0}")]
+    Json(String),
+}
+
+/// Separately versioned immutable external snapshot envelope (unstable until M107X).
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExternalSnapshotSetV1 {
+    version: u32,
+    revision: u64,
+    digest: ExternalSnapshotSetDigest,
+    entries: Vec<ExternalSnapshotEntry>,
+}
+
+/// M43 convenience name for the current closed external snapshot envelope.
+pub type ExternalSnapshotSet = ExternalSnapshotSetV1;
+
+impl Default for ExternalSnapshotSetV1 {
+    fn default() -> Self {
+        let entries = Vec::new();
+        Self {
+            version: EXTERNAL_SNAPSHOT_SET_VERSION_V1,
+            revision: 0,
+            digest: external_snapshot_set_digest(0, &entries),
+            entries,
+        }
+    }
+}
+
+impl ExternalSnapshotSetV1 {
+    /// Constructs and canonically stamps one immutable external snapshot set.
+    ///
+    /// # Errors
+    ///
+    /// Rejects invalid revisions, duplicate bindings, malformed features, or resources
+    /// above the fixed M43 limits.
+    pub fn new(
+        revision: u64,
+        mut entries: Vec<ExternalSnapshotEntry>,
+    ) -> Result<Self, ExternalSnapshotInputError> {
+        validate_external_snapshot_entries(revision, &mut entries)?;
+        Ok(Self {
+            version: EXTERNAL_SNAPSHOT_SET_VERSION_V1,
+            revision,
+            digest: external_snapshot_set_digest(revision, &entries),
+            entries,
+        })
+    }
+
+    /// Reconstructs a set only when its version and canonical digest are exact.
+    ///
+    /// # Errors
+    ///
+    /// Rejects unsupported versions, invalid entries, or a digest mismatch.
+    pub fn from_digest(
+        version: u32,
+        revision: u64,
+        digest: ExternalSnapshotSetDigest,
+        mut entries: Vec<ExternalSnapshotEntry>,
+    ) -> Result<Self, ExternalSnapshotInputError> {
+        if version != EXTERNAL_SNAPSHOT_SET_VERSION_V1 {
+            return Err(ExternalSnapshotInputError::UnsupportedVersion { actual: version });
+        }
+        validate_external_snapshot_entries(revision, &mut entries)?;
+        if external_snapshot_set_digest(revision, &entries) != digest {
+            return Err(ExternalSnapshotInputError::DigestMismatch);
+        }
+        Ok(Self {
+            version,
+            revision,
+            digest,
+            entries,
+        })
+    }
+
+    #[must_use]
+    pub const fn version(&self) -> u32 {
+        self.version
+    }
+
+    #[must_use]
+    pub const fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    #[must_use]
+    pub const fn digest(&self) -> ExternalSnapshotSetDigest {
+        self.digest
+    }
+
+    #[must_use]
+    pub fn entries(&self) -> &[ExternalSnapshotEntry] {
+        &self.entries
+    }
+
+    /// Encodes the independently revalidated set as canonical JSON.
+    ///
+    /// # Errors
+    ///
+    /// Rejects internally inconsistent evidence or JSON serialization failure.
+    pub fn to_canonical_json(&self) -> Result<String, ExternalSnapshotInputError> {
+        Self::from_digest(
+            self.version,
+            self.revision,
+            self.digest,
+            self.entries.clone(),
+        )?;
+        serde_json::to_string(self)
+            .map_err(|error| ExternalSnapshotInputError::Json(error.to_string()))
+    }
+
+    /// Decodes strict JSON and independently validates its claimed digest.
+    ///
+    /// # Errors
+    ///
+    /// Rejects malformed JSON, unknown fields or variants, invalid features, and
+    /// inconsistent version/digest evidence.
+    pub fn from_json(json: &str) -> Result<Self, ExternalSnapshotInputError> {
+        let decoded: Self = serde_json::from_str(json)
+            .map_err(|error| ExternalSnapshotInputError::Json(error.to_string()))?;
+        Self::from_digest(
+            decoded.version,
+            decoded.revision,
+            decoded.digest,
+            decoded.entries,
+        )
+    }
+}
+
+fn validate_external_snapshot_entries(
+    revision: u64,
+    entries: &mut Vec<ExternalSnapshotEntry>,
+) -> Result<(), ExternalSnapshotInputError> {
+    if entries.is_empty() {
+        if revision != 0 {
+            return Err(ExternalSnapshotInputError::InvalidSetRevision);
+        }
+    } else if revision == 0 {
+        return Err(ExternalSnapshotInputError::InvalidSetRevision);
+    }
+    if entries.len() > MAX_EXTERNAL_SNAPSHOT_ENTRIES {
+        return Err(ExternalSnapshotInputError::ResourceLimit {
+            actual: entries.len(),
+            limit: MAX_EXTERNAL_SNAPSHOT_ENTRIES,
+        });
+    }
+    entries.sort_by_key(|entry| entry.binding);
+    for pair in entries.windows(2) {
+        if pair[0].binding == pair[1].binding {
+            return Err(ExternalSnapshotInputError::DuplicateBinding {
+                binding: pair[0].binding,
+            });
+        }
+    }
+    for entry in entries {
+        if entry.source_revision == 0 {
+            return Err(ExternalSnapshotInputError::InvalidSourceRevision {
+                binding: entry.binding,
+            });
+        }
+        validate_external_snapshot_feature(entry.binding, &entry.feature)?;
+    }
+    Ok(())
+}
+
+fn validate_external_snapshot_feature(
+    binding: DocumentExternalBindingId,
+    feature: &ExternalSnapshotFeatureV1,
+) -> Result<(), ExternalSnapshotInputError> {
+    let invalid = |reason| ExternalSnapshotInputError::InvalidFeature { binding, reason };
+    let (scale, resources, expected) = match feature {
+        ExternalSnapshotFeatureV1::Point {
+            position,
+            scale,
+            resources,
+        } => {
+            if !position.iter().all(|value| value.is_finite()) {
+                return Err(invalid("point position must be finite"));
+            }
+            (*scale, *resources, (1, 0, 0))
+        }
+        ExternalSnapshotFeatureV1::LineSegment {
+            start,
+            end,
+            domain,
+            scale,
+            resources,
+            ..
+        } => {
+            if !start.iter().chain(end).all(|value| value.is_finite()) {
+                return Err(invalid("line endpoints must be finite"));
+            }
+            if domain[0].to_bits() != 0.0_f64.to_bits() || domain[1].to_bits() != 1.0_f64.to_bits()
+            {
+                return Err(invalid("line domain must be exactly [0, 1]"));
+            }
+            let dx = end[0] - start[0];
+            let dy = end[1] - start[1];
+            if !dx.is_finite() || !dy.is_finite() || dx.hypot(dy) <= f64::EPSILON {
+                return Err(invalid("line direction must be finite and nondegenerate"));
+            }
+            (*scale, *resources, (2, 0, 1))
+        }
+    };
+    if !scale.is_finite() || scale <= 0.0 {
+        return Err(invalid("scale must be positive and finite"));
+    }
+    if resources.point_count > MAX_EXTERNAL_SNAPSHOT_POINTS
+        || resources.control_count > MAX_EXTERNAL_SNAPSHOT_CONTROLS
+        || resources.span_count > MAX_EXTERNAL_SNAPSHOT_SPANS
+    {
+        return Err(invalid("resource evidence exceeds M43 limits"));
+    }
+    if (
+        resources.point_count,
+        resources.control_count,
+        resources.span_count,
+    ) != expected
+    {
+        return Err(invalid("resource evidence does not match feature kind"));
+    }
+    Ok(())
+}
+
+fn external_snapshot_set_digest(
+    revision: u64,
+    entries: &[ExternalSnapshotEntry],
+) -> ExternalSnapshotSetDigest {
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(b"geosolve-external-snapshot-set-v1");
+    bytes.extend_from_slice(&revision.to_be_bytes());
+    for entry in entries {
+        bytes.extend_from_slice(&entry.binding.0.as_u128().to_be_bytes());
+        bytes.extend_from_slice(&entry.source_revision.to_be_bytes());
+        bytes.extend_from_slice(&entry.source_digest.bytes());
+        match &entry.feature {
+            ExternalSnapshotFeatureV1::Point {
+                position,
+                scale,
+                resources,
+            } => {
+                bytes.push(0);
+                append_f64s(&mut bytes, position);
+                bytes.extend_from_slice(&scale.to_bits().to_be_bytes());
+                append_external_resources(&mut bytes, *resources);
+            }
+            ExternalSnapshotFeatureV1::LineSegment {
+                start,
+                end,
+                domain,
+                scale,
+                topology_digest,
+                resources,
+                ..
+            } => {
+                bytes.push(1);
+                append_f64s(&mut bytes, start);
+                append_f64s(&mut bytes, end);
+                append_f64s(&mut bytes, domain);
+                bytes.push(0);
+                bytes.extend_from_slice(&scale.to_bits().to_be_bytes());
+                bytes.extend_from_slice(&topology_digest.bytes());
+                append_external_resources(&mut bytes, *resources);
+            }
+        }
+    }
+    let mut lanes = [
+        0xcbf2_9ce4_8422_2325_u64,
+        0x8422_2325_cbf2_9ce4_u64,
+        0x9e37_79b1_85eb_ca87_u64,
+        0xd6e8_feb8_6659_fd93_u64,
+    ];
+    for byte in bytes {
+        for (index, lane) in lanes.iter_mut().enumerate() {
+            *lane ^= u64::from(byte) + u64::try_from(index).unwrap_or(0);
+            *lane = lane.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    }
+    let mut digest = [0; 32];
+    for (index, lane) in lanes.into_iter().enumerate() {
+        digest[index * 8..(index + 1) * 8].copy_from_slice(&lane.to_be_bytes());
+    }
+    ExternalSnapshotSetDigest(digest)
+}
+
+fn append_f64s(bytes: &mut Vec<u8>, values: &[f64]) {
+    for value in values {
+        bytes.extend_from_slice(&value.to_bits().to_be_bytes());
+    }
+}
+
+fn append_external_resources(bytes: &mut Vec<u8>, resources: ExternalSnapshotResourcesV1) {
+    bytes.extend_from_slice(&resources.point_count.to_be_bytes());
+    bytes.extend_from_slice(&resources.control_count.to_be_bytes());
+    bytes.extend_from_slice(&resources.span_count.to_be_bytes());
+}
+
+fn parameter_digest(revision: u64, entries: &[ParameterBatchEntry]) -> ParameterDigest {
+    let mut lanes = [
+        0xcbf2_9ce4_8422_2325_u64,
+        0x8422_2325_cbf2_9ce4_u64,
+        0x9e37_79b1_85eb_ca87_u64,
+        0xd6e8_feb8_6659_fd93_u64,
+    ];
+    let mut bytes = Vec::with_capacity(16 + entries.len() * 25);
+    bytes.extend_from_slice(b"geosolve-parameter-batch-v1");
+    bytes.extend_from_slice(&revision.to_be_bytes());
+    for entry in entries {
+        bytes.extend_from_slice(&entry.parameter.0.as_u128().to_be_bytes());
+        match entry.value {
+            ParameterValue::Length(value) => {
+                bytes.push(0);
+                bytes.extend_from_slice(&value.to_bits().to_be_bytes());
+            }
+            ParameterValue::Angle(value) => {
+                bytes.push(1);
+                bytes.extend_from_slice(&value.to_bits().to_be_bytes());
+            }
+            ParameterValue::Dimensionless(value) => {
+                bytes.push(2);
+                bytes.extend_from_slice(&value.to_bits().to_be_bytes());
+            }
+            ParameterValue::Activation(value) => {
+                bytes.push(3);
+                bytes.push(u8::from(value));
+            }
+        }
+    }
+    for byte in bytes {
+        for (lane_index, lane) in lanes.iter_mut().enumerate() {
+            *lane ^= u64::from(byte) + u64::try_from(lane_index).unwrap_or(0);
+            *lane = lane.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    }
+    let mut digest = [0_u8; 32];
+    for (index, lane) in lanes.into_iter().enumerate() {
+        digest[index * 8..(index + 1) * 8].copy_from_slice(&lane.to_be_bytes());
+    }
+    ParameterDigest(digest)
+}
+
+/// Defensive bound for one immutable host parameter batch.
+pub const MAX_PARAMETER_BATCH_ENTRIES: usize = crate::MAX_DOCUMENT_PARAMETERS;
+
+/// One closed typed canonical host parameter value.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ParameterValue {
+    Length(f64),
+    Angle(f64),
+    Dimensionless(f64),
+    Activation(bool),
+}
+
+impl ParameterValue {
+    #[must_use]
+    pub const fn kind(self) -> DocumentParameterKind {
+        match self {
+            Self::Length(_) => DocumentParameterKind::Length,
+            Self::Angle(_) => DocumentParameterKind::Angle,
+            Self::Dimensionless(_) => DocumentParameterKind::Dimensionless,
+            Self::Activation(_) => DocumentParameterKind::Activation,
+        }
+    }
+
+    #[must_use]
+    pub const fn numeric(self) -> Option<f64> {
+        match self {
+            Self::Length(value) | Self::Angle(value) | Self::Dimensionless(value) => Some(value),
+            Self::Activation(_) => None,
+        }
+    }
+}
+
+/// One canonical immutable host parameter entry.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ParameterBatchEntry {
+    pub parameter: DocumentParameterId,
+    pub value: ParameterValue,
+}
+
+/// Canonical deterministic identity of one immutable parameter batch.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct ParameterDigest([u8; 32]);
+
+impl ParameterDigest {
+    #[must_use]
+    pub const fn bytes(self) -> [u8; 32] {
+        self.0
+    }
+}
+
+/// Immutable ordered, revisioned host parameter input captured by one attempt.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ParameterBatch {
+    revision: u64,
+    digest: ParameterDigest,
+    entries: Vec<ParameterBatchEntry>,
+}
+
+impl Default for ParameterBatch {
+    fn default() -> Self {
+        Self {
+            revision: 0,
+            digest: parameter_digest(0, &[]),
+            entries: Vec::new(),
+        }
+    }
+}
+
+impl ParameterBatch {
+    /// Canonicalizes and captures one complete host input batch.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a zero revision, excess, duplicate, or non-finite entries.
+    pub fn new(
+        revision: u64,
+        mut entries: Vec<ParameterBatchEntry>,
+    ) -> Result<Self, DocumentError> {
+        if revision == 0 {
+            return Err(DocumentError::InvalidField {
+                field: "parameter batch revision",
+                message: "must be positive".into(),
+            });
+        }
+        if entries.len() > MAX_PARAMETER_BATCH_ENTRIES {
+            return Err(DocumentError::ResourceLimit {
+                resource: "parameter batch entries",
+                actual: entries.len(),
+                limit: MAX_PARAMETER_BATCH_ENTRIES,
+            });
+        }
+        entries.sort_by_key(|entry| entry.parameter);
+        for pair in entries.windows(2) {
+            if pair[0].parameter == pair[1].parameter {
+                return Err(DocumentError::InvalidField {
+                    field: "parameter batch",
+                    message: format!("duplicate parameter {}", pair[0].parameter),
+                });
+            }
+        }
+        for entry in &entries {
+            if entry
+                .value
+                .numeric()
+                .is_some_and(|value| !value.is_finite())
+            {
+                return Err(DocumentError::InvalidField {
+                    field: "parameter batch",
+                    message: format!("parameter {} is not finite", entry.parameter),
+                });
+            }
+        }
+        Ok(Self {
+            revision,
+            digest: parameter_digest(revision, &entries),
+            entries,
+        })
+    }
+
+    #[must_use]
+    pub const fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    #[must_use]
+    pub const fn digest(&self) -> ParameterDigest {
+        self.digest
+    }
+
+    #[must_use]
+    pub fn entries(&self) -> &[ParameterBatchEntry] {
+        &self.entries
+    }
+}
+
+#[allow(clippy::too_many_lines)]
+fn resolve_parameter_batch(
+    document: &SketchDocument,
+    batch: &ParameterBatch,
+    unavailable_external: &BTreeSet<DocumentElementId>,
+) -> Result<ResolvedDocumentParameters, DocumentError> {
+    document.validate()?;
+    let mut activation_required = BTreeSet::new();
+    for binding in document.parameter_bindings() {
+        if matches!(binding.target, DocumentParameterTarget::Activation(_)) {
+            activation_required.insert(binding.parameter);
+        }
+    }
+    let mut supplied = BTreeMap::new();
+    for entry in batch.entries() {
+        let declaration = document
+            .parameter(entry.parameter)
+            .ok_or(DocumentError::UnknownId {
+                kind: "parameter batch entry",
+                id: entry.parameter.0,
+            })?;
+        if declaration.kind != entry.value.kind() {
+            return Err(DocumentError::InvalidField {
+                field: "parameter batch",
+                message: format!("parameter {} has the wrong kind", entry.parameter),
+            });
+        }
+        supplied.insert(entry.parameter, entry.value);
+    }
+    if let Some(missing) = activation_required
+        .iter()
+        .find(|id| !supplied.contains_key(id))
+    {
+        return Err(DocumentError::InvalidField {
+            field: "parameter batch",
+            message: format!("required parameter {missing} is missing"),
+        });
+    }
+
+    let mut inactive = BTreeSet::<DocumentElementId>::new();
+    for binding in document.parameter_bindings() {
+        if let DocumentParameterTarget::Activation(element) = binding.target {
+            let Some(ParameterValue::Activation(active)) = supplied.get(&binding.parameter) else {
+                continue;
+            };
+            if !active {
+                inactive.insert(element);
+            }
+        }
+    }
+    let activity = document.effective_activity_with_input_overlays(&inactive, unavailable_external);
+    let mut required = activation_required;
+    for binding in document.parameter_bindings() {
+        let active = match binding.target {
+            DocumentParameterTarget::DrivingDimension(id) => activity.is_active(id),
+            DocumentParameterTarget::DimensionlessFixedScalar(property) => {
+                document.dimensionless_parameter_target_is_active(property, &activity)
+            }
+            DocumentParameterTarget::Activation(_) => false,
+        };
+        if active {
+            required.insert(binding.parameter);
+        }
+    }
+    if let Some(unexpected) = supplied.keys().find(|id| !required.contains(id)) {
+        return Err(DocumentError::InvalidField {
+            field: "parameter batch",
+            message: format!("parameter {unexpected} is not a required input"),
+        });
+    }
+    if let Some(missing) = required.iter().find(|id| !supplied.contains_key(id)) {
+        return Err(DocumentError::InvalidField {
+            field: "parameter batch",
+            message: format!("required parameter {missing} is missing"),
+        });
+    }
+    let mut dimensions = BTreeMap::new();
+    let mut dimensionless = BTreeMap::new();
+    for binding in document.parameter_bindings() {
+        let Some(value) = supplied
+            .get(&binding.parameter)
+            .and_then(|value| value.numeric())
+        else {
+            continue;
+        };
+        let resolved = ResolvedParameterBinding {
+            parameter: binding.parameter,
+            target: binding.target,
+            value,
+            parameter_revision: batch.revision(),
+            parameter_digest: batch.digest(),
+        };
+        match binding.target {
+            DocumentParameterTarget::DrivingDimension(dimension)
+                if activity.is_active(dimension) =>
+            {
+                document.validate_parameter_dimension_value(dimension, value)?;
+                dimensions.insert(dimension, resolved);
+            }
+            DocumentParameterTarget::DimensionlessFixedScalar(property)
+                if document.dimensionless_parameter_target_is_active(property, &activity) =>
+            {
+                document.validate_parameter_scalar_value(property.scalar, value)?;
+                dimensionless.insert(property.scalar, resolved);
+            }
+            DocumentParameterTarget::DrivingDimension(_)
+            | DocumentParameterTarget::DimensionlessFixedScalar(_)
+            | DocumentParameterTarget::Activation(_) => {}
+        }
+    }
+    Ok(ResolvedDocumentParameters {
+        activity,
+        dimensions,
+        dimensionless,
+        external_revision: 0,
+        external_digest: ExternalSnapshotSet::default().digest(),
+        external: BTreeMap::new(),
+    })
+}
+
+fn resolve_attempt_inputs(
+    document: &SketchDocument,
+    parameters: &ParameterBatch,
+    snapshots: &ExternalSnapshotSet,
+) -> Result<ResolvedDocumentParameters, AttemptInputError> {
+    let entries = snapshots
+        .entries()
+        .iter()
+        .map(|entry| (entry.binding, entry.clone()))
+        .collect::<BTreeMap<_, _>>();
+    for binding in entries.keys() {
+        if document.external_binding(*binding).is_none() {
+            return Err(AttemptInputError::External {
+                error: ExternalSnapshotInputError::UnknownBinding { binding: *binding },
+                activity: document.effective_activity(),
+            });
+        }
+    }
+    let mut unavailable = BTreeSet::new();
+    let mut incompatibilities = BTreeMap::new();
+    for declaration in document.external_bindings() {
+        let error = match entries.get(&declaration.id) {
+            None => Some(ExternalSnapshotInputError::MissingBinding {
+                binding: declaration.id,
+            }),
+            Some(entry) if entry.feature.kind() != declaration.expected_kind => {
+                Some(ExternalSnapshotInputError::WrongKind {
+                    binding: declaration.id,
+                    expected: declaration.expected_kind,
+                    actual: entry.feature.kind(),
+                })
+            }
+            Some(ExternalSnapshotEntry {
+                feature:
+                    ExternalSnapshotFeatureV1::LineSegment {
+                        topology_digest, ..
+                    },
+                ..
+            }) if declaration.expected_topology != Some(*topology_digest) => {
+                Some(ExternalSnapshotInputError::TopologyMismatch {
+                    binding: declaration.id,
+                })
+            }
+            Some(_) => None,
+        };
+        if let Some(error) = error {
+            unavailable.insert(DocumentElementId::ExternalBinding(declaration.id));
+            incompatibilities.insert(declaration.id, error);
+        }
+    }
+    let mut resolved = resolve_parameter_batch(document, parameters, &unavailable)
+        .map_err(AttemptInputError::Parameter)?;
+    for constraint in document.constraints() {
+        let binding = match constraint.definition {
+            DocumentConstraintDefinition::ExternalPointCoincident { external, .. } => {
+                external.binding
+            }
+            DocumentConstraintDefinition::ExternalLineCollinear { external, .. } => {
+                external.binding
+            }
+            _ => continue,
+        };
+        if resolved.activity.reason(binding)
+            == Some(crate::InactivityReason::UnavailableExternalReference)
+            && matches!(
+                resolved.activity.reason(constraint.id),
+                Some(crate::InactivityReason::UnavailableDependency {
+                    dependency: DocumentElementId::ExternalBinding(dependency)
+                }) if dependency == binding
+            )
+        {
+            return Err(AttemptInputError::External {
+                error: incompatibilities
+                    .get(&binding)
+                    .expect("unavailable binding has structured input evidence")
+                    .clone(),
+                activity: resolved.activity,
+            });
+        }
+    }
+    resolved.external_revision = snapshots.revision();
+    resolved.external_digest = snapshots.digest();
+    resolved.external = entries;
+    Ok(resolved)
+}
+
+enum AttemptInputError {
+    Parameter(DocumentError),
+    External {
+        error: ExternalSnapshotInputError,
+        activity: crate::EffectiveActivity,
+    },
+}
 
 /// Persistent drag request lowered only after runtime IDs have been allocated.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -52,6 +875,14 @@ impl DocumentSolveRequest {
     #[must_use]
     pub const fn without_previous_state_preferences(mut self) -> Self {
         self.previous_state_preferences = false;
+        self
+    }
+
+    /// Removes interaction-scoped drag and stability targets before a retained restore.
+    #[must_use]
+    pub const fn without_temporary_targets(mut self) -> Self {
+        self.drag = None;
+        self.stability_target = None;
         self
     }
 
@@ -265,7 +1096,7 @@ impl SketchAcceptedStateIdentity {
 
 /// Exact M34 inputs evaluated by one attempt before later host-input stamps exist.
 ///
-/// M41-M47 extend the lifecycle with activation, parameter, external-snapshot, and
+/// M41-M101X extend the lifecycle with activation, parameter, external-snapshot, and
 /// prepared-work identities. This type intentionally records only inputs implemented
 /// by M34 and does not claim to be the final v5 input stamp.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -274,9 +1105,46 @@ pub struct SketchAttemptInput {
     candidate_request: DocumentSolveRequest,
     publication_request: DocumentSolveRequest,
     solver_config: SolverConfig,
+    effective_activation_revision: u64,
+    activation_digest: ActivationDigest,
+    parameter_revision: u64,
+    parameter_digest: ParameterDigest,
+    external_snapshot_set_revision: u64,
+    external_snapshot_set_digest: ExternalSnapshotSetDigest,
 }
 
 impl SketchAttemptInput {
+    fn for_document_with_parameters(
+        document: &SketchDocument,
+        design: SketchDesignIdentity,
+        candidate_request: DocumentSolveRequest,
+        publication_request: DocumentSolveRequest,
+        solver_config: SolverConfig,
+        parameters: &ParameterBatch,
+        snapshots: &ExternalSnapshotSet,
+    ) -> Self {
+        // A valid M42 batch contributes its activation overlay to the exact
+        // immutable attempt stamp. Invalid batches remain attempts (rather than
+        // accepted states), so retain the document-only activity for their
+        // diagnostic capsule.
+        let activity = resolve_attempt_inputs(document, parameters, snapshots).map_or_else(
+            |_| document.effective_activity(),
+            |resolved| resolved.activity,
+        );
+        Self {
+            design,
+            candidate_request,
+            publication_request,
+            solver_config,
+            effective_activation_revision: activity.activation_revision(),
+            activation_digest: activity.activation_digest(),
+            parameter_revision: parameters.revision(),
+            parameter_digest: parameters.digest(),
+            external_snapshot_set_revision: snapshots.revision(),
+            external_snapshot_set_digest: snapshots.digest(),
+        }
+    }
+
     #[must_use]
     pub const fn design_identity(self) -> SketchDesignIdentity {
         self.design
@@ -297,12 +1165,46 @@ impl SketchAttemptInput {
     pub const fn solver_config(self) -> SolverConfig {
         self.solver_config
     }
+
+    /// Returns the effective activation revision captured before lowering.
+    #[must_use]
+    pub const fn effective_activation_revision(self) -> u64 {
+        self.effective_activation_revision
+    }
+
+    /// Returns the exact effective activation payload identity captured before lowering.
+    #[must_use]
+    pub const fn activation_digest(self) -> ActivationDigest {
+        self.activation_digest
+    }
+
+    #[must_use]
+    pub const fn parameter_revision(self) -> u64 {
+        self.parameter_revision
+    }
+
+    #[must_use]
+    pub const fn parameter_digest(self) -> ParameterDigest {
+        self.parameter_digest
+    }
+
+    #[must_use]
+    pub const fn external_snapshot_set_revision(self) -> u64 {
+        self.external_snapshot_set_revision
+    }
+
+    #[must_use]
+    pub const fn external_snapshot_set_digest(self) -> ExternalSnapshotSetDigest {
+        self.external_snapshot_set_digest
+    }
 }
 
 /// Stage at which a retained-design attempt failed before producing a solve report.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum SketchAttemptFailureKind {
+    ParameterInput,
+    ExternalSnapshotInput,
     Lowering,
     Request,
     Solve,
@@ -315,6 +1217,8 @@ pub enum SketchAttemptFailureKind {
 pub struct SketchAttemptFailure {
     kind: SketchAttemptFailureKind,
     message: String,
+    external_error: Option<ExternalSnapshotInputError>,
+    effective_activity: Option<crate::EffectiveActivity>,
 }
 
 impl SketchAttemptFailure {
@@ -326,6 +1230,17 @@ impl SketchAttemptFailure {
     #[must_use]
     pub fn message(&self) -> &str {
         &self.message
+    }
+
+    #[must_use]
+    pub const fn external_snapshot_error(&self) -> Option<&ExternalSnapshotInputError> {
+        self.external_error.as_ref()
+    }
+
+    /// Returns the exact M41 closure used to classify an external-input failure.
+    #[must_use]
+    pub const fn effective_activity(&self) -> Option<&crate::EffectiveActivity> {
+        self.effective_activity.as_ref()
     }
 }
 
@@ -433,6 +1348,55 @@ pub struct SketchAcceptedDocumentState {
     document: SketchDocument,
     runtime: SketchSession,
     mappings: DocumentRuntimeMap,
+    redundancy: SketchAcceptedDocumentRedundancy,
+    parameter_outputs: Vec<DocumentParameterOutputProposal>,
+}
+
+/// One accepted, independently evaluated reference-dimension output proposal.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DocumentParameterOutputProposal {
+    pub parameter: DocumentParameterId,
+    pub dimension: DocumentDimensionId,
+    pub source: DocumentSourceId,
+    pub unit: DocumentScalarUnit,
+    pub value: f64,
+    pub design: SketchDesignIdentity,
+    pub attempt: SketchAttemptIdentity,
+    pub accepted: SketchAcceptedStateIdentity,
+    pub parameter_revision: u64,
+    pub parameter_digest: ParameterDigest,
+    pub provenance: DocumentMeasurementProvenance,
+}
+
+/// Persistent accepted redundancy with exact accepted-state and solved-design provenance.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SketchAcceptedDocumentRedundancy {
+    accepted_state: SketchAcceptedStateIdentity,
+    design: SketchDesignIdentity,
+    fully_redundant_sources: Vec<DocumentSourceId>,
+    sources_containing_redundant_rows: Vec<DocumentSourceId>,
+}
+
+impl SketchAcceptedDocumentRedundancy {
+    #[must_use]
+    pub const fn accepted_state_identity(&self) -> SketchAcceptedStateIdentity {
+        self.accepted_state
+    }
+
+    #[must_use]
+    pub const fn design_identity(&self) -> SketchDesignIdentity {
+        self.design
+    }
+
+    #[must_use]
+    pub fn fully_redundant_sources(&self) -> &[DocumentSourceId] {
+        &self.fully_redundant_sources
+    }
+
+    #[must_use]
+    pub fn sources_containing_redundant_rows(&self) -> &[DocumentSourceId] {
+        &self.sources_containing_redundant_rows
+    }
 }
 
 impl SketchAcceptedDocumentState {
@@ -476,6 +1440,18 @@ impl SketchAcceptedDocumentState {
     #[must_use]
     pub const fn solve_result(&self) -> &SketchSolveResult {
         self.runtime.accepted_result()
+    }
+
+    /// Returns persistent redundancy derived only from this accepted state.
+    #[must_use]
+    pub const fn accepted_redundancy(&self) -> &SketchAcceptedDocumentRedundancy {
+        &self.redundancy
+    }
+
+    /// Returns the immutable output proposals published with this accepted state.
+    #[must_use]
+    pub fn parameter_output_proposals(&self) -> &[DocumentParameterOutputProposal] {
+        &self.parameter_outputs
     }
 
     /// Returns one accepted reference measurement by persistent dimension identity.
@@ -601,6 +1577,26 @@ pub enum DocumentEdit {
         definition: DocumentDimensionDefinition,
         mode: DocumentDimensionMode,
     },
+    CreateParameter {
+        label: String,
+        kind: DocumentParameterKind,
+    },
+    AddParameterBinding {
+        parameter: DocumentParameterId,
+        target: DocumentParameterTarget,
+    },
+    RemoveParameterBinding {
+        parameter: DocumentParameterId,
+        target: DocumentParameterTarget,
+    },
+    AddParameterOutput {
+        parameter: DocumentParameterId,
+        dimension: DocumentDimensionId,
+    },
+    RemoveParameterOutput {
+        parameter: DocumentParameterId,
+        dimension: DocumentDimensionId,
+    },
     CreateRectangle {
         label: String,
         origin: [f64; 2],
@@ -707,6 +1703,24 @@ pub enum DocumentEdit {
         source: DocumentSourceId,
         suppressed: bool,
     },
+    /// Changes only the profile/construction role of one curve.
+    SetGeometryRole {
+        curve: CurveId,
+        role: GeometryRole,
+    },
+    /// Generalized user activation for every persistent document element.
+    ///
+    /// `SetSourceSuppressed` remains the source-specific compatibility command.
+    SetElementUserSuppressed {
+        element: crate::DocumentElementId,
+        suppressed: bool,
+    },
+    /// Installs a newer immutable host configuration payload.
+    ///
+    /// A newer payload with no overrides clears all host-requested inactivity.
+    SetHostConfigurationActivation {
+        activation: HostConfigurationActivation,
+    },
     Delete {
         object: DocumentObjectId,
     },
@@ -739,6 +1753,23 @@ pub enum DocumentCommandEffect {
     CreatedContact(ContactId),
     CreatedConstraint(DocumentConstraintId),
     CreatedDimension(DocumentDimensionId),
+    CreatedParameter(DocumentParameterId),
+    AddedParameterBinding {
+        parameter: DocumentParameterId,
+        target: DocumentParameterTarget,
+    },
+    RemovedParameterBinding {
+        parameter: DocumentParameterId,
+        target: DocumentParameterTarget,
+    },
+    AddedParameterOutput {
+        parameter: DocumentParameterId,
+        dimension: DocumentDimensionId,
+    },
+    RemovedParameterOutput {
+        parameter: DocumentParameterId,
+        dimension: DocumentDimensionId,
+    },
     CreatedRectangle(Box<RectangleIds>),
     CreatedMirroredCurve(Box<MirroredCurveIds>),
     CreatedLineLineFillet(Box<LineLineFilletIds>),
@@ -756,6 +1787,9 @@ pub enum DocumentCommandEffect {
     UpdatedConstraint(DocumentConstraintId),
     UpdatedDimension(DocumentDimensionId),
     UpdatedSource(DocumentSourceId),
+    UpdatedGeometryRole(CurveId),
+    UpdatedElementUserSuppression(crate::DocumentElementId),
+    UpdatedHostConfigurationActivation,
     Deleted(DocumentObjectId),
     Transaction(String),
     Imported,
@@ -815,6 +1849,12 @@ pub enum DocumentSessionError {
         expected: SketchDesignIdentity,
         actual: SketchDesignIdentity,
     },
+    #[error("parameter batch revision {actual} is not newer than retained revision {retained}")]
+    StaleParameterRevision { actual: u64, retained: u64 },
+    #[error(
+        "external snapshot set revision {actual} is not newer than retained revision {retained}"
+    )]
+    StaleExternalSnapshotRevision { actual: u64, retained: u64 },
     #[error("retained design belongs to document {actual}, expected {expected}")]
     ForeignDesign {
         expected: crate::DocumentId,
@@ -824,6 +1864,16 @@ pub enum DocumentSessionError {
     RevisionExhausted { domain: &'static str },
     #[error("the restored accepted document did not produce an independently accepted state")]
     InvalidAcceptedSnapshot,
+    #[error("point-move preview belongs to a different document")]
+    PreviewForeignDocument,
+    #[error("point-move preview does not belong to the current retained design")]
+    PreviewStaleDesign,
+    #[error("point-move preview does not descend from the current accepted state")]
+    PreviewAcceptedProvenance,
+    #[error("point-move preview's latest attempt did not publish its accepted state")]
+    PreviewNotAccepted,
+    #[error("point and position do not bitwise match the preview drag and accepted point")]
+    PreviewPointMismatch,
 }
 
 #[derive(Clone, Debug)]
@@ -862,6 +1912,8 @@ pub struct RetainedSketchDocumentSession {
     accepted_revision_high_water: Option<SketchAcceptedRevision>,
     request: DocumentSolveRequest,
     config: SolverConfig,
+    parameter_batch: ParameterBatch,
+    external_snapshots: ExternalSnapshotSet,
 }
 
 impl SketchDocumentSession {
@@ -1768,7 +2820,56 @@ impl RetainedSketchDocumentSession {
         request: DocumentSolveRequest,
         config: SolverConfig,
     ) -> Result<Self, DocumentSessionError> {
-        Self::new_at(document, request, config, 0, 0, None, 0)
+        Self::new_with_parameter_batch(document, ParameterBatch::default(), request, config)
+    }
+
+    /// Starts a lifecycle with one exact immutable M42 host-input batch.
+    ///
+    /// # Errors
+    ///
+    /// Rejects malformed design data, host input, or invalid solver policy.
+    pub fn new_with_parameter_batch(
+        document: SketchDocument,
+        parameter_batch: ParameterBatch,
+        request: DocumentSolveRequest,
+        config: SolverConfig,
+    ) -> Result<Self, DocumentSessionError> {
+        Self::new_at(
+            document,
+            parameter_batch,
+            ExternalSnapshotSet::default(),
+            request,
+            config,
+            0,
+            0,
+            None,
+            0,
+        )
+    }
+
+    /// Starts a lifecycle with exact immutable parameter and external inputs.
+    ///
+    /// # Errors
+    ///
+    /// Rejects malformed document/input state or lifecycle setup failures.
+    pub fn new_with_inputs(
+        document: SketchDocument,
+        parameter_batch: ParameterBatch,
+        external_snapshots: ExternalSnapshotSet,
+        request: DocumentSolveRequest,
+        config: SolverConfig,
+    ) -> Result<Self, DocumentSessionError> {
+        Self::new_at(
+            document,
+            parameter_batch,
+            external_snapshots,
+            request,
+            config,
+            0,
+            0,
+            None,
+            0,
+        )
     }
 
     /// Starts a retained-design lifecycle under operation control.
@@ -1799,15 +2900,26 @@ impl RetainedSketchDocumentSession {
             document: document.id(),
             revision: SketchAttemptRevision(0),
         };
-        let input = SketchAttemptInput {
-            design: design_identity,
-            candidate_request: request,
-            publication_request: request,
-            solver_config: config,
-        };
-        let Some(execution) =
-            run_retained_attempt_controlled(&document, request, None, config, &mut controller)
-        else {
+        let parameter_batch = ParameterBatch::default();
+        let external_snapshots = ExternalSnapshotSet::default();
+        let input = SketchAttemptInput::for_document_with_parameters(
+            &document,
+            design_identity,
+            request,
+            request,
+            config,
+            &parameter_batch,
+            &external_snapshots,
+        );
+        let Some(execution) = run_retained_attempt_controlled(
+            &document,
+            &parameter_batch,
+            &external_snapshots,
+            request,
+            None,
+            config,
+            &mut controller,
+        ) else {
             return Ok(controller.outcome_unchecked());
         };
         if controller
@@ -1834,6 +2946,8 @@ impl RetainedSketchDocumentSession {
             accepted_revision_high_water,
             request,
             config,
+            parameter_batch,
+            external_snapshots,
         }))
     }
 
@@ -1858,6 +2972,8 @@ impl RetainedSketchDocumentSession {
             .map_or(Ok(0), |revision| next_revision(revision.0, "accepted"))?;
         Self::new_at(
             design,
+            ParameterBatch::default(),
+            ExternalSnapshotSet::default(),
             request,
             config,
             design_revision,
@@ -1867,8 +2983,11 @@ impl RetainedSketchDocumentSession {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn new_at(
         document: SketchDocument,
+        parameter_batch: ParameterBatch,
+        external_snapshots: ExternalSnapshotSet,
         request: DocumentSolveRequest,
         config: SolverConfig,
         design_revision: u64,
@@ -1887,13 +3006,23 @@ impl RetainedSketchDocumentSession {
             document: document.id(),
             revision: SketchAttemptRevision(attempt_revision),
         };
-        let input = SketchAttemptInput {
-            design: design_identity,
-            candidate_request: request,
-            publication_request: request,
-            solver_config: config,
-        };
-        let execution = run_retained_attempt(&document, request, None, config);
+        let input = SketchAttemptInput::for_document_with_parameters(
+            &document,
+            design_identity,
+            request,
+            request,
+            config,
+            &parameter_batch,
+            &external_snapshots,
+        );
+        let execution = run_retained_attempt(
+            &document,
+            &parameter_batch,
+            &external_snapshots,
+            request,
+            None,
+            config,
+        );
         let (last_attempt, accepted) = publish_retained_attempt(
             &document,
             &input,
@@ -1914,6 +3043,8 @@ impl RetainedSketchDocumentSession {
             accepted_revision_high_water,
             request,
             config,
+            parameter_batch,
+            external_snapshots,
         })
     }
 
@@ -1950,6 +3081,8 @@ impl RetainedSketchDocumentSession {
             .map_or(Ok(0), |revision| next_revision(revision.0, "accepted"))?;
         let mut session = Self::new_at(
             accepted,
+            ParameterBatch::default(),
+            ExternalSnapshotSet::default(),
             DocumentSolveRequest::default(),
             config,
             accepted_design_revision,
@@ -1979,6 +3112,18 @@ impl RetainedSketchDocumentSession {
     #[must_use]
     pub const fn design_document(&self) -> &SketchDocument {
         &self.design
+    }
+
+    /// Returns the latest immutable host batch captured for attempts.
+    #[must_use]
+    pub const fn parameter_batch(&self) -> &ParameterBatch {
+        &self.parameter_batch
+    }
+
+    /// Returns the exact immutable external set captured for attempts.
+    #[must_use]
+    pub const fn external_snapshot_set(&self) -> &ExternalSnapshotSet {
+        &self.external_snapshots
     }
 
     /// Returns non-authoritative evidence for the most recent exact attempt.
@@ -2041,6 +3186,85 @@ impl RetainedSketchDocumentSession {
         };
         candidate.validate()?;
         self.retain_candidate(candidate, effect, command_drag)
+    }
+
+    /// Retains one point-position edit while seeding its final solve from an exact
+    /// independently accepted transient preview.
+    ///
+    /// Only the point edit is retained as design intent. Every solved continuous
+    /// value in `preview` seeds the new independent solve; preview lifecycle
+    /// identities and temporary request targets are not retained.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a stale edit, malformed point position, or preview whose document,
+    /// design, parent accepted state, latest attempt, and published accepted state
+    /// do not coherently belong to this lifecycle.
+    pub fn apply_point_position_from_preview(
+        &mut self,
+        expected: SketchDesignIdentity,
+        point: DesignPointId,
+        position: [f64; 2],
+        preview: &Self,
+    ) -> Result<RetainedDocumentTransactionOutcome<DocumentCommandEffect>, DocumentSessionError>
+    {
+        self.check_design_identity(expected)?;
+        if preview.design_identity.document != self.design_identity.document {
+            return Err(DocumentSessionError::PreviewForeignDocument);
+        }
+        if preview.design_identity != self.design_identity
+            || preview.last_attempt.design_identity() != self.design_identity
+        {
+            return Err(DocumentSessionError::PreviewStaleDesign);
+        }
+        let parent = self
+            .accepted
+            .as_ref()
+            .map(SketchAcceptedDocumentState::identity);
+        if preview.last_attempt.parent_accepted_identity() != parent {
+            return Err(DocumentSessionError::PreviewAcceptedProvenance);
+        }
+        let Some(preview_accepted) = preview.accepted.as_ref() else {
+            return Err(DocumentSessionError::PreviewNotAccepted);
+        };
+        if preview.last_attempt.failure().is_some()
+            || preview
+                .last_attempt
+                .solve_result()
+                .is_none_or(|solve| solve.rejection.is_some())
+            || preview.last_attempt.accepted_state_identity() != Some(preview_accepted.identity())
+            || preview_accepted.design_identity() != self.design_identity
+        {
+            return Err(DocumentSessionError::PreviewNotAccepted);
+        }
+        if preview
+            .last_attempt
+            .input()
+            .candidate_request()
+            .drag
+            .map(|drag| drag.point)
+            != Some(point)
+            || preview_accepted
+                .document
+                .point(point)
+                .map(|accepted| pair_bits(accepted.position))
+                != Some(pair_bits(position))
+        {
+            return Err(DocumentSessionError::PreviewPointMismatch);
+        }
+
+        let mut candidate = self.design.clone();
+        candidate.set_point_position(point, position)?;
+        candidate.validate()?;
+        self.retain_candidate_with_seed(
+            candidate,
+            DocumentCommandEffect::UpdatedPoint(point),
+            Some(DocumentDragTarget {
+                point,
+                target: position,
+            }),
+            &preview_accepted.document,
+        )
     }
 
     /// Retains and attempts one edit under cooperative operation control.
@@ -2118,12 +3342,15 @@ impl RetainedSketchDocumentSession {
             .accepted
             .as_ref()
             .map(SketchAcceptedDocumentState::identity);
-        let input = SketchAttemptInput {
-            design: self.design_identity,
-            candidate_request: request,
-            publication_request: request,
-            solver_config: self.config,
-        };
+        let input = SketchAttemptInput::for_document_with_parameters(
+            &self.design,
+            self.design_identity,
+            request,
+            request,
+            self.config,
+            &self.parameter_batch,
+            &self.external_snapshots,
+        );
         let seed = match seed_from_accepted_parent_controlled(
             &self.design,
             self.accepted.as_ref(),
@@ -2156,9 +3383,15 @@ impl RetainedSketchDocumentSession {
                 return Ok(controller.outcome(attempt));
             }
         };
-        let Some(execution) =
-            run_retained_attempt_controlled(&seed, request, None, self.config, &mut controller)
-        else {
+        let Some(execution) = run_retained_attempt_controlled(
+            &seed,
+            &self.parameter_batch,
+            &self.external_snapshots,
+            request,
+            None,
+            self.config,
+            &mut controller,
+        ) else {
             return Ok(controller.outcome_unchecked());
         };
         let (attempt, accepted) = publish_retained_attempt(
@@ -2255,14 +3488,24 @@ impl RetainedSketchDocumentSession {
             .accepted
             .as_ref()
             .map(SketchAcceptedDocumentState::identity);
-        let input = SketchAttemptInput {
-            design: self.design_identity,
-            candidate_request: request,
-            publication_request: request,
-            solver_config: self.config,
-        };
+        let input = SketchAttemptInput::for_document_with_parameters(
+            &self.design,
+            self.design_identity,
+            request,
+            request,
+            self.config,
+            &self.parameter_batch,
+            &self.external_snapshots,
+        );
         let execution = match seed_from_accepted_parent(&self.design, self.accepted.as_ref()) {
-            Ok(seed) => run_retained_attempt(&seed, request, None, self.config),
+            Ok(seed) => run_retained_attempt(
+                &seed,
+                &self.parameter_batch,
+                &self.external_snapshots,
+                request,
+                None,
+                self.config,
+            ),
             Err(error) => RetainedAttemptExecution::failure(
                 SketchAttemptFailureKind::AcceptedSession,
                 error.to_string(),
@@ -2283,6 +3526,259 @@ impl RetainedSketchDocumentSession {
             self.accepted = Some(accepted);
         }
         Ok(&self.last_attempt)
+    }
+
+    /// Attempts retained design with a new exact host parameter batch.
+    ///
+    /// Changed payloads require a strictly newer host revision. An exact immutable
+    /// reattempt may reuse the current batch and revision.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a stale design identity, stale batch revision, or exhausted
+    /// lifecycle revision space.
+    pub fn update_parameter_batch(
+        &mut self,
+        expected: SketchDesignIdentity,
+        batch: ParameterBatch,
+        request: DocumentSolveRequest,
+    ) -> Result<&SketchDocumentAttempt, DocumentSessionError> {
+        self.check_design_identity(expected)?;
+        if batch != self.parameter_batch && batch.revision() <= self.parameter_batch.revision() {
+            return Err(DocumentSessionError::StaleParameterRevision {
+                actual: batch.revision(),
+                retained: self.parameter_batch.revision(),
+            });
+        }
+        let attempt_identity = self.next_attempt_identity()?;
+        let parent = self
+            .accepted
+            .as_ref()
+            .map(SketchAcceptedDocumentState::identity);
+        let input = SketchAttemptInput::for_document_with_parameters(
+            &self.design,
+            self.design_identity,
+            request,
+            request,
+            self.config,
+            &batch,
+            &self.external_snapshots,
+        );
+        let execution = match seed_from_accepted_parent(&self.design, self.accepted.as_ref()) {
+            Ok(seed) => run_retained_attempt(
+                &seed,
+                &batch,
+                &self.external_snapshots,
+                request,
+                None,
+                self.config,
+            ),
+            Err(error) => RetainedAttemptExecution::failure(
+                SketchAttemptFailureKind::AcceptedSession,
+                error.to_string(),
+            ),
+        };
+        let (attempt, accepted) = publish_retained_attempt(
+            &self.design,
+            &input,
+            attempt_identity,
+            parent,
+            next_accepted_revision(self.accepted_revision_high_water),
+            execution,
+        );
+        self.parameter_batch = batch;
+        self.request = request;
+        self.last_attempt = attempt;
+        if let Some(accepted) = accepted {
+            self.accepted_revision_high_water = Some(accepted.identity.revision);
+            self.accepted = Some(accepted);
+        }
+        Ok(&self.last_attempt)
+    }
+
+    /// Attempts retained design with a newer immutable external snapshot set.
+    ///
+    /// The retained set changes only when the supplied set produces a newly
+    /// independently accepted state. Input, lowering, solve, validation, and
+    /// publication failures remain inspectable attempts while retaining both the
+    /// current set and the prior accepted state's snapshot stamp.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a stale design identity, a lower revision, or a same-revision set
+    /// with a different digest before allocating an attempt identity.
+    pub fn update_external_snapshot_set(
+        &mut self,
+        expected: SketchDesignIdentity,
+        snapshots: ExternalSnapshotSet,
+        request: DocumentSolveRequest,
+    ) -> Result<&SketchDocumentAttempt, DocumentSessionError> {
+        self.check_design_identity(expected)?;
+        if snapshots != self.external_snapshots
+            && snapshots.revision() <= self.external_snapshots.revision()
+        {
+            return Err(DocumentSessionError::StaleExternalSnapshotRevision {
+                actual: snapshots.revision(),
+                retained: self.external_snapshots.revision(),
+            });
+        }
+        let attempt_identity = self.next_attempt_identity()?;
+        let parent = self
+            .accepted
+            .as_ref()
+            .map(SketchAcceptedDocumentState::identity);
+        let input = SketchAttemptInput::for_document_with_parameters(
+            &self.design,
+            self.design_identity,
+            request,
+            request,
+            self.config,
+            &self.parameter_batch,
+            &snapshots,
+        );
+        let execution = match seed_from_accepted_parent(&self.design, self.accepted.as_ref()) {
+            Ok(seed) => run_retained_attempt(
+                &seed,
+                &self.parameter_batch,
+                &snapshots,
+                request,
+                None,
+                self.config,
+            ),
+            Err(error) => RetainedAttemptExecution::failure(
+                SketchAttemptFailureKind::AcceptedSession,
+                error.to_string(),
+            ),
+        };
+        let (attempt, accepted) = publish_retained_attempt(
+            &self.design,
+            &input,
+            attempt_identity,
+            parent,
+            next_accepted_revision(self.accepted_revision_high_water),
+            execution,
+        );
+        self.request = request;
+        self.last_attempt = attempt;
+        if let Some(accepted) = accepted {
+            self.external_snapshots = snapshots;
+            self.accepted_revision_high_water = Some(accepted.identity.revision);
+            self.accepted = Some(accepted);
+        }
+        Ok(&self.last_attempt)
+    }
+
+    /// Controlled counterpart to [`Self::update_external_snapshot_set`].
+    ///
+    /// Cancellation and work exhaustion leave the retained and accepted external
+    /// snapshot sets unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale design identity, stale snapshot revisions, malformed inputs, or
+    /// lifecycle revision exhaustion.
+    pub fn update_external_snapshot_set_controlled(
+        &mut self,
+        expected: SketchDesignIdentity,
+        snapshots: ExternalSnapshotSet,
+        request: DocumentSolveRequest,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<SketchDocumentAttempt>, DocumentSessionError> {
+        let mut controller = OperationController::new(control);
+        if controller
+            .checkpoint(OperationCheckpoint::DocumentValidation)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        self.check_design_identity(expected)?;
+        if snapshots != self.external_snapshots
+            && snapshots.revision() <= self.external_snapshots.revision()
+        {
+            return Err(DocumentSessionError::StaleExternalSnapshotRevision {
+                actual: snapshots.revision(),
+                retained: self.external_snapshots.revision(),
+            });
+        }
+        let attempt_identity = self.next_attempt_identity()?;
+        let parent = self
+            .accepted
+            .as_ref()
+            .map(SketchAcceptedDocumentState::identity);
+        let input = SketchAttemptInput::for_document_with_parameters(
+            &self.design,
+            self.design_identity,
+            request,
+            request,
+            self.config,
+            &self.parameter_batch,
+            &snapshots,
+        );
+        let seed = match seed_from_accepted_parent_controlled(
+            &self.design,
+            self.accepted.as_ref(),
+            &mut controller,
+        ) {
+            Ok(Some(seed)) => seed,
+            Ok(None) => return Ok(controller.outcome_unchecked()),
+            Err(error) => {
+                let execution = RetainedAttemptExecution::failure(
+                    SketchAttemptFailureKind::AcceptedSession,
+                    error.to_string(),
+                );
+                let (attempt, accepted) = publish_retained_attempt(
+                    &self.design,
+                    &input,
+                    attempt_identity,
+                    parent,
+                    next_accepted_revision(self.accepted_revision_high_water),
+                    execution,
+                );
+                if controller
+                    .checkpoint(OperationCheckpoint::BeforeCommit)
+                    .is_err()
+                {
+                    return Ok(controller.outcome_unchecked());
+                }
+                self.request = request;
+                self.last_attempt = attempt.clone();
+                debug_assert!(accepted.is_none());
+                return Ok(controller.outcome(attempt));
+            }
+        };
+        let Some(execution) = run_retained_attempt_controlled(
+            &seed,
+            &self.parameter_batch,
+            &snapshots,
+            request,
+            None,
+            self.config,
+            &mut controller,
+        ) else {
+            return Ok(controller.outcome_unchecked());
+        };
+        let (attempt, accepted) = publish_retained_attempt(
+            &self.design,
+            &input,
+            attempt_identity,
+            parent,
+            next_accepted_revision(self.accepted_revision_high_water),
+            execution,
+        );
+        if controller
+            .checkpoint(OperationCheckpoint::BeforeCommit)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        self.request = request;
+        self.last_attempt = attempt.clone();
+        if let Some(accepted) = accepted {
+            self.external_snapshots = snapshots;
+            self.accepted_revision_high_water = Some(accepted.identity.revision);
+            self.accepted = Some(accepted);
+        }
+        Ok(controller.outcome(attempt))
     }
 
     /// Imports a supported v1-v4 graph as retained design intent.
@@ -2415,19 +3911,95 @@ impl RetainedSketchDocumentSession {
             .accepted
             .as_ref()
             .map(SketchAcceptedDocumentState::identity);
-        let input = SketchAttemptInput {
-            design: design_identity,
-            candidate_request: effective_attempt_request(self.request, command_drag),
-            publication_request: self.request,
-            solver_config: self.config,
-        };
+        let input = SketchAttemptInput::for_document_with_parameters(
+            &candidate,
+            design_identity,
+            effective_attempt_request(self.request, command_drag),
+            self.request,
+            self.config,
+            &self.parameter_batch,
+            &self.external_snapshots,
+        );
         let execution = match seed_from_accepted_parent(&candidate, self.accepted.as_ref()) {
-            Ok(seed) => run_retained_attempt(&seed, self.request, command_drag, self.config),
+            Ok(seed) => run_retained_attempt(
+                &seed,
+                &self.parameter_batch,
+                &self.external_snapshots,
+                self.request,
+                command_drag,
+                self.config,
+            ),
             Err(error) => RetainedAttemptExecution::failure(
                 SketchAttemptFailureKind::AcceptedSession,
                 error.to_string(),
             ),
         };
+        let (attempt, accepted) = publish_retained_attempt(
+            &candidate,
+            &input,
+            attempt_identity,
+            parent,
+            next_accepted_revision(self.accepted_revision_high_water),
+            execution,
+        );
+        let published_accepted = accepted.as_ref().map(SketchAcceptedDocumentState::identity);
+        self.design = candidate;
+        self.design_identity = design_identity;
+        self.last_attempt = attempt;
+        if let Some(accepted) = accepted {
+            self.accepted_revision_high_water = Some(accepted.identity.revision);
+            self.accepted = Some(accepted);
+        }
+        Ok(RetainedDocumentTransactionOutcome {
+            value,
+            design: design_identity,
+            attempt: attempt_identity,
+            published_accepted,
+        })
+    }
+
+    fn retain_candidate_with_seed<T>(
+        &mut self,
+        candidate: SketchDocument,
+        value: T,
+        command_drag: Option<DocumentDragTarget>,
+        seed: &SketchDocument,
+    ) -> Result<RetainedDocumentTransactionOutcome<T>, DocumentSessionError> {
+        if candidate.id() != self.design_identity.document || seed.id() != candidate.id() {
+            return Err(DocumentSessionError::ForeignDesign {
+                expected: self.design_identity.document,
+                actual: candidate.id(),
+            });
+        }
+        candidate.validate()?;
+        seed.validate()?;
+        let design_revision = next_revision(self.design_identity.revision.0, "design")?;
+        let attempt_identity = self.next_attempt_identity()?;
+        let design_identity = SketchDesignIdentity {
+            document: self.design_identity.document,
+            revision: SketchDesignRevision(design_revision),
+        };
+        let parent = self
+            .accepted
+            .as_ref()
+            .map(SketchAcceptedDocumentState::identity);
+        let input = SketchAttemptInput::for_document_with_parameters(
+            &candidate,
+            design_identity,
+            effective_attempt_request(self.request, command_drag),
+            self.request,
+            self.config,
+            &self.parameter_batch,
+            &self.external_snapshots,
+        );
+        let execution = run_retained_attempt(
+            seed,
+            &self.parameter_batch,
+            &self.external_snapshots,
+            self.request,
+            command_drag,
+            self.config,
+        );
         let (attempt, accepted) = publish_retained_attempt(
             &candidate,
             &input,
@@ -2483,12 +4055,15 @@ impl RetainedSketchDocumentSession {
             .accepted
             .as_ref()
             .map(SketchAcceptedDocumentState::identity);
-        let input = SketchAttemptInput {
-            design: design_identity,
-            candidate_request: effective_attempt_request(self.request, command_drag),
-            publication_request: self.request,
-            solver_config: self.config,
-        };
+        let input = SketchAttemptInput::for_document_with_parameters(
+            &candidate,
+            design_identity,
+            effective_attempt_request(self.request, command_drag),
+            self.request,
+            self.config,
+            &self.parameter_batch,
+            &self.external_snapshots,
+        );
         let execution = match seed_from_accepted_parent_controlled(
             &candidate,
             self.accepted.as_ref(),
@@ -2497,6 +4072,8 @@ impl RetainedSketchDocumentSession {
             Ok(Some(seed)) => {
                 let Some(execution) = run_retained_attempt_controlled(
                     &seed,
+                    &self.parameter_batch,
+                    &self.external_snapshots,
                     self.request,
                     command_drag,
                     self.config,
@@ -2571,8 +4148,23 @@ struct RetainedAttemptExecution {
     solve: Option<SketchSolveResult>,
     attempted_geometry: Option<crate::SketchGeometry>,
     mappings: Option<DocumentRuntimeMap>,
-    accepted: Option<(SketchDocument, SketchSession, DocumentRuntimeMap)>,
+    accepted: Option<(
+        SketchDocument,
+        SketchSession,
+        DocumentRuntimeMap,
+        RetainedAttemptInputStamps,
+    )>,
     failure: Option<SketchAttemptFailure>,
+}
+
+#[derive(Clone, Copy)]
+struct RetainedAttemptInputStamps {
+    activation_revision: u64,
+    activation_digest: ActivationDigest,
+    parameter_revision: u64,
+    parameter_digest: ParameterDigest,
+    external_revision: u64,
+    external_digest: ExternalSnapshotSetDigest,
 }
 
 impl RetainedAttemptExecution {
@@ -2582,7 +4174,30 @@ impl RetainedAttemptExecution {
             attempted_geometry: None,
             mappings: None,
             accepted: None,
-            failure: Some(SketchAttemptFailure { kind, message }),
+            failure: Some(SketchAttemptFailure {
+                kind,
+                message,
+                external_error: None,
+                effective_activity: None,
+            }),
+        }
+    }
+
+    fn external_input_failure(
+        error: ExternalSnapshotInputError,
+        activity: crate::EffectiveActivity,
+    ) -> Self {
+        Self {
+            solve: None,
+            attempted_geometry: None,
+            mappings: None,
+            accepted: None,
+            failure: Some(SketchAttemptFailure {
+                kind: SketchAttemptFailureKind::ExternalSnapshotInput,
+                message: error.to_string(),
+                external_error: Some(error),
+                effective_activity: Some(activity),
+            }),
         }
     }
 }
@@ -2590,11 +4205,33 @@ impl RetainedAttemptExecution {
 #[allow(clippy::too_many_lines)]
 fn run_retained_attempt(
     candidate: &SketchDocument,
+    parameters: &ParameterBatch,
+    snapshots: &ExternalSnapshotSet,
     request: DocumentSolveRequest,
     command_drag: Option<DocumentDragTarget>,
     config: SolverConfig,
 ) -> RetainedAttemptExecution {
-    let lowered = match candidate.lower() {
+    let resolved = match resolve_attempt_inputs(candidate, parameters, snapshots) {
+        Ok(resolved) => resolved,
+        Err(AttemptInputError::Parameter(error)) => {
+            return RetainedAttemptExecution::failure(
+                SketchAttemptFailureKind::ParameterInput,
+                error.to_string(),
+            );
+        }
+        Err(AttemptInputError::External { error, activity }) => {
+            return RetainedAttemptExecution::external_input_failure(error, activity);
+        }
+    };
+    let input_stamps = RetainedAttemptInputStamps {
+        activation_revision: resolved.activity.activation_revision(),
+        activation_digest: resolved.activity.activation_digest(),
+        parameter_revision: parameters.revision(),
+        parameter_digest: parameters.digest(),
+        external_revision: resolved.external_revision,
+        external_digest: resolved.external_digest,
+    };
+    let lowered = match candidate.lower_with_resolved_parameters(&resolved) {
         Ok(lowered) => lowered,
         Err(error) => {
             return RetainedAttemptExecution::failure(
@@ -2663,6 +4300,8 @@ fn run_retained_attempt(
                 failure: Some(SketchAttemptFailure {
                     kind: SketchAttemptFailureKind::AcceptedSession,
                     message: error.to_string(),
+                    external_error: None,
+                    effective_activity: None,
                 }),
             };
         }
@@ -2689,7 +4328,7 @@ fn run_retained_attempt(
         attempted_geometry: solve.attempted_geometry.clone(),
         solve: Some(solve),
         mappings: Some(mappings.clone()),
-        accepted: Some((document, runtime, mappings)),
+        accepted: Some((document, runtime, mappings, input_stamps)),
         failure: None,
     }
 }
@@ -2697,21 +4336,46 @@ fn run_retained_attempt(
 #[allow(clippy::too_many_lines)]
 fn run_retained_attempt_controlled(
     candidate: &SketchDocument,
+    parameters: &ParameterBatch,
+    snapshots: &ExternalSnapshotSet,
     request: DocumentSolveRequest,
     command_drag: Option<DocumentDragTarget>,
     config: SolverConfig,
     controller: &mut OperationController,
 ) -> Option<RetainedAttemptExecution> {
-    let lowered = match candidate.lower_with_controller(controller) {
-        Ok(Some(lowered)) => lowered,
-        Ok(None) => return None,
-        Err(error) => {
+    let resolved = match resolve_attempt_inputs(candidate, parameters, snapshots) {
+        Ok(resolved) => resolved,
+        Err(AttemptInputError::Parameter(error)) => {
             return Some(RetainedAttemptExecution::failure(
-                SketchAttemptFailureKind::Lowering,
+                SketchAttemptFailureKind::ParameterInput,
                 error.to_string(),
             ));
         }
+        Err(AttemptInputError::External { error, activity }) => {
+            return Some(RetainedAttemptExecution::external_input_failure(
+                error, activity,
+            ));
+        }
     };
+    let input_stamps = RetainedAttemptInputStamps {
+        activation_revision: resolved.activity.activation_revision(),
+        activation_digest: resolved.activity.activation_digest(),
+        parameter_revision: parameters.revision(),
+        parameter_digest: parameters.digest(),
+        external_revision: resolved.external_revision,
+        external_digest: resolved.external_digest,
+    };
+    let lowered =
+        match candidate.lower_with_resolved_parameters_with_controller(&resolved, controller) {
+            Ok(Some(lowered)) => lowered,
+            Ok(None) => return None,
+            Err(error) => {
+                return Some(RetainedAttemptExecution::failure(
+                    SketchAttemptFailureKind::Lowering,
+                    error.to_string(),
+                ));
+            }
+        };
     let (mut sketch, mappings) = lowered.into_parts();
     let validation_sketch = sketch.clone();
     let runtime_request = match lower_request(request, &mappings) {
@@ -2780,6 +4444,8 @@ fn run_retained_attempt_controlled(
                 failure: Some(SketchAttemptFailure {
                     kind: SketchAttemptFailureKind::AcceptedSession,
                     message: error.to_string(),
+                    external_error: None,
+                    effective_activity: None,
                 }),
             });
         }
@@ -2803,6 +4469,8 @@ fn run_retained_attempt_controlled(
                 failure: Some(SketchAttemptFailure {
                     kind: SketchAttemptFailureKind::AcceptedSession,
                     message: error.to_string(),
+                    external_error: None,
+                    effective_activity: None,
                 }),
             });
         }
@@ -2840,7 +4508,7 @@ fn run_retained_attempt_controlled(
         attempted_geometry: solve.attempted_geometry.clone(),
         solve: Some(solve),
         mappings: Some(mappings.clone()),
-        accepted: Some((document, runtime, mappings)),
+        accepted: Some((document, runtime, mappings, input_stamps)),
         failure: None,
     })
 }
@@ -2857,8 +4525,28 @@ fn publish_retained_attempt(
     let design_identity = input.design;
     let mut published = None;
     let mut accepted_state = None;
-    if let Some((document, runtime, mappings)) = execution.accepted.take() {
-        if let Some(revision) = next_accepted_revision {
+    if let Some((document, runtime, mappings, stamps)) = execution.accepted.take() {
+        let stale_input = if input.effective_activation_revision() != stamps.activation_revision
+            || input.activation_digest() != stamps.activation_digest
+        {
+            Some("effective activation input changed before publication")
+        } else if input.parameter_revision() != stamps.parameter_revision
+            || input.parameter_digest() != stamps.parameter_digest
+        {
+            Some("parameter input changed before publication")
+        } else if input.external_snapshot_set_revision() != stamps.external_revision
+            || input.external_snapshot_set_digest() != stamps.external_digest
+        {
+            Some("external snapshot input changed before publication")
+        } else {
+            None
+        };
+        if let Some(message) = stale_input {
+            execution = RetainedAttemptExecution::failure(
+                SketchAttemptFailureKind::Publication,
+                message.into(),
+            );
+        } else if let Some(revision) = next_accepted_revision {
             let identity = SketchAcceptedStateIdentity {
                 document: design_identity.document,
                 revision: SketchAcceptedRevision(revision),
@@ -2870,6 +4558,20 @@ fn publish_retained_attempt(
                 .and_then(|solve| solve.attempted_geometry.clone());
             execution.mappings = Some(mappings.clone());
             accepted_state = Some(identity);
+            let redundancy = accepted_document_redundancy(
+                identity,
+                design_identity,
+                runtime.accepted_result(),
+                &mappings,
+            );
+            let parameter_outputs = accepted_parameter_outputs(
+                solved_design,
+                &input,
+                attempt_identity,
+                identity,
+                runtime.accepted_result(),
+                &mappings,
+            );
             published = Some(SketchAcceptedDocumentState {
                 identity,
                 input,
@@ -2878,12 +4580,16 @@ fn publish_retained_attempt(
                 document,
                 runtime,
                 mappings,
+                redundancy,
+                parameter_outputs,
             });
         } else {
             execution.solve = None;
             execution.failure = Some(SketchAttemptFailure {
                 kind: SketchAttemptFailureKind::Publication,
                 message: "accepted revision space is exhausted".into(),
+                external_error: None,
+                effective_activity: None,
             });
         }
     }
@@ -2902,6 +4608,85 @@ fn publish_retained_attempt(
             || attempt.solve.as_ref().is_none_or(|solve| !solve.accepted())
     );
     (attempt, published)
+}
+
+fn accepted_parameter_outputs(
+    design: &SketchDocument,
+    input: &SketchAttemptInput,
+    attempt: SketchAttemptIdentity,
+    accepted: SketchAcceptedStateIdentity,
+    solve: &SketchSolveResult,
+    mappings: &DocumentRuntimeMap,
+) -> Vec<DocumentParameterOutputProposal> {
+    design
+        .parameter_outputs()
+        .iter()
+        .filter_map(|output| {
+            let dimension = design.dimension(output.dimension)?;
+            let RuntimeSource::Dimension(runtime) = mappings.runtime_source(dimension.source_id)?
+            else {
+                return None;
+            };
+            let value = solve.reference_values.iter().find_map(|entry| {
+                (entry.dimension_id == runtime && entry.value.is_finite()).then_some(entry.value)
+            })?;
+            let unit = match dimension.definition {
+                DocumentDimensionDefinition::OrientedAngle { .. } => DocumentScalarUnit::Angle,
+                _ => DocumentScalarUnit::Length,
+            };
+            Some(DocumentParameterOutputProposal {
+                parameter: output.parameter,
+                dimension: output.dimension,
+                source: dimension.source_id,
+                unit,
+                value,
+                design: input.design_identity(),
+                attempt,
+                accepted,
+                parameter_revision: input.parameter_revision(),
+                parameter_digest: input.parameter_digest(),
+                provenance: DocumentMeasurementProvenance::AcceptedDocument {
+                    revision: accepted.revision().0,
+                },
+            })
+        })
+        .collect()
+}
+
+fn accepted_document_redundancy(
+    accepted_state: SketchAcceptedStateIdentity,
+    design: SketchDesignIdentity,
+    solve: &SketchSolveResult,
+    mappings: &DocumentRuntimeMap,
+) -> SketchAcceptedDocumentRedundancy {
+    let runtime = solve
+        .accepted_redundancy()
+        .expect("published state always has an accepted solve result");
+    let persistent_sources = |sources: &[SketchSource]| {
+        sources
+            .iter()
+            .filter_map(|source| {
+                let runtime = match source {
+                    SketchSource::Constraint(id) => RuntimeSource::Constraint(*id),
+                    SketchSource::Dimension(id) => RuntimeSource::Dimension(*id),
+                    SketchSource::DragTarget(_) | SketchSource::PreviousState(_) => return None,
+                };
+                mappings.source_mappings().iter().find_map(|mapping| {
+                    (mapping.runtime == Some(runtime)).then_some(mapping.source_id)
+                })
+            })
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect()
+    };
+    SketchAcceptedDocumentRedundancy {
+        accepted_state,
+        design,
+        fully_redundant_sources: persistent_sources(runtime.fully_redundant_sources()),
+        sources_containing_redundant_rows: persistent_sources(
+            runtime.sources_containing_redundant_rows(),
+        ),
+    }
 }
 
 fn seed_from_accepted_parent(
@@ -3268,6 +5053,37 @@ fn apply_edit(
         } => DocumentCommandEffect::CreatedDimension(
             document.add_dimension(label, definition, mode)?,
         ),
+        DocumentEdit::CreateParameter { label, kind } => {
+            DocumentCommandEffect::CreatedParameter(document.add_parameter(label, kind)?)
+        }
+        DocumentEdit::AddParameterBinding { parameter, target } => {
+            document.add_parameter_binding(parameter, target)?;
+            DocumentCommandEffect::AddedParameterBinding { parameter, target }
+        }
+        DocumentEdit::RemoveParameterBinding { parameter, target } => {
+            document.remove_parameter_binding(parameter, target)?;
+            DocumentCommandEffect::RemovedParameterBinding { parameter, target }
+        }
+        DocumentEdit::AddParameterOutput {
+            parameter,
+            dimension,
+        } => {
+            document.add_parameter_output(parameter, dimension)?;
+            DocumentCommandEffect::AddedParameterOutput {
+                parameter,
+                dimension,
+            }
+        }
+        DocumentEdit::RemoveParameterOutput {
+            parameter,
+            dimension,
+        } => {
+            document.remove_parameter_output(parameter, dimension)?;
+            DocumentCommandEffect::RemovedParameterOutput {
+                parameter,
+                dimension,
+            }
+        }
         DocumentEdit::CreateRectangle {
             label,
             origin,
@@ -3423,6 +5239,21 @@ fn apply_edit(
         DocumentEdit::SetSourceSuppressed { source, suppressed } => {
             document.set_source_suppressed(source, suppressed)?;
             DocumentCommandEffect::UpdatedSource(source)
+        }
+        DocumentEdit::SetGeometryRole { curve, role } => {
+            document.set_geometry_role(curve, role)?;
+            DocumentCommandEffect::UpdatedGeometryRole(curve)
+        }
+        DocumentEdit::SetElementUserSuppressed {
+            element,
+            suppressed,
+        } => {
+            document.set_element_user_suppressed(element, suppressed)?;
+            DocumentCommandEffect::UpdatedElementUserSuppression(element)
+        }
+        DocumentEdit::SetHostConfigurationActivation { activation } => {
+            document.set_host_configuration_activation(activation)?;
+            DocumentCommandEffect::UpdatedHostConfigurationActivation
         }
         DocumentEdit::Delete { object } => {
             document.remove_with_owned_state(object)?;

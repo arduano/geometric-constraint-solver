@@ -32,6 +32,8 @@ pub enum OperationCheckpoint {
     ProfileIntegration,
     ProfileContainment,
     ProfileFace,
+    MeasurementIntegration,
+    MeasurementDerivative,
     BeforeFinalValidation,
     AfterFinalValidation,
     BeforeCommit,
@@ -60,6 +62,8 @@ pub enum OperationWorkCounter {
     ProfileIntegrations,
     ProfileContainmentTests,
     ProfileFaces,
+    MeasurementIntegrations,
+    MeasurementDerivativeEvaluations,
 }
 
 /// Typed deterministic limits for one synchronous operation.
@@ -86,6 +90,8 @@ pub struct OperationLimits {
     pub profile_integrations: usize,
     pub profile_containment_tests: usize,
     pub profile_faces: usize,
+    pub measurement_integrations: usize,
+    pub measurement_derivative_evaluations: usize,
 }
 
 impl OperationLimits {
@@ -111,6 +117,8 @@ impl OperationLimits {
             profile_integrations: usize::MAX,
             profile_containment_tests: usize::MAX,
             profile_faces: usize::MAX,
+            measurement_integrations: usize::MAX,
+            measurement_derivative_evaluations: usize::MAX,
         }
     }
 
@@ -135,6 +143,10 @@ impl OperationLimits {
             OperationWorkCounter::ProfileIntegrations => self.profile_integrations,
             OperationWorkCounter::ProfileContainmentTests => self.profile_containment_tests,
             OperationWorkCounter::ProfileFaces => self.profile_faces,
+            OperationWorkCounter::MeasurementIntegrations => self.measurement_integrations,
+            OperationWorkCounter::MeasurementDerivativeEvaluations => {
+                self.measurement_derivative_evaluations
+            }
         }
     }
 }
@@ -169,6 +181,8 @@ pub struct OperationWork {
     pub profile_integrations: usize,
     pub profile_containment_tests: usize,
     pub profile_faces: usize,
+    pub measurement_integrations: usize,
+    pub measurement_derivative_evaluations: usize,
 }
 
 impl OperationWork {
@@ -193,6 +207,10 @@ impl OperationWork {
             OperationWorkCounter::ProfileIntegrations => self.profile_integrations,
             OperationWorkCounter::ProfileContainmentTests => self.profile_containment_tests,
             OperationWorkCounter::ProfileFaces => self.profile_faces,
+            OperationWorkCounter::MeasurementIntegrations => self.measurement_integrations,
+            OperationWorkCounter::MeasurementDerivativeEvaluations => {
+                self.measurement_derivative_evaluations
+            }
         }
     }
 
@@ -217,6 +235,10 @@ impl OperationWork {
             OperationWorkCounter::ProfileIntegrations => self.profile_integrations = value,
             OperationWorkCounter::ProfileContainmentTests => self.profile_containment_tests = value,
             OperationWorkCounter::ProfileFaces => self.profile_faces = value,
+            OperationWorkCounter::MeasurementIntegrations => self.measurement_integrations = value,
+            OperationWorkCounter::MeasurementDerivativeEvaluations => {
+                self.measurement_derivative_evaluations = value;
+            }
         }
     }
 }
@@ -394,6 +416,8 @@ impl OperationController {
                 profile_integrations: 0,
                 profile_containment_tests: 0,
                 profile_faces: 0,
+                measurement_integrations: 0,
+                measurement_derivative_evaluations: 0,
             },
             stopping_reason: None,
         }

@@ -21,6 +21,12 @@ pub const MAX_BSPLINE_CONTROLS: usize = 10_000;
 pub const MAX_LABEL_BYTES: usize = 1_024;
 /// Defensive byte limit applied before JSON deserialization.
 pub const MAX_DOCUMENT_JSON_BYTES: usize = 16 * 1024 * 1024;
+/// Defensive bound for one immutable host-configuration activation input.
+pub const MAX_ACTIVATION_OVERRIDES: usize = MAX_DOCUMENT_OBJECTS;
+/// Defensive bound for persistent host-parameter declarations and associations.
+pub const MAX_DOCUMENT_PARAMETERS: usize = MAX_DOCUMENT_OBJECTS;
+/// Defensive bound for persistent external-reference declarations.
+pub const MAX_EXTERNAL_BINDINGS: usize = MAX_DOCUMENT_OBJECTS;
 
 static DOCUMENT_NONCE: AtomicU32 = AtomicU32::new(1);
 
@@ -37,6 +43,25 @@ impl PersistentId {
     #[must_use]
     pub const fn as_u128(self) -> u128 {
         self.0
+    }
+}
+
+fn validate_external_binding_shape(
+    kind: ExternalFeatureKindV1,
+    topology: Option<ExternalTopologyDigest>,
+) -> Result<(), DocumentError> {
+    match (kind, topology) {
+        (ExternalFeatureKindV1::Point, None) | (ExternalFeatureKindV1::LineSegment, Some(_)) => {
+            Ok(())
+        }
+        (ExternalFeatureKindV1::Point, Some(_)) => invalid(
+            "external binding topology",
+            "point bindings must not declare span topology",
+        ),
+        (ExternalFeatureKindV1::LineSegment, None) => invalid(
+            "external binding topology",
+            "line-segment bindings require stable span topology",
+        ),
     }
 }
 
@@ -115,6 +140,11 @@ typed_id!(
     "Persistent geometric-constraint identity."
 );
 typed_id!(DocumentDimensionId, "Persistent dimension identity.");
+typed_id!(DocumentParameterId, "Persistent host-parameter identity.");
+typed_id!(
+    DocumentExternalBindingId,
+    "Persistent document-local external-reference binding identity."
+);
 typed_id!(
     DocumentSourceId,
     "Persistent source-order and audit identity."
@@ -128,6 +158,18 @@ pub enum DocumentError {
     InvalidId(String),
     #[error("unsupported sketch-document version {actual}; expected {expected}")]
     UnsupportedVersion { actual: u32, expected: u32 },
+    #[error("supported sketch-v4 encoding cannot represent non-default M41 state")]
+    UnsupportedM41State,
+    #[error("supported sketch-v4 encoding cannot represent non-default M42 state")]
+    UnsupportedM42State,
+    #[error("supported sketch-v4 encoding cannot represent non-default M43 state")]
+    UnsupportedM43State,
+    #[error("activation revision {actual} is not newer than retained revision {retained}")]
+    StaleActivationRevision { actual: u64, retained: u64 },
+    #[error("activation input contains duplicate element {0:?}")]
+    DuplicateActivationElement(DocumentElementId),
+    #[error("activation digest does not match the canonical activation payload")]
+    ActivationDigestMismatch,
     #[error("duplicate persistent ID {0}")]
     DuplicateId(PersistentId),
     #[error("unknown {kind} ID {id}")]
@@ -616,6 +658,58 @@ pub struct DocumentLineSupportRef {
     pub direction: DocumentDirectionSense,
 }
 
+/// Closed feature family expected by one immutable external binding.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExternalFeatureKindV1 {
+    Point,
+    LineSegment,
+}
+
+/// Stable host-supplied topology identity for one directed external span.
+#[derive(
+    Clone, Copy, Debug, Default, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize,
+)]
+#[serde(transparent)]
+pub struct ExternalTopologyDigest([u8; 32]);
+
+impl ExternalTopologyDigest {
+    #[must_use]
+    pub const fn from_bytes(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+
+    #[must_use]
+    pub const fn bytes(self) -> [u8; 32] {
+        self.0
+    }
+}
+
+/// Persistent local declaration of an immutable external feature.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentExternalBinding {
+    pub id: DocumentExternalBindingId,
+    pub label: String,
+    pub expected_kind: ExternalFeatureKindV1,
+    pub expected_topology: Option<ExternalTopologyDigest>,
+}
+
+/// Explicit external point operand. It never denotes a native point or runtime variable.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentExternalPointRef {
+    pub binding: DocumentExternalBindingId,
+}
+
+/// Explicit directed external line-support operand.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentExternalLineSupportRef {
+    pub binding: DocumentExternalBindingId,
+    pub direction: DocumentDirectionSense,
+}
+
 /// Persistent curve-span operand with explicit traversal winding.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -655,7 +749,8 @@ pub enum DocumentConicFeature {
 }
 
 /// One finite scalar measurement exposed by the persistent conic query seam.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum DocumentConicMeasurement {
     MajorAxisLength,
     MinorAxisLength,
@@ -885,6 +980,10 @@ pub enum DocumentConstraintDefinition {
         first: DesignPointId,
         second: DesignPointId,
     },
+    ExternalPointCoincident {
+        point: DesignPointId,
+        external: DocumentExternalPointRef,
+    },
     Horizontal {
         line: CurveSpan,
     },
@@ -902,6 +1001,10 @@ pub enum DocumentConstraintDefinition {
     Perpendicular {
         first: CurveSpan,
         second: CurveSpan,
+    },
+    ExternalLineCollinear {
+        line: DocumentLineSupportRef,
+        external: DocumentExternalLineSupportRef,
     },
     EqualLength {
         first: CurveSpan,
@@ -1066,6 +1169,51 @@ pub struct DocumentDimension {
     pub definition: DocumentDimensionDefinition,
 }
 
+/// Closed canonical kind of one host-owned parameter.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DocumentParameterKind {
+    Length,
+    Angle,
+    Dimensionless,
+    Activation,
+}
+
+/// Persistent declaration of one host-owned parameter identity.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentParameter {
+    pub id: DocumentParameterId,
+    pub label: String,
+    pub kind: DocumentParameterKind,
+}
+
+/// Typed persistent target supplied by one host input parameter.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(tag = "kind", content = "target", rename_all = "snake_case")]
+pub enum DocumentParameterTarget {
+    DrivingDimension(DocumentDimensionId),
+    /// One deliberately declared dimensionless runtime scalar property.
+    DimensionlessFixedScalar(crate::semantic::DocumentScalarPropertyRef),
+    Activation(DocumentElementId),
+}
+
+/// Persistent parameter-to-target association. Its pair is its stable identity.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentParameterBinding {
+    pub parameter: DocumentParameterId,
+    pub target: DocumentParameterTarget,
+}
+
+/// Persistent declaration of one reference-dimension output proposal.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DocumentParameterOutput {
+    pub parameter: DocumentParameterId,
+    pub dimension: DocumentDimensionId,
+}
+
 /// Any deletable persistent object identity.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum DocumentObjectId {
@@ -1075,12 +1223,15 @@ pub enum DocumentObjectId {
     Contact(ContactId),
     Constraint(DocumentConstraintId),
     Dimension(DocumentDimensionId),
+    Parameter(DocumentParameterId),
+    ExternalBinding(DocumentExternalBindingId),
 }
 
 /// Any persistent sketch-document element that application state may reference.
 ///
 /// This is a semantic identity seam only. It never lowers to a runtime or core ID.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(tag = "kind", content = "id", rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum DocumentElementId {
     Document(DocumentId),
@@ -1090,7 +1241,191 @@ pub enum DocumentElementId {
     Contact(ContactId),
     Constraint(DocumentConstraintId),
     Dimension(DocumentDimensionId),
+    Parameter(DocumentParameterId),
+    ExternalBinding(DocumentExternalBindingId),
     Source(DocumentSourceId),
+}
+
+/// Closed profile eligibility role for persistent sketch geometry.
+///
+/// Both roles remain ordinary lowerable and constrainable geometry. The role changes
+/// only default profile eligibility.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GeometryRole {
+    #[default]
+    Profile,
+    Construction,
+}
+
+/// One explicit host-configuration activity decision.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "state", content = "element", rename_all = "snake_case")]
+pub enum HostActivationOverride {
+    Inactive(DocumentElementId),
+    /// Reserved M43 seam. M41 stores no external geometry snapshot.
+    UnavailableExternalReference(DocumentElementId),
+}
+
+impl HostActivationOverride {
+    #[must_use]
+    pub const fn element(self) -> DocumentElementId {
+        match self {
+            Self::Inactive(element) | Self::UnavailableExternalReference(element) => element,
+        }
+    }
+}
+
+/// Canonical deterministic identity of an immutable activation payload.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+pub struct ActivationDigest([u8; 32]);
+
+impl ActivationDigest {
+    #[must_use]
+    pub const fn bytes(self) -> [u8; 32] {
+        self.0
+    }
+}
+
+/// Immutable host-configuration activation payload consumed by one document state.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostConfigurationActivation {
+    revision: u64,
+    digest: ActivationDigest,
+    overrides: Vec<HostActivationOverride>,
+}
+
+impl HostConfigurationActivation {
+    /// Builds, canonicalizes, bounds, and digests an immutable activation payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for a zero revision, excessive or duplicate overrides.
+    pub fn new(
+        revision: u64,
+        overrides: Vec<HostActivationOverride>,
+    ) -> Result<Self, DocumentError> {
+        if revision == 0 {
+            return invalid("activation revision", "must be positive");
+        }
+        if overrides.len() > MAX_ACTIVATION_OVERRIDES {
+            return Err(DocumentError::ResourceLimit {
+                resource: "activation overrides",
+                actual: overrides.len(),
+                limit: MAX_ACTIVATION_OVERRIDES,
+            });
+        }
+        let mut overrides = overrides;
+        overrides.sort_by_key(|entry| canonical_element_key(entry.element()));
+        for pair in overrides.windows(2) {
+            if pair[0].element() == pair[1].element() {
+                return Err(DocumentError::DuplicateActivationElement(pair[0].element()));
+            }
+        }
+        let digest = activation_digest(revision, &overrides);
+        Ok(Self {
+            revision,
+            digest,
+            overrides,
+        })
+    }
+
+    /// Restores a payload only when its claimed canonical digest is exact.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when payload validation fails or the digest does not match.
+    pub fn from_digest(
+        revision: u64,
+        digest: ActivationDigest,
+        overrides: Vec<HostActivationOverride>,
+    ) -> Result<Self, DocumentError> {
+        let value = Self::new(revision, overrides)?;
+        if value.digest != digest {
+            return Err(DocumentError::ActivationDigestMismatch);
+        }
+        Ok(value)
+    }
+
+    #[must_use]
+    pub const fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    #[must_use]
+    pub const fn digest(&self) -> ActivationDigest {
+        self.digest
+    }
+
+    #[must_use]
+    pub fn overrides(&self) -> &[HostActivationOverride] {
+        &self.overrides
+    }
+}
+
+/// Closed explanation for one derived inactive document element.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InactivityReason {
+    UserSuppressed,
+    HostConfigurationInactive,
+    UnavailableDependency { dependency: DocumentElementId },
+    UnavailableExternalReference,
+}
+
+/// One canonical effective-activity entry.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DocumentElementActivity {
+    pub element: DocumentElementId,
+    pub reason: Option<InactivityReason>,
+}
+
+impl DocumentElementActivity {
+    #[must_use]
+    pub const fn is_active(self) -> bool {
+        self.reason.is_none()
+    }
+}
+
+/// Immutable deterministic dependency-closure result used by all M41 consumers.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EffectiveActivity {
+    activation_revision: u64,
+    activation_digest: ActivationDigest,
+    elements: Vec<DocumentElementActivity>,
+}
+
+impl EffectiveActivity {
+    #[must_use]
+    pub const fn activation_revision(&self) -> u64 {
+        self.activation_revision
+    }
+
+    #[must_use]
+    pub const fn activation_digest(&self) -> ActivationDigest {
+        self.activation_digest
+    }
+
+    #[must_use]
+    pub fn elements(&self) -> &[DocumentElementActivity] {
+        &self.elements
+    }
+
+    #[must_use]
+    pub fn reason(&self, element: impl Into<DocumentElementId>) -> Option<InactivityReason> {
+        let element = element.into();
+        self.elements
+            .binary_search_by_key(&canonical_element_key(element), |entry| {
+                canonical_element_key(entry.element)
+            })
+            .ok()
+            .and_then(|index| self.elements[index].reason)
+    }
+
+    #[must_use]
+    pub fn is_active(&self, element: impl Into<DocumentElementId>) -> bool {
+        self.reason(element).is_none()
+    }
 }
 
 impl DocumentElementId {
@@ -1104,6 +1439,8 @@ impl DocumentElementId {
             Self::Contact(id) => id.0,
             Self::Constraint(id) => id.0,
             Self::Dimension(id) => id.0,
+            Self::Parameter(id) => id.0,
+            Self::ExternalBinding(id) => id.0,
             Self::Source(id) => id.0,
         }
     }
@@ -1118,6 +1455,8 @@ impl DocumentElementId {
             Self::Contact(_) => "contact",
             Self::Constraint(_) => "constraint",
             Self::Dimension(_) => "dimension",
+            Self::Parameter(_) => "parameter",
+            Self::ExternalBinding(_) => "external binding",
             Self::Source(_) => "source",
         }
     }
@@ -1140,6 +1479,8 @@ element_from_id!(CurveId, Curve);
 element_from_id!(ContactId, Contact);
 element_from_id!(DocumentConstraintId, Constraint);
 element_from_id!(DocumentDimensionId, Dimension);
+element_from_id!(DocumentParameterId, Parameter);
+element_from_id!(DocumentExternalBindingId, ExternalBinding);
 element_from_id!(DocumentSourceId, Source);
 
 /// Persistent owner of one document source/audit identity.
@@ -1254,7 +1595,14 @@ pub struct SketchDocument {
     trim_views: Vec<DocumentCurveTrimView>,
     constraints: Vec<DocumentConstraint>,
     dimensions: Vec<DocumentDimension>,
+    parameters: Vec<DocumentParameter>,
+    parameter_bindings: Vec<DocumentParameterBinding>,
+    parameter_outputs: Vec<DocumentParameterOutput>,
+    external_bindings: Vec<DocumentExternalBinding>,
     source_order: Vec<DocumentSourceId>,
+    geometry_roles: BTreeMap<CurveId, GeometryRole>,
+    user_inactive_elements: BTreeSet<DocumentElementId>,
+    host_activation: Option<HostConfigurationActivation>,
     /// Ownership for semantic catalogs persisted outside frozen sketch v1-v4.
     semantic_source_reservations: BTreeMap<DocumentSourceId, DocumentSourceId>,
     mutation_validation_deferred: bool,
@@ -1641,7 +1989,14 @@ impl From<SketchDocumentV1> for SketchDocument {
                 .into_iter()
                 .map(DocumentDimension::from)
                 .collect(),
+            parameters: Vec::new(),
+            parameter_bindings: Vec::new(),
+            parameter_outputs: Vec::new(),
+            external_bindings: Vec::new(),
             source_order: document.source_order,
+            geometry_roles: BTreeMap::new(),
+            user_inactive_elements: BTreeSet::new(),
+            host_activation: None,
             semantic_source_reservations: BTreeMap::new(),
             mutation_validation_deferred: false,
         }
@@ -1731,7 +2086,14 @@ impl From<SketchDocumentV2> for SketchDocument {
                 .map(DocumentConstraint::from)
                 .collect(),
             dimensions: document.dimensions,
+            parameters: Vec::new(),
+            parameter_bindings: Vec::new(),
+            parameter_outputs: Vec::new(),
+            external_bindings: Vec::new(),
             source_order: document.source_order,
+            geometry_roles: BTreeMap::new(),
+            user_inactive_elements: BTreeSet::new(),
+            host_activation: None,
             semantic_source_reservations: BTreeMap::new(),
             mutation_validation_deferred: false,
         }
@@ -1772,7 +2134,14 @@ impl From<SketchDocumentV3> for SketchDocument {
                 .map(DocumentConstraint::from)
                 .collect(),
             dimensions: document.dimensions,
+            parameters: Vec::new(),
+            parameter_bindings: Vec::new(),
+            parameter_outputs: Vec::new(),
+            external_bindings: Vec::new(),
             source_order: document.source_order,
+            geometry_roles: BTreeMap::new(),
+            user_inactive_elements: BTreeSet::new(),
+            host_activation: None,
             semantic_source_reservations: BTreeMap::new(),
             mutation_validation_deferred: false,
         }
@@ -1829,11 +2198,45 @@ impl From<SketchDocumentV4> for SketchDocument {
             trim_views: document.trim_views,
             constraints: document.constraints,
             dimensions: document.dimensions,
+            parameters: Vec::new(),
+            parameter_bindings: Vec::new(),
+            parameter_outputs: Vec::new(),
+            external_bindings: Vec::new(),
             source_order: document.source_order,
+            geometry_roles: BTreeMap::new(),
+            user_inactive_elements: BTreeSet::new(),
+            host_activation: None,
             semantic_source_reservations: BTreeMap::new(),
             mutation_validation_deferred: false,
         }
     }
+}
+
+// Explicitly unsupported and intentionally private wire language. Public draft codec
+// methods below are doc-hidden so M41 state can round-trip without claiming v5 support.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct SketchDocumentDraftV5 {
+    version: u32,
+    document: SketchDocumentV4,
+    geometry_roles: Vec<DraftGeometryRole>,
+    user_inactive_elements: Vec<DocumentElementId>,
+    host_activation: Option<HostConfigurationActivation>,
+    #[serde(default)]
+    parameters: Vec<DocumentParameter>,
+    #[serde(default)]
+    parameter_bindings: Vec<DocumentParameterBinding>,
+    #[serde(default)]
+    parameter_outputs: Vec<DocumentParameterOutput>,
+    #[serde(default)]
+    external_bindings: Vec<DocumentExternalBinding>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct DraftGeometryRole {
+    curve: CurveId,
+    role: GeometryRole,
 }
 
 #[derive(Deserialize)]
@@ -1842,6 +2245,30 @@ struct DocumentHeader {
 }
 
 impl SketchDocument {
+    pub(crate) fn validate_parameter_scalar_value(
+        &self,
+        scalar: DesignScalarId,
+        value: f64,
+    ) -> Result<(), DocumentError> {
+        let scalar = self.scalar(scalar).ok_or(DocumentError::UnknownId {
+            kind: "scalar",
+            id: scalar.0,
+        })?;
+        validate_scalar_value(value, scalar.domain)
+    }
+
+    pub(crate) fn validate_parameter_dimension_value(
+        &self,
+        dimension: DocumentDimensionId,
+        value: f64,
+    ) -> Result<(), DocumentError> {
+        let dimension = self.dimension(dimension).ok_or(DocumentError::UnknownId {
+            kind: "dimension",
+            id: dimension.0,
+        })?;
+        self.validate_parameter_scalar_value(dimension_target(&dimension.definition), value)
+    }
+
     /// Creates an empty current-version document.
     ///
     /// # Errors
@@ -1878,7 +2305,14 @@ impl SketchDocument {
             trim_views: Vec::new(),
             constraints: Vec::new(),
             dimensions: Vec::new(),
+            parameters: Vec::new(),
+            parameter_bindings: Vec::new(),
+            parameter_outputs: Vec::new(),
+            external_bindings: Vec::new(),
             source_order: Vec::new(),
+            geometry_roles: BTreeMap::new(),
+            user_inactive_elements: BTreeSet::new(),
+            host_activation: None,
             semantic_source_reservations: BTreeMap::new(),
             mutation_validation_deferred: false,
         })
@@ -1912,6 +2346,160 @@ impl SketchDocument {
     #[must_use]
     pub fn curves(&self) -> &[DesignCurve] {
         &self.curves
+    }
+
+    /// Returns one curve's persistent profile/construction role.
+    #[must_use]
+    pub fn geometry_role(&self, curve: CurveId) -> Option<GeometryRole> {
+        self.curve(curve)
+            .map(|_| self.geometry_roles.get(&curve).copied().unwrap_or_default())
+    }
+
+    /// Atomically changes a curve role without changing any geometric or discrete state.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the curve is unknown or the resulting document is invalid.
+    pub fn set_geometry_role(
+        &mut self,
+        curve: CurveId,
+        role: GeometryRole,
+    ) -> Result<(), DocumentError> {
+        if self.curve(curve).is_none() {
+            return Err(unknown("curve", curve.0));
+        }
+        let mut candidate = self.clone();
+        if role == GeometryRole::Profile {
+            candidate.geometry_roles.remove(&curve);
+        } else {
+            candidate.geometry_roles.insert(curve, role);
+        }
+        candidate.validate_after_mutation()?;
+        *self = candidate;
+        Ok(())
+    }
+
+    /// Returns the retained immutable host-configuration activation payload.
+    #[must_use]
+    pub const fn host_configuration_activation(&self) -> Option<&HostConfigurationActivation> {
+        self.host_activation.as_ref()
+    }
+
+    /// Atomically installs a newer immutable host-configuration activation payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for stale revisions, unknown elements, or invalid resulting state.
+    pub fn set_host_configuration_activation(
+        &mut self,
+        activation: HostConfigurationActivation,
+    ) -> Result<(), DocumentError> {
+        let retained = self
+            .host_activation
+            .as_ref()
+            .map_or(0, HostConfigurationActivation::revision);
+        if activation.revision() <= retained {
+            return Err(DocumentError::StaleActivationRevision {
+                actual: activation.revision(),
+                retained,
+            });
+        }
+        for entry in activation.overrides() {
+            if !self.contains_element(entry.element()) {
+                return Err(unknown(
+                    entry.element().kind(),
+                    entry.element().persistent_id(),
+                ));
+            }
+        }
+        let mut candidate = self.clone();
+        candidate.host_activation = Some(activation);
+        candidate.validate_after_mutation()?;
+        *self = candidate;
+        Ok(())
+    }
+
+    /// Atomically changes the requested user suppression of any persistent element.
+    ///
+    /// Constraint/dimension/source edits update the frozen v1-v4 `suppressed` Boolean
+    /// exactly; other element kinds are represented only by draft M41 state.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the element is unknown or the resulting document is invalid.
+    pub fn set_element_user_suppressed(
+        &mut self,
+        element: DocumentElementId,
+        suppressed: bool,
+    ) -> Result<(), DocumentError> {
+        if !self.contains_element(element) {
+            return Err(unknown(element.kind(), element.persistent_id()));
+        }
+        let mut candidate = self.clone();
+        match element {
+            DocumentElementId::Constraint(id) => {
+                let Some(constraint) = candidate
+                    .constraints
+                    .iter_mut()
+                    .find(|value| value.id == id)
+                else {
+                    return Err(unknown("constraint", id.0));
+                };
+                constraint.suppressed = suppressed;
+            }
+            DocumentElementId::Dimension(id) => {
+                let Some(dimension) = candidate.dimensions.iter_mut().find(|value| value.id == id)
+                else {
+                    return Err(unknown("dimension", id.0));
+                };
+                dimension.suppressed = suppressed;
+            }
+            DocumentElementId::Source(id) => {
+                if let Some(constraint) = candidate
+                    .constraints
+                    .iter_mut()
+                    .find(|value| value.source_id == id)
+                {
+                    constraint.suppressed = suppressed;
+                } else {
+                    let Some(dimension) = candidate
+                        .dimensions
+                        .iter_mut()
+                        .find(|value| value.source_id == id)
+                    else {
+                        return Err(unknown("source", id.0));
+                    };
+                    dimension.suppressed = suppressed;
+                }
+            }
+            _ => {
+                if suppressed {
+                    candidate.user_inactive_elements.insert(element);
+                } else {
+                    candidate.user_inactive_elements.remove(&element);
+                }
+            }
+        }
+        candidate.validate_after_mutation()?;
+        *self = candidate;
+        Ok(())
+    }
+
+    /// Computes the one canonical typed dependency closure used by M41 consumers.
+    #[must_use]
+    pub fn effective_activity(&self) -> EffectiveActivity {
+        self.compute_effective_activity()
+    }
+
+    pub(crate) fn effective_activity_with_input_overlays(
+        &self,
+        parameter_inactive: &BTreeSet<DocumentElementId>,
+        unavailable_external: &BTreeSet<DocumentElementId>,
+    ) -> EffectiveActivity {
+        self.compute_effective_activity_with_input_overlays(
+            parameter_inactive,
+            unavailable_external,
+        )
     }
 
     #[must_use]
@@ -2033,8 +2621,9 @@ impl SketchDocument {
     /// Returns the active association that derives one circular arc's fillet endpoints.
     #[must_use]
     pub fn line_line_fillet_for_arc(&self, arc: CurveId) -> Option<&DocumentConstraint> {
+        let activity = self.compute_effective_activity();
         self.line_line_fillet_owner_for_arc(arc)
-            .filter(|constraint| !constraint.suppressed)
+            .filter(|constraint| activity.is_active(constraint.id))
     }
 
     fn line_line_fillet_owner_for_arc(&self, arc: CurveId) -> Option<&DocumentConstraint> {
@@ -2050,8 +2639,9 @@ impl SketchDocument {
     /// Returns the active generic association that derives one circular arc's fillet endpoints.
     #[must_use]
     pub fn curve_curve_fillet_for_arc(&self, arc: CurveId) -> Option<&DocumentConstraint> {
+        let activity = self.compute_effective_activity();
         self.constraints.iter().find(|constraint| {
-            !constraint.suppressed
+            activity.is_active(constraint.id)
                 && matches!(
                     constraint.definition,
                     DocumentConstraintDefinition::CurveCurveFillet { arc: output, .. }
@@ -2063,6 +2653,224 @@ impl SketchDocument {
     #[must_use]
     pub fn dimensions(&self) -> &[DocumentDimension] {
         &self.dimensions
+    }
+
+    /// Returns persistent host-parameter declarations in canonical identity order.
+    #[must_use]
+    pub fn parameters(&self) -> &[DocumentParameter] {
+        &self.parameters
+    }
+
+    /// Resolves one persistent host-parameter declaration.
+    #[must_use]
+    pub fn parameter(&self, id: DocumentParameterId) -> Option<&DocumentParameter> {
+        self.parameters.iter().find(|parameter| parameter.id == id)
+    }
+
+    /// Returns persistent host-input associations in canonical pair order.
+    #[must_use]
+    pub fn parameter_bindings(&self) -> &[DocumentParameterBinding] {
+        &self.parameter_bindings
+    }
+
+    /// Returns declared reference-output proposals in canonical pair order.
+    #[must_use]
+    pub fn parameter_outputs(&self) -> &[DocumentParameterOutput] {
+        &self.parameter_outputs
+    }
+
+    /// Returns external-reference declarations in canonical identity order.
+    #[must_use]
+    pub fn external_bindings(&self) -> &[DocumentExternalBinding] {
+        &self.external_bindings
+    }
+
+    /// Resolves one document-local external binding.
+    #[must_use]
+    pub fn external_binding(
+        &self,
+        id: DocumentExternalBindingId,
+    ) -> Option<&DocumentExternalBinding> {
+        self.external_bindings
+            .iter()
+            .find(|binding| binding.id == id)
+    }
+
+    /// Allocates one persistent external-reference declaration.
+    ///
+    /// # Errors
+    ///
+    /// Rejects invalid labels, kind/topology combinations, exhausted identities, and
+    /// external-binding resource-limit violations.
+    pub fn add_external_binding(
+        &mut self,
+        label: impl Into<String>,
+        expected_kind: ExternalFeatureKindV1,
+        expected_topology: Option<ExternalTopologyDigest>,
+    ) -> Result<DocumentExternalBindingId, DocumentError> {
+        let label = label.into();
+        validate_label(&label, "external binding label")?;
+        validate_external_binding_shape(expected_kind, expected_topology)?;
+        if self.external_bindings.len() >= MAX_EXTERNAL_BINDINGS {
+            return Err(DocumentError::ResourceLimit {
+                resource: "external bindings",
+                actual: self.external_bindings.len() + 1,
+                limit: MAX_EXTERNAL_BINDINGS,
+            });
+        }
+        let mut candidate = self.clone();
+        let id = DocumentExternalBindingId(candidate.allocate_id()?);
+        candidate.external_bindings.push(DocumentExternalBinding {
+            id,
+            label,
+            expected_kind,
+            expected_topology,
+        });
+        candidate.validate_after_mutation()?;
+        candidate.canonicalize();
+        *self = candidate;
+        Ok(id)
+    }
+
+    /// Explicitly changes the family/topology contract of one retained binding.
+    ///
+    /// # Errors
+    ///
+    /// Rejects an unknown binding or an invalid kind/topology combination.
+    pub fn rebind_external_binding(
+        &mut self,
+        id: DocumentExternalBindingId,
+        expected_kind: ExternalFeatureKindV1,
+        expected_topology: Option<ExternalTopologyDigest>,
+    ) -> Result<(), DocumentError> {
+        validate_external_binding_shape(expected_kind, expected_topology)?;
+        let mut candidate = self.clone();
+        let binding = candidate
+            .external_bindings
+            .iter_mut()
+            .find(|binding| binding.id == id)
+            .ok_or_else(|| unknown("external binding", id.0))?;
+        binding.expected_kind = expected_kind;
+        binding.expected_topology = expected_topology;
+        candidate.validate_after_mutation()?;
+        *self = candidate;
+        Ok(())
+    }
+
+    /// Allocates one persistent host-parameter declaration.
+    ///
+    /// # Errors
+    ///
+    /// Rejects an invalid label, exhausted identity space, or resource limit.
+    pub fn add_parameter(
+        &mut self,
+        label: impl Into<String>,
+        kind: DocumentParameterKind,
+    ) -> Result<DocumentParameterId, DocumentError> {
+        let label = label.into();
+        validate_label(&label, "parameter label")?;
+        if self.parameters.len() >= MAX_DOCUMENT_PARAMETERS {
+            return Err(DocumentError::ResourceLimit {
+                resource: "parameters",
+                actual: self.parameters.len() + 1,
+                limit: MAX_DOCUMENT_PARAMETERS,
+            });
+        }
+        let mut candidate = self.clone();
+        let id = DocumentParameterId(candidate.allocate_id()?);
+        candidate
+            .parameters
+            .push(DocumentParameter { id, label, kind });
+        candidate.validate_after_mutation()?;
+        *self = candidate;
+        Ok(id)
+    }
+
+    /// Adds one typed host-input association atomically.
+    ///
+    /// # Errors
+    ///
+    /// Rejects missing identities, duplicate targets, incompatible kinds, or local
+    /// input/output ownership overlap.
+    pub fn add_parameter_binding(
+        &mut self,
+        parameter: DocumentParameterId,
+        target: DocumentParameterTarget,
+    ) -> Result<(), DocumentError> {
+        let mut candidate = self.clone();
+        candidate
+            .parameter_bindings
+            .push(DocumentParameterBinding { parameter, target });
+        candidate.validate_after_mutation()?;
+        candidate.canonicalize();
+        *self = candidate;
+        Ok(())
+    }
+
+    /// Removes one exact host-input association.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a missing association or an invalid resulting document.
+    pub fn remove_parameter_binding(
+        &mut self,
+        parameter: DocumentParameterId,
+        target: DocumentParameterTarget,
+    ) -> Result<(), DocumentError> {
+        let mut candidate = self.clone();
+        let index = candidate
+            .parameter_bindings
+            .iter()
+            .position(|binding| binding.parameter == parameter && binding.target == target)
+            .ok_or_else(|| invalid_error("parameter binding", "association does not exist"))?;
+        candidate.parameter_bindings.remove(index);
+        candidate.validate_after_mutation()?;
+        *self = candidate;
+        Ok(())
+    }
+
+    /// Declares one reference-dimension output proposal atomically.
+    ///
+    /// # Errors
+    ///
+    /// Rejects missing identities, incompatible output declarations, or local
+    /// input/output ownership overlap.
+    pub fn add_parameter_output(
+        &mut self,
+        parameter: DocumentParameterId,
+        dimension: DocumentDimensionId,
+    ) -> Result<(), DocumentError> {
+        let mut candidate = self.clone();
+        candidate.parameter_outputs.push(DocumentParameterOutput {
+            parameter,
+            dimension,
+        });
+        candidate.validate_after_mutation()?;
+        candidate.canonicalize();
+        *self = candidate;
+        Ok(())
+    }
+
+    /// Removes one exact reference-output declaration.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a missing declaration or an invalid resulting document.
+    pub fn remove_parameter_output(
+        &mut self,
+        parameter: DocumentParameterId,
+        dimension: DocumentDimensionId,
+    ) -> Result<(), DocumentError> {
+        let mut candidate = self.clone();
+        let index = candidate
+            .parameter_outputs
+            .iter()
+            .position(|output| output.parameter == parameter && output.dimension == dimension)
+            .ok_or_else(|| invalid_error("parameter output", "declaration does not exist"))?;
+        candidate.parameter_outputs.remove(index);
+        candidate.validate_after_mutation()?;
+        *self = candidate;
+        Ok(())
     }
 
     #[must_use]
@@ -2114,6 +2922,8 @@ impl SketchDocument {
             DocumentElementId::Contact(id) => self.contact(id).is_some(),
             DocumentElementId::Constraint(id) => self.constraint(id).is_some(),
             DocumentElementId::Dimension(id) => self.dimension(id).is_some(),
+            DocumentElementId::Parameter(id) => self.parameter(id).is_some(),
+            DocumentElementId::ExternalBinding(id) => self.external_binding(id).is_some(),
             DocumentElementId::Source(id) => self.source(id).is_some(),
         }
     }
@@ -2150,6 +2960,16 @@ impl SketchDocument {
             .or_else(|| {
                 self.dimensions.iter().find_map(|value| {
                     (value.id.0 == id).then_some(DocumentElementId::Dimension(value.id))
+                })
+            })
+            .or_else(|| {
+                self.parameters.iter().find_map(|value| {
+                    (value.id.0 == id).then_some(DocumentElementId::Parameter(value.id))
+                })
+            })
+            .or_else(|| {
+                self.external_bindings.iter().find_map(|value| {
+                    (value.id.0 == id).then_some(DocumentElementId::ExternalBinding(value.id))
                 })
             })
             .or_else(|| {
@@ -2452,12 +3272,13 @@ impl SketchDocument {
     ) -> Result<DocumentTrimProjection, DocumentTrimProjectionError> {
         use crate::ConicGeometry as G;
 
+        let activity = self.compute_effective_activity();
         let definition = &self
             .curve(curve)
             .ok_or_else(|| unknown("curve", curve.0))?
             .definition;
         if self.constraints.iter().any(|constraint| {
-            !constraint.suppressed
+            activity.is_active(constraint.id)
                 && matches!(
                     constraint.definition,
                     DocumentConstraintDefinition::LineLineFillet { arc, .. }
@@ -5055,7 +5876,8 @@ impl SketchDocument {
         parameter: f64,
     ) -> Result<DocumentMirroredBSplineInsertion, DocumentError> {
         validate_label(label, "mirrored B-spline insertion label")?;
-        self.validate_mirrored_bspline_pair(source_curve, mirrored_curve, axis)?;
+        let activity = self.compute_effective_activity();
+        self.validate_mirrored_bspline_pair(source_curve, mirrored_curve, axis, &activity)?;
         let before = self.clone();
         let result = (|| {
             let source = self.insert_bspline_knot(source_curve, parameter)?;
@@ -5089,6 +5911,7 @@ impl SketchDocument {
         source_curve: CurveId,
         mirrored_curve: CurveId,
         axis: CurveSpan,
+        activity: &EffectiveActivity,
     ) -> Result<(), DocumentError> {
         self.validate_line_span(axis)?;
         if source_curve == mirrored_curve {
@@ -5138,7 +5961,7 @@ impl SketchDocument {
                 .zip(mirrored_controls)
                 .all(|(first, second)| {
                     self.constraints.iter().any(|constraint| {
-                    !constraint.suppressed
+                    activity.is_active(constraint.id)
                         && matches!(
                             constraint.definition,
                             DocumentConstraintDefinition::SymmetricAboutLine {
@@ -5193,6 +6016,7 @@ impl SketchDocument {
         id: DesignScalarId,
         value: f64,
     ) -> Result<(), DocumentError> {
+        let activity = self.compute_effective_activity();
         if self.contacts.iter().any(|contact| contact.parameter == id) {
             return invalid(
                 "scalar edit",
@@ -5210,7 +6034,7 @@ impl SketchDocument {
             };
             (*start_angle == id || *end_angle == id)
                 && self.constraints.iter().any(|constraint| {
-                    !constraint.suppressed
+                    activity.is_active(constraint.id)
                         && matches!(
                             constraint.definition,
                             DocumentConstraintDefinition::LineLineFillet { arc, .. }
@@ -5729,8 +6553,9 @@ impl SketchDocument {
             return invalid("contact edits", "contact IDs must be distinct");
         }
         self.ordered_source_contacts(&requested.iter().copied().collect::<Vec<_>>())?;
+        let activity = self.compute_effective_activity();
         if self.constraints.iter().any(|constraint| {
-            constraint.suppressed
+            !activity.is_active(constraint.id)
                 && matches!(
                     constraint.definition,
                     DocumentConstraintDefinition::CurveCurveFillet { .. }
@@ -5741,7 +6566,7 @@ impl SketchDocument {
         }) {
             return invalid(
                 "contact edits",
-                "suppressed curve fillet contacts remain frozen with their visible intervals",
+                "inactive curve fillet contacts remain frozen with their visible intervals",
             );
         }
         let mut candidate = self.clone();
@@ -5913,23 +6738,7 @@ impl SketchDocument {
         source: DocumentSourceId,
         suppressed: bool,
     ) -> Result<(), DocumentError> {
-        if let Some(constraint) = self
-            .constraints
-            .iter_mut()
-            .find(|value| value.source_id == source)
-        {
-            constraint.suppressed = suppressed;
-            return Ok(());
-        }
-        if let Some(dimension) = self
-            .dimensions
-            .iter_mut()
-            .find(|value| value.source_id == source)
-        {
-            dimension.suppressed = suppressed;
-            return Ok(());
-        }
-        Err(unknown("source", source.0))
+        self.set_element_user_suppressed(DocumentElementId::Source(source), suppressed)
     }
 
     /// Replaces one persistent source's human-readable audit label.
@@ -5972,10 +6781,18 @@ impl SketchDocument {
         let mut candidate = self.clone();
         match object {
             DocumentObjectId::Point(id) => retain_remove(&mut candidate.points, |v| v.id == id)
-                .then_some(())
+                .then(|| {
+                    candidate
+                        .user_inactive_elements
+                        .remove(&DocumentElementId::Point(id));
+                })
                 .ok_or_else(|| unknown("point", id.0))?,
             DocumentObjectId::Scalar(id) => retain_remove(&mut candidate.scalars, |v| v.id == id)
-                .then_some(())
+                .then(|| {
+                    candidate
+                        .user_inactive_elements
+                        .remove(&DocumentElementId::Scalar(id));
+                })
                 .ok_or_else(|| unknown("scalar", id.0))?,
             DocumentObjectId::Curve(id) => {
                 let owned_scalars = curve_owned_scalars(
@@ -5985,13 +6802,21 @@ impl SketchDocument {
                         .definition,
                 );
                 retain_remove(&mut candidate.curves, |value| value.id == id);
+                candidate.geometry_roles.remove(&id);
+                candidate
+                    .user_inactive_elements
+                    .remove(&DocumentElementId::Curve(id));
                 candidate
                     .scalars
                     .retain(|value| !owned_scalars.contains(&value.id));
                 candidate.trim_views.retain(|view| view.support.curve != id);
             }
             DocumentObjectId::Contact(id) => retain_remove(&mut candidate.contacts, |v| v.id == id)
-                .then_some(())
+                .then(|| {
+                    candidate
+                        .user_inactive_elements
+                        .remove(&DocumentElementId::Contact(id));
+                })
                 .ok_or_else(|| unknown("contact", id.0))?,
             DocumentObjectId::Constraint(id) => {
                 candidate.freeze_generic_fillet_boundaries(id)?;
@@ -6009,6 +6834,24 @@ impl SketchDocument {
                     .source_id;
                 retain_remove(&mut candidate.dimensions, |value| value.id == id);
                 candidate.source_order.retain(|value| *value != source);
+            }
+            DocumentObjectId::Parameter(id) => {
+                retain_remove(&mut candidate.parameters, |parameter| parameter.id == id)
+                    .then(|| {
+                        candidate
+                            .user_inactive_elements
+                            .remove(&DocumentElementId::Parameter(id));
+                    })
+                    .ok_or_else(|| unknown("parameter", id.0))?;
+            }
+            DocumentObjectId::ExternalBinding(id) => {
+                retain_remove(&mut candidate.external_bindings, |binding| binding.id == id)
+                    .then(|| {
+                        candidate
+                            .user_inactive_elements
+                            .remove(&DocumentElementId::ExternalBinding(id));
+                    })
+                    .ok_or_else(|| unknown("external binding", id.0))?;
             }
         }
         candidate.validate().map_err(|error| match error {
@@ -6211,7 +7054,10 @@ impl SketchDocument {
 
         let mut removal = removal.into_iter().collect::<Vec<_>>();
         removal.sort_by_key(|object| match object {
-            DocumentObjectId::Constraint(_) | DocumentObjectId::Dimension(_) => 0,
+            DocumentObjectId::Constraint(_)
+            | DocumentObjectId::Dimension(_)
+            | DocumentObjectId::Parameter(_)
+            | DocumentObjectId::ExternalBinding(_) => 0,
             DocumentObjectId::Contact(_) => 1,
             DocumentObjectId::Curve(_) => 2,
             DocumentObjectId::Point(_) | DocumentObjectId::Scalar(_) => 3,
@@ -6276,6 +7122,7 @@ impl SketchDocument {
             });
         }
         finite_positive(self.model_scale, "model_scale")?;
+        let activity = self.compute_effective_activity();
         let curve_point_references: usize = self
             .curves
             .iter()
@@ -6301,6 +7148,10 @@ impl SketchDocument {
             + self.trim_views.len()
             + self.constraints.len() * 2
             + self.dimensions.len() * 2
+            + self.parameters.len()
+            + self.parameter_bindings.len()
+            + self.parameter_outputs.len()
+            + self.external_bindings.len()
             + curve_point_references;
         if count > MAX_DOCUMENT_OBJECTS {
             return Err(DocumentError::ResourceLimit {
@@ -6350,7 +7201,7 @@ impl SketchDocument {
             }
             insert_unique(&mut ids, curve.id.0)?;
             validate_label(&curve.label, "curve label")?;
-            self.validate_curve_definition(curve.id, &curve.definition)?;
+            self.validate_curve_definition(curve.id, &curve.definition, &activity)?;
             for scalar in curve_scalars(&curve.definition) {
                 claim_scalar(&mut used_scalars, scalar)?;
             }
@@ -6491,7 +7342,7 @@ impl SketchDocument {
         for constraint in self
             .constraints
             .iter()
-            .filter(|constraint| !constraint.suppressed)
+            .filter(|constraint| activity.is_active(constraint.id))
         {
             if !charge_document_item(
                 &mut controller,
@@ -6556,8 +7407,131 @@ impl SketchDocument {
             insert_unique(&mut ids, dimension.source_id.0)?;
             sources.insert(dimension.source_id);
             validate_label(&dimension.label, "dimension label")?;
-            self.validate_dimension_definition(&dimension.definition)?;
+            self.validate_dimension_definition(&dimension.definition, dimension.mode)?;
             claim_scalar(&mut used_scalars, dimension_target(&dimension.definition))?;
+        }
+        if self.parameters.len() > MAX_DOCUMENT_PARAMETERS {
+            return Err(DocumentError::ResourceLimit {
+                resource: "parameters",
+                actual: self.parameters.len(),
+                limit: MAX_DOCUMENT_PARAMETERS,
+            });
+        }
+        for parameter in &self.parameters {
+            insert_unique(&mut ids, parameter.id.0)?;
+            validate_label(&parameter.label, "parameter label")?;
+        }
+        if self.external_bindings.len() > MAX_EXTERNAL_BINDINGS {
+            return Err(DocumentError::ResourceLimit {
+                resource: "external bindings",
+                actual: self.external_bindings.len(),
+                limit: MAX_EXTERNAL_BINDINGS,
+            });
+        }
+        for binding in &self.external_bindings {
+            insert_unique(&mut ids, binding.id.0)?;
+            validate_label(&binding.label, "external binding label")?;
+            validate_external_binding_shape(binding.expected_kind, binding.expected_topology)?;
+        }
+        let mut binding_pairs = BTreeSet::new();
+        let mut binding_targets = BTreeSet::new();
+        let mut input_parameters = BTreeSet::new();
+        for binding in &self.parameter_bindings {
+            let target_key = canonical_parameter_target_key(binding.target);
+            if !binding_pairs.insert((binding.parameter, target_key)) {
+                return invalid("parameter binding", "duplicate association");
+            }
+            if !binding_targets.insert(target_key) {
+                return invalid("parameter binding", "one target may have only one supplier");
+            }
+            let parameter = self
+                .parameter(binding.parameter)
+                .ok_or_else(|| unknown("parameter", binding.parameter.0))?;
+            input_parameters.insert(binding.parameter);
+            match binding.target {
+                DocumentParameterTarget::DrivingDimension(id) => {
+                    let dimension = self
+                        .dimension(id)
+                        .ok_or_else(|| unknown("parameter dimension target", id.0))?;
+                    if dimension.mode != DocumentDimensionMode::Driving {
+                        return invalid(
+                            "parameter binding",
+                            "only driving dimensions may consume host inputs",
+                        );
+                    }
+                    if parameter.kind != dimension_parameter_kind(&dimension.definition) {
+                        return invalid(
+                            "parameter binding",
+                            "parameter kind is incompatible with the dimension target",
+                        );
+                    }
+                }
+                DocumentParameterTarget::DimensionlessFixedScalar(property) => {
+                    if parameter.kind != DocumentParameterKind::Dimensionless {
+                        return invalid(
+                            "parameter binding",
+                            "dimensionless scalar targets require a dimensionless parameter",
+                        );
+                    }
+                    self.validate_dimensionless_parameter_property(property)?;
+                }
+                DocumentParameterTarget::Activation(element) => {
+                    if parameter.kind != DocumentParameterKind::Activation {
+                        return invalid(
+                            "parameter binding",
+                            "activation targets require an activation parameter",
+                        );
+                    }
+                    if !self.contains_element(element) {
+                        return Err(unknown(element.kind(), element.persistent_id()));
+                    }
+                    if matches!(
+                        element,
+                        DocumentElementId::Document(_) | DocumentElementId::Parameter(_)
+                    ) {
+                        return invalid(
+                            "parameter binding",
+                            "document and parameter declarations are not activation targets",
+                        );
+                    }
+                }
+            }
+        }
+        let mut outputs = BTreeSet::new();
+        let mut output_parameters = BTreeSet::new();
+        for output in &self.parameter_outputs {
+            if !outputs.insert(*output) {
+                return invalid("parameter output", "duplicate declaration");
+            }
+            let parameter = self
+                .parameter(output.parameter)
+                .ok_or_else(|| unknown("parameter", output.parameter.0))?;
+            output_parameters.insert(output.parameter);
+            let dimension = self
+                .dimension(output.dimension)
+                .ok_or_else(|| unknown("parameter output dimension", output.dimension.0))?;
+            if dimension.mode != DocumentDimensionMode::Reference {
+                return invalid(
+                    "parameter output",
+                    "only reference dimensions may produce output proposals",
+                );
+            }
+            if parameter.kind != dimension_parameter_kind(&dimension.definition) {
+                return invalid(
+                    "parameter output",
+                    "parameter kind is incompatible with the reference dimension",
+                );
+            }
+        }
+        if input_parameters
+            .intersection(&output_parameters)
+            .next()
+            .is_some()
+        {
+            return invalid(
+                "parameter ownership",
+                "input and output parameter sets must be disjoint",
+            );
         }
         let mut ordered = BTreeSet::new();
         for source in &self.source_order {
@@ -6572,6 +7546,45 @@ impl SketchDocument {
         }
         if ordered.len() != self.source_order.len() || ordered != sources {
             return invalid("source_order", "must contain every source exactly once");
+        }
+        for (curve, role) in &self.geometry_roles {
+            if self.curve(*curve).is_none() {
+                return Err(unknown("curve role", curve.0));
+            }
+            if *role == GeometryRole::Profile {
+                return invalid("geometry role", "default profile roles must be implicit");
+            }
+        }
+        for element in &self.user_inactive_elements {
+            if !self.contains_element(*element) {
+                return Err(unknown(element.kind(), element.persistent_id()));
+            }
+            if matches!(
+                element,
+                DocumentElementId::Constraint(_)
+                    | DocumentElementId::Dimension(_)
+                    | DocumentElementId::Source(_)
+            ) {
+                return invalid(
+                    "user activation",
+                    "source-owned suppression must use the v1-v4 suppressed field",
+                );
+            }
+        }
+        if let Some(activation) = &self.host_activation {
+            let canonical = HostConfigurationActivation::from_digest(
+                activation.revision,
+                activation.digest,
+                activation.overrides.clone(),
+            )?;
+            for entry in canonical.overrides() {
+                if !self.contains_element(entry.element()) {
+                    return Err(unknown(
+                        entry.element().kind(),
+                        entry.element().persistent_id(),
+                    ));
+                }
+            }
         }
         let maximum = ids.iter().map(|id| id.as_u128()).max().unwrap_or(0);
         if self.next_id.as_u128() == 0 || self.next_id.as_u128() <= maximum {
@@ -6590,9 +7603,116 @@ impl SketchDocument {
     /// Returns a validation or JSON serialization error.
     pub fn to_canonical_json(&self) -> Result<String, DocumentError> {
         self.validate()?;
+        if !self.geometry_roles.is_empty()
+            || !self.user_inactive_elements.is_empty()
+            || self.host_activation.is_some()
+        {
+            return Err(DocumentError::UnsupportedM41State);
+        }
+        if !self.parameters.is_empty()
+            || !self.parameter_bindings.is_empty()
+            || !self.parameter_outputs.is_empty()
+        {
+            return Err(DocumentError::UnsupportedM42State);
+        }
+        if !self.external_bindings.is_empty()
+            || self.constraints.iter().any(|constraint| {
+                matches!(
+                    constraint.definition,
+                    DocumentConstraintDefinition::ExternalPointCoincident { .. }
+                        | DocumentConstraintDefinition::ExternalLineCollinear { .. }
+                )
+            })
+        {
+            return Err(DocumentError::UnsupportedM43State);
+        }
         let mut canonical = self.clone();
         canonical.canonicalize();
         Ok(serde_json::to_string(&SketchDocumentV4::from(&canonical))?)
+    }
+
+    /// Explicitly unsupported draft-v5 codec for pre-M107X M41 state.
+    #[doc(hidden)]
+    pub fn to_draft_v5_json(&self) -> Result<String, DocumentError> {
+        self.validate()?;
+        let mut canonical = self.clone();
+        canonical.canonicalize();
+        let geometry_roles = canonical
+            .geometry_roles
+            .iter()
+            .map(|(curve, role)| DraftGeometryRole {
+                curve: *curve,
+                role: *role,
+            })
+            .collect();
+        let draft = SketchDocumentDraftV5 {
+            version: 5,
+            document: SketchDocumentV4::from(&canonical),
+            geometry_roles,
+            user_inactive_elements: canonical.user_inactive_elements.iter().copied().collect(),
+            host_activation: canonical.host_activation,
+            parameters: canonical.parameters,
+            parameter_bindings: canonical.parameter_bindings,
+            parameter_outputs: canonical.parameter_outputs,
+            external_bindings: canonical.external_bindings,
+        };
+        Ok(serde_json::to_string(&draft)?)
+    }
+
+    /// Restores the explicitly unsupported pre-M107X draft-v5 representation.
+    #[doc(hidden)]
+    pub fn from_draft_v5_json(json: &str) -> Result<Self, DocumentError> {
+        if json.len() > MAX_DOCUMENT_JSON_BYTES {
+            return Err(DocumentError::ResourceLimit {
+                resource: "JSON bytes",
+                actual: json.len(),
+                limit: MAX_DOCUMENT_JSON_BYTES,
+            });
+        }
+        let draft: SketchDocumentDraftV5 = serde_json::from_str(json)?;
+        if draft.version != 5 {
+            return Err(DocumentError::UnsupportedVersion {
+                actual: draft.version,
+                expected: 5,
+            });
+        }
+        if draft.document.version != SKETCH_DOCUMENT_VERSION {
+            return Err(DocumentError::UnsupportedVersion {
+                actual: draft.document.version,
+                expected: SKETCH_DOCUMENT_VERSION,
+            });
+        }
+        let mut document = Self::from(draft.document);
+        for role in draft.geometry_roles {
+            if role.role == GeometryRole::Profile
+                || document
+                    .geometry_roles
+                    .insert(role.curve, role.role)
+                    .is_some()
+            {
+                return invalid("draft geometry roles", "must be unique non-default roles");
+            }
+        }
+        for element in draft.user_inactive_elements {
+            if !document.user_inactive_elements.insert(element) {
+                return Err(DocumentError::DuplicateActivationElement(element));
+            }
+        }
+        document.host_activation = match draft.host_activation {
+            Some(activation) => Some(HostConfigurationActivation::from_digest(
+                activation.revision,
+                activation.digest,
+                activation.overrides,
+            )?),
+            None => None,
+        };
+        document.parameters = draft.parameters;
+        document.parameter_bindings = draft.parameter_bindings;
+        document.parameter_outputs = draft.parameter_outputs;
+        document.external_bindings = draft.external_bindings;
+        document.validate()?;
+        document.canonicalize();
+        Ok(document)
     }
 
     /// Parses and strictly validates a versioned JSON document.
@@ -6669,6 +7789,15 @@ impl SketchDocument {
         self.trim_views.sort_by_key(|value| value.support);
         self.constraints.sort_by_key(|value| value.id);
         self.dimensions.sort_by_key(|value| value.id);
+        self.parameters.sort_by_key(|value| value.id);
+        self.parameter_bindings.sort_by_key(|binding| {
+            (
+                binding.parameter,
+                canonical_parameter_target_key(binding.target),
+            )
+        });
+        self.parameter_outputs.sort();
+        self.external_bindings.sort_by_key(|binding| binding.id);
     }
 
     pub(crate) fn point_mut(&mut self, id: DesignPointId) -> Option<&mut DesignPoint> {
@@ -6787,11 +7916,15 @@ impl SketchDocument {
         }
     }
 
-    pub(crate) fn curve_branch_is_enforced(&self, span: CurveSpan) -> bool {
+    pub(crate) fn curve_branch_is_enforced_with_activity(
+        &self,
+        span: CurveSpan,
+        activity: &EffectiveActivity,
+    ) -> bool {
         let has_axis_constraint = self
             .constraints
             .iter()
-            .filter(|constraint| !constraint.suppressed)
+            .filter(|constraint| activity.is_active(constraint.id))
             .any(|constraint| {
                 matches!(
                     constraint.definition,
@@ -6804,7 +7937,7 @@ impl SketchDocument {
             .dimensions
             .iter()
             .filter(|dimension| {
-                !dimension.suppressed && dimension.mode == DocumentDimensionMode::Driving
+                activity.is_active(dimension.id) && dimension.mode == DocumentDimensionMode::Driving
             })
             .any(|dimension| {
                 matches!(
@@ -6815,7 +7948,7 @@ impl SketchDocument {
         let has_sided_fillet = self
             .constraints
             .iter()
-            .filter(|constraint| !constraint.suppressed)
+            .filter(|constraint| activity.is_active(constraint.id))
             .any(|constraint| {
                 let (DocumentConstraintDefinition::LineLineFillet {
                     first_contact,
@@ -6836,6 +7969,276 @@ impl SketchDocument {
                     .any(|contact| contact.curve == span)
             });
         has_sided_fillet || (has_axis_constraint && has_driving_length)
+    }
+
+    fn compute_effective_activity(&self) -> EffectiveActivity {
+        self.compute_effective_activity_with_input_overlays(&BTreeSet::new(), &BTreeSet::new())
+    }
+
+    fn compute_effective_activity_with_input_overlays(
+        &self,
+        parameter_inactive: &BTreeSet<DocumentElementId>,
+        unavailable_external: &BTreeSet<DocumentElementId>,
+    ) -> EffectiveActivity {
+        let mut elements = self.canonical_elements();
+        let mut reasons = BTreeMap::<DocumentElementId, InactivityReason>::new();
+        for element in &elements {
+            if let Some(reason) = self.direct_inactivity_reason(*element) {
+                reasons.insert(*element, reason);
+            } else if parameter_inactive.contains(element) {
+                reasons.insert(*element, InactivityReason::HostConfigurationInactive);
+            } else if unavailable_external.contains(element) {
+                reasons.insert(*element, InactivityReason::UnavailableExternalReference);
+            }
+        }
+        if !reasons.is_empty() {
+            loop {
+                let mut changed = false;
+                for element in &elements {
+                    if reasons.contains_key(element) {
+                        continue;
+                    }
+                    if let Some(dependency) = self
+                        .direct_dependencies(*element)
+                        .into_iter()
+                        .find(|dependency| reasons.contains_key(dependency))
+                    {
+                        reasons.insert(
+                            *element,
+                            InactivityReason::UnavailableDependency { dependency },
+                        );
+                        changed = true;
+                    }
+                }
+                if !changed {
+                    break;
+                }
+            }
+        }
+        let (activation_revision, activation_digest) = self
+            .host_activation
+            .as_ref()
+            .map_or((0, ActivationDigest::default()), |activation| {
+                (activation.revision(), activation.digest())
+            });
+        let entries = elements
+            .drain(..)
+            .map(|element| DocumentElementActivity {
+                element,
+                reason: reasons.get(&element).copied(),
+            })
+            .collect();
+        EffectiveActivity {
+            activation_revision,
+            activation_digest,
+            elements: entries,
+        }
+    }
+
+    fn canonical_elements(&self) -> Vec<DocumentElementId> {
+        let mut elements = Vec::with_capacity(
+            1 + self.points.len()
+                + self.scalars.len()
+                + self.curves.len()
+                + self.contacts.len()
+                + self.constraints.len() * 2
+                + self.dimensions.len() * 2
+                + self.parameters.len()
+                + self.external_bindings.len(),
+        );
+        elements.push(DocumentElementId::Document(self.id));
+        elements.extend(
+            self.points
+                .iter()
+                .map(|value| DocumentElementId::Point(value.id)),
+        );
+        elements.extend(
+            self.scalars
+                .iter()
+                .map(|value| DocumentElementId::Scalar(value.id)),
+        );
+        elements.extend(
+            self.curves
+                .iter()
+                .map(|value| DocumentElementId::Curve(value.id)),
+        );
+        elements.extend(
+            self.contacts
+                .iter()
+                .map(|value| DocumentElementId::Contact(value.id)),
+        );
+        elements.extend(
+            self.constraints
+                .iter()
+                .map(|value| DocumentElementId::Constraint(value.id)),
+        );
+        elements.extend(
+            self.dimensions
+                .iter()
+                .map(|value| DocumentElementId::Dimension(value.id)),
+        );
+        elements.extend(
+            self.parameters
+                .iter()
+                .map(|value| DocumentElementId::Parameter(value.id)),
+        );
+        elements.extend(
+            self.external_bindings
+                .iter()
+                .map(|value| DocumentElementId::ExternalBinding(value.id)),
+        );
+        elements.extend(
+            self.source_order
+                .iter()
+                .copied()
+                .map(DocumentElementId::Source),
+        );
+        elements.sort_by_key(|element| canonical_element_key(*element));
+        elements
+    }
+
+    fn direct_inactivity_reason(&self, element: DocumentElementId) -> Option<InactivityReason> {
+        let owner_suppressed = match element {
+            DocumentElementId::Constraint(id) => self
+                .constraint(id)
+                .is_some_and(|constraint| constraint.suppressed),
+            DocumentElementId::Dimension(id) => self
+                .dimension(id)
+                .is_some_and(|dimension| dimension.suppressed),
+            DocumentElementId::Source(id) => {
+                self.source(id).is_some_and(|source| source.suppressed)
+            }
+            _ => false,
+        };
+        if owner_suppressed || self.user_inactive_elements.contains(&element) {
+            return Some(InactivityReason::UserSuppressed);
+        }
+        let activation = self.host_activation.as_ref()?;
+        let owner_source = match element {
+            DocumentElementId::Constraint(id) => self
+                .constraint(id)
+                .map(|constraint| DocumentElementId::Source(constraint.source_id)),
+            DocumentElementId::Dimension(id) => self
+                .dimension(id)
+                .map(|dimension| DocumentElementId::Source(dimension.source_id)),
+            _ => None,
+        };
+        activation.overrides().iter().find_map(|entry| {
+            if entry.element() != element && Some(entry.element()) != owner_source {
+                return None;
+            }
+            Some(match entry {
+                HostActivationOverride::Inactive(_) => InactivityReason::HostConfigurationInactive,
+                HostActivationOverride::UnavailableExternalReference(_) => {
+                    InactivityReason::UnavailableExternalReference
+                }
+            })
+        })
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn direct_dependencies(&self, element: DocumentElementId) -> Vec<DocumentElementId> {
+        if element == DocumentElementId::Document(self.id) {
+            return Vec::new();
+        }
+        let mut dependencies = vec![DocumentElementId::Document(self.id)];
+        let objects = self
+            .points
+            .iter()
+            .map(|value| DocumentObjectId::Point(value.id))
+            .chain(
+                self.scalars
+                    .iter()
+                    .map(|value| DocumentObjectId::Scalar(value.id)),
+            )
+            .chain(
+                self.curves
+                    .iter()
+                    .map(|value| DocumentObjectId::Curve(value.id)),
+            )
+            .chain(
+                self.contacts
+                    .iter()
+                    .map(|value| DocumentObjectId::Contact(value.id)),
+            )
+            .chain(
+                self.constraints
+                    .iter()
+                    .map(|value| DocumentObjectId::Constraint(value.id)),
+            )
+            .chain(
+                self.dimensions
+                    .iter()
+                    .map(|value| DocumentObjectId::Dimension(value.id)),
+            )
+            .chain(
+                self.parameters
+                    .iter()
+                    .map(|value| DocumentObjectId::Parameter(value.id)),
+            )
+            .chain(
+                self.external_bindings
+                    .iter()
+                    .map(|value| DocumentObjectId::ExternalBinding(value.id)),
+            );
+        match element {
+            DocumentElementId::Curve(id) => {
+                if let Some(curve) = self.curve(id) {
+                    dependencies.extend(
+                        objects
+                            .filter(|object| curve_references_object(&curve.definition, *object))
+                            .map(document_object_element),
+                    );
+                }
+            }
+            DocumentElementId::Contact(id) => {
+                if let Some(contact) = self.contact(id) {
+                    dependencies.extend(
+                        objects
+                            .filter(|object| contact_references_object(contact, *object))
+                            .map(document_object_element),
+                    );
+                }
+            }
+            DocumentElementId::Constraint(id) => {
+                if let Some(constraint) = self.constraint(id) {
+                    dependencies.extend(
+                        objects
+                            .filter(|object| {
+                                constraint_references_object(&constraint.definition, *object)
+                            })
+                            .map(document_object_element),
+                    );
+                }
+            }
+            DocumentElementId::Dimension(id) => {
+                if let Some(dimension) = self.dimension(id) {
+                    dependencies.extend(
+                        objects
+                            .filter(|object| {
+                                dimension_references_object(&dimension.definition, *object)
+                            })
+                            .map(document_object_element),
+                    );
+                }
+            }
+            DocumentElementId::Source(id) => {
+                if let Some(source) = self.source(id) {
+                    dependencies.push(match source.owner {
+                        DocumentSourceOwner::Constraint(id) => id.into(),
+                        DocumentSourceOwner::Dimension(id) => id.into(),
+                    });
+                }
+            }
+            DocumentElementId::Document(_)
+            | DocumentElementId::Point(_)
+            | DocumentElementId::Scalar(_)
+            | DocumentElementId::Parameter(_)
+            | DocumentElementId::ExternalBinding(_) => {}
+        }
+        dependencies.sort_by_key(|dependency| canonical_element_key(*dependency));
+        dependencies.dedup();
+        dependencies
     }
 
     fn line_span_endpoint_ids(
@@ -6895,6 +8298,8 @@ impl SketchDocument {
             DocumentObjectId::Contact(id) => self.contact(id).is_some(),
             DocumentObjectId::Constraint(id) => self.constraint(id).is_some(),
             DocumentObjectId::Dimension(id) => self.dimension(id).is_some(),
+            DocumentObjectId::Parameter(id) => self.parameter(id).is_some(),
+            DocumentObjectId::ExternalBinding(id) => self.external_binding(id).is_some(),
         }
     }
 
@@ -6914,6 +8319,7 @@ impl SketchDocument {
         &self,
         curve: CurveId,
         definition: &CurveDefinition,
+        activity: &EffectiveActivity,
     ) -> Result<(), DocumentError> {
         match definition {
             CurveDefinition::Line {
@@ -6931,7 +8337,7 @@ impl SketchDocument {
                     self.require_point(*start)?.position,
                     self.require_point(*end)?.position,
                 )?;
-                if self.curve_branch_is_enforced(CurveSpan::line(curve))
+                if self.curve_branch_is_enforced_with_activity(CurveSpan::line(curve), activity)
                     && dot(current, *branch_direction) <= 0.0
                 {
                     return invalid(
@@ -6974,16 +8380,19 @@ impl SketchDocument {
                         );
                     }
                     validate_unit_direction(*direction, "polyline branch_direction")?;
-                    if self.curve_branch_is_enforced(CurveSpan {
-                        curve,
-                        segment: u32::try_from(index).map_err(|_| {
-                            DocumentError::ResourceLimit {
-                                resource: "polyline segment index",
-                                actual: index,
-                                limit: u32::MAX as usize,
-                            }
-                        })?,
-                    }) && dot(
+                    if self.curve_branch_is_enforced_with_activity(
+                        CurveSpan {
+                            curve,
+                            segment: u32::try_from(index).map_err(|_| {
+                                DocumentError::ResourceLimit {
+                                    resource: "polyline segment index",
+                                    actual: index,
+                                    limit: u32::MAX as usize,
+                                }
+                            })?,
+                        },
+                        activity,
+                    ) && dot(
                         normalized_direction(start.position, end.position)?,
                         *direction,
                     ) <= 0.0
@@ -7360,6 +8769,18 @@ impl SketchDocument {
                 finite(*target, "fixed-coordinate target")?;
             }
             C::Coincident { first, second } => self.require_distinct_points(*first, *second)?,
+            C::ExternalPointCoincident { point, external } => {
+                self.require_point(*point)?;
+                let binding = self
+                    .external_binding(external.binding)
+                    .ok_or_else(|| unknown("external binding", external.binding.0))?;
+                if binding.expected_kind != ExternalFeatureKindV1::Point {
+                    return invalid(
+                        "external point operand",
+                        "binding must expect a point feature",
+                    );
+                }
+            }
             C::Horizontal { line } | C::Vertical { line } => {
                 self.validate_line_span(*line)?;
             }
@@ -7383,6 +8804,18 @@ impl SketchDocument {
                 self.validate_line_span(*second)?;
                 if first == second {
                     return invalid("constraint.definition", "line spans must be distinct");
+                }
+            }
+            C::ExternalLineCollinear { line, external } => {
+                self.validate_line_span(line.span)?;
+                let binding = self
+                    .external_binding(external.binding)
+                    .ok_or_else(|| unknown("external binding", external.binding.0))?;
+                if binding.expected_kind != ExternalFeatureKindV1::LineSegment {
+                    return invalid(
+                        "external line operand",
+                        "binding must expect a line-segment feature",
+                    );
                 }
             }
             C::EqualRadius { first, second } => {
@@ -7766,6 +9199,7 @@ impl SketchDocument {
     fn validate_dimension_definition(
         &self,
         definition: &DocumentDimensionDefinition,
+        mode: DocumentDimensionMode,
     ) -> Result<(), DocumentError> {
         use DocumentDimensionDefinition as D;
         let target = match definition {
@@ -7819,12 +9253,32 @@ impl SketchDocument {
             }
         };
         let scalar = self.require_scalar(target)?;
-        finite_positive(scalar.value, "dimension target")?;
+        if mode == DocumentDimensionMode::Driving {
+            finite_positive(scalar.value, "dimension target")?;
+        } else {
+            finite(scalar.value, "dimension target")?;
+        }
         let unit = match definition {
             D::OrientedAngle { .. } => ScalarUnit::Angle,
             _ => ScalarUnit::Length,
         };
-        require_scalar_role(scalar, unit, ScalarDomain::Positive, "dimension target")
+        let domain_is_valid = match mode {
+            DocumentDimensionMode::Driving => scalar.domain == ScalarDomain::Positive,
+            // Existing documents commonly retain the positive domain after changing a
+            // dimension to reference mode. M42 also permits finite-only reference
+            // storage because the scalar is not consumed as a solver coefficient.
+            DocumentDimensionMode::Reference => {
+                matches!(scalar.domain, ScalarDomain::Finite | ScalarDomain::Positive)
+            }
+        };
+        if scalar.unit == unit && domain_is_valid {
+            Ok(())
+        } else {
+            invalid(
+                "dimension target",
+                "scalar unit or domain does not match its semantic role",
+            )
+        }
     }
 
     fn validate_fillet_parent_request(
@@ -8879,6 +10333,88 @@ fn constraint_contacts(definition: &DocumentConstraintDefinition) -> Vec<Contact
 }
 
 #[allow(clippy::too_many_lines)]
+const fn canonical_element_key(element: DocumentElementId) -> (u128, u8) {
+    let kind = match element {
+        DocumentElementId::Document(_) => 0,
+        DocumentElementId::Point(_) => 1,
+        DocumentElementId::Scalar(_) => 2,
+        DocumentElementId::Curve(_) => 3,
+        DocumentElementId::Contact(_) => 4,
+        DocumentElementId::Constraint(_) => 5,
+        DocumentElementId::Dimension(_) => 6,
+        DocumentElementId::Parameter(_) => 7,
+        DocumentElementId::ExternalBinding(_) => 8,
+        DocumentElementId::Source(_) => 9,
+    };
+    (element.persistent_id().as_u128(), kind)
+}
+
+/// Canonical identity of a typed parameter target. A validated dimensionless
+/// declaration has exactly one permissible unit/domain/branch interpretation for
+/// its persistent scalar, so its scalar identity is the complete deduplication key.
+pub(crate) const fn canonical_parameter_target_key(
+    target: DocumentParameterTarget,
+) -> (u8, u128, u8) {
+    match target {
+        DocumentParameterTarget::DrivingDimension(id) => (0, id.0.as_u128(), 0),
+        DocumentParameterTarget::DimensionlessFixedScalar(property) => {
+            (1, property.scalar.0.as_u128(), 0)
+        }
+        DocumentParameterTarget::Activation(element) => {
+            let (id, kind) = canonical_element_key(element);
+            (2, id, kind)
+        }
+    }
+}
+
+const fn document_object_element(object: DocumentObjectId) -> DocumentElementId {
+    match object {
+        DocumentObjectId::Point(id) => DocumentElementId::Point(id),
+        DocumentObjectId::Scalar(id) => DocumentElementId::Scalar(id),
+        DocumentObjectId::Curve(id) => DocumentElementId::Curve(id),
+        DocumentObjectId::Contact(id) => DocumentElementId::Contact(id),
+        DocumentObjectId::Constraint(id) => DocumentElementId::Constraint(id),
+        DocumentObjectId::Dimension(id) => DocumentElementId::Dimension(id),
+        DocumentObjectId::Parameter(id) => DocumentElementId::Parameter(id),
+        DocumentObjectId::ExternalBinding(id) => DocumentElementId::ExternalBinding(id),
+    }
+}
+
+fn activation_digest(revision: u64, overrides: &[HostActivationOverride]) -> ActivationDigest {
+    // Four independently seeded stable FNV-1a lanes. This is a canonical identity,
+    // not an authentication primitive; hosts that need authenticity sign the payload.
+    let mut lanes = [
+        0xcbf2_9ce4_8422_2325_u64,
+        0x8422_2325_cbf2_9ce4_u64,
+        0x9e37_79b1_85eb_ca87_u64,
+        0xd6e8_feb8_6659_fd93_u64,
+    ];
+    let mut bytes = Vec::with_capacity(8 + overrides.len() * 18);
+    bytes.extend_from_slice(&revision.to_be_bytes());
+    for entry in overrides {
+        let (state, element) = match entry {
+            HostActivationOverride::Inactive(element) => (0_u8, *element),
+            HostActivationOverride::UnavailableExternalReference(element) => (1_u8, *element),
+        };
+        let (_, kind) = canonical_element_key(element);
+        bytes.push(state);
+        bytes.push(kind);
+        bytes.extend_from_slice(&element.persistent_id().as_u128().to_be_bytes());
+    }
+    for (lane_index, lane) in lanes.iter_mut().enumerate() {
+        for byte in &bytes {
+            *lane ^= u64::from(*byte).wrapping_add((lane_index as u64) << 8);
+            *lane = lane.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    }
+    let mut digest = [0_u8; 32];
+    for (index, lane) in lanes.into_iter().enumerate() {
+        digest[index * 8..index * 8 + 8].copy_from_slice(&lane.to_be_bytes());
+    }
+    ActivationDigest(digest)
+}
+
+#[allow(clippy::too_many_lines)]
 fn curve_references_object(definition: &CurveDefinition, object: DocumentObjectId) -> bool {
     match (definition, object) {
         (CurveDefinition::Line { start, end, .. }, DocumentObjectId::Point(point)) => {
@@ -9003,7 +10539,8 @@ fn constraint_references_object(
             DocumentConstraintDefinition::FixedPoint { point, .. }
             | DocumentConstraintDefinition::FixedCoordinate { point, .. }
             | DocumentConstraintDefinition::PointOnCurve { point, .. }
-            | DocumentConstraintDefinition::Midpoint { point, .. },
+            | DocumentConstraintDefinition::Midpoint { point, .. }
+            | DocumentConstraintDefinition::ExternalPointCoincident { point, .. },
             DocumentObjectId::Point(selected),
         ) => *point == selected,
         (
@@ -9011,6 +10548,10 @@ fn constraint_references_object(
             | DocumentConstraintDefinition::SymmetricAboutLine { first, second, .. },
             DocumentObjectId::Point(selected),
         ) => *first == selected || *second == selected,
+        (
+            DocumentConstraintDefinition::ExternalPointCoincident { external, .. },
+            DocumentObjectId::ExternalBinding(selected),
+        ) => external.binding == selected,
         (
             DocumentConstraintDefinition::Horizontal { line }
             | DocumentConstraintDefinition::Vertical { line }
@@ -9020,6 +10561,14 @@ fn constraint_references_object(
             | DocumentConstraintDefinition::CurveDirection { line, .. },
             DocumentObjectId::Curve(selected),
         ) => line.curve == selected,
+        (
+            DocumentConstraintDefinition::ExternalLineCollinear { line, .. },
+            DocumentObjectId::Curve(selected),
+        ) => line.span.curve == selected,
+        (
+            DocumentConstraintDefinition::ExternalLineCollinear { external, .. },
+            DocumentObjectId::ExternalBinding(selected),
+        ) => external.binding == selected,
         (
             DocumentConstraintDefinition::Parallel { first, second }
             | DocumentConstraintDefinition::Perpendicular { first, second }
@@ -9350,6 +10899,22 @@ const fn dimension_target(definition: &DocumentDimensionDefinition) -> DesignSca
     }
 }
 
+const fn dimension_parameter_kind(
+    definition: &DocumentDimensionDefinition,
+) -> DocumentParameterKind {
+    match definition {
+        DocumentDimensionDefinition::OrientedAngle { .. } => DocumentParameterKind::Angle,
+        DocumentDimensionDefinition::PointDistance { .. }
+        | DocumentDimensionDefinition::CurveLength { .. }
+        | DocumentDimensionDefinition::Radius { .. }
+        | DocumentDimensionDefinition::Diameter { .. }
+        | DocumentDimensionDefinition::SupportingLineOffset { .. }
+        | DocumentDimensionDefinition::ExactTranslatedSegmentOffset { .. } => {
+            DocumentParameterKind::Length
+        }
+    }
+}
+
 fn claim_scalar(
     used: &mut BTreeSet<DesignScalarId>,
     scalar: DesignScalarId,
@@ -9517,11 +11082,15 @@ fn unknown(kind: &'static str, id: PersistentId) -> DocumentError {
     DocumentError::UnknownId { kind, id }
 }
 
-fn invalid<T>(field: &'static str, message: impl Into<String>) -> Result<T, DocumentError> {
-    Err(DocumentError::InvalidField {
+fn invalid_error(field: &'static str, message: impl Into<String>) -> DocumentError {
+    DocumentError::InvalidField {
         field,
         message: message.into(),
-    })
+    }
+}
+
+fn invalid<T>(field: &'static str, message: impl Into<String>) -> Result<T, DocumentError> {
+    Err(invalid_error(field, message))
 }
 
 fn retain_remove<T>(values: &mut Vec<T>, predicate: impl Fn(&T) -> bool) -> bool {
@@ -9538,5 +11107,7 @@ const fn object_persistent(object: DocumentObjectId) -> PersistentId {
         DocumentObjectId::Contact(id) => id.0,
         DocumentObjectId::Constraint(id) => id.0,
         DocumentObjectId::Dimension(id) => id.0,
+        DocumentObjectId::Parameter(id) => id.0,
+        DocumentObjectId::ExternalBinding(id) => id.0,
     }
 }

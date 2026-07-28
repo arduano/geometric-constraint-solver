@@ -35,6 +35,7 @@ mod document;
 mod document_lowering;
 mod document_session;
 mod generic_curves;
+mod m38;
 mod model;
 mod nurbs;
 mod profiles;
@@ -65,10 +66,10 @@ pub use compiler::{
     CompiledSketch, ConicScalarVariableMapping, ConicVectorRole, ConicVectorVariableMapping,
     DragTarget, LatentVariableMapping, LatentVariableRole, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT,
     MIN_REPRESENTABLE_RADIUS, NurbsWeightVariableMapping, PointVariableMapping,
-    ReferenceDimensionValue, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, SketchBound, SketchBoundMapping,
-    SketchGeometry, SketchSolveRequest, SketchSolveResult, SketchSource, SketchSourceMapping,
-    SolveRejection, SolvedArc, SolvedCircle, SolvedConic, SolvedConicKind, SolvedNurbs,
-    SolvedPoint,
+    ReferenceDimensionValue, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, SketchAcceptedRedundancy,
+    SketchBound, SketchBoundMapping, SketchGeometry, SketchSolveRequest, SketchSolveResult,
+    SketchSource, SketchSourceMapping, SolveRejection, SolvedArc, SolvedCircle, SolvedConic,
+    SolvedConicKind, SolvedNurbs, SolvedPoint,
 };
 pub use conics::{ConicCurve, ConicGeometry, ConicKind};
 pub use curves::{
@@ -79,8 +80,8 @@ pub use curves::{
     ContactState, LineOffsetOrientation, LineParameterDomain, LineSide,
 };
 pub use document::{
-    ContactDefinition, ContactDomain, ContactId, ContactNeighborhood, ContactSlot,
-    ContactStateEdit, CurveCurveFilletIds, CurveCurveFilletRequest, CurveDefinition,
+    ActivationDigest, ContactDefinition, ContactDomain, ContactId, ContactNeighborhood,
+    ContactSlot, ContactStateEdit, CurveCurveFilletIds, CurveCurveFilletRequest, CurveDefinition,
     CurveFilletParentRequest, CurveId, CurveSpan, DesignCurve, DesignPoint, DesignPointId,
     DesignScalar, DesignScalarId, DocumentAngleOrientation, DocumentArcSweep,
     DocumentArcTangencySide, DocumentBSplineForm, DocumentBSplineInsertion,
@@ -92,30 +93,42 @@ pub use document::{
     DocumentCurveMeasurementError, DocumentCurveMeasurementKind, DocumentCurveNormalSide,
     DocumentCurveSpanRef, DocumentCurveTrimView, DocumentDimension, DocumentDimensionDefinition,
     DocumentDimensionId, DocumentDimensionMode, DocumentDirectionRef, DocumentDirectionSense,
-    DocumentElementId, DocumentEndpointRef, DocumentError, DocumentFilletEndpointOrder,
-    DocumentFilletTrimEndpoint, DocumentHyperbolaBranch, DocumentId, DocumentLineOffsetOrientation,
-    DocumentLineSide, DocumentLineSupportRef, DocumentMirroredBSplineInsertion,
-    DocumentNurbsInsertion, DocumentObjectId, DocumentPointRef, DocumentSourceId,
-    DocumentSourceOwner, DocumentSourceRef, DocumentTrimBoundary, DocumentTrimParameter,
-    DocumentTrimProjection, DocumentTrimProjectionError, DocumentVisibleCurveInterval,
-    FeatureEndpoint, FeatureRef, LineLineFilletIds, LineLineFilletRequest, MAX_BSPLINE_CONTROLS,
-    MAX_DOCUMENT_JSON_BYTES, MAX_DOCUMENT_OBJECTS, MAX_LABEL_BYTES, MAX_POLYLINE_POINTS,
-    MirroredCurveIds, PersistentId, RectangleIds, SKETCH_DOCUMENT_VERSION, ScalarDomain,
-    ScalarUnit, SketchDocument, TangentOrientation,
+    DocumentElementActivity, DocumentElementId, DocumentEndpointRef, DocumentError,
+    DocumentExternalBinding, DocumentExternalBindingId, DocumentExternalLineSupportRef,
+    DocumentExternalPointRef, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint,
+    DocumentHyperbolaBranch, DocumentId, DocumentLineOffsetOrientation, DocumentLineSide,
+    DocumentLineSupportRef, DocumentMirroredBSplineInsertion, DocumentNurbsInsertion,
+    DocumentObjectId, DocumentParameter, DocumentParameterBinding, DocumentParameterId,
+    DocumentParameterKind, DocumentParameterOutput, DocumentParameterTarget, DocumentPointRef,
+    DocumentSourceId, DocumentSourceOwner, DocumentSourceRef, DocumentTrimBoundary,
+    DocumentTrimParameter, DocumentTrimProjection, DocumentTrimProjectionError,
+    DocumentVisibleCurveInterval, EffectiveActivity, ExternalFeatureKindV1, ExternalTopologyDigest,
+    FeatureEndpoint, FeatureRef, GeometryRole, HostActivationOverride, HostConfigurationActivation,
+    InactivityReason, LineLineFilletIds, LineLineFilletRequest, MAX_BSPLINE_CONTROLS,
+    MAX_DOCUMENT_JSON_BYTES, MAX_DOCUMENT_OBJECTS, MAX_DOCUMENT_PARAMETERS, MAX_EXTERNAL_BINDINGS,
+    MAX_LABEL_BYTES, MAX_POLYLINE_POINTS, MirroredCurveIds, PersistentId, RectangleIds,
+    SKETCH_DOCUMENT_VERSION, ScalarDomain, ScalarUnit, SketchDocument, TangentOrientation,
 };
 pub use document_lowering::{
-    ContactRuntimeMapping, CurveRuntimeMapping, DocumentContactRole, DocumentRuntimeMap,
-    DocumentSourceRuntimeMapping, LoweredDocument, PointRuntimeMapping, RuntimeCurve,
-    RuntimeSource,
+    ContactRuntimeMapping, CurveRuntimeMapping, DocumentContactRole,
+    DocumentParameterRuntimeBinding, DocumentRuntimeMap, DocumentSourceRuntimeMapping,
+    LoweredDocument, PointRuntimeMapping, RuntimeCurve, RuntimeSource,
 };
 pub use document_session::{
     DocumentCommand, DocumentCommandEffect, DocumentCommandOutcome, DocumentDragTarget,
-    DocumentEdit, DocumentSessionError, DocumentSolveRequest, DocumentSolveResult,
-    DocumentTransactionOutcome, RetainedDocumentTransactionOutcome, RetainedSketchDocumentSession,
-    SketchAcceptedDocumentState, SketchAcceptedRevision, SketchAcceptedStateIdentity,
-    SketchAttemptFailure, SketchAttemptFailureKind, SketchAttemptIdentity, SketchAttemptInput,
-    SketchAttemptRevision, SketchDesignIdentity, SketchDesignRevision, SketchDocumentAttempt,
-    SketchDocumentSession, SketchLifecycleRevisionHighWater,
+    DocumentEdit, DocumentParameterOutputProposal, DocumentSessionError, DocumentSolveRequest,
+    DocumentSolveResult, DocumentTransactionOutcome, EXTERNAL_SNAPSHOT_SET_VERSION_V1,
+    ExternalLineOrientationV1, ExternalSnapshotDigest, ExternalSnapshotEntry,
+    ExternalSnapshotFeatureV1, ExternalSnapshotInputError, ExternalSnapshotResourcesV1,
+    ExternalSnapshotSet, ExternalSnapshotSetDigest, ExternalSnapshotSetV1,
+    MAX_EXTERNAL_SNAPSHOT_CONTROLS, MAX_EXTERNAL_SNAPSHOT_ENTRIES, MAX_EXTERNAL_SNAPSHOT_POINTS,
+    MAX_EXTERNAL_SNAPSHOT_SPANS, MAX_PARAMETER_BATCH_ENTRIES, ParameterBatch, ParameterBatchEntry,
+    ParameterDigest, ParameterValue, RetainedDocumentTransactionOutcome,
+    RetainedSketchDocumentSession, SketchAcceptedDocumentRedundancy, SketchAcceptedDocumentState,
+    SketchAcceptedRevision, SketchAcceptedStateIdentity, SketchAttemptFailure,
+    SketchAttemptFailureKind, SketchAttemptIdentity, SketchAttemptInput, SketchAttemptRevision,
+    SketchDesignIdentity, SketchDesignRevision, SketchDocumentAttempt, SketchDocumentSession,
+    SketchLifecycleRevisionHighWater,
 };
 pub use geosolve_core::{
     CancellationHandle, CancellationToken, OperationCheckpoint, OperationControl, OperationLimits,
@@ -129,14 +142,20 @@ pub use geosolve_geometry::{
     EllipseAxisObservability, HyperbolaBranch, MAX_BSPLINE_DEGREE, NurbsDefinitionError,
     NurbsEvaluationError, NurbsInsertionError, ProperConicKind,
 };
+pub use m38::{
+    DocumentBoundedCurveInterval, DocumentDatumAxis, DocumentM38DimensionDefinition,
+    DocumentM38SolveResult, DocumentMeasurementAudit, DocumentMeasurementCatalog,
+    DocumentMeasurementDefinition, DocumentMeasurementProvenance, DocumentMeasurementValue,
+    DocumentMeasurementWork,
+};
 pub use model::{
     ArcAngleEndpoint, ArcId, BSplineId, BezierId, CircleId, ConicId, ConicScalarRole,
     CoordinateAxis, CurveContactNeighborhood, CurveContinuity, CurveCurvatureRelation,
     CurveDirectionRelation, CurveMeasurementKind, CurveNormalSide, CurveTangentOrientation,
-    DimensionKind, DimensionMode, FilletEndpointOrder, LineSegment, NurbsId, PointId,
-    SegmentBranch, SegmentEndpoint, SegmentId, Sketch, SketchConstraint, SketchConstraintId,
-    SketchConstraintKind, SketchCurve, SketchCurveContact, SketchDimension, SketchDimensionId,
-    SketchError, SketchPoint, SketchScalarRef,
+    DimensionKind, DimensionMode, ExternalConstraintProvenance, FilletEndpointOrder, LineSegment,
+    M38ConicProperty, NurbsId, PointId, SegmentBranch, SegmentEndpoint, SegmentId, Sketch,
+    SketchConstraint, SketchConstraintId, SketchConstraintKind, SketchCurve, SketchCurveContact,
+    SketchDimension, SketchDimensionId, SketchError, SketchPoint, SketchScalarRef,
 };
 pub use nurbs::NurbsCurve;
 pub use profiles::{

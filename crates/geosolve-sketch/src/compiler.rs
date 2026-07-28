@@ -20,13 +20,15 @@ use crate::model::{
     SketchDimensionId, SketchError, SketchScalarRef, validate_model_scale, validate_point,
 };
 use crate::residuals::{
-    AxisDifferenceResidual, BezierIncidence, CircleArcTangencyResidual, CircleTangencyResidual,
-    CoincidentResidual, CollinearResidual, CurveParameterIncidence, DistanceResidual,
-    EqualAngleResidual, EqualDistanceResidual, FixedCoordinateResidual,
-    GenericCurveDirectionResidual, GenericCurveFilletResidual, GenericCurveIncidence,
-    GenericCurvePairResidual, GenericEndpointContinuityResidual, GenericEqualCurvatureResidual,
-    GenericPointOnCurveResidual, LineBezierTangencyResidual, LineCircleTangencyResidual,
-    LineOffsetResidual, LineOffsetResidualMode, MidpointResidual, NurbsWeightIncidence,
+    AxisDifferenceResidual, AxisDimensionResidual, BezierIncidence, CircleArcTangencyResidual,
+    CircleTangencyResidual, CircularArcLengthResidual, CircularSweepResidual, CoincidentResidual,
+    CollinearResidual, ConicPropertyResidual, ConicPropertyResidualKind, CurveParameterIncidence,
+    DistanceResidual, EqualAngleResidual, EqualDistanceResidual, ExternalLineCollinearResidual,
+    FixedCoordinateResidual, GenericCurveDirectionResidual, GenericCurveFilletResidual,
+    GenericCurveIncidence, GenericCurvePairResidual, GenericEndpointContinuityResidual,
+    GenericEqualCurvatureResidual, GenericPathLengthResidual, GenericPointOnCurveResidual,
+    LineBezierTangencyResidual, LineCircleTangencyResidual, LineOffsetResidual,
+    LineOffsetResidualMode, M38DimensionResidual, MidpointResidual, NurbsWeightIncidence,
     OrientedAngleResidual, PointOnBezierResidual, PointOnCircleResidual, PointOnLineResidual,
     PointTargetResidual, ScalarEqualityResidual, ScalarTargetResidual, SegmentPairEquation,
     SegmentPairResidual, SymmetryResidual,
@@ -660,6 +662,10 @@ impl CompiledSketch {
                     &self.point_variables,
                     &self.circle_radius_variables,
                     &self.arc_radius_variables,
+                    &self.arc_angle_variables,
+                    &self.conic_vector_variables,
+                    &self.conic_scalar_variables,
+                    &self.nurbs_weight_variables,
                     dimension_id,
                     dimension,
                 )?
@@ -1153,10 +1159,58 @@ pub struct SketchSolveResult {
     pub acceptance_hard_residual_max: Option<f64>,
 }
 
+/// Accepted-only redundancy classification in stable sketch runtime identities.
+///
+/// A fully redundant source has every active row classified as redundant. The
+/// containing set also includes sources with only some redundant rows.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SketchAcceptedRedundancy {
+    fully_redundant_sources: Vec<SketchSource>,
+    sources_containing_redundant_rows: Vec<SketchSource>,
+}
+
+impl SketchAcceptedRedundancy {
+    #[must_use]
+    pub fn fully_redundant_sources(&self) -> &[SketchSource] {
+        &self.fully_redundant_sources
+    }
+
+    #[must_use]
+    pub fn sources_containing_redundant_rows(&self) -> &[SketchSource] {
+        &self.sources_containing_redundant_rows
+    }
+}
+
 impl SketchSolveResult {
     #[must_use]
     pub const fn accepted(&self) -> bool {
         self.rejection.is_none()
+    }
+
+    /// Returns authoritative redundancy only for an independently accepted result.
+    #[must_use]
+    pub fn accepted_redundancy(&self) -> Option<SketchAcceptedRedundancy> {
+        if !self.accepted() {
+            return None;
+        }
+        let map_sources = |core_sources: &[SourceConstraintId]| {
+            let mut sources = Vec::new();
+            for core_source in core_sources {
+                if let Some(source) = self.source_mappings.iter().find_map(|mapping| {
+                    (mapping.core_source_id == Some(*core_source)).then_some(mapping.source)
+                }) && !sources.contains(&source)
+                {
+                    sources.push(source);
+                }
+            }
+            sources
+        };
+        Some(SketchAcceptedRedundancy {
+            fully_redundant_sources: map_sources(&self.core_report.redundant_sources),
+            sources_containing_redundant_rows: map_sources(
+                &self.core_report.sources_containing_redundant_rows,
+            ),
+        })
     }
 }
 
@@ -1289,27 +1343,38 @@ impl Sketch {
             if !compile_item(&mut control) {
                 return Ok(None);
             }
-            let PersistentSource::Constraint(constraint_id) = *source else {
-                continue;
-            };
-            let Some(constraint) = self.constraints.get(constraint_id) else {
-                continue;
-            };
-            let arcs = match constraint.kind() {
-                SketchConstraintKind::CurveCurveFillet { arc, .. } => vec![(arc, true)],
-                SketchConstraintKind::FixedArcAngle { arc, .. }
-                | SketchConstraintKind::FixedScalar {
-                    property: SketchScalarRef::ArcAngle { arc, .. },
-                    ..
-                } => vec![(arc, false)],
-                SketchConstraintKind::EqualScalar { first, second, .. } => [first, second]
-                    .into_iter()
-                    .filter_map(|property| match property {
-                        SketchScalarRef::ArcAngle { arc, .. } => Some((arc, false)),
-                        _ => None,
-                    })
-                    .collect(),
-                _ => continue,
+            let arcs = match *source {
+                PersistentSource::Constraint(constraint_id) => {
+                    let Some(constraint) = self.constraints.get(constraint_id) else {
+                        continue;
+                    };
+                    match constraint.kind() {
+                        SketchConstraintKind::CurveCurveFillet { arc, .. } => vec![(arc, true)],
+                        SketchConstraintKind::FixedArcAngle { arc, .. }
+                        | SketchConstraintKind::FixedScalar {
+                            property: SketchScalarRef::ArcAngle { arc, .. },
+                            ..
+                        } => vec![(arc, false)],
+                        SketchConstraintKind::EqualScalar { first, second, .. } => [first, second]
+                            .into_iter()
+                            .filter_map(|property| match property {
+                                SketchScalarRef::ArcAngle { arc, .. } => Some((arc, false)),
+                                _ => None,
+                            })
+                            .collect(),
+                        _ => continue,
+                    }
+                }
+                PersistentSource::Dimension(dimension_id) => {
+                    let Some(dimension) = self.dimensions.get(dimension_id) else {
+                        continue;
+                    };
+                    match dimension.kind() {
+                        DimensionKind::CircularSweep { arc, .. }
+                        | DimensionKind::CircularArcLength { arc, .. } => vec![(arc, false)],
+                        _ => continue,
+                    }
+                }
             };
             for (arc, fillet) in arcs {
                 if fillet && fillet_angle_arcs.contains(&arc) {
@@ -1488,6 +1553,10 @@ impl Sketch {
                         &point_variables,
                         &circle_radius_variables,
                         &arc_radius_variables,
+                        &arc_angle_variables,
+                        &conic_vector_variables,
+                        &conic_scalar_variables,
+                        &nurbs_weight_variables,
                         dimension_id,
                         dimension,
                     )?);
@@ -3494,6 +3563,28 @@ fn compile_constraint(
                 residual_id,
             ));
         }
+        SketchConstraintKind::ExternalPoint {
+            point,
+            target,
+            provenance,
+        } => {
+            let point_name = sketch.point_name(point)?;
+            let label = format!(
+                "constraint {}: {point_name} coincident with external binding {}",
+                constraint.ordinal(),
+                provenance.binding
+            );
+            return compile_external_point_target(
+                sketch,
+                problem,
+                point_variables,
+                SketchSource::Constraint(constraint_id),
+                point,
+                target,
+                provenance,
+                label,
+            );
+        }
         SketchConstraintKind::FixedCoordinate {
             point,
             axis,
@@ -4052,6 +4143,44 @@ fn compile_curve_constraint(
                 Box::new(CollinearResidual {
                     first: first_indices,
                     second: second_indices,
+                }),
+            )
+        }
+        SketchConstraintKind::ExternalLineCollinear {
+            segment,
+            external_start,
+            external_end,
+            provenance,
+        } => {
+            let (_, _, native) = segment_points(sketch, segment)?;
+            let native_indices =
+                segment_incidence(sketch, point_variables, &mut incidence, segment)?;
+            let bindings = external_provenance_bindings(provenance);
+            (
+                format!(
+                    "constraint {}: {} collinear with external binding {}",
+                    constraint.ordinal(),
+                    native.label(),
+                    provenance.binding
+                ),
+                2,
+                vec![1.0, scale],
+                vec![
+                    audit_row_unit(
+                        "cross(unit_direction(native), unit_direction(external))".into(),
+                        bindings.clone(),
+                        "dimensionless",
+                    ),
+                    audit_row(
+                        "cross(unit_direction(native), external.start - native.start) / model_scale"
+                            .into(),
+                        bindings,
+                    ),
+                ],
+                Box::new(ExternalLineCollinearResidual {
+                    native: native_indices,
+                    external_start: [external_start.x, external_start.y],
+                    external_end: [external_end.x, external_end.y],
                 }),
             )
         }
@@ -5271,16 +5400,54 @@ impl geosolve_core::ResidualEvaluator for BoxedEvaluator {
     }
 }
 
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn compile_dimension(
     sketch: &Sketch,
     problem: &mut Problem,
     point_variables: &[PointVariableMapping],
     circle_radius_variables: &[CircleRadiusVariableMapping],
     arc_radius_variables: &[ArcRadiusVariableMapping],
+    arc_angle_variables: &[ArcAngleVariableMapping],
+    conic_vector_variables: &[ConicVectorVariableMapping],
+    conic_scalar_variables: &[ConicScalarVariableMapping],
+    nurbs_weight_variables: &[NurbsWeightVariableMapping],
     dimension_id: SketchDimensionId,
     dimension: &crate::SketchDimension,
 ) -> Result<SketchSourceMapping, SketchError> {
     let kind = dimension.kind();
+    if matches!(
+        kind,
+        DimensionKind::CircularSweep { .. }
+            | DimensionKind::CircularArcLength { .. }
+            | DimensionKind::ConicProperty { .. }
+            | DimensionKind::PathLength { .. }
+            | DimensionKind::EqualPathLength { .. }
+    ) {
+        return compile_m38_dimension(
+            sketch,
+            problem,
+            point_variables,
+            circle_radius_variables,
+            arc_radius_variables,
+            arc_angle_variables,
+            conic_vector_variables,
+            conic_scalar_variables,
+            nurbs_weight_variables,
+            dimension_id,
+            dimension,
+            kind,
+        );
+    }
+    if matches!(kind, DimensionKind::CoordinateDifference { .. }) {
+        return compile_coordinate_dimension(
+            sketch,
+            problem,
+            point_variables,
+            dimension_id,
+            dimension,
+            kind,
+        );
+    }
     if matches!(
         kind,
         DimensionKind::SupportingLineOffset { .. }
@@ -5372,6 +5539,340 @@ fn compile_dimension(
             ],
         )],
         DistanceResidual { target },
+    )?)?;
+    Ok(equation_mapping(
+        SketchSource::Dimension(dimension_id),
+        label,
+        source_id,
+        residual_id,
+    ))
+}
+
+fn compile_coordinate_dimension(
+    sketch: &Sketch,
+    problem: &mut Problem,
+    point_variables: &[PointVariableMapping],
+    dimension_id: SketchDimensionId,
+    dimension: &crate::SketchDimension,
+    kind: DimensionKind,
+) -> Result<SketchSourceMapping, SketchError> {
+    let DimensionKind::CoordinateDifference {
+        first,
+        second,
+        axis,
+        target,
+    } = kind
+    else {
+        unreachable!("non-coordinate dimension reached coordinate compiler");
+    };
+    let first_name = sketch.point_name(first)?;
+    let second_name = sketch.point_name(second)?;
+    let coordinate = match axis {
+        crate::CoordinateAxis::X => 0,
+        crate::CoordinateAxis::Y => 1,
+    };
+    let subject = format!("signed {axis:?} coordinate {first_name} to {second_name}");
+    if dimension.mode() == DimensionMode::Reference {
+        return Ok(SketchSourceMapping {
+            source: SketchSource::Dimension(dimension_id),
+            source_label: format!(
+                "dimension {}: reference measurement of {subject}",
+                dimension.ordinal()
+            ),
+            core_source_id: None,
+            residual_ids: Vec::new(),
+        });
+    }
+    let label = format!(
+        "dimension {}: {subject} = {target} (driving)",
+        dimension.ordinal()
+    );
+    let source_id = problem.add_source(SourceConstraint::new(&label)?);
+    let residual_id = problem.add_residual(ResidualBlock::new(
+        source_id,
+        ResidualCategory::Hard,
+        vec![
+            point_variable(point_variables, first)?,
+            point_variable(point_variables, second)?,
+        ],
+        1,
+        vec![sketch.model_scale],
+        vec![audit_row(
+            format!("(({second_name}.{axis:?} - {first_name}.{axis:?}) - target) / model_scale"),
+            vec![
+                AuditBinding::new("first", first_name),
+                AuditBinding::new("second", second_name),
+                AuditBinding::new("axis", format!("{axis:?}")),
+                AuditBinding::new("target", target.to_string()),
+            ],
+        )],
+        AxisDimensionResidual { coordinate, target },
+    )?)?;
+    Ok(equation_mapping(
+        SketchSource::Dimension(dimension_id),
+        label,
+        source_id,
+        residual_id,
+    ))
+}
+
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+fn compile_m38_dimension(
+    sketch: &Sketch,
+    problem: &mut Problem,
+    point_variables: &[PointVariableMapping],
+    circle_radius_variables: &[CircleRadiusVariableMapping],
+    arc_radius_variables: &[ArcRadiusVariableMapping],
+    arc_angle_variables: &[ArcAngleVariableMapping],
+    conic_vector_variables: &[ConicVectorVariableMapping],
+    conic_scalar_variables: &[ConicScalarVariableMapping],
+    nurbs_weight_variables: &[NurbsWeightVariableMapping],
+    dimension_id: SketchDimensionId,
+    dimension: &crate::SketchDimension,
+    kind: DimensionKind,
+) -> Result<SketchSourceMapping, SketchError> {
+    if dimension.mode() == DimensionMode::Reference {
+        return Ok(SketchSourceMapping {
+            source: SketchSource::Dimension(dimension_id),
+            source_label: format!(
+                "dimension {}: M38 reference measurement",
+                dimension.ordinal()
+            ),
+            core_source_id: None,
+            residual_ids: Vec::new(),
+        });
+    }
+    let mut incidence = IncidenceBuilder::default();
+    let (subject, target, scale, template, evaluator): (
+        String,
+        f64,
+        f64,
+        &'static str,
+        M38DimensionResidual,
+    ) = match kind {
+        DimensionKind::CircularSweep { arc, target } => {
+            let value = sketch.arc_value(arc)?;
+            (
+                format!("circular sweep of {}", value.label()),
+                target,
+                1.0,
+                "(end_angle - start_angle + retained_turns*2*pi) - target",
+                M38DimensionResidual::CircularSweep(CircularSweepResidual {
+                    start_angle: incidence.add(arc_angle_variable(
+                        arc_angle_variables,
+                        arc,
+                        ArcAngleRole::Start,
+                    )?),
+                    end_angle: incidence.add(arc_angle_variable(
+                        arc_angle_variables,
+                        arc,
+                        ArcAngleRole::End,
+                    )?),
+                    turn_offset: retained_arc_turn_offset(value)?,
+                    target,
+                }),
+            )
+        }
+        DimensionKind::CircularArcLength { arc, target } => {
+            let value = sketch.arc_value(arc)?;
+            (
+                format!("circular arc length of {}", value.label()),
+                target,
+                sketch.model_scale,
+                "radius * abs(end_angle - start_angle + retained_turns*2*pi) - target",
+                M38DimensionResidual::CircularArcLength(CircularArcLengthResidual {
+                    radius: incidence.add(arc_radius_variable(arc_radius_variables, arc)?),
+                    start_angle: incidence.add(arc_angle_variable(
+                        arc_angle_variables,
+                        arc,
+                        ArcAngleRole::Start,
+                    )?),
+                    end_angle: incidence.add(arc_angle_variable(
+                        arc_angle_variables,
+                        arc,
+                        ArcAngleRole::End,
+                    )?),
+                    turn_offset: retained_arc_turn_offset(value)?,
+                    target,
+                }),
+            )
+        }
+        DimensionKind::ConicProperty {
+            conic,
+            property,
+            target,
+        } => {
+            let value = sketch.conic_value(conic)?;
+            let residual_kind = match value.kind() {
+                crate::ConicKind::Ellipse {
+                    center,
+                    major_axis_point,
+                    ..
+                }
+                | crate::ConicKind::EllipticalArc {
+                    center,
+                    major_axis_point,
+                    ..
+                } => ConicPropertyResidualKind::Ellipse {
+                    center: incidence.add(point_variable(point_variables, center)?),
+                    axis: incidence.add(point_variable(point_variables, major_axis_point)?),
+                    ratio: incidence.add(conic_scalar_variable(
+                        conic_scalar_variables,
+                        conic,
+                        ConicScalarRole::MinorAxisRatio,
+                    )?),
+                    property,
+                },
+                crate::ConicKind::ParabolaSegment { vertex, focus, .. }
+                    if property == crate::model::M38ConicProperty::FocalDistance =>
+                {
+                    ConicPropertyResidualKind::ParabolaFocalDistance {
+                        vertex: incidence.add(point_variable(point_variables, vertex)?),
+                        focus: incidence.add(point_variable(point_variables, focus)?),
+                    }
+                }
+                crate::ConicKind::HyperbolaSegment {
+                    center,
+                    transverse_axis_point,
+                    ..
+                } => ConicPropertyResidualKind::Hyperbola {
+                    center: incidence.add(point_variable(point_variables, center)?),
+                    axis: incidence.add(point_variable(point_variables, transverse_axis_point)?),
+                    semi_conjugate: incidence.add(conic_scalar_variable(
+                        conic_scalar_variables,
+                        conic,
+                        ConicScalarRole::SemiConjugate,
+                    )?),
+                    property,
+                },
+                _ => {
+                    return Err(geosolve_core::CoreError::InvalidSolverConfig {
+                        field: "M38 conic property dimension",
+                        message: "property is unsupported for this conic family",
+                    }
+                    .into());
+                }
+            };
+            (
+                format!("{property:?} of {}", value.label()),
+                target,
+                sketch.model_scale,
+                "conic_property(active_geometry) - target",
+                M38DimensionResidual::ConicProperty(ConicPropertyResidual {
+                    kind: residual_kind,
+                    target,
+                }),
+            )
+        }
+        DimensionKind::PathLength {
+            curve,
+            start,
+            end,
+            target,
+        } => {
+            let generic = generic_curve_incidence(
+                sketch,
+                point_variables,
+                circle_radius_variables,
+                arc_radius_variables,
+                arc_angle_variables,
+                conic_vector_variables,
+                conic_scalar_variables,
+                nurbs_weight_variables,
+                &mut incidence,
+                curve,
+                CurveParameterIncidence::Fixed(start),
+            )?;
+            (
+                format!(
+                    "bounded path length of {}",
+                    generic_curve_label(sketch, curve)?
+                ),
+                target,
+                sketch.model_scale,
+                "certified_integral(start,end,norm(curve'(t)),dt) - target",
+                M38DimensionResidual::PathLength(Box::new(GenericPathLengthResidual {
+                    first: generic,
+                    first_interval: [start, end],
+                    second: None,
+                    target,
+                    tolerance: sketch.model_scale * 1.0e-11,
+                    max_evaluations: 8193,
+                })),
+            )
+        }
+        DimensionKind::EqualPathLength {
+            first,
+            first_start,
+            first_end,
+            second,
+            second_start,
+            second_end,
+            target,
+        } => {
+            let first_curve = generic_curve_incidence(
+                sketch,
+                point_variables,
+                circle_radius_variables,
+                arc_radius_variables,
+                arc_angle_variables,
+                conic_vector_variables,
+                conic_scalar_variables,
+                nurbs_weight_variables,
+                &mut incidence,
+                first,
+                CurveParameterIncidence::Fixed(first_start),
+            )?;
+            let second_curve = generic_curve_incidence(
+                sketch,
+                point_variables,
+                circle_radius_variables,
+                arc_radius_variables,
+                arc_angle_variables,
+                conic_vector_variables,
+                conic_scalar_variables,
+                nurbs_weight_variables,
+                &mut incidence,
+                second,
+                CurveParameterIncidence::Fixed(second_start),
+            )?;
+            (
+                "equal bounded path lengths".into(),
+                target,
+                sketch.model_scale,
+                "certified_length(first) - certified_length(second) - target",
+                M38DimensionResidual::PathLength(Box::new(GenericPathLengthResidual {
+                    first: first_curve,
+                    first_interval: [first_start, first_end],
+                    second: Some((second_curve, [second_start, second_end])),
+                    target,
+                    tolerance: sketch.model_scale * 1.0e-11,
+                    max_evaluations: 8193,
+                })),
+            )
+        }
+        _ => unreachable!("non-M38 dimension reached M38 compiler"),
+    };
+    let label = format!(
+        "dimension {}: {subject} = {target} (driving)",
+        dimension.ordinal()
+    );
+    let source_id = problem.add_source(SourceConstraint::new(&label)?);
+    let residual_id = problem.add_residual(ResidualBlock::new(
+        source_id,
+        ResidualCategory::Hard,
+        incidence.variables,
+        1,
+        vec![scale],
+        vec![audit_row(
+            template.into(),
+            vec![
+                AuditBinding::new("subject", subject),
+                AuditBinding::new("target", target.to_string()),
+                AuditBinding::new("work bound", "8193 derivative evaluations"),
+            ],
+        )],
+        evaluator,
     )?)?;
     Ok(equation_mapping(
         SketchSource::Dimension(dimension_id),
@@ -5735,6 +6236,111 @@ fn compile_point_target(
         },
     )?)?;
     Ok(equation_mapping(source, label, source_id, residual_id))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn compile_external_point_target(
+    sketch: &Sketch,
+    problem: &mut Problem,
+    point_variables: &[PointVariableMapping],
+    source: SketchSource,
+    point: PointId,
+    target: Point2<f64>,
+    provenance: crate::ExternalConstraintProvenance,
+    label: String,
+) -> Result<SketchSourceMapping, SketchError> {
+    let point_name = sketch.point_name(point)?;
+    let source_id = problem.add_source(SourceConstraint::new(&label)?);
+    let mut bindings = external_provenance_bindings(provenance);
+    bindings.push(AuditBinding::new("native point", point_name));
+    bindings.push(AuditBinding::new(
+        "external target",
+        format!("({}, {})", target.x, target.y),
+    ));
+    let residual_id = problem.add_residual(ResidualBlock::new(
+        source_id,
+        ResidualCategory::Hard,
+        vec![point_variable(point_variables, point)?],
+        2,
+        vec![sketch.model_scale, sketch.model_scale],
+        vec![
+            audit_row(
+                format!("({point_name}.x - external.x) / model_scale"),
+                bindings.clone(),
+            ),
+            audit_row(
+                format!("({point_name}.y - external.y) / model_scale"),
+                bindings,
+            ),
+        ],
+        PointTargetResidual {
+            target: [target.x, target.y],
+        },
+    )?)?;
+    Ok(equation_mapping(source, label, source_id, residual_id))
+}
+
+fn external_provenance_bindings(
+    provenance: crate::ExternalConstraintProvenance,
+) -> Vec<AuditBinding> {
+    let kind_name = |kind| match kind {
+        crate::ExternalFeatureKindV1::Point => "point",
+        crate::ExternalFeatureKindV1::LineSegment => "line_segment",
+    };
+    let mut bindings = vec![
+        AuditBinding::new("external binding", provenance.binding.to_string()),
+        AuditBinding::new(
+            "external expected kind",
+            kind_name(provenance.expected_kind),
+        ),
+        AuditBinding::new("external actual kind", kind_name(provenance.actual_kind)),
+        AuditBinding::new(
+            "external feature scale",
+            provenance.feature_scale.to_string(),
+        ),
+        AuditBinding::new("external set revision", provenance.set_revision.to_string()),
+        AuditBinding::new(
+            "external set digest",
+            hex_digest(provenance.set_digest.bytes()),
+        ),
+        AuditBinding::new(
+            "external source revision",
+            provenance.source_revision.to_string(),
+        ),
+        AuditBinding::new(
+            "external source digest",
+            hex_digest(provenance.source_digest.bytes()),
+        ),
+    ];
+    if let Some([domain_start, domain_end]) = provenance.line_domain {
+        bindings.push(AuditBinding::new(
+            "external line domain",
+            format!("[{domain_start}, {domain_end}]"),
+        ));
+    }
+    if let Some(orientation) = provenance.line_orientation {
+        let value = match orientation {
+            crate::ExternalLineOrientationV1::StartToEnd => "start_to_end",
+        };
+        bindings.push(AuditBinding::new("external line orientation", value));
+    }
+    if let Some(digest) = provenance.line_topology_digest {
+        bindings.push(AuditBinding::new(
+            "external line topology digest",
+            hex_digest(digest.bytes()),
+        ));
+    }
+    bindings
+}
+
+fn hex_digest(bytes: [u8; 32]) -> String {
+    use std::fmt::Write as _;
+
+    let mut value = String::with_capacity(64);
+    for byte in bytes {
+        write!(&mut value, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    value
 }
 
 fn equation_mapping(

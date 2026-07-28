@@ -2800,13 +2800,12 @@ fn validate_driver_consistency(assembly: &SpatialAssembly) -> Result<(), Spatial
     let mut translation_targets = BTreeMap::<SpatialCoordinateId, f64>::new();
     for source in &assembly.sources {
         match source.kind {
-            SpatialSourceKind::HingePositionDriver { coordinate, target } => {
+            SpatialSourceKind::HingePositionDriver { coordinate, target }
                 if hinge_targets
                     .insert(coordinate, target)
-                    .is_some_and(|existing| !same_hinge_target(existing, target))
-                {
-                    return Err(SpatialAssemblyError::IncompatibleDriverTargets { coordinate });
-                }
+                    .is_some_and(|existing| !same_hinge_target(existing, target)) =>
+            {
+                return Err(SpatialAssemblyError::IncompatibleDriverTargets { coordinate });
             }
             SpatialSourceKind::TranslationPositionDriver { coordinate, target }
                 if translation_targets
