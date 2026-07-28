@@ -153,8 +153,8 @@ Baseline candidate vectors do not yet carry M8 completeness metadata. Until the 
 M8 is ready for review only when every item below is objectively present. These checkboxes are acceptance criteria and do not mark `PLAN.md` complete.
 
 The checked wording below is the preserved M8 completion record. Its then-current M8-M22
-allocations are historical; `PLAN.md` now governs completed work through M56 and the executable
-M57-M64 sequence.
+allocations are historical; `PLAN.md` now governs completed work through M57 and the executable
+M58-M64 sequence.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1001,9 +1001,26 @@ sharing, equation change or schema change was added.
 
 ### M57: incremental solving and scale
 
+Status: complete (2026-07-29); direct evidence is recorded in
+`docs/M57_IMPLEMENTATION.md`.
+
 - Incremental and full-rebuild paths agree on geometry, validation, rank, branch and diagnostics.
 - Parameter, reference, activation and local geometry edits dirty only their dependency closures without skipping fresh acceptance evidence.
 - Published cold/warm/profile/memory/cancellation envelopes pass, and rank authority is either proved sparse or bounded honestly by a supported connected-component limit.
+
+Completion record (2026-07-29): the retained document lifecycle preserves compatible runtime
+mappings, compiled topology, core session state and component caches. A scratch compatibility
+compile verifies exact runtime/equation/bound shape; changed persistent elements select transitive
+source closures, and changed host parameter/external-reference payloads replace only their runtime
+sources. Same-shape activation changes reuse every component; topology/source-shape changes report
+and take a full rebuild. Every path still performs fresh hard-row, derivative, branch/domain,
+projection and rank validation before publication. Persistent runtime joins are indexed, bounded
+profile results are cached only inside one accepted revision, and execution/rank-envelope evidence
+is sketch-owned. Sparse hard steps remain supported, while numerical rank is honestly dense-SVD
+authoritative only for connected components at or below 256 active rows and tangent coordinates.
+Nine direct regressions cover fresh parity, two- and sixteen-component locality, parameter,
+external reference, activation, topology fallback, profile invalidation, storage bounds and
+work-exhaustion rollback.
 
 ### M58: sketch operations companion
 

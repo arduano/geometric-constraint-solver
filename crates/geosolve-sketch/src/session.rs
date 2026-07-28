@@ -103,6 +103,45 @@ pub struct SketchSessionRevisions {
     pub bound: u64,
 }
 
+/// Execution path that produced the current accepted runtime state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum SketchSessionExecutionKind {
+    InitialSolve,
+    IncrementalUpdate,
+    FullRebuild,
+}
+
+/// Bounded execution evidence for the current accepted runtime state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SketchSessionExecutionSummary {
+    pub kind: SketchSessionExecutionKind,
+    pub component_count: usize,
+    pub reused_component_count: usize,
+    pub freshly_validated_hard_rows: bool,
+    pub rank_valid: bool,
+}
+
+/// Numerical-rank authority supported by the production sketch envelope.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum SketchRankAuthority {
+    /// Sparse storage/steps may execute, but rank remains authoritative dense SVD
+    /// within the declared connected-component bound.
+    BoundedDenseSvd,
+}
+
+/// Honest connected-component assessment for one accepted sketch runtime.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SketchProductionScaleAssessment {
+    pub authority: SketchRankAuthority,
+    pub supported: bool,
+    pub component_limit: usize,
+    pub component_count: usize,
+    pub maximum_active_rows: usize,
+    pub maximum_active_tangent_dimensions: usize,
+}
+
 /// Persistent accepted sketch plus retained core compilation/session state.
 #[derive(Clone, Debug)]
 pub struct SketchSession {
@@ -115,6 +154,7 @@ pub struct SketchSession {
     revisions: SketchSessionRevisions,
     topology_compilations: u64,
     preference_targets: Vec<(PointId, Point2<f64>)>,
+    last_execution: SketchSessionExecutionKind,
 }
 
 #[derive(Debug)]
@@ -192,6 +232,7 @@ impl SketchSession {
             revisions: SketchSessionRevisions::default(),
             topology_compilations: 1,
             preference_targets,
+            last_execution: SketchSessionExecutionKind::InitialSolve,
         })
     }
 
@@ -326,6 +367,7 @@ impl SketchSession {
             revisions: SketchSessionRevisions::default(),
             topology_compilations: 1,
             preference_targets,
+            last_execution: SketchSessionExecutionKind::InitialSolve,
         }))
     }
 
@@ -354,6 +396,70 @@ impl SketchSession {
     #[must_use]
     pub const fn topology_compilations(&self) -> u64 {
         self.topology_compilations
+    }
+
+    #[must_use]
+    pub fn execution_summary(&self) -> SketchSessionExecutionSummary {
+        SketchSessionExecutionSummary {
+            kind: self.last_execution,
+            component_count: self.accepted_result.core_report.component_solves.len(),
+            reused_component_count: self
+                .accepted_result
+                .core_report
+                .component_solves
+                .iter()
+                .filter(|component| component.reused)
+                .count(),
+            freshly_validated_hard_rows: self.accepted_result.core_report.hard_residuals_validated,
+            rank_valid: self.accepted_result.core_report.rank_is_valid,
+        }
+    }
+
+    /// Assesses the accepted runtime against the bounded production rank envelope.
+    ///
+    /// Sparse hard steps remain available inside this envelope. Numerical rank is
+    /// deliberately not claimed as sparse-authoritative: dense SVD remains the
+    /// oracle, bounded by the same safe-Rust controlled-kernel component limit.
+    #[must_use]
+    pub fn production_scale_assessment(&self) -> SketchProductionScaleAssessment {
+        let maximum_active_rows = self
+            .accepted_result
+            .core_report
+            .structural
+            .component_summaries
+            .iter()
+            .map(|component| component.active_rows)
+            .max()
+            .unwrap_or(0);
+        let maximum_active_tangent_dimensions = self
+            .accepted_result
+            .core_report
+            .structural
+            .component_summaries
+            .iter()
+            .map(|component| component.active_tangent_dimensions)
+            .max()
+            .unwrap_or(0);
+        let component_limit = geosolve_core::CONTROLLED_DENSE_KERNEL_MAX_DIMENSION;
+        SketchProductionScaleAssessment {
+            authority: SketchRankAuthority::BoundedDenseSvd,
+            supported: self.accepted_result.core_report.rank_is_valid
+                && maximum_active_rows <= component_limit
+                && maximum_active_tangent_dimensions <= component_limit,
+            component_limit,
+            component_count: self
+                .accepted_result
+                .core_report
+                .structural
+                .component_summaries
+                .len(),
+            maximum_active_rows,
+            maximum_active_tangent_dimensions,
+        }
+    }
+
+    pub(crate) fn mark_full_rebuild(&mut self) {
+        self.last_execution = SketchSessionExecutionKind::FullRebuild;
     }
 
     #[must_use]
@@ -428,7 +534,7 @@ impl SketchSession {
     fn apply_patch_inner(
         &mut self,
         patch: SketchSessionPatch,
-        mut controller: Option<&mut OperationController>,
+        controller: Option<&mut OperationController>,
     ) -> Result<Option<SketchSolveResult>, SketchSessionError> {
         if patch.expected_revision != self.revision {
             return Err(SketchSessionError::StalePatch {
@@ -530,9 +636,147 @@ impl SketchSession {
                 }
             }
         }
-        let mut domain_source_changed =
+        let domain_source_changed =
             edit_changes_source(patch.edit) || !replacement_sources.is_empty();
 
+        self.finish_incremental_candidate(
+            candidate_sketch,
+            candidate_request,
+            candidate_preference_targets,
+            core_patch,
+            replacement_source_labels,
+            bound_changed,
+            domain_source_changed,
+            controller,
+        )
+    }
+
+    /// Applies a fully lowered scratch candidate while retaining compatible runtime
+    /// identities, component caches, and symbolic storage.
+    ///
+    /// The caller supplies the exact source closure whose evaluator payloads may
+    /// have changed. Every changed variable value is derived by comparing the
+    /// scratch compilation with the retained compilation. A topology mismatch is
+    /// reported explicitly so the document owner can take its full-rebuild path.
+    pub(crate) fn apply_compatible_candidate(
+        &mut self,
+        candidate_sketch: Sketch,
+        candidate_request: SketchSolveRequest,
+        replacement_sources: &[SketchSource],
+        mut controller: Option<&mut OperationController>,
+    ) -> Result<Option<SketchSolveResult>, SketchSessionError> {
+        candidate_sketch.preflight_segments()?;
+        let candidate_compiled = match controller.as_deref_mut() {
+            Some(controller) => {
+                candidate_sketch.compile_with_controller(candidate_request, controller)?
+            }
+            None => Some(candidate_sketch.compile(candidate_request)?),
+        };
+        let Some(candidate_compiled) = candidate_compiled else {
+            return Ok(None);
+        };
+        if !self
+            .compiled
+            .has_compatible_runtime_topology(&candidate_compiled)
+        {
+            return Err(SketchSessionError::RebuildRequired);
+        }
+
+        let candidate_preference_targets = preference_targets(&candidate_sketch, &self.compiled);
+        let mut core_patch = SessionPatch::new(self.core.revisions());
+        for variable in self.compiled.shape_variable_ids() {
+            let retained = self
+                .core
+                .problem()
+                .variable(variable)
+                .ok_or(geosolve_core::CoreError::UnknownVariable(variable))?
+                .value();
+            let candidate = candidate_compiled
+                .problem()
+                .variable(variable)
+                .ok_or(geosolve_core::CoreError::UnknownVariable(variable))?
+                .value();
+            if retained != candidate {
+                core_patch.set_variable_value(variable, candidate);
+            }
+        }
+
+        let mut replacement_sources = replacement_sources.to_vec();
+        for mapping in self.compiled.source_mappings() {
+            let SketchSource::PreviousState(point) = mapping.source else {
+                continue;
+            };
+            let Some(position) = candidate_sketch
+                .point(point)
+                .map(crate::SketchPoint::position)
+            else {
+                continue;
+            };
+            if self
+                .preference_targets
+                .iter()
+                .find_map(|(id, target)| (*id == point).then_some(*target))
+                .is_some_and(|target| point_bits(target) != point_bits(position))
+            {
+                push_unique(&mut replacement_sources, mapping.source);
+            }
+        }
+        replacement_sources.retain(|source| {
+            self.compiled
+                .source_mappings()
+                .iter()
+                .any(|mapping| mapping.source == *source && mapping.core_source_id.is_some())
+        });
+
+        let mut replacement_source_labels = Vec::new();
+        let mut bound_changed = false;
+        for source in &replacement_sources {
+            if let Some(source_patch) =
+                self.compiled
+                    .source_patch(&candidate_sketch, candidate_request, *source)?
+            {
+                replacement_source_labels.push((*source, source_patch.source.label().to_owned()));
+                bound_changed |= !source_patch.bounds.is_empty();
+                for (variable, value) in source_patch.variable_values {
+                    core_patch.set_variable_value(variable, value);
+                }
+                for (bound_id, bound) in source_patch.bounds {
+                    core_patch.replace_bound(bound_id, bound);
+                }
+                core_patch.replace_source(source_patch.source_id, source_patch.source);
+                for (residual_id, residual) in source_patch.residuals {
+                    core_patch.replace_residual(residual_id, residual);
+                }
+            }
+        }
+        self.finish_incremental_candidate(
+            candidate_sketch,
+            candidate_request,
+            candidate_preference_targets,
+            core_patch,
+            replacement_source_labels,
+            bound_changed,
+            !replacement_sources.is_empty(),
+            controller,
+        )
+    }
+
+    #[allow(
+        clippy::needless_pass_by_value,
+        clippy::too_many_arguments,
+        clippy::too_many_lines
+    )]
+    fn finish_incremental_candidate(
+        &mut self,
+        candidate_sketch: Sketch,
+        candidate_request: SketchSolveRequest,
+        candidate_preference_targets: Vec<(PointId, Point2<f64>)>,
+        core_patch: SessionPatch,
+        replacement_source_labels: Vec<(SketchSource, String)>,
+        bound_changed: bool,
+        mut domain_source_changed: bool,
+        mut controller: Option<&mut OperationController>,
+    ) -> Result<Option<SketchSolveResult>, SketchSessionError> {
         let validation_compiled = self.compiled.clone();
         let validation_template = candidate_sketch.clone();
         let mut candidate_core = self.core.clone();
@@ -680,6 +924,7 @@ impl SketchSession {
         }
         self.preference_targets = candidate_preference_targets;
         self.accepted_result = result.clone();
+        self.last_execution = SketchSessionExecutionKind::IncrementalUpdate;
         Ok(Some(result))
     }
 
@@ -825,6 +1070,7 @@ impl SketchSession {
             },
             topology_compilations: self.topology_compilations.saturating_add(1),
             preference_targets,
+            last_execution: SketchSessionExecutionKind::FullRebuild,
         };
         *self = rebuilt;
         Ok(&self.accepted_result)
@@ -891,6 +1137,7 @@ impl SketchSession {
             bound: self.revisions.bound.saturating_add(1),
         };
         rebuilt.topology_compilations = self.topology_compilations.saturating_add(1);
+        rebuilt.last_execution = SketchSessionExecutionKind::FullRebuild;
         if controller
             .checkpoint(OperationCheckpoint::BeforeCommit)
             .is_err()

@@ -1259,8 +1259,9 @@ instruction or a supported persistence format.
 
 M33-M44 add the current production-embedding fixtures without replacing the frozen
 scenarios above. Cleanup M46-M53 preserves their durable behavior through direct tests and
-approved post-cleanup UAT. M54-M56 complete stable diagnostics, early alpha action parity and
-prepared concurrency; M57-M64 own the remaining executable scale/operations/release scope. Every
+approved post-cleanup UAT. M54-M57 complete stable diagnostics, early alpha action parity,
+prepared concurrency and incremental scale; M58-M64 own the remaining executable
+operations/release scope. Every
 new fixture must name its exact design, parameter, external-snapshot, activation and
 accepted-state revisions. The workbench remains a desktop-only public-API consumer; no
 mobile scenario is required.
@@ -1472,6 +1473,33 @@ attempt identity. Native jobs/patches move as single-owner `Send` values. Immuta
 operation and commit DTOs are `Send + Sync`; session-bearing values are intentionally not promised
 `Sync` because core caches use safe single-owner interior mutability. The all-feature WASM build
 uses the same prepare/execute/commit API synchronously and adds no browser scheduling semantics.
+
+### M57-C1 - Dependency-local retained scale
+
+The direct M57 corpus builds two disconnected constrained rectangles and performs four exact-input
+updates against the retained document lifecycle:
+
+1. a local point edit dirties its persistent dependent-source closure, retains runtime identity,
+   reuses the other component and matches a fresh rebuild on accepted document and rank;
+2. a host parameter changes one driving dimension and an immutable external point snapshot moves
+   one referenced point; each replaces only its runtime source and reuses the unrelated component;
+3. a newer empty activation payload preserves equation shape and reuses every component while
+   still publishing a freshly validated accepted revision; and
+4. a created point changes topology and therefore reports an explicit full rebuild rather than
+   pretending to be incremental; and
+5. rebinding one persistent contact across adjacent polyline spans keeps semantic IDs but changes
+   residual incidence, so compatibility is rejected and the accepted edit takes the same explicit
+   full-rebuild path.
+
+Every optimized return reports `IncrementalUpdate`, fresh hard-row validation and valid numerical
+rank. The fresh-build comparisons include accepted geometry and explicit branch-bearing document
+state. A 16-component/64-point workload retains at least 15 clean components after one local edit,
+stays inside canonical document storage limits and passes the bounded production rank assessment.
+The rank assessment is intentionally `BoundedDenseSvd`: sparse hard steps do not claim sparse rank
+certification, and supported connected components have at most 256 active rows and tangent
+coordinates. A revision-local visual-profile cache returns identical bounded analysis for repeated
+options and starts empty after the next accepted state. Deterministic component-work exhaustion
+publishes no parameter, lifecycle, geometry or cache state.
 
 ### UAT-C3 - Advanced geometry and topology at M61
 

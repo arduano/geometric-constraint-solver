@@ -193,5 +193,7 @@ pub use semantic::{
     LoweredDocumentScalarSource,
 };
 pub use session::{
-    SketchPatch, SketchSession, SketchSessionError, SketchSessionPatch, SketchSessionRevisions,
+    SketchPatch, SketchProductionScaleAssessment, SketchRankAuthority, SketchSession,
+    SketchSessionError, SketchSessionExecutionKind, SketchSessionExecutionSummary,
+    SketchSessionPatch, SketchSessionRevisions,
 };

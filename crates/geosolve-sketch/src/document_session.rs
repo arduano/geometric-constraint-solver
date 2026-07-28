@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 
 use geosolve_core::{
@@ -1403,6 +1404,7 @@ pub struct SketchAcceptedDocumentState {
     effective_activity: crate::EffectiveActivity,
     redundancy: SketchAcceptedDocumentRedundancy,
     parameter_outputs: Vec<DocumentParameterOutputProposal>,
+    profile_cache: RefCell<Vec<(crate::VisualProfileOptions, crate::VisualProfileAnalysis)>>,
 }
 
 /// One accepted, independently evaluated reference-dimension output proposal.
@@ -1535,6 +1537,36 @@ impl SketchAcceptedDocumentState {
                 variable_elements: &variable_elements,
             },
         )
+    }
+
+    /// Returns bounded visual-profile analysis cached by this exact accepted revision.
+    ///
+    /// The cache is presentation-independent and cannot affect equations or acceptance.
+    /// A new accepted state owns a fresh cache, so results never cross revision identity.
+    #[must_use]
+    pub fn analyze_visual_profiles_cached(
+        &self,
+        options: crate::VisualProfileOptions,
+    ) -> crate::VisualProfileAnalysis {
+        if let Some(analysis) = self
+            .profile_cache
+            .borrow()
+            .iter()
+            .find_map(|(cached, analysis)| (*cached == options).then(|| analysis.clone()))
+        {
+            return analysis;
+        }
+        let analysis = self.document.analyze_visual_profiles(options);
+        self.profile_cache
+            .borrow_mut()
+            .push((options, analysis.clone()));
+        analysis
+    }
+
+    /// Number of option-specific profile results retained by this accepted revision.
+    #[must_use]
+    pub fn visual_profile_cache_entries(&self) -> usize {
+        self.profile_cache.borrow().len()
     }
 
     /// Returns one accepted reference measurement by persistent dimension identity.
@@ -3294,6 +3326,7 @@ impl RetainedSketchDocumentSession {
             request,
             None,
             config,
+            None,
             &mut controller,
         ) else {
             return Ok(controller.outcome_unchecked());
@@ -3398,6 +3431,7 @@ impl RetainedSketchDocumentSession {
             request,
             None,
             config,
+            None,
         );
         let (last_attempt, accepted) = publish_retained_attempt(
             &document,
@@ -3856,6 +3890,7 @@ impl RetainedSketchDocumentSession {
             request,
             None,
             self.config,
+            self.accepted.as_ref(),
             &mut controller,
         ) else {
             return Ok(controller.outcome_unchecked());
@@ -3971,6 +4006,7 @@ impl RetainedSketchDocumentSession {
                 request,
                 None,
                 self.config,
+                self.accepted.as_ref(),
             ),
             Err(error) => RetainedAttemptExecution::failure(
                 SketchAttemptFailureKind::AcceptedSession,
@@ -4038,6 +4074,7 @@ impl RetainedSketchDocumentSession {
                 request,
                 None,
                 self.config,
+                self.accepted.as_ref(),
             ),
             Err(error) => RetainedAttemptExecution::failure(
                 SketchAttemptFailureKind::AcceptedSession,
@@ -4145,6 +4182,7 @@ impl RetainedSketchDocumentSession {
             request,
             None,
             self.config,
+            self.accepted.as_ref(),
             &mut controller,
         ) else {
             return Ok(controller.outcome_unchecked());
@@ -4221,6 +4259,7 @@ impl RetainedSketchDocumentSession {
                 request,
                 None,
                 self.config,
+                self.accepted.as_ref(),
             ),
             Err(error) => RetainedAttemptExecution::failure(
                 SketchAttemptFailureKind::AcceptedSession,
@@ -4330,6 +4369,7 @@ impl RetainedSketchDocumentSession {
             request,
             None,
             self.config,
+            self.accepted.as_ref(),
             &mut controller,
         ) else {
             return Ok(controller.outcome_unchecked());
@@ -4505,6 +4545,7 @@ impl RetainedSketchDocumentSession {
                 self.request,
                 command_drag,
                 self.config,
+                self.accepted.as_ref(),
             ),
             Err(error) => RetainedAttemptExecution::failure(
                 SketchAttemptFailureKind::AcceptedSession,
@@ -4576,6 +4617,7 @@ impl RetainedSketchDocumentSession {
             self.request,
             command_drag,
             self.config,
+            self.accepted.as_ref(),
         );
         let (attempt, accepted) = publish_retained_attempt(
             &candidate,
@@ -4654,6 +4696,7 @@ impl RetainedSketchDocumentSession {
                     self.request,
                     command_drag,
                     self.config,
+                    self.accepted.as_ref(),
                     controller,
                 ) else {
                     return Ok(None);
@@ -4738,6 +4781,102 @@ fn effective_attempt_request(
         drag: command_drag.or(request.drag),
         stability_target: request.stability_target,
         previous_state_preferences: command_drag.is_none() && request.previous_state_preferences,
+    }
+}
+
+fn incremental_runtime_sources(
+    candidate: &SketchDocument,
+    mappings: &DocumentRuntimeMap,
+    stamps: &RetainedAttemptInputStamps,
+    parent: &SketchAcceptedDocumentState,
+) -> Vec<SketchSource> {
+    let mut changed = BTreeSet::new();
+    for point in candidate.points() {
+        if parent.solved_design.point(point.id) != Some(point) {
+            changed.insert(DocumentElementId::Point(point.id));
+        }
+    }
+    for scalar in candidate.scalars() {
+        if parent.solved_design.scalar(scalar.id) != Some(scalar) {
+            changed.insert(DocumentElementId::Scalar(scalar.id));
+        }
+    }
+    for curve in candidate.curves() {
+        if parent.solved_design.curve(curve.id) != Some(curve) {
+            changed.insert(DocumentElementId::Curve(curve.id));
+        }
+    }
+    for contact in candidate.contacts() {
+        if parent.solved_design.contact(contact.id) != Some(contact) {
+            changed.insert(DocumentElementId::Contact(contact.id));
+        }
+    }
+    for constraint in candidate.constraints() {
+        if parent.solved_design.constraint(constraint.id) != Some(constraint) {
+            changed.insert(DocumentElementId::Constraint(constraint.id));
+        }
+    }
+    for dimension in candidate.dimensions() {
+        if parent.solved_design.dimension(dimension.id) != Some(dimension) {
+            changed.insert(DocumentElementId::Dimension(dimension.id));
+        }
+    }
+    for parameter in candidate.parameters() {
+        if parent
+            .solved_design
+            .parameters()
+            .iter()
+            .find(|retained| retained.id == parameter.id)
+            != Some(parameter)
+        {
+            changed.insert(DocumentElementId::Parameter(parameter.id));
+        }
+    }
+    for binding in candidate.external_bindings() {
+        if parent.solved_design.external_binding(binding.id) != Some(binding)
+            || stamps.external_digest != parent.input.external_snapshot_set_digest()
+        {
+            changed.insert(DocumentElementId::ExternalBinding(binding.id));
+        }
+    }
+
+    let mut sources = Vec::new();
+    for mapping in mappings.source_mappings() {
+        let source_element = DocumentElementId::Source(mapping.source_id);
+        if !changed.contains(&source_element)
+            && !candidate
+                .dependency_closure(source_element)
+                .iter()
+                .any(|dependency| changed.contains(dependency))
+        {
+            continue;
+        }
+        if let Some(runtime) = mapping.runtime {
+            push_unique_runtime_source(&mut sources, runtime);
+        }
+    }
+    for binding in mappings.parameter_bindings() {
+        let retained = parent
+            .mappings
+            .parameter_bindings()
+            .iter()
+            .find(|retained| {
+                retained.parameter == binding.parameter && retained.target == binding.target
+            });
+        if retained != Some(binding) {
+            push_unique_runtime_source(&mut sources, binding.runtime);
+        }
+    }
+    sources
+}
+
+fn push_unique_runtime_source(sources: &mut Vec<SketchSource>, runtime: RuntimeSource) {
+    let source = match runtime {
+        RuntimeSource::Constraint(source) => SketchSource::Constraint(source),
+        RuntimeSource::Dimension(source) => SketchSource::Dimension(source),
+    };
+    if !sources.contains(&source) {
+        sources.push(source);
     }
 }
 
@@ -4830,6 +4969,7 @@ fn run_retained_attempt(
     request: DocumentSolveRequest,
     command_drag: Option<DocumentDragTarget>,
     config: SolverConfig,
+    parent: Option<&SketchAcceptedDocumentState>,
 ) -> RetainedAttemptExecution {
     let resolved = match resolve_attempt_inputs(candidate, parameters, snapshots) {
         Ok(resolved) => resolved,
@@ -4889,6 +5029,74 @@ fn run_retained_attempt(
                 };
             }
         };
+    if attempted_request == runtime_request
+        && let Some(parent) = parent.filter(|parent| {
+            parent.mappings.has_compatible_runtime_topology(&mappings)
+                && parent.runtime.request() == runtime_request
+        })
+    {
+        let sources = incremental_runtime_sources(candidate, &mappings, &input_stamps, parent);
+        let mut runtime = parent.runtime.clone();
+        match runtime.apply_compatible_candidate(sketch.clone(), runtime_request, &sources, None) {
+            Ok(Some(result)) if result.accepted() => {
+                let mut document = candidate.clone();
+                if let Err(error) = document.project_accepted_state(runtime.sketch(), &mappings) {
+                    let mut rejected = result;
+                    rejected.rejection = Some(SolveRejection::IndependentValidationFailed(
+                        error.to_string(),
+                    ));
+                    rejected.acceptance_hard_residual_max = None;
+                    rejected.core_report.hard_validity = HardValidity::Invalid;
+                    rejected.core_report.termination = SolveTermination::Stalled;
+                    return RetainedAttemptExecution {
+                        attempted_geometry: rejected.attempted_geometry.clone(),
+                        solve: Some(rejected),
+                        mappings: Some(mappings),
+                        effective_activity: Some(resolved.activity.clone()),
+                        accepted: None,
+                        failure: None,
+                    };
+                }
+                let solve = runtime.accepted_result().clone();
+                return RetainedAttemptExecution {
+                    attempted_geometry: solve.attempted_geometry.clone(),
+                    solve: Some(solve),
+                    mappings: Some(mappings.clone()),
+                    effective_activity: Some(resolved.activity),
+                    accepted: Some((document, runtime, mappings, input_stamps)),
+                    failure: None,
+                };
+            }
+            Ok(Some(rejected)) => {
+                return RetainedAttemptExecution {
+                    attempted_geometry: rejected.attempted_geometry.clone(),
+                    solve: Some(rejected),
+                    mappings: Some(mappings),
+                    effective_activity: Some(resolved.activity.clone()),
+                    accepted: None,
+                    failure: None,
+                };
+            }
+            Ok(None) => unreachable!("uncontrolled incremental solve cannot be interrupted"),
+            Err(SketchSessionError::RebuildRequired) => {}
+            Err(error) => {
+                return RetainedAttemptExecution {
+                    solve: None,
+                    attempted_geometry: None,
+                    mappings: Some(mappings),
+                    effective_activity: Some(resolved.activity.clone()),
+                    accepted: None,
+                    failure: Some(SketchAttemptFailure {
+                        kind: SketchAttemptFailureKind::AcceptedSession,
+                        message: error.to_string(),
+                        parameter_issue: None,
+                        external_error: None,
+                        effective_activity: None,
+                    }),
+                };
+            }
+        }
+    }
     let solve = match sketch.solve(attempted_request, config) {
         Ok(solve) => solve,
         Err(error) => {
@@ -4914,9 +5122,60 @@ fn run_retained_attempt(
         };
     }
 
-    let runtime = match SketchSession::new(sketch, runtime_request, config) {
-        Ok(runtime) => runtime,
-        Err(error) => {
+    let incremental_sources = parent
+        .map(|parent| incremental_runtime_sources(candidate, &mappings, &input_stamps, parent));
+    let incremental = parent
+        .zip(incremental_sources.as_deref())
+        .filter(|(parent, _)| {
+            parent.mappings.has_compatible_runtime_topology(&mappings)
+                && parent.runtime.request() == runtime_request
+        })
+        .map(|(parent, sources)| {
+            let mut runtime = parent.runtime.clone();
+            runtime
+                .apply_compatible_candidate(sketch.clone(), runtime_request, sources, None)
+                .map(|result| result.map(|result| (runtime, result)))
+        });
+    let runtime = match incremental {
+        Some(Ok(Some((runtime, result)))) if result.accepted() => runtime,
+        Some(Ok(Some((_, rejected)))) => {
+            return RetainedAttemptExecution {
+                attempted_geometry: rejected.attempted_geometry.clone(),
+                solve: Some(rejected),
+                mappings: Some(mappings),
+                effective_activity: Some(resolved.activity.clone()),
+                accepted: None,
+                failure: None,
+            };
+        }
+        Some(Ok(None)) => unreachable!("uncontrolled incremental solve cannot be interrupted"),
+        Some(Err(SketchSessionError::RebuildRequired)) | None => {
+            match SketchSession::new(sketch, runtime_request, config) {
+                Ok(mut runtime) => {
+                    if parent.is_some() {
+                        runtime.mark_full_rebuild();
+                    }
+                    runtime
+                }
+                Err(error) => {
+                    return RetainedAttemptExecution {
+                        solve: None,
+                        attempted_geometry,
+                        mappings: Some(mappings),
+                        effective_activity: Some(resolved.activity.clone()),
+                        accepted: None,
+                        failure: Some(SketchAttemptFailure {
+                            kind: SketchAttemptFailureKind::AcceptedSession,
+                            message: error.to_string(),
+                            parameter_issue: None,
+                            external_error: None,
+                            effective_activity: None,
+                        }),
+                    };
+                }
+            }
+        }
+        Some(Err(error)) => {
             return RetainedAttemptExecution {
                 solve: None,
                 attempted_geometry,
@@ -4962,7 +5221,7 @@ fn run_retained_attempt(
     }
 }
 
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn run_retained_attempt_controlled(
     candidate: &SketchDocument,
     parameters: &ParameterBatch,
@@ -4970,6 +5229,7 @@ fn run_retained_attempt_controlled(
     request: DocumentSolveRequest,
     command_drag: Option<DocumentDragTarget>,
     config: SolverConfig,
+    parent: Option<&SketchAcceptedDocumentState>,
     controller: &mut OperationController,
 ) -> Option<RetainedAttemptExecution> {
     let resolved = match resolve_attempt_inputs(candidate, parameters, snapshots) {
@@ -5035,6 +5295,99 @@ fn run_retained_attempt_controlled(
                 });
             }
         };
+    if attempted_request == runtime_request
+        && let Some(parent) = parent.filter(|parent| {
+            parent.mappings.has_compatible_runtime_topology(&mappings)
+                && parent.runtime.request() == runtime_request
+        })
+    {
+        let sources = incremental_runtime_sources(candidate, &mappings, &input_stamps, parent);
+        let mut runtime = parent.runtime.clone();
+        match runtime.apply_compatible_candidate(
+            sketch.clone(),
+            runtime_request,
+            &sources,
+            Some(controller),
+        ) {
+            Ok(Some(result)) if result.accepted() => {
+                if controller
+                    .checkpoint(OperationCheckpoint::BeforeFinalValidation)
+                    .is_err()
+                {
+                    return None;
+                }
+                let mut document = candidate.clone();
+                let projected = document.project_accepted_state_with_controller(
+                    runtime.sketch(),
+                    &mappings,
+                    controller,
+                );
+                if matches!(projected, Ok(false)) {
+                    return None;
+                }
+                if controller
+                    .checkpoint(OperationCheckpoint::AfterFinalValidation)
+                    .is_err()
+                {
+                    return None;
+                }
+                if let Err(error) = projected {
+                    let mut rejected = result;
+                    rejected.rejection = Some(SolveRejection::IndependentValidationFailed(
+                        error.to_string(),
+                    ));
+                    rejected.acceptance_hard_residual_max = None;
+                    rejected.core_report.hard_validity = HardValidity::Invalid;
+                    rejected.core_report.termination = SolveTermination::Stalled;
+                    return Some(RetainedAttemptExecution {
+                        attempted_geometry: rejected.attempted_geometry.clone(),
+                        solve: Some(rejected),
+                        mappings: Some(mappings),
+                        effective_activity: Some(resolved.activity.clone()),
+                        accepted: None,
+                        failure: None,
+                    });
+                }
+                let solve = runtime.accepted_result().clone();
+                return Some(RetainedAttemptExecution {
+                    attempted_geometry: solve.attempted_geometry.clone(),
+                    solve: Some(solve),
+                    mappings: Some(mappings.clone()),
+                    effective_activity: Some(resolved.activity),
+                    accepted: Some((document, runtime, mappings, input_stamps)),
+                    failure: None,
+                });
+            }
+            Ok(Some(rejected)) => {
+                return Some(RetainedAttemptExecution {
+                    attempted_geometry: rejected.attempted_geometry.clone(),
+                    solve: Some(rejected),
+                    mappings: Some(mappings),
+                    effective_activity: Some(resolved.activity.clone()),
+                    accepted: None,
+                    failure: None,
+                });
+            }
+            Ok(None) => return None,
+            Err(SketchSessionError::RebuildRequired) => {}
+            Err(error) => {
+                return Some(RetainedAttemptExecution {
+                    solve: None,
+                    attempted_geometry: None,
+                    mappings: Some(mappings),
+                    effective_activity: Some(resolved.activity.clone()),
+                    accepted: None,
+                    failure: Some(SketchAttemptFailure {
+                        kind: SketchAttemptFailureKind::AcceptedSession,
+                        message: error.to_string(),
+                        parameter_issue: None,
+                        external_error: None,
+                        effective_activity: None,
+                    }),
+                });
+            }
+        }
+    }
     let solve = match sketch.solve_with_controller(attempted_request, config, controller) {
         Ok(Some(solve)) => solve,
         Ok(None) => return None,
@@ -5066,52 +5419,105 @@ fn run_retained_attempt_controlled(
     {
         return None;
     }
-    let runtime_solve = match sketch.solve_with_controller(runtime_request, config, controller) {
-        Ok(Some(solve)) => solve,
-        Ok(None) => return None,
-        Err(error) => {
-            return Some(RetainedAttemptExecution {
-                solve: None,
-                attempted_geometry,
-                mappings: Some(mappings),
-                effective_activity: Some(resolved.activity.clone()),
-                accepted: None,
-                failure: Some(SketchAttemptFailure {
-                    kind: SketchAttemptFailureKind::AcceptedSession,
-                    message: error.to_string(),
-                    parameter_issue: None,
-                    external_error: None,
-                    effective_activity: None,
-                }),
-            });
+    let mut incremental_runtime = None;
+    if let Some(parent) = parent.filter(|parent| {
+        parent.mappings.has_compatible_runtime_topology(&mappings)
+            && parent.runtime.request() == runtime_request
+    }) {
+        let sources = incremental_runtime_sources(candidate, &mappings, &input_stamps, parent);
+        let mut runtime = parent.runtime.clone();
+        match runtime.apply_compatible_candidate(
+            sketch.clone(),
+            runtime_request,
+            &sources,
+            Some(controller),
+        ) {
+            Ok(Some(result)) if result.accepted() => incremental_runtime = Some(runtime),
+            Ok(Some(rejected)) => {
+                return Some(RetainedAttemptExecution {
+                    attempted_geometry: rejected.attempted_geometry.clone(),
+                    solve: Some(rejected),
+                    mappings: Some(mappings),
+                    effective_activity: Some(resolved.activity.clone()),
+                    accepted: None,
+                    failure: None,
+                });
+            }
+            Ok(None) => return None,
+            Err(SketchSessionError::RebuildRequired) => {}
+            Err(error) => {
+                return Some(RetainedAttemptExecution {
+                    solve: None,
+                    attempted_geometry,
+                    mappings: Some(mappings),
+                    effective_activity: Some(resolved.activity.clone()),
+                    accepted: None,
+                    failure: Some(SketchAttemptFailure {
+                        kind: SketchAttemptFailureKind::AcceptedSession,
+                        message: error.to_string(),
+                        parameter_issue: None,
+                        external_error: None,
+                        effective_activity: None,
+                    }),
+                });
+            }
         }
-    };
-    let runtime = match SketchSession::from_accepted_solve_with_controller(
-        sketch,
-        &validation_sketch,
-        runtime_request,
-        config,
-        runtime_solve,
-        controller,
-    ) {
-        Ok(Some(runtime)) => runtime,
-        Ok(None) => return None,
-        Err(error) => {
-            return Some(RetainedAttemptExecution {
-                solve: None,
-                attempted_geometry,
-                mappings: Some(mappings),
-                effective_activity: Some(resolved.activity.clone()),
-                accepted: None,
-                failure: Some(SketchAttemptFailure {
-                    kind: SketchAttemptFailureKind::AcceptedSession,
-                    message: error.to_string(),
-                    parameter_issue: None,
-                    external_error: None,
-                    effective_activity: None,
-                }),
-            });
+    }
+    let runtime = if let Some(runtime) = incremental_runtime {
+        runtime
+    } else {
+        let runtime_solve = match sketch.solve_with_controller(runtime_request, config, controller)
+        {
+            Ok(Some(solve)) => solve,
+            Ok(None) => return None,
+            Err(error) => {
+                return Some(RetainedAttemptExecution {
+                    solve: None,
+                    attempted_geometry,
+                    mappings: Some(mappings),
+                    effective_activity: Some(resolved.activity.clone()),
+                    accepted: None,
+                    failure: Some(SketchAttemptFailure {
+                        kind: SketchAttemptFailureKind::AcceptedSession,
+                        message: error.to_string(),
+                        parameter_issue: None,
+                        external_error: None,
+                        effective_activity: None,
+                    }),
+                });
+            }
+        };
+        let mut runtime = match SketchSession::from_accepted_solve_with_controller(
+            sketch,
+            &validation_sketch,
+            runtime_request,
+            config,
+            runtime_solve,
+            controller,
+        ) {
+            Ok(Some(runtime)) => runtime,
+            Ok(None) => return None,
+            Err(error) => {
+                return Some(RetainedAttemptExecution {
+                    solve: None,
+                    attempted_geometry,
+                    mappings: Some(mappings),
+                    effective_activity: Some(resolved.activity.clone()),
+                    accepted: None,
+                    failure: Some(SketchAttemptFailure {
+                        kind: SketchAttemptFailureKind::AcceptedSession,
+                        message: error.to_string(),
+                        parameter_issue: None,
+                        external_error: None,
+                        effective_activity: None,
+                    }),
+                });
+            }
+        };
+        if parent.is_some() {
+            runtime.mark_full_rebuild();
         }
+        runtime
     };
     let mut document = candidate.clone();
     let projected =
@@ -5225,6 +5631,7 @@ fn publish_retained_attempt(
                 effective_activity: stamps.activity,
                 redundancy,
                 parameter_outputs,
+                profile_cache: RefCell::new(Vec::new()),
             });
         } else {
             execution.solve = None;

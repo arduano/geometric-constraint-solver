@@ -138,6 +138,10 @@ pub struct DocumentRuntimeMap {
     sources: Vec<DocumentSourceRuntimeMapping>,
     contacts: Vec<ContactRuntimeMapping>,
     parameter_bindings: Vec<DocumentParameterRuntimeBinding>,
+    point_index: BTreeMap<DesignPointId, usize>,
+    curve_index: BTreeMap<CurveId, usize>,
+    source_index: BTreeMap<DocumentSourceId, usize>,
+    contact_index: BTreeMap<ContactId, usize>,
 }
 
 impl DocumentRuntimeMap {
@@ -167,8 +171,28 @@ impl DocumentRuntimeMap {
         &self.parameter_bindings
     }
 
+    pub(crate) fn has_compatible_runtime_topology(&self, candidate: &Self) -> bool {
+        self.points == candidate.points
+            && self.curves == candidate.curves
+            && self.sources == candidate.sources
+            && self.contacts == candidate.contacts
+            && self.parameter_bindings.len() == candidate.parameter_bindings.len()
+            && self
+                .parameter_bindings
+                .iter()
+                .zip(&candidate.parameter_bindings)
+                .all(|(retained, candidate)| {
+                    retained.parameter == candidate.parameter
+                        && retained.target == candidate.target
+                        && retained.runtime == candidate.runtime
+                })
+    }
+
     #[must_use]
     pub fn runtime_point(&self, id: DesignPointId) -> Option<PointId> {
+        if let Some(index) = self.point_index.get(&id) {
+            return self.points.get(*index).map(|mapping| mapping.runtime);
+        }
         self.points
             .iter()
             .find_map(|mapping| (mapping.persistent == id).then_some(mapping.runtime))
@@ -176,6 +200,9 @@ impl DocumentRuntimeMap {
 
     #[must_use]
     pub fn runtime_curve(&self, id: CurveId) -> Option<&RuntimeCurve> {
+        if let Some(index) = self.curve_index.get(&id) {
+            return self.curves.get(*index).map(|mapping| &mapping.runtime);
+        }
         self.curves
             .iter()
             .find_map(|mapping| (mapping.persistent == id).then_some(&mapping.runtime))
@@ -183,10 +210,52 @@ impl DocumentRuntimeMap {
 
     #[must_use]
     pub fn runtime_source(&self, id: DocumentSourceId) -> Option<RuntimeSource> {
+        if let Some(index) = self.source_index.get(&id) {
+            return self.sources.get(*index).and_then(|mapping| mapping.runtime);
+        }
         self.sources
             .iter()
             .find_map(|mapping| (mapping.source_id == id).then_some(mapping.runtime))
             .flatten()
+    }
+
+    /// Returns the retained runtime source/latent role for one persistent contact.
+    #[must_use]
+    pub fn runtime_contact(&self, id: ContactId) -> Option<ContactRuntimeMapping> {
+        if let Some(index) = self.contact_index.get(&id) {
+            return self.contacts.get(*index).copied();
+        }
+        self.contacts
+            .iter()
+            .find(|mapping| mapping.persistent == id)
+            .copied()
+    }
+
+    fn rebuild_indices(&mut self) {
+        self.point_index = self
+            .points
+            .iter()
+            .enumerate()
+            .map(|(index, mapping)| (mapping.persistent, index))
+            .collect();
+        self.curve_index = self
+            .curves
+            .iter()
+            .enumerate()
+            .map(|(index, mapping)| (mapping.persistent, index))
+            .collect();
+        self.source_index = self
+            .sources
+            .iter()
+            .enumerate()
+            .map(|(index, mapping)| (mapping.source_id, index))
+            .collect();
+        self.contact_index = self
+            .contacts
+            .iter()
+            .enumerate()
+            .map(|(index, mapping)| (mapping.persistent, index))
+            .collect();
     }
 
     pub(crate) fn runtime_segment(&self, span: CurveSpan) -> Option<SegmentId> {
@@ -506,6 +575,7 @@ impl SketchDocument {
                 )
             });
         }
+        mappings.rebuild_indices();
         Ok(Some(LoweredDocument { sketch, mappings }))
     }
 

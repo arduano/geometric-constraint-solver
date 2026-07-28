@@ -2023,8 +2023,8 @@ M45; the M46 follow-up cleared it without changing behavior.
 M46-M53 are the completed cleanup and host-semantics UAT sequence. After M53 approval, the future
 sequence was finalized from M54 onward. A subsequent supervising-user decision inserted the
 constraint/dimension/branch-action parity gate at M55, shifting the preserved later sequence by one
-number through M64 without changing its dependency order or scope. M54-M56 are now complete;
-M57 is the next executable milestone.
+number through M64 without changing its dependency order or scope. M54-M57 are now complete;
+M58 is the next executable milestone.
 
 ## Pre-cleanup phase
 
@@ -2404,15 +2404,49 @@ all-feature WASM and release Trunk pass. `docs/M56_IMPLEMENTATION.md` records th
 
 ### M57: incremental solving and production scale
 
-Status: active.
+Status: complete as of 2026-07-29.
 
 Scope: persistent runtime mappings, dependency-closure rebuilds, indexed/history storage,
 profile caches, workload envelopes, sparse-rank evaluation and full fresh validation on
 every optimized return path.
 
+- [x] Retain compatible document/runtime/core identities and derive dirty variables/sources from
+  persistent document dependencies rather than caller-supplied runtime IDs.
+- [x] Prove local geometry, parameter, external-reference and same-shape activation updates reuse
+  only clean components while topology/source-shape changes take an explicit full-rebuild path.
+- [x] Index persistent-to-runtime point/curve/source/contact mappings and keep application history
+  outside the retained solver lifecycle; accepted-only command history remains directly indexed.
+- [x] Cache bounded visual profiles only inside one accepted revision and invalidate the cache on
+  every newly accepted state.
+- [x] Publish execution-path/fresh-validation evidence and an honest production rank assessment:
+  sparse steps are supported, while numerical rank remains dense-SVD authoritative within the
+  256-row/256-tangent connected-component envelope.
+- [x] Qualify cold/warm, profile, storage and cancellation behavior with deterministic direct
+  tests, fresh-rebuild parity and an observed release workload record.
+
+Completion notes (2026-07-29): compatible retained attempts now lower one scratch compatibility
+oracle, preserve `DocumentRuntimeMap`, `CompiledSketch` and `SolveSession` identities, and submit
+only changed shape variables plus the transitive persistent source closure through the existing
+core `SessionPatch`. Parameter and external-reference updates bypass the former full attempted
+solve when request shape is unchanged. Local point edits preserve the temporary-drag semantics,
+then publish through the same retained runtime boundary. Every optimized return still executes
+`finalize_solved_candidate_controlled`, fresh hard-row/Jacobian/rank evaluation, document
+projection and atomic publication.
+
+`SketchSessionExecutionSummary` distinguishes initial, incremental and full-rebuild execution;
+`SketchProductionScaleAssessment` reports bounded dense-SVD rank authority without pretending
+sparse steps imply sparse rank certification. Runtime maps have persistent-ID indexes, accepted
+profile caches are revision-local, and host/application history remains outside
+`RetainedSketchDocumentSession`. The ten-case M57 corpus covers two- and sixteen-component
+workloads, fresh parity, local geometry, parameters, immutable external references, activation,
+topology and changed-incidence fallback, profile invalidation and deterministic work exhaustion.
+Release execution of the complete M57 corpus took 0.21 s and 66,496 KiB maximum RSS on the
+recorded development host;
+these are observations, not correctness tolerances. `docs/M57_IMPLEMENTATION.md` records the gate.
+
 ### M58: sketch operations companion
 
-Status: planned; begins after M57 passes.
+Status: active.
 
 Scope: a separate no-residual-formula transaction companion for split/break/trim/extend,
 mirror, chamfer, grouped rectangle/polygon/slot/pattern expansion and multi-interval visible

@@ -659,6 +659,93 @@ impl CompiledSketch {
         self.problem = problem;
     }
 
+    /// Returns whether a scratch compilation can update this retained compilation
+    /// without changing any runtime identity or equation/bound shape.
+    pub(crate) fn has_compatible_runtime_topology(&self, candidate: &Self) -> bool {
+        self.point_variables == candidate.point_variables
+            && self.circle_radius_variables == candidate.circle_radius_variables
+            && self.arc_radius_variables == candidate.arc_radius_variables
+            && self.arc_angle_variables == candidate.arc_angle_variables
+            && self.conic_vector_variables == candidate.conic_vector_variables
+            && self.conic_scalar_variables == candidate.conic_scalar_variables
+            && self.nurbs_weight_variables == candidate.nurbs_weight_variables
+            && self.latent_variables == candidate.latent_variables
+            && self.bound_mappings == candidate.bound_mappings
+            && self.source_mappings.len() == candidate.source_mappings.len()
+            && self
+                .source_mappings
+                .iter()
+                .zip(&candidate.source_mappings)
+                .all(|(retained, candidate_mapping)| {
+                    retained.source == candidate_mapping.source
+                        && retained.core_source_id == candidate_mapping.core_source_id
+                        && retained.residual_ids == candidate_mapping.residual_ids
+                        && retained.residual_ids.iter().all(|residual_id| {
+                            let Some(retained) = self.problem.residual(*residual_id) else {
+                                return false;
+                            };
+                            let Some(candidate) = candidate.problem.residual(*residual_id) else {
+                                return false;
+                            };
+                            retained.source() == candidate.source()
+                                && retained.category() == candidate.category()
+                                && retained.incident_variables() == candidate.incident_variables()
+                                && retained.output_dimension() == candidate.output_dimension()
+                        })
+                })
+            && self.bound_mappings.iter().all(|mapping| {
+                let Some(retained) = self.problem.bound(mapping.bound_id) else {
+                    return false;
+                };
+                let Some(candidate) = candidate.problem.bound(mapping.bound_id) else {
+                    return false;
+                };
+                retained.variable_id() == candidate.variable_id()
+                    && retained.coordinate() == candidate.coordinate()
+            })
+    }
+
+    pub(crate) fn shape_variable_ids(&self) -> Vec<VariableId> {
+        let mut ids = self
+            .point_variables
+            .iter()
+            .map(|mapping| mapping.variable_id)
+            .chain(
+                self.circle_radius_variables
+                    .iter()
+                    .map(|mapping| mapping.variable_id),
+            )
+            .chain(
+                self.arc_radius_variables
+                    .iter()
+                    .map(|mapping| mapping.variable_id),
+            )
+            .chain(
+                self.arc_angle_variables
+                    .iter()
+                    .map(|mapping| mapping.variable_id),
+            )
+            .chain(
+                self.conic_vector_variables
+                    .iter()
+                    .map(|mapping| mapping.variable_id),
+            )
+            .chain(
+                self.conic_scalar_variables
+                    .iter()
+                    .map(|mapping| mapping.variable_id),
+            )
+            .chain(
+                self.nurbs_weight_variables
+                    .iter()
+                    .map(|mapping| mapping.variable_id),
+            )
+            .collect::<Vec<_>>();
+        ids.sort_unstable();
+        ids.dedup();
+        ids
+    }
+
     pub(crate) fn replace_source_label(
         &mut self,
         source: SketchSource,

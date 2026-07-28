@@ -23,16 +23,16 @@ M23-M31 subsequently complete spatial kinematics, sketch embedding identities,
 advanced constructions, generic fillets and persistent trim views, interactive
 construction/NURBS UAT and certified all-family visual profiles.
 
-- **Baseline:** implemented and accepted behavior through M56. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication. M1-M7 remain the frozen regression baseline.
-- **Active target:** M57 owns incremental solving and production scale.
-- **Planned sequence:** M57-M64 preserves incremental scale through production release scope.
+- **Baseline:** implemented and accepted behavior through M57. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence. M1-M7 remain the frozen regression baseline.
+- **Active target:** M58 owns the equation-free sketch operations companion.
+- **Planned sequence:** M58-M64 preserves incremental scale through production release scope.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
 `PLAN.md` owns current execution numbering. Milestone labels in the preserved M8
 completion record and in ADRs accepted before the playground rebaseline describe the
 allocation at acceptance time; their architectural decisions remain accepted, but
-current ownership is the completed M10-M56 sequence and executable M57-M64 sequence listed in
+current ownership is the completed M10-M57 sequence and executable M58-M64 sequence listed in
 section 15.
 
 ## 3. Crate responsibilities
@@ -120,7 +120,7 @@ M35-M43 continue the implementation transition with a standard planar
 relation/dimension surface, typed construction/activation semantics, host-supplied parameter values,
 immutable external 2D snapshots and cancellation. M54 owns stable persistent-ID diagnostics;
 M55 consumes the public domain/action contracts through the headless editor without adding a solver
-equation; M56 completes revision-checked prepared jobs and M57 owns incremental solving. Host expressions,
+equation; M56 completes revision-checked prepared jobs and M57 completes incremental solving. Host expressions,
 projection and application history remain outside this crate. One solve attempt consumes immutable
 input revisions and never calls host code.
 
@@ -313,6 +313,17 @@ domains plus current design, attempt, accepted/high-water, request and solver po
 Typed work executes only against a captured session clone. A completed candidate can replace the
 live session only when `commit_prepared_patch` compares that complete base stamp equal; stale or
 out-of-order candidates leave every live identity unchanged.
+
+M57 retains compatible `DocumentRuntimeMap`, `CompiledSketch` and `SolveSession` state across
+accepted document attempts. Persistent point/curve/source/contact joins are indexed. One scratch
+compile is a compatibility oracle only: exact variable/source/residual/bound mappings must match
+before changed shape values and the transitive persistent source closure enter a core
+`SessionPatch`. Parameter and immutable external-reference updates with unchanged request shape
+take this path directly. Topology or source-shape changes are explicit full rebuilds. Both paths
+freshly validate all hard rows, derivatives, domain/branch state, projection and numerical rank
+before publication. Profile caches belong to one accepted revision and cannot affect solving.
+Sparse hard steps do not imply sparse rank authority; production rank remains dense-SVD
+authoritative within the declared 256-row/256-tangent connected-component envelope.
 
 M35 adds additive `OperationControl`/`OperationController` boundaries shared by core
 and sketch operations. A monotonic library token carries host cancellation; overflow-safe
@@ -566,7 +577,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
 - M55: completed alpha constraint, dimension and explicit branch-action parity in the headless
   editor and sole workbench.
 - M56: completed prepared jobs and concurrency contract.
-- M57: active incremental production-scale solving.
-- M58-M59: planned sketch-operation and production-topology companions.
+- M57: completed incremental production-scale solving.
+- M58: active sketch-operation companion; M59 remains the planned production-topology companion.
 - M60-M61: planned advanced workbench and human advanced/topology UAT.
 - M62-M64: planned v5/API candidate freeze, integrated human UAT and production embedding release.

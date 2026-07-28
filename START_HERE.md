@@ -16,7 +16,8 @@ application and browser E2E stack. M51 hardened the one surviving workbench; M52
 direct-qualified post-cleanup host-semantics candidate, M53 received supervising-human approval,
 M54 completed stable sketch-owned diagnostics, M55 completed the preserved alpha
 constraint/dimension/branch-action surface, M56 completed prepared jobs and exact-input
-compare-and-swap publication, and M57 is now active. The workbench is a
+compare-and-swap publication, M57 completed dependency-local retained solving and bounded
+production-scale evidence, and M58 is now active. The workbench is a
 non-authoritative demo consumer, not a production UI or third solver. Mobile support and
 physics remain outside future acceptance.
 
@@ -70,8 +71,9 @@ core reports behind explicitly unstable seams. M55 then completed the closed 13-
 five-dimension alpha action matrix, persistent contact/angle branch editing, typed disabled
 reasons, direct native/WASM presentation qualification and two reusable scenario leaves. M56 then
 added complete-input snapshots, typed scratch jobs, non-mutating patches and safe host-owned
-native/WASM scheduling. The active milestone is **M57: incremental solving and production
-scale**. Old Chromium/CDP, HTTP
+native/WASM scheduling. M57 retained compatible runtime/core state, indexed persistent mappings,
+dependency-local updates, accepted-revision profile caches and honest bounded rank/scale evidence.
+The active milestone is **M58: sketch operations companion**. Old Chromium/CDP, HTTP
 serving, DOM-scraping, screenshot, wall-clock browser-timing and source-substring-scan gates remain
 retired.
 
@@ -117,6 +119,7 @@ Durable cleanup records:
 - `docs/M54_IMPLEMENTATION.md`
 - `docs/M55_IMPLEMENTATION.md`
 - `docs/M56_IMPLEMENTATION.md`
+- `docs/M57_IMPLEMENTATION.md`
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

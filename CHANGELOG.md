@@ -35,6 +35,10 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - Safe host-managed concurrency metadata: single-owner session-bearing jobs/patches are `Send`,
   immutable prepared DTOs are `Send + Sync`, and single-threaded WASM uses the same synchronous
   prepare/execute/commit boundary.
+- Persistent-ID-indexed runtime maps, reverse document dependency closures, revision-local
+  accepted profile caches and stable incremental/full-rebuild execution evidence.
+- An honest sketch production-scale assessment: sparse hard steps remain supported while
+  numerical rank is dense-SVD authoritative within the 256-row/256-tangent component envelope.
 
 ### Changed
 
@@ -79,6 +83,10 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - Completed M56 prepared concurrency without changing equations or accepted-state validation.
   Stale, out-of-order, cancelled and work-exhausted worker results cannot publish over newer
   session state; no `unsafe`, solver mutex, internal scheduler or schema change was added.
+- Completed M57 dependency-local retained solving. Compatible parameter, external-reference,
+  activation and geometry attempts retain runtime/core identities and clean-component caches;
+  source-shape/topology changes use an explicit full rebuild, and all paths still perform fresh
+  hard-row, derivative, domain/branch, projection and rank validation before publication.
 
 ## [0.2.0] - 2026-07-22
 

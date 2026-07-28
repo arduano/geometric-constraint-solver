@@ -2530,6 +2530,36 @@ impl SketchDocument {
         closure
     }
 
+    /// Returns every persistent element transitively affected by the queried element.
+    ///
+    /// This is the reverse of [`Self::dependency_closure`]: the queried element is
+    /// excluded, and each returned element directly or transitively depends on it.
+    /// Results are deduplicated in canonical persistent-identity order.
+    #[must_use]
+    pub fn dependent_closure(
+        &self,
+        element: impl Into<DocumentElementId>,
+    ) -> Vec<DocumentElementId> {
+        let root = element.into();
+        let elements = self.canonical_elements();
+        let mut discovered = BTreeSet::new();
+        let mut pending = vec![root];
+        while let Some(dependency) = pending.pop() {
+            for candidate in &elements {
+                if *candidate == root || discovered.contains(candidate) {
+                    continue;
+                }
+                if self.direct_dependencies(*candidate).contains(&dependency) {
+                    discovered.insert(*candidate);
+                    pending.push(*candidate);
+                }
+            }
+        }
+        let mut closure = discovered.into_iter().collect::<Vec<_>>();
+        closure.sort_by_key(|dependent| canonical_element_key(*dependent));
+        closure
+    }
+
     pub(crate) fn effective_activity_with_input_overlays(
         &self,
         parameter_inactive: &BTreeSet<DocumentElementId>,
