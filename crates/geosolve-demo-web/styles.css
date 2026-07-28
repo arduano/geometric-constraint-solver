@@ -397,7 +397,26 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 }
 .wb-error-marker:hover .wb-error-tooltip,
 .wb-error-marker:focus-visible .wb-error-tooltip { opacity: 1; }
-.wb-canvas-hud { position: absolute; right: 0.65rem; bottom: 0.55rem; display: flex; gap: 0.8rem; color: #7c8886; font: 0.65rem ui-monospace, monospace; }
+.wb-canvas-hud {
+  position: absolute;
+  right: 0.65rem;
+  bottom: 0.55rem;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: #7c8886;
+  font: 0.65rem ui-monospace, monospace;
+}
+.wb-camera-controls { display: flex; gap: 0.2rem; }
+.wb-camera-controls button {
+  min-width: 1.75rem;
+  min-height: 1.55rem;
+  padding: 0.12rem 0.35rem;
+  border-color: #465051;
+  color: #b9c4c2;
+  background: rgb(25 31 31 / 92%);
+  font: inherit;
+}
 
 .wb-host-controls,
 .wb-host-state { display: grid; gap: 0.55rem; }

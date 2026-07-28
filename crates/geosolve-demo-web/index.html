@@ -56,7 +56,16 @@
           <button type="button" data-wb-action="finish">Finish polyline</button>
           <button type="button" data-wb-action="cancel">Cancel</button>
         </div>
-        <div class="wb-canvas-hud"><span>XY plane</span><span>50 px / unit</span></div>
+        <div class="wb-canvas-hud">
+          <span>XY plane</span>
+          <span id="wb-camera-scale">50.0 px / unit</span>
+          <div class="wb-camera-controls" aria-label="Canvas view controls">
+            <button type="button" data-wb-action="zoom-out" aria-label="Zoom out">−</button>
+            <button type="button" data-wb-action="zoom-fit">Fit</button>
+            <button type="button" data-wb-action="zoom-in" aria-label="Zoom in">+</button>
+          </div>
+          <span>Wheel zoom · middle-drag pan</span>
+        </div>
       </section>
 
       <aside class="wb-inspector" aria-label="Property inspector">

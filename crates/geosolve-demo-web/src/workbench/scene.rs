@@ -12,8 +12,119 @@ use geosolve_sketch::{
     DocumentDimensionMode, GeometryRole, SketchAcceptedDocumentState,
 };
 
+const SCREEN_SIZE: [f64; 2] = [1000.0, 700.0];
+const DEFAULT_PIXELS_PER_MODEL_UNIT: f64 = 50.0;
+const MIN_PIXELS_PER_MODEL_UNIT: f64 = 2.0;
+const MAX_PIXELS_PER_MODEL_UNIT: f64 = 2_000.0;
+const FIT_MARGIN_PIXELS: f64 = 64.0;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct CanvasCamera {
+    pub(crate) model_center: [f64; 2],
+    pub(crate) pixels_per_model_unit: f64,
+}
+
+impl Default for CanvasCamera {
+    fn default() -> Self {
+        Self {
+            model_center: [0.0, 0.0],
+            pixels_per_model_unit: DEFAULT_PIXELS_PER_MODEL_UNIT,
+        }
+    }
+}
+
+impl CanvasCamera {
+    pub(crate) fn viewport(self) -> Viewport {
+        Viewport::new(SCREEN_SIZE, self.model_center, self.pixels_per_model_unit)
+            .expect("camera invariants keep the viewport valid")
+    }
+
+    pub(crate) fn reset(&mut self) {
+        *self = Self::default();
+    }
+
+    pub(crate) fn zoom_about(&mut self, anchor: ScreenPoint, factor: f64) -> bool {
+        if !anchor.x.is_finite() || !anchor.y.is_finite() || !factor.is_finite() || factor <= 0.0 {
+            return false;
+        }
+        let before = self.viewport().screen_to_model(anchor);
+        let next_scale = (self.pixels_per_model_unit * factor)
+            .clamp(MIN_PIXELS_PER_MODEL_UNIT, MAX_PIXELS_PER_MODEL_UNIT);
+        if (next_scale - self.pixels_per_model_unit).abs()
+            <= f64::EPSILON * self.pixels_per_model_unit.max(1.0)
+        {
+            return false;
+        }
+        self.pixels_per_model_unit = next_scale;
+        let after = self.viewport().screen_to_model(anchor);
+        self.model_center[0] += before[0] - after[0];
+        self.model_center[1] += before[1] - after[1];
+        true
+    }
+
+    pub(crate) fn pan_from(
+        &mut self,
+        origin_center: [f64; 2],
+        origin: ScreenPoint,
+        current: ScreenPoint,
+    ) -> bool {
+        if !origin_center.into_iter().all(f64::is_finite)
+            || !origin.x.is_finite()
+            || !origin.y.is_finite()
+            || !current.x.is_finite()
+            || !current.y.is_finite()
+        {
+            return false;
+        }
+        self.model_center = [
+            origin_center[0] - (current.x - origin.x) / self.pixels_per_model_unit,
+            origin_center[1] + (current.y - origin.y) / self.pixels_per_model_unit,
+        ];
+        true
+    }
+
+    pub(crate) fn fit_scene(&mut self, scene: &EditorScene) -> bool {
+        let mut minimum = [f64::INFINITY; 2];
+        let mut maximum = [f64::NEG_INFINITY; 2];
+        let mut include = |point: [f64; 2]| {
+            if point.into_iter().all(f64::is_finite) {
+                for axis in 0..2 {
+                    minimum[axis] = minimum[axis].min(point[axis]);
+                    maximum[axis] = maximum[axis].max(point[axis]);
+                }
+            }
+        };
+        for point in &scene.points {
+            include(point.model_position);
+        }
+        for curve in &scene.curves {
+            for point in &curve.screen_polyline {
+                include(scene.viewport.screen_to_model(*point));
+            }
+        }
+        if !minimum.into_iter().all(f64::is_finite) || !maximum.into_iter().all(f64::is_finite) {
+            return false;
+        }
+        let width = (maximum[0] - minimum[0]).max(1.0e-9);
+        let height = (maximum[1] - minimum[1]).max(1.0e-9);
+        let available = [
+            SCREEN_SIZE[0] - 2.0 * FIT_MARGIN_PIXELS,
+            SCREEN_SIZE[1] - 2.0 * FIT_MARGIN_PIXELS,
+        ];
+        self.model_center = [
+            (minimum[0] + maximum[0]) * 0.5,
+            (minimum[1] + maximum[1]) * 0.5,
+        ];
+        self.pixels_per_model_unit = (available[0] / width)
+            .min(available[1] / height)
+            .clamp(MIN_PIXELS_PER_MODEL_UNIT, MAX_PIXELS_PER_MODEL_UNIT);
+        true
+    }
+}
+
+#[cfg(test)]
 pub(crate) fn viewport() -> Viewport {
-    Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("static viewport is valid")
+    CanvasCamera::default().viewport()
 }
 
 #[allow(clippy::too_many_lines)]
@@ -23,6 +134,7 @@ pub(crate) fn svg_markup(
     selection: &[SelectionItem],
     construction_preview: Option<&ConstructionPreview>,
     problem: Option<&EditorProblemMetadata>,
+    viewport: Viewport,
 ) -> String {
     let mut output = String::new();
     let mut problem_markers = String::new();
@@ -45,8 +157,11 @@ pub(crate) fn svg_markup(
     } else {
         output.push_str("<g class=\"wb-accepted-scene\" data-scene-provenance=\"none\">");
     }
-    output.push_str(
-        "<g class=\"wb-grid\"><path d=\"M0 350H1000M500 0V700\"/></g><g class=\"wb-geometry\">",
+    let origin = viewport.model_to_screen([0.0, 0.0]);
+    let _ = write!(
+        output,
+        "<g class=\"wb-grid\"><path d=\"M0 {:.3}H1000M{:.3} 0V700\"/></g><g class=\"wb-geometry\">",
+        origin.y, origin.x,
     );
     if let Some(scene) = scene {
         for curve in &scene.curves {
@@ -129,7 +244,7 @@ pub(crate) fn svg_markup(
     }
     output.push_str("</g>");
     if let Some(preview) = construction_preview {
-        output.push_str(&construction_markup(preview, viewport()));
+        output.push_str(&construction_markup(preview, viewport));
     }
     if let Some(problem) = problem {
         if problem.scope == EditorProblemScope::Global || resolved_targets.is_empty() {
@@ -486,7 +601,8 @@ fn escape(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use geosolve_constraint_editor::{
-        ConstructionPreviewGeometry, EditorScene, RetainedEditorCoordinator, SelectionItem,
+        ConstructionPreviewGeometry, EditorScene, RetainedEditorCoordinator, ScreenPoint,
+        SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -498,7 +614,8 @@ mod tests {
     };
 
     use super::{
-        constraint_glyph, construction_geometry_markup, dimension_kind, svg_markup, viewport,
+        CanvasCamera, constraint_glyph, construction_geometry_markup, dimension_kind, svg_markup,
+        viewport,
     };
     use crate::workbench::panels::{
         accepted_redundancy_markup, host_state_markup, lifecycle_presentation, problem_markup,
@@ -521,6 +638,73 @@ mod tests {
         value: ParameterValue,
     ) -> ParameterBatch {
         ParameterBatch::new(revision, vec![ParameterBatchEntry { parameter, value }]).unwrap()
+    }
+
+    fn assert_point_close(actual: [f64; 2], expected: [f64; 2]) {
+        for axis in 0..2 {
+            assert!(
+                (actual[axis] - expected[axis]).abs() <= 1.0e-12,
+                "axis {axis}: actual={} expected={}",
+                actual[axis],
+                expected[axis]
+            );
+        }
+    }
+
+    #[test]
+    fn camera_zoom_preserves_anchor_and_pan_uses_screen_space_direction() {
+        let mut camera = CanvasCamera::default();
+        let anchor = ScreenPoint { x: 750.0, y: 175.0 };
+        let before = camera.viewport().screen_to_model(anchor);
+        assert!(camera.zoom_about(anchor, 2.0));
+        assert_point_close(camera.viewport().screen_to_model(anchor), before);
+
+        let origin_center = camera.model_center;
+        assert!(camera.pan_from(
+            origin_center,
+            ScreenPoint { x: 100.0, y: 100.0 },
+            ScreenPoint { x: 200.0, y: 150.0 },
+        ));
+        assert_point_close(
+            camera.model_center,
+            [
+                origin_center[0] - 100.0 / camera.pixels_per_model_unit,
+                origin_center[1] + 50.0 / camera.pixels_per_model_unit,
+            ],
+        );
+    }
+
+    #[test]
+    fn camera_fit_contains_scene_geometry_with_margin() {
+        let fixture = geosolve_sketch::alpha_scenario(
+            geosolve_sketch::AlphaScenarioKind::MotionScissorTower,
+            1.0,
+        )
+        .unwrap();
+        let session = RetainedSketchDocumentSession::new(
+            fixture.document,
+            fixture.request,
+            SolverConfig::default(),
+        )
+        .unwrap();
+        let accepted = session.accepted_state().unwrap();
+        let initial = viewport();
+        let scene = EditorScene::from_accepted(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            initial,
+            0.8,
+        )
+        .unwrap();
+        let mut camera = CanvasCamera::default();
+        assert!(camera.fit_scene(&scene));
+        let fitted = camera.viewport();
+        for point in scene.points {
+            let point = fitted.model_to_screen(point.model_position);
+            assert!((63.0..=937.0).contains(&point.x));
+            assert!((63.0..=637.0).contains(&point.y));
+        }
     }
 
     #[test]
@@ -691,7 +875,14 @@ mod tests {
         )
         .unwrap();
         let selection = [SelectionItem::Point(rectangle.points[0])];
-        let markup = svg_markup(Some(&scene), Some(accepted), &selection, None, None);
+        let markup = svg_markup(
+            Some(&scene),
+            Some(accepted),
+            &selection,
+            None,
+            None,
+            viewport(),
+        );
         let tree = crate::workbench::panels::tree_markup(accepted.document(), &selection);
         let point_identity = format!("data-persistent-id=\"{}\"", rectangle.points[0]);
         assert!(markup.contains("class=\"wb-point selected\""));
@@ -782,7 +973,14 @@ mod tests {
         )
         .unwrap();
         let problem = coordinator.current_problem_metadata().unwrap();
-        let markup = svg_markup(Some(&scene), Some(accepted), &[], None, Some(&problem));
+        let markup = svg_markup(
+            Some(&scene),
+            Some(accepted),
+            &[],
+            None,
+            Some(&problem),
+            viewport(),
+        );
 
         assert!(markup.contains("data-problem-scope=\"targeted\""));
         assert!(markup.contains(&format!(
@@ -865,7 +1063,14 @@ mod tests {
         )
         .unwrap();
         let problem = coordinator.current_problem_metadata().unwrap();
-        let markup = svg_markup(Some(&scene), Some(accepted), &[], None, Some(&problem));
+        let markup = svg_markup(
+            Some(&scene),
+            Some(accepted),
+            &[],
+            None,
+            Some(&problem),
+            viewport(),
+        );
         assert!(markup.contains("data-scene-provenance=\"accepted\""));
         assert!(markup.contains(&format!(
             "data-accepted-revision=\"{}\"",

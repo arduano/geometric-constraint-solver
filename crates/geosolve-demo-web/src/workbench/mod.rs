@@ -44,7 +44,7 @@ pub(crate) mod wasm {
     use wasm_bindgen::prelude::JsValue;
     use web_sys::{
         Document, Element, Event, HtmlElement, HtmlInputElement, HtmlSelectElement, KeyboardEvent,
-        MouseEvent, PointerEvent,
+        MouseEvent, PointerEvent, WheelEvent,
     };
 
     use super::persistence::{LEGACY_STORAGE_KEY, STORAGE_KEY, WorkspaceSnapshot};
@@ -52,10 +52,19 @@ pub(crate) mod wasm {
     struct Workbench {
         coordinator: RetainedEditorCoordinator,
         scenarios: super::scenarios::ScenarioWorkbenchState,
+        camera: super::scene::CanvasCamera,
+        pan_gesture: Option<PanGesture>,
         construction_preview: Option<ConstructionPreview>,
         inference_preview: Option<ProvisionalInferenceCandidate>,
         notice: String,
         problems_open: bool,
+    }
+
+    #[derive(Clone, Copy)]
+    struct PanGesture {
+        pointer_id: i32,
+        origin: geosolve_constraint_editor::ScreenPoint,
+        origin_center: [f64; 2],
     }
 
     pub(crate) fn install(document: &Document) -> Result<(), JsValue> {
@@ -82,6 +91,8 @@ pub(crate) mod wasm {
         let workbench = Rc::new(RefCell::new(Workbench {
             coordinator,
             scenarios: super::scenarios::ScenarioWorkbenchState::new(),
+            camera: super::scene::CanvasCamera::default(),
+            pan_gesture: None,
             construction_preview: None,
             inference_preview: None,
             notice,
@@ -296,6 +307,7 @@ pub(crate) mod wasm {
         workbench: &Rc<RefCell<Workbench>>,
     ) -> Result<(), JsValue> {
         let viewport = required(document, "wb-viewport")?;
+        install_pan_listeners(document, workbench, &viewport)?;
         install_pointer_listener(
             document,
             workbench,
@@ -365,6 +377,107 @@ pub(crate) mod wasm {
         });
         viewport.add_event_listener_with_callback("dblclick", double.as_ref().unchecked_ref())?;
         double.forget();
+        install_wheel_zoom(document, workbench, &viewport)?;
+        Ok(())
+    }
+
+    fn install_pan_listeners(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+        viewport: &Element,
+    ) -> Result<(), JsValue> {
+        for name in ["pointerdown", "pointermove", "pointerup", "pointercancel"] {
+            let callback_document = document.clone();
+            let callback_workbench = Rc::clone(workbench);
+            let callback_viewport = viewport.clone();
+            let callback = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
+                let mut wb = callback_workbench.borrow_mut();
+                let screen = client_screen_point(
+                    &callback_viewport,
+                    wb.camera.viewport(),
+                    f64::from(event.client_x()),
+                    f64::from(event.client_y()),
+                );
+                match name {
+                    "pointerdown" if event.button() == 1 => {
+                        let Some(origin) = screen else {
+                            return;
+                        };
+                        event.prevent_default();
+                        wb.pan_gesture = Some(PanGesture {
+                            pointer_id: event.pointer_id(),
+                            origin,
+                            origin_center: wb.camera.model_center,
+                        });
+                        wb.notice = "Panning canvas".into();
+                    }
+                    "pointermove" => {
+                        let Some(gesture) = wb
+                            .pan_gesture
+                            .filter(|gesture| gesture.pointer_id == event.pointer_id())
+                        else {
+                            return;
+                        };
+                        let Some(current) = screen else {
+                            return;
+                        };
+                        event.prevent_default();
+                        wb.camera
+                            .pan_from(gesture.origin_center, gesture.origin, current);
+                        drop(wb);
+                        let _ = render(&callback_document, &callback_workbench);
+                    }
+                    "pointerup" | "pointercancel"
+                        if wb
+                            .pan_gesture
+                            .is_some_and(|gesture| gesture.pointer_id == event.pointer_id()) =>
+                    {
+                        event.prevent_default();
+                        wb.pan_gesture = None;
+                        wb.notice = "Canvas pan complete".into();
+                        drop(wb);
+                        let _ = render(&callback_document, &callback_workbench);
+                    }
+                    _ => {}
+                }
+            });
+            viewport.add_event_listener_with_callback(name, callback.as_ref().unchecked_ref())?;
+            callback.forget();
+        }
+        Ok(())
+    }
+
+    fn install_wheel_zoom(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+        viewport: &Element,
+    ) -> Result<(), JsValue> {
+        let callback_document = document.clone();
+        let callback_workbench = Rc::clone(workbench);
+        let callback_viewport = viewport.clone();
+        let callback = Closure::<dyn FnMut(WheelEvent)>::new(move |event: WheelEvent| {
+            let mut wb = callback_workbench.borrow_mut();
+            let Some(anchor) = client_screen_point(
+                &callback_viewport,
+                wb.camera.viewport(),
+                f64::from(event.client_x()),
+                f64::from(event.client_y()),
+            ) else {
+                return;
+            };
+            event.prevent_default();
+            let factor = (-event.delta_y() * 0.0015).exp();
+            if wb.camera.zoom_about(anchor, factor) {
+                wb.notice = format!(
+                    "Canvas zoom {:.1} px / unit",
+                    wb.camera.pixels_per_model_unit
+                );
+            }
+            drop(wb);
+            let _ = render(&callback_document, &callback_workbench);
+        });
+        viewport.add_event_listener_with_callback("wheel", callback.as_ref().unchecked_ref())?;
+        callback.forget();
         Ok(())
     }
 
@@ -388,6 +501,9 @@ pub(crate) mod wasm {
                 return;
             }
             let mut wb = callback_workbench.borrow_mut();
+            if wb.pan_gesture.is_some() {
+                return;
+            }
             if wb.scenarios.is_active() {
                 return;
             }
@@ -582,6 +698,7 @@ pub(crate) mod wasm {
         let result = match action {
             "new" => empty_coordinator().map(|coordinator| {
                 wb.coordinator = coordinator;
+                wb.camera.reset();
                 wb.construction_preview = None;
                 wb.inference_preview = None;
             }),
@@ -617,6 +734,24 @@ pub(crate) mod wasm {
                 wb.problems_open = !wb.problems_open;
                 Ok(())
             }
+            "zoom-in" => {
+                wb.camera.zoom_about(
+                    geosolve_constraint_editor::ScreenPoint { x: 500.0, y: 350.0 },
+                    1.25,
+                );
+                Ok(())
+            }
+            "zoom-out" => {
+                wb.camera.zoom_about(
+                    geosolve_constraint_editor::ScreenPoint { x: 500.0, y: 350.0 },
+                    0.8,
+                );
+                Ok(())
+            }
+            "zoom-fit" => {
+                fit_camera(wb);
+                Ok(())
+            }
             _ => Ok(()),
         };
         wb.notice = result.map_or_else(
@@ -631,6 +766,7 @@ pub(crate) mod wasm {
     fn select_scenario(wb: &mut Workbench, key: &str) -> bool {
         match wb.scenarios.select_key(key) {
             Ok(()) => {
+                fit_camera(wb);
                 wb.notice = format!(
                     "{} loaded; this review state is ephemeral and ordinary save is disabled",
                     wb.scenarios.selected_title().unwrap_or("Scenario")
@@ -656,7 +792,10 @@ pub(crate) mod wasm {
             "reset" => {
                 wb.notice = wb.scenarios.reset().map_or_else(
                     |error| error,
-                    |()| "Selected scenario reset to its deterministic starting state".into(),
+                    |()| {
+                        fit_camera(wb);
+                        "Selected scenario reset to its deterministic starting state".into()
+                    },
                 );
                 false
             }
@@ -888,10 +1027,16 @@ pub(crate) mod wasm {
             coordinator.session().design_identity(),
             accepted.document(),
             coordinator.session().design_document(),
-            super::scene::viewport(),
+            wb.camera.viewport(),
             0.8,
         )
         .ok()
+    }
+
+    fn fit_camera(wb: &mut Workbench) {
+        if let Some(scene) = editor_scene(wb) {
+            wb.camera.fit_scene(&scene);
+        }
     }
 
     fn render(document: &Document, workbench: &Rc<RefCell<Workbench>>) -> Result<(), JsValue> {
@@ -918,6 +1063,7 @@ pub(crate) mod wasm {
             selection,
             construction_preview,
             coordinator.current_problem_metadata().as_ref(),
+            wb.camera.viewport(),
         ));
         let design = coordinator.session().design_document();
         required(document, "wb-tree")?
@@ -928,6 +1074,10 @@ pub(crate) mod wasm {
         state.set_attribute("data-state", key)?;
         state.set_text_content(Some(label));
         required(document, "wb-status-message")?.set_text_content(Some(&wb.notice));
+        required(document, "wb-camera-scale")?.set_text_content(Some(&format!(
+            "{:.1} px / unit",
+            wb.camera.pixels_per_model_unit
+        )));
         required(document, "wb-status-count")?.set_text_content(Some(&format!(
             "{} points / {} curves",
             design.points().len(),
@@ -1442,19 +1592,14 @@ pub(crate) mod wasm {
         model_viewport: geosolve_constraint_editor::Viewport,
         event: &PointerEvent,
     ) -> Option<PointerInput> {
-        let rect = viewport.get_bounding_client_rect();
         let pointer_id = u64::try_from(event.pointer_id()).ok()?;
         Some(PointerInput {
             pointer_id,
-            position: super::effect_adapter::normalize_client_point(
-                super::effect_adapter::ClientRect {
-                    left: rect.left(),
-                    top: rect.top(),
-                    width: rect.width(),
-                    height: rect.height(),
-                },
-                model_viewport.screen_size,
-                [f64::from(event.client_x()), f64::from(event.client_y())],
+            position: client_screen_point(
+                viewport,
+                model_viewport,
+                f64::from(event.client_x()),
+                f64::from(event.client_y()),
             )?,
             modifiers: Modifiers {
                 shift: event.shift_key(),
@@ -1462,6 +1607,25 @@ pub(crate) mod wasm {
                 command: event.meta_key(),
             },
         })
+    }
+
+    fn client_screen_point(
+        viewport: &Element,
+        model_viewport: geosolve_constraint_editor::Viewport,
+        client_x: f64,
+        client_y: f64,
+    ) -> Option<geosolve_constraint_editor::ScreenPoint> {
+        let rect = viewport.get_bounding_client_rect();
+        super::effect_adapter::normalize_client_point(
+            super::effect_adapter::ClientRect {
+                left: rect.left(),
+                top: rect.top(),
+                width: rect.width(),
+                height: rect.height(),
+            },
+            model_viewport.screen_size,
+            [client_x, client_y],
+        )
     }
 
     fn selection_item(target: &Element) -> Option<SelectionItem> {

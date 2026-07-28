@@ -1178,7 +1178,7 @@ impl ScenarioWorkbenchState {
     }
 
     pub(crate) fn ordinary_action_allowed(&self, action: &str) -> bool {
-        !self.is_active() || action == "problems"
+        !self.is_active() || matches!(action, "problems" | "zoom-in" | "zoom-out" | "zoom-fit")
     }
 
     pub(crate) fn persistence_snapshot(
