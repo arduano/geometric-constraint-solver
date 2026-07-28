@@ -1960,6 +1960,11 @@ pub enum DocumentSessionError {
     PreviewNotAccepted,
     #[error("point and position do not bitwise match the preview drag and accepted point")]
     PreviewPointMismatch,
+    #[error("stale prepared sketch patch: captured {expected:?}, current {actual:?}")]
+    StalePreparedPatch {
+        expected: Box<PreparedSketchInput>,
+        actual: Box<PreparedSketchInput>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -2000,6 +2005,291 @@ pub struct RetainedSketchDocumentSession {
     config: SolverConfig,
     parameter_batch: ParameterBatch,
     external_snapshots: ExternalSnapshotSet,
+}
+
+/// Exact immutable session input captured before host-scheduled solve work.
+///
+/// The attempt input records the current retained design, solve requests, solver
+/// policy, activation, parameter, and external-snapshot identities. The latest
+/// attempt and accepted/high-water identities close the lifecycle stamp so a
+/// candidate computed from an older session can never compare equal after any
+/// intervening attempt or accepted publication.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PreparedSketchInput {
+    input: SketchAttemptInput,
+    latest_attempt: SketchAttemptIdentity,
+    accepted: Option<SketchAcceptedStateIdentity>,
+    accepted_revision_high_water: Option<SketchAcceptedRevision>,
+}
+
+impl PreparedSketchInput {
+    #[must_use]
+    pub const fn attempt_input(self) -> SketchAttemptInput {
+        self.input
+    }
+
+    #[must_use]
+    pub const fn design_identity(self) -> SketchDesignIdentity {
+        self.input.design_identity()
+    }
+
+    #[must_use]
+    pub const fn latest_attempt_identity(self) -> SketchAttemptIdentity {
+        self.latest_attempt
+    }
+
+    #[must_use]
+    pub const fn accepted_state_identity(self) -> Option<SketchAcceptedStateIdentity> {
+        self.accepted
+    }
+
+    #[must_use]
+    pub const fn accepted_revision_high_water(self) -> Option<SketchAcceptedRevision> {
+        self.accepted_revision_high_water
+    }
+}
+
+/// One operation that may be solved away from the session owner.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum PreparedSketchOperation {
+    Apply(DocumentEdit),
+    Reattempt {
+        request: DocumentSolveRequest,
+    },
+    UpdateParameterBatch {
+        batch: ParameterBatch,
+        request: DocumentSolveRequest,
+    },
+    UpdateExternalSnapshotSet {
+        snapshots: ExternalSnapshotSet,
+        request: DocumentSolveRequest,
+    },
+}
+
+impl PreparedSketchOperation {
+    #[must_use]
+    pub const fn kind(&self) -> PreparedSketchOperationKind {
+        match self {
+            Self::Apply(_) => PreparedSketchOperationKind::Apply,
+            Self::Reattempt { .. } => PreparedSketchOperationKind::Reattempt,
+            Self::UpdateParameterBatch { .. } => PreparedSketchOperationKind::UpdateParameterBatch,
+            Self::UpdateExternalSnapshotSet { .. } => {
+                PreparedSketchOperationKind::UpdateExternalSnapshotSet
+            }
+        }
+    }
+}
+
+/// Stable characterization of a prepared sketch operation.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[non_exhaustive]
+pub enum PreparedSketchOperationKind {
+    Apply,
+    Reattempt,
+    UpdateParameterBatch,
+    UpdateExternalSnapshotSet,
+}
+
+/// Immutable accepted/design snapshot from which host-scheduled work is prepared.
+///
+/// Native hosts may clone then move this single-owner value to a worker.
+/// Session-bearing snapshots/jobs/patches are `Send` but deliberately not promised
+/// `Sync`: core solver caches use safe single-owner interior mutability. Immutable
+/// stamps and operation DTOs are `Send + Sync`. Single-threaded WASM hosts use the
+/// same synchronous [`Self::prepare`] and [`PreparedSketchJob::execute`] boundary
+/// without spawning a thread.
+#[derive(Clone, Debug)]
+pub struct PreparedSketchSnapshot {
+    input: PreparedSketchInput,
+    session: RetainedSketchDocumentSession,
+}
+
+impl PreparedSketchSnapshot {
+    #[must_use]
+    pub const fn input(&self) -> PreparedSketchInput {
+        self.input
+    }
+
+    #[must_use]
+    pub const fn design_document(&self) -> &SketchDocument {
+        self.session.design_document()
+    }
+
+    #[must_use]
+    pub const fn accepted_state(&self) -> Option<&SketchAcceptedDocumentState> {
+        self.session.accepted_state()
+    }
+
+    #[must_use]
+    pub fn prepare(self, operation: PreparedSketchOperation) -> PreparedSketchJob {
+        PreparedSketchJob {
+            snapshot: self,
+            operation,
+        }
+    }
+}
+
+/// One immutable-input job ready for host-managed execution.
+#[derive(Debug)]
+pub struct PreparedSketchJob {
+    snapshot: PreparedSketchSnapshot,
+    operation: PreparedSketchOperation,
+}
+
+impl PreparedSketchJob {
+    #[must_use]
+    pub const fn input(&self) -> PreparedSketchInput {
+        self.snapshot.input
+    }
+
+    #[must_use]
+    pub const fn operation(&self) -> &PreparedSketchOperation {
+        &self.operation
+    }
+
+    /// Executes entirely on the captured session clone.
+    ///
+    /// Completion returns a non-mutating candidate patch. Cancellation or work
+    /// exhaustion returns no patch and therefore cannot publish any lifecycle state.
+    ///
+    /// # Errors
+    ///
+    /// Returns the ordinary validation, revision, lowering, or solve-setup error for
+    /// the prepared operation. The live owning session is never touched.
+    pub fn execute(
+        self,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<PreparedSketchPatch>, DocumentSessionError> {
+        let Self {
+            snapshot,
+            operation,
+        } = self;
+        let base = snapshot.input;
+        let mut candidate = snapshot.session;
+        let kind = operation.kind();
+        let outcome = match operation {
+            PreparedSketchOperation::Apply(edit) => candidate
+                .apply_controlled(base.design_identity(), edit, control)?
+                .map(|outcome| {
+                    PreparedSketchCommit::new(
+                        kind,
+                        outcome.design_identity(),
+                        outcome.attempt_identity(),
+                        outcome.published_accepted_identity(),
+                    )
+                }),
+            PreparedSketchOperation::Reattempt { request } => candidate
+                .reattempt_controlled(base.design_identity(), request, control)?
+                .map(|attempt| {
+                    PreparedSketchCommit::new(
+                        kind,
+                        attempt.design_identity(),
+                        attempt.identity(),
+                        attempt.accepted_state_identity(),
+                    )
+                }),
+            PreparedSketchOperation::UpdateParameterBatch { batch, request } => candidate
+                .update_parameter_batch_controlled(base.design_identity(), batch, request, control)?
+                .map(|attempt| {
+                    PreparedSketchCommit::new(
+                        kind,
+                        attempt.design_identity(),
+                        attempt.identity(),
+                        attempt.accepted_state_identity(),
+                    )
+                }),
+            PreparedSketchOperation::UpdateExternalSnapshotSet { snapshots, request } => candidate
+                .update_external_snapshot_set_controlled(
+                    base.design_identity(),
+                    snapshots,
+                    request,
+                    control,
+                )?
+                .map(|attempt| {
+                    PreparedSketchCommit::new(
+                        kind,
+                        attempt.design_identity(),
+                        attempt.identity(),
+                        attempt.accepted_state_identity(),
+                    )
+                }),
+        };
+        Ok(outcome.map(|commit| PreparedSketchPatch {
+            base,
+            commit,
+            candidate,
+        }))
+    }
+}
+
+/// Non-mutating candidate session produced by one completed prepared job.
+///
+/// This value has no public candidate-session accessor. It can only be inspected
+/// through its stamps and consumed by
+/// [`RetainedSketchDocumentSession::commit_prepared_patch`].
+#[derive(Debug)]
+pub struct PreparedSketchPatch {
+    base: PreparedSketchInput,
+    commit: PreparedSketchCommit,
+    candidate: RetainedSketchDocumentSession,
+}
+
+impl PreparedSketchPatch {
+    #[must_use]
+    pub const fn base_input(&self) -> PreparedSketchInput {
+        self.base
+    }
+
+    #[must_use]
+    pub const fn proposed_commit(&self) -> PreparedSketchCommit {
+        self.commit
+    }
+}
+
+/// Identities published when one prepared patch wins compare-and-swap commit.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PreparedSketchCommit {
+    operation: PreparedSketchOperationKind,
+    design: SketchDesignIdentity,
+    attempt: SketchAttemptIdentity,
+    accepted: Option<SketchAcceptedStateIdentity>,
+}
+
+impl PreparedSketchCommit {
+    const fn new(
+        operation: PreparedSketchOperationKind,
+        design: SketchDesignIdentity,
+        attempt: SketchAttemptIdentity,
+        accepted: Option<SketchAcceptedStateIdentity>,
+    ) -> Self {
+        Self {
+            operation,
+            design,
+            attempt,
+            accepted,
+        }
+    }
+
+    #[must_use]
+    pub const fn operation(self) -> PreparedSketchOperationKind {
+        self.operation
+    }
+
+    #[must_use]
+    pub const fn design_identity(self) -> SketchDesignIdentity {
+        self.design
+    }
+
+    #[must_use]
+    pub const fn attempt_identity(self) -> SketchAttemptIdentity {
+        self.attempt
+    }
+
+    #[must_use]
+    pub const fn accepted_state_identity(self) -> Option<SketchAcceptedStateIdentity> {
+        self.accepted
+    }
 }
 
 impl SketchDocumentSession {
@@ -3289,6 +3579,46 @@ impl RetainedSketchDocumentSession {
         }
     }
 
+    /// Captures one immutable, exact-input snapshot for host-scheduled work.
+    ///
+    /// Creating a snapshot performs no solve work and changes no lifecycle identity.
+    #[must_use]
+    pub fn prepared_snapshot(&self) -> PreparedSketchSnapshot {
+        PreparedSketchSnapshot {
+            input: self.current_prepared_input(),
+            session: self.clone(),
+        }
+    }
+
+    /// Commits a completed prepared patch only when its complete captured input
+    /// still matches this owning session.
+    ///
+    /// This is the only prepared-work publication point. Hosts retain exclusive
+    /// ownership of the live session, execute [`PreparedSketchJob`] on native
+    /// workers or synchronously in single-threaded WASM, then bring the patch back
+    /// to this compare-and-swap boundary.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DocumentSessionError::StalePreparedPatch`] without mutation after
+    /// any intervening design, attempt, accepted, policy, parameter, activation, or
+    /// external-input change.
+    pub fn commit_prepared_patch(
+        &mut self,
+        patch: PreparedSketchPatch,
+    ) -> Result<PreparedSketchCommit, DocumentSessionError> {
+        let actual = self.current_prepared_input();
+        if actual != patch.base {
+            return Err(DocumentSessionError::StalePreparedPatch {
+                expected: Box::new(patch.base),
+                actual: Box::new(actual),
+            });
+        }
+        let commit = patch.commit;
+        *self = patch.candidate;
+        Ok(commit)
+    }
+
     /// Retains one valid typed edit even when its solve attempt rejects.
     ///
     /// `Ok` means the design transaction was retained. Check
@@ -3730,6 +4060,117 @@ impl RetainedSketchDocumentSession {
             self.accepted = Some(accepted);
         }
         Ok(&self.last_attempt)
+    }
+
+    /// Controlled counterpart to [`Self::update_parameter_batch`].
+    ///
+    /// Cancellation and work exhaustion leave the parameter batch, request, and
+    /// every lifecycle identity unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale design/batch revisions or lifecycle revision exhaustion.
+    pub fn update_parameter_batch_controlled(
+        &mut self,
+        expected: SketchDesignIdentity,
+        batch: ParameterBatch,
+        request: DocumentSolveRequest,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<SketchDocumentAttempt>, DocumentSessionError> {
+        let mut controller = OperationController::new(control);
+        if controller
+            .checkpoint(OperationCheckpoint::DocumentValidation)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        self.check_design_identity(expected)?;
+        if batch != self.parameter_batch && batch.revision() <= self.parameter_batch.revision() {
+            return Err(DocumentSessionError::StaleParameterRevision {
+                actual: batch.revision(),
+                retained: self.parameter_batch.revision(),
+            });
+        }
+        let attempt_identity = self.next_attempt_identity()?;
+        let parent = self
+            .accepted
+            .as_ref()
+            .map(SketchAcceptedDocumentState::identity);
+        let input = SketchAttemptInput::for_document_with_parameters(
+            &self.design,
+            self.design_identity,
+            request,
+            request,
+            self.config,
+            &batch,
+            &self.external_snapshots,
+        );
+        let seed = match seed_from_accepted_parent_controlled(
+            &self.design,
+            self.accepted.as_ref(),
+            &mut controller,
+        ) {
+            Ok(Some(seed)) => seed,
+            Ok(None) => return Ok(controller.outcome_unchecked()),
+            Err(error) => {
+                let execution = RetainedAttemptExecution::failure(
+                    SketchAttemptFailureKind::AcceptedSession,
+                    error.to_string(),
+                );
+                let (attempt, accepted) = publish_retained_attempt(
+                    &self.design,
+                    &input,
+                    attempt_identity,
+                    parent,
+                    next_accepted_revision(self.accepted_revision_high_water),
+                    execution,
+                );
+                if controller
+                    .checkpoint(OperationCheckpoint::BeforeCommit)
+                    .is_err()
+                {
+                    return Ok(controller.outcome_unchecked());
+                }
+                self.parameter_batch = batch;
+                self.request = request;
+                self.last_attempt = attempt.clone();
+                debug_assert!(accepted.is_none());
+                return Ok(controller.outcome(attempt));
+            }
+        };
+        let Some(execution) = run_retained_attempt_controlled(
+            &seed,
+            &batch,
+            &self.external_snapshots,
+            request,
+            None,
+            self.config,
+            &mut controller,
+        ) else {
+            return Ok(controller.outcome_unchecked());
+        };
+        let (attempt, accepted) = publish_retained_attempt(
+            &self.design,
+            &input,
+            attempt_identity,
+            parent,
+            next_accepted_revision(self.accepted_revision_high_water),
+            execution,
+        );
+        if controller
+            .checkpoint(OperationCheckpoint::BeforeCommit)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        self.parameter_batch = batch;
+        self.request = request;
+        self.last_attempt = attempt.clone();
+        if let Some(accepted) = accepted {
+            self.accepted_revision_high_water = Some(accepted.identity.revision);
+            self.accepted = Some(accepted);
+        }
+        Ok(controller.outcome(attempt))
     }
 
     /// Attempts retained design with a newer immutable external snapshot set.
@@ -4253,6 +4694,26 @@ impl RetainedSketchDocumentSession {
             attempt: attempt_identity,
             published_accepted,
         }))
+    }
+
+    fn current_prepared_input(&self) -> PreparedSketchInput {
+        PreparedSketchInput {
+            input: SketchAttemptInput::for_document_with_parameters(
+                &self.design,
+                self.design_identity,
+                self.request,
+                self.request,
+                self.config,
+                &self.parameter_batch,
+                &self.external_snapshots,
+            ),
+            latest_attempt: self.last_attempt.identity,
+            accepted: self
+                .accepted
+                .as_ref()
+                .map(SketchAcceptedDocumentState::identity),
+            accepted_revision_high_water: self.accepted_revision_high_water,
+        }
     }
 }
 

@@ -282,6 +282,23 @@ impl<T> OperationOutcome<T> {
             | Self::WorkExhausted { report } => report,
         }
     }
+
+    /// Maps only a completed value while preserving cancellation/work-exhaustion
+    /// evidence exactly.
+    #[must_use]
+    pub fn map<U, F>(self, map: F) -> OperationOutcome<U>
+    where
+        F: FnOnce(T) -> U,
+    {
+        match self {
+            Self::Completed { value, report } => OperationOutcome::Completed {
+                value: map(value),
+                report,
+            },
+            Self::Cancelled { report } => OperationOutcome::Cancelled { report },
+            Self::WorkExhausted { report } => OperationOutcome::WorkExhausted { report },
+        }
+    }
 }
 
 /// Read-only monotonic cancellation state passed to an operation.
@@ -605,6 +622,29 @@ mod tests {
             controller.outcome(()),
             OperationOutcome::Cancelled { .. }
         ));
+    }
+
+    #[test]
+    fn outcome_mapping_changes_only_completed_values() {
+        let completed = OperationController::new(OperationControl::unlimited())
+            .outcome(2_u32)
+            .map(|value| value + 3);
+        assert!(matches!(
+            completed,
+            OperationOutcome::Completed { value: 5, .. }
+        ));
+
+        let (handle, token) = cancellation_pair();
+        handle.cancel();
+        let mut controller =
+            OperationController::new(OperationControl::new(token, OperationLimits::unlimited()));
+        controller
+            .checkpoint(OperationCheckpoint::DocumentValidation)
+            .unwrap_err();
+        let cancelled = controller
+            .outcome_unchecked::<u32>()
+            .map(|_| panic!("cancelled outcome must not invoke the completed-value mapper"));
+        assert!(matches!(cancelled, OperationOutcome::Cancelled { .. }));
     }
 
     #[test]

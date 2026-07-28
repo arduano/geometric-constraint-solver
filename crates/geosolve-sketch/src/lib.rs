@@ -136,11 +136,13 @@ pub use document_session::{
     ExternalSnapshotSet, ExternalSnapshotSetDigest, ExternalSnapshotSetV1,
     MAX_EXTERNAL_SNAPSHOT_CONTROLS, MAX_EXTERNAL_SNAPSHOT_ENTRIES, MAX_EXTERNAL_SNAPSHOT_POINTS,
     MAX_EXTERNAL_SNAPSHOT_SPANS, MAX_PARAMETER_BATCH_ENTRIES, ParameterBatch, ParameterBatchEntry,
-    ParameterDigest, ParameterValue, RetainedDocumentTransactionOutcome,
-    RetainedSketchDocumentSession, SketchAcceptedDocumentRedundancy, SketchAcceptedDocumentState,
-    SketchAcceptedRevision, SketchAcceptedStateIdentity, SketchAttemptFailure,
-    SketchAttemptFailureKind, SketchAttemptIdentity, SketchAttemptInput, SketchAttemptRevision,
-    SketchDesignIdentity, SketchDesignRevision, SketchDocumentAttempt, SketchDocumentSession,
+    ParameterDigest, ParameterValue, PreparedSketchCommit, PreparedSketchInput, PreparedSketchJob,
+    PreparedSketchOperation, PreparedSketchOperationKind, PreparedSketchPatch,
+    PreparedSketchSnapshot, RetainedDocumentTransactionOutcome, RetainedSketchDocumentSession,
+    SketchAcceptedDocumentRedundancy, SketchAcceptedDocumentState, SketchAcceptedRevision,
+    SketchAcceptedStateIdentity, SketchAttemptFailure, SketchAttemptFailureKind,
+    SketchAttemptIdentity, SketchAttemptInput, SketchAttemptRevision, SketchDesignIdentity,
+    SketchDesignRevision, SketchDocumentAttempt, SketchDocumentSession,
     SketchLifecycleRevisionHighWater,
 };
 pub use geosolve_core::{

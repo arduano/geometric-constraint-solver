@@ -1259,8 +1259,8 @@ instruction or a supported persistence format.
 
 M33-M44 add the current production-embedding fixtures without replacing the frozen
 scenarios above. Cleanup M46-M53 preserves their durable behavior through direct tests and
-approved post-cleanup UAT. M54-M55 complete stable diagnostics and early alpha action parity;
-M56-M64 own the remaining executable concurrency/scale/operations/release scope. Every
+approved post-cleanup UAT. M54-M56 complete stable diagnostics, early alpha action parity and
+prepared concurrency; M57-M64 own the remaining executable scale/operations/release scope. Every
 new fixture must name its exact design, parameter, external-snapshot, activation and
 accepted-state revisions. The workbench remains a desktop-only public-API consumer; no
 mobile scenario is required.
@@ -1447,6 +1447,31 @@ accepted scene. **Undo rejected contact** performs bounded history recovery unti
 metadata clears. Direct editor tests additionally prove accepted same-curve semantic-span
 End-to-Start migration, bounded-to-supporting-line domain replacement, parameter scalar identity,
 periodic winding edits and oriented-angle direction changes.
+
+### M56-C1 - Prepared worker ordering and cancellation
+
+The direct M56 corpus uses the accepted A2 document as one immutable worker input. The prepared
+stamp contains the retained design identity, latest attempt, accepted state and accepted revision
+high-water plus solve request/policy, effective activation, parameter and external-snapshot
+revision/digest identities.
+
+Three deterministic schedules qualify the host boundary:
+
+1. move one prepared point edit to a native worker, finish it against scratch state, verify the
+   owning session is bitwise/lifecycle unchanged, then publish its patch through exact-input
+   compare-and-swap;
+2. execute two different edits prepared from the same base, commit the first, then prove the
+   out-of-order second patch returns `StalePreparedPatch` without changing the winner; and
+3. cancel a prepared parameter-batch job before its first controlled boundary and prove it yields
+   no patch, consumes no parameter/lifecycle revision and cannot enter the commit API.
+
+A fourth input-stamp case adds a non-default unreferenced external point declaration/snapshot and
+advances both parameter and external revisions through prepared jobs. It proves every stamp domain
+changes explicitly and a same-design reattempt still invalidates older work through its latest
+attempt identity. Native jobs/patches move as single-owner `Send` values. Immutable stamp,
+operation and commit DTOs are `Send + Sync`; session-bearing values are intentionally not promised
+`Sync` because core caches use safe single-owner interior mutability. The all-feature WASM build
+uses the same prepare/execute/commit API synchronously and adds no browser scheduling semantics.
 
 ### UAT-C3 - Advanced geometry and topology at M61
 

@@ -15,7 +15,8 @@ retained assertion with direct owning-layer tests and removed the separately rou
 application and browser E2E stack. M51 hardened the one surviving workbench; M52 completed the
 direct-qualified post-cleanup host-semantics candidate, M53 received supervising-human approval,
 M54 completed stable sketch-owned diagnostics, M55 completed the preserved alpha
-constraint/dimension/branch-action surface, and M56 is now active. The workbench is a
+constraint/dimension/branch-action surface, M56 completed prepared jobs and exact-input
+compare-and-swap publication, and M57 is now active. The workbench is a
 non-authoritative demo consumer, not a production UI or third solver. Mobile support and
 physics remain outside future acceptance.
 
@@ -67,8 +68,10 @@ objective state claims remain backed by M52 tests and the final direct-qualified
 then completed persistent-ID diagnostic DTOs, separated rank/mobility evidence and isolated raw
 core reports behind explicitly unstable seams. M55 then completed the closed 13-relation and
 five-dimension alpha action matrix, persistent contact/angle branch editing, typed disabled
-reasons, direct native/WASM presentation qualification and two reusable scenario leaves. The
-active milestone is **M56: prepared jobs and concurrency contract**. Old Chromium/CDP, HTTP
+reasons, direct native/WASM presentation qualification and two reusable scenario leaves. M56 then
+added complete-input snapshots, typed scratch jobs, non-mutating patches and safe host-owned
+native/WASM scheduling. The active milestone is **M57: incremental solving and production
+scale**. Old Chromium/CDP, HTTP
 serving, DOM-scraping, screenshot, wall-clock browser-timing and source-substring-scan gates remain
 retired.
 
@@ -113,6 +116,7 @@ Durable cleanup records:
 - `docs/M52_IMPLEMENTATION.md`
 - `docs/M54_IMPLEMENTATION.md`
 - `docs/M55_IMPLEMENTATION.md`
+- `docs/M56_IMPLEMENTATION.md`
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

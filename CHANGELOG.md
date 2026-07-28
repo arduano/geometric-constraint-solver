@@ -30,6 +30,11 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   oriented-angle branch changes with deterministic replay.
 - Two reusable M55 scenario leaves for the accepted alpha family catalog and explicit
   branch/rejection recovery, under the existing recursive right-expanding scenario selector.
+- Immutable complete-input sketch snapshots, typed prepared edit/reattempt/parameter/external
+  jobs, non-mutating candidate patches and exact compare-and-swap publication.
+- Safe host-managed concurrency metadata: single-owner session-bearing jobs/patches are `Send`,
+  immutable prepared DTOs are `Send + Sync`, and single-threaded WASM uses the same synchronous
+  prepare/execute/commit boundary.
 
 ### Changed
 
@@ -71,6 +76,9 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - Completed M55 action-surface parity in the sole workbench. Applicability and disabled reasons
   remain headless; glyphs, dimensions and branch controls render typed domain/editor metadata;
   the deleted playground, `/#/dev/lab`, browser E2E and legacy harnesses remain absent.
+- Completed M56 prepared concurrency without changing equations or accepted-state validation.
+  Stale, out-of-order, cancelled and work-exhausted worker results cannot publish over newer
+  session state; no `unsafe`, solver mutex, internal scheduler or schema change was added.
 
 ## [0.2.0] - 2026-07-22
 

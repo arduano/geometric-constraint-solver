@@ -2023,8 +2023,8 @@ M45; the M46 follow-up cleared it without changing behavior.
 M46-M53 are the completed cleanup and host-semantics UAT sequence. After M53 approval, the future
 sequence was finalized from M54 onward. A subsequent supervising-user decision inserted the
 constraint/dimension/branch-action parity gate at M55, shifting the preserved later sequence by one
-number through M64 without changing its dependency order or scope. M54 and M55 are now complete;
-M56 is the next executable milestone.
+number through M64 without changing its dependency order or scope. M54-M56 are now complete;
+M57 is the next executable milestone.
 
 ## Pre-cleanup phase
 
@@ -2370,15 +2370,41 @@ limitations. No residual equation, schema version, legacy route/harness or mobil
 
 ### M56: prepared jobs and concurrency contract
 
-Status: active.
+Status: complete as of 2026-07-29.
 
 Scope: immutable accepted snapshots, exact-revision prepared jobs, non-mutating candidate
 patches, compare-and-swap commit, host-managed scheduling and safe Rust `Send`/`Sync`
 contracts for native and single-threaded WASM consumers.
 
+- [x] Capture the exact retained design, latest attempt, accepted/high-water state, solve policy,
+  activation, parameter and external-snapshot identities in one immutable prepared snapshot.
+- [x] Execute typed design edits, reattempts, parameter batches and external snapshot replacements
+  against scratch session state and return only a non-mutating candidate patch.
+- [x] Publish a completed patch only through exact-input compare-and-swap; stale, out-of-order,
+  cancelled and work-exhausted jobs cannot mutate the owning session.
+- [x] Document and directly qualify the safe ownership contract: session-bearing snapshots/jobs/
+  patches move as `Send` single-owner values, immutable DTOs are `Send + Sync`, native hosts may
+  use workers, and single-threaded WASM uses the same synchronous boundary without `unsafe`.
+
+Completion notes (2026-07-29): `RetainedSketchDocumentSession::prepared_snapshot` now captures a
+complete `PreparedSketchInput` stamp and returns a read-only snapshot. `PreparedSketchOperation`
+covers ordinary typed edits, reattempts, parameter-batch changes and external-snapshot changes.
+`PreparedSketchJob::execute` performs controlled work only on its captured clone and yields no
+patch on cancellation or work exhaustion. `commit_prepared_patch` compares the complete captured
+stamp against the live owner before one atomic session replacement; stale patches return a typed
+`StalePreparedPatch` error without mutation.
+
+The native regression moves a prepared job through `std::thread::spawn`, proves the live session
+unchanged before commit and verifies exact CAS publication. Separate regressions cover out-of-order
+stale rejection, pre-cancelled parameter work, complete lifecycle/activation/parameter/external
+stamps and same API behavior under the all-feature WASM build. Solver caches remain safe
+single-owner interior state: session-bearing values are `Send`, not promised `Sync`; immutable
+input/operation/commit DTOs are `Send + Sync`. Full workspace tests, warnings-denied Clippy,
+all-feature WASM and release Trunk pass. `docs/M56_IMPLEMENTATION.md` records the exact gate.
+
 ### M57: incremental solving and production scale
 
-Status: planned; begins after M56 passes.
+Status: active.
 
 Scope: persistent runtime mappings, dependency-closure rebuilds, indexed/history storage,
 profile caches, workload envelopes, sparse-rank evaluation and full fresh validation on

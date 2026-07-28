@@ -153,8 +153,8 @@ Baseline candidate vectors do not yet carry M8 completeness metadata. Until the 
 M8 is ready for review only when every item below is objectively present. These checkboxes are acceptance criteria and do not mark `PLAN.md` complete.
 
 The checked wording below is the preserved M8 completion record. Its then-current M8-M22
-allocations are historical; `PLAN.md` now governs completed work through M55 and the executable
-M56-M64 sequence.
+allocations are historical; `PLAN.md` now governs completed work through M56 and the executable
+M57-M64 sequence.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -982,9 +982,22 @@ No browser equation, branch heuristic, browser E2E or human-approval claim is pa
 
 ### M56: prepared jobs and concurrency
 
+Status: complete (2026-07-29); direct evidence is recorded in
+`docs/M56_IMPLEMENTATION.md`.
+
 - Prepared jobs capture every relevant input revision and cannot mutate a session until compare-and-swap commit.
 - Stale or cancelled work cannot overwrite a newer accepted state.
 - The documented safe Rust ownership contract works for host-managed native workers and single-threaded WASM without `unsafe` code.
+
+Completion record (2026-07-29): one immutable prepared stamp captures retained design, latest
+attempt, accepted/high-water state, solve requests/policy, effective activation, parameter batch
+and external snapshot identities. Typed edit, reattempt, parameter and external-input jobs execute
+only on a captured session clone. Cancellation/work exhaustion returns no patch; completed patches
+publish only through exact-stamp compare-and-swap. A moved native worker job, two out-of-order
+patches, cancelled parameter work and non-default parameter/external revisions are directly
+qualified. Session-bearing values are safely `Send` single-owner values; immutable metadata is
+`Send + Sync`; all-feature WASM consumes the same API synchronously. No `unsafe`, lock-based solver
+sharing, equation change or schema change was added.
 
 ### M57: incremental solving and scale
 
