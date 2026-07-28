@@ -48,4 +48,4 @@ do
 done
 
 nix-shell "$root/shell.nix" --run \
-  "cd '$root/crates/geosolve-demo-web' && trunk build --release"
+  "cd '$root/crates/geosolve-demo-web' && env -u NO_COLOR trunk build --release"
