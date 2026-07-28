@@ -42,11 +42,17 @@ replace or defer another finding, roadmap item or open question.
 | Session | Candidate identity | Human access | Browser/OS | State |
 | --- | --- | --- | --- | --- |
 | M53-S1 | `feat/m53-host-semantics-uat` at base `9002565`, qualified M38-M52 working tree; recorded release distribution manifest SHA-256 `ea878d3b4dceff61a46c68734dc00f627a089e77a9cd02720ce92017b9235af2` | retired temporary endpoint; no longer valid | no human review started | superseded before review: recovery audit found the live watcher had rebuilt `dist` to manifest `868d45822086714cd457bb2e9912d4b57f3aeb44dcc58663e363c365a7195d88`, so the served bytes no longer matched the recorded identity |
+| M53-S2 | clean build-source commit `66fd90d62d06a810e465185e24fff40ebbea5ef2`; release distribution manifest SHA-256 `65f74cd18ed59e443848c65da1efd5e89150b7b95742eff629fa9bc9d8c8a751` | temporary non-watching static endpoint `http://100.94.63.83:8080/` over Tailscale | pending supervising-human entry | ready for human review; no ratings or approval recorded |
 
 S1 used the SHA-256 output of `sha256sum dist/* | sha256sum`, but its watched distribution
 changed after recording. Any candidate rebuild must receive a new session row and digest.
 Temporary human delivery is permitted for M53 observation; the removed browser E2E/server scripts,
 automated DOM qualification and old fixture routes remain prohibited.
+
+S2 was produced by the clean release gate, then served from the completed `dist` directory without
+a rebuild watcher. Direct HTTP retrieval of all seven files matched the local SHA-256 values,
+including `index.html`, JavaScript, CSS and the WASM binary. The ledger-only handoff commit after
+`66fd90d` does not change the recorded build input or distribution.
 
 ### Findings and change-request ledger
 
@@ -55,13 +61,13 @@ automated DOM qualification and old fixture routes remain prohibited.
 | M53-P001 | M53-S1, before setup observation | Preserve every UAT UI request and all other development concerns/questions/plans durably so one request cannot shadow another. | review process | complete: added this ledger, candidate versioning, classification, continuity and retest rules before product review | `git diff --check`, format check and independent read-only documentation review passed 2026-07-28 | not a product rating |
 | M53-P002 | M53-S1, before setup observation | The active scorecard name `M45_UAT` is misleading; consolidate it under M53, align the local branch name and verify Git hygiene without losing accumulated work. | review process | complete: renamed the scorecard to `docs/M53_UAT.md`, consolidated historical M45 context there, updated repository references and renamed the no-upstream local branch to `feat/m53-host-semantics-uat` | tracked/untracked whitespace checks, format check and independent read-only consolidation/Git review passed 2026-07-28 | not a product rating |
 | M53-P003 | M53-S1, before setup observation | Plan coherent split commits for the accumulated qualified M38-M52 working tree before deciding whether to stage or commit it. | review process | superseded by M53-P006: the path coverage was complete, but the proposed dependency order omitted two documentation files compiled directly by tests/editor code; the interrupted checkpoint also left its first slice staged | independent recovery audit reproduced the first-slice failure at `geosolve-sketch/tests/m33.rs` | not a product rating |
-| M53-P004 | Recovery request after M53-S1 was prepared, before human setup observation | Reconcile all surviving work into the main worktree, eliminate dangling untracked or misleading/outdated content, create clean commits, remove child-worktree dependence and finish with a trustworthy UAT-ready candidate. | review process | in progress: commits `a5542da`, `ba711c3` and `5087c41` contain all recovered work; all duplicate/stale worktrees and recovery artifacts are removed and the main worktree is clean | pending full clean release qualification and M53-S2 publication | human review has not started |
-| M53-P005 | M53-S1 delivery verification, before human setup observation | The recorded release manifest must identify the bytes actually served for UAT. | review process | in progress: M53-S1 is superseded without ratings because the live `trunk serve --release` watcher rebuilt `dist`; stop the stale watcher after recovery, create a clean release build and record a new candidate session/digest before UAT | local and served HTML/WASM bytes matched each other, but `sha256sum dist/* \| sha256sum` produced `868d45822086714cd457bb2e9912d4b57f3aeb44dcc58663e363c365a7195d88`, not the recorded S1 digest | human review has not started |
+| M53-P004 | Recovery request after M53-S1 was prepared, before human setup observation | Reconcile all surviving work into the main worktree, eliminate dangling untracked or misleading/outdated content, create clean commits, remove child-worktree dependence and finish with a trustworthy UAT-ready candidate. | review process | complete: commits `a5542da`, `ba711c3`, `5087c41` and `66fd90d` contain all recovered work; the sole registered worktree is the clean main worktree, with no stash or untracked files; duplicate/stale worktrees and generated recovery artifacts were removed only after proving they contained no unique source | `nix-shell shell.nix --run './scripts/release-gate.sh'` passed from clean build-source commit `66fd90d`; M53-S2 records and serves the resulting frozen distribution | human review has not started |
+| M53-P005 | M53-S1 delivery verification, before human setup observation | The recorded release manifest must identify the bytes actually served for UAT. | review process | complete: superseded M53-S1 without ratings, stopped its stale live-rebuild watcher, built clean M53-S2 and served only the completed distribution through a non-watching static server | all seven HTTP responses matched their local SHA-256 values; `sha256sum dist/* \| sha256sum` remained `65f74cd18ed59e443848c65da1efd5e89150b7b95742eff629fa9bc9d8c8a751` before and after delivery verification | human review has not started |
 | M53-P006 | Interrupted commit consolidation, before human setup observation | Make each checkpoint commit independently buildable and keep compiled documentation inputs with their owning code/tests. | review process | complete: domain commit `a5542da` contains the M33 matrix; editor/workbench commit `ba711c3` contains the embedded M40 JSON; remaining durable records form the documentation checkpoint | exact staged domain tree passed core/sketch/linkage all-feature tests; exact staged editor tree passed editor 58/58, demo-web 24/24, all-feature WASM check and release Trunk build | not a product rating |
 | M53-P007 | Recovery content audit, before human setup observation | Durable records and embedded qualification artifacts must distinguish historical M40-M52 evidence from current M53 procedure, remove references to the absent temporary handoff and stop advertising retired browser/E2E infrastructure or old milestones as active work. | review process | complete: retained every uniquely owned/compiled record, compacted the old M40 UAT into approved historical evidence, marked planning/browser material historical, removed ephemeral addresses and replaced every absent/brittle handoff reference with a durable section owner | repository reference scan and `git diff --check` pass; full release qualification remains a parent gate rather than a content-audit blocker | not a product rating |
-| M53-P008 | Recovery release-gate audit, before human setup observation | The compatibility contract names five publishable lockstep crates, but the package-content loop checks only four and its prose also says four. | objective defect | complete in `ba711c3`: `geosolve-constraint-editor` is the fifth package-content target and the compatibility prose now says five; publication remains a maintainer action | `cargo package --locked --allow-dirty --list` confirmed `LICENSE` and `README.md` for all five crates; full clean release gate remains pending | not a product rating |
+| M53-P008 | Recovery release-gate audit, before human setup observation | The compatibility contract names five publishable lockstep crates, but the package-content loop checks only four and its prose also says four. | objective defect | complete in `ba711c3`: `geosolve-constraint-editor` is the fifth package-content target and the compatibility prose now says five; publication remains a maintainer action | the clean release gate ran `cargo package --locked --allow-dirty --list` and confirmed `LICENSE` and `README.md` for all five crates | not a product rating |
 | M53-P009 | Recovery capability-contract audit, before human setup observation | The machine-read M33 capability matrix still labels completed M38 dimensions and path-length behavior as planned/current gaps. | objective defect | complete in `a5542da`: M38 catalog rows use `implemented_m38`; frozen legacy `EqualLength`/`CurveLength` rows point to the separate M38 path APIs instead of claiming M38 still waits | exact staged domain tree passed M33 2/2, M38 11/11 and the complete core/sketch/linkage all-feature suites | not a product rating |
-| M53-P010 | Exact staged editor release build, before human setup observation | The supported Trunk 0.21 build must not reject the conventional inherited `NO_COLOR=1` environment value before compiling the candidate. | objective defect | in progress: constrain the release-gate Trunk subprocess to an unset `NO_COLOR`; this changes no product bytes or solver/editor behavior | isolated editor 58/58, demo-web 24/24 and WASM check passed; first Trunk call rejected only `NO_COLOR=1`, and the same exact tree built after unsetting it | not a product rating |
+| M53-P010 | Exact staged editor release build, before human setup observation | The supported Trunk 0.21 build must not reject the conventional inherited `NO_COLOR=1` environment value before compiling the candidate. | objective defect | complete in `66fd90d`: the release gate unsets `NO_COLOR` only for its Trunk subprocess; this changes no product bytes or solver/editor behavior | the complete clean release gate passed, including editor 58/58, demo-web 24/24, all-feature WASM check and Trunk 0.21.14 release build | not a product rating |
 
 ### Preserved development continuity
 
@@ -69,15 +75,14 @@ automated DOM qualification and old fixture routes remain prohibited.
 | --- | --- | --- |
 | M53 ratings, findings and explicit approval | this scorecard and `PLAN.md` M53 | active; no rating or approval recorded |
 | Later diagnostics, concurrency, scale, operations/topology, advanced workbench/UAT and release work | `PLAN.md` M100X-M109X | preserved placeholders; M53 feedback must not silently consume or reorder them |
-| Recovered M38-M52 implementation and evidence on `feat/m53-host-semantics-uat` | Git commits plus completed milestone records | supervising caller authorized dependency-safe commits; recovery must finish with all unique work in the main worktree and no untracked files |
+| Recovered M38-M52 implementation and evidence on `feat/m53-host-semantics-uat` | Git commits plus completed milestone records | complete in four dependency-safe commits through `66fd90d`; all unique work is in the sole main worktree and no untracked files remain |
 | Cargo duplicate `license`/`license-file` metadata warnings seen during release build | existing package metadata | known nonblocking concern; warnings-denied Clippy and M52 gates pass, and M53 does not broaden into metadata cleanup |
 
-Recovery Git snapshot (2026-07-28): the branch has no upstream or configured remote, no stash,
-unmerged entry, hidden commit or unique child-worktree file exists, and the main worktree contains
-all latest work. The interrupted agent left a 23-path domain slice staged and an exact duplicate
-in a detached verification worktree. The supervising caller has now authorized reviewed,
-dependency-safe commits and removal of those duplicate/stale worktrees; discarding unique work
-remains prohibited.
+Recovery Git result (2026-07-28): the branch has no upstream or configured remote, no stash,
+unmerged entry, hidden commit, child-worktree registration or untracked file, and the main worktree
+contains all latest work. The interrupted agent's 23-path staged domain slice and exact detached
+verification-worktree duplicate were reconciled into the dependency-safe commits above before the
+duplicate/stale worktrees and generated recovery artifacts were removed.
 
 No other engineering blocker or unresolved M52 objective question is known at M53 entry. Add newly
 discovered non-UAT work to this table and its roadmap owner before starting another requested change.
@@ -229,7 +234,7 @@ direct assertions.
 
 | Review context | Value |
 | --- | --- |
-| Candidate build/revision | pending reconciled M53-S2 clean build and distribution manifest |
+| Candidate build/revision | M53-S2: clean build-source commit `66fd90d62d06a810e465185e24fff40ebbea5ef2`; distribution manifest `65f74cd18ed59e443848c65da1efd5e89150b7b95742eff629fa9bc9d8c8a751`; `http://100.94.63.83:8080/` |
 | Desktop browser/OS | pending supervising-human entry |
 | Elapsed time | pending supervising-human entry |
 | Supervising human/date | pending supervising-human entry |
