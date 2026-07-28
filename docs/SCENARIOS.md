@@ -1476,7 +1476,7 @@ uses the same prepare/execute/commit API synchronously and adds no browser sched
 
 ### M57-C1 - Dependency-local retained scale
 
-The direct M57 corpus builds two disconnected constrained rectangles and performs four exact-input
+The direct M57 corpus builds two disconnected constrained rectangles and performs five exact-input
 updates against the retained document lifecycle:
 
 1. a local point edit dirties its persistent dependent-source closure, retains runtime identity,

@@ -1018,9 +1018,9 @@ projection and rank validation before publication. Persistent runtime joins are 
 profile results are cached only inside one accepted revision, and execution/rank-envelope evidence
 is sketch-owned. Sparse hard steps remain supported, while numerical rank is honestly dense-SVD
 authoritative only for connected components at or below 256 active rows and tangent coordinates.
-Nine direct regressions cover fresh parity, two- and sixteen-component locality, parameter,
-external reference, activation, topology fallback, profile invalidation, storage bounds and
-work-exhaustion rollback.
+Ten direct regressions cover fresh parity, two- and sixteen-component locality, parameter,
+external reference, activation, topology and changed-incidence fallback, profile invalidation,
+storage bounds and work-exhaustion rollback.
 
 ### M58: sketch operations companion
 
