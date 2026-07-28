@@ -1259,9 +1259,9 @@ instruction or a supported persistence format.
 
 M33-M44 add the current production-embedding fixtures without replacing the frozen
 scenarios above. Cleanup M46-M53 preserves their durable behavior through direct tests and
-approved post-cleanup UAT. M54-M57 complete stable diagnostics, early alpha action parity,
-prepared concurrency and incremental scale; M58-M64 own the remaining executable
-operations/release scope. Every
+approved post-cleanup UAT. M54-M58 complete stable diagnostics, early alpha action parity,
+prepared concurrency, incremental scale and the equation-free operations companion; M59-M64 own
+the remaining production-topology/release scope. Every
 new fixture must name its exact design, parameter, external-snapshot, activation and
 accepted-state revisions. The workbench remains a desktop-only public-API consumer; no
 mobile scenario is required.
@@ -1500,6 +1500,33 @@ certification, and supported connected components have at most 256 active rows a
 coordinates. A revision-local visual-profile cache returns identical bounded analysis for repeated
 options and starts empty after the next accepted state. Deterministic component-work exhaustion
 publishes no parameter, lifecycle, geometry or cache state.
+
+### M58-C1 - Deterministic sketch operations and visible topology
+
+The direct M58 corpus starts from immutable complete input stamps and exercises the closed
+operations request surface without a browser or operation-owned equation:
+
+1. split one line support at an exact parameter, break a subinterval and trim one side while
+   retaining the immutable curve definition and publishing ordered visible intervals;
+2. extend a selected line endpoint to a non-parallel accepted line and retain the source curve
+   identity; an intersection on the wrong side returns typed incomplete evidence;
+3. mirror and linearly pattern exact point-defined families into ordinary public geometry, while
+   a circle mirror returns typed unsupported rather than a sampled approximation;
+4. chamfer two line spans sharing one persistent endpoint using ordinary point-on-curve contacts,
+   driving point-distance dimensions and contact-owned trim boundaries; deleting one owner freezes
+   its boundary at the accepted parameter before removing owned contact state;
+5. wrap the existing generic fillet transaction and expand rectangle, regular polygon and slot
+   macros without a private residual or solver path; and
+6. reject stale application, pre-cancelled/exhausted work, accepted geometry from an older design,
+   non-finite values, excessive polygon/pattern counts and malformed visible intervals without
+   changing retained lifecycle or accepted geometry.
+
+Two preparations from the same stamped input and request publish the same identity disposition.
+An exact shared split boundary closes the original rectangle profile by semantic parameter bits,
+not coordinate proximity. Canonical v4 export/import rejects multi-interval and ordinary
+constraint-contact topology, while the hidden draft-v5 bridge round-trips it pending M62. The
+companion depends directly only on `geosolve-sketch` and `geosolve-geometry`; it has no direct
+core, linkage, production-topology or UI dependency.
 
 ### UAT-C3 - Advanced geometry and topology at M61
 

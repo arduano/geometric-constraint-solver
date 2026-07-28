@@ -39,6 +39,14 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   accepted profile caches and stable incremental/full-rebuild execution evidence.
 - An honest sketch production-scale assessment: sparse hard steps remain supported while
   numerical rank is dense-SVD authoritative within the 256-row/256-tangent component envelope.
+- The separate `geosolve-sketch-ops` companion with complete-stamp prepared operation jobs,
+  deterministic identity mappings, typed unsupported/incomplete outcomes and exact-CAS
+  application through ordinary retained sketch transactions.
+- Equation-free split/break/trim, line extension, exact supported-family mirror, line chamfer,
+  public associative-fillet integration, rectangle, regular-polygon, slot and bounded
+  linear-pattern expansions.
+- Ordered non-overlapping multi-interval visibility over immutable curve supports, including
+  exact fixed/contact boundary identity and ordinary point-on-curve-owned trim boundaries.
 
 ### Changed
 
@@ -87,6 +95,10 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   activation and geometry attempts retain runtime/core identities and clean-component caches;
   source-shape/topology changes use an explicit full rebuild, and all paths still perform fresh
   hard-row, derivative, domain/branch, projection and rank validation before publication.
+- Completed M58 without adding residuals, solver/session ownership or a private commit path.
+  Unsupported exact transforms are never sampled into approximations; stale, cancelled,
+  exhausted and foreign-input proposals cannot mutate the live session. Canonical sketch v4
+  remains frozen and rejects M58-only topology until the planned M62 schema freeze.
 
 ## [0.2.0] - 2026-07-22
 

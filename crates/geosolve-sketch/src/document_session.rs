@@ -3624,6 +3624,12 @@ impl RetainedSketchDocumentSession {
         }
     }
 
+    /// Returns the current complete prepared-work stamp without cloning session state.
+    #[must_use]
+    pub fn prepared_input(&self) -> PreparedSketchInput {
+        self.current_prepared_input()
+    }
+
     /// Commits a completed prepared patch only when its complete captured input
     /// still matches this owning session.
     ///

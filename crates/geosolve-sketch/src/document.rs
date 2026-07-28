@@ -164,6 +164,8 @@ pub enum DocumentError {
     UnsupportedM42State,
     #[error("supported sketch-v4 encoding cannot represent non-default M43 state")]
     UnsupportedM43State,
+    #[error("supported sketch-v4 encoding cannot represent M58 operation trim topology")]
+    UnsupportedM58State,
     #[error("activation revision {actual} is not newer than retained revision {retained}")]
     StaleActivationRevision { actual: u64, retained: u64 },
     #[error("activation input contains duplicate element {0:?}")]
@@ -545,6 +547,12 @@ pub struct DocumentTrimParameter {
 pub enum DocumentTrimBoundary {
     Fixed(DocumentTrimParameter),
     FilletContact {
+        owner: DocumentConstraintId,
+        contact: ContactId,
+    },
+    /// Boundary owned by an ordinary point-on-curve constraint emitted by a
+    /// public equation-free construction transaction.
+    ConstraintContact {
         owner: DocumentConstraintId,
         contact: ContactId,
     },
@@ -2582,10 +2590,28 @@ impl SketchDocument {
         &self.trim_views
     }
 
-    /// Returns the persistent trim view for one immutable support span.
+    /// Returns the sole persistent trim view for one immutable support span.
+    ///
+    /// Multi-interval supports deliberately return `None`; callers that support
+    /// general operation topology use [`Self::trim_views_for_span`].
     #[must_use]
     pub fn trim_view(&self, support: CurveSpan) -> Option<&DocumentCurveTrimView> {
-        self.trim_views.iter().find(|view| view.support == support)
+        let mut views = self
+            .trim_views
+            .iter()
+            .filter(|view| view.support == support);
+        let view = views.next()?;
+        views.next().is_none().then_some(view)
+    }
+
+    /// Returns every persistent visible interval for one immutable support.
+    pub fn trim_views_for_span(
+        &self,
+        support: CurveSpan,
+    ) -> impl Iterator<Item = &DocumentCurveTrimView> {
+        self.trim_views
+            .iter()
+            .filter(move |view| view.support == support)
     }
 
     /// Resolves one support span's accepted visible interval and boundary provenance.
@@ -2599,9 +2625,40 @@ impl SketchDocument {
         &self,
         support: CurveSpan,
     ) -> Result<DocumentVisibleCurveInterval, DocumentError> {
+        let intervals = self.visible_intervals(support)?;
+        let [interval] = intervals.as_slice() else {
+            return invalid(
+                "visible curve interval",
+                "support has multiple visible intervals; use visible_intervals",
+            );
+        };
+        Ok(*interval)
+    }
+
+    /// Resolves every visible interval for one immutable support in traversal order.
+    ///
+    /// Absence of persistent views resolves to the complete native span.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for invalid, overlapping, or dangling interval state.
+    pub fn visible_intervals(
+        &self,
+        support: CurveSpan,
+    ) -> Result<Vec<DocumentVisibleCurveInterval>, DocumentError> {
         self.validate_span(support)?;
-        if let Some(view) = self.trim_view(support) {
-            return self.resolve_trim_view(view);
+        let mut intervals = self
+            .trim_views_for_span(support)
+            .map(|view| self.resolve_trim_view(view))
+            .collect::<Result<Vec<_>, _>>()?;
+        if !intervals.is_empty() {
+            intervals.sort_by(|first, second| {
+                first
+                    .start
+                    .total_cmp(&second.start)
+                    .then(first.end.total_cmp(&second.end))
+            });
+            return Ok(intervals);
         }
         let period = self.trim_support_period(support)?;
         let periodic = self.trim_support_is_periodic(support)?;
@@ -2613,13 +2670,13 @@ impl SketchDocument {
             parameter: if periodic { 0.0 } else { period },
             winding: i32::from(periodic),
         };
-        Ok(DocumentVisibleCurveInterval {
+        Ok(vec![DocumentVisibleCurveInterval {
             support,
             start: 0.0,
             end: period,
             start_boundary: DocumentTrimBoundary::Fixed(start_parameter),
             end_boundary: DocumentTrimBoundary::Fixed(end_parameter),
-        })
+        }])
     }
 
     /// Resolves every accepted visible support interval for one curve in semantic order.
@@ -2631,10 +2688,11 @@ impl SketchDocument {
         &self,
         curve: CurveId,
     ) -> Result<Vec<DocumentVisibleCurveInterval>, DocumentError> {
-        self.curve_spans(curve)?
-            .into_iter()
-            .map(|span| self.visible_interval(span))
-            .collect()
+        let mut intervals = Vec::new();
+        for span in self.curve_spans(curve)? {
+            intervals.extend(self.visible_intervals(span)?);
+        }
+        Ok(intervals)
     }
 
     /// Returns whether one unwrapped support parameter is inside the accepted visible interval.
@@ -2648,8 +2706,49 @@ impl SketchDocument {
         total_parameter: f64,
     ) -> Result<bool, DocumentError> {
         finite(total_parameter, "visible curve parameter")?;
-        let interval = self.visible_interval(support)?;
-        Ok(total_parameter >= interval.start && total_parameter <= interval.end)
+        Ok(self
+            .visible_intervals(support)?
+            .iter()
+            .any(|interval| total_parameter >= interval.start && total_parameter <= interval.end))
+    }
+
+    /// Atomically replaces every equation-free visible interval for one support.
+    ///
+    /// Each supplied view must name `support`. Empty input restores the complete
+    /// native support. Association-owned boundaries cannot be removed through
+    /// this generic operation seam.
+    ///
+    /// # Errors
+    ///
+    /// Rejects invalid supports, mismatched/overlapping intervals, or removal of
+    /// an association-owned boundary.
+    pub fn replace_trim_views(
+        &mut self,
+        support: CurveSpan,
+        views: Vec<DocumentCurveTrimView>,
+    ) -> Result<(), DocumentError> {
+        self.validate_span(support)?;
+        if views.iter().any(|view| view.support != support) {
+            return invalid(
+                "trim view support",
+                "every replacement interval must name the selected support",
+            );
+        }
+        if self.trim_views_for_span(support).any(|view| {
+            !matches!(view.start, DocumentTrimBoundary::Fixed(_))
+                || !matches!(view.end, DocumentTrimBoundary::Fixed(_))
+        }) {
+            return invalid(
+                "trim view ownership",
+                "association-owned trim boundaries cannot be replaced",
+            );
+        }
+        let mut candidate = self.clone();
+        candidate.trim_views.retain(|view| view.support != support);
+        candidate.trim_views.extend(views);
+        candidate.validate_after_mutation()?;
+        *self = candidate;
+        Ok(())
     }
 
     /// Removes one fully fixed trim view while preserving immutable support geometry.
@@ -2668,8 +2767,8 @@ impl SketchDocument {
                 message: "support has no persistent trim view".into(),
             })?;
         let view = candidate.trim_views[index];
-        if matches!(view.start, DocumentTrimBoundary::FilletContact { .. })
-            || matches!(view.end, DocumentTrimBoundary::FilletContact { .. })
+        if !matches!(view.start, DocumentTrimBoundary::Fixed(_))
+            || !matches!(view.end, DocumentTrimBoundary::Fixed(_))
         {
             return invalid(
                 "trim view",
@@ -5705,7 +5804,7 @@ impl SketchDocument {
         }
         for parent in [request.first, request.second] {
             self.validate_fillet_parent_request(parent)?;
-            if self.trim_view(parent.curve).is_some() {
+            if self.trim_views_for_span(parent.curve).next().is_some() {
                 return invalid(
                     "curve fillet parent",
                     "support already has a persistent trim view",
@@ -6565,18 +6664,20 @@ impl SketchDocument {
             } else {
                 0
             };
-            let view = candidate
-                .trim_views
-                .iter_mut()
-                .find(|view| view.support == support)
-                .ok_or_else(|| DocumentError::InvalidField {
-                    field: "trim view",
-                    message: "generic fillet parent has no trim view".into(),
-                })?;
             let expected = DocumentTrimBoundary::FilletContact {
                 owner: constraint,
                 contact,
             };
+            let view = candidate
+                .trim_views
+                .iter_mut()
+                .find(|view| {
+                    view.support == support && (view.start == expected || view.end == expected)
+                })
+                .ok_or_else(|| DocumentError::InvalidField {
+                    field: "trim view",
+                    message: "generic fillet parent has no trim view".into(),
+                })?;
             let retained_fixed = match old_endpoint {
                 DocumentFilletTrimEndpoint::Start if view.start == expected => view.end,
                 DocumentFilletTrimEndpoint::End if view.end == expected => view.start,
@@ -7093,44 +7194,66 @@ impl SketchDocument {
         &mut self,
         constraint: DocumentConstraintId,
     ) -> Result<(), DocumentError> {
-        let contacts = match self
-            .constraint(constraint)
-            .ok_or_else(|| unknown("constraint", constraint.0))?
-            .definition
-        {
-            DocumentConstraintDefinition::CurveCurveFillet {
-                first_contact,
-                second_contact,
-                ..
-            } => [first_contact, second_contact],
-            _ => return Ok(()),
-        };
-        for contact in contacts {
+        self.constraint(constraint)
+            .ok_or_else(|| unknown("constraint", constraint.0))?;
+        let owned = self
+            .trim_views
+            .iter()
+            .flat_map(|view| [view.start, view.end])
+            .filter_map(|boundary| match boundary {
+                DocumentTrimBoundary::FilletContact { owner, contact }
+                | DocumentTrimBoundary::ConstraintContact { owner, contact }
+                    if owner == constraint =>
+                {
+                    Some(contact)
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        for contact in owned {
             let slot = self.require_contact(contact)?.clone();
             let accepted = DocumentTrimBoundary::Fixed(DocumentTrimParameter {
                 parameter: self.require_scalar(slot.parameter)?.value,
                 winding: slot.winding,
             });
-            let expected = DocumentTrimBoundary::FilletContact {
-                owner: constraint,
-                contact,
-            };
             let view = self
                 .trim_views
                 .iter_mut()
-                .find(|view| view.support == slot.curve)
+                .find(|view| {
+                    let owns = |boundary| {
+                        matches!(
+                            boundary,
+                            DocumentTrimBoundary::FilletContact { owner, contact: owned }
+                                | DocumentTrimBoundary::ConstraintContact {
+                                    owner,
+                                    contact: owned,
+                                } if owner == constraint && owned == contact
+                        )
+                    };
+                    view.support == slot.curve && (owns(view.start) || owns(view.end))
+                })
                 .ok_or_else(|| DocumentError::InvalidField {
                     field: "trim view",
-                    message: "generic fillet parent has no owned trim view".into(),
+                    message: "constraint has no owned trim view".into(),
                 })?;
-            if view.start == expected {
+            let owns = |boundary| {
+                matches!(
+                    boundary,
+                    DocumentTrimBoundary::FilletContact { owner, contact: owned }
+                        | DocumentTrimBoundary::ConstraintContact {
+                            owner,
+                            contact: owned,
+                        } if owner == constraint && owned == contact
+                )
+            };
+            if owns(view.start) {
                 view.start = accepted;
-            } else if view.end == expected {
+            } else if owns(view.end) {
                 view.end = accepted;
             } else {
                 return invalid(
                     "trim view ownership",
-                    "generic fillet does not own its recorded boundary",
+                    "constraint does not own its recorded boundary",
                 );
             }
         }
@@ -7473,7 +7596,7 @@ impl SketchDocument {
                 );
             }
         }
-        let mut trimmed_supports = BTreeSet::new();
+        let mut prior_trim_end = BTreeMap::<CurveSpan, f64>::new();
         for view in &self.trim_views {
             if !charge_document_item(
                 &mut controller,
@@ -7486,13 +7609,15 @@ impl SketchDocument {
             ) {
                 return Ok(false);
             }
-            if !trimmed_supports.insert(view.support) {
+            let interval = self.resolve_trim_view(view)?;
+            if let Some(prior_end) = prior_trim_end.insert(view.support, interval.end)
+                && prior_end > interval.start
+            {
                 return invalid(
-                    "trim view support",
-                    "a curve support may have at most one trim view",
+                    "trim view intervals",
+                    "visible intervals on one support must be traversal-ordered and non-overlapping",
                 );
             }
-            self.resolve_trim_view(view)?;
         }
         let mut sources = BTreeSet::new();
         let mut used_contacts = BTreeSet::new();
@@ -7578,10 +7703,10 @@ impl SketchDocument {
             }
             for contact in constraint_contacts(&constraint.definition) {
                 let slot = self.require_contact(contact)?;
-                let Some(view) = self.trim_view(slot.curve) else {
+                if self.trim_views_for_span(slot.curve).next().is_none() {
                     continue;
-                };
-                let interval = self.resolve_trim_view(view)?;
+                }
+                let intervals = self.visible_intervals(slot.curve)?;
                 let value = self.resolve_fixed_trim_parameter(
                     slot.curve,
                     DocumentTrimParameter {
@@ -7589,17 +7714,21 @@ impl SketchDocument {
                         winding: slot.winding,
                     },
                 )?;
-                let owned = view.start
-                    == (DocumentTrimBoundary::FilletContact {
-                        owner: constraint.id,
-                        contact,
-                    })
-                    || view.end
-                        == (DocumentTrimBoundary::FilletContact {
-                            owner: constraint.id,
-                            contact,
-                        });
-                if owned {
+                let fillet_boundary = DocumentTrimBoundary::FilletContact {
+                    owner: constraint.id,
+                    contact,
+                };
+                let constraint_boundary = DocumentTrimBoundary::ConstraintContact {
+                    owner: constraint.id,
+                    contact,
+                };
+                let owned_interval = intervals.iter().find(|interval| {
+                    interval.start_boundary == fillet_boundary
+                        || interval.end_boundary == fillet_boundary
+                        || interval.start_boundary == constraint_boundary
+                        || interval.end_boundary == constraint_boundary
+                });
+                if let Some(interval) = owned_interval {
                     if value.to_bits() != interval.start.to_bits()
                         && value.to_bits() != interval.end.to_bits()
                     {
@@ -7608,10 +7737,13 @@ impl SketchDocument {
                             "owned contact must resolve to its visible boundary",
                         );
                     }
-                } else if !(interval.start < value && value < interval.end) {
+                } else if !intervals
+                    .iter()
+                    .any(|interval| interval.start < value && value < interval.end)
+                {
                     return invalid(
                         "trim contact visibility",
-                        "executable non-owner contact must lie inside the visible interval",
+                        "executable non-owner contact must lie inside a visible interval",
                     );
                 }
             }
@@ -7851,6 +7983,9 @@ impl SketchDocument {
         {
             return Err(DocumentError::UnsupportedM43State);
         }
+        if !self.v4_trim_state_supported() {
+            return Err(DocumentError::UnsupportedM58State);
+        }
         let mut canonical = self.clone();
         canonical.canonicalize();
         Ok(serde_json::to_string(&SketchDocumentV4::from(&canonical))?)
@@ -7995,7 +8130,13 @@ impl SketchDocument {
                 validate_legacy_contact_language(&wire.contacts)?;
                 Self::from(wire)
             }
-            4 => Self::from(serde_json::from_str::<SketchDocumentV4>(json)?),
+            4 => {
+                let document = Self::from(serde_json::from_str::<SketchDocumentV4>(json)?);
+                if !document.v4_trim_state_supported() {
+                    return Err(DocumentError::UnsupportedM58State);
+                }
+                document
+            }
             actual => {
                 return Err(DocumentError::UnsupportedVersion {
                     actual,
@@ -8023,6 +8164,21 @@ impl SketchDocument {
         });
         self.parameter_outputs.sort();
         self.external_bindings.sort_by_key(|binding| binding.id);
+    }
+
+    fn v4_trim_state_supported(&self) -> bool {
+        let mut supports = BTreeSet::new();
+        self.trim_views.iter().all(|view| {
+            supports.insert(view.support)
+                && matches!(
+                    view.start,
+                    DocumentTrimBoundary::Fixed(_) | DocumentTrimBoundary::FilletContact { .. }
+                )
+                && matches!(
+                    view.end,
+                    DocumentTrimBoundary::Fixed(_) | DocumentTrimBoundary::FilletContact { .. }
+                )
+        })
     }
 
     pub(crate) fn point_mut(&mut self, id: DesignPointId) -> Option<&mut DesignPoint> {
@@ -9728,6 +9884,37 @@ impl SketchDocument {
                 };
                 self.resolve_fixed_trim_parameter(support, parameter)
             }
+            DocumentTrimBoundary::ConstraintContact { owner, contact } => {
+                let constraint = self
+                    .constraint(owner)
+                    .ok_or_else(|| unknown("trim boundary owner", owner.0))?;
+                if !matches!(
+                    constraint.definition,
+                    DocumentConstraintDefinition::PointOnCurve {
+                        contact: owned,
+                        ..
+                    } if owned == contact
+                ) {
+                    return invalid(
+                        "trim boundary owner",
+                        "owner is not a point-on-curve constraint for this contact",
+                    );
+                }
+                let slot = self.require_contact(contact)?;
+                if slot.curve != support {
+                    return invalid(
+                        "trim boundary contact",
+                        "contact support does not match the trim view",
+                    );
+                }
+                self.resolve_fixed_trim_parameter(
+                    support,
+                    DocumentTrimParameter {
+                        parameter: self.require_scalar(slot.parameter)?.value,
+                        winding: slot.winding,
+                    },
+                )
+            }
         }
     }
 
@@ -9761,13 +9948,14 @@ impl SketchDocument {
         endpoint: DocumentFilletTrimEndpoint,
     ) -> Result<(), DocumentError> {
         let slot = self.require_contact(contact)?;
+        let expected = DocumentTrimBoundary::FilletContact { owner, contact };
         let view = self
-            .trim_view(slot.curve)
+            .trim_views_for_span(slot.curve)
+            .find(|view| view.start == expected || view.end == expected)
             .ok_or_else(|| DocumentError::InvalidField {
                 field: "trim view ownership",
                 message: "generic fillet parent has no trim view".into(),
             })?;
-        let expected = DocumentTrimBoundary::FilletContact { owner, contact };
         let (contact_boundary, opposite) = match endpoint {
             DocumentFilletTrimEndpoint::Start => (view.start, view.end),
             DocumentFilletTrimEndpoint::End => (view.end, view.start),

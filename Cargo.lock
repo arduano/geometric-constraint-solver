@@ -636,6 +636,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "geosolve-sketch-ops"
+version = "0.2.0"
+dependencies = [
+ "geosolve-geometry",
+ "geosolve-sketch",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

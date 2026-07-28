@@ -242,28 +242,29 @@ impl EditorScene {
         let mut curves = Vec::new();
         for curve in document.curves() {
             for span in document.curve_spans(curve.id)? {
-                let interval = document.visible_interval(span)?;
-                let start = document.evaluate_curve_jet(span, interval.start)?;
-                let end = document.evaluate_curve_jet(span, interval.end)?;
-                let start = viewport.model_to_screen([start.position.x, start.position.y]);
-                let end = viewport.model_to_screen([end.position.x, end.position.y]);
-                let mut screen_polyline = vec![start];
-                tessellate(
-                    document,
-                    viewport,
-                    span,
-                    interval.start,
-                    start,
-                    interval.end,
-                    end,
-                    chord_tolerance_pixels,
-                    0,
-                    &mut screen_polyline,
-                )?;
-                curves.push(SceneCurve {
-                    span,
-                    screen_polyline,
-                });
+                for interval in document.visible_intervals(span)? {
+                    let start = document.evaluate_curve_jet(span, interval.start)?;
+                    let end = document.evaluate_curve_jet(span, interval.end)?;
+                    let start = viewport.model_to_screen([start.position.x, start.position.y]);
+                    let end = viewport.model_to_screen([end.position.x, end.position.y]);
+                    let mut screen_polyline = vec![start];
+                    tessellate(
+                        document,
+                        viewport,
+                        span,
+                        interval.start,
+                        start,
+                        interval.end,
+                        end,
+                        chord_tolerance_pixels,
+                        0,
+                        &mut screen_polyline,
+                    )?;
+                    curves.push(SceneCurve {
+                        span,
+                        screen_polyline,
+                    });
+                }
             }
         }
         Ok(Self {

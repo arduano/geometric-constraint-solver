@@ -1,0 +1,24 @@
+[package]
+name = "geosolve-sketch-ops"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+license-file.workspace = true
+readme.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Equation-free deterministic drafting operations for GeoSolve sketches"
+documentation = "https://docs.rs/geosolve-sketch-ops/0.2.0"
+keywords = ["cad", "sketch", "geometry", "operations"]
+categories = ["algorithms", "mathematics", "science"]
+
+[dependencies]
+geosolve-geometry = { version = "0.2.0", path = "../geosolve-geometry" }
+geosolve-sketch = { version = "0.2.0", path = "../geosolve-sketch" }
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

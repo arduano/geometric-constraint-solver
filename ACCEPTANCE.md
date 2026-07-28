@@ -153,8 +153,8 @@ Baseline candidate vectors do not yet carry M8 completeness metadata. Until the 
 M8 is ready for review only when every item below is objectively present. These checkboxes are acceptance criteria and do not mark `PLAN.md` complete.
 
 The checked wording below is the preserved M8 completion record. Its then-current M8-M22
-allocations are historical; `PLAN.md` now governs completed work through M57 and the executable
-M58-M64 sequence.
+allocations are historical; `PLAN.md` now governs completed work through M58 and the executable
+M59-M64 sequence.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1027,6 +1027,22 @@ storage bounds and work-exhaustion rollback.
 - The companion owns no residual equations and emits deterministic public sketch transactions with identity-preserving mappings.
 - Split, trim, extend, mirror, chamfer and baseline macro/pattern operations are transactional and dependency-aware.
 - Multiple visible intervals never rewrite immutable support definitions or infer topology by proximity.
+
+Completion record (2026-07-29): `geosolve-sketch-ops` prepares controlled immutable proposals
+from the complete retained-design/attempt/accepted input stamp and applies them only after exact
+compare-and-swap through `RetainedSketchDocumentSession::transact`. Split, break, trim, line
+extension, exact point-defined mirror, line chamfer, the existing public generic-fillet command,
+rectangle, regular polygon, slot and bounded linear pattern all emit ordinary public document
+state plus explicit identity disposition. Unsupported exact families and incomplete accepted
+geometry return typed outcomes; no curve is sampled into an approximation.
+
+Multi-interval visibility retains immutable support definitions, validates canonical traversal
+order and non-overlap, uses exact fixed/contact boundary identities in visual profiles and freezes
+constraint-owned boundaries before owner deletion. Canonical sketch v4 rejects this new state;
+the hidden draft-v5 bridge round-trips it until M62. Direct regressions prove deterministic
+proposal mappings, stale/cancelled/exhausted/foreign-input atomicity, finite/resource bounds,
+profile closure and companion dependency isolation. Native, full-workspace, WASM and release
+qualification pass without a private residual, browser harness or restored legacy route.
 
 ### M59: production topology companion
 

@@ -15,9 +15,9 @@ use pieces::{Box2, CurvePiece, PieceEvaluationError, PieceKind, piece_for_span};
 
 use crate::{
     ContactDomain, ContactId, CurveDefinition, CurveId, CurveSpan, DesignPointId,
-    DocumentBSplineForm, DocumentConstraintDefinition, DocumentFilletEndpointOrder,
-    DocumentTrimBoundary, DocumentVisibleCurveInterval, EffectiveActivity, FeatureEndpoint,
-    GeometryRole, InactivityReason, SketchDocument,
+    DocumentBSplineForm, DocumentConstraintDefinition, DocumentConstraintId,
+    DocumentFilletEndpointOrder, DocumentTrimBoundary, DocumentVisibleCurveInterval,
+    EffectiveActivity, FeatureEndpoint, GeometryRole, InactivityReason, SketchDocument,
 };
 use geosolve_core::{
     OperationCheckpoint, OperationControl, OperationController, OperationOutcome,
@@ -271,10 +271,27 @@ struct SourcePiece {
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum VertexKey {
     Persistent(DesignPointId),
-    CurveBoundary { curve: CurveId, boundary: u32 },
-    PeriodicAnchor { span: CurveSpan, anchor: u8 },
-    LoopAnchor { span: CurveSpan, ordinal: u32 },
-    TrimEndpoint { span: CurveSpan, endpoint: u8 },
+    CurveBoundary {
+        curve: CurveId,
+        boundary: u32,
+    },
+    PeriodicAnchor {
+        span: CurveSpan,
+        anchor: u8,
+    },
+    LoopAnchor {
+        span: CurveSpan,
+        ordinal: u32,
+    },
+    TrimFixed {
+        span: CurveSpan,
+        parameter_bits: u64,
+        winding: i32,
+    },
+    TrimContact {
+        owner: DocumentConstraintId,
+        contact: ContactId,
+    },
     Intersection(usize),
 }
 
@@ -1310,7 +1327,7 @@ fn source_pieces(
             if !work.checkpoint(OperationCheckpoint::ProfileCandidate) {
                 return Err(ProfileSetupError::Interrupted);
             }
-            let interval = document.visible_interval(span).map_err(|_| {
+            let intervals = document.visible_intervals(span).map_err(|_| {
                 (
                     span,
                     VisualProfileIssueKind::VisibleIntervalUnavailable { support: span },
@@ -1327,66 +1344,84 @@ fn source_pieces(
                 };
                 (span, kind)
             })?;
-            let full_periodic = is_explicit_full_period(&curve.definition, interval);
-            if full_periodic {
-                let middle = interval.start + 0.5 * (interval.end - interval.start);
-                let seam = VertexKey::PeriodicAnchor { span, anchor: 0 };
-                let antipodal = VertexKey::PeriodicAnchor { span, anchor: 1 };
-                for (piece_ordinal, (parameters, start, end)) in [
-                    (Interval::hull(interval.start, middle), seam, antipodal),
-                    (Interval::hull(middle, interval.end), antipodal, seam),
-                ]
-                .into_iter()
-                .enumerate()
-                {
-                    sources.push(build_source_piece(
-                        document,
+            for (interval_ordinal, interval) in intervals.into_iter().enumerate() {
+                let interval_ordinal = u32::try_from(interval_ordinal).map_err(|_| {
+                    (
                         span,
-                        u32::try_from(piece_ordinal).map_err(|_| {
+                        VisualProfileIssueKind::VisibleIntervalUnavailable { support: span },
+                    )
+                })?;
+                let full_periodic = is_explicit_full_period(&curve.definition, interval);
+                if full_periodic {
+                    let middle = interval.start + 0.5 * (interval.end - interval.start);
+                    let seam = VertexKey::PeriodicAnchor { span, anchor: 0 };
+                    let antipodal = VertexKey::PeriodicAnchor { span, anchor: 1 };
+                    for (half, (parameters, start, end)) in [
+                        (Interval::hull(interval.start, middle), seam, antipodal),
+                        (Interval::hull(middle, interval.end), antipodal, seam),
+                    ]
+                    .into_iter()
+                    .enumerate()
+                    {
+                        let half = u32::try_from(half).map_err(|_| {
                             (
                                 span,
                                 VisualProfileIssueKind::VisibleIntervalUnavailable {
                                     support: span,
                                 },
                             )
-                        })?,
-                        curve_piece.clone(),
-                        parameters,
-                        start,
-                        end,
-                    )?);
+                        })?;
+                        let piece_ordinal = interval_ordinal
+                            .checked_mul(2)
+                            .and_then(|value| value.checked_add(half))
+                            .ok_or((
+                                span,
+                                VisualProfileIssueKind::VisibleIntervalUnavailable {
+                                    support: span,
+                                },
+                            ))?;
+                        sources.push(build_source_piece(
+                            document,
+                            span,
+                            piece_ordinal,
+                            curve_piece.clone(),
+                            parameters,
+                            start,
+                            end,
+                        )?);
+                    }
+                    continue;
                 }
-                continue;
+                let start = endpoint_key(
+                    welded,
+                    &curve.definition,
+                    &spans,
+                    span_ordinal,
+                    span,
+                    interval.start,
+                    interval.start_boundary,
+                    true,
+                );
+                let end = endpoint_key(
+                    welded,
+                    &curve.definition,
+                    &spans,
+                    span_ordinal,
+                    span,
+                    interval.end,
+                    interval.end_boundary,
+                    false,
+                );
+                sources.push(build_source_piece(
+                    document,
+                    span,
+                    interval_ordinal,
+                    curve_piece.clone(),
+                    Interval::hull(interval.start, interval.end),
+                    start,
+                    end,
+                )?);
             }
-            let start = endpoint_key(
-                welded,
-                &curve.definition,
-                &spans,
-                span_ordinal,
-                span,
-                interval.start,
-                interval.start_boundary,
-                true,
-            );
-            let end = endpoint_key(
-                welded,
-                &curve.definition,
-                &spans,
-                span_ordinal,
-                span,
-                interval.end,
-                interval.end_boundary,
-                false,
-            );
-            sources.push(build_source_piece(
-                document,
-                span,
-                0,
-                curve_piece,
-                Interval::hull(interval.start, interval.end),
-                start,
-                end,
-            )?);
         }
     }
     sources.sort_by_key(|source| (source.span, source.piece_ordinal));
@@ -1430,9 +1465,16 @@ fn endpoint_key(
     ) || !matches!(boundary, DocumentTrimBoundary::Fixed(_))
         || !parameter_equal(parameter, native)
     {
-        return VertexKey::TrimEndpoint {
-            span,
-            endpoint: u8::from(!start),
+        return match boundary {
+            DocumentTrimBoundary::Fixed(fixed) => VertexKey::TrimFixed {
+                span,
+                parameter_bits: fixed.parameter.to_bits(),
+                winding: fixed.winding,
+            },
+            DocumentTrimBoundary::FilletContact { owner, contact }
+            | DocumentTrimBoundary::ConstraintContact { owner, contact } => {
+                VertexKey::TrimContact { owner, contact }
+            }
         };
     }
     let persistent = |point| VertexKey::Persistent(welded.roots[&point]);

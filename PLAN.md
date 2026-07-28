@@ -2446,15 +2446,57 @@ these are observations, not correctness tolerances. `docs/M57_IMPLEMENTATION.md`
 
 ### M58: sketch operations companion
 
-Status: active.
+Status: complete as of 2026-07-29.
 
-Scope: a separate no-residual-formula transaction companion for split/break/trim/extend,
-mirror, chamfer, grouped rectangle/polygon/slot/pattern expansion and multi-interval visible
-topology.
+Goal: add a separate deterministic, equation-free transaction companion without giving
+drafting operations solver, residual, session-publication or B-rep ownership.
+
+- [x] Add `geosolve-sketch-ops` with one-way direct dependencies only on public sketch and
+  immutable geometry APIs, plus native/WASM-safe controlled prepared work.
+- [x] Capture the complete retained input stamp and matching accepted-state identity when
+  geometry is required; apply only through exact-input compare-and-swap and the ordinary retained
+  sketch transaction path.
+- [x] Implement typed split, break, trim, line extension, exact supported-family mirror, line
+  chamfer, existing associative-fillet integration, rectangle, regular-polygon, slot and bounded
+  linear-pattern requests.
+- [x] Publish deterministic retained/replaced/split/proposed identity mappings and typed
+  unsupported/incomplete outcomes; never approximate an unsupported exact family.
+- [x] Generalize equation-free visible topology to ordered non-overlapping multi-interval
+  supports, exact fixed/contact boundary identity and atomic constraint-owned boundary freezing.
+- [x] Preserve frozen canonical sketch v4: M58-only state is rejected by v4 import/export and
+  round-trips only through the explicitly unsupported pre-M62 draft-v5 codec.
+- [x] Directly qualify stale application, cancellation/work exhaustion, foreign accepted state,
+  interval validation, profile adjacency, persistence rejection, operation expansion and
+  dependency boundaries under native, workspace and WASM gates.
+
+Gate: complete. The companion owns no residual or solver state, every proposal is deterministic
+for one exact input, stale/cancelled/exhausted work cannot mutate the live session, and all
+operation results pass ordinary sketch validation and independent accepted-state publication.
+
+Completion notes (2026-07-29): `geosolve-sketch-ops` exposes an immutable
+`SketchOperationSnapshot`, worker-movable `PreparedSketchOperation`, closed request/result
+surface, deterministic `SketchOperationProposal` and exact-CAS `apply`. Geometry-dependent
+requests require the accepted state for the same retained design. Mirror and linear pattern
+currently require accepted geometry to equal design geometry exactly; unsupported curve families
+and ambiguous/incomplete geometric cases return typed outcomes rather than sampled approximations
+or guesses.
+
+`geosolve-sketch` now supports several ordered visible intervals per immutable support, ordinary
+point-on-curve-owned trim boundaries, exact semantic profile endpoint keys and a read-only current
+prepared-input stamp. Existing generic fillets remain public sketch associations; chamfer emits
+ordinary contacts, point-on-curve constraints and driving dimensions. Canonical v4 remains frozen,
+while the hidden draft-v5 codec preserves M58 state until M62 freezes the real schema.
+
+The 18-case M58 suite covers every request family plus deterministic mappings, stale/cancelled/
+exhausted atomicity, foreign accepted geometry, bounds/non-finite input, interval overlap/order,
+constraint deletion freezing, exact split profile closure, draft-v5 round-trip and strict v4
+rejection. Focused M28/M31/M34/M57/editor compatibility, warnings-denied Clippy, the complete
+all-feature workspace suite, demo-web and operations WASM checks and the Trunk release build pass.
+`docs/M58_IMPLEMENTATION.md` records APIs, mathematical behavior, exact commands and limitations.
 
 ### M59: production topology companion
 
-Status: planned; begins after M58 passes.
+Status: active; begins from the qualified M58 operation/topology boundary.
 
 Scope: revision-stamped complete wires/profiles, nesting/holes/provenance, explicit
 ambiguity policy, declared construction/external filtering and typed incomplete outcomes.

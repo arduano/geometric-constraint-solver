@@ -146,9 +146,9 @@ pub use document_session::{
     SketchLifecycleRevisionHighWater,
 };
 pub use geosolve_core::{
-    CancellationHandle, CancellationToken, OperationCheckpoint, OperationControl, OperationLimits,
-    OperationOutcome, OperationReport, OperationStopReason, OperationWork, OperationWorkCounter,
-    cancellation_pair,
+    CancellationHandle, CancellationToken, OperationCheckpoint, OperationControl,
+    OperationController, OperationLimits, OperationOutcome, OperationReport, OperationStopReason,
+    OperationWork, OperationWorkCounter, SolverConfig, cancellation_pair,
 };
 pub use geosolve_geometry::{
     BSplineBasis, BSplineContinuity, BSplineDefinitionError, BSplineEvaluationError, BSplineForm,
