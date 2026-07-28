@@ -2,10 +2,10 @@
 
 ## Release line
 
-GeoSolve `0.2.0` is the current supported preview release; `0.1.0` was the first. The four library crates
-(`geosolve-geometry`, `geosolve-core`, `geosolve-sketch` and
-`geosolve-linkage`) version and release in lockstep. `geosolve-demo-web` is a
-non-published diagnostic consumer.
+GeoSolve `0.2.0` is the current supported preview release; `0.1.0` was the first. The
+five library crates (`geosolve-geometry`, `geosolve-core`, `geosolve-sketch`,
+`geosolve-linkage` and `geosolve-constraint-editor`) version and release in lockstep.
+`geosolve-demo-web` is a non-published diagnostic consumer.
 
 Before `1.0`, a minor version may contain source-breaking changes. Patch releases
 must remain source-compatible except where retaining behavior would preserve a
@@ -14,13 +14,14 @@ After `1.0`, Rust API compatibility follows Cargo SemVer.
 
 M33 completes the production-embedding contract and baseline freeze without adding
 target APIs. M34 adds the retained-design lifecycle and M35 adds cooperative
-operation-control APIs; M36-M55 continue the planned implementation transition. M53
-freezes the next
+operation-control APIs; M36-M44 complete the current implementation transition. Cleanup
+M46-M53 preserves released v1-v4 wire compatibility and the accepted-state safety contract
+while evolving the new pre-1.0 editor/workbench surface. Placeholder M107X freezes the next
 release-candidate API and sketch v5 language only after the ordinary, host-state and
-advanced workbench phases pass automated acceptance and their M40/M45/M52 human UAT
-gates. M54 then ratifies the integrated candidate. Until M53 passes, any draft-v5
-representation is explicitly unsupported and must not be treated as a released wire
-language.
+advanced workbench phases pass direct automated acceptance and the required
+M40.7/M53/placeholder M106X human UAT gates. Placeholder M108X then ratifies the integrated
+candidate. Until M107X passes, any draft-v5 representation is explicitly unsupported and
+must not be treated as a released wire language.
 
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.
@@ -35,7 +36,9 @@ The supported domain entry points are:
 - `SpatialAssemblyDocument` and `SpatialAssemblyDocumentSession` for spatial
   kinematics;
 - immutable geometry and accepted domain result/audit types returned by those
-  workflows.
+  workflows;
+- `geosolve-constraint-editor` state, scene, normalized input and typed effect APIs for
+  presentation-independent constraint editing over those sketch workflows.
 
 Legacy direct `Sketch`, `Linkage` and `SpatialAssembly` builders remain supported
 compatibility facades in the `0.2` line.
@@ -86,7 +89,7 @@ The planned sketch v5 transition retains direct deterministic migration from v1-
 and uses separately versioned host-parameter, immutable external-snapshot and desktop-
 workspace envelopes. Host expressions, PDM keys, projection callbacks and application
 undo are not added to canonical sketch equations. The current table remains the
-supported contract until M53 acceptance updates it.
+supported contract until placeholder M107X acceptance updates it.
 
 The project supports reading every schema listed above throughout the `0.2` line.
 Dropping an input schema requires a minor release before `1.0`, a major release
@@ -102,10 +105,11 @@ behind a private v1 wire DTO in the same manner as sketch persistence.
 
 The release has no optional Cargo feature contract. Native Linux x86-64 and
 `wasm32-unknown-unknown` are release-gated. Other Rust-supported targets are
-best-effort unless added to the release matrix. M55 targets Linux, Windows, macOS and
-WASM Rust consumers. No C ABI is planned through M55. The WASM playground/workbench
-is not a separate product API and does not define document semantics; future workbench
-acceptance is desktop-browser only, with no mobile or responsive support contract.
+best-effort unless added to the release matrix. Placeholder M109X targets Linux, Windows,
+macOS and WASM Rust consumers. No C ABI is planned through M109X. The WASM workbench is
+not a separate product API and does not define document semantics; cleanup qualification
+uses direct Rust/WASM tests rather than browser E2E, and there is no mobile or responsive
+support contract.
 
 ## Publication
 
@@ -115,9 +119,10 @@ The publishable crates are released in dependency order:
 2. `geosolve-core` after the matching geometry version is visible;
 3. `geosolve-sketch` and `geosolve-linkage` after the matching core version is
    visible.
+4. `geosolve-constraint-editor` after the matching sketch version is visible.
 
 Cargo cannot create a registry-ready dependent archive before its path dependency
 version exists in the registry. The pre-publication gate therefore checks the exact
-archive file list for all four crates and builds every workspace target from path
+archive file list for all five crates and builds every workspace target from path
 dependencies. Each package includes `LICENSE` and `README.md`. Registry publication
 itself remains a maintainer action after a repository URL and release tag exist.

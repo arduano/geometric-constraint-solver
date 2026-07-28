@@ -238,16 +238,22 @@ Expected behavior:
 - accepted normalized hard residual remains `<= 1e-9` and Jacobian oracle error remains `<= 1e-6` away from excluded singular/nondifferentiable states;
 - topology, persistent IDs, source ordering, branch/span/winding/orientation/neighborhood state, rank/mobility and conflict diagnosis are invariant;
 - reference dimensions scale by `s`, while angles and normalized contact parameters do not;
-- desktop and mobile E2E can pan/zoom to and edit the accepted geometry at all three scales without changing document semantics.
+- direct native scale owners preserve accepted geometry and document semantics at all three
+  scales; the retired desktop/mobile browser delivery is not a post-cleanup gate.
 
 ### M14 field regressions
 
 - R1: an otherwise free line endpoint can cross the stored direction half-plane without an `opposite branch` error. The inactive persisted branch remains unchanged; adding both an axis constraint and driving length makes that branch enforceable again and an opposite crossing rejects until an explicit branch transition.
 - R2: dragging A5 line endpoint B follows successive transient targets at scales `1e-6`, `1` and `1e6`, projects to the nearest length-2 tangent configuration, retains the fixed contact/orientation state and commits the final accepted preview as exactly one history entry. Rank-deficient secondary solves must satisfy their KKT check rather than report `NumericalFailure` or accept `Stalled` as success.
 - R3: deleting all visible A1 points and edges atomically removes dependent constraints, dimensions, contacts and private scalars while retaining disconnected geometry. Undo restores the same persistent IDs and source order.
-- R4: the canonical A1 rectangle remains anchored and dimensioned. A rectangle created by the playground removes the macro anchor and generated width/height dimensions, retains hard horizontal/vertical topology, reports four local DOF and changes size under projected corner drag.
+- R4: the canonical A1 rectangle remains anchored and dimensioned. An ordinary rectangle
+  transaction removes the macro anchor and generated width/height dimensions, retains hard
+  horizontal/vertical topology, reports four local DOF and changes size under a projected
+  corner edit.
 - R5: rotating the A5 tangent line through its endpoint applies a transient stability target to the opposite cubic Bezier handle. The opposite handle and endpoint remain stable while the constrained handle and line satisfy contact, tangent orientation and driving length.
-- R6: every constraint and dimension row in the playground object panel exposes a typed transactional delete action. Deletion removes owned hidden state, enters history only when accepted and restores the same persistent IDs on undo.
+- R6: every supported constraint and dimension exposes a typed transactional editor delete
+  action. Deletion removes owned hidden state, enters history only when accepted and restores
+  the same persistent IDs on undo.
 - R7: every supported draw tool stages points on pointer release, exposes its exact next step, renders the prospective primitive, and commits once. Pointer cancellation changes no draft/document state, invalid completion retains staged points, and Undo point/Cancel never mutate accepted history.
 - R8: the tangent-orbit satellite traverses all four quadrants and returns to its start under projected drag. Opposed tangent orientation and periodic contact state retain external tangency without imposing a fixed center-direction half-plane or switching to internal tangency.
 
@@ -267,7 +273,43 @@ Expected behavior:
 - `diagnostic-endpoint-bound`: a fixed `t = 1` line contact is shown beside a circle radius at its positive lower domain. Equality mobility is two, the fixed endpoint and active radius remove bidirectional mobility, and only the radius contributes one-sided feasible motion.
 - `diagnostic-redundancy`: a fixed-origin horizontal arm has two independent driving length-4 sources. Geometry remains valid and locked, structural/numerical left nullity is one, and the duplicate source receives deterministic complete redundancy evidence.
 
-These examples are loadable interaction/audit stress labs, not additional canonical A1-A10 gates. They compose existing public document constraints and add no browser equations or new curve family.
+These are historical interaction/audit stress compositions, not additional canonical A1-A10
+gates or promised post-cleanup UI fixtures. Their retained mathematical behavior is owned by
+direct domain/editor tests; they compose existing public document constraints and add no
+browser equations or new curve family.
+
+## Historical M39 desktop workbench qualification
+
+M39-W1 is a desktop-browser interaction fixture, not a new mathematical
+scenario. It composes ordinary public document edits and retained-session views.
+
+### M39-W1 - Core authoring and retained-state synchronization
+
+- at the M39 snapshot the default route opened the CAD workbench while a temporary advanced
+  playground remained separately routed; M50 later removed that route and runtime;
+- point, line/polyline, rectangle, circle and circular-arc tools retain complete
+  public document transactions, with incomplete drafts changing no document;
+- canvas and sketch-tree selection identify the same persistent points, curves,
+  constraints and dimensions, and the inspector applies only compatible public
+  edits;
+- fixed, coincident, horizontal, vertical, parallel, perpendicular and equal-
+  length constraints are selectable persistent glyph objects;
+- point-distance and line-length dimensions remain selectable persistent
+  driving/reference objects whose values and equations are evaluated by
+  `geosolve-sketch`, never by browser formulas;
+- point drag submits a public retained-design point edit, delete removes the
+  selected persistent object, and application undo/redo restores document
+  snapshots through `RetainedSketchDocumentSession`;
+- rendering reads the accepted document only, tessellates public immutable curve
+  jets adaptively and keys its retained cache by accepted revision;
+- every rejected attempt keeps the prior accepted canvas visible while the tree
+  shows retained unsolved design intent and Problems names the exact latest
+  attempt;
+- lifecycle badges expose `Accepted`, `Design unsolved`, `Solving`, `Solved
+  preview` and `Rejected attempt` as distinct application states.
+
+Automation uses a fixed desktop viewport. Responsive, tablet and mobile behavior
+is neither tested nor claimed.
 
 ## M21 non-rational B-spline fixtures
 
@@ -1134,11 +1176,13 @@ conflicting owner, missing fixed opposite boundary or malformed boundary winding
 rejects atomically. Accepted edits that escape their local root retain canonical
 JSON, visible intervals, geometry, history and audit.
 
-## M30 interactive construction and NURBS UAT fixtures
+## Historical M30 interactive construction and NURBS UAT fixtures
 
-Every focused lab starts accepted, publishes its expected equality/bounded DOF and
-names one primary projected drag. The browser reset action reconstructs the same
-canonical public scenario rather than restoring private UI geometry.
+At the M30 checkpoint, every focused lab started accepted, published its expected
+equality/bounded DOF and named one primary projected drag. The retired browser reset
+action reconstructed the same canonical public scenario rather than restoring
+private UI geometry. The public scenarios and direct domain assertions remain;
+M50 removed the lab and browser delivery.
 
 ### M30-C1 - Offsets, mirror and directed angle
 
@@ -1160,9 +1204,11 @@ canonical public scenario rather than restoring private UI geometry.
 - `nurbs-periodic` exposes explicit previous/next span transition, winding and knot-side state; crossing the seam changes winding only through the command.
 - `nurbs-differential` exposes the existing tangent/normal/curvature and endpoint continuity audit on movable NURBS geometry.
 
-Focused controls submit only public `SketchDocumentSession` commands. Browser tests
-must compare accepted geometry before/after every advertised drag or editor action;
-loading an example without motion is not M30 acceptance.
+Focused controls submitted only public `SketchDocumentSession` commands. The M30
+browser tests compared accepted geometry before/after every advertised drag or
+editor action; loading an example without motion was not M30 acceptance. Those
+durable geometry/edit claims now remain at their direct Rust owners rather than in
+a browser gate.
 
 ## M31 all-family visual-profile fixtures
 
@@ -1199,46 +1245,122 @@ sign before `Complete`. Required scales, rotations, reflections and large transl
 preserve topology and scale area by `s^2`. Canonical JSON, history and selection remain
 unchanged by analysis and pointer-transparent rendering.
 
-### Text failure-case handoff
+### Historical text failure-case handoff
 
-The JSON/autosave disclosure provides **Copy compressed scene capsule**. The emitted
-`GEOSOLVE_SCENE_V1` text contains the canonical v4 sketch document, exact active
-profile budgets, example/model/status metadata, original byte count and checksum in
-a deterministic pure-Rust LZSS/base64url envelope. Paste the complete block into the
-same text area and choose **Import text** to reproduce it. Import independently solves
-and validates the document before replacing accepted state. Invalid encoding,
-checksum, declared size, profile limits or document contents retain the previous
-accepted scene. This is a disposable diagnostic interchange format, not a new
-persistent sketch schema or equation source.
+The removed M31 playground exposed a `GEOSOLVE_SCENE_V1` compressed diagnostic
+capsule containing canonical v4 sketch JSON, exact profile budgets, metadata, byte
+count and checksum. Import independently solved and validated the document before
+replacing accepted state; malformed input retained the previous accepted scene.
+M49 classified the retained canonical/import semantics and M50 retired the private
+capsule UI and codec. This paragraph is historical evidence, not an import
+instruction or a supported persistence format.
 
 ## Post-M32 CAD embedding and human UAT scenarios
 
-M33-M55 add production embedding fixtures without replacing the frozen scenarios
-above. Every new fixture must name its exact design, parameter, external-snapshot,
-activation and accepted-state revisions. The browser remains a desktop-only public-
-API consumer; no mobile scenario is required.
+M33-M44 add the current production-embedding fixtures without replacing the frozen
+scenarios above. Cleanup M46-M53 preserves their durable behavior through direct tests and
+post-cleanup UAT. Placeholder M100X-M109X preserves later functional/release scope. Every
+new fixture must name its exact design, parameter, external-snapshot, activation and
+accepted-state revisions. The workbench remains a desktop-only public-API consumer; no
+mobile scenario is required.
 
-Objective geometry, residual, derivative, rank, branch, persistence, migration,
-resource, cancellation and topology assertions are always automated. Human review is
-limited to four prepared checkpoints after their complete automated qualification.
+Objective geometry, residual, derivative, rank, branch, persistence, migration, resource,
+cancellation, presentation-adapter and topology assertions are directly automated at their
+owning Rust/WASM layer. Old browser E2E is not a qualification path. Human review is
+limited to completed M40.7, post-cleanup M53 and placeholder M106X/M108X after direct
+automated qualification.
 
-### UAT-C1 - Core sketch interaction at M40
+### M40-ES1 - Headless persistent line selection and relation action
+
+Construct one accepted document containing two separate line segments and map it
+through a finite viewport. A pointer click 6.5 px from each centerline is within the
+7 px curve tolerance. The first click replaces selection; Shift/Ctrl/Command on the
+second extends the ordered persistent span selection. Point endpoints win overlapping
+hits. Applying **Parallel** emits one ordinary public `DocumentEdit`; no DOM target,
+CSS hit stroke, renderer or browser event is part of the oracle. A 2.9 px point motion
+remains a click and emits no geometry edit, while exactly 3 px starts typed drag
+preview. M40.2 native tests own this regression.
+
+### UAT-C1 - Core sketch interaction at M40.7
 
 One ordinary mechanical profile covers geometry creation, canvas/tree/inspector
 selection, standard constraints, driving/reference dimensions, projected drag,
 redundancy, conflict, deletion and history. The prepared 30-45 minute review judges
 discoverability, manipulation intent and whether accepted, solved-preview, unsolved
 and rejected states are unmistakable. Automation proves all numerical facts.
+The supervising human approved this gate on 2026-07-26 after the mechanically
+requalified UAT-C1-F4 and UAT-C1-F5 targeted rechecks.
 
-### UAT-C2 - CAD host semantics at M45
+### UAT-C1-F4 - Constrained release preserves the accepted preview branch
 
-One host-state workspace covers construction-role conversion, suppression and
-reactivation, one parameter driving several dimensions, invalid parameter recovery,
-an immutable external reference becoming stale/missing/valid and retained unsolved
-design over prior accepted geometry. The prepared 30-45 minute review judges state,
-ownership and recovery clarity; revisions, digests and atomicity remain automated.
+Construct a two-link underdetermined arm with a fixed base, equal fixed link lengths,
+and explicit branch directions. Drag its end back to the base through a separately
+solved retained preview. Replaying the former cold release from the pre-drag accepted
+state must deterministically choose an elbow position more than `0.5` model units from
+that preview, proving the regression exercises the original seam. Pointer release must
+instead consume the exact accepted preview session: every accepted point remains within
+`1e-10` model units of the last preview, both explicit line branches are unchanged, and
+no clear/cancellation effect may discard the seed before commit. The release adds
+exactly one retained history checkpoint, and one Undo restores the pre-drag accepted
+geometry.
 
-### UAT-C3 - Advanced geometry and topology at M52
+### UAT-C1-F5 - Staged construction previews are wire-only and terminal
+
+Construction previews are distinct from complete committable proposals. An open line
+or polyline preview is always an unfilled wire and cannot imply profile area. After the
+circle center click, its retained center marker remains visible while the radius is
+positioned. A counterclockwise arc publishes its center marker after click one, a
+center-to-start radius guide while placing and after clicking the start point, and only
+then the normalized complete arc preview. Pointer completion, Finish, Enter and
+double-click emit the same ordered terminal effects: commit the complete proposal, then
+clear all provisional geometry. In particular, Finish commits only placed polyline
+vertices and removes any last pointer-following unplaced segment immediately.
+
+### Future-HI1 - Remembered reference inference is headless
+
+This scenario records a future interaction contract; it is not an M40 completion
+requirement. Start a line draft, move within the headless snap tolerance of persistent
+point `P`, then move away without placing the endpoint. The editor state remembers
+`P` as a typed reference candidate. When a later pointer sample enters the horizontal
+or vertical activation boundary relative to `P`, the editor—not the UI—publishes the
+ranked prospective relation, guide and adjusted preview. Leaving that boundary removes
+the assistance deterministically; explicit confirmation is still required before any
+constraint changes the document.
+
+The replay uses persistent identities and normalized 2D editor inputs and must produce
+the same transitions natively and through WASM. A browser can render the guide, and a
+3D CAD host can first map its camera ray onto the active sketch plane, but neither host
+may remember the hovered point, calculate the inference tolerance, rank candidates or
+adjust the preview. Replacing either UI must leave the replay result unchanged.
+
+### M41-A1 - Construction geometry remains solver-active but profile-ineligible
+
+A closed square initially publishes one complete visual profile. Mark its curve as
+construction and constrain one of its persistent points to a different fixed position.
+The accepted solve must move that point to the constraint target and retain a runtime
+curve mapping, while default visual-profile analysis publishes no face. Undo and redo
+of the role edit preserve the persistent curve identity.
+
+### M41-A2 - Typed transitive inactivity and exact reactivation
+
+Suppress one persistent operand of a trimmed-fillet design through user state, then
+reactivate it; repeat with newer immutable host-configuration revisions. The direct
+operand reports the requested typed reason and dependents report the unavailable
+dependency identity before lowering. A rejected conflicting reactivation retains the
+previous accepted input stamp. Successful reactivation restores draft bytes exactly,
+including branch, span/sweep, winding, contacts, trim associations and output ownership,
+without selecting from coordinates.
+
+### UAT-C2 - CAD host semantics at M53
+
+One minimal post-cleanup composition covers construction-role conversion, suppression and
+reactivation, one parameter driving several dimensions, invalid parameter recovery, an
+immutable external reference becoming stale/missing/valid and retained unsolved design
+over prior accepted geometry. The prepared 30-45 minute review judges state, ownership and
+recovery clarity; revisions, digests and atomicity remain directly automated. M45 preserved
+these points but recorded no human approval; M52 prepared this candidate.
+
+### UAT-C3 - Advanced geometry and topology at placeholder M106X
 
 Prepared advanced scenes cover conics, Bezier/B-spline/NURBS controls, weights,
 knots, periodic transitions, explicit branch edits, fillet/trim/mirror/pattern
@@ -1247,24 +1369,24 @@ topology. One medium sketch exercises rapid edit and cancellation. The 45-60 min
 review judges local predictability, branch clarity, coherent associated motion,
 topology trust and perceived responsiveness.
 
-### UAT-C4 - Integrated release candidate at M54
+### UAT-C4 - Integrated release candidate at placeholder M108X
 
 The frozen candidate starts from an empty workspace and proceeds through ordinary
 and construction geometry, constraints, host parameters, an external reference, an
 advanced curve, one associative operation, conflict repair, production profile,
-save/reload/history/capsule recovery and short exploratory authoring. The 45-60 minute
+save/reload/history recovery and short exploratory authoring. The 45-60 minute
 review judges end-to-end trust and coherence rather than repeating an exhaustive
 matrix.
 
 ### UAT evidence and recheck policy
 
-Each checkpoint provides one URL, deterministic resets, concise instructions and
-checksummed capsules. Findings automatically capture the candidate revision,
-workspace input, action transcript, screenshot and accepted/attempted diagnostics.
-Objective defects receive native and browser regressions. A targeted human recheck is
-preferred; a full checkpoint repeats only after a material API, schema or primary-
-workflow change. M40, M45, M52 and M54 cannot close without explicit supervising-
-human sign-off.
+Each checkpoint provides one manual entry point, deterministic resets and concise
+instructions. Findings capture the candidate revision, workspace input, action transcript
+and accepted/attempted diagnostics from public APIs; a human may attach an OS screenshot
+for a visual finding. Objective defects receive direct owning-layer regressions. A targeted
+human recheck is preferred; a full checkpoint repeats only after a material API, schema or
+primary-workflow change. Completed M40.7, M53 and eventual renumbered M106X/M108X require
+explicit supervising-human sign-off.
 
 ## Frozen near-singular fixtures
 

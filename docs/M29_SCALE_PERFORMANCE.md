@@ -24,7 +24,7 @@ not interactive-performance promises.
 | Core dense | Criterion `2x2`, `4x4`, `8x8` systems |
 | Core representative | CAD-like 100/1,000/10,000 and linkage-like 99/999/9,999 tangent coordinates |
 | Sparse crossover | Connected 64/128/256-column hard systems; `Auto` threshold remains 256 columns/rows/entries at density `<= 1/128` |
-| Sketch interaction | M14 small and medium documents with import, first solve, incremental solve and browser-render ceilings |
+| Sketch interaction | M14 small and medium documents with current native import/first/incremental solve ceilings; browser-render evidence is historical |
 | Advanced sketch | 1,000-control/128-contact NURBS locality and M28 105-pair correctness; no general interactive timing claim |
 | Spatial release | 256 moving bodies, 1,536 active coordinates, validated `SparseQr`, dense-authoritative rank and 180-second ceiling |
 
@@ -47,19 +47,20 @@ tree are development evidence only.
 
 ## M29 development measurements
 
-The 2026-07-21 release-candidate tree produced these enforced p95 results:
+The 2026-07-21 release-candidate tree produced these p95 results. Native M14 rows
+remain enforced; the browser row is a retired historical measurement:
 
 | Measurement | Small | Medium | Budget |
 | --- | ---: | ---: | ---: |
 | JSON import | 0.449 ms | 0.519 ms | 20 / 150 ms |
 | First solve | 1.849 ms | 51.550 ms | 500 / 4,000 ms |
 | Incremental edit/solve | 4.558 ms | 111.778 ms | 300 / 1,500 ms |
-| Browser render | 9.300 ms | 61.400 ms | 75 / 400 ms |
+| Browser render (historical) | 9.300 ms | 61.400 ms | 75 / 400 ms at the M29 checkpoint |
 
 The 256-moving-body spatial release fixture solved and independently validated
 1,536 active coordinates with the `SparseQr` step path in `88.29s`, below its
-`180s` ceiling. The desktop five-stage scissor burst coalesced 40 pointer events to
-one render in `37ms`, below its `100ms` ceiling.
+`180s` ceiling. Historically, the desktop five-stage scissor burst coalesced 40
+pointer events to one render in `37ms`, below its then-current `100ms` ceiling.
 
 ## Commands
 
@@ -73,16 +74,20 @@ cargo test --locked --release -p geosolve-linkage --test m23_performance \
   -- --exact --ignored --nocapture
 ```
 
-Browser release gate, from `crates/geosolve-demo-web`:
+Surviving release WASM build, from `crates/geosolve-demo-web`:
 
 ```bash
-nix-shell ../../shell.nix --run 'trunk build --release && node e2e/m14.mjs'
+nix-shell ../../shell.nix --run 'trunk build --release'
 ```
+
+The former browser timing invocation was deleted by M50 after its retained semantics received
+direct owners. Its recorded measurements remain historical evidence, not a current gate.
 
 ## Budgets and rebaselining
 
-M14 timing ceilings and the M23 180-second release ceiling are enforced gates.
-Criterion measurements are observational. A change outside normal noise requires
+The native M14 import/solve/edit ceilings and the M23 180-second release ceiling
+remain enforced gates. The M14 browser-render/burst ceilings were retired with the
+browser harness at M50. Criterion measurements are observational. A change outside normal noise requires
 investigation but does not fail solely by percentage. Rebaselining an enforced
 budget requires a documented workload or reference-environment change, preserved
 before/after measurements and confirmation that residual, rank, branch and

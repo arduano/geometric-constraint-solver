@@ -13,9 +13,10 @@ old accepted geometry as if it solved the new intent would make audit, persisten
 and stale-work checks ambiguous.
 
 M34 therefore needs distinct design, attempt and accepted-state identities before
-M41-M47 add activation, host inputs and prepared work. Those identities must also
-allow an underconstrained but independently hard-valid state to remain a legitimate
-parent state. Zero mobility is not a condition of acceptance.
+M41-M43 add activation and immutable host inputs and placeholder M101X later adds
+prepared work. Those identities must also allow an underconstrained but independently
+hard-valid state to remain a legitimate parent state. Zero mobility is not a condition
+of acceptance.
 
 ## Decision
 
@@ -83,7 +84,7 @@ by an omitted or process-default field.
 The stamp is immutable during an attempt. Every result repeats it, and publication
 compares every member rather than checking only the design revision. A revision
 provides ordering and stale-work evidence; a digest provides exact payload identity.
-Neither substitutes for validating the corresponding input. M47 compare-and-swap
+Neither substitutes for validating the corresponding input. M101X compare-and-swap
 publication must reject a candidate if any stamped member differs from current
 session input.
 
@@ -105,19 +106,21 @@ Sketch wire languages v1 through v4 remain frozen. Their fields and variants are
 expanded to encode retained unsolved intent, attempt identity or host-input stamps.
 They continue to mean exactly the accepted-document languages already released.
 
-M34 implements the three-view lifecycle and identity rules. From M34 through M52,
+M34 implements the three-view lifecycle and identity rules. From M34 through M106X,
 any draft-v5 representation is private, explicitly unsupported and free to change
 without migration or compatibility guarantees. A draft-v5 payload is not a released
 wire language, supported import or canonical public output, and relabeling draft-v5
 syntax as v1-v4 must reject.
 
-M53 alone freezes one final sketch v5 language, its direct deterministic migrations
+M107X alone freezes one final sketch v5 language, its direct deterministic migrations
 from frozen v1-v4 and the separate parameter, external-snapshot and desktop-workspace
 envelopes. Until that gate passes, v1-v4 remain the only supported sketch wire
 languages.
 
 This ADR is an M33 contract decision only. M33 introduces no Rust API, public or
 private schema API, session behavior or draft-v5 reader/writer.
+
+The `X` suffix in M100X-M109X denotes a placeholder future milestone number.
 
 ## Consequences
 

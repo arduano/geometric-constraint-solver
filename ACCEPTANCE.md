@@ -56,7 +56,7 @@ orientation/span/winding/branch state; curvature, G2 and separately named parame
 C2 behavior; driving/reference dimensions; truthful diagnostics; and versioned
 persistence. It did not complete the production host-embedding contract.
 
-Completion of Deliverable 1 at M55 additionally requires the ordinary planar CAD
+Completion of Deliverable 1 at placeholder M109X additionally requires the ordinary planar CAD
 constraint/dimension catalog, retained unsolved design intent separated from accepted
 geometry, construction/activation semantics, typed host parameters, immutable
 external 2D references, cancellation, stable persistent-ID diagnostics, stale-work
@@ -78,13 +78,17 @@ M14 completes an alpha cut toward Deliverable 1, not Deliverable 1 itself. Its l
 `SketchDocument`, `SketchSession`, commands, history, versioned serialization, curve evaluation and constraints must be reusable Rust APIs. Selection, hit testing, tool state, rendering and `localStorage` must remain web-only, and the web crate must contain no equations. Desktop and mobile must support select/box-select, compatible multi-select constraints, draw, solver-projected drag, dimension edit, delete/suppress, pan/zoom, undo/redo, JSON import/export/local autosave, confirmed prospective coincident/horizontal/vertical inference, diagnostics/conflict/DOF and retained geometry on failure.
 
 The preceding desktop/mobile requirement records the completed M13-M14 historical
-gate. Post-alpha mobile behavior is not a future acceptance target. M39-M51 replace
-the playground with a desktop-only CAD-like sketch consumer; no responsive, tablet
-or phone implementation is required.
+gate. Post-alpha mobile behavior is not a future acceptance target. M39/M44 establish
+the desktop workbench, and cleanup M46-M50 removes the playground after direct-test
+replacement; no responsive, tablet
+or phone implementation is required. ADR 0029 also supersedes the historical
+web-only ownership of selection, hit testing and tool state: deterministic
+constraint-editing policy moves to `geosolve-constraint-editor`, while rendering,
+platform events, accessibility and browser storage remain presentation-owned.
 
 ## Frozen M1-M7 regression baseline
 
-All existing M1-M7 tests and the advanced free-radius circle/arc tangency follow-up remain mandatory through M55.
+All existing M1-M7 tests and the advanced free-radius circle/arc tangency follow-up remain mandatory through placeholder M109X.
 
 ### Core representation and solver
 
@@ -142,13 +146,13 @@ Baseline candidate vectors do not yet carry M8 completeness metadata. Until the 
 - Geometry and audit values always come from the same accepted state.
 - It displays termination, hard residual, rank/DOF, branch and candidate diagnostics, plus grouped source audit rows.
 - It preserves prior valid geometry visibly after failed edits.
-- Automated WASM and desktop browser diagnostic coverage remains through M55. M13-M14 added the disposable playground, including its historical mobile checks, as an alpha acceptance consumer without making it authoritative; those mobile checks do not extend to the post-M32 workbench.
+- Automated Rust and WASM adapter coverage remains through placeholder M109X. M13-M14 added the disposable playground and historical browser/mobile E2E as alpha acceptance consumers without making them authoritative; cleanup M46-M50 replaces retained claims with direct owning-layer tests and deletes that old infrastructure.
 
 ## M8 acceptance: contract rebaseline and representative baselines
 
 M8 is ready for review only when every item below is objectively present. These checkboxes are acceptance criteria and do not mark `PLAN.md` complete.
 
-The checked wording below is the preserved M8 completion record. Its then-current M8-M22 allocations are historical; `PLAN.md` now governs the ordered M10-M55 program.
+The checked wording below is the preserved M8 completion record. Its then-current M8-M22 allocations are historical; `PLAN.md` now governs completed work, cleanup M46-M53 and the placeholder M100X-M109X future sequence.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -669,17 +673,62 @@ complete.
 - Persistent measurements carry typed units, provenance and finite independently evaluated values.
 - Generic path length cannot succeed when value, derivative or work bounds are incomplete.
 
+M38 acceptance is complete. Focused regressions also prove explicit positive/negative
+angle winding and reject stale or foreign persistent-measurement provenance without
+mutation.
+
 ## M39 acceptance: CAD workbench foundation
 
 - The desktop shell provides core authoring, selection, sketch tree, inspector, glyphs, dimensions, status and problems through public sketch APIs.
 - Accepted, unsolved, solving, solved-preview and rejected views are explicit and synchronized.
 - Automated desktop E2E passes; mobile and responsive behavior are not tested or claimed.
 
-## M40 acceptance: human UAT 1
+M39 acceptance is complete. The focused fresh-profile desktop E2E covers authoring,
+selection synchronization, accepted-value dimension annotations, accepted and rejected
+reload behavior, retained accepted geometry and the isolated legacy developer route.
 
-- All objective core drafting workflows pass automation before review.
-- The supervising human completes the prepared 30-45 minute core interaction scorecard.
-- No unresolved correctness, data-loss, misleading-state or basic interaction blocker remains; objective findings have automated regressions.
+## M40 acceptance: mechanically qualified core interaction and human UAT 1
+
+- M40.1 fixes the one-way `geosolve-constraint-editor` to `geosolve-sketch` dependency
+  and assigns no equations, accepted-state authority, rendering or platform state to
+  the editor.
+- M40.2 natively proves deterministic accepted scene, persistent point/span picking,
+  point priority, ordered modifier selection, basic relation applicability and the
+  exact click/drag threshold without DOM hit geometry.
+- M40.3 natively enumerates every draft stage, snap proposal, projected-drag preview,
+  completion, cancellation, invalid input, modifier, pointer and threshold boundary.
+- M40.4 natively proves retained design/attempt/accepted identity, action
+  applicability, dimensions, delete/suppression, history, diagnostics, stale revisions
+  and transactional rollback through public sketch APIs.
+- M40.5 makes the desktop workbench a thin event/render/storage adapter and removes
+  duplicate interaction policy rather than retaining fallback paths.
+- M40.6 provides deterministic/model-based native transition coverage, native/WASM
+  parity and focused browser adapter tests for every objective scorecard action.
+- M40.7 begins only after M40.1-M40.6 pass; the supervising human then completes the
+  prepared 30-45 minute usability scorecard.
+- No unresolved correctness, data-loss, misleading-state or basic interaction blocker
+  remains; every objective finding has a headless regression before human recheck.
+
+M40.1-M40.6 automated acceptance is complete. The checked-in corpus, generated model,
+canonical native/release-WASM report and all-covered machine matrix qualify every
+objective scorecard action, while focused Chromium platform evidence passes 14/14.
+M40 is complete as of 2026-07-26: the supervising human approved M40.7 after the
+mechanically requalified UAT-C1-F4 and UAT-C1-F5 remediations.
+
+### Post-M40 reusable interaction acceptance rule
+
+- New semantic drafting assistance must be implemented and deterministically tested in
+  `geosolve-constraint-editor`, including state retained across pointer samples, snap or
+  hover identity memory, candidate ranking, tolerance boundaries, guides, previews and
+  commit/cancel consequences.
+- Browser/native/3D hosts may translate platform events and map a ray or pointer onto a
+  sketch plane, then render editor DTOs. They may not maintain a parallel geometric
+  interaction state machine or derive their own assistance candidates.
+- Prospective inference remains non-mutating until explicit confirmation submits a
+  typed headless effect/document edit.
+- Every future browser assertion for such behavior requires a native headless replay
+  proving the same transition first. This rule is prospective and does not reopen the
+  mechanically completed M40.1-M40.6 scope.
 
 ## M41 acceptance: construction roles and activation
 
@@ -687,11 +736,20 @@ complete.
 - Effective activation and every inactivity reason are explicit and dependency-safe.
 - Inactive branch/contact/topology state survives reactivation without coordinate inference.
 
+Passed 2026-07-27: focused role/activation, constrained-construction, dependency-closure,
+retained-lifecycle, frozen-persistence and exact discrete-state regressions passed with
+independent review and all global native/WASM quality gates.
+
 ## M42 acceptance: typed host parameters
 
 - Immutable revisioned parameter batches can drive several targets without adding solver variables.
 - Inputs and output proposals have typed units, persistent identity, provenance and stale-commit protection.
 - GeoSolve owns no formula parser, host dependency graph or configuration evaluator.
+
+Passed 2026-07-27: canonical typed batches, shared driving targets, activation-first
+resolution, declared dimensionless fixed-scalar targets, stamped output proposals,
+deterministic persistence/evidence and atomic stale/invalid/cancelled retention passed
+focused and global native/WASM qualification with independent review.
 
 ## M43 acceptance: external references
 
@@ -699,78 +757,225 @@ complete.
 - Missing, stale, malformed or topology-incompatible references retain unsolved intent and accepted geometry truthfully.
 - Rebinding and topology transitions are explicit; proximity never repairs identity.
 
+Passed 2026-07-27: canonical bounded point/directed-line snapshot sets, exact attempt
+and accepted stamps, fixed-coefficient native solving, typed unavailable-reference
+closure, atomic failure retention, explicit topology rebinding, complete audit evidence
+and diagnostic reproduction passed focused and global native/WASM/browser qualification
+with independent review.
+
 ## M44 acceptance: host-state workbench
 
 - Construction, activation, parameter, external-reference and dual-state workflows are available through the desktop consumer.
 - Browser state identifies all design/input/accepted revisions and never exposes internal scalars as user parameters accidentally.
 - Fresh-profile automated E2E proves every advertised state and recovery path before UAT 2.
 
-## M45 acceptance: human UAT 2
+Passed 2026-07-27: coordinator and workbench fixtures expose
+typed role/activity, complete parameter batches and proposals, immutable external status
+and explicit rebinding, three lifecycle identities and accepted-only scene/profile/audit
+evidence. Locked native/WASM/release checks, preserved M40 browser coverage (14/14) and
+fresh-profile M44 coverage (6/6) passed with static equation/callback boundary checks.
+The carry-forward full M14 browser suite has no complete
+post-correction pass. Separate runs produced tower burst-drag overruns (`130 ms` and
+`118 ms` against the unchanged `100 ms` budget) and a CDP mouse-event dispatch timeout.
+The reproducible overrun was localized to unconditional all-active M41 dependency
+propagation and corrected by skipping dependency closure when no direct inactivity reason
+exists. Five isolated post-correction tower runs (`62`, `42`, `37`, `39`, `44 ms`) were
+within budget and focused M41/native tower/release build checks passed, but the full rerun
+was stopped by the supervising user before a final result. The budget and historical
+assertions remain unchanged. Further flaky full-M14 work is explicitly deferred to the
+M45 UAT preparation window. During that preparation, the release WASM build, focused
+103-test web suite and all six fresh-profile M44 groups passed again, including the
+checksummed M45 finding package. The supervising user then explicitly authorized avoiding
+the costly legacy full-M14 suite and fast-tracking to M45 based on focused happy-path
+qualification. This closes M44 without converting any incomplete M14 run into passing
+evidence or weakening its preserved gates.
 
-- The supervising human completes the prepared 30-45 minute host-semantics scorecard after full automated qualification.
+## M45 acceptance: cleanup investigation and UAT-point capture
+
+- All intended host-semantics UAT points are preserved independently of the temporary fixture.
+- Every legacy inline/E2E group is classified by authoritative owner or explicit retirement.
+- Human UAT is not claimed; the host-semantics human gate is relocated to post-cleanup M53.
+
+## M46 acceptance: direct-test ownership freeze
+
+- Every M14/M40/M44 E2E assertion has a named direct Rust unit/integration owner or reviewed retirement reason.
+- Direct tests target domain, editor, presentation, persistence or WASM-adapter contracts without Chromium, CDP, HTTP serving, DOM scraping, screenshots or wall-clock browser timing.
+- No new E2E or source-substring policy scan is introduced, and workspace formatting/Clippy gates are clean.
+
+Completion record (2026-07-27): the final ledger assigns every M14/M40/M44 group,
+static scan and legacy inline assertion to an existing or named proposed direct Rust owner
+or reviewed retirement. Finding capture is test/UAT-only, M46 deletes nothing, and an
+independent read-only review found no ownership or deletion-gate blocker. Formatting/diff,
+shell syntax, warnings-denied workspace Clippy, the complete locked all-feature workspace
+suite and locked WASM check pass without browser automation.
+
+## M47 acceptance: focused host-state replacement and M44 purge
+
+- Five small fixture groups preserve all former M44 contracts and ten recorded UAT points without becoming canonical or persisted product state.
+- Typed finding evidence is tested deterministically over public domain/audit APIs.
+- The broad fixture, fixture-only controls, `e2e/m44.mjs` and its browser infrastructure are deleted.
+
+Completion record (2026-07-28): five direct Rust groups in `panels.rs`, `scene.rs` and
+`evidence.rs` preserve the six M44 contracts and all ten archived UAT points through typed
+public domain/editor inputs, accepted-only rendering and deterministic checksummed capture.
+The broad `HostState` composition, its fixture actions/markers and `e2e/m44.mjs` are absent.
+Focused M41-M43 tests, 101 demo-web tests, the complete locked all-feature workspace suite,
+formatting/diff, warnings-denied Clippy and the locked all-feature WASM check pass without
+browser automation. M47 acceptance is complete.
+
+## M48 acceptance: direct workbench qualification and M40 purge
+
+- The native editor corpus/golden remains authoritative; retained presentation, persistence and WASM-adapter claims have direct tests.
+- Browser-only DOM/layout/reload/download/focus claims are explicitly retired rather than imitated at the wrong layer.
+- `e2e/m40.mjs`, `serve-m40.sh`, source scans and M40 browser infrastructure are deleted.
+
+Completion record (2026-07-28): the unchanged 53-test editor suite passes its M40 corpus,
+canonical golden and completeness oracle. Pure workbench tests directly cover construction
+effects, coordinate normalization, shared persistent identity, glyph/dimension DTOs,
+lifecycle/problem/redundancy presentation, the production persistence codec and fallback,
+semantic markup, deterministic evidence serialization and exact adapter report/checksum
+parity. The M40 script, serving script, runtime markers/actions and browser-only qualification
+mechanics are absent; delivery-only claims are recorded as retired in
+`docs/M48_IMPLEMENTATION.md`. The 111-test all-feature demo-web suite, complete locked
+all-feature workspace suite, formatting/diff, warnings-denied Clippy, locked all-feature WASM
+check and release Trunk build pass without browser automation. M48 acceptance is complete.
+
+## M49 acceptance: legacy semantic extraction
+
+- Every retained class-A/M14 claim passes in sketch, linkage, editor, persistence or focused presentation tests.
+- Duplicate claims are confirmed against native owners; legacy-only UI/mobile/layout/timing/download claims have reviewed retirement entries.
+- No retained assertion depends on the playground runtime or `e2e/m14.mjs`.
+
+Completion record (2026-07-28): all 13 M14 browser groups and all 92 legacy inline tests
+are reconciled in `docs/M49_IMPLEMENTATION.md` with zero unowned claims. Retained geometry,
+continuation, transaction, inference, accepted-snapshot and diagnostic semantics pass through
+direct sketch, linkage, editor and focused workbench owners; browser delivery, layout,
+timing, download and private adaptive-render claims have explicit retirement rationales.
+Formatting/diff, the complete locked all-feature workspace suite, warnings-denied workspace
+Clippy, the all-feature WASM check and release Trunk build pass without browser automation.
+Independent read-only verification confirmed that no retained assertion depends on the old
+runtime and that M49 leaves the M14 E2E/application purge exclusively to M50. M49 acceptance
+is complete.
+
+## M50 acceptance: old E2E and legacy application purge
+
+- All old E2E scripts and Chromium/CDP/server/profile/download infrastructure are absent.
+- `#/dev/lab`, the playground/frozen legacy application, hidden DOM, obsolete CSS, legacy persistence glue and legacy-only tests are absent.
+- Repository search, direct native/WASM tests, formatting and warnings-denied Clippy prove the deletion boundary without browser automation.
+
+Completion record (2026-07-28): the final M14 E2E script/directory, playground route/runtime,
+hidden DOM and obsolete CSS, legacy-only tests and persistence glue, serving scripts and
+release-gate browser invocation are absent. One workbench remains over public domain/editor
+APIs; dead dependencies and browser-only features are pruned. The focused editor and demo-web
+suites, complete locked all-feature workspace suite, formatting/diff, warnings-denied workspace
+Clippy, all-feature WASM check and release Trunk build pass without browser automation or
+serving. Reviewed source/script searches and independent read-only verification confirm the
+deletion boundary. M50 acceptance is complete.
+
+## M51 acceptance: single-workbench consolidation
+
+- One workbench remains, with minimal platform glue and directly testable presentation/persistence/evidence transformations.
+- Dead dependencies, compatibility shims, stale docs and cleanup-only fixtures are removed.
+- Direct tests are the sole automated qualification path and native/WASM checks pass.
+
+Completion record (2026-07-28): one workbench and one WASM startup path remain. M51 removed the
+design-only browser-storage migration, duplicate M40 editor-report adapter and M40 JSON/SVG
+evidence package; retained directly tested workspace persistence, presentation/effect
+transformations and deterministic typed host evidence; and removed the stale M32 distribution
+copy. Focused editor/demo-web suites, the complete locked all-feature workspace suite,
+formatting/diff, warnings-denied workspace Clippy, all-feature WASM check and release Trunk build
+pass without browser automation or serving. Independent read-only verification found no
+functional loss or unowned survivor contract. M51 acceptance is complete.
+
+## M52 acceptance: post-cleanup host UAT candidate
+
+- Minimal disposable UAT composition covers all ten host-semantics points without reintroducing product fixture state.
+- Instructions and finding evidence are deterministic products of public domain/audit APIs.
+- All objective claims pass direct automated qualification; only human judgment remains.
+
+Completion record (2026-07-28): four fixed-identity in-memory fixtures and ten deterministic typed
+instructions/actions cover the preserved host-semantics points in the sole workbench. Dedicated
+M52 evidence omits canonical fixture documents while retaining typed inputs, identities, revisions,
+lifecycle and accepted/attempted audit. The production-used sidecar state directly proves blocked
+ordinary actions and saves, unchanged exit state and persistence-codec reload. Focused and full
+native tests, formatting/diff, warnings-denied workspace Clippy, WASM check and release Trunk build
+pass without browser automation or serving. Independent read-only verification passed. M52
+acceptance is complete; only M53 supervising-human judgment remains.
+
+## M53 acceptance: human UAT 2
+
+- The supervising human completes and explicitly approves the rewritten 30-45 minute host-semantics scorecard.
 - Construction, suppression, parameters, external references and unsolved-state recovery are understandable and trustworthy.
-- No unresolved ownership, stale-data, recovery or state-trust blocker remains; objective findings have regressions.
+- No unresolved ownership, stale-data, recovery or state-trust blocker remains; objective findings have direct regressions.
+- Every UAT request/finding has a durable identifier, classification, disposition and applicable
+  regression/requalification plus human retest; deferred future scope retains an explicit roadmap
+  owner.
 
-## M46 acceptance: stable diagnostics
+## Placeholder future acceptance
 
-- Hosts can consume solve, source, component, dependency, activation, parameter and external-reference diagnostics through stable domain DTOs and persistent IDs.
+The literal M100X-M109X identifiers are placeholder future numbers, not executable cleanup
+milestones. They will be renumbered after M53; no old browser E2E qualification may return.
+
+### M100X: stable diagnostics
+
+- Hosts consume solve, source, component, dependency, activation, parameter and external-reference diagnostics through stable domain DTOs and persistent IDs.
 - Structural/numerical rank, equality/bounded/one-sided mobility and diagnostic completeness remain separate.
 - Machine-readable repair suggestions never mutate state automatically or claim globally minimal conflict proof.
 
-## M47 acceptance: prepared jobs and concurrency
+### M101X: prepared jobs and concurrency
 
 - Prepared jobs capture every relevant input revision and cannot mutate a session until compare-and-swap commit.
 - Stale or cancelled work cannot overwrite a newer accepted state.
 - The documented safe Rust ownership contract works for host-managed native workers and single-threaded WASM without `unsafe` code.
 
-## M48 acceptance: incremental solving and scale
+### M102X: incremental solving and scale
 
 - Incremental and full-rebuild paths agree on geometry, validation, rank, branch and diagnostics.
 - Parameter, reference, activation and local geometry edits dirty only their dependency closures without skipping fresh acceptance evidence.
 - Published cold/warm/profile/memory/cancellation envelopes pass, and rank authority is either proved sparse or bounded honestly by a supported connected-component limit.
 
-## M49 acceptance: sketch operations companion
+### M103X: sketch operations companion
 
 - The companion owns no residual equations and emits deterministic public sketch transactions with identity-preserving mappings.
 - Split, trim, extend, mirror, chamfer and baseline macro/pattern operations are transactional and dependency-aware.
 - Multiple visible intervals never rewrite immutable support definitions or infer topology by proximity.
 
-## M50 acceptance: production topology companion
+### M104X: production topology companion
 
 - Complete output publishes revision-stamped wires, nesting, holes, orientation and exact source provenance for the declared scope.
 - Tangency, overlap, touching, T-junction and self-intersection policies are explicit and bounded.
 - Stale, cancelled, truncated or ambiguous output cannot be consumed as a production profile and never changes solver state.
 
-## M51 acceptance: advanced workbench and qualification
+### M105X: advanced workbench and direct qualification
 
-- The CAD-like desktop consumer covers advanced curves, branches, operations, diagnostics, production profiles, persistence and cancellation without private equations.
-- The old playground, hidden legacy application and obsolete styling are removed after automated parity.
-- Isolated fresh-profile browser suites and the generated UAT evidence package pass without retries; no mobile behavior is claimed.
+- The one CAD-like desktop consumer covers advanced curves, branches, operations, diagnostics, production profiles, persistence and cancellation without private equations.
+- Direct editor, presentation, persistence and WASM-adapter suites qualify every objective claim; no old playground or browser E2E returns.
+- The generated UAT evidence package is deterministic; no mobile behavior is claimed.
 
-## M52 acceptance: human UAT 3
+### M106X: human UAT 3
 
 - The supervising human completes the prepared 45-60 minute advanced geometry/topology scorecard.
 - Advanced controls, branch transitions, associated operations, topology claims and representative interaction performance are understandable and trustworthy.
 - No unresolved wrong-branch, misleading-profile, advanced-interaction or responsiveness blocker remains.
 
-## M53 acceptance: release-candidate freeze
+### M107X: release-candidate freeze
 
 - Sketch v5, parameter/snapshot/workspace envelopes and the supported Rust/WASM API are frozen with deterministic migration and compatibility tests.
-- The exact candidate passes SemVer, schema, package, native, WASM, browser, fuzz, mutation, performance, documentation and licence gates.
+- The exact candidate passes SemVer, schema, package, native, WASM, fuzz, mutation, performance, documentation and licence gates through direct automated qualification.
 - Any material API/schema/workflow change revokes the candidate and requires full requalification.
 
-## M54 acceptance: human UAT 4
+### M108X: human UAT 4
 
 - The supervising human completes and signs the 45-60 minute integrated candidate workflow plus exploratory authoring.
 - Normal work, failure recovery, persistence, profiles and advanced diagnostics form one coherent and trustworthy experience.
-- Every objective finding has a regression; only targeted human rechecks remain unless the candidate changes materially.
+- Every objective finding has a direct regression; only targeted human rechecks remain unless the candidate changes materially.
 
-## M55 acceptance: production embedding release
+### M109X: production embedding release
 
 - A mock CAD host owns expressions, external keys, application metadata/history and worker scheduling while consuming only stable public GeoSolve APIs.
 - Retained intent, immutable inputs, activation, cancellation, stale work, diagnostics and production topology pass end to end.
 - Coverage-guided fuzzing, resource controls, packaged examples and Linux/Windows/macOS/WASM Rust consumers pass without a C ABI.
-- One release command proves all automated M1-M54 gates and records the four required human approvals without false success, false complete topology or stale commit.
+- One release command proves every renumbered automated gate and records the required human approvals without false success, false complete topology or stale commit.
 
 ## Regression and oracle policy
 

@@ -114,10 +114,10 @@ These deterministic counters are the authoritative resource evidence for bounded
 profile work. Peak RSS is reported for observation only because allocator, loader,
 platform, and process history make it unsuitable as a portable correctness gate.
 
-## Browser harness and measurements
+## Historical browser harness and measurements
 
-`m32BrowserPerformanceSuite` runs in both `GEOSOLVE_E2E_M32_ONLY=1` and the full
-browser suite. Each workload receives two warmups followed by 12 measured samples.
+Before M50, `m32BrowserPerformanceSuite` ran in both a focused mode and the full browser
+suite. Each workload received two warmups followed by 12 measured samples.
 The timer starts immediately before the existing **Load accepted example** action and
 stops only after `#playground-root` publishes a strictly newer `renderSequence`.
 Selection of the scene key and scale `1` is untimed. The timed work therefore includes
@@ -154,8 +154,10 @@ cargo check --locked -p geosolve-sketch --example m32_performance
 cargo run --locked --release -p geosolve-sketch --example m32_performance
 cargo test --locked -p geosolve-sketch --test m30 --test m31
 (cd crates/geosolve-demo-web && nix-shell ../../shell.nix --run 'trunk build --release')
-(cd crates/geosolve-demo-web && GEOSOLVE_E2E_M32_ONLY=1 node e2e/m14.mjs)
 ```
+
+The focused Chromium command is intentionally omitted because M50 deleted the old browser
+harness after direct semantic replacement. The table above remains historical evidence.
 
 The example check passed, the release harness passed all six timing gates and all
 correctness/completeness/resource assertions, and the relevant native tests passed:

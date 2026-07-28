@@ -26,7 +26,7 @@ capability and must not present any part of this ADR as implemented behavior.
 
 M35 implements cooperative cancellation, deterministic work limits, operation
 outcomes and checkpoints for synchronous sketch solve, diagnostic and profile paths.
-M47 implements immutable accepted snapshots, prepared jobs, candidate patches and
+M101X implements immutable accepted snapshots, prepared jobs, candidate patches and
 complete-input-stamp compare-and-swap commit. No implementation claim is made before
 the corresponding milestone gate passes.
 
@@ -95,7 +95,7 @@ M35 places checkpoints at deterministic safe boundaries, including:
 Residual and Jacobian evaluation remains behavior-pure and does not call host code.
 The implementation need not poll inside a third-party factorization or another
 non-interruptible kernel. Such kernels have documented input bounds, and M35 measures
-the maximum observed cancellation latency at their boundaries. M48 may improve those
+the maximum observed cancellation latency at their boundaries. M102X may improve those
 bounds but cannot weaken outcome or commit semantics.
 
 If cancellation is observed at any checkpoint, all scratch work is discarded and the
@@ -109,7 +109,7 @@ operation. Consequently, an operation that returns `Cancelled` has never committ
 
 ### Immutable prepared jobs
 
-M47 separates preparation, execution and commit:
+M101X separates preparation, execution and commit:
 
 1. the session owner captures an immutable accepted/input snapshot and prepares a
    job;
@@ -171,7 +171,7 @@ request evidence still match the host's selected query.
 
 ### Native and WASM ownership contract
 
-At M47, immutable accepted snapshots, prepared jobs, cancellation handles/tokens and
+At M101X, immutable accepted snapshots, prepared jobs, cancellation handles/tokens and
 job results are `Send + Sync` on native targets when published as worker-shareable
 types; compile-time assertions protect that surface. Mutable sessions have no `Sync`
 mutation contract and remain owned by the single writer. This uses safe Rust only and
@@ -202,5 +202,5 @@ cannot change accepted publication: only one exact complete-stamp CAS can commit
 - Single-threaded WASM remains supported without pretending that synchronous code can
   be interrupted by the same blocked event loop.
 - M35 must instrument all documented expensive paths before claiming cancellation;
-  M47 must prove ownership markers and stale-commit behavior before claiming prepared
+  M101X must prove ownership markers and stale-commit behavior before claiming prepared
   concurrency.

@@ -1096,9 +1096,10 @@ impl SketchAcceptedStateIdentity {
 
 /// Exact M34 inputs evaluated by one attempt before later host-input stamps exist.
 ///
-/// M41-M101X extend the lifecycle with activation, parameter, external-snapshot, and
-/// prepared-work identities. This type intentionally records only inputs implemented
-/// by M34 and does not claim to be the final v5 input stamp.
+/// M41-M43 extend the lifecycle with activation, parameter and external-snapshot
+/// identities; placeholder M101X later adds prepared-work identity. This type
+/// intentionally records only inputs implemented by M34 and does not claim to be the
+/// final v5 input stamp.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SketchAttemptInput {
     design: SketchDesignIdentity,

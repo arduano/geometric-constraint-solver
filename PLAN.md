@@ -32,8 +32,9 @@ The library must support independently editable 2D sketch geometry, including:
   host without importing B-rep or UI concerns into solver state.
 
 M22 completed the built-in curve and generic differential-constraint surface, not
-the complete production embedding contract. M33-M55 close the ordinary CAD
-catalog, host integration, interaction-consumer and release gaps. This deliverable
+the complete production embedding contract. M33-M45 close the first ordinary-CAD,
+host-integration and interaction-consumer cut; M46-M53 perform the cleanup rebase;
+the placeholder M100X-M109X sequence preserves the later functional/release work. This deliverable
 does not include a solid B-rep kernel, meshing or 3D sketch curves.
 
 ### Deliverable 2: 2D and 3D rigid-body kinematics
@@ -76,10 +77,16 @@ The playground interaction scope is select, box-select, multi-select compatible 
 
 Reusable Rust APIs own `SketchDocument`, `SketchSession`, commands, history, versioned serialization, curve evaluation and all constraints/equations. Selection, hit testing, tool state, rendering and browser `localStorage` remain web-only. The web crate is non-authoritative, contains no solver or geometry equations and may be replaced without changing document semantics.
 
+The preceding paragraph records the completed M13-M14 alpha boundary. ADR 0029
+supersedes its post-alpha interaction ownership: deterministic editor policy moves to
+`geosolve-constraint-editor`; only rendering, accessibility, platform events and
+browser storage remain presentation-specific.
+
 Post-alpha browser policy: the playground is a robust sanity-checking instrument for
 the supervising user to inspect claims and expose defects, not a production
-application. M39, M44 and M51 replace it with a desktop-only CAD-like sketch
-workbench that remains a non-authoritative public-API consumer. Future mobile or
+application. M39 and M44 establish its desktop-only CAD-like replacement, and
+M46-M50 remove the old playground and its E2E infrastructure after direct-test
+replacement. The workbench remains a non-authoritative public-API consumer. Future mobile or
 responsive behavior is explicitly outside acceptance and must not consume roadmap
 time.
 
@@ -97,7 +104,14 @@ engine that a real CAD host can use. The accepted personality is:
   branch changes remain explicit;
 - sketch operations and production topology are companion APIs rather than solver
   equations or B-rep features;
-- supported embedding targets are Rust and WASM only through M55;
+- all semantic interaction intelligence is reusable headless state: tool progression,
+  hover/snap memory, inference candidates, guide activation, tolerances, preview
+  geometry and commit/cancel policy belong in `geosolve-constraint-editor`, never in a
+  particular DOM, canvas or 3D host UI;
+- an embedding UI may map a platform pointer or 3D camera ray onto a sketch plane and
+  render returned DTOs, but it must not recreate the editor's interaction state machine
+  or infer geometric assistance independently;
+- supported embedding targets are Rust and WASM only through placeholder M109X;
 - the reusable library remains `GPL-3.0-or-later`;
 - the web consumer is a desktop demo of sketch-constraint workflows, not a mobile
   product or solid modeller.
@@ -112,13 +126,19 @@ engine that a real CAD host can use. The accepted personality is:
 - Use local forward automatic differentiation where it reduces fragile analytic code; retain central finite differences as an independent oracle for every residual.
 - Preserve pure Rust, GPL-3.0-or-later licensing and the workspace `unsafe_code = "forbid"` policy.
 - Keep `geosolve-demo-web` as a separate public-API consumer. M13-M14 may shape embeddable sketch workflows, but web-only interaction and rendering concerns must not enter reusable Rust document/session APIs.
+- Keep stateful drafting assistance in `geosolve-constraint-editor`. Remembered hover
+  identities, prospective horizontal/vertical/coincident relationships, activation
+  boundaries and preview consequences must be deterministic headless inputs/state/
+  outputs with native regressions. A UI may display and explicitly confirm them only.
 - Do not call host code during residual evaluation. Host parameters and external
   geometry enter one attempt as immutable revisioned values.
 - Keep cross-system expressions, B-rep projection, topological naming, feature
   history and application undo outside the sketch solver contract.
-- Keep future human acceptance limited to M40, M45, M52 and M54. Every objective
-  correctness, persistence, compatibility and browser assertion must pass
-  automatically before a human checkpoint begins.
+- Keep future human acceptance limited to completed M40.7, post-cleanup M53, and
+  placeholder M106X and M108X. Every objective correctness, persistence,
+  compatibility and presentation-adapter assertion must pass through direct unit or
+  integration tests at its owning layer before a human checkpoint begins; old CDP E2E
+  suites are not a qualification path.
 
 ## Frozen baseline: M0-M7
 
@@ -1339,7 +1359,7 @@ for profile cancellation, `2.687691 ms` for the bounded QR window and `7.323588 
 for the bounded rank-SVD window. Nineteen focused M35 regressions cover cancellation,
 work exhaustion, checkpoint placement, rollback, constructor/compile/session parity,
 dense-cap boundaries and operation reports. Frozen sketch v1-v4 remains unchanged;
-M47 prepared jobs and compare-and-swap concurrency remain deferred. Formatting,
+Placeholder M101X prepared jobs and compare-and-swap concurrency remain deferred. Formatting,
 warnings-denied locked workspace Clippy/rustdoc, full locked workspace tests, locked
 WASM, release Trunk and the complete release gate pass.
 
@@ -1425,332 +1445,903 @@ locked workspace tests and the locked WASM consumer check pass.
 
 ## M38: dimensions and persistent measurements
 
-Status: planned.
+Status: complete.
 
 Goal: complete the normal dimensional vocabulary and make measurement semantics
 available without UI formulas.
 
-- [ ] Add signed relative horizontal/vertical and absolute datum-coordinate dimensions.
-- [ ] Add signed point-to-line distance and parallel-line separation.
-- [ ] Add two-line and three-point angle, circular sweep and circular arc-length dimensions.
-- [ ] Add driving/reference ellipse-axis and supported conic-property dimensions.
-- [ ] Persist curvature, osculating-radius and generic measurement definitions with typed units and provenance.
-- [ ] Add equation-free bounded length measurement for every regular bounded curve.
-- [ ] Add driving and equal path-length constraints only with bounded value/derivative evaluation and typed work exhaustion.
-- [ ] Remove the misleading line-only public meaning of `CurveLength` through a migration-safe replacement.
+- [x] Add signed relative horizontal/vertical and absolute datum-coordinate dimensions.
+- [x] Add signed point-to-line distance and parallel-line separation.
+- [x] Add two-line and three-point angle, circular sweep and circular arc-length dimensions.
+- [x] Add driving/reference ellipse-axis and supported conic-property dimensions.
+- [x] Persist curvature, osculating-radius and generic measurement definitions with typed units and provenance.
+- [x] Add equation-free bounded length measurement for every regular bounded curve.
+- [x] Add driving and equal path-length constraints only with bounded value/derivative evaluation and typed work exhaustion.
+- [x] Remove the misleading line-only public meaning of `CurveLength` through a migration-safe replacement.
 
 Gate: every driving and reference form agrees on the same independently evaluated
 measurement; no integral dimension succeeds outside its certified work and derivative
 contract.
 
+Completion notes: the separate M38 catalog provides signed coordinates and spacing,
+explicitly unwrapped angles, circular and conic dimensions, bounded path/equal-path
+length, and typed persistent measurements with accepted-lifecycle provenance. The new
+`SegmentLength` and `PathLength` definitions carry the expanded semantics; the old
+line-only `DocumentDimensionDefinition::CurveLength` spelling remains only as required
+frozen sketch-v1-v4 compatibility. Eleven focused M38 regressions cover central finite
+differences, driving/reference agreement, positive and negative angle winding, work
+limits, audit evidence, stale/foreign provenance and no-mutation rejection. Formatting,
+warnings-denied locked workspace Clippy, full locked workspace tests and the locked
+WASM consumer check pass.
+
 ## M39: CAD workbench foundation and core authoring
 
-Status: planned.
+Status: complete.
 
 Goal: begin the desktop-only rewrite early enough to test the ordinary CAD interaction
 model before host and advanced workflows build on it.
 
-- [ ] Split application state, domain controller, tools, selection, scene, panels, persistence and browser platform code into explicit modules.
-- [ ] Make one domain adapter the sole owner of sketch sessions and unstable core-report translation.
-- [ ] Add explicit accepted, design-unsolved, solving, solved-preview and rejected-attempt application states.
-- [ ] Build a CAD-like desktop shell with command bar, tool palette, sketch tree, full-height canvas, property inspector, status bar and Problems drawer.
-- [ ] Add retained scene layers, adaptive public-jet tessellation and revision-keyed geometry/profile caches.
-- [ ] Implement point, line/polyline, rectangle, circle/arc, core constraints, dimensions, drag, delete, undo and redo through public commands.
-- [ ] Draw selectable persistent constraint glyphs and driving/reference dimensions without recomputing equations in the browser.
-- [ ] Keep the old advanced lab available only through an explicit temporary developer route during migration.
+- [x] Split application state, domain controller, tools, selection, scene, panels, persistence and browser platform code into explicit modules.
+- [x] Make one domain adapter the sole owner of sketch sessions and unstable core-report translation.
+- [x] Add explicit accepted, design-unsolved, solving, solved-preview and rejected-attempt application states.
+- [x] Build a CAD-like desktop shell with command bar, tool palette, sketch tree, full-height canvas, property inspector, status bar and Problems drawer.
+- [x] Add retained scene layers, adaptive public-jet tessellation and revision-keyed geometry/profile caches.
+- [x] Implement point, line/polyline, rectangle, circle/arc, core constraints, dimensions, drag, delete, undo and redo through public commands.
+- [x] Draw selectable persistent constraint glyphs and driving/reference dimensions without recomputing equations in the browser.
+- [x] Keep the old advanced lab available only through an explicit temporary developer route during migration.
 
 Gate: automated desktop E2E proves every core workflow, accepted-state retention and
 canvas/tree/inspector synchronization before human UAT begins. Mobile support is not
 implemented or tested.
 
-## M40: human UAT 1 - core sketch interaction
+Completion notes: `geosolve-demo-web::workbench` separates application, domain,
+selection/tool, retained-scene, panel, persistence and platform responsibilities. Its
+versioned application-owned snapshot stores frozen design JSON, optional accepted JSON
+and lifecycle revision high-water metadata; reload independently restores accepted
+state and truthfully replays retained rejected intent. Canvas dimensions consume
+accepted domain values, and the web crate contains no solver equations. The release
+Trunk build and focused desktop M39 E2E pass, including core authoring, synchronized
+selection, accepted-state reload, driving/reference values, rejected-attempt reload,
+retained accepted geometry and the isolated `#/dev/lab` route. Mobile behavior remains
+outside implementation and acceptance.
 
-Status: planned; human approval required.
+## M40 pivot: mechanically qualified constraint editing
 
-Goal: retire the risk that the basic creation, selection, constraint and dimension
-interaction model is mathematically correct but unsuitable for CAD authoring.
+Status: complete as of 2026-07-26. UAT-C1-F4 and UAT-C1-F5 are confirmed fixed,
+automated requalification is complete and the supervising human approved M40.7.
 
-- [ ] Prequalify all objective core workflows through native, WASM and isolated desktop browser automation.
-- [ ] Provide one URL, deterministic resets and a 30-45 minute core drafting script requiring no build or numeric comparison.
-- [ ] Exercise geometry creation, constraints, driving/reference dimensions, constrained drag, conflict/redundancy, delete and history.
-- [ ] Assess whether accepted, preview, unsolved and rejected states are unmistakable.
-- [ ] Capture every finding as a scene capsule, screenshot, action transcript and accepted/attempted diagnostic bundle.
-- [ ] Convert objective findings into native and browser regressions and complete only the necessary targeted human rechecks.
+Goal: make every deterministic constraint-editing transition mechanically testable in
+pure Rust before asking a human to assess usability.
 
-Gate: the supervising human explicitly approves the core interaction scorecard and no
-correctness, data-loss, misleading-state or basic-usability blocker remains.
+Historical prequalification note (2026-07-26, superseded by the approved F4/F5
+rechecks): `cargo test --locked --workspace
+--all-features`, locked WASM check, release Trunk build and isolated `e2e/m40.mjs`
+all pass. The browser suite covers staged-design unsolved state, accepted edits,
+projected constrained drag/preview, dimensions, accepted redundancy, rejected conflict,
+history, reload and independently checksummed finding downloads. `docs/M40_UAT.md`
+preserves the prepared scorecard; M40 remained open at that time for
+supervising-human findings and explicit approval. This was the
+prequalification state before the findings below invalidated it.
+
+UAT finding UAT-C1-F1 (2026-07-26): the first human pass was stopped because staged
+geometry had no live preview, polyline completion was unclear and SVG letterboxing
+offset exact endpoint clicks. The targeted fix adds live previews for every core draft,
+an in-canvas polyline completion guide with button/double-click/Enter paths, correct
+screen-to-SVG conversion and endpoint-ID snapping for lines/polylines. `e2e/m40.mjs`
+regresses preview, completion, letterboxed coordinates and topology reuse. The human
+targeted recheck was required at that stage and subsequently passed.
+
+UAT finding UAT-C1-F2 (2026-07-26): point dragging showed `Sketch unsolved` and did
+not move accepted geometry until pointer release. The targeted fix rebuilds each pointer
+move as an isolated retained-session drag request, renders only independently accepted
+projected candidates, retains the last valid preview on rejection and commits one normal
+design/history edit on release. Escape and pointer cancellation discard the preview.
+`e2e/m40.mjs` now checks unconstrained and horizontal-constrained positions before
+release, including live projection onto the constraint manifold. A human targeted
+recheck was required at that stage and subsequently passed.
+
+UAT finding UAT-C1-F3 (2026-07-26): the next pass found broken canvas multiselection,
+impractically narrow line selection, point clicks being submitted as tiny drags, and an
+arc preview whose sweep and moving endpoint disagreed with accepted geometry. The fix
+makes point selection stable at pointer start, supports Shift/Ctrl/Meta extension, adds
+14 px invisible curve hit targets, requires 3 px of motion before drag preview or commit,
+and derives preview and commit from the same model-space counterclockwise arc endpoint
+projection. Browser regressions create point- and line-based constraints from canvas
+multiselection, prove click-only geometry is unchanged, and compare projected arc preview
+with accepted placement. A subsequent human recheck still could not select lines for
+constraints. This invalidates the prior automated-prequalification claim and triggers
+the headless-editor pivot below rather than another targeted DOM patch.
+
+### Post-M40 headless interaction ownership audit (2026-07-26)
+
+#### Requirements
+
+- The architecture rule assigns every behavior that changes an editing gesture's meaning
+  or progression—including remembered identities, candidate ranking, tolerance-boundary
+  transitions, guides/previews and confirmation—to `geosolve-constraint-editor` with
+  native replay. Hosts may normalize platform input, render DTOs, store state and register
+  events, but may not recreate assistance (`ARCHITECTURE.md`, *Headless
+  interaction-intelligence rule*).
+- The reusable acceptance rule is prospective: it does not reopen completed M40.1-M40.6
+  or create an M40 gate. M40.7 required supervising-human approval
+  (`ACCEPTANCE.md`, *Post-M40 reusable interaction acceptance rule*).
+
+#### Evidence and source pointers
+
+- **Default workbench (the default route): allowed platform/render/storage ownership.**
+  `workbench::wasm::install_canvas`, `install_keyboard` and `pointer_input`
+  (`crates/geosolve-demo-web/src/workbench/mod.rs`) register DOM events and normalize
+  letterboxed browser coordinates into `PointerInput`; `scene.rs` renders headless
+  scene/preview/selection DTOs and accepted sketch state, while `panels.rs` renders public
+  sketch-document data and editor-provided interaction state; `persistence.rs` serializes
+  coordinator checkpoints; `platform.rs` supplies `Window`. `routing::parse` selects `Workbench`
+  unless the hash is exactly `#/dev/lab`.
+- **Default workbench: headless semantic-policy ownership.** `ConstraintEditor` owns
+  deterministic scene/picking, selection, tool/draft progression, endpoint snap,
+  drag threshold, projected-preview request/result and construction effects
+  (`crates/geosolve-constraint-editor/src/lib.rs`: `EditorScene::hit_test`,
+  `ConstraintEditor::{pointer_down,pointer_move,pointer_up,projected_drag_result,
+  complete_draft}`). `RetainedEditorCoordinator` owns projected-solve acceptance,
+  applicability/disabled reasons, mutations, history, lifecycle and replay
+  (`coordinator.rs`: `resolve_projected_point_move`, `actions`,
+  `apply_editor_effect`, `undo`, `redo`, `replay`). The default adapter dispatches
+  those effects rather than deriving candidates or geometry (`workbench/mod.rs`:
+  `dispatch_effects`, `perform_action`).
+- **Evidenced default-workbench semantic-policy exception (one narrow case).**
+  `workbench/effect_adapter.rs::dispatch_construction_effect` retains a construction
+  preview after a failed commit by maintaining `failed_commit` and suppressing the
+  following `ClearConstructionPreview`. That failure-dependent preview-lifecycle
+  decision is semantic interaction state outside the headless crate, even though it
+  preserves the intended retry behavior. No other default-workbench exception was
+  evidenced in the inspected allowed sources.
+- **Legacy developer lab: isolated, non-default, nonconforming legacy ownership.**
+  `lib.rs::wasm::start` installs `playground::wasm` only for the explicit
+  `#/dev/lab` route and otherwise installs the workbench; `workbench/routing.rs` has a
+  regression proving that default hashes select `Workbench`. The lab's
+  `playground.rs::PlaygroundState` is a parallel web-owned interaction state machine:
+  `PointerGesture`, `InferenceProposal`, `set_tool`, `draw_click`, `create_point`,
+  `select_at`/`hit_test`, `begin_*`, `update_gesture`, `end_gesture`, `apply_constraint`,
+  `apply_dimension`, `apply_branch_state`, `confirm_inference`, and
+  `undo`/`redo` own gesture progression, hit ranking, tolerance/drag behavior,
+  inference, branch choices, previews and commits. It therefore does not satisfy the
+  reusable headless rule, but is deliberately isolated from the default M40 workbench.
+
+#### Decisions / inferred constraints
+
+- **Default-workbench adherence: high, approximately 85--95% by ownership area, not a
+  measured line/action percentage.** The audit counted eight meaningful semantic areas
+  (scene/picking/selection; tools/drafts/snapping; drag threshold; projected preview;
+  commit/cancel; action applicability; retained lifecycle/history; replay). Seven are
+  owned by the editor/coordinator; the failed-construction-clear disposition is the one
+  remaining adapter-owned area. This band communicates the narrow exception without
+  claiming false precision.
+- **Developer-lab adherence: nonconforming legacy tier (effectively no reuse of the
+  headless interaction state machine for its own policies).** Its isolation and explicit
+  route mean this is not evidence that the default workbench changes behavior by host.
+- Smallest future migration: extend the headless construction-effect protocol with a
+  commit acknowledgement/failure disposition so `ConstraintEditor` decides whether a
+  terminal preview clear is consumed; then make `effect_adapter` a literal renderer of
+  that decision. Do this as prospective interaction cleanup, without reopening M40.1--
+  M40.6 or adding an M40 gate.
+
+#### Open questions
+
+- None within the permitted source area. The later supervising-human M40.7 approval
+  closes the milestone without changing this audit's prospective ownership finding.
+
+#### Out of scope
+
+- No claim is made about uninspected routes, future assistance, or a migration of the
+  intentionally isolated `#/dev/lab` playground.
+
+### M40.1: headless editor contract and transition inventory
+
+Status: complete as of 2026-07-26.
+
+- [x] Accept ADR 0029 and add `geosolve-constraint-editor` as a one-way public consumer
+  over `geosolve-sketch`.
+- [x] Assign normalized input, viewport, scene, hit testing, selection, drafting,
+  gestures, applicability, typed effects, lifecycle and replay to the headless crate.
+- [x] Keep rendering, widgets, accessibility, storage and platform event registration
+  outside the crate; keep equations and accepted-state authority in `geosolve-sketch`.
+- [x] Replace the original M40 gate with ordered M40.1-M40.7 qualification.
+
+Gate: crate ownership and dependency direction are explicit; every current web-owned
+interaction responsibility has one planned headless or presentation owner.
+
+### M40.2: accepted scene, picking and selection foundation
+
+Status: complete as of 2026-07-26.
+
+- [x] Build deterministic screen-space points and semantic curve spans from accepted
+  documents using only public immutable curve evaluation.
+- [x] Add validated viewport transforms and configurable pixel-space pick tolerances.
+- [x] Resolve hits by point priority, distance and persistent identity without DOM or
+  CSS hit geometry.
+- [x] Add ordered replace/toggle selection with Shift/Ctrl/Command semantics.
+- [x] Add a 3 px point click-versus-drag state transition with typed preview, commit
+  and cancellation effects.
+- [x] Expose compatible fixed, coincident, horizontal, vertical, parallel,
+  perpendicular and equal-length actions as ordinary public `DocumentEdit`s.
+
+Gate: native tests select a line 6.5 px off its centerline, prioritize endpoints,
+multiselect two spans into a parallel edit, prove sub-threshold clicks emit no geometry
+work and validate viewport/error boundaries without a browser.
+
+Completion notes: `geosolve-constraint-editor` now provides `EditorScene`, `Viewport`,
+`ConstraintEditor`, persistent point/span selection, normalized pointer transitions,
+core action applicability and typed host effects. Five native tests pass. This does not
+qualify the existing browser, which still owns duplicate interaction logic.
+
+### M40.3: headless drafting, snapping and projection gestures
+
+Status: complete as of 2026-07-26.
+
+- [x] Add tool activation and complete point, line/polyline, rectangle, circle and arc
+  draft state machines with exact completion/cancel transitions.
+- [x] Add deterministic endpoint snapping and shared preview/commit construction
+  proposals without duplicating sketch equations.
+- [x] Add point-drag preview request/result transitions with last-valid-preview,
+  release and cancellation semantics.
+- [x] Exhaustively test every tool stage, threshold boundary, modifier, pointer ID,
+  invalid input and interruption sequence natively.
+
+Gate: generated transition sequences cannot mutate accepted state from an incomplete or
+cancelled draft, cannot commit a click as a drag and cannot disagree between preview
+and commit operands.
+
+Completion notes: typed `ConstructionProposal`s lower through public atomic document
+transactions; all core draft tools, persistent endpoint snapping and correlated
+projected-drag request/result transitions are headless. Seventeen native tests cover
+tool stages, exact gesture/snap boundaries, modifiers, pointer interruption, non-finite
+input, invalid-draft recovery, zero-sweep arcs and preview/commit operand identity.
+Focused tests and warnings-denied Clippy pass.
+
+### M40.4: headless edit lifecycle, history and diagnostics
+
+Status: complete as of 2026-07-26.
+
+- [x] Coordinate retained design, attempted candidate and accepted state through
+  public `RetainedSketchDocumentSession` APIs.
+- [x] Add constraints, dimensions, delete, suppression, undo/redo and stale-revision
+  transitions with exact action applicability.
+- [x] Publish presentation DTOs for lifecycle, problems, selection, action enablement,
+  accepted measurements and audit identity without core-report interpretation in UIs.
+- [x] Add deterministic replay/model tests for conflicts, redundancy, rejected edits,
+  retained accepted geometry, history and reload inputs.
+
+Gate: native state-machine scenarios cover every objective core scorecard workflow and
+prove accepted/design/attempt identities, rollback, history and available actions.
+
+Completion notes: `RetainedEditorCoordinator` owns retained lifecycle coordination,
+revision-bound effects, opaque checkpoint history, action applicability, core
+dimensions, cascading delete/suppression, replay, coherent problem/audit identities and
+provenance-checked measurements. Thirty-two editor tests cover accepted/rejected intent,
+stale effects, preview provenance, history/reload revision non-reuse and transcript
+replay. Accepted redundancy remains deliberately unavailable until sketch provides a
+stable domain DTO; the editor does not inspect core reports to fabricate one.
+
+### M40.5: thin desktop web adapter
+
+Status: complete as of 2026-07-26.
+
+- [x] Replace workbench selection, tools, drafts, gesture thresholds, constraint
+  compatibility, history orchestration and lifecycle inference with editor inputs and
+  returned state/effects.
+- [x] Render editor scene primitives and persistent identities without authoritative
+  DOM/CSS hit geometry.
+- [x] Keep only browser event translation, SVG presentation, accessibility, storage,
+  files and evidence capture in `geosolve-demo-web`.
+- [x] Delete superseded duplicate workbench state rather than retaining fallback paths.
+
+Gate: dependency and source checks prove the web adapter does not reimplement headless
+policy; native editor tests and focused fresh-profile browser adapter tests pass.
+
+Completion notes: the workbench now owns one `RetainedEditorCoordinator`, translates
+DOM pointer/modifier/widget input into editor inputs, dispatches every typed editor
+effect through the coordinator, and renders editor scene/selection/lifecycle/action and
+audit DTOs. The browser retains only SVG/HTML formatting, event registration,
+`localStorage`, routing, downloads and environment evidence. The duplicate
+`app_state.rs`, `domain_adapter.rs`, `selection.rs` and `tools.rs` policy modules,
+index-based selection and CSS-authoritative curve hit paths are deleted. Thirty-two
+native editor tests, the locked WASM check, release Trunk build, source-policy checks and
+fresh-profile `e2e/m40.mjs` adapter qualification pass. Full scorecard-action and
+native/WASM parity coverage remains M40.6; strict workspace Clippy currently exposes
+unrelated legacy-playground warnings that must be cleared before M40.6 closes.
+
+### M40.6: automated core-interaction qualification
+
+Status: complete as of 2026-07-26.
+
+- [x] Add generated/model-based transition coverage, deterministic replay corpus and
+  native/WASM parity for all core tools and actions.
+- [x] Run exact boundary, overlapping-hit, scale/viewport, cancellation, malformed
+  input, persistence and accepted-retention matrices.
+- [x] Keep browser automation focused on platform wiring, rendered identity,
+  accessibility, storage and downloadable evidence.
+- [x] Produce a machine-readable coverage matrix linking every UAT action to native
+  state-machine and browser-adapter evidence.
+
+Gate: all objective M40 workflows pass the primary native oracle, locked WASM and thin
+browser adapter without retries; no scorecard action relies only on browser E2E or UAT.
+
+Completion notes (2026-07-26): a checked-in transition corpus and seeded bounded model
+execute all frozen creation, snapping/picking/selection, constraint, dimension,
+projected-drag, delete/suppression/history, conflict/repair, lifecycle, redundancy,
+persistence, malformed-input and boundary classes. Native tests validate the corpus,
+the all-covered machine matrix and canonical golden report; the release WASM exports
+the same runner and Chromium compares its report byte-for-byte. Dimension-family
+selection is coordinator-owned, and accepted redundancy is a provenance-bearing
+`geosolve-sketch` DTO rather than editor/browser report interpretation. The thin
+browser suite covers only platform normalization, rendered persistent identity,
+accessibility, storage, lifecycle and checksummed evidence downloads and passes 14/14.
+Formatting/diff checks, warnings-denied locked workspace Clippy, full locked workspace
+tests, locked WASM check and the supported release Trunk build all pass.
+
+### M40.7: human UAT 1 - core sketch interaction
+
+Status: complete as of 2026-07-26; UAT-C1-F4 and UAT-C1-F5 are confirmed fixed and
+the supervising human explicitly approved the milestone.
+
+UAT finding UAT-C1-F4 (2026-07-26): while manipulating constrained geometry, live
+projected previews remained valid and followed the intended nearby solution, but
+pointer release sometimes re-solved onto a different valid configuration. Release must
+commit the exact accepted preview branch rather than reconstructing the edit from the
+raw pointer target or another warm start. The review is stopped until a deterministic
+headless regression covers preview-to-commit geometry/branch continuity and the
+targeted release path is requalified.
+
+Remediation note (2026-07-26): the coordinator now privately retains the exact
+same-design independently accepted preview session and uses its complete continuous
+state as the final solve warm start while applying only the point-position design edit.
+Commit is dispatched before preview clearing; rejected provenance/identity checks do
+not mutate the retained session and preserve a valid preview for retry. The canonical
+two-link regression proves that the former cold release selects materially different
+geometry, while the preview-seeded release preserves every point within `1e-10`, keeps
+explicit branches and adds exactly one Undo checkpoint. Focused sketch/editor tests,
+formatting, warnings-denied locked workspace Clippy, full locked workspace tests, the
+locked WASM check, supported release Trunk build and isolated `e2e/m40.mjs` all pass;
+the release-browser suite reports 14/14. The targeted human recheck was then reopened
+and subsequently passed.
+
+UAT finding UAT-C1-F5 (2026-07-26): after confirming the constrained release no longer
+jumped, human review found four related drafting-preview defects: open polyline
+previews showed implicit filled area, circle previews omitted their center, arc drafts
+showed no center/radius guidance before a complete three-point arc existed, and Finish
+could leave the last unplaced polyline segment visible. The shared cause was using only
+a complete committable `ConstructionProposal` as preview state, styling every draft SVG
+shape as fillable, and duplicating terminal commit/clear effect construction.
+
+Remediation note (2026-07-26): `ConstructionPreview` is now a distinct typed,
+non-committable DTO with complete-proposal, retained-anchor and arc-radius-guide stages.
+Circle and arc centers render explicitly, arc center-to-start guidance exists before
+the complete normalized arc preview, and every provisional construction is wire-only;
+area fill remains accepted-profile presentation. One shared terminal helper emits
+commit before clear for pointer completion, Finish, Enter and double-click routes.
+Native editor tests pass 45/45, the web library tests pass 91/91, the locked WASM check
+and supported release Trunk build pass, and `e2e/m40.mjs` passes 14/14 with focused
+render/lifecycle assertions. The targeted UAT-C1-F5 recheck was then reopened and
+subsequently passed.
+
+Second-pass consistency note (2026-07-26): complete previews now retain resolved
+accepted operand positions alongside persistent retained-design point IDs. Construction
+apply derives line/polyline branches and arc scalar seeds from those exact snapshots,
+so a rejected retained-design point edit cannot make the visible accepted preview and
+the eventual commit disagree. Removed retained IDs remain visible/pickable from the
+accepted scene but cannot snap. Browser arc serialization has direct minor/major CCW
+flag coverage, and adapter dispatch now retains a complete preview when construction
+commit fails while successful commit still clears it. Formatting/diff checks,
+warnings-denied locked workspace Clippy, full locked workspace tests, locked WASM
+check, release Trunk build and `e2e/m40.mjs` 14/14 pass. The supervising human
+subsequently passed the targeted recheck and approved M40.7.
+
+- [x] Provide one URL, deterministic resets and a 30-45 minute core drafting script.
+- [x] Restrict human review to discoverability, manipulation intent and clarity of
+  accepted, preview, unsolved and rejected states.
+- [x] Convert any objective finding into a headless regression first, then perform only
+  the necessary targeted human recheck.
+- [x] Obtain explicit supervising-human approval.
+
+Gate: the supervising human approves the core interaction scorecard and no correctness,
+data-loss, misleading-state or basic-usability blocker remains.
+
+Completion note (2026-07-26): after the mechanically requalified F4/F5 remediations,
+the supervising human passed M40.7. No unresolved correctness, data-loss,
+misleading-state or basic-interaction blocker remained, so M41 began.
 
 ## M41: construction roles and activation
 
-Status: planned.
+Status: complete as of 2026-07-27.
 
 Goal: represent construction and configuration semantics as explicit domain state.
 
-- [ ] Add persisted regular/profile and construction geometry roles.
-- [ ] Keep construction geometry fully constrainable while excluding it from production profiles by default.
-- [ ] Generalize activation over entities, constraints, dimensions and associations.
-- [ ] Distinguish user suppression, host-configuration inactivity, unavailable dependency and unavailable external reference.
-- [ ] Validate the effective active dependency closure and report every inactivity reason.
-- [ ] Preserve branch, span, winding, contact and ownership state while inactive and across reactivation.
+- [x] Add persisted regular/profile and construction geometry roles.
+- [x] Keep construction geometry fully constrainable while excluding it from production profiles by default.
+- [x] Generalize activation over entities, constraints, dimensions and associations.
+- [x] Distinguish user suppression, host-configuration inactivity, unavailable dependency and unavailable external reference.
+- [x] Validate the effective active dependency closure and report every inactivity reason.
+- [x] Preserve branch, span, winding, contact and ownership state while inactive and across reactivation.
 
 Gate: activation changes are atomic, never evaluate dangling dependencies and never
 infer a new branch from retained coordinates.
 
+Completion note (2026-07-27): M41 added closed profile/construction roles, immutable
+revisioned host activation, one deterministic typed dependency closure, activity-aware
+lowering/profile/branch/ownership consumers and activation revision/digest lifecycle
+stamps. Frozen v1-v4 bytes remain unchanged for representable state; supported v4
+encoding rejects non-default M41 state and the pre-M107X draft-v5 codec remains explicitly
+unsupported. Focused M41 tests, independent verification, locked all-feature workspace
+tests, warnings-denied workspace Clippy, the WASM check and the release Trunk build all
+passed. M42 and M43 subsequently completed.
+
 ## M42: typed host parameters
 
-Status: planned.
+Status: complete (2026-07-27).
 
 Goal: let host-owned expression/configuration systems drive sketches through finite
 typed values without becoming solver variables or a second expression language.
 
-- [ ] Add persistent parameter identities and typed length, angle, dimensionless and activation input bindings.
-- [ ] Accept immutable revisioned parameter batches and map dependencies to affected sources/components.
-- [ ] Allow one parameter to drive multiple dimensions without adding an artificial unknown.
-- [ ] Return declared reference measurements as revision-stamped output proposals with units and provenance.
-- [ ] Reject input/output ownership cycles and stale parameter commits atomically.
-- [ ] Keep expression parsing, unit display and configuration dependency graphs host-owned.
+- [x] Add persistent parameter identities and typed length, angle, dimensionless and activation input bindings.
+- [x] Accept immutable revisioned parameter batches and map dependencies to affected sources/components.
+- [x] Allow one parameter to drive multiple dimensions without adding an artificial unknown.
+- [x] Return declared reference measurements as revision-stamped output proposals with units and provenance.
+- [x] Reject input/output ownership cycles and stale parameter commits atomically.
+- [x] Keep expression parsing, unit display and configuration dependency graphs host-owned.
 
 Gate: identical design and parameter bytes reproduce identical accepted geometry and
 diagnostics; rejection changes no accepted input or output revision.
 
+Completion note (2026-07-27): M42 added persistent typed parameter declarations,
+bindings and reference-output proposals; canonical immutable revision/digest batches;
+activation-first resolution; fixed-coefficient driving dimensions; and deliberately
+declared dimensionless fixed-scalar targets with exact runtime/audit provenance and no
+parameter solver unknown. Domain, unit, branch, ownership, duplicate-supplier, stale,
+missing, cancellation and rejection paths retain accepted input/output truth atomically.
+Draft-v5 round trips M42 state while supported v1-v4 bytes remain frozen and v4 export
+rejects non-default state. Focused M36/M42 tests, independent review, locked all-feature
+workspace tests, warnings-denied workspace Clippy, the WASM check and release Trunk build
+all passed. M43 subsequently completed.
+
 ## M43: immutable external 2D references
 
-Status: planned.
+Status: complete as of 2026-07-27.
 
 Goal: constrain native sketch geometry against other sketches or model geometry
 without callbacks, hidden fixed copies or coordinate-based repair.
 
-- [ ] Persist stable local external-binding identity and expected feature kind.
-- [ ] Accept immutable finite 2D point/curve snapshots carrying revision, digest, domain, orientation, scale and resource evidence.
-- [ ] Integrate external features into the same typed operand and audit system as native geometry without adding solver variables.
-- [ ] Require explicit rebinding/remapping for family, span or topology changes.
-- [ ] Report missing, stale, duplicate, wrong-kind, non-finite, oversized and incompatible snapshots as typed unsolved-design outcomes.
-- [ ] Keep arbitrary host/PDM keys and 3D projection computation outside sketch equations and canonical sketch state.
-- [ ] Let diagnostic capsules bundle design, parameter and snapshot inputs for reproducibility without making stored status authoritative.
+- [x] Persist stable local external-binding identity and expected feature kind.
+- [x] Accept immutable finite 2D point/curve snapshots carrying revision, digest, domain, orientation, scale and resource evidence.
+- [x] Integrate external features into the same typed operand and audit system as native geometry without adding solver variables.
+- [x] Require explicit rebinding/remapping for family, span or topology changes.
+- [x] Report missing, stale, duplicate, wrong-kind, non-finite, oversized and incompatible snapshots as typed unsolved-design outcomes.
+- [x] Keep arbitrary host/PDM keys and 3D projection computation outside sketch equations and canonical sketch state.
+- [x] Let diagnostic capsules bundle design, parameter and snapshot inputs for reproducibility without making stored status authoritative.
 
 Gate: one attempt validates against exactly one immutable snapshot set and records its
 revision/digest; no host callback or proximity inference participates in solving.
 
+Completion record (2026-07-27): M43 added monotone document-local external bindings
+and a closed v1 snapshot vocabulary for points and directed single-span line segments.
+Canonical bounded snapshot sets validate exact revision/digest, topology, orientation,
+domain, scale and resource evidence before lowering. Native point coincidence and line
+collinearity consume external geometry only as immutable fixed coefficients, publish
+complete binding/snapshot audit provenance and pass independent residual validation;
+external geometry never becomes a solver unknown or hidden native copy. Missing, stale,
+duplicate, wrong-kind, malformed and topology-incompatible inputs remain typed attempts,
+propagate the M41 unavailable-dependency closure and retain prior accepted bytes and
+input stamps atomically. Explicit rebinding is the only topology recovery path.
+
+Draft-v5 and the unstable diagnostic capsule reproduce exact design, parameter,
+activation and snapshot evidence without importing stored status or geometry authority;
+frozen sketch v1-v4 remains unchanged. Ten focused M43 regressions cover canonical
+validation, solving, stamps, activity precedence, rollback, rebinding, audit and finite
+differences. Independent review, formatting/diff checks, warnings-denied locked workspace
+Clippy, full locked workspace tests, locked WASM, release Trunk and browser E2E passed.
+M44 subsequently completed; at that time M45 became active. The M45 status below
+supersedes this dated handoff sentence.
+
 ## M44: host-state workbench integration
 
-Status: planned.
+Status: complete as of 2026-07-27. Implementation and focused M44 qualification pass;
+the supervising user explicitly removed the costly legacy full-M14 carry-forward run
+from the M45 preparation gate rather than treating its incomplete runs as passing evidence.
 
 Goal: expose construction, activation, parameters, references and dual-state behavior
 coherently through the CAD-like desktop consumer.
 
-- [ ] Add construction styling and explicit profile participation controls.
-- [ ] Add activation/suppression editors distinct from driving/reference dimension mode.
-- [ ] Add parameter inputs, bindings and output proposals without exposing internal design scalars indiscriminately.
-- [ ] Add external-reference tree entries, styling, revision/digest status and explicit rebind workflows.
-- [ ] Display design, attempted and accepted revisions together whenever they differ.
-- [ ] Prove atomic batch updates, stale/missing inputs and accepted-state retention in browser automation.
+- [x] Add construction styling and explicit profile participation controls.
+- [x] Add activation/suppression editors distinct from driving/reference dimension mode.
+- [x] Add parameter inputs, bindings and output proposals without exposing internal design scalars indiscriminately.
+- [x] Add external-reference tree entries, styling, revision/digest status and explicit rebind workflows.
+- [x] Display design, attempted and accepted revisions together whenever they differ.
+- [x] Prove atomic batch updates, stale/missing inputs and accepted-state retention in browser automation.
 
 Gate: every host-state workflow is objectively qualified before the second human UAT
 checkpoint; the browser still contains no equation or host callback.
 
-## M45: human UAT 2 - CAD host semantics
+Qualification note (2026-07-27): narrow coordinator wrappers and deterministic
+workbench fixture sidecars expose canonical M41 roles/activity, complete immutable M42
+parameter batches/proposals, M43 snapshot status/rebinding and concurrent
+design/attempt/accepted stamps without browser equations, host callbacks or canonical
+workspace pollution. Focused coordinator tests (26), the web suite (103), format/diff,
+warnings-denied locked workspace Clippy, full locked workspace tests, locked all-feature
+WASM check, release Trunk, preserved M40 browser qualification (14/14) and fresh-profile
+M44 browser qualification (6/6) passed. Three standalone carry-forward M14 runs exposed
+two tower burst-drag overruns (`130 ms` and `118 ms` against the unchanged `100 ms`
+budget) and one 30-second CDP mouse-event timeout. Isolated comparison localized the
+overrun to unconditional M41 dependency-closure traversal in the all-active case;
+`SketchDocument` now skips that traversal when there are no direct inactivity reasons.
+Five isolated post-correction tower runs measured `62`, `42`, `37`, `39` and `44 ms`,
+comparable to clean-HEAD measurements of `66`, `38`, `43`, `41` and `38 ms`. Focused
+M41 tests, the release native tower test, formatting and release Trunk build passed after
+the correction. A full post-correction M14 run was stopped by the supervising user after
+desktop layout and has no final-pass result. No threshold was weakened. Per explicit
+supervising-user direction at that time, further flaky full-M14 work was deferred until
+the M45 UAT preparation window; M44 remained active pending a later scope decision and
+explicit supervising-human participation.
 
-Status: planned; human approval required.
+Completion addendum (2026-07-27): during M45 preparation the release WASM build and the
+focused 103-test web suite passed, and fresh-profile M44 browser qualification passed all
+six frozen host-state groups, including the M45 finding package. A full M14 attempt first
+found that `chromium` was unavailable in the copied shell and, with an explicit Chrome
+binary, was then stopped after desktop layout. It still has no final-pass result. The
+supervising user explicitly authorized avoiding these costly legacy E2E runs and
+fast-tracking the already-focused host-state candidate into M45 UAT. This is a scope
+decision, not M14 passing evidence: no threshold or assertion changed, and the historical
+suite remains available for later retirement or targeted replacement. M44 is complete on
+its focused native/WASM/browser evidence; at that time M45 entered pre-UAT cleanup. The
+M45 completion record and M46-M53 cleanup sequence below supersede that dated handoff.
 
-Goal: retire trust and comprehension risks around construction, activation,
-parameters, external references and retained unsolved intent.
+## M45: cleanup investigation and UAT-point capture
 
-- [ ] Prequalify all state/revision/digest/atomicity behavior automatically.
-- [ ] Provide a 30-45 minute prepared script for role conversion, suppression/reactivation, shared parameter updates, invalid configurations and external-reference loss/recovery.
-- [ ] Assess whether stale external data, solver rejection and unsolved design are visibly distinct.
-- [ ] Assess whether parameter ownership, output proposals and activation reasons are understandable.
-- [ ] Capture findings automatically and convert objective defects into regressions.
-- [ ] Require only targeted human rechecks unless the host-state workflow changes materially.
+Status: complete as of 2026-07-27. This milestone does **not** record human UAT approval.
+The previously prepared host-semantics review was archived and relocated to post-cleanup
+M53 so cleanup can replace its broad fixture and obsolete browser infrastructure first.
+
+Goal: establish the source-backed cleanup boundary without losing intended host-semantics
+coverage.
+
+- [x] Preserve ten host-semantics verification points independently of the temporary fixture.
+- [x] Establish that the workbench is the default application while `#/dev/lab` remains a separate legacy runtime.
+- [x] Classify all 92 legacy inline consumer tests and every M14/M40/M44 E2E group.
+- [x] Define the direct-test replacement layers and explicit-retirement policy.
+- [x] Record the incomplete M14 history without calling it passing evidence.
+
+Gate: the archived M45 capture now consolidated in `docs/M53_UAT.md`, plus
+`docs/M45_CLEANUP_PLAN.md`,
+`docs/M45_TEST_FIXTURE_CLEANUP_INVESTIGATION.md`,
+`docs/M45_UI_CLEANUP_INVESTIGATION.md`, `docs/M46_DIRECT_TEST_REPLACEMENT.md` and
+`docs/M46_REBASE_INVENTORY.md` preserve the evidence and make no human-approval claim.
+
+Independent review found the inventory sufficient to guide implementation. The focused
+demo-web suite passed 103/103 and `git diff --check` passed; no browser suite was run for
+the investigation. Workspace-wide Clippy reproduced the disclosed linkage lint during
+M45; the M46 follow-up cleared it without changing behavior.
+
+## Cleanup numbering convention
+
+M46-M53 are the executable cleanup sequence. The literal identifiers M100X-M109X are
+**placeholder future numbers**: the `100` series keeps displaced functional work out of
+the cleanup sequence, and the suffix `X` explicitly means “not a final milestone number.”
+They preserve scope and dependency order only and will be renumbered after M53. They must
+not be treated as active implementation milestones during cleanup.
+
+## Pre-cleanup phase
+
+### M46: direct-test ownership freeze
+
+Status: complete as of 2026-07-27.
+
+Goal: give every retained assertion from the old E2E/demo stack one authoritative direct
+unit or integration-test owner before deletion begins.
+
+- [x] Inventory all M14, M40 and M44 E2E groups, static scans and legacy inline tests.
+- [x] Freeze one deletion ledger marking each assertion as domain, editor, workbench presentation, persistence, WASM-adapter or explicit retirement.
+- [x] Ban new CDP, served-page, DOM-scraping, screenshot-diff and wall-clock browser tests.
+- [x] Decide deterministic finding capture as cleanup/UAT test infrastructure over public APIs, not a stable product API.
+- [x] Add named regression targets for every ledger entry that lacks a direct owner.
+- [x] Clear the workspace Clippy failure before implementation milestones claim completion.
+
+Gate: every old E2E assertion has a named direct owner or a reviewed explicit-retirement
+reason; no replacement relies on a browser process, HTTP server, CDP or substring scan.
+
+Completion notes: `docs/M46_DIRECT_TEST_REPLACEMENT.md` freezes unconditional direct-owner
+or reviewed-retirement dispositions for all M14/M40/M44 E2E groups, static scans and the
+92 legacy inline consumer tests. Finding capture is test/UAT-only infrastructure; proposed
+replacement tests remain assigned to M47-M49, and M46 deletes nothing. A behavior-preserving
+match-guard rewrite cleared the workspace linkage Clippy lint. Formatting, diff and shell
+syntax checks, warnings-denied workspace Clippy, the complete locked all-feature workspace
+suite and the locked WASM check pass. Independent read-only review found no ownership or
+deletion-gate blocker. No browser E2E was run or used as current evidence.
+
+### M47: focused host-state replacement and M44 purge
+
+Status: complete as of 2026-07-28.
+
+Goal: replace the broad temporary M44 fixture with small direct fixtures and remove its
+browser qualification stack.
+
+- [x] Add focused role/profile/activity presentation tests.
+- [x] Add parameter/binding/proposal stamp and invalid/stale recovery tests.
+- [x] Add external snapshot/rebind and retained-evidence tests.
+- [x] Add lifecycle design/attempt/accepted identity tests.
+- [x] Add deterministic typed finding-package tests over public domain/audit APIs.
+- [x] Delete the broad host fixture, fixture-only controls, `e2e/m44.mjs` and its CDP/profile/server infrastructure.
+
+Gate: all six former M44 groups and all ten preserved UAT points have passing direct
+owners; no M44 browser fixture or E2E artifact remains.
+
+Completion notes: five direct Rust fixture groups in workbench panels, accepted-scene
+rendering and evidence serialization now cover role/profile/activity, atomic parameter
+bindings and proposal provenance, external snapshot retention and explicit rebind,
+design/attempt/accepted lifecycle separation, and checksummed typed host finding content.
+They preserve all six former M44 groups and all ten M45 UAT points without a reusable or
+persisted aggregate host fixture. `workbench/host_state.rs`, fixture-only actions/markup,
+`e2e/m44.mjs` and its M44 CDP/server/profile machinery are deleted; no equations or
+canonical persistence behavior changed. The focused M41-M43 suites, 101-test all-feature
+demo-web suite, complete locked all-feature workspace suite, formatting, diff,
+warnings-denied workspace Clippy and locked all-feature WASM check pass. No browser E2E
+was run. M40/M14 infrastructure remains only for its assigned M48/M50 deletion gates.
+
+### M48: direct workbench qualification and M40 purge
+
+Status: complete (2026-07-28).
+
+Goal: replace root-workbench browser qualification with direct editor, presentation,
+persistence and WASM-adapter tests.
+
+- [x] Keep the native M40 transition corpus and byte-identical golden oracle.
+- [x] Directly test creation effects, coordinate conversion, selection identity, glyph/dimension DTOs, lifecycle, redundancy and conflict retention.
+- [x] Directly test persistence codecs/fallbacks, semantic accessibility markup and evidence-package serialization.
+- [x] Replace source substring scans with executable typed-API use and module ownership.
+- [x] Explicitly retire browser-only keyboard/focus delivery, DOM layout, download/blob and reload mechanics.
+- [x] Delete `e2e/m40.mjs`, `scripts/serve-m40.sh` and all M40 CDP/profile/server/download infrastructure.
+
+Gate: every retained M40 contract passes at its direct owner and no M40 browser E2E or
+source-policy scan remains.
+
+Completion notes: the unchanged 53-test editor suite retains the native M40 corpus,
+canonical report bytes and completeness oracle. Pure workbench tests now own letterboxed
+client-coordinate normalization, construction-effect dispatch, persistent scene/tree
+selection identity, unique constraint glyphs, dimension mode/value DTOs, lifecycle/problem/
+redundancy semantics, the exact production persistence codec and malformed fallback, semantic
+markup, deterministic evidence serialization and a test-only adapter comparison with the
+authoritative M40 report/checksum. Browser-only focus/keyboard delivery, DOM/layout/reload,
+download/blob observation and source-substring scans are retired rather than imitated.
+`e2e/m40.mjs`, `scripts/serve-m40.sh` and M40-only runtime markers/actions are deleted;
+`e2e/m14.mjs`, `scripts/serve-m45.sh`, the legacy playground and its shared platform
+dependencies remain for M49-M50. The 111-test all-feature demo-web suite, complete locked
+all-feature workspace suite, formatting, diff, warnings-denied workspace Clippy, locked
+all-feature WASM check and release Trunk build pass. No browser E2E was run.
+
+### M49: legacy semantic extraction
+
+Status: complete (2026-07-28).
+
+Goal: move useful assertions out of the old playground before deleting the application.
+
+- [x] Move all class-A domain/transaction/branch/history/sampling/profile assertions into sketch, linkage, editor, persistence or focused presentation tests.
+- [x] Confirm the three class-C duplicates against their cited native tests.
+- [x] Explicitly retire class-B/D legacy delivery/layout assertions and class-E capabilities not present in the cleanup-era product scope.
+- [x] Preserve advanced mathematical behavior in native domain tests without preserving its old demo controls.
+- [x] Replace any retained capsule/file semantics with direct codec tests; retire file-picker/download delivery.
+- [x] Produce a zero-unowned-assertion ledger for `e2e/m14.mjs` and the 92 legacy inline tests.
+
+Gate: every retained semantic claim passes outside the legacy runtime and every retired
+claim has an explicit rationale; the old UI can be deleted without coverage ambiguity.
+
+Completion notes: `docs/M49_IMPLEMENTATION.md` reconciles all 13 M14 browser groups and
+all 92 legacy inline tests with zero unowned claims. Direct sketch, linkage, editor and
+focused workbench owners preserve retained geometry, continuation, transaction, inference,
+diagnostic and accepted-snapshot semantics; delivery/layout/browser claims and private
+adaptive-render policy are explicitly retired. The complete locked all-feature workspace
+suite, formatting, diff, warnings-denied workspace Clippy, all-feature WASM check and release
+Trunk build pass. Independent read-only verification passed after confirming that M49 leaves
+`e2e/m14.mjs`, the playground, route, CSS, serving and release-gate infrastructure unchanged.
+No browser E2E was run.
+
+## Cleanup cut
+
+### M50: old E2E and legacy application purge
+
+Status: complete (2026-07-28).
+
+Goal: remove the old application and every old E2E mechanism in one reviewable deletion
+after M46-M49 establish direct coverage.
+
+- [x] Delete `e2e/m14.mjs` and the remaining `crates/geosolve-demo-web/e2e/` directory.
+- [x] Delete Chromium/CDP launch code, HTTP test servers, profiles, timing/retry helpers and download interception.
+- [x] Delete `#/dev/lab`, `src/playground.rs`, legacy/frozen application branches, hidden DOM, obsolete CSS and legacy persistence/capsule glue.
+- [x] Delete legacy-only inline tests, selectors, fixture markers and stale serving/UAT scripts.
+- [x] Remove dead dependencies, features, generated artifacts and release-gate E2E invocations.
+- [x] Update every repository document to describe the single-workbench/direct-test architecture.
+
+Gate: reviewed source/script search finds no executable or current instruction for old E2E,
+CDP, the legacy route/application, broad fixtures or obsolete serving; historical evidence is
+explicitly archival. Direct native/WASM tests, formatting and warnings-denied Clippy pass.
+
+Completion notes: the final M14 Node/CDP suite, its `e2e/` directory, the separately routed
+playground runtime, hidden DOM/CSS, legacy inline tests, serving scripts and release-gate
+browser invocation are deleted. Demo-web now starts exactly one non-authoritative workbench
+through public sketch/editor APIs. Dead geometry/linkage/`js-sys` dependencies and obsolete
+`web-sys` features were pruned while release Trunk remains in the gate. Reviewed searches find
+no executable legacy route, E2E, Chromium/CDP, profile, server, download or environment
+infrastructure; historical records remain explicitly archival.
+
+The 58-test editor suite, 22-test all-feature demo-web suite, complete locked all-feature
+workspace suite, formatting, diff, warnings-denied workspace Clippy, all-feature WASM check
+and release Trunk build pass. Independent read-only verification passed after one stale-ledger
+correction. No browser automation or serving was run.
+
+## Post-cleanup phase
+
+### M51: single-workbench consolidation and hardening
+
+Status: complete (2026-07-28).
+
+Goal: simplify the surviving consumer and make direct tests the only automated
+qualification path.
+
+- [x] Consolidate routing, persistence, evidence, presentation DTOs and test fixtures around one workbench.
+- [x] Remove compatibility shims and dependencies made dead by M50.
+- [x] Keep browser/platform glue minimal and isolate it from testable pure transformations.
+- [x] Add direct regressions for every cleanup defect or lost contract found during purge review.
+- [x] Verify native and `wasm32-unknown-unknown` consumers without serving or launching a browser.
+- [x] Publish the post-cleanup module/test ownership map.
+
+Gate: one workbench remains, all automated qualification is direct, and no cleanup-era
+compatibility shim or dead test infrastructure remains.
+
+Completion notes: the survivor now restores only its complete workspace snapshot. The obsolete
+design-only local-storage migration, duplicate demo wrapper around the editor's M40 qualification
+report and M40 JSON/SVG evidence package are deleted. The retained typed host-evidence serializer,
+workspace codec, scene/panels and effect adapter have focused direct owners documented in
+`docs/M51_IMPLEMENTATION.md`; the stale M32 distribution copy is removed, while ordinary Trunk
+developer configuration and all live dependencies remain.
+
+The 58-test editor suite, 19-test all-feature demo-web suite, complete locked all-feature
+workspace suite, formatting/diff, warnings-denied workspace Clippy, all-feature WASM check and
+release Trunk build pass. Independent read-only verification found no functional loss and passed
+after the active inventory/status wording was corrected. No browser automation or serving was run.
+
+### M52: post-cleanup host-semantics UAT candidate
+
+Status: complete as of 2026-07-28.
+
+Goal: build a minimal disposable UAT composition after cleanup rather than preserving a
+fixture as product state.
+
+- [x] Compose small role/activity, parameter/proposal, external/rebind and lifecycle fixtures only for UAT setup.
+- [x] Generate deterministic instructions and finding evidence from public domain/audit APIs.
+- [x] Requalify all ten preserved host-semantics points through direct automated tests.
+- [x] Build the release WASM candidate and verify its public adapter exports without E2E automation.
+- [x] Rewrite the archived scorecard against the minimal post-cleanup composition.
+
+Gate: the candidate is reproducible, all objective claims pass directly, and the only
+remaining work is supervising-human judgment.
+
+Completion notes: the sole workbench now hosts one explicitly labelled in-memory UAT sidecar
+composed from four fixed-identity fixtures. Ten deterministic instructions and typed actions cover
+role/activity, parameters/proposals, external snapshots/rebind and retained lifecycle evidence.
+M52 finding evidence deliberately omits canonical fixture documents, and the production-used
+sidecar state directly proves ordinary-action/save isolation, unchanged exit state and persistence
+codec reload. No public API, schema, dependency or `wasm_bindgen` export was added.
+
+The five focused M52 tests, 24-test all-feature demo-web suite, complete locked all-feature
+workspace suite, formatting/diff, warnings-denied workspace Clippy, all-feature WASM check and
+release Trunk build pass. Independent read-only verification passed after converting canonical
+evidence leakage and indirect save/exit checks into regressions over the production state path. No
+browser automation, serving or source-substring scan was used. Human clarity, trust and approval
+remain exclusively M53 work.
+
+### M53: human UAT 2 - CAD host semantics
+
+Status: active; human approval required.
+
+Goal: retire trust and comprehension risks around construction, activation, parameters,
+external references and retained unsolved intent on the post-cleanup workbench.
+
+- [ ] Assess role/profile and suppression/mode distinctions.
+- [ ] Assess parameter ownership, proposal provenance and invalid/stale recovery.
+- [ ] Assess missing/stale/topology/rebind external-reference recovery.
+- [ ] Assess design/latest-attempt/accepted-state clarity and natural-use coherence.
+- [ ] Capture findings, convert objective defects into direct regressions and perform only targeted rechecks.
+- [ ] Record explicit supervising-human approval and disposition of nonblocking concerns.
 
 Gate: the supervising human approves the host-semantics scorecard and no state-trust,
 recovery or ownership blocker remains.
 
-## M46: stable diagnostics and mobility evidence
+Active execution note (2026-07-28): `docs/M53_UAT.md` is the consolidated durable M53 session, finding,
+change-request and retest ledger. Every observation or UI request must be recorded and classified
+before implementation. Objective defects require direct regressions and targeted requalification;
+clarity/layout changes require an identified candidate rebuild and affected human retest; future
+scope remains in M100X-M109X or an explicit open question. One request must not shadow or silently
+close another development concern, question or plan. Candidate identities and any temporary
+human-only access details belong exclusively in the M53 ledger; they are not automated gates,
+retained server infrastructure or product routes.
 
-Status: planned.
+## Placeholder future functional sequence
 
-Goal: let CAD hosts explain and repair sketches without consuming unstable core
-reports or parsing display strings.
+### M100X: stable diagnostics and mobility evidence
 
-- [ ] Publish stable sketch-owned solve, source, component, dependency, activation, parameter and external-reference diagnostic DTOs.
-- [ ] Keep design, attempt and accepted revisions explicit in every relevant diagnostic.
-- [ ] Report structural and numerical rank, equality/bounded/one-sided DOF and diagnostic completeness separately.
-- [ ] Add budgeted mobility witnesses mapped to persistent point/scalar identities.
-- [ ] Add bounded conflict cores or ranked repair candidates without claiming global minimality.
-- [ ] Publish stable machine-readable action suggestions that create ordinary explicit transactions.
-- [ ] Move direct core reports behind a clearly unstable advanced-diagnostics seam.
+Status: placeholder future number; not executable until post-cleanup renumbering.
 
-Gate: a host can render every supported success, failure, incompleteness and repair
-path from persistent domain IDs and stable codes alone.
+Scope: publish stable sketch-owned diagnostics, revision identities, structural/numerical
+rank and mobility evidence, bounded conflict/repair information, and move direct core
+reports behind an unstable seam.
 
-## M47: prepared jobs and concurrency contract
+### M101X: prepared jobs and concurrency contract
 
-Status: planned.
+Status: placeholder future number; not executable until post-cleanup renumbering.
 
-Goal: let native and WASM hosts schedule sketch work safely without an internal async
-runtime or thread pool.
+Scope: immutable accepted snapshots, exact-revision prepared jobs, non-mutating candidate
+patches, compare-and-swap commit, host-managed scheduling and safe Rust `Send`/`Sync`
+contracts for native and single-threaded WASM consumers.
 
-- [ ] Make accepted snapshots immutable and shareable under a documented Rust ownership contract.
-- [ ] Prepare solve/profile jobs against exact design, parameter, external, activation and policy revisions.
-- [ ] Return attempted diagnostics and a candidate patch without mutating session state.
-- [ ] Add compare-and-swap commit that rejects every stale input revision.
-- [ ] Specify synchronous single-writer sessions and host-managed worker scheduling.
-- [ ] Prove deterministic publication independent of scheduling order and cancellation timing.
-- [ ] Add compile-time and runtime tests for the intended `Send`/`Sync` surface without adding `unsafe` code.
+### M102X: incremental solving and production scale
 
-Gate: stale or cancelled work remains inspectable but can never overwrite a newer
-accepted state; native and single-threaded WASM consumers share one semantic contract.
+Status: placeholder future number; not executable until post-cleanup renumbering.
 
-## M48: incremental solving and production scale
+Scope: persistent runtime mappings, dependency-closure rebuilds, indexed/history storage,
+profile caches, workload envelopes, sparse-rank evaluation and full fresh validation on
+every optimized return path.
 
-Status: planned.
+### M103X: sketch operations companion
 
-Goal: stop rebuilding the complete document for ordinary edits and publish an honest
-supported production envelope.
+Status: placeholder future number; not executable until post-cleanup renumbering.
 
-- [ ] Retain persistent-to-runtime mappings and patch nonstructural edits through the existing session machinery.
-- [ ] Rebuild only affected topology/dependency closures for structural, parameter, reference and activation changes.
-- [ ] Add indexed stores and structural-sharing history without changing canonical order or ID high-water semantics.
-- [ ] Add profile broad-phase indexing and revision-keyed immutable piece/bounds caches while preserving certified narrow-phase decisions.
-- [ ] Benchmark cold import, warm edit, drag, diagnostics, parameter/reference updates, cancellation latency, profiles and memory separately.
-- [ ] Evaluate a pure-Rust rank-revealing sparse authority against dense SVD or publish an explicit connected-component size limit if parity cannot be proved.
-- [ ] Preserve complete fresh validation and diagnostic evidence on every optimized return path.
+Scope: a separate no-residual-formula transaction companion for split/break/trim/extend,
+mirror, chamfer, grouped rectangle/polygon/slot/pattern expansion and multi-interval visible
+topology.
 
-Gate: incremental and full rebuild paths agree on accepted geometry, status, rank,
-branch and source diagnostics; all documented workload envelopes pass.
+### M104X: production topology companion
 
-## M49: sketch operations companion
+Status: placeholder future number; not executable until post-cleanup renumbering.
 
-Status: planned.
+Scope: revision-stamped complete wires/profiles, nesting/holes/provenance, explicit
+ambiguity policy, declared construction/external filtering and typed incomplete outcomes.
 
-Goal: provide reusable drafting operations without moving construction algorithms or
-private equations into the numerical solver.
+### M105X: advanced workbench completion
 
-- [ ] Establish a separate companion API/crate that produces public sketch transactions and owns no residual formulas.
-- [ ] Add general split, break, trim and extend with identity-preserving result mappings.
-- [ ] Generalize visible topology to multiple explicit intervals per immutable support.
-- [ ] Add family-complete mirror where exact parameter transformation is available.
-- [ ] Add chamfer and preserve explicit ownership for existing fillet workflows.
-- [ ] Add rectangle, polygon, slot and pattern expansion into ordinary geometry and grouped sources.
-- [ ] Keep general spline/conic offset approximation and persistent pattern-object personality outside the M55 gate.
+Status: placeholder future number; not executable until post-cleanup renumbering.
 
-Gate: every operation is deterministic, transactional, dependency-aware and
-replaceable by an equivalent host transaction without changing solver semantics.
+Scope: add advanced curves/branches, companion operations, production profiles, stable
+diagnostics, cancellation/stale presentation and a versioned desktop workspace envelope to
+the already-clean single workbench. Qualification remains direct; no old playground or CDP
+E2E may return.
 
-## M50: production topology companion
+### M106X: human UAT 3 - advanced geometry and topology
 
-Status: planned.
+Status: placeholder future number; human approval required after renumbering.
 
-Goal: turn accepted visible geometry into trustworthy wire/profile input for a CAD
-feature system without creating B-rep or solver state.
+Scope: advanced authoring, operations, topology, branch clarity and interaction-performance
+review after objective direct qualification.
 
-- [ ] Establish a separate production topology API/crate over accepted sketch snapshots and exact input digests.
-- [ ] Publish revision-stamped wires, orientation, nesting, holes, source-span provenance and bounded region boundaries.
-- [ ] Define explicit production policies for tangency, overlap, touching contours, T-junctions and self-intersections.
-- [ ] Filter construction and external geometry only through declared query scope.
-- [ ] Keep production results ephemeral and distinct from visual-analysis faces, persistent sketch entities and solver sources.
-- [ ] Preserve `Complete`, `Truncated`, `Skipped` and cancellation evidence with consumed budgets.
+### M107X: API and schema release-candidate freeze
 
-Gate: downstream CAD features may consume only `Complete` output for the exact
-accepted-state/input digest; ambiguous, stale or incomplete topology is unusable.
+Status: placeholder future number; not executable until post-cleanup renumbering.
 
-## M51: advanced workbench completion and automated qualification
+Scope: final sketch v5 migration, parameter/external/workspace schemas, supported Rust/WASM
+facade, package/SemVer/schema gates and removal of unstable fixture/compiler surfaces.
 
-Status: planned.
+### M108X: human UAT 4 - integrated release candidate
 
-Goal: complete the CAD-like desktop demo over advanced geometry, operations,
-diagnostics and topology, then remove the old playground.
+Status: placeholder future number; human approval required after renumbering.
 
-- [ ] Add conic, Bezier, B-spline and NURBS controls, weights, knots, gauges and periodic transitions.
-- [ ] Add explicit editors for sweep, side, orientation, winding, neighborhood and other branch state.
-- [ ] Add companion fillet, trim, split, extend, mirror, chamfer, pattern, polygon and slot workflows.
-- [ ] Add production profile inspection, source navigation and truthful incomplete-state presentation.
-- [ ] Add conflict navigation, redundancy display, mobility evidence, cancellation and stale-result presentation.
-- [ ] Add a versioned desktop workspace envelope for annotations, panel state, attributes, parameters and external descriptors around canonical sketch inputs.
-- [ ] Split browser automation into isolated core, host-state, advanced, persistence, profile and performance suites.
-- [ ] Remove the old playground state, legacy application, hidden DOM and obsolete CSS after automated parity.
-- [ ] Generate deterministic UAT scenes, capsules, instructions and automatic finding evidence.
+Scope: one integrated frozen-candidate workflow, conflict recovery, production profiles,
+persistence/history, exploratory authoring and explicit sign-off.
 
-Gate: every advertised workflow passes native, WASM and fresh-profile desktop browser
-qualification without retries; no legacy alternate application or browser equation
-remains.
+### M109X: production embedding release gate
 
-## M52: human UAT 3 - advanced geometry and topology
+Status: placeholder future number; not executable until post-cleanup renumbering.
 
-Status: planned; human approval required.
-
-Goal: retire perceptual branch, advanced-authoring, topology-trust and interaction-
-performance risks after objective qualification is complete.
-
-- [ ] Provide a 45-60 minute prepared script covering conics, splines/NURBS, weights/knots, periodic transitions and explicit branch controls.
-- [ ] Exercise fillets, trims, mirrors, patterns and other companion operations.
-- [ ] Inspect valid profiles, holes, self-intersections and intentionally incomplete topology.
-- [ ] Exercise rapid edits, cancellation and one representative medium sketch.
-- [ ] Assess local predictability, branch clarity, coherent associated motion, topology trust and interactive responsiveness.
-- [ ] Capture findings automatically, add regressions and perform targeted human rechecks.
-
-Gate: the supervising human approves the advanced/topology scorecard and no wrong-
-branch, misleading-profile, interaction or responsiveness blocker remains.
-
-## M53: API and schema release-candidate freeze
-
-Status: planned.
-
-Goal: make one deliberate compatibility cut only after ordinary, host and advanced
-workflows have passed their phase UAT.
-
-- [ ] Freeze one final sketch v5 language with deterministic direct migration from frozen v1-v4.
-- [ ] Freeze separate versioned parameter, external-snapshot and desktop-workspace envelopes.
-- [ ] Freeze the supported Rust/WASM facade, request builders, diagnostics, capability queries, cancellation and threading contracts.
-- [ ] Remove fixture/scenario and unstable compiler/runtime types from the primary production surface.
-- [ ] Pass schema goldens, downstream compile fixtures, SemVer checks, packaged-crate examples and migration mutation tests.
-- [ ] Record the candidate commit, toolchains, performance/resource envelopes and complete automated evidence bundle.
-- [ ] Revoke and requalify the candidate after any API, schema, persistence or major workflow change.
-
-Gate: the exact release candidate passes every native, WASM, browser, fuzz, mutation,
-performance, package, documentation and licence gate with no known correctness or
-trust blocker.
-
-## M54: human UAT 4 - integrated release candidate
-
-Status: planned; human approval required.
-
-Goal: validate end-to-end trust and coherence on the frozen candidate rather than
-repeat an exhaustive feature matrix.
-
-- [ ] Provide one 45-60 minute integrated workflow from empty sketch through ordinary/construction geometry, constraints, parameters, external references, advanced curves and an associative operation.
-- [ ] Introduce and repair a conflict, inspect a production profile and exercise save/reload/history/capsule recovery.
-- [ ] Include a short unscripted exploratory authoring period.
-- [ ] Assess whether normal work is unobtrusive, failures are trustworthy and advanced diagnostics remain available without dominating the workflow.
-- [ ] Capture and regress every objective finding; request only targeted rechecks unless the candidate changes materially.
-- [ ] Record explicit human sign-off and disposition of nonblocking polish findings.
-
-Gate: the supervising human ratifies the release-candidate scorecard and no integrated
-correctness, data-loss, topology, persistence or trust blocker remains.
-
-## M55: production embedding release gate
-
-Status: planned.
-
-Goal: prove a real CAD host can build on the frozen contract without duplicating
-equations and publish a CAD-engine-ready release candidate.
-
-- [ ] Add a mock host that owns expressions, parameter values, external keys, attributes, cross-system history and worker scheduling.
-- [ ] Exercise retained unsolved intent, immutable snapshots, parameters, activation, cancellation, stale jobs, stable diagnostics and production topology through public APIs only.
-- [ ] Add coverage-guided fuzz targets and resource limits for every document/input/transaction/profile envelope.
-- [ ] Gate Linux, Windows, macOS and `wasm32-unknown-unknown` Rust consumers without adding a C ABI.
-- [ ] Build examples from packaged archives and complete MSRV, dependency, advisory, licence and documentation checks.
-- [ ] Publish compatibility, migration, performance, security and resource records.
-- [ ] Run one reproducible release command covering all M1-M54 automated acceptance and recorded human approvals.
-
-Gate: no input can panic, exceed its declared interruption/resource policy, publish
-non-finite data, falsely report success/complete topology or commit stale work. The
-result is a production embedding release candidate; a `1.0` label waits for at least
-one real downstream CAD integration.
+Scope: mock CAD host, public-API-only embedding, fuzz/resource limits, Linux/Windows/macOS/
+WASM consumers, packaged examples and one reproducible release command covering every
+renumbered automated gate and recorded human approval.
 
 ## Explicit non-goals
 
-The following are not part of M8-M55:
+The following are not part of the program through placeholder M109X:
 
 - solid modeling, B-rep booleans, meshing or a production rendering system;
 - 3D sketch curves or a unified 2D/3D sketch entity model;

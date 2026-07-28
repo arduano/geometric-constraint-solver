@@ -13,7 +13,7 @@ M10-M14 are the completed 2D Sketch Playground Alpha cut toward the first produc
 
 This is not a solid modeller, B-rep kernel, mesher, production renderer, collision
 engine, statics solver, dynamics engine or global polynomial-root enumerator. Mass,
-inertia, force, reaction, friction, impact and time integration are outside M8-M55.
+inertia, force, reaction, friction, impact and time integration are outside the program through placeholder M109X.
 
 ## 2. Status of this document
 
@@ -23,16 +23,17 @@ M23-M31 subsequently complete spatial kinematics, sketch embedding identities,
 advanced constructions, generic fillets and persistent trim views, interactive
 construction/NURBS UAT and certified all-family visual profiles.
 
-- **Baseline:** implemented behavior through M37, including the completed M33 contract/baselines, retained-design lifecycle, cooperative operation control, closed semantic operands/scalars and the standard planar relation catalog, with M1-M7 domain behavior protected as the frozen regression baseline.
-- **Active target:** M38 dimensions and persistent measurements.
-- **Planned target:** M38-M55 production sketch embedding, CAD-like desktop consumer, companion operations/topology and release qualification. Planned statements are not implemented capabilities.
+- **Baseline:** implemented behavior through M52. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state. M1-M7 remain the frozen regression baseline.
+- **Active human gate:** M53 owns host-semantics clarity, trust, finding disposition and explicit supervising-human approval over the direct-qualified M52 candidate.
+- **Placeholder future target:** M100X-M109X preserve stable diagnostics through production release scope. The `X` suffix denotes non-executable placeholder numbers pending post-M53 renumbering.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
 `PLAN.md` owns current execution numbering. Milestone labels in the preserved M8
 completion record and in ADRs accepted before the playground rebaseline describe the
 allocation at acceptance time; their architectural decisions remain accepted, but
-current ownership is M10-M55 as listed in section 15.
+current ownership is the completed M10-M45 sequence, cleanup M46-M53 and placeholder
+M100X-M109X sequence listed in section 15.
 
 ## 3. Crate responsibilities
 
@@ -115,23 +116,73 @@ Sampling is rendering only and cannot prove arrangement topology.
 M33 accepts the production-embedding identity, host-input, operation-control and
 companion-boundary contracts without adding target behavior. M34 implements retained
 design intent, attempted candidates and accepted solved state as separate typed views.
-M35-M48 continue the implementation transition with a standard planar
+M35-M43 continue the implementation transition with a standard planar
 relation/dimension surface, typed construction/activation semantics, host-supplied parameter values,
-immutable external 2D snapshots, cancellation, stable persistent-ID diagnostics,
-revision-checked prepared jobs and incremental solving. Host expressions, projection
+immutable external 2D snapshots and cancellation. Placeholder M100X-M102X preserve stable
+persistent-ID diagnostics, revision-checked prepared jobs and incremental solving. Host expressions, projection
 and application history remain outside this crate. One solve attempt consumes
 immutable input revisions and never calls host code.
 
+### `geosolve-constraint-editor`
+
+Owns presentation-independent constraint-editing interaction policy over public
+`geosolve-sketch` APIs:
+
+- validated viewport transforms and deterministic accepted-scene primitives;
+- screen-space persistent point/span picking and ordered selection;
+- normalized gestures, drafting, snapping and action applicability;
+- persistent interaction context such as remembered hover/snap identities, prospective
+  inference candidates and deterministic guide/tolerance activation;
+- typed document-edit, preview, commit and cancellation effects; and
+- deterministic transition/replay fixtures for native and WASM qualification.
+
+It depends one way on `geosolve-sketch`. It does not own equations, accepted-state
+validation, persistent sketch identity, a renderer, DOM, widget toolkit, platform
+event loop, storage or host expressions. M40.2 implements accepted scene, picking,
+selection, basic relation applicability and the click/drag boundary; M40.3-M40.6
+complete and mechanically qualify the state machine under ADR 0029 through one
+canonical native/release-WASM report and focused browser platform evidence.
+
+M40.7 separates non-authoritative `ConstructionPreview` from complete committable
+`ConstructionProposal`. A preview may represent an incomplete anchor or arc-radius
+guide, while only a complete proposal may enter a document transaction. Terminal
+construction effects are ordered commit then clear. Provisional geometry is rendered
+as wire guidance only; accepted profile analysis remains the sole owner of area fill.
+An existing construction operand carries both its persistent retained-design point ID
+and the accepted visible position at snap time. Apply validates the ID against the
+retained document but derives branch directions and arc scalar seeds from that exact
+snapshot, preserving preview/commit consistency when retained design and accepted
+geometry differ after rejection. The browser dispatch adapter suppresses the terminal
+preview clear only when the preceding construction commit failed.
+
+#### Headless interaction-intelligence rule
+
+All behavior that changes the meaning or progression of an editing gesture belongs in
+`geosolve-constraint-editor`, including behavior that spans several pointer events.
+The editor may remember that a draft previously hovered or snapped to a persistent
+point, then later use that identity to offer horizontal, vertical or coincident
+assistance when the current sample enters a typed tolerance boundary. That remembered
+identity, candidate ranking, boundary transition, guide/preview DTO and eventual
+confirmation effect are headless state-machine behavior with native replay coverage;
+the renderer must not reconstruct any of them from coordinates or DOM hover history.
+
+This rule is intentionally broader than M40's implemented endpoint snapping and does
+not add a new M40 gate. It constrains future interaction work. A desktop browser, a
+native application or a 3D CAD host editing on a sketch plane may own camera/ray-to-
+plane conversion, event delivery, rendering and styling. After producing the editor's
+normalized 2D input, each host consumes the same headless previews, guides, inference
+candidates and effects, so changing UI technology cannot change sketch behavior.
+
 ### Planned sketch companion APIs
 
-M49 targets a `geosolve-sketch-ops` companion for split, trim, extend, mirror,
+Placeholder M103X targets a `geosolve-sketch-ops` companion for split, trim, extend, mirror,
 chamfer and ordinary drafting macros. It may construct public sketch transactions but
 owns no private residual equation.
 
-M50 targets a `geosolve-sketch-topology` companion for revision-stamped production
+Placeholder M104X targets a `geosolve-sketch-topology` companion for revision-stamped production
 wires, nesting, holes and source provenance. Its complete output may feed a host B-rep
 feature, but it owns no B-rep entities and never changes sketch solve state. M33
-accepts these names and boundaries; both crates remain planned until M49/M50.
+accepts these names and boundaries; both crates remain planned until those placeholders are renumbered and executed.
 
 ### `geosolve-linkage`
 
@@ -146,26 +197,36 @@ The frozen baseline is planar `Pose2` linkage kinematics. M17 migrated it to per
 
 ### `geosolve-demo-web`
 
-Is currently a separate, disposable WASM playground and compatibility/audit consumer
-whose primary purpose is interactive sanity checking:
+Is a separate, non-authoritative WASM workbench and compatibility/audit consumer whose
+primary purpose is interactive sanity checking:
 
 - it uses public sketch document, session, command, history, serialization and audit APIs;
-- selection, hit testing, tool state, rendering and browser `localStorage` exist only here;
+- rendering, accessibility, browser event translation and browser `localStorage` exist only here;
 - it contains no residual, curve, measurement, inference-commit or document-validation equations;
-- prospective coincident/horizontal/vertical inference remains an uncommitted UI proposal until explicit user confirmation submits a library command;
-- it retains automated build/browser coverage and always renders accepted geometry and audit data from the same result;
+- prospective coincident/horizontal/vertical inference remains uncommitted until
+  explicit user confirmation; future candidate generation and interaction memory must
+  come from the headless editor, while this crate only presents and dispatches it;
+- direct native/WASM tests qualify its adapters and it always renders accepted geometry and audit data from the same result;
 - it is desktop-only for all future work; responsive, tablet and mobile support are
   not implementation or acceptance targets;
 - it remains non-authoritative and replaceable.
 
-M13 implements alpha interactions: select/box-select, compatible multi-select constraints, draw, solver-projected drag, dimension edit, delete/suppress, pan/zoom, undo/redo, JSON import/export/local autosave, prospective inference, diagnostics/conflict/DOF and retained geometry on failure. M14 hardens E2E, import/error recovery and performance. None of this moves equations or authoritative state into the web crate.
+Historically, M13 implemented the disposable alpha playground interactions and M14 hardened
+its E2E, import/error recovery and performance. M46-M50 replaced every retained semantic
+claim with a direct owner or reviewed retirement and then removed that runtime. None of the
+historical or surviving consumer behavior moves equations or authoritative state into the
+web crate.
 
-M39, M44 and M51 plan a staged rewrite into a CAD-like sketch workbench with a
+M39 begins and M44 continues a staged rewrite into a CAD-like sketch workbench with a
 command bar, tool palette, sketch tree, retained canvas scene, property inspector,
 status bar and Problems/Profile/Audit panels. The rewrite remains a demo of sketch
 constraints only: it has no solid-feature tools, computes no constraint or measurement
-formula and consumes stable domain diagnostics. Human acceptance is required only at
-M40, M45, M52 and M54 after complete automated qualification of the applicable phase.
+formula and consumes stable domain diagnostics. M40.5 removed duplicated selection,
+gesture, drafting, lifecycle and history policy and made this crate a thin adapter over
+`geosolve-constraint-editor`. Cleanup M46-M50 replaces direct-test ownership and removes the
+second legacy application and old browser E2E; M51 consolidates the survivor around one workspace
+snapshot and direct presentation/evidence owners. Human acceptance remains at completed
+M40.7, post-cleanup M53 and placeholder M106X/M108X after direct qualification.
 
 ## 4. Numerical representation and linearization
 
@@ -209,10 +270,10 @@ independently accepted solved state. Design may remain unsolved after a conflict
 unavailable input, but neither design nor attempted geometry gains an accepted
 revision or authoritative audit. The older `SketchDocumentSession` remains an
 accepted-only command/history workflow. Frozen v1-v4 graphs persist design and
-accepted views separately; revision high-water metadata is host-owned until the M53
-wire freeze. M43-M47 extend
-attempt identity with immutable parameter/external/activation revisions and require a
-compare-and-swap commit for prepared work.
+accepted views separately; revision high-water metadata is host-owned until placeholder M107X
+wire freeze. M41-M43 extend attempt identity with immutable
+activation/parameter/external revisions. Placeholder M101X later adds prepared work and
+requires compare-and-swap commit.
 
 M35 adds additive `OperationControl`/`OperationController` boundaries shared by core
 and sketch operations. A monotonic library token carries host cancellation; overflow-safe
@@ -222,7 +283,7 @@ cancellation and work exhaustion from numerical or geometric rejection and from
 independently validated convergence. Controlled mutations perform work on scratch
 state and check cancellation immediately before atomic publication. Controlled dense
 factorization and rank kernels are bounded to 256 rows and 256 columns per kernel in
-M35; larger controlled inputs fail closed before kernel entry. M47 alone adds prepared
+M35; larger controlled inputs fail closed before kernel entry. Placeholder M101X alone adds prepared
 jobs, stale-result rejection and compare-and-swap concurrency.
 
 ## 6. Hard validity and secondary optimum status
@@ -399,8 +460,9 @@ Every executable residual row has structured audit metadata generated with the e
 
 Persistence stores domain topology, continuous accepted state and every discrete branch/span/winding/gauge/assembly choice in a versioned envelope. Runtime slot-map keys are remapped deterministically and are never serialized as persistent identity. M11 establishes the alpha sketch document, M17 establishes the first planar linkage document and gauge schema, M22 and M23 complete each product schema, M24 freezes the first sketch wire DTO and migration dispatch, M25 migrates strict sketch v1 input to canonical v2 for associative construction definitions, M27 advances canonical sketch output to v3 for associative fillets, M28 freezes v1-v3 input and advances canonical output to v4 for generic fillets and trim views, and M29 finalizes public compatibility policy.
 
-M34-M52 may develop an explicitly unstable draft-v5 representation while v1-v4
-remain frozen supported languages. M53 alone freezes final sketch v5 plus separate
+From M34 until placeholder M107X, work may develop an explicitly unstable draft-v5
+representation while v1-v4 remain frozen supported languages. Placeholder M107X alone
+freezes final sketch v5 plus separate
 versioned parameter, external-snapshot and desktop-workspace envelopes. Host/PDM keys,
 formula graphs and application undo remain host state rather than canonical sketch
 equations.
@@ -430,7 +492,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
 - M15: completed manifold `Pose2`/`Pose3`, validated frames and accepted hard-equality sensitivity.
 - M16: completed sparse structure, matching, hierarchy and robust planar continuation.
 - M17-M22: completed persistent planar architecture, the first spatial slice, conics, the common spatial joint/mate catalog, B-splines and NURBS/advanced CAD continuity; M23 completes spatial kinematic product behavior.
-- M22: completed NURBS and the built-in curve/generic differential-constraint surface; production host embedding remains M33-M55 work.
+- M22: completed NURBS and the built-in curve/generic differential-constraint surface; production host embedding continues through cleanup and placeholder M109X.
 - M24: completed persistent element/source identity, typed application attributes and explicit sketch version dispatch.
 - M25: completed associative line offsets, point-defined mirrors, directed-angle workflows and sketch JSON v2 migration.
 - M26: completed visual-only line-profile detection with explicit topology, ambiguity and budgets.
@@ -442,10 +504,19 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
 - M30: completed interactive construction, fillet and NURBS UAT over public document APIs.
 - M31: completed certified all-family visual profile intersections, curved topology and bounded area/containment.
 - M32: completed post-expansion UAT, mutation, performance and `0.2.0` release hardening.
-- M33-M38: production contract, retained design/accepted-state separation, cancellation, semantic operands and the standard relation/dimension catalog.
-- M39-M40: CAD-like core workbench foundation and first human core-interaction gate.
-- M41-M45: construction/activation, typed parameters, immutable external references, host-state workbench integration and second human gate.
-- M46-M48: stable domain diagnostics, prepared concurrency jobs and incremental production-scale solving.
-- M49-M50: separate sketch-operation and production-topology companions.
-- M51-M52: completed advanced desktop workbench, automated qualification and third human advanced/topology gate.
-- M53-M55: v5/API candidate freeze, fourth integrated human gate and production embedding release.
+- M33-M38: completed production contract, retained design/accepted-state separation, cancellation, semantic operands and the standard relation/dimension catalog.
+- M39: completed CAD-like core workbench foundation.
+- M40: completed and mechanically qualified the headless-editor architecture, accepted scene, persistent picking/selection, drafting, projected gestures, actions, lifecycle/history and thin browser adapter; supervising-human M40.7 approval passed after targeted F4/F5 remediation.
+- M41-M44: completed construction/activation, typed parameters, immutable external references and host-state workbench integration.
+- M45: completed cleanup investigation and UAT-point capture; no human approval.
+- M46: completed direct-test ownership/retirement freeze without deleting old infrastructure.
+- M47: completed focused host-state replacement and M44 fixture/E2E purge.
+- M48: completed direct workbench qualification and M40 browser-E2E/serving purge.
+- M49-M50: legacy semantic extraction followed by deletion of all remaining old E2E and the legacy application.
+- M51: completed single-workbench consolidation and direct-qualification hardening.
+- M52: completed direct-qualified post-cleanup candidate preparation.
+- M53: active supervising-human UAT 2 gate.
+- M100X-M102X: placeholder stable diagnostics, prepared jobs and incremental production-scale solving.
+- M103X-M104X: placeholder sketch-operation and production-topology companions.
+- M105X-M106X: placeholder advanced workbench and human advanced/topology UAT.
+- M107X-M109X: placeholder v5/API candidate freeze, integrated human UAT and production embedding release.

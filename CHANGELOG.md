@@ -10,12 +10,42 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - Typed retained-design, solve-attempt and accepted-state identities/views for
   repairable unsolved sketch intent, optional finite candidate geometry and separate
   v1-v4 design/accepted persistence with host-owned revision high-water metadata.
+- Cooperative cancellation and deterministic work-budget APIs with typed non-success
+  outcomes and publication-time cancellation checks.
+- Closed semantic relation, dimension and persistent-measurement catalogs through
+  M36-M38, including bounded path-length work and independent evidence validation.
+- The pure-Rust `geosolve-constraint-editor` state machine for normalized input,
+  persistent selection/drafting state, accepted-scene projection and typed effects.
+- Persistent construction/activity roles, revisioned typed host-parameter bindings and
+  immutable external 2D snapshot/rebind contracts.
+- A disposable, non-persisted M52 host-semantics UAT sidecar over the sole workbench,
+  with deterministic typed evidence and direct owning-layer regressions.
 
 ### Changed
 
-- Adopted the M33-M55 production-embedding roadmap for the planar sketch engine,
-  including the standard CAD catalog, immutable host inputs, CAD-like desktop demo,
-  companion operations/topology APIs and four consolidated human UAT gates.
+- Rebased the post-M44 roadmap: M45 preserves cleanup evidence without human approval;
+  M46-M53 replace and purge legacy browser E2E/playground infrastructure, consolidate one
+  directly tested workbench and perform post-cleanup host-semantics UAT. Later functional
+  and release work is preserved under explicit non-executable placeholders M100X-M109X
+  pending post-cleanup renumbering.
+- Completed the M46 ownership freeze: every old M14/M40/M44 browser/static assertion and
+  legacy inline test has a named direct-test owner or reviewed retirement, while no old
+  fixture, E2E script or playground code was deleted early.
+- Completed M47 with five direct host-semantics fixture groups and deterministic typed
+  finding capture, then removed the broad M44 host fixture, fixture-only controls and
+  `e2e/m44.mjs` browser qualification infrastructure.
+- Completed M48 direct editor/workbench qualification and removed the M40 browser E2E,
+  serving script, static scans and browser-only delivery checks.
+- Completed M49 legacy semantic extraction with direct owning-layer coverage or explicit
+  retirement for every M14 browser group and legacy inline test.
+- Completed M50 by deleting the final M14 E2E/CDP/server stack, legacy playground route and
+  runtime, hidden DOM/CSS, stale serving glue and release-gate browser invocation. One directly
+  qualified workbench remains with pruned dependencies and WASM features.
+- Completed M51 by removing the survivor's design-only storage migration, duplicate M40
+  report/evidence fixtures and stale M32 distribution copy; one workspace snapshot and directly
+  tested presentation, persistence, effect and typed-evidence transformations remain.
+- Consolidated the WASM consumer to one directly tested workbench and removed the legacy
+  playground, routes, browser E2E, serving/download glue and browser-owned qualification path.
 
 ## [0.2.0] - 2026-07-22
 
