@@ -2243,7 +2243,7 @@ external references and retained unsolved intent on the post-cleanup workbench.
 
 - [x] Replace the one-off M52 launcher/action wall with six typed scenario definitions, a nested
   selector and a contextual guide while preserving P1-P10 and ordinary-workspace isolation.
-- [ ] Requalify the integrated demo-web/WASM/release candidate and record its new identity before
+- [x] Requalify the integrated demo-web/WASM/release candidate and record its new identity before
   targeted human review.
 - [ ] Assess role/profile and suppression/mode distinctions.
 - [ ] Assess parameter ownership, proposal provenance and invalid/stale recovery.
@@ -2264,10 +2264,10 @@ close another development concern, question or plan. Candidate identities and an
 human-only access details belong exclusively in the M53 ledger; they are not automated gates,
 retained server infrastructure or product routes.
 
-M53-P011 owns the selector change: the typed catalog and focused native catalog regressions are
-implemented, while integrated qualification, a newly identified candidate and the targeted human
-discoverability/guidance retest remain pending. The change presents the already qualified M52
-fixture behavior and adds no new host semantic.
+M53-P011 owns the selector change: the typed catalog, native regressions and clean integrated
+release qualification pass, and M53-S3 records build-source commit `17a4a25` plus its frozen
+distribution manifest. The targeted human discoverability/guidance retest remains pending. The
+change presents the already qualified M52 fixture behavior and adds no new host semantic.
 
 ## Placeholder future functional sequence
 

@@ -73,8 +73,10 @@ silently broadening M53.
 Active M53 finding M53-P011 replaces only the M52 candidate's one-off launcher and overlay with
 six reusable typed scenario definitions, a nested **Scenarios** selector and a contextual guide
 sidebar. The four fixed fixture families, ten objective points and ordinary-workspace isolation
-retain their direct M52 qualification; the integrated selector still requires requalification and
-a new candidate, neither of which constitutes a human rating or approval.
+retain their direct M52 qualification. Clean integrated requalification passes and
+`docs/M53_UAT.md` records the frozen M53-S3 candidate; targeted supervising-human review remains
+pending, and neither automated qualification nor candidate delivery constitutes a rating or
+approval.
 
 The displaced functional/release roadmap is preserved as literal placeholders
 M100X-M109X: stable diagnostics, prepared jobs, incremental scale, operations, production
