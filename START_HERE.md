@@ -19,7 +19,8 @@ constraint/dimension/branch-action surface, M56 completed prepared jobs and exac
 compare-and-swap publication, M57 completed dependency-local retained solving and bounded
 production-scale evidence, M58 completed the deterministic equation-free sketch operations
 companion and multi-interval visible topology, M59 completed the revision-stamped production
-topology companion, and M60 is now active. The workbench is a
+topology companion, and M60 completed the directly qualified advanced workbench and prepared M61
+scorecard. M61 human UAT is now active. The workbench is a
 non-authoritative demo consumer, not a production UI or third solver. Mobile support and
 physics remain outside future acceptance.
 
@@ -79,7 +80,9 @@ M58 added `geosolve-sketch-ops`, exact-stamped public transaction proposals and 
 multi-interval visible supports without adding residuals or changing canonical v4. M59 added
 `geosolve-sketch-topology`, complete-input accepted snapshots, bounded ambiguity evidence,
 independently validated oriented wires/regions/holes and exact native/external source provenance.
-The active milestone is **M60: advanced workbench completion**. Old Chromium/CDP, HTTP
+M60 added public companion presentation, four deterministic advanced/topology scenario leaves and
+a versioned canonical-v4/draft-v5 desktop workspace envelope while retaining the full M55 action
+surface. The active milestone is **M61: human UAT 3 — advanced geometry and topology**. Old Chromium/CDP, HTTP
 serving, DOM-scraping, screenshot, wall-clock browser-timing and source-substring-scan gates remain
 retired.
 
@@ -103,10 +106,10 @@ are complete, growing the catalog to eight scenarios. The complete clean release
 build-source commit `f72116b`; `docs/M53_UAT.md` records the frozen M53-S5 manifest and temporary
 human endpoint. The targeted attribution review passed as part of final M53-S5 approval.
 
-The finalized M54-M64 functional/release roadmap covers completed stable diagnostics and early
-alpha constraint/dimension/branch-action parity, then prepared jobs, incremental scale, operations,
-production topology, advanced workbench, advanced UAT, API/schema freeze, integrated UAT and the
-production embedding release.
+The finalized M54-M64 functional/release roadmap covers completed stable diagnostics, alpha
+constraint/dimension/branch-action parity, prepared jobs, incremental scale, operations,
+production topology and advanced workbench, followed by active advanced UAT, API/schema freeze,
+integrated UAT and the production embedding release.
 
 Durable cleanup records:
 
@@ -128,6 +131,8 @@ Durable cleanup records:
 - `docs/M57_IMPLEMENTATION.md`
 - `docs/M58_IMPLEMENTATION.md`
 - `docs/M59_IMPLEMENTATION.md`
+- `docs/M60_IMPLEMENTATION.md`
+- `docs/M61_UAT.md` (prepared scorecard; no M61 approval recorded yet)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

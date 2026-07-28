@@ -1067,14 +1067,33 @@ focused compatibility, full workspace, WASM and release Trunk qualification pass
 
 ### M60: advanced workbench and direct qualification
 
+Status: complete (2026-07-29); direct evidence is recorded in
+`docs/M60_IMPLEMENTATION.md`.
+
 - The M55 alpha action surface remains complete while advanced geometry and companion workflows are
   added.
 - The one CAD-like desktop consumer covers advanced curves, branches, operations, diagnostics, production profiles, persistence and cancellation without private equations.
 - Direct editor, presentation, persistence and WASM-adapter suites qualify every objective claim; no old playground or browser E2E returns.
 - The generated UAT evidence package is deterministic; no mobile behavior is claimed.
 
+Completion record (2026-07-29): the sole workbench directly consumes public sketch, editor,
+operations and production-topology APIs. Four stable M61-ready leaves present accepted all-family
+geometry, explicit periodic NURBS span/winding and knot edits, associative fillet state plus public
+split/mirror/pattern proposals, and complete/incomplete/cancelled/recovered production topology.
+Only complete `TopologyProductionProfile` output is labelled consumable. The ten existing M53/M55
+scenario identities, complete M55 action surface and ordinary-workspace isolation remain
+unchanged.
+
+The version-2 desktop workspace envelope records explicit canonical-v4 or draft-v5 payload
+encoding, round-trips M58 multi-interval state and migrates legacy workspace v1. Malformed,
+unknown-version, unknown-field and unknown-encoding payloads reject. Focused editor, workbench,
+operations and topology suites, warnings-denied Clippy, all relevant WASM checks, release Trunk and
+the complete workspace gate pass. No equation, branch heuristic, B-rep state, browser E2E,
+`/#/dev/lab` route or mobile claim was added.
+
 ### M61: human UAT 3
 
+- Status: active; `docs/M61_UAT.md` is prepared and no human approval is recorded yet.
 - The supervising human completes the prepared 45-60 minute advanced geometry/topology scorecard.
 - Advanced controls, branch transitions, associated operations, topology claims and representative interaction performance are understandable and trustworthy.
 - No unresolved wrong-branch, misleading-profile, advanced-interaction or responsiveness blocker remains.

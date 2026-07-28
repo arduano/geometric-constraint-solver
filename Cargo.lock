@@ -591,6 +591,8 @@ dependencies = [
  "geosolve-constraint-editor",
  "geosolve-core",
  "geosolve-sketch",
+ "geosolve-sketch-ops",
+ "geosolve-sketch-topology",
  "serde",
  "serde_json",
  "wasm-bindgen",

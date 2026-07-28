@@ -1261,7 +1261,8 @@ M33-M44 add the current production-embedding fixtures without replacing the froz
 scenarios above. Cleanup M46-M53 preserves their durable behavior through direct tests and
 approved post-cleanup UAT. M54-M59 complete stable diagnostics, early alpha action parity,
 prepared concurrency, incremental scale and the separate operations/production-topology
-companions; M60-M64 own the remaining advanced-workbench/release scope. Every
+companions; M60 completes the advanced workbench and M61-M64 own the remaining human-UAT/release
+scope. Every
 new fixture must name its exact design, parameter, external-snapshot, activation and
 accepted-state revisions. The workbench remains a desktop-only public-API consumer; no
 mobile scenario is required.
@@ -1269,7 +1270,7 @@ mobile scenario is required.
 Objective geometry, residual, derivative, rank, branch, persistence, migration, resource,
 cancellation, presentation-adapter and topology assertions are directly automated at their
 owning Rust/WASM layer. Old browser E2E is not a qualification path. Human review is
-limited to completed M40.7 and M53 plus planned M61/M63 after direct
+limited to completed M40.7 and M53, active M61 and planned M63 after direct
 automated qualification.
 
 ### M40-ES1 - Headless persistent line selection and relation action
@@ -1557,14 +1558,49 @@ cross-owner endpoint relationship, so such mixed closure remains `Skipped` until
 identity contract exists. The companion depends directly only on `geosolve-sketch` and
 `geosolve-geometry` and owns no residual, live solver/session, publication or B-rep state.
 
+### M60-W1 - Advanced workbench and deterministic M61 scenarios
+
+The sole directly tested workbench retains the complete M55 action surface and the exact ten
+existing M53/M55 scenario IDs. M60 adds one sibling root group,
+`m61-advanced-topology` (**M61 Advanced geometry & topology**), with four stable leaves:
+
+| Stable scenario ID | Scenario title | Direct purpose |
+| --- | --- | --- |
+| `advanced-all-families` | Advanced all-family gallery | Present accepted analytic, conic, Bezier, B-spline and NURBS geometry with stable diagnostics from public domain APIs. |
+| `nurbs-branch-topology` | NURBS branch & knot topology | Apply an explicit periodic next-span/winding transition and geometry-preserving knot insertion through typed public document edits. |
+| `associative-companion-operations` | Associative & companion operations | Present an accepted generic fillet/trim, then publish split, exact mirror and bounded linear-pattern proposals through the public operations companion and ordinary retained-session boundary. |
+| `production-topology-trust` | Production topology trust | Compare complete consumable output with open-support incompleteness, pre-cancelled query control and deterministic complete recovery. |
+
+Selecting or resetting a leaf reconstructs all fixed scenario coordinators. The selected fixture is
+the only one rendered, but deterministic typed evidence covers all four advanced families as well
+as the preserved M53/M55 fixtures. Scenario state does not enter workspace persistence; exit
+restores the unchanged ordinary coordinator.
+
+The production-topology inspector captures only a current independently accepted complete input.
+It exposes wire/region/hole counts and accepted revision only when a
+`TopologyProductionProfile` exists. Skipped, truncated, cancelled, exhausted, unavailable and
+query-error outcomes are explicit and never carry a consumable-profile marker. Adding one open
+eligible line produces `UncoveredEligibleSource` and no profile; a pre-cancelled query changes no
+input or accepted identity; recovery reconstructs the exact complete fixture.
+
+The application workspace envelope is version 2. Each retained design and optional accepted
+payload declares `canonical_v4` or `draft_v5`; version 1 migrates as canonical v4. Direct tests
+round-trip canonical documents, M58 multi-interval draft-v5 state and lifecycle high-water
+metadata, and reject malformed, unknown-version, unknown-field or unknown-encoding input.
+Checkpoint encoding is reported by the headless coordinator rather than inferred by the browser.
+
+These scenarios own no equation, curve evaluator, applicability rule, branch heuristic, solver
+publication or B-rep state. The right-expanding selector, guide, transcript and topology card are
+presentation only. Native/WASM direct tests are the objective qualification path.
+
 ### UAT-C3 - Advanced geometry and topology at M61
 
-Prepared advanced scenes cover conics, Bezier/B-spline/NURBS controls, weights,
-knots, periodic transitions, explicit branch edits, fillet/trim/mirror/pattern
-operations, complete profiles, holes, self-intersections and intentionally incomplete
-topology. One medium sketch exercises rapid edit and cancellation. The 45-60 minute
-review judges local predictability, branch clarity, coherent associated motion,
-topology trust and perceived responsiveness.
+The four M60-W1 leaves are the prepared entry point. They cover all-family accepted geometry,
+periodic NURBS span/winding and knot topology, fillet/trim plus split/mirror/pattern operations,
+complete production regions, intentionally open/incomplete topology, cancellation and fresh
+recovery. The 45-60 minute review judges local predictability, branch clarity, coherent associated
+motion, topology trust and perceived desktop responsiveness. `docs/M61_UAT.md` owns the scorecard;
+objective facts remain directly qualified and M61 requires explicit supervising-human approval.
 
 ### UAT-C4 - Integrated release candidate at M63
 
@@ -1578,15 +1614,16 @@ matrix.
 ### UAT evidence and recheck policy
 
 Each checkpoint provides one manual entry point, deterministic resets and concise
-instructions. The top **Scenarios** entry now contains the eight stable M53 leaves and two
-direct-qualified M55 leaves; the M53 subtree and approval record are unchanged. The catalog
-machinery may host UAT-C3/UAT-C4 only after their preceding milestones are executed.
+instructions. The top **Scenarios** entry now contains the eight stable M53 leaves, two
+direct-qualified M55 leaves and four direct-qualified M61-preparation leaves; the M53/M55
+subtrees and M53 approval record are unchanged. UAT-C3 is ready after M60; the catalog machinery
+may host UAT-C4 only after its preceding milestone is executed.
 Findings capture the candidate revision, selected scenario,
 workspace input, action transcript and accepted/attempted diagnostics from public APIs; a
 human may attach an OS screenshot for a visual finding. Objective defects receive direct
 owning-layer regressions. A targeted human recheck is preferred; a full checkpoint repeats
 only after a material API, schema or primary-workflow change. Completed M40.7 and M53 required
-explicit supervising-human sign-off; planned M61/M63 require the same.
+explicit supervising-human sign-off; active M61 and planned M63 require the same.
 
 ## Frozen near-singular fixtures
 

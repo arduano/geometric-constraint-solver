@@ -8,20 +8,24 @@ use geosolve_constraint_editor::{
 use geosolve_core::SolverConfig;
 use geosolve_sketch::{
     AlphaScenarioIds, AlphaScenarioKind, ContactDomain, ContactNeighborhood, CurveDefinition,
-    CurveSpan, DocumentConstraintDefinition, DocumentCurveSpanRef, DocumentDimensionDefinition,
-    DocumentDimensionMode, DocumentDirectionSense, DocumentEdit, DocumentElementId,
-    DocumentExternalLineSupportRef, DocumentId, DocumentLineSupportRef, DocumentParameterKind,
-    DocumentParameterTarget, DocumentSessionError, DocumentSolveRequest, ExternalFeatureKindV1,
-    ExternalLineOrientationV1, ExternalSnapshotDigest, ExternalSnapshotEntry,
-    ExternalSnapshotFeatureV1, ExternalSnapshotResourcesV1, ExternalSnapshotSet,
-    ExternalTopologyDigest, GeometryRole, HostActivationOverride, HostConfigurationActivation,
-    ParameterBatch, ParameterBatchEntry, ParameterValue, PersistentId,
-    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument, TangentOrientation,
-    alpha_scenario,
+    CurveSpan, DocumentBSplineSpanDirection, DocumentConstraintDefinition, DocumentCurveSpanRef,
+    DocumentDimensionDefinition, DocumentDimensionMode, DocumentDirectionSense, DocumentEdit,
+    DocumentElementId, DocumentExternalLineSupportRef, DocumentId, DocumentLineSupportRef,
+    DocumentParameterKind, DocumentParameterTarget, DocumentSessionError, DocumentSolveRequest,
+    ExternalFeatureKindV1, ExternalLineOrientationV1, ExternalSnapshotDigest,
+    ExternalSnapshotEntry, ExternalSnapshotFeatureV1, ExternalSnapshotResourcesV1,
+    ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole, HostActivationOverride,
+    HostConfigurationActivation, OperationControl, OperationOutcome, ParameterBatch,
+    ParameterBatchEntry, ParameterValue, PersistentId, RetainedSketchDocumentSession, ScalarDomain,
+    ScalarUnit, SketchDocument, TangentOrientation, alpha_scenario, cancellation_pair,
 };
+use geosolve_sketch_ops::{
+    SketchOperationRequest, SketchOperationResult, SketchOperationSnapshot, SplitRetainedPiece,
+};
+use geosolve_sketch_topology::{TopologyRequest, TopologySnapshot};
 
 use super::evidence::{parameter_batch_json, serialize_scenario_typed_host_evidence};
-use super::panels::host_state_markup;
+use super::panels::{host_state_markup, production_topology_markup};
 
 const TOPOLOGY_A: ExternalTopologyDigest = ExternalTopologyDigest::from_bytes([0x41; 32]);
 const TOPOLOGY_B: ExternalTopologyDigest = ExternalTopologyDigest::from_bytes([0x42; 32]);
@@ -35,6 +39,10 @@ pub(crate) enum ScenarioFixture {
     ErrorAttribution,
     AlphaParity,
     AlphaBranchRecovery,
+    AdvancedGallery,
+    NurbsBranches,
+    Operations,
+    ProductionTopology,
 }
 
 impl ScenarioFixture {
@@ -47,6 +55,10 @@ impl ScenarioFixture {
             Self::ErrorAttribution => "Canvas error attribution",
             Self::AlphaParity => "Alpha relation and dimension parity",
             Self::AlphaBranchRecovery => "Explicit contact branches and recovery",
+            Self::AdvancedGallery => "Advanced curve gallery",
+            Self::NurbsBranches => "NURBS topology and branch state",
+            Self::Operations => "Associative and companion operations",
+            Self::ProductionTopology => "Production topology and cancellation",
         }
     }
 }
@@ -76,6 +88,14 @@ pub(crate) enum ScenarioAction {
     AlphaFlipTangency,
     AlphaRejectedContact,
     AlphaRecovery,
+    NurbsNextSpan,
+    NurbsInsertKnot,
+    OperationSplit,
+    OperationMirror,
+    OperationPattern,
+    TopologyMakeIncomplete,
+    TopologyRecover,
+    TopologyCancel,
     CaptureEvidence,
 }
 
@@ -105,6 +125,14 @@ impl ScenarioAction {
             "alpha-flip-tangency" => Self::AlphaFlipTangency,
             "alpha-rejected-contact" => Self::AlphaRejectedContact,
             "alpha-recovery" => Self::AlphaRecovery,
+            "nurbs-next-span" => Self::NurbsNextSpan,
+            "nurbs-insert-knot" => Self::NurbsInsertKnot,
+            "operation-split" => Self::OperationSplit,
+            "operation-mirror" => Self::OperationMirror,
+            "operation-pattern" => Self::OperationPattern,
+            "topology-incomplete" => Self::TopologyMakeIncomplete,
+            "topology-recover" => Self::TopologyRecover,
+            "topology-cancel" => Self::TopologyCancel,
             "capture" => Self::CaptureEvidence,
             _ => return None,
         })
@@ -135,6 +163,14 @@ impl ScenarioAction {
             Self::AlphaFlipTangency => "alpha-flip-tangency",
             Self::AlphaRejectedContact => "alpha-rejected-contact",
             Self::AlphaRecovery => "alpha-recovery",
+            Self::NurbsNextSpan => "nurbs-next-span",
+            Self::NurbsInsertKnot => "nurbs-insert-knot",
+            Self::OperationSplit => "operation-split",
+            Self::OperationMirror => "operation-mirror",
+            Self::OperationPattern => "operation-pattern",
+            Self::TopologyMakeIncomplete => "topology-incomplete",
+            Self::TopologyRecover => "topology-recover",
+            Self::TopologyCancel => "topology-cancel",
             Self::CaptureEvidence => "capture",
         }
     }
@@ -164,6 +200,14 @@ impl ScenarioAction {
             Self::AlphaFlipTangency => "Flip tangent orientation",
             Self::AlphaRejectedContact => "Submit impossible contact",
             Self::AlphaRecovery => "Undo rejected contact",
+            Self::NurbsNextSpan => "Advance periodic span",
+            Self::NurbsInsertKnot => "Insert NURBS knot",
+            Self::OperationSplit => "Split visible support",
+            Self::OperationMirror => "Mirror exact source",
+            Self::OperationPattern => "Create linear pattern",
+            Self::TopologyMakeIncomplete => "Add open eligible support",
+            Self::TopologyRecover => "Recover complete topology",
+            Self::TopologyCancel => "Cancel topology query",
             Self::CaptureEvidence => "Capture typed evidence",
         }
     }
@@ -192,6 +236,13 @@ impl ScenarioAction {
             }
             Self::AlphaFlipTangency | Self::AlphaRejectedContact | Self::AlphaRecovery => {
                 ScenarioFixture::AlphaBranchRecovery
+            }
+            Self::NurbsNextSpan | Self::NurbsInsertKnot => ScenarioFixture::NurbsBranches,
+            Self::OperationSplit | Self::OperationMirror | Self::OperationPattern => {
+                ScenarioFixture::Operations
+            }
+            Self::TopologyMakeIncomplete | Self::TopologyRecover | Self::TopologyCancel => {
+                ScenarioFixture::ProductionTopology
             }
             Self::CaptureEvidence => return None,
         })
@@ -303,6 +354,22 @@ struct AlphaBranchFixture {
     impossible_lines: [CurveSpan; 2],
 }
 
+struct NurbsBranchFixture {
+    coordinator: RetainedEditorCoordinator,
+    curve: geosolve_sketch::CurveId,
+    contact: geosolve_sketch::ContactId,
+}
+
+struct OperationFixture {
+    coordinator: RetainedEditorCoordinator,
+    source: geosolve_sketch::CurveId,
+    axis: CurveSpan,
+}
+
+struct ProductionTopologyFixture {
+    coordinator: RetainedEditorCoordinator,
+}
+
 #[derive(Default)]
 struct ScenarioTransition {
     explicit_declaration: bool,
@@ -318,6 +385,10 @@ pub(crate) struct ScenarioCandidate {
     error_attribution: Box<ErrorAttributionFixture>,
     alpha_parity: Box<RetainedEditorCoordinator>,
     alpha_branch: Box<AlphaBranchFixture>,
+    advanced_gallery: Box<RetainedEditorCoordinator>,
+    nurbs_branches: Box<NurbsBranchFixture>,
+    operations: Box<OperationFixture>,
+    production_topology: Box<ProductionTopologyFixture>,
     transcript: Vec<ScenarioObservation>,
     evidence_text: String,
 }
@@ -333,6 +404,10 @@ impl ScenarioCandidate {
             error_attribution: Box::new(error_attribution_fixture()?),
             alpha_parity: Box::new(alpha_parity_fixture()?),
             alpha_branch: Box::new(alpha_branch_fixture()?),
+            advanced_gallery: Box::new(advanced_gallery_fixture()?),
+            nurbs_branches: Box::new(nurbs_branch_fixture()?),
+            operations: Box::new(operation_fixture()?),
+            production_topology: Box::new(production_topology_fixture()?),
             transcript: Vec::new(),
             evidence_text: "Capture has not been requested.".into(),
         })
@@ -359,6 +434,10 @@ impl ScenarioCandidate {
             ScenarioFixture::ErrorAttribution => &self.error_attribution.coordinator,
             ScenarioFixture::AlphaParity => &self.alpha_parity,
             ScenarioFixture::AlphaBranchRecovery => &self.alpha_branch.coordinator,
+            ScenarioFixture::AdvancedGallery => &self.advanced_gallery,
+            ScenarioFixture::NurbsBranches => &self.nurbs_branches.coordinator,
+            ScenarioFixture::Operations => &self.operations.coordinator,
+            ScenarioFixture::ProductionTopology => &self.production_topology.coordinator,
         }
     }
 
@@ -704,6 +783,106 @@ impl ScenarioCandidate {
                     }
                 }
             }
+            ScenarioAction::NurbsNextSpan => {
+                let expected = self.nurbs_branches.coordinator.session().design_identity();
+                self.nurbs_branches
+                    .coordinator
+                    .apply_edit(
+                        expected,
+                        DocumentEdit::TransitionNurbsContact {
+                            contact: self.nurbs_branches.contact,
+                            direction: DocumentBSplineSpanDirection::Next,
+                        },
+                    )
+                    .map_err(|error| error.to_string())?;
+            }
+            ScenarioAction::NurbsInsertKnot => {
+                let expected = self.nurbs_branches.coordinator.session().design_identity();
+                self.nurbs_branches
+                    .coordinator
+                    .apply_edit(
+                        expected,
+                        DocumentEdit::InsertNurbsKnot {
+                            curve: self.nurbs_branches.curve,
+                            parameter: 0.5,
+                        },
+                    )
+                    .map_err(|error| error.to_string())?;
+            }
+            ScenarioAction::OperationSplit => {
+                apply_scenario_operation(
+                    &mut self.operations.coordinator,
+                    SketchOperationRequest::Split {
+                        support: CurveSpan::line(self.operations.source),
+                        parameter: 0.5,
+                        retained: SplitRetainedPiece::Before,
+                    },
+                )?;
+            }
+            ScenarioAction::OperationMirror => {
+                apply_scenario_operation(
+                    &mut self.operations.coordinator,
+                    SketchOperationRequest::Mirror {
+                        label: "UAT mirrored source".into(),
+                        source: self.operations.source,
+                        axis: self.operations.axis,
+                    },
+                )?;
+            }
+            ScenarioAction::OperationPattern => {
+                apply_scenario_operation(
+                    &mut self.operations.coordinator,
+                    SketchOperationRequest::LinearPattern {
+                        label: "UAT source pattern".into(),
+                        sources: vec![self.operations.source],
+                        instances: 3,
+                        step: [0.0, 1.5],
+                    },
+                )?;
+            }
+            ScenarioAction::TopologyMakeIncomplete => {
+                let mut session = self.production_topology.coordinator.session().clone();
+                let expected = session.design_identity();
+                session
+                    .transact(expected, |document| {
+                        let points = [
+                            document.add_point("UAT open start", [18.0, -2.0])?,
+                            document.add_point("UAT open end", [22.0, 1.0])?,
+                        ];
+                        document.add_curve(
+                            "UAT open eligible support",
+                            CurveDefinition::Line {
+                                start: points[0],
+                                end: points[1],
+                                branch_direction: [0.8, 0.6],
+                            },
+                        )?;
+                        Ok(())
+                    })
+                    .map_err(|error| error.to_string())?;
+                self.production_topology.coordinator =
+                    RetainedEditorCoordinator::new(session).map_err(|error| error.to_string())?;
+            }
+            ScenarioAction::TopologyRecover => {
+                *self.production_topology = production_topology_fixture()?;
+            }
+            ScenarioAction::TopologyCancel => {
+                let snapshot =
+                    TopologySnapshot::capture(self.production_topology.coordinator.session())
+                        .map_err(|error| error.to_string())?;
+                let (handle, token) = cancellation_pair();
+                handle.cancel();
+                let outcome = snapshot
+                    .prepare(TopologyRequest::default())
+                    .execute(OperationControl::new(
+                        token,
+                        geosolve_sketch::OperationLimits::unlimited(),
+                    ))
+                    .map_err(|error| error.to_string())?;
+                if !matches!(outcome, OperationOutcome::Cancelled { .. }) {
+                    return Err("pre-cancelled topology query unexpectedly completed".into());
+                }
+            }
             ScenarioAction::CaptureEvidence => {}
         }
         Ok(transition)
@@ -733,7 +912,7 @@ impl ScenarioCandidate {
             .collect::<Vec<_>>()
             .join("\n");
         Ok(format!(
-            "SCENARIO CATALOG EVIDENCE\nprovenance=fixed-scenario-not-runtime-platform\nobjective_checks=direct Rust/WASM state transitions\nhuman_clarity_and_trust=human-UAT judgment only\nSCENARIO_TRANSCRIPT\n{}\nROLE_ACTIVITY\n{}\nPARAMETER\n{}\nSUBMITTED_PARAMETER_TYPED\n{}\nEXTERNAL\n{}\nSUBMITTED_EXTERNAL_TYPED\n{}\nLIFECYCLE\n{}\nERROR_ATTRIBUTION\n{}\nALPHA_PARITY\n{}\nALPHA_BRANCH_RECOVERY\n{}",
+            "SCENARIO CATALOG EVIDENCE\nprovenance=fixed-scenario-not-runtime-platform\nobjective_checks=direct Rust/WASM state transitions\nhuman_clarity_and_trust=human-UAT judgment only\nSCENARIO_TRANSCRIPT\n{}\nROLE_ACTIVITY\n{}\nPARAMETER\n{}\nSUBMITTED_PARAMETER_TYPED\n{}\nEXTERNAL\n{}\nSUBMITTED_EXTERNAL_TYPED\n{}\nLIFECYCLE\n{}\nERROR_ATTRIBUTION\n{}\nALPHA_PARITY\n{}\nALPHA_BRANCH_RECOVERY\n{}\nADVANCED_ALL_FAMILIES\n{}\nNURBS_BRANCH_TOPOLOGY\n{}\nASSOCIATIVE_COMPANION_OPERATIONS\n{}\nPRODUCTION_TOPOLOGY\n{}\nPRODUCTION_TOPOLOGY_PRESENTATION\n{}",
             scenario_transcript,
             serialize("scenario://role-activity", &self.role.coordinator)?,
             serialize(
@@ -753,8 +932,44 @@ impl ScenarioCandidate {
                 "scenario://alpha-branch-recovery",
                 &self.alpha_branch.coordinator
             )?,
+            serialize("scenario://advanced-all-families", &self.advanced_gallery)?,
+            serialize(
+                "scenario://nurbs-branch-topology",
+                &self.nurbs_branches.coordinator
+            )?,
+            serialize(
+                "scenario://associative-companion-operations",
+                &self.operations.coordinator
+            )?,
+            serialize(
+                "scenario://production-topology",
+                &self.production_topology.coordinator
+            )?,
+            production_topology_markup(self.production_topology.coordinator.session()),
         ))
     }
+}
+
+fn apply_scenario_operation(
+    coordinator: &mut RetainedEditorCoordinator,
+    request: SketchOperationRequest,
+) -> Result<(), String> {
+    let outcome = SketchOperationSnapshot::capture(coordinator.session())
+        .prepare(request)
+        .execute(OperationControl::default())
+        .map_err(|error| error.to_string())?;
+    let OperationOutcome::Completed { value, .. } = outcome else {
+        return Err("scenario operation did not complete".into());
+    };
+    let SketchOperationResult::Proposed(proposal) = value else {
+        return Err(format!("scenario operation was not proposed: {value:?}"));
+    };
+    let mut session = coordinator.session().clone();
+    proposal
+        .apply(&mut session)
+        .map_err(|error| error.to_string())?;
+    *coordinator = RetainedEditorCoordinator::new(session).map_err(|error| error.to_string())?;
+    Ok(())
 }
 
 fn role_fixture() -> Result<RoleFixture, String> {
@@ -898,6 +1113,104 @@ fn alpha_parity_fixture() -> Result<RetainedEditorCoordinator, String> {
     )
     .map_err(|error| error.to_string())?;
     RetainedEditorCoordinator::new(session).map_err(|error| error.to_string())
+}
+
+fn advanced_gallery_fixture() -> Result<RetainedEditorCoordinator, String> {
+    let fixture = alpha_scenario(AlphaScenarioKind::ProfileAllFamilies, 1.0)
+        .map_err(|error| error.to_string())?;
+    let session = RetainedSketchDocumentSession::new(
+        fixture.document,
+        fixture.request,
+        SolverConfig::default(),
+    )
+    .map_err(|error| error.to_string())?;
+    RetainedEditorCoordinator::new(session).map_err(|error| error.to_string())
+}
+
+fn nurbs_branch_fixture() -> Result<NurbsBranchFixture, String> {
+    let fixture =
+        alpha_scenario(AlphaScenarioKind::NurbsPeriodic, 1.0).map_err(|error| error.to_string())?;
+    let AlphaScenarioIds::NurbsPeriodic(ids) = fixture.ids else {
+        return Err("periodic NURBS scenario IDs are unavailable".into());
+    };
+    let contact = ids
+        .contact
+        .ok_or_else(|| "periodic NURBS scenario contact is unavailable".to_owned())?;
+    let session = RetainedSketchDocumentSession::new(
+        fixture.document,
+        fixture.request,
+        SolverConfig::default(),
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(NurbsBranchFixture {
+        coordinator: RetainedEditorCoordinator::new(session).map_err(|error| error.to_string())?,
+        curve: ids.curve,
+        contact,
+    })
+}
+
+fn operation_fixture() -> Result<OperationFixture, String> {
+    let fixture = alpha_scenario(AlphaScenarioKind::M28TrimmedFillet, 1.0)
+        .map_err(|error| error.to_string())?;
+    let mut document = fixture.document;
+    let source_points = [
+        document
+            .add_point("Operation source start", [12.0, 0.0])
+            .map_err(|error| error.to_string())?,
+        document
+            .add_point("Operation source end", [16.0, 0.0])
+            .map_err(|error| error.to_string())?,
+    ];
+    let source = document
+        .add_curve(
+            "Operation exact line source",
+            CurveDefinition::Line {
+                start: source_points[0],
+                end: source_points[1],
+                branch_direction: [1.0, 0.0],
+            },
+        )
+        .map_err(|error| error.to_string())?;
+    let axis_points = [
+        document
+            .add_point("Operation mirror axis start", [10.0, -3.0])
+            .map_err(|error| error.to_string())?,
+        document
+            .add_point("Operation mirror axis end", [10.0, 3.0])
+            .map_err(|error| error.to_string())?,
+    ];
+    let axis = document
+        .add_curve(
+            "Operation mirror axis",
+            CurveDefinition::Line {
+                start: axis_points[0],
+                end: axis_points[1],
+                branch_direction: [0.0, 1.0],
+            },
+        )
+        .map_err(|error| error.to_string())?;
+    let session =
+        RetainedSketchDocumentSession::new(document, fixture.request, SolverConfig::default())
+            .map_err(|error| error.to_string())?;
+    Ok(OperationFixture {
+        coordinator: RetainedEditorCoordinator::new(session).map_err(|error| error.to_string())?,
+        source,
+        axis: CurveSpan::line(axis),
+    })
+}
+
+fn production_topology_fixture() -> Result<ProductionTopologyFixture, String> {
+    let fixture = alpha_scenario(AlphaScenarioKind::ProfileCurvedTopology, 1.0)
+        .map_err(|error| error.to_string())?;
+    let session = RetainedSketchDocumentSession::new(
+        fixture.document,
+        fixture.request,
+        SolverConfig::default(),
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(ProductionTopologyFixture {
+        coordinator: RetainedEditorCoordinator::new(session).map_err(|error| error.to_string())?,
+    })
 }
 
 fn alpha_branch_fixture() -> Result<AlphaBranchFixture, String> {
@@ -1121,11 +1434,12 @@ fn accepted_evidence(coordinator: &RetainedEditorCoordinator) -> String {
 #[cfg(test)]
 mod tests {
     use geosolve_constraint_editor::{EditorProblemScope, EditorProblemTarget, SelectionItem};
+    use geosolve_sketch::CurveSpan;
 
     use super::{
         ScenarioAction, ScenarioBoundary, ScenarioCandidate, ScenarioFixture, ScenarioRejection,
     };
-    use crate::workbench::panels::{host_state_markup, tree_markup};
+    use crate::workbench::panels::{host_state_markup, production_topology_markup, tree_markup};
 
     #[test]
     fn scenario_candidate_directly_qualifies_role_activity_and_mode_distinctions() {
@@ -1467,6 +1781,166 @@ mod tests {
     }
 
     #[test]
+    fn advanced_nurbs_actions_preserve_explicit_branch_and_add_one_span() {
+        let mut candidate = ScenarioCandidate::new(ScenarioFixture::NurbsBranches).unwrap();
+        let curve = candidate.nurbs_branches.curve;
+        let contact = candidate.nurbs_branches.contact;
+        let before_contact = candidate
+            .nurbs_branches
+            .coordinator
+            .session()
+            .design_document()
+            .contact(contact)
+            .cloned()
+            .unwrap();
+        let before_spans = candidate
+            .nurbs_branches
+            .coordinator
+            .session()
+            .design_document()
+            .curve_spans(curve)
+            .unwrap();
+
+        assert_eq!(
+            candidate
+                .perform(ScenarioAction::NurbsNextSpan)
+                .unwrap()
+                .boundary,
+            ScenarioBoundary::AdvancedAccepted
+        );
+        let transitioned = candidate
+            .nurbs_branches
+            .coordinator
+            .session()
+            .design_document()
+            .contact(contact)
+            .cloned()
+            .unwrap();
+        assert_ne!(transitioned.curve, before_contact.curve);
+        assert_ne!(transitioned.winding, before_contact.winding);
+
+        assert_eq!(
+            candidate
+                .perform(ScenarioAction::NurbsInsertKnot)
+                .unwrap()
+                .boundary,
+            ScenarioBoundary::AdvancedAccepted
+        );
+        let document = candidate
+            .nurbs_branches
+            .coordinator
+            .session()
+            .design_document();
+        assert_eq!(
+            document.curve_spans(curve).unwrap().len(),
+            before_spans.len() + 1
+        );
+        assert!(
+            candidate
+                .nurbs_branches
+                .coordinator
+                .session()
+                .accepted_state()
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn companion_operation_actions_publish_through_accepted_session_boundary() {
+        let mut candidate = ScenarioCandidate::new(ScenarioFixture::Operations).unwrap();
+        let source = candidate.operations.source;
+        let initial_curves = candidate
+            .operations
+            .coordinator
+            .session()
+            .design_document()
+            .curves()
+            .len();
+
+        candidate.perform(ScenarioAction::OperationSplit).unwrap();
+        assert_eq!(
+            candidate
+                .operations
+                .coordinator
+                .session()
+                .design_document()
+                .visible_intervals(CurveSpan::line(source))
+                .unwrap()
+                .len(),
+            2
+        );
+        candidate.perform(ScenarioAction::OperationMirror).unwrap();
+        let after_mirror = candidate
+            .operations
+            .coordinator
+            .session()
+            .design_document()
+            .curves()
+            .len();
+        assert!(after_mirror > initial_curves);
+        candidate.perform(ScenarioAction::OperationPattern).unwrap();
+        assert!(
+            candidate
+                .operations
+                .coordinator
+                .session()
+                .design_document()
+                .curves()
+                .len()
+                > after_mirror
+        );
+        assert!(
+            candidate
+                .operations
+                .coordinator
+                .session()
+                .accepted_state()
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn production_topology_actions_fail_closed_cancel_without_mutation_and_recover() {
+        let mut candidate = ScenarioCandidate::new(ScenarioFixture::ProductionTopology).unwrap();
+        let initial =
+            production_topology_markup(candidate.production_topology.coordinator.session());
+        assert!(initial.contains("data-topology-status=\"complete\""));
+        assert!(initial.contains("data-production-regions=\"true\""));
+
+        candidate
+            .perform(ScenarioAction::TopologyMakeIncomplete)
+            .unwrap();
+        let incomplete =
+            production_topology_markup(candidate.production_topology.coordinator.session());
+        assert!(incomplete.contains("data-topology-status=\"skipped\""));
+        assert!(!incomplete.contains("data-production-regions=\"true\""));
+        let accepted_before_cancel = candidate
+            .production_topology
+            .coordinator
+            .session()
+            .accepted_state()
+            .unwrap()
+            .identity();
+        let cancelled = candidate.perform(ScenarioAction::TopologyCancel).unwrap();
+        assert_eq!(cancelled.boundary, ScenarioBoundary::RetainedAccepted);
+        assert_eq!(
+            candidate
+                .production_topology
+                .coordinator
+                .session()
+                .accepted_state()
+                .unwrap()
+                .identity(),
+            accepted_before_cancel
+        );
+
+        candidate.perform(ScenarioAction::TopologyRecover).unwrap();
+        let recovered =
+            production_topology_markup(candidate.production_topology.coordinator.session());
+        assert_eq!(recovered, initial);
+    }
+
+    #[test]
     fn scenario_candidate_evidence_is_deterministic_and_contains_typed_inputs() {
         let mut candidate = ScenarioCandidate::new(ScenarioFixture::RoleActivity).unwrap();
         candidate
@@ -1510,6 +1984,11 @@ mod tests {
             "human_clarity_and_trust=human-UAT judgment only",
             "scenario://alpha-parity",
             "scenario://alpha-branch-recovery",
+            "scenario://advanced-all-families",
+            "scenario://nurbs-branch-topology",
+            "scenario://associative-companion-operations",
+            "scenario://production-topology",
+            "PRODUCTION_TOPOLOGY_PRESENTATION",
         ] {
             assert!(first.contains(expected), "missing evidence {expected}");
         }
@@ -1524,6 +2003,10 @@ mod tests {
             &candidate.lifecycle.coordinator,
             &candidate.alpha_parity,
             &candidate.alpha_branch.coordinator,
+            &candidate.advanced_gallery,
+            &candidate.nurbs_branches.coordinator,
+            &candidate.operations.coordinator,
+            &candidate.production_topology.coordinator,
         ] {
             let checkpoint = coordinator.checkpoint();
             assert!(!first.contains(checkpoint.design_json()));

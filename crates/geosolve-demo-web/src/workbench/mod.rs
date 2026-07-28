@@ -47,7 +47,7 @@ pub(crate) mod wasm {
         MouseEvent, PointerEvent,
     };
 
-    use super::persistence::{STORAGE_KEY, WorkspaceSnapshot};
+    use super::persistence::{LEGACY_STORAGE_KEY, STORAGE_KEY, WorkspaceSnapshot};
 
     struct Workbench {
         coordinator: RetainedEditorCoordinator,
@@ -60,9 +60,13 @@ pub(crate) mod wasm {
 
     pub(crate) fn install(document: &Document) -> Result<(), JsValue> {
         let storage = super::platform::window()?.local_storage().ok().flatten();
-        let snapshot = storage
-            .as_ref()
-            .and_then(|storage| storage.get_item(STORAGE_KEY).ok().flatten());
+        let snapshot = storage.as_ref().and_then(|storage| {
+            storage
+                .get_item(STORAGE_KEY)
+                .ok()
+                .flatten()
+                .or_else(|| storage.get_item(LEGACY_STORAGE_KEY).ok().flatten())
+        });
         let restored = if let Some(snapshot) = snapshot.as_deref() {
             WorkspaceSnapshot::decode(snapshot).and_then(|value| coordinator_from_snapshot(&value))
         } else {
@@ -155,12 +159,11 @@ pub(crate) mod wasm {
     fn coordinator_from_snapshot(
         snapshot: &WorkspaceSnapshot,
     ) -> Result<RetainedEditorCoordinator, String> {
-        let design =
-            SketchDocument::from_json(&snapshot.design_json).map_err(|error| error.to_string())?;
-        let session = if let Some(json) = snapshot.accepted_json.as_deref() {
+        let design = snapshot.design_document()?;
+        let session = if let Some(accepted) = snapshot.accepted_document()? {
             RetainedSketchDocumentSession::restore_design_with_accepted(
                 design,
-                SketchDocument::from_json(json).map_err(|error| error.to_string())?,
+                accepted,
                 snapshot.revisions(),
                 DocumentSolveRequest::default(),
                 SolverConfig::default(),
@@ -940,6 +943,9 @@ pub(crate) mod wasm {
         );
         required(document, "wb-host-state")?
             .set_inner_html(&super::panels::host_state_markup(coordinator.session()));
+        required(document, "wb-production-topology")?.set_inner_html(
+            &super::panels::production_topology_markup(coordinator.session()),
+        );
         render_scenario_ui(document, &wb.scenarios)?;
         let problems = required(document, "wb-problems")?;
         if wb.problems_open || problem != "No current solver problem" {

@@ -7,10 +7,97 @@ use std::fmt::Write as _;
 use geosolve_constraint_editor::{LifecycleStatus, SelectionItem};
 use geosolve_sketch::{
     DocumentMeasurementProvenance, DocumentParameterTarget, ExternalSnapshotInputError,
-    GeometryRole, InactivityReason, ParameterValue, SketchAcceptedDocumentRedundancy,
-    SketchDiagnosticSearch, SketchDiagnosticSearchStatus, SketchDiagnosticSnapshot, SketchDocument,
-    VisualProfileOptions,
+    GeometryRole, InactivityReason, OperationControl, OperationOutcome, ParameterValue,
+    RetainedSketchDocumentSession, SketchAcceptedDocumentRedundancy, SketchDiagnosticSearch,
+    SketchDiagnosticSearchStatus, SketchDiagnosticSnapshot, SketchDocument, VisualProfileOptions,
 };
+use geosolve_sketch_topology::{TopologyCompleteness, TopologyRequest, TopologySnapshot};
+
+pub(crate) fn production_topology_markup(session: &RetainedSketchDocumentSession) -> String {
+    let snapshot = match TopologySnapshot::capture(session) {
+        Ok(snapshot) => snapshot,
+        Err(error) => {
+            return format!(
+                "<section class=\"wb-topology-card\" data-topology-status=\"unavailable\"><h3>Production topology</h3><p>Unavailable: {}</p><p class=\"wb-topology-scope\">Only current independently accepted geometry is consumable.</p></section>",
+                escape(&error.to_string())
+            );
+        }
+    };
+    let outcome = match snapshot
+        .prepare(TopologyRequest::default())
+        .execute(OperationControl::default())
+    {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            return format!(
+                "<section class=\"wb-topology-card\" data-topology-status=\"error\"><h3>Production topology</h3><p>Query error: {}</p></section>",
+                escape(&error.to_string())
+            );
+        }
+    };
+    let OperationOutcome::Completed { value, .. } = outcome else {
+        let status = if matches!(outcome, OperationOutcome::Cancelled { .. }) {
+            "cancelled"
+        } else {
+            "work-exhausted"
+        };
+        return format!(
+            "<section class=\"wb-topology-card\" data-topology-status=\"{status}\"><h3>Production topology</h3><p>{status}</p></section>"
+        );
+    };
+    let mut output = format!(
+        "<section class=\"wb-topology-card\" data-topology-status=\"{}\" data-topology-eligible=\"{}\" data-topology-issues=\"{}\"><h3>Production topology</h3>",
+        match value.completeness {
+            TopologyCompleteness::Complete => "complete",
+            TopologyCompleteness::Truncated => "truncated",
+            TopologyCompleteness::Skipped => "skipped",
+        },
+        value.scope.eligible_sources.len(),
+        value.issues.len(),
+    );
+    if let Some(profile) = value.production_profile {
+        let _ = write!(
+            output,
+            "<p><strong>Complete</strong>: {} wire usages, {} bounded regions, exact accepted revision {}.</p><ul class=\"wb-host-list\" data-production-regions=\"true\">",
+            profile.wires().len(),
+            profile.regions().len(),
+            profile.accepted_state_identity().revision().get(),
+        );
+        for region in profile.regions() {
+            let _ = write!(
+                output,
+                "<li data-topology-region=\"{}\" data-topology-outer=\"{}\" data-topology-holes=\"{}\" data-topology-area=\"{}\">Region {} · area {} · {} hole(s)</li>",
+                region.id.0,
+                region.outer.0,
+                region.holes.len(),
+                region.area,
+                region.id.0,
+                region.area,
+                region.holes.len(),
+            );
+        }
+        output.push_str("</ul>");
+    } else {
+        let _ = write!(
+            output,
+            "<p><strong>{:?}</strong>: no production profile is consumable.</p><ul class=\"wb-host-list\" data-topology-issue-list=\"true\">",
+            value.completeness
+        );
+        for issue in value.issues {
+            let _ = write!(
+                output,
+                "<li data-topology-issue=\"{:?}\" data-topology-source-count=\"{}\">{:?} · {} source(s)</li>",
+                issue.kind,
+                issue.affected_sources.len(),
+                issue.kind,
+                issue.affected_sources.len(),
+            );
+        }
+        output.push_str("</ul>");
+    }
+    output.push_str("<p class=\"wb-topology-scope\">Candidate arrangement evidence is independently checked for complete source coverage, provenance, closure and orientation.</p></section>");
+    output
+}
 
 pub(crate) fn accepted_redundancy_markup(
     redundancy: Option<&SketchAcceptedDocumentRedundancy>,
@@ -704,20 +791,22 @@ mod tests {
     use geosolve_constraint_editor::{LifecycleStatus, RetainedEditorCoordinator, SelectionItem};
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
-        CurveDefinition, CurveSpan, DocumentConstraintDefinition, DocumentDimensionDefinition,
-        DocumentDimensionMode, DocumentDirectionSense, DocumentElementId,
-        DocumentExternalLineSupportRef, DocumentLineSupportRef, DocumentParameterKind,
-        DocumentParameterTarget, DocumentSolveRequest, ExternalFeatureKindV1,
-        ExternalLineOrientationV1, ExternalSnapshotDigest, ExternalSnapshotEntry,
-        ExternalSnapshotFeatureV1, ExternalSnapshotResourcesV1, ExternalSnapshotSet,
-        ExternalTopologyDigest, GeometryRole, ParameterBatch, ParameterBatchEntry, ParameterValue,
-        RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDiagnosticIncompleteReason,
-        SketchDiagnosticSearchStatus, SketchDocument,
+        AlphaScenarioKind, CurveDefinition, CurveSpan, DocumentConstraintDefinition,
+        DocumentDimensionDefinition, DocumentDimensionMode, DocumentDirectionSense,
+        DocumentElementId, DocumentExternalLineSupportRef, DocumentLineSupportRef,
+        DocumentParameterKind, DocumentParameterTarget, DocumentSolveRequest,
+        ExternalFeatureKindV1, ExternalLineOrientationV1, ExternalSnapshotDigest,
+        ExternalSnapshotEntry, ExternalSnapshotFeatureV1, ExternalSnapshotResourcesV1,
+        ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole, ParameterBatch,
+        ParameterBatchEntry, ParameterValue, RetainedSketchDocumentSession, ScalarDomain,
+        ScalarUnit, SketchDiagnosticIncompleteReason, SketchDiagnosticSearchStatus, SketchDocument,
+        alpha_scenario,
     };
 
     use super::{
         accepted_hard_residual_max, accepted_redundancy_markup, accepted_report_markup,
-        host_state_markup, lifecycle_presentation, problem_markup, tree_markup,
+        host_state_markup, lifecycle_presentation, problem_markup, production_topology_markup,
+        tree_markup,
     };
 
     const TOPOLOGY_A: ExternalTopologyDigest = ExternalTopologyDigest::from_bytes([0x41; 32]);
@@ -1313,5 +1402,43 @@ mod tests {
         let recovered = host_state_markup(coordinator.session());
         assert!(recovered.contains("data-attempted-external-status=\"valid\""));
         assert!(recovered.contains("data-accepted-external-revision=\"13\""));
+    }
+
+    #[test]
+    fn production_topology_markup_distinguishes_complete_and_open_eligible_geometry() {
+        let fixture = alpha_scenario(AlphaScenarioKind::ProfileCurvedTopology, 1.0).unwrap();
+        let complete = RetainedSketchDocumentSession::new(
+            fixture.document,
+            fixture.request,
+            SolverConfig::default(),
+        )
+        .unwrap();
+        let complete_markup = production_topology_markup(&complete);
+        assert!(complete_markup.contains("data-topology-status=\"complete\""));
+        assert!(complete_markup.contains("data-production-regions=\"true\""));
+        assert!(complete_markup.contains("exact accepted revision"));
+
+        let mut open = SketchDocument::new(8.0).unwrap();
+        let first = open.add_point("open first", [0.0, 0.0]).unwrap();
+        let second = open.add_point("open second", [4.0, 0.0]).unwrap();
+        open.add_curve(
+            "open eligible line",
+            CurveDefinition::Line {
+                start: first,
+                end: second,
+                branch_direction: [1.0, 0.0],
+            },
+        )
+        .unwrap();
+        let open = RetainedSketchDocumentSession::new(
+            open,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .unwrap();
+        let open_markup = production_topology_markup(&open);
+        assert!(open_markup.contains("data-topology-status=\"skipped\""));
+        assert!(open_markup.contains("UncoveredEligibleSource"));
+        assert!(!open_markup.contains("data-production-regions=\"true\""));
     }
 }

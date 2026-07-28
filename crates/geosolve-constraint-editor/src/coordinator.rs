@@ -38,16 +38,32 @@ pub struct RestoreCheckpoint {
 }
 
 impl RestoreCheckpoint {
-    /// Canonical retained-design JSON.
+    /// Retained-design JSON in the encoding reported by
+    /// [`Self::design_uses_draft_v5`].
     #[must_use]
     pub fn design_json(&self) -> &str {
         &self.design_json
     }
 
-    /// Canonical accepted-state JSON, if an accepted state existed.
+    /// Whether [`Self::design_json`] uses the explicitly unstable draft-v5
+    /// sketch encoding rather than frozen canonical v4.
+    #[must_use]
+    pub const fn design_uses_draft_v5(&self) -> bool {
+        self.design_is_draft_v5
+    }
+
+    /// Accepted-state JSON in the encoding reported by
+    /// [`Self::accepted_uses_draft_v5`], if an accepted state existed.
     #[must_use]
     pub fn accepted_json(&self) -> Option<&str> {
         self.accepted_json.as_deref()
+    }
+
+    /// Whether the accepted-state payload uses the explicitly unstable draft-v5
+    /// sketch encoding. This is false when there is no accepted payload.
+    #[must_use]
+    pub const fn accepted_uses_draft_v5(&self) -> bool {
+        self.accepted_is_draft_v5
     }
 
     /// Never-reuse lifecycle revision metadata.

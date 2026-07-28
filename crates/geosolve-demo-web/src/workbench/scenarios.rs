@@ -26,11 +26,15 @@ pub(crate) enum VerificationPointId {
     P12,
     P13,
     P14,
+    P15,
+    P16,
+    P17,
+    P18,
 }
 
 impl VerificationPointId {
     #[cfg(test)]
-    pub(crate) const ALL: [Self; 14] = [
+    pub(crate) const ALL: [Self; 18] = [
         Self::P1,
         Self::P2,
         Self::P3,
@@ -45,6 +49,10 @@ impl VerificationPointId {
         Self::P12,
         Self::P13,
         Self::P14,
+        Self::P15,
+        Self::P16,
+        Self::P17,
+        Self::P18,
     ];
 
     pub(crate) const fn number(self) -> u8 {
@@ -63,6 +71,10 @@ impl VerificationPointId {
             Self::P12 => 12,
             Self::P13 => 13,
             Self::P14 => 14,
+            Self::P15 => 15,
+            Self::P16 => 16,
+            Self::P17 => 17,
+            Self::P18 => 18,
         }
     }
 }
@@ -100,11 +112,15 @@ pub(crate) enum ScenarioId {
     GlobalCanvasError,
     AlphaParityCatalog,
     AlphaBranchRecovery,
+    AdvancedAllFamilies,
+    NurbsBranchTopology,
+    AssociativeCompanionOperations,
+    ProductionTopologyTrust,
 }
 
 impl ScenarioId {
     #[cfg(test)]
-    pub(crate) const ALL: [Self; 10] = [
+    pub(crate) const ALL: [Self; 14] = [
         Self::RoleProfileParticipation,
         Self::ActivationDimensionMode,
         Self::SharedParameterProposal,
@@ -115,6 +131,10 @@ impl ScenarioId {
         Self::GlobalCanvasError,
         Self::AlphaParityCatalog,
         Self::AlphaBranchRecovery,
+        Self::AdvancedAllFamilies,
+        Self::NurbsBranchTopology,
+        Self::AssociativeCompanionOperations,
+        Self::ProductionTopologyTrust,
     ];
 
     pub(crate) fn from_key(value: &str) -> Option<Self> {
@@ -129,6 +149,10 @@ impl ScenarioId {
             "global-canvas-error" => Self::GlobalCanvasError,
             "alpha-parity-catalog" => Self::AlphaParityCatalog,
             "alpha-branch-recovery" => Self::AlphaBranchRecovery,
+            "advanced-all-families" => Self::AdvancedAllFamilies,
+            "nurbs-branch-topology" => Self::NurbsBranchTopology,
+            "associative-companion-operations" => Self::AssociativeCompanionOperations,
+            "production-topology-trust" => Self::ProductionTopologyTrust,
             _ => return None,
         })
     }
@@ -145,6 +169,10 @@ impl ScenarioId {
             Self::GlobalCanvasError => "global-canvas-error",
             Self::AlphaParityCatalog => "alpha-parity-catalog",
             Self::AlphaBranchRecovery => "alpha-branch-recovery",
+            Self::AdvancedAllFamilies => "advanced-all-families",
+            Self::NurbsBranchTopology => "nurbs-branch-topology",
+            Self::AssociativeCompanionOperations => "associative-companion-operations",
+            Self::ProductionTopologyTrust => "production-topology-trust",
         }
     }
 
@@ -160,6 +188,7 @@ pub(crate) enum ScenarioGroupId {
     Root,
     M53HostSemantics,
     M55ActionParity,
+    M61AdvancedTopology,
     GeometryIntent,
     HostOwnedInputs,
     TruthEvidence,
@@ -172,6 +201,7 @@ impl ScenarioGroupId {
             Self::Root => "uat-scenarios",
             Self::M53HostSemantics => "m53-host-semantics",
             Self::M55ActionParity => "m55-action-parity",
+            Self::M61AdvancedTopology => "m61-advanced-topology",
             Self::GeometryIntent => "geometry-intent",
             Self::HostOwnedInputs => "host-owned-inputs",
             Self::TruthEvidence => "truth-evidence",
@@ -315,7 +345,7 @@ impl ScenarioCatalog {
 }
 
 #[cfg(test)]
-pub(crate) const ALL_SCENARIO_ACTIONS: [ScenarioAction; 24] = [
+pub(crate) const ALL_SCENARIO_ACTIONS: [ScenarioAction; 32] = [
     ScenarioAction::RoleConstruction,
     ScenarioAction::RoleProfile,
     ScenarioAction::SuppressDimension,
@@ -339,10 +369,18 @@ pub(crate) const ALL_SCENARIO_ACTIONS: [ScenarioAction; 24] = [
     ScenarioAction::AlphaFlipTangency,
     ScenarioAction::AlphaRejectedContact,
     ScenarioAction::AlphaRecovery,
+    ScenarioAction::NurbsNextSpan,
+    ScenarioAction::NurbsInsertKnot,
+    ScenarioAction::OperationSplit,
+    ScenarioAction::OperationMirror,
+    ScenarioAction::OperationPattern,
+    ScenarioAction::TopologyMakeIncomplete,
+    ScenarioAction::TopologyRecover,
+    ScenarioAction::TopologyCancel,
     ScenarioAction::CaptureEvidence,
 ];
 
-const VERIFICATION_POINTS: [VerificationPoint; 14] = [
+const VERIFICATION_POINTS: [VerificationPoint; 18] = [
     VerificationPoint {
         id: VerificationPointId::P1,
         objective: "Role changes profile participation while geometry remains solver-active and accepted.",
@@ -413,6 +451,26 @@ const VERIFICATION_POINTS: [VerificationPoint; 14] = [
         objective: "Explicit tangent orientation changes and an impossible fixed contact retain typed branch state, accepted truth, and deterministic recovery.",
         human_judgment: "Judge whether branch choice, rejection attribution, and undo recovery are clear and trustworthy.",
     },
+    VerificationPoint {
+        id: VerificationPointId::P15,
+        objective: "Every built-in advanced curve family is presented from one accepted public-domain scene with stable diagnostics and no browser-owned geometry.",
+        human_judgment: "Judge whether the family variety, accepted state, and diagnostic provenance remain legible at a glance.",
+    },
+    VerificationPoint {
+        id: VerificationPointId::P16,
+        objective: "Periodic NURBS span/winding transitions and knot insertion occur only through explicit typed document edits and retain accepted geometry truth.",
+        human_judgment: "Judge whether span, winding, knot topology, and the resulting accepted state are understandable and predictable.",
+    },
+    VerificationPoint {
+        id: VerificationPointId::P17,
+        objective: "Associative fillet/trim state and split, exact mirror, and bounded pattern proposals publish through the ordinary accepted transaction boundary.",
+        human_judgment: "Judge whether operation ownership, retained source identity, and generated geometry read coherently.",
+    },
+    VerificationPoint {
+        id: VerificationPointId::P18,
+        objective: "Only independently complete topology is presented as consumable; open support and cancellation remain explicit non-profile outcomes and recovery is deterministic.",
+        human_judgment: "Judge whether complete, incomplete, cancelled, and recovered topology states are immediately trustworthy.",
+    },
 ];
 
 const ROLE_PROFILE_POINTS: [VerificationPointId; 1] = [VerificationPointId::P1];
@@ -431,6 +489,10 @@ const ATTRIBUTED_ERROR_POINTS: [VerificationPointId; 1] = [VerificationPointId::
 const GLOBAL_ERROR_POINTS: [VerificationPointId; 1] = [VerificationPointId::P12];
 const ALPHA_PARITY_POINTS: [VerificationPointId; 1] = [VerificationPointId::P13];
 const ALPHA_BRANCH_POINTS: [VerificationPointId; 1] = [VerificationPointId::P14];
+const ADVANCED_ALL_FAMILIES_POINTS: [VerificationPointId; 1] = [VerificationPointId::P15];
+const NURBS_BRANCH_POINTS: [VerificationPointId; 1] = [VerificationPointId::P16];
+const OPERATIONS_POINTS: [VerificationPointId; 1] = [VerificationPointId::P17];
+const PRODUCTION_TOPOLOGY_POINTS: [VerificationPointId; 1] = [VerificationPointId::P18];
 
 const ROLE_PROFILE_STEPS: [ScenarioStep; 3] = [
     ScenarioStep {
@@ -692,7 +754,119 @@ const ALPHA_BRANCH_STEPS: [ScenarioStep; 4] = [
     },
 ];
 
-const SCENARIOS: [ScenarioDefinition; 10] = [
+const ADVANCED_ALL_FAMILIES_STEPS: [ScenarioStep; 3] = [
+    ScenarioStep {
+        instruction: "Inspect the accepted all-family scene, sketch tree, and stable diagnostics.",
+        action: None,
+        expected: "Lines, circular and conic curves, Beziers, B-splines, and NURBS all come from one accepted public-domain fixture.",
+    },
+    ScenarioStep {
+        instruction: "Compare curve identity, branch annotations, rank/mobility, and the production-topology card.",
+        action: None,
+        expected: "The workbench presents domain-owned geometry and diagnostics without inferring an equation, branch, or profile claim.",
+    },
+    ScenarioStep {
+        instruction: "Reset the scenario and confirm the same accepted scene and evidence return.",
+        action: None,
+        expected: "The advanced gallery is deterministic and ordinary workspace state remains isolated.",
+    },
+];
+
+const NURBS_BRANCH_STEPS: [ScenarioStep; 5] = [
+    ScenarioStep {
+        instruction: "Inspect the periodic NURBS contact's current semantic span, winding, side, and neighborhood.",
+        action: None,
+        expected: "The selected branch is explicit persistent state rather than a coordinate-derived choice.",
+    },
+    ScenarioStep {
+        instruction: "Advance the contact to the next periodic span.",
+        action: Some(ScenarioAction::NurbsNextSpan),
+        expected: "The typed transition preserves the seam position while changing the explicit semantic span and winding as required.",
+    },
+    ScenarioStep {
+        instruction: "Insert a knot into the same NURBS definition.",
+        action: Some(ScenarioAction::NurbsInsertKnot),
+        expected: "One accepted topology edit adds a semantic span while preserving finite rational geometry and existing identities.",
+    },
+    ScenarioStep {
+        instruction: "Inspect accepted diagnostics and branch controls after both edits.",
+        action: None,
+        expected: "The accepted scene, branch metadata, audit, and rank describe the same current document.",
+    },
+    ScenarioStep {
+        instruction: "Reset and repeat the span transition.",
+        action: None,
+        expected: "The explicit branch workflow starts from the same deterministic periodic state.",
+    },
+];
+
+const OPERATIONS_STEPS: [ScenarioStep; 6] = [
+    ScenarioStep {
+        instruction: "Inspect the accepted generic fillet and parent trim views beside the independent exact line source.",
+        action: None,
+        expected: "Associative fillet state remains ordinary accepted sketch state while companion operations own no solver equation.",
+    },
+    ScenarioStep {
+        instruction: "Split the independent line at its exact midpoint.",
+        action: Some(ScenarioAction::OperationSplit),
+        expected: "The immutable support identity is retained with deterministic adjacent visible intervals.",
+    },
+    ScenarioStep {
+        instruction: "Mirror the exact source across the declared line axis.",
+        action: Some(ScenarioAction::OperationMirror),
+        expected: "A deterministic proposal publishes ordinary exact mirrored geometry through the retained session transaction boundary.",
+    },
+    ScenarioStep {
+        instruction: "Create a bounded three-instance linear pattern.",
+        action: Some(ScenarioAction::OperationPattern),
+        expected: "The pattern publishes ordinary geometry and explicit identity disposition without a browser equation or B-rep entity.",
+    },
+    ScenarioStep {
+        instruction: "Compare the tree, canvas, stable diagnostics, and production-topology card.",
+        action: None,
+        expected: "Every surface reflects the same newly accepted document and no proposal is shown as accepted before publication.",
+    },
+    ScenarioStep {
+        instruction: "Reset before trying a different operation order.",
+        action: None,
+        expected: "Reset reconstructs the deterministic associative/companion fixture.",
+    },
+];
+
+const PRODUCTION_TOPOLOGY_STEPS: [ScenarioStep; 6] = [
+    ScenarioStep {
+        instruction: "Inspect the initial production-topology card and its accepted-revision evidence.",
+        action: None,
+        expected: "Only complete independently checked wires and regions are labelled consumable.",
+    },
+    ScenarioStep {
+        instruction: "Add one open eligible support to the accepted design.",
+        action: Some(ScenarioAction::TopologyMakeIncomplete),
+        expected: "Topology becomes skipped or truncated with typed issue evidence and no consumable production profile.",
+    },
+    ScenarioStep {
+        instruction: "Cancel a fresh topology query before its first controlled checkpoint.",
+        action: Some(ScenarioAction::TopologyCancel),
+        expected: "Cancellation is recorded separately from topology incompleteness and changes no accepted sketch input or geometry.",
+    },
+    ScenarioStep {
+        instruction: "Recover the deterministic complete topology fixture.",
+        action: Some(ScenarioAction::TopologyRecover),
+        expected: "A fresh complete profile returns with exact accepted provenance; no stale result is reused.",
+    },
+    ScenarioStep {
+        instruction: "Compare complete, incomplete, cancellation, and recovered transcript entries.",
+        action: None,
+        expected: "The state story distinguishes solver acceptance, query control, and consumable topology.",
+    },
+    ScenarioStep {
+        instruction: "Reset and verify the initial complete output is reproduced.",
+        action: None,
+        expected: "The production-topology evidence is deterministic and ordinary workspace persistence remains untouched.",
+    },
+];
+
+const SCENARIOS: [ScenarioDefinition; 14] = [
     ScenarioDefinition {
         id: ScenarioId::RoleProfileParticipation,
         title: "Role & profile participation",
@@ -783,6 +957,42 @@ const SCENARIOS: [ScenarioDefinition; 10] = [
         points: &ALPHA_BRANCH_POINTS,
         steps: &ALPHA_BRANCH_STEPS,
     },
+    ScenarioDefinition {
+        id: ScenarioId::AdvancedAllFamilies,
+        title: "Advanced all-family gallery",
+        description: "Inspect accepted analytic, polynomial, spline, and rational curve families through public scene and stable diagnostic APIs.",
+        human_question: "Can a CAD user distinguish the advanced families and trust that the visible geometry and diagnostics share one accepted source?",
+        fixture: ScenarioFixture::AdvancedGallery,
+        points: &ADVANCED_ALL_FAMILIES_POINTS,
+        steps: &ADVANCED_ALL_FAMILIES_STEPS,
+    },
+    ScenarioDefinition {
+        id: ScenarioId::NurbsBranchTopology,
+        title: "NURBS branch & knot topology",
+        description: "Exercise a periodic semantic-span transition, explicit winding, and geometry-preserving knot insertion.",
+        human_question: "Are periodic branch state and topology-changing refinement explicit, predictable, and recoverable?",
+        fixture: ScenarioFixture::NurbsBranches,
+        points: &NURBS_BRANCH_POINTS,
+        steps: &NURBS_BRANCH_STEPS,
+    },
+    ScenarioDefinition {
+        id: ScenarioId::AssociativeCompanionOperations,
+        title: "Associative & companion operations",
+        description: "Inspect a public associative fillet, then publish split, exact mirror, and bounded pattern proposals through ordinary transactions.",
+        human_question: "Does operation ownership remain clear while associated and generated geometry move into the accepted sketch?",
+        fixture: ScenarioFixture::Operations,
+        points: &OPERATIONS_POINTS,
+        steps: &OPERATIONS_STEPS,
+    },
+    ScenarioDefinition {
+        id: ScenarioId::ProductionTopologyTrust,
+        title: "Production topology trust",
+        description: "Compare complete production output with open-support incompleteness, cooperative cancellation, and deterministic recovery.",
+        human_question: "Can a host user immediately tell which topology is consumable and why incomplete or cancelled work is not?",
+        fixture: ScenarioFixture::ProductionTopology,
+        points: &PRODUCTION_TOPOLOGY_POINTS,
+        steps: &PRODUCTION_TOPOLOGY_STEPS,
+    },
 ];
 
 const GEOMETRY_INTENT_CHILDREN: [ScenarioNode; 2] = [
@@ -859,9 +1069,24 @@ const M55_ACTION_PARITY_GROUP: ScenarioGroup = ScenarioGroup {
     children: &M55_ACTION_PARITY_CHILDREN,
 };
 
-const ROOT_CHILDREN: [ScenarioNode; 2] = [
+const M61_ADVANCED_TOPOLOGY_CHILDREN: [ScenarioNode; 4] = [
+    ScenarioNode::Scenario(ScenarioId::AdvancedAllFamilies),
+    ScenarioNode::Scenario(ScenarioId::NurbsBranchTopology),
+    ScenarioNode::Scenario(ScenarioId::AssociativeCompanionOperations),
+    ScenarioNode::Scenario(ScenarioId::ProductionTopologyTrust),
+];
+
+const M61_ADVANCED_TOPOLOGY_GROUP: ScenarioGroup = ScenarioGroup {
+    id: ScenarioGroupId::M61AdvancedTopology,
+    title: "M61 Advanced geometry & topology",
+    description: "Prepared advanced-curve, branch, companion-operation and production-topology review scenarios.",
+    children: &M61_ADVANCED_TOPOLOGY_CHILDREN,
+};
+
+const ROOT_CHILDREN: [ScenarioNode; 3] = [
     ScenarioNode::Group(M53_HOST_SEMANTICS_GROUP),
     ScenarioNode::Group(M55_ACTION_PARITY_GROUP),
+    ScenarioNode::Group(M61_ADVANCED_TOPOLOGY_GROUP),
 ];
 
 const ROOT_GROUP: ScenarioGroup = ScenarioGroup {
@@ -1050,7 +1275,7 @@ impl ScenarioWorkbenchState {
 fn selector_markup(selected: Option<ScenarioId>) -> String {
     let root = SCENARIO_CATALOG.root();
     let mut markup = String::from(
-        "<nav class=\"wb-scenario-catalog\" aria-label=\"M53 scenario selector\"><header class=\"wb-scenario-catalog-header\"><strong>",
+        "<nav class=\"wb-scenario-catalog\" aria-label=\"GeoSolve scenario selector\"><header class=\"wb-scenario-catalog-header\"><strong>",
     );
     push_escaped_text(&mut markup, root.title());
     markup.push_str("</strong><span>");
@@ -1213,7 +1438,7 @@ mod tests {
         collect_catalog(*SCENARIO_CATALOG.root(), &mut groups, &mut scenarios);
 
         assert_eq!(SCENARIO_CATALOG.root().title(), "GeoSolve scenarios");
-        assert_eq!(groups.len(), 7);
+        assert_eq!(groups.len(), 8);
         assert_eq!(scenarios.len(), ScenarioId::ALL.len());
         let unique_groups: HashSet<_> = groups.iter().copied().collect();
         let unique_scenarios: HashSet<_> = scenarios.iter().copied().collect();
@@ -1239,6 +1464,32 @@ mod tests {
             assert!(!action.label().is_empty());
         }
         assert_eq!(ScenarioAction::from_key("not-an-action"), None);
+    }
+
+    #[test]
+    fn m53_and_m55_stable_scenario_identities_remain_unchanged() {
+        let preserved = [
+            "role-profile-participation",
+            "activation-dimension-mode",
+            "shared-parameter-proposal",
+            "invalid-stale-parameter-recovery",
+            "external-loss-explicit-recovery",
+            "lifecycle-evidence-natural-pass",
+            "attributed-canvas-error",
+            "global-canvas-error",
+            "alpha-parity-catalog",
+            "alpha-branch-recovery",
+        ];
+        assert_eq!(
+            ScenarioId::ALL[..preserved.len()]
+                .iter()
+                .map(|id| id.key())
+                .collect::<Vec<_>>(),
+            preserved
+        );
+        for key in preserved {
+            assert_eq!(ScenarioId::from_key(key).unwrap().key(), key);
+        }
     }
 
     #[test]
@@ -1285,9 +1536,9 @@ mod tests {
             .unwrap();
         let markup = state.menu_markup();
 
-        assert_eq!(markup.matches("data-scenario-group-trigger=").count(), 6);
-        assert_eq!(markup.matches("class=\"wb-scenario-flyout\"").count(), 6);
-        assert_eq!(markup.matches("data-scenario-id=").count(), 10);
+        assert_eq!(markup.matches("data-scenario-group-trigger=").count(), 7);
+        assert_eq!(markup.matches("class=\"wb-scenario-flyout\"").count(), 7);
+        assert_eq!(markup.matches("data-scenario-id=").count(), 14);
         assert!(markup.contains("class=\"wb-scenario-catalog-header\""));
         assert!(markup.contains("aria-expanded=\"false\""));
         assert!(markup.contains("aria-controls=\"wb-scenario-flyout-host-owned-inputs\""));
@@ -1296,6 +1547,8 @@ mod tests {
         assert!(markup.contains(
             "data-scenario-id=\"external-loss-explicit-recovery\" aria-current=\"true\""
         ));
+        assert!(markup.contains("data-scenario-group=\"m61-advanced-topology\""));
+        assert!(markup.contains("data-scenario-id=\"production-topology-trust\""));
         assert!(!markup.contains("role=\"tree"));
         assert!(!markup.contains("role=\"menu"));
         assert!(!markup.contains("role=\"listbox"));

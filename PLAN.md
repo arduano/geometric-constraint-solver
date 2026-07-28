@@ -134,7 +134,7 @@ engine that a real CAD host can use. The accepted personality is:
   geometry enter one attempt as immutable revisioned values.
 - Keep cross-system expressions, B-rep projection, topological naming, feature
   history and application undo outside the sketch solver contract.
-- Keep human acceptance limited to completed M40.7 and M53, plus the planned M61 and M63 gates.
+- Keep human acceptance limited to completed M40.7 and M53, active M61 and the planned M63 gate.
   Every objective correctness, persistence,
   compatibility and presentation-adapter assertion must pass through direct unit or
   integration tests at its owning layer before a human checkpoint begins; old CDP E2E
@@ -2024,7 +2024,7 @@ M46-M53 are the completed cleanup and host-semantics UAT sequence. After M53 app
 sequence was finalized from M54 onward. A subsequent supervising-user decision inserted the
 constraint/dimension/branch-action parity gate at M55, shifting the preserved later sequence by one
 number through M64 without changing its dependency order or scope. M54-M57 are now complete;
-M58 is the next executable milestone.
+M58-M60 subsequently completed, and M61 is the active human UAT gate.
 
 ## Pre-cleanup phase
 
@@ -2547,16 +2547,47 @@ commands and limitations.
 
 ### M60: advanced workbench completion
 
-Status: active; begins from the qualified M59 production-topology boundary.
+Status: complete as of 2026-07-29.
 
-Scope: build on the completed M55 action surface by adding advanced curves/branches, companion
+Goal: build on the completed M55 action surface by exposing advanced curves/branches, companion
 operations, production profiles, stable diagnostics, cancellation/stale presentation and a
-versioned desktop workspace envelope to the already-clean single workbench. Qualification remains
-direct; no old playground or CDP E2E may return.
+versioned desktop workspace envelope in the already-clean single workbench.
+
+- [x] Preserve all 13 relation/five dimension M55 actions and the ten stable M53/M55 scenario
+  identities.
+- [x] Add deterministic accepted all-family and periodic NURBS scenarios with explicit
+  span/winding transition and knot insertion through public document edits.
+- [x] Add associative-fillet plus split, exact-mirror and bounded-pattern workflows through public
+  `geosolve-sketch-ops` prepared proposals and ordinary retained-session publication.
+- [x] Present `geosolve-sketch-topology` complete wires/regions and typed incomplete, cancelled,
+  exhausted and unavailable outcomes without promoting candidate evidence.
+- [x] Add four stable M61 leaves under one right-expanding advanced/topology selector subtree,
+  deterministic guidance/evidence and unchanged ordinary-workspace isolation.
+- [x] Advance the desktop workspace envelope to version 2 with explicit canonical-v4/draft-v5
+  document encodings and deterministic version-1 migration.
+- [x] Directly qualify editor, presentation, persistence, scenario, operations and topology
+  behavior under native, WASM and release Trunk gates without restoring browser E2E, CDP,
+  `/#/dev/lab` or mobile scope.
+
+Completion notes (2026-07-29): `geosolve-demo-web` now consumes the public operations and topology
+companions directly. The inspector publishes complete production wires/regions only from
+`TopologyProductionProfile`; open support, cancellation, exhaustion, staleness and unavailable
+accepted input remain non-consumable typed states. The scenario catalog grows from ten to fourteen
+stable leaves with `advanced-all-families`, `nurbs-branch-topology`,
+`associative-companion-operations` and `production-topology-trust`; old IDs, M55 action coverage,
+reset/evidence behavior and persistence isolation are directly frozen.
+
+Workspace v2 records whether each checkpoint payload is canonical v4 or the explicitly unstable
+draft v5, restores M58 multi-interval documents exactly and migrates legacy workspace v1. The
+focused gate passes editor 60 unit plus 7 M55 integration tests, demo-web 40/40, operations 18/18
+and topology 15/15, warnings-denied Clippy, all three relevant WASM checks and Trunk 0.21.14
+release build. The complete workspace gate also passes. `docs/M60_IMPLEMENTATION.md` records exact
+behavior and commands; `docs/M61_UAT.md` is the prepared human scorecard.
 
 ### M61: human UAT 3 - advanced geometry and topology
 
-Status: planned; human approval required after M60 qualification.
+Status: active; objective M60 qualification is complete and supervising-human approval is now
+required.
 
 Scope: advanced authoring, operations, topology, branch clarity and interaction-performance
 review after objective direct qualification.

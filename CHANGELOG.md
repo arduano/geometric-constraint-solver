@@ -53,6 +53,13 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - Independently checked production wires, outer/hole regions, certified orientation/area and exact
   native-visible-interval or immutable-external-line provenance. Only complete current results
   expose a consumable production profile.
+- Direct advanced-workbench presentation for accepted all-family geometry, explicit periodic NURBS
+  span/winding and knot edits, public companion operations, stable diagnostics and production
+  topology.
+- Four stable M61-preparation scenario leaves with right-expanding navigation, deterministic
+  guidance/transcript/evidence and complete ordinary-workspace isolation.
+- A version-2 desktop workspace envelope with explicit canonical-v4/draft-v5 document encodings,
+  exact M58 multi-interval round trips and deterministic legacy-v1 migration.
 
 ### Changed
 
@@ -109,6 +116,10 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   Candidate evidence is independently checked for declared-source coverage, parameters,
   endpoints, closure, orientation, area and output limits. Stale, cancelled, exhausted,
   truncated, ambiguous and uncovered-source results cannot be consumed as production topology.
+- Completed M60 without changing equations or restoring a legacy harness. The sole workbench now
+  consumes public operations/topology companions directly, labels only complete current production
+  profiles consumable, retains the full M55 action surface and all ten prior scenario identities,
+  and is directly qualified for the active M61 human UAT.
 
 ## [0.2.0] - 2026-07-22
 

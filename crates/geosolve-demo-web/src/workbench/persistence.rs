@@ -3,18 +3,43 @@
 use serde::{Deserialize, Serialize};
 
 use geosolve_constraint_editor::RestoreCheckpoint;
-use geosolve_sketch::SketchLifecycleRevisionHighWater;
+use geosolve_sketch::{SketchDocument, SketchLifecycleRevisionHighWater};
 
 #[cfg(target_arch = "wasm32")]
-pub(crate) const STORAGE_KEY: &str = "geosolve.workbench.session.v1";
+pub(crate) const STORAGE_KEY: &str = "geosolve.workbench.session.v2";
+#[cfg(target_arch = "wasm32")]
+pub(crate) const LEGACY_STORAGE_KEY: &str = "geosolve.workbench.session.v1";
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct WorkspaceSnapshot {
     version: u32,
-    pub(crate) design_json: String,
-    pub(crate) accepted_json: Option<String>,
+    design: WorkspaceDocumentPayload,
+    accepted: Option<WorkspaceDocumentPayload>,
     pub(crate) revisions: WorkspaceRevisions,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum WorkspaceDocumentEncoding {
+    CanonicalV4,
+    DraftV5,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct WorkspaceDocumentPayload {
+    encoding: WorkspaceDocumentEncoding,
+    json: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LegacyWorkspaceSnapshot {
+    version: u32,
+    design_json: String,
+    accepted_json: Option<String>,
+    revisions: WorkspaceRevisions,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -29,9 +54,25 @@ impl WorkspaceSnapshot {
     pub(crate) fn from_checkpoint(checkpoint: &RestoreCheckpoint) -> Self {
         let revisions = checkpoint.revisions();
         Self {
-            version: 1,
-            design_json: checkpoint.design_json().to_owned(),
-            accepted_json: checkpoint.accepted_json().map(str::to_owned),
+            version: 2,
+            design: WorkspaceDocumentPayload {
+                encoding: if checkpoint.design_uses_draft_v5() {
+                    WorkspaceDocumentEncoding::DraftV5
+                } else {
+                    WorkspaceDocumentEncoding::CanonicalV4
+                },
+                json: checkpoint.design_json().to_owned(),
+            },
+            accepted: checkpoint
+                .accepted_json()
+                .map(|json| WorkspaceDocumentPayload {
+                    encoding: if checkpoint.accepted_uses_draft_v5() {
+                        WorkspaceDocumentEncoding::DraftV5
+                    } else {
+                        WorkspaceDocumentEncoding::CanonicalV4
+                    },
+                    json: json.to_owned(),
+                }),
             revisions: WorkspaceRevisions {
                 design: revisions.design().get(),
                 attempt: revisions.attempt().get(),
@@ -55,12 +96,51 @@ impl WorkspaceSnapshot {
     }
 
     pub(crate) fn decode(input: &str) -> Result<Self, String> {
-        let snapshot: Self = serde_json::from_str(input).map_err(|error| error.to_string())?;
-        if snapshot.version != 1 {
-            return Err("unsupported workbench snapshot version".into());
+        let version = serde_json::from_str::<serde_json::Value>(input)
+            .map_err(|error| error.to_string())?
+            .get("version")
+            .and_then(serde_json::Value::as_u64)
+            .ok_or_else(|| "workbench snapshot version is missing".to_owned())?;
+        match version {
+            1 => {
+                let legacy: LegacyWorkspaceSnapshot =
+                    serde_json::from_str(input).map_err(|error| error.to_string())?;
+                if legacy.version != 1 {
+                    return Err("unsupported workbench snapshot version".into());
+                }
+                Ok(Self {
+                    version: 2,
+                    design: WorkspaceDocumentPayload {
+                        encoding: WorkspaceDocumentEncoding::CanonicalV4,
+                        json: legacy.design_json,
+                    },
+                    accepted: legacy.accepted_json.map(|json| WorkspaceDocumentPayload {
+                        encoding: WorkspaceDocumentEncoding::CanonicalV4,
+                        json,
+                    }),
+                    revisions: legacy.revisions,
+                })
+            }
+            2 => serde_json::from_str(input).map_err(|error| error.to_string()),
+            _ => Err("unsupported workbench snapshot version".into()),
         }
-        Ok(snapshot)
     }
+
+    pub(crate) fn design_document(&self) -> Result<SketchDocument, String> {
+        decode_document(&self.design)
+    }
+
+    pub(crate) fn accepted_document(&self) -> Result<Option<SketchDocument>, String> {
+        self.accepted.as_ref().map(decode_document).transpose()
+    }
+}
+
+fn decode_document(payload: &WorkspaceDocumentPayload) -> Result<SketchDocument, String> {
+    match payload.encoding {
+        WorkspaceDocumentEncoding::CanonicalV4 => SketchDocument::from_json(&payload.json),
+        WorkspaceDocumentEncoding::DraftV5 => SketchDocument::from_draft_v5_json(&payload.json),
+    }
+    .map_err(|error| error.to_string())
 }
 
 #[cfg(test)]
@@ -85,8 +165,8 @@ mod tests {
         let coordinator = RetainedEditorCoordinator::new(session).unwrap();
         let snapshot = WorkspaceSnapshot::from_checkpoint(coordinator.checkpoint());
         let decoded = WorkspaceSnapshot::decode(&snapshot.encode().unwrap()).unwrap();
-        assert_eq!(decoded.design_json, snapshot.design_json);
-        assert_eq!(decoded.accepted_json, snapshot.accepted_json);
+        assert_eq!(decoded.design, snapshot.design);
+        assert_eq!(decoded.accepted, snapshot.accepted);
         assert_eq!(decoded.revisions().design(), snapshot.revisions().design());
         assert_eq!(
             decoded.revisions().attempt(),
@@ -134,15 +214,17 @@ mod tests {
 
         let snapshot = WorkspaceSnapshot::from_checkpoint(coordinator.checkpoint());
         let decoded = WorkspaceSnapshot::decode(&snapshot.encode().unwrap()).unwrap();
-        assert_eq!(decoded.design_json, snapshot.design_json);
-        assert_eq!(decoded.accepted_json, snapshot.accepted_json);
+        assert_eq!(decoded.design, snapshot.design);
+        assert_eq!(decoded.accepted, snapshot.accepted);
         assert_eq!(decoded.revisions(), snapshot.revisions());
 
-        for json in [
-            decoded.design_json.as_str(),
-            decoded.accepted_json.as_deref().expect("accepted JSON"),
+        for document in [
+            decoded.design_document().unwrap(),
+            decoded
+                .accepted_document()
+                .unwrap()
+                .expect("accepted document"),
         ] {
-            let document = SketchDocument::from_json(json).unwrap();
             let circle_contact = document.contact(ids.circle_contact).unwrap();
             assert_eq!(circle_contact.id, ids.circle_contact);
             assert_eq!(
@@ -183,13 +265,97 @@ mod tests {
     fn codec_rejects_malformed_unknown_version_and_unknown_fields() {
         for input in [
             "not json",
-            r#"{"version":2,"design_json":"{}","accepted_json":null,"revisions":{"design":1,"attempt":1,"accepted":null}}"#,
-            r#"{"version":1,"design_json":"{}","accepted_json":null,"revisions":{"design":1,"attempt":1,"accepted":null},"extra":true}"#,
+            r#"{"version":3,"design":{"encoding":"canonical_v4","json":"{}"},"accepted":null,"revisions":{"design":1,"attempt":1,"accepted":null}}"#,
+            r#"{"version":2,"design":{"encoding":"future_v6","json":"{}"},"accepted":null,"revisions":{"design":1,"attempt":1,"accepted":null}}"#,
+            r#"{"version":2,"design":{"encoding":"canonical_v4","json":"{}"},"accepted":null,"revisions":{"design":1,"attempt":1,"accepted":null},"extra":true}"#,
         ] {
             assert!(
                 WorkspaceSnapshot::decode(input).is_err(),
                 "accepted {input}"
             );
         }
+    }
+
+    #[test]
+    fn v2_round_trips_draft_v5_multi_interval_state_and_migrates_v1() {
+        use geosolve_sketch::{
+            CurveDefinition, CurveSpan, DocumentCurveTrimView, DocumentTrimBoundary,
+            DocumentTrimParameter,
+        };
+
+        let mut document = SketchDocument::new(8.0).unwrap();
+        let first = document.add_point("first", [0.0, 0.0]).unwrap();
+        let second = document.add_point("second", [4.0, 0.0]).unwrap();
+        let curve = document
+            .add_curve(
+                "split support",
+                CurveDefinition::Line {
+                    start: first,
+                    end: second,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .unwrap();
+        let support = CurveSpan::line(curve);
+        let boundary = |parameter| {
+            DocumentTrimBoundary::Fixed(DocumentTrimParameter {
+                parameter,
+                winding: 0,
+            })
+        };
+        document
+            .replace_trim_views(
+                support,
+                vec![
+                    DocumentCurveTrimView {
+                        support,
+                        start: boundary(0.0),
+                        end: boundary(0.5),
+                    },
+                    DocumentCurveTrimView {
+                        support,
+                        start: boundary(0.5),
+                        end: boundary(1.0),
+                    },
+                ],
+            )
+            .unwrap();
+        let coordinator = RetainedEditorCoordinator::new(
+            RetainedSketchDocumentSession::new(
+                document,
+                DocumentSolveRequest::default(),
+                SolverConfig::default(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let snapshot = WorkspaceSnapshot::from_checkpoint(coordinator.checkpoint());
+        assert_eq!(
+            snapshot.design.encoding,
+            super::WorkspaceDocumentEncoding::DraftV5
+        );
+        let decoded = WorkspaceSnapshot::decode(&snapshot.encode().unwrap()).unwrap();
+        assert_eq!(
+            decoded
+                .design_document()
+                .unwrap()
+                .visible_intervals(support)
+                .unwrap()
+                .len(),
+            2
+        );
+
+        let empty = SketchDocument::new(8.0).unwrap();
+        let v1 = format!(
+            r#"{{"version":1,"design_json":{},"accepted_json":null,"revisions":{{"design":1,"attempt":1,"accepted":null}}}}"#,
+            serde_json::to_string(&empty.to_canonical_json().unwrap()).unwrap()
+        );
+        let migrated = WorkspaceSnapshot::decode(&v1).unwrap();
+        assert_eq!(migrated.version, 2);
+        assert_eq!(
+            migrated.design.encoding,
+            super::WorkspaceDocumentEncoding::CanonicalV4
+        );
+        migrated.design_document().unwrap();
     }
 }
