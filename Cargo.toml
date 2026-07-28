@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/geosolve-constraint-editor",
     "crates/geosolve-core",
     "crates/geosolve-demo-web",
     "crates/geosolve-geometry",

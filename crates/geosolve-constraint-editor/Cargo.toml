@@ -1,0 +1,22 @@
+[package]
+name = "geosolve-constraint-editor"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+license-file.workspace = true
+readme.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Headless state machine for GeoSolve constraint-editing user interfaces"
+documentation = "https://docs.rs/geosolve-constraint-editor/0.2.0"
+keywords = ["cad", "constraints", "editor", "geometry"]
+categories = ["algorithms", "graphics"]
+
+[dependencies]
+geosolve-sketch = { version = "0.2.0", path = "../geosolve-sketch" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

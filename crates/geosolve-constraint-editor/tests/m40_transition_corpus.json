@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "seed": 557104722984976929,
+  "cases": [
+    {"id":"m40.viewport.scale-letterbox","operation":"viewport_matrix","input":{"scales":[0.000001,1.0,1000000.0],"centers":[[0.0,0.0],[1000000.0,-1000000.0]]},"expected_digest":"fnv1a64-fbe1c56fe900551d"},
+    {"id":"m40.draft.all-tools-routes-cancel","operation":"draft_matrix","input":{"tools":["point","line","polyline","rectangle","circle","arc"],"routes":["pointer","button","double-click","enter","escape","pointercancel"]},"expected_digest":"fnv1a64-8cffc552bc5d88c2"},
+    {"id":"m40.snap.inside-equal-outside-tie","operation":"snap_matrix","input":{"offsets":[7.999,8.0,8.001],"tie_policy":"persistent-identity"},"expected_digest":"fnv1a64-9a71d281e2a9f029"},
+    {"id":"m40.pick.boundary-overlap-ties","operation":"pick_matrix","input":{"curve_offsets":[6.999,7.0,7.001],"overlaps":["point-curve","curve-curve"]},"expected_digest":"fnv1a64-77fb4675cd2dc83c"},
+    {"id":"m40.selection.point-curve-modifiers","operation":"selection_matrix","input":{"modifiers":["shift","control","command"],"origins":["canvas","tree","inspector"]},"expected_digest":"fnv1a64-9ea92330d4e3afa5"},
+    {"id":"m40.constraints.seven-valid-invalid","operation":"constraint_matrix","input":{"kinds":["fixed","coincident","horizontal","vertical","parallel","perpendicular","equal-length"]},"expected_digest":"fnv1a64-66b18f780fd1beff"},
+    {"id":"m40.dimensions.families-modes-replay","operation":"dimension_matrix","input":{"families":["point-distance","segment-length"],"modes":["driving","reference"],"transitions":["mode","undo","redo","reload"]},"expected_digest":"fnv1a64-dc8d53e0a9e3d327"},
+    {"id":"m40.drag.order-last-valid-release-cancel","operation":"drag_matrix","input":{"threshold":[2.999,3.0,3.001],"results":["foreign","stale","accepted","rejected"],"release_commits":1},"expected_digest":"fnv1a64-8430280283cdb074"},
+    {"id":"m40.history.delete-suppress-undo-redo-reload","operation":"history_matrix","input":{"actions":["delete","suppress","undo","redo","reload"],"retain_ids":true},"expected_digest":"fnv1a64-088148ddae5bcb30"},
+    {"id":"m40.redundancy.accepted-dto","operation":"redundancy","input":{"source":"sketch-owned-dto"},"expected_digest":"fnv1a64-dd94a9fc9373fea1"},
+    {"id":"m40.conflict.problems-retained-accepted","operation":"conflict_retention","input":{"retain":["accepted-json","accepted-identity","scene"]},"expected_digest":"fnv1a64-cea72de5ae3d970f"},
+    {"id":"m40.lifecycle.all-states","operation":"lifecycle_matrix","input":{"states":["accepted","design-unsolved","solving","solved-preview","rejected-attempt"]},"expected_digest":"fnv1a64-3b0c9450abd6a1e9"},
+    {"id":"m40.malformed.nonfinite-cancellation-storage","operation":"malformed_matrix","input":{"values":["nan","inf","zero-viewport","pointercancel","tool-cancel","malformed-storage"]},"expected_digest":"fnv1a64-67eb14d40ef89a8b"},
+    {"id":"m40.model.seeded-bounded-replay","operation":"seeded_model","input":{"steps":256,"max_selection":2,"classes":["creation","snap-pick-selection","constraints","dimensions","projected-drag","delete-suppress-history-persistence","conflict-rejection-repair","lifecycle-accepted-retention","redundancy","boundaries"]},"expected_digest":"fnv1a64-d9c51d7bcf05bcbc"}
+  ]
+}

@@ -557,6 +557,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2c81fb5260e37854d09d5c87183309fd8c555b75289427884b25660bc87a85e"
 
 [[package]]
+name = "geosolve-constraint-editor"
+version = "0.2.0"
+dependencies = [
+ "geosolve-sketch",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "geosolve-core"
 version = "0.2.0"
 dependencies = [
@@ -578,11 +588,11 @@ name = "geosolve-demo-web"
 version = "0.2.0"
 dependencies = [
  "console_error_panic_hook",
+ "geosolve-constraint-editor",
  "geosolve-core",
- "geosolve-geometry",
- "geosolve-linkage",
  "geosolve-sketch",
- "js-sys",
+ "serde",
+ "serde_json",
  "wasm-bindgen",
  "web-sys",
 ]

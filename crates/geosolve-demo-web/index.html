@@ -3,369 +3,92 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>GeoSolve Sketch Playground</title>
+    <title>GeoSolve Sketch Workbench</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%230d1215' d='M0 0h32v32H0z'/%3E%3Cpath fill='none' stroke='%236fd7e5' stroke-width='3' d='M6 24 16 6l10 18Z'/%3E%3C/svg%3E" />
     <link data-trunk rel="css" href="styles.css" />
     <link data-trunk rel="rust" data-wasm-opt="z" />
     <link data-trunk rel="copy-file" href="../../LICENSE" />
     <link data-trunk rel="copy-file" href="../../THIRD_PARTY_LICENSES.md" />
     <link data-trunk rel="copy-file" href="../../docs/API_COMPATIBILITY.md" />
-    <link data-trunk rel="copy-file" href="../../docs/M32_SCALE_PERFORMANCE.md" />
   </head>
   <body>
-    <main class="playground" id="playground-root" data-example-mode="sketch">
-      <header class="playground-header">
-        <div class="playground-brand">
-          <span class="page-kicker" id="workspace-kicker">2D sketch playground / alpha</span>
-          <h1 id="workspace-title">Draw the constraint, not the answer.</h1>
-          <p id="workspace-summary">Persistent geometry, projected edits, explicit branches, and the accepted audit in one workspace.</p>
+    <main class="workbench" id="workbench-root" aria-label="GeoSolve desktop sketch workbench">
+      <header class="wb-command-bar">
+        <a class="wb-brand" href="#/">GeoSolve <span>Sketch</span></a>
+        <div class="wb-command-group" aria-label="File commands">
+          <button type="button" data-wb-action="new">New</button>
+          <button type="button" data-wb-action="undo">Undo</button>
+          <button type="button" data-wb-action="redo">Redo</button>
         </div>
-        <div class="history-actions" aria-label="Document history">
-          <button type="button" class="sketch-edit-only" data-action="undo" id="undo">Undo</button>
-          <button type="button" class="sketch-edit-only" data-action="redo" id="redo">Redo</button>
-          <button type="button" data-action="new">New</button>
+        <div class="wb-command-context">
+          <span id="wb-lifecycle" data-state="accepted">Accepted</span>
+          <span class="wb-document-name">Untitled sketch</span>
         </div>
       </header>
 
-      <section class="example-bar" aria-label="Examples and constraint stress labs">
-        <label for="alpha-example">Example</label>
-        <select id="alpha-example">
-          <optgroup label="Canonical workflows">
-            <option value="a1">A1 / constrained rectangle</option>
-            <option value="a2">A2 / projected drag</option>
-            <option value="a3">A3 / line-circle tangency</option>
-            <option value="a4">A4 / free-radius circle-arc</option>
-            <option value="a5">A5 / Bezier tangent line</option>
-            <option value="a8">A8 / combined persistence</option>
-          </optgroup>
-          <optgroup label="Solver diagnostics">
-            <option value="diagnostic-rank-drop">Rank / structural vs numerical</option>
-            <option value="diagnostic-endpoint-bound">Fixed endpoint vs active bound</option>
-            <option value="diagnostic-redundancy">Diagnostics / redundant dimensions</option>
-          </optgroup>
-          <optgroup label="M19 / analytic conics">
-            <option value="conic-gallery">Conic gallery / five families</option>
-            <option value="conic-tangency">Conic contact and tangency</option>
-            <option value="conic-circle-limit">Circle-limit observability</option>
-          </optgroup>
-          <optgroup label="M20 / spatial assemblies">
-            <option value="shaft-bearing">Driven shaft in bearing</option>
-            <option value="block-base">Driven block on base</option>
-          </optgroup>
-          <optgroup label="M28 / visible parent trims">
-            <option value="m28-trimmed-fillet">Trimmed line-circle fillet</option>
-          </optgroup>
-          <optgroup label="M30 / interactive constructions">
-            <option value="construction-supporting-offset">Offset / supporting line, 2 DOF</option>
-            <option value="construction-exact-offset">Offset / exact translated pair, 1 DOF</option>
-            <option value="construction-entity-mirror">Mirror / associated entity pair</option>
-            <option value="construction-directed-angle">Angle / directed branch-cut lab</option>
-            <option value="fillet-line-line-reference">Fillet / M27 untrimmed reference radius</option>
-            <option value="fillet-line-circle">Fillet / interactive line-circle</option>
-            <option value="fillet-line-bezier">Fillet / interactive line-Bezier</option>
-            <option value="fillet-nurbs-line">Fillet / interactive NURBS-line</option>
-          </optgroup>
-          <optgroup label="M30 / NURBS UAT">
-            <option value="nurbs-quarter-circle">NURBS / quarter-circle and weight</option>
-            <option value="nurbs-local-support">NURBS / local support and insertion</option>
-            <option value="nurbs-periodic">NURBS / periodic span and winding</option>
-            <option value="nurbs-differential">NURBS / differential C2 continuity</option>
-          </optgroup>
-          <optgroup label="M31 / all-family visual profiles">
-            <option value="profile-all-families">Profiles / all 15 family roles</option>
-            <option value="profile-curved-topology">Profiles / intersections and holes</option>
-            <option value="profile-fillet-trim">Profiles / fillet-owned trim joins</option>
-            <option value="profile-nurbs-self-intersection">Profiles / editable NURBS self-intersection</option>
-            <option value="profile-incomplete">Profiles / retained face beside issue</option>
-            <option value="profile-budget">Profiles / deterministic budget stop</option>
-          </optgroup>
-          <optgroup label="Motion and constraint stress">
-            <option value="stress-compass">Stress / symmetric drafting compass</option>
-            <option value="stress-bridge">Stress / cubic C1 bridge</option>
-            <option value="motion-cam">Motion / twin Bezier-cam rollers</option>
-            <option value="motion-orbit">Motion / branch-preserving tangent orbit</option>
-            <option value="motion-trammel">Motion / elliptic trammel</option>
-            <option value="motion-scotch-yoke">Motion / offset Scotch yoke</option>
-            <option value="motion-rotating-square">Motion / constraint-built square</option>
-            <option value="motion-scissor">Motion / symmetric scissor jack</option>
-            <option value="motion-scissor-tower">Motion / five-stage scissor tower</option>
-            <option value="motion-peaucellier">Motion / Peaucellier straight-line cell</option>
-          </optgroup>
-          <optgroup label="Scale and performance">
-            <option value="corpus">A10 / complete alpha corpus</option>
-            <option value="medium">M14 / medium performance document</option>
-          </optgroup>
-        </select>
-        <label for="alpha-scale">Scale</label>
-        <select id="alpha-scale"><option value="0.000001">1e-6</option><option value="1" selected>1</option><option value="1000000">1e6</option></select>
-        <button type="button" data-action="load-example">Load accepted example</button>
+      <aside class="wb-tool-palette" aria-label="Core sketch tools">
+        <button type="button" data-wb-tool="select" aria-pressed="true"><kbd>V</kbd><span>Select</span></button>
+        <div class="wb-tool-rule"></div>
+        <button type="button" data-wb-tool="point" aria-pressed="false"><kbd>·</kbd><span>Point</span></button>
+        <button type="button" data-wb-tool="line" aria-pressed="false"><kbd>L</kbd><span>Line</span></button>
+        <button type="button" data-wb-tool="polyline" aria-pressed="false"><kbd>P</kbd><span>Polyline</span></button>
+        <button type="button" data-wb-tool="rectangle" aria-pressed="false"><kbd>R</kbd><span>Rectangle</span></button>
+        <button type="button" data-wb-tool="circle" aria-pressed="false"><kbd>C</kbd><span>Circle</span></button>
+        <button type="button" data-wb-tool="arc" aria-pressed="false"><kbd>A</kbd><span>Arc</span></button>
+        <div class="wb-tool-rule"></div>
+        <button type="button" data-wb-action="finish"><kbd>↵</kbd><span>Finish</span></button>
+        <button type="button" data-wb-action="cancel"><kbd>Esc</kbd><span>Cancel</span></button>
+      </aside>
+
+      <aside class="wb-tree-panel" aria-label="Sketch tree">
+        <div class="wb-panel-title"><span>Sketch tree</span><span id="wb-status-count">0 points / 0 curves</span></div>
+        <div id="wb-tree" class="wb-tree" role="tree" aria-label="Sketch objects"></div>
+      </aside>
+
+      <section class="wb-canvas-panel" aria-label="Sketch canvas">
+        <svg id="wb-viewport" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet" role="application" aria-label="Editable sketch canvas"></svg>
+        <div id="wb-draft-guide" class="wb-draft-guide" hidden>
+          <span id="wb-draft-guide-text">Click to add the next point</span>
+          <button type="button" data-wb-action="finish">Finish polyline</button>
+          <button type="button" data-wb-action="cancel">Cancel</button>
+        </div>
+        <div class="wb-canvas-hud"><span>XY plane</span><span>50 px / unit</span></div>
       </section>
 
-      <section id="uat-panel" class="uat-panel" aria-label="Current example UAT" hidden>
-        <div><span class="page-kicker">Focused UAT</span><strong id="uat-title"></strong></div>
-        <p id="uat-instructions"></p>
-        <dl><div><dt id="uat-metric-label">Expected DOF</dt><dd id="uat-dof"></dd></div><div><dt id="uat-action-label">Primary drag</dt><dd id="uat-primary-drag"></dd></div></dl>
-        <button type="button" data-action="reload-example">Reset / reload example</button>
-      </section>
-
-      <nav class="tool-rail" aria-label="Sketch tools">
-        <button type="button" class="active sketch-edit-only" data-tool="select">Select</button>
-        <button type="button" data-tool="pan">Pan</button>
-        <span class="tool-divider sketch-edit-only" aria-hidden="true"></span>
-        <button type="button" class="sketch-edit-only" data-tool="point">Point</button>
-        <button type="button" class="sketch-edit-only" data-tool="line">Line</button>
-        <button type="button" class="sketch-edit-only" data-tool="polyline">Polyline</button>
-        <button type="button" class="sketch-edit-only" data-tool="rectangle">Rectangle</button>
-        <button type="button" class="sketch-edit-only" data-tool="circle">Circle</button>
-        <button type="button" class="sketch-edit-only" data-tool="arc">Arc</button>
-        <button type="button" class="sketch-edit-only" data-tool="quadratic">Quadratic Bézier</button>
-        <button type="button" class="sketch-edit-only" data-tool="cubic">Cubic Bézier</button>
-        <span class="tool-divider sketch-edit-only" aria-hidden="true"></span>
-        <button type="button" class="sketch-edit-only" data-tool="ellipse" title="Shortcut: E">Ellipse</button>
-        <button type="button" class="sketch-edit-only" data-tool="elliptical-arc" title="Shortcut: Shift+E">Elliptical arc</button>
-        <button type="button" class="sketch-edit-only" data-tool="rational-conic" title="Shortcut: R">Rational conic</button>
-        <button type="button" class="sketch-edit-only" data-tool="parabola" title="Shortcut: B">Parabola</button>
-        <button type="button" class="sketch-edit-only" data-tool="hyperbola" title="Shortcut: H">Hyperbola</button>
-      </nav>
-
-      <section id="conic-options" class="conic-options sketch-edit-only" aria-label="Conic creation options" hidden>
-        <div class="conic-options-heading">
-          <span class="draft-kicker">M19 conic definition</span>
-          <p id="conic-options-help">Values are persisted exactly. Invalid values are never clamped, reordered, normalized, or substituted; correct them and use Finish to retry the retained draft.</p>
-        </div>
-        <div id="conic-ratio-options" class="conic-option-group" hidden>
-          <label for="conic-ratio">Minor-axis ratio</label>
-          <input id="conic-ratio" type="number" value="0.5" min="5e-324" max="1" step="any" inputmode="decimal" />
-        </div>
-        <div id="conic-arc-options" class="conic-option-group conic-arc-options" hidden>
-          <label for="conic-arc-start">Arc start angle (rad)</label>
-          <input id="conic-arc-start" type="number" value="0" step="any" inputmode="decimal" />
-          <label for="conic-arc-end">Arc end angle (rad)</label>
-          <input id="conic-arc-end" type="number" value="1.5707963267948966" step="any" inputmode="decimal" />
-          <label for="conic-arc-sweep">Explicit arc sweep</label>
-          <select id="conic-arc-sweep"><option>Counterclockwise</option><option>Clockwise</option></select>
-        </div>
-        <div id="conic-weight-options" class="conic-option-group" hidden>
-          <label for="conic-weight">Homogeneous Q_h weight</label>
-          <input id="conic-weight" type="number" value="1" min="-0.9999999999999998" max="1.7976931348623157e308" step="any" inputmode="decimal" />
-          <p>Second click is Q_h, the homogeneous weighted coordinate. It is not an ordinary control point when weight != 1 and is never created as a DesignPoint.</p>
-        </div>
-        <div id="conic-trim-options" class="conic-option-group conic-trim-options" hidden>
-          <label for="conic-trim-start">Directed trim start</label>
-          <input id="conic-trim-start" type="number" value="-1" step="any" inputmode="decimal" />
-          <label for="conic-trim-end">Directed trim end</label>
-          <input id="conic-trim-end" type="number" value="1" step="any" inputmode="decimal" />
-        </div>
-        <div id="conic-hyperbola-options" class="conic-option-group conic-hyperbola-options" hidden>
-          <label for="conic-semi-conjugate">Semi-conjugate length</label>
-          <input id="conic-semi-conjugate" type="number" value="1" min="5e-324" step="any" inputmode="decimal" />
-          <label for="conic-hyperbola-branch">Explicit hyperbola branch</label>
-          <select id="conic-hyperbola-branch"><option>Positive branch</option><option>Negative branch</option></select>
-        </div>
-        <p id="conic-options-error" class="conic-options-error" role="alert" hidden></p>
-      </section>
-
-      <section class="draft-bar sketch-edit-only" aria-label="Drawing progress">
-        <div><span class="draft-kicker">Active drawing</span><strong id="draft-status">Choose a draw tool to begin.</strong></div>
-        <div class="draft-actions">
-          <button type="button" data-action="undo-draft" id="undo-draft">Undo point</button>
-          <button type="button" data-action="cancel-draft" id="cancel-draft">Cancel</button>
-          <button type="button" data-action="finish-draft" id="finish-draft">Finish / retry</button>
-        </div>
-      </section>
-
-      <section class="playground-grid">
-        <section class="canvas-panel" aria-label="Sketch canvas">
-          <div class="canvas-heading">
-            <div class="canvas-context"><strong id="tool-status">Select</strong><span id="document-status">Empty document</span></div>
-            <div class="canvas-solve-state" aria-label="Current accepted solve state">
-              <span id="solve-view-label">Accepted solve</span>
-              <span id="solve-badge" class="live-badge">valid</span>
-            </div>
-            <div class="zoom-actions" aria-label="Viewport zoom">
-              <button type="button" data-action="zoom-out" aria-label="Zoom out">−</button>
-              <button type="button" data-action="zoom-fit">Fit</button>
-              <button type="button" data-action="zoom-in" aria-label="Zoom in">+</button>
-            </div>
-          </div>
-          <svg id="sketch-viewport" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet" role="application" aria-label="Editable geometric sketch" aria-describedby="interaction-help"></svg>
-          <p id="interaction-help" class="interaction-help">Select geometry or choose a draw tool. Shift-click extends selection.</p>
-          <p id="playground-announcement" class="visually-hidden" aria-live="polite" aria-atomic="true"></p>
+      <aside class="wb-inspector" aria-label="Property inspector">
+        <div class="wb-panel-title"><span>Inspector</span><button type="button" data-wb-action="clear-selection">Clear</button></div>
+        <section class="wb-inspector-section">
+          <span class="wb-field-label">Selection</span>
+          <strong id="wb-selection">0 selected</strong>
+          <button type="button" class="wb-danger" data-wb-action="delete">Delete selected</button>
         </section>
+        <section class="wb-inspector-section">
+          <label class="wb-field-label" for="wb-constraint-kind">Constraint</label>
+          <select id="wb-constraint-kind"><option value="fixed">Fixed</option><option value="coincident">Coincident</option><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option><option value="parallel">Parallel</option><option value="perpendicular">Perpendicular</option><option value="equal-length">Equal length</option></select>
+          <button type="button" data-wb-action="constraint">Apply constraint</button>
+        </section>
+        <section class="wb-inspector-section">
+          <span class="wb-field-label">Dimension at current accepted value</span>
+          <select id="wb-dimension-mode"><option value="driving">Driving</option><option value="reference">Reference</option></select>
+          <button type="button" data-wb-action="dimension">Create dimension</button>
+        </section>
+        <section id="wb-host-state" class="wb-inspector-section wb-host-state" aria-live="polite" aria-label="Host-state evidence"></section>
+        <section id="wb-redundancy" class="wb-inspector-section wb-redundancy" aria-live="polite" aria-label="Accepted redundancy"></section>
+        <p class="wb-inspector-note">Constraint glyphs and dimensions are persistent selectable objects. Values and equations come from the sketch domain.</p>
+      </aside>
 
-        <aside class="inspector-panel" aria-label="Sketch inspector">
-          <section class="inspector-section selection-section sketch-edit-only">
-            <div class="section-heading"><span>Selection</span><button type="button" data-action="clear-selection">Clear</button></div>
-            <div id="selection-summary" class="selection-summary">Nothing selected</div>
-            <div class="selection-actions"><button type="button" data-action="delete">Delete</button><button type="button" data-action="toggle-suppressed">Suppress / restore</button></div>
-          </section>
-
-          <section class="inspector-section sketch-edit-only">
-            <div class="section-heading"><span>Constraint</span></div>
-            <label class="field-label" for="constraint-kind">Compatible operation</label>
-            <select id="constraint-kind">
-              <option>Fixed</option><option>Coincident</option><option>Horizontal</option><option>Vertical</option>
-              <option>Parallel</option><option>Perpendicular</option><option>Equal length</option><option>Equal radius</option>
-              <option>Midpoint</option><option>Symmetry</option><option>Point on curve</option><option>Curve contact</option><option>Curve tangency</option>
-            </select>
-            <button type="button" class="primary-action" data-action="apply-constraint">Apply constraint</button>
-          </section>
-
-          <section class="inspector-section sketch-edit-only">
-            <div class="section-heading"><span>Dimension / directed angle</span></div>
-            <div class="field-row"><select id="dimension-kind"><option>Distance</option><option>Length</option><option>Radius</option><option>Diameter</option><option>Angle</option><option>Supporting offset</option><option>Exact translated offset</option></select><select id="dimension-mode"><option>Driving</option><option>Reference</option></select></div>
-            <label class="field-label" for="angle-orientation">Angle orientation</label>
-            <select id="angle-orientation"><option>Counterclockwise</option><option>Clockwise</option></select>
-            <div class="field-row">
-              <label class="field-label" for="offset-side">Offset side<select id="offset-side"><option>Left</option><option>Right</option></select></label>
-              <label class="field-label" for="offset-orientation">Endpoint orientation<select id="offset-orientation"><option>Same</option><option>Reversed</option></select></label>
-            </div>
-            <label class="field-label" for="dimension-value">Target</label>
-            <input id="dimension-value" type="number" value="1" step="any" inputmode="decimal" />
-            <label class="field-label" for="dimension-label">New dimension label</label>
-            <input id="dimension-label" type="text" value="dimension" />
-            <button type="button" class="primary-action" data-action="apply-dimension">Create / update dimension</button>
-          </section>
-
-          <section class="inspector-section sketch-edit-only">
-            <div class="section-heading"><span>Construction</span></div>
-            <p class="control-help">Offsets use two selected line spans in source/target order. Mirror uses a selected point-defined source curve followed by a selected line axis.</p>
-            <button type="button" class="primary-action" data-action="create-mirror">Mirror selected source about axis</button>
-          </section>
-
-          <details id="fillet-controls" class="inspector-section inspector-disclosure sketch-edit-only" hidden>
-            <summary>Selected fillet branch and radius</summary>
-            <div class="inspector-disclosure-body">
-              <div class="field-row"><label class="field-label" for="fillet-first-side">First side<select id="fillet-first-side"><option>Left</option><option>Right</option></select></label><label class="field-label" for="fillet-second-side">Second side<select id="fillet-second-side"><option>Left</option><option>Right</option></select></label></div>
-              <div class="field-row"><label class="field-label" for="fillet-first-trim">First trim<select id="fillet-first-trim"><option>End</option><option>Start</option></select></label><label class="field-label" for="fillet-second-trim">Second trim<select id="fillet-second-trim"><option>Start</option><option>End</option></select></label></div>
-              <label class="field-label" for="fillet-order">Arc endpoint order</label><select id="fillet-order"><option>First then second</option><option>Second then first</option></select>
-              <label class="field-label" for="fillet-sweep">Output sweep</label><select id="fillet-sweep"><option>Counterclockwise</option><option>Clockwise</option></select>
-              <div class="field-row"><label class="field-label" for="fillet-radius">Radius<input id="fillet-radius" type="number" value="1" min="5e-324" step="any" inputmode="decimal" /></label><label class="field-label" for="fillet-radius-mode">Mode<select id="fillet-radius-mode"><option>Driving</option><option>Reference</option></select></label></div>
-              <button type="button" class="primary-action" data-action="apply-fillet">Apply fillet branch / radius</button>
-            </div>
-          </details>
-
-          <details id="nurbs-controls" class="inspector-section inspector-disclosure sketch-edit-only" hidden open>
-            <summary>NURBS object inspector</summary>
-            <div class="inspector-disclosure-body">
-              <p id="nurbs-state" class="control-help"></p>
-              <label class="field-label" for="nurbs-control">Ordered control point</label><select id="nurbs-control"></select>
-              <div class="field-row"><label class="field-label" for="nurbs-control-x">Target X<input id="nurbs-control-x" type="number" value="0" step="any" inputmode="decimal" /></label><label class="field-label" for="nurbs-control-y">Target Y<input id="nurbs-control-y" type="number" value="0" step="any" inputmode="decimal" /></label></div>
-              <button type="button" class="primary-action" data-action="set-nurbs-control">Move / project control exactly</button>
-              <label class="field-label" for="nurbs-weight">Owned weight</label><select id="nurbs-weight"></select>
-              <label class="field-label" for="nurbs-weight-value">Positive non-gauge value</label><input id="nurbs-weight-value" type="number" value="1" min="5e-324" step="any" inputmode="decimal" />
-              <div class="field-row"><button type="button" data-action="set-nurbs-weight">Set weight</button><button type="button" data-action="set-nurbs-gauge">Use as gauge</button></div>
-              <label class="field-label" for="nurbs-knot">Native knot parameter</label><input id="nurbs-knot" type="number" value="0.5" step="any" inputmode="decimal" />
-              <button type="button" data-action="insert-nurbs-knot">Insert knot transactionally</button>
-              <div class="field-row"><button type="button" data-action="previous-nurbs-span">Previous span</button><button type="button" data-action="next-nurbs-span">Next span</button></div>
-            </div>
-          </details>
-
-          <details class="inspector-section inspector-disclosure sketch-edit-only">
-            <summary>Explicit branch state</summary>
-            <div class="inspector-disclosure-body">
-              <label class="field-label" for="arc-sweep">Arc sweep</label>
-              <select id="arc-sweep"><option>Counterclockwise</option><option>Clockwise</option></select>
-              <label class="field-label" for="contact-neighborhood">First / point neighborhood</label>
-              <select id="contact-neighborhood"><option>Picked local / endpoint</option><option>Interior</option><option>Start</option><option>End</option></select>
-              <label class="field-label" for="contact-parameter">First contact parameter (blank retains)</label>
-              <input id="contact-parameter" type="number" step="any" inputmode="decimal" />
-              <label class="field-label" for="tangent-orientation">First tangent orientation</label>
-              <select id="tangent-orientation"><option>Aligned</option><option>Opposed</option></select>
-              <label class="field-label" for="contact-winding">First periodic winding</label>
-              <input id="contact-winding" type="number" value="0" step="1" inputmode="numeric" />
-              <label class="field-label" for="second-contact-neighborhood">Second neighborhood</label>
-              <select id="second-contact-neighborhood"><option>Picked local / endpoint</option><option>Interior</option><option>Start</option><option>End</option></select>
-              <label class="field-label" for="second-contact-parameter">Second contact parameter (blank retains)</label>
-              <input id="second-contact-parameter" type="number" step="any" inputmode="decimal" />
-              <label class="field-label" for="second-tangent-orientation">Second tangent orientation</label>
-              <select id="second-tangent-orientation"><option>Aligned</option><option>Opposed</option></select>
-              <label class="field-label" for="second-contact-winding">Second periodic winding</label>
-              <input id="second-contact-winding" type="number" value="0" step="1" inputmode="numeric" />
-              <button type="button" class="primary-action" data-action="apply-branch-state">Apply to selected arcs / contacts</button>
-            </div>
-          </details>
-
-          <section id="inference-panel" class="inspector-section inference-panel sketch-edit-only" hidden>
-            <div class="section-heading"><span>Proposed inference</span></div>
-            <p id="inference-summary"></p>
-            <div class="field-row"><button type="button" data-action="confirm-inference">Confirm</button><button type="button" data-action="cancel-inference">Dismiss</button></div>
-          </section>
-
-          <section class="inspector-section">
-            <div class="section-heading"><span>Objects</span></div>
-            <div id="object-list" class="object-list"></div>
-          </section>
-        </aside>
-
-        <aside class="diagnostics-panel" aria-label="Accepted solver diagnostics">
-          <section class="inspector-section diagnostics-summary">
-            <div class="section-heading"><span>Solver detail</span><span>accepted state</span></div>
-            <div id="playground-solve-status" class="solve-status"></div>
-            <div id="last-attempt" class="attempt-notice"></div>
-          </section>
-          <section id="profile-analysis-section" class="inspector-section profile-analysis-section">
-            <div class="section-heading"><span>Profile analysis</span><span>native topology / web render</span></div>
-            <div id="profile-analysis"></div>
-          </section>
-          <section class="inspector-section audit-section">
-            <div class="section-heading"><span>Residual audit</span></div>
-            <div id="playground-audit"></div>
-          </section>
-          <details class="inspector-section persistence-section sketch-edit-only">
-            <summary>JSON and autosave</summary>
-            <textarea id="document-json" spellcheck="false" aria-label="Sketch document JSON"></textarea>
-            <div class="field-row"><button type="button" data-action="export-json">Export to text</button><button type="button" data-action="import-json">Import text</button></div>
-            <button type="button" class="primary-action" data-action="copy-scene-capsule">Copy compressed scene capsule</button>
-            <p class="control-help">Capsules include canonical JSON, active profile budgets, status metadata and a checksum. Paste one here and use Import text to reproduce it.</p>
-            <div class="field-row"><button type="button" data-action="download-json">Download JSON</button><label class="file-action" for="document-file">Upload JSON<input id="document-file" type="file" accept="application/json,.json" /></label></div>
-            <p id="storage-status">Accepted revisions autosave locally.</p>
-          </details>
-          <details id="release-contract" class="inspector-section release-contract" open>
-            <summary>0.2 release contract and UAT</summary>
-            <dl>
-              <div><dt>Library</dt><dd>0.2.0 supported preview</dd></div>
-              <div><dt>Sketch persistence</dt><dd>reads v1-v4, writes canonical v4</dd></div>
-              <div><dt>Linkage persistence</dt><dd>planar v1 and spatial v1</dd></div>
-              <div><dt>Tested scale points</dt><dd>1e-6, 1, 1e6</dd></div>
-              <div><dt>Acceptance</dt><dd>independent normalized residual at most 1e-9</dd></div>
-            </dl>
-            <p><strong>Construction and NURBS:</strong> choose an M30 lab, follow the focused UAT card, perform its named primary drag, then reset before changing branch, dimension, weight, gauge or knot state.</p>
-            <p><strong>Visual profiles:</strong> choose an M31 lab and compare the expected status/family/face card with the published roots, issues and consumed budgets. Rendering samples are never topology evidence.</p>
-            <p><strong>Failure handoff:</strong> copy a compressed scene capsule, paste it into the JSON field and import it. Corrupt, oversized or over-budget capsules must retain the accepted scene.</p>
-            <div class="release-links">
-              <a href="API_COMPATIBILITY.md">API and schema policy</a>
-              <a href="M32_SCALE_PERFORMANCE.md">Scale and performance envelope</a>
-            </div>
-          </details>
-        </aside>
+      <section class="wb-problems" id="wb-problems" aria-label="Problems" aria-live="assertive" hidden>
+        <div><strong>Problems</strong><span>Latest exact attempt</span></div>
+        <p id="wb-problem-text">No current solver problem</p>
       </section>
-      <footer class="legal-footer">
-        GeoSolve 0.2.0 diagnostic build. GPL-3.0-or-later, without warranty.
-        <a href="LICENSE">Licence and corresponding source terms</a>
-        <a href="THIRD_PARTY_LICENSES.md">Third-party notices</a>
-      </footer>
-    </main>
 
-    <section hidden aria-hidden="true">
-      <select id="scenario">
-        <option value="triangle">S1 / Underconstrained triangle</option>
-        <option value="conflicting-rectangle">S2 / Conflicting rectangle</option>
-        <option value="tangent-circles">S3 / Tangent circles</option>
-        <option value="arc-contact-drag">M7 / Arc contact drag</option>
-        <option value="arc-circle-auto-radius">M7 / Arc-circle auto radius</option>
-        <option value="line-circle-tangent-glide">M7 / Line-circle tangent glide</option>
-        <option value="horizontal-rail">Fixture / Horizontal rail</option>
-        <option value="coincident-pair">Fixture / Coincident pair</option>
-        <option value="four-bar-open">L1 / Four-bar open</option>
-        <option value="four-bar-crossed">L2 / Four-bar crossed</option>
-        <option value="slider-crank">L3 / Slider-crank</option>
-      </select>
-      <svg id="viewport"></svg>
-      <section id="scene-action-controls" class="scene-action-controls" aria-label="Scene action" hidden><button id="scene-action" type="button" aria-describedby="scene-action-help" disabled>Scene action unavailable</button><p id="scene-action-help"></p></section>
-      <section id="driver-controls" class="driver-controls" aria-label="Linkage driver" hidden><label for="driver-angle">Driver angle</label><output id="driver-output" for="driver-angle">60 deg</output><input id="driver-angle" type="range" step="1" disabled /></section>
-      <p id="drag-instructions"></p><p id="solve-announcement" class="visually-hidden" aria-live="polite" aria-atomic="true"></p>
-      <section id="solve-status" aria-label="Detailed solve status"></section><span id="audit-badge"></span><div id="equations"></div>
-    </section>
+      <footer class="wb-status-bar">
+        <button type="button" data-wb-action="problems">Problems</button>
+        <span id="wb-status-message" aria-live="polite">Ready</span>
+        <button type="button" data-uat-action="load">Load disposable M52 UAT</button>
+        <span>Desktop workbench · GPL-3.0-or-later</span>
+      </footer>
+      <aside id="wb-uat-panel" class="wb-uat-panel" aria-label="Disposable M52 host-semantics UAT"></aside>
+    </main>
   </body>
 </html>

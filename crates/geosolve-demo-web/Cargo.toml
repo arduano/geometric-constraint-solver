@@ -7,44 +7,34 @@ license-file.workspace = true
 readme.workspace = true
 rust-version.workspace = true
 authors.workspace = true
-description = "Non-authoritative WASM diagnostic playground for GeoSolve"
+description = "Non-authoritative WASM sketch workbench for GeoSolve"
 publish = false
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+geosolve-constraint-editor = { version = "0.2.0", path = "../geosolve-constraint-editor" }
 geosolve-core = { version = "0.2.0", path = "../geosolve-core" }
-geosolve-geometry = { version = "0.2.0", path = "../geosolve-geometry" }
-geosolve-linkage = { version = "0.2.0", path = "../geosolve-linkage" }
 geosolve-sketch = { version = "0.2.0", path = "../geosolve-sketch" }
+serde.workspace = true
+serde_json.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.7"
-js-sys = "=0.3.98"
 wasm-bindgen = "=0.2.121"
 web-sys = { version = "=0.3.98", features = [
-    "Blob",
-    "BlobPropertyBag",
     "Document",
     "DomRect",
     "Element",
     "Event",
     "EventTarget",
-    "File",
-    "FileList",
-    "FileReader",
-    "HtmlAnchorElement",
-    "HtmlInputElement",
-    "HtmlOutputElement",
+    "HtmlElement",
     "HtmlSelectElement",
-    "HtmlTextAreaElement",
     "KeyboardEvent",
     "MouseEvent",
     "PointerEvent",
     "Storage",
-    "Url",
-    "WheelEvent",
     "Window",
 ] }
 

@@ -35,11 +35,17 @@ else
   nix-shell -p cargo-deny --run 'cargo deny check licenses'
 fi
 
-for package in geosolve-geometry geosolve-core geosolve-sketch geosolve-linkage; do
+for package in \
+  geosolve-geometry \
+  geosolve-core \
+  geosolve-sketch \
+  geosolve-linkage \
+  geosolve-constraint-editor
+do
   contents="$(cargo package --locked --allow-dirty --list -p "$package")"
   grep -qx 'LICENSE' <<<"$contents"
   grep -qx 'README.md' <<<"$contents"
 done
 
 nix-shell "$root/shell.nix" --run \
-  "cd '$root/crates/geosolve-demo-web' && trunk build --release && env -u GEOSOLVE_E2E_M28_ONLY -u GEOSOLVE_E2E_M30_ONLY -u GEOSOLVE_E2E_M31_ONLY -u GEOSOLVE_E2E_M32_ONLY -u GEOSOLVE_E2E_CONICS_ONLY node e2e/m14.mjs"
+  "cd '$root/crates/geosolve-demo-web' && trunk build --release"
