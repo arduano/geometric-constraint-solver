@@ -152,7 +152,7 @@ Baseline candidate vectors do not yet carry M8 completeness metadata. Until the 
 
 M8 is ready for review only when every item below is objectively present. These checkboxes are acceptance criteria and do not mark `PLAN.md` complete.
 
-The checked wording below is the preserved M8 completion record. Its then-current M8-M22 allocations are historical; `PLAN.md` now governs completed work through M53 and the executable M54-M64 sequence.
+The checked wording below is the preserved M8 completion record. Its then-current M8-M22 allocations are historical; `PLAN.md` now governs completed work through M54 and the executable M55-M64 sequence.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -938,6 +938,8 @@ These are the final executable post-M53 milestone numbers. No old browser E2E qu
 return.
 
 ### M54: stable diagnostics
+
+Status: complete (2026-07-29); direct evidence is recorded in `docs/M54_IMPLEMENTATION.md`.
 
 - Hosts consume solve, source, component, dependency, activation, parameter and external-reference diagnostics through stable domain DTOs and persistent IDs.
 - Structural/numerical rank, equality/bounded/one-sided mobility and diagnostic completeness remain separate.

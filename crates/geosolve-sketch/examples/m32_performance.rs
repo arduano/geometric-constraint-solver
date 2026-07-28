@@ -286,7 +286,7 @@ fn report(name: &str, measurement: &str, samples: &[Duration], budget: Duration)
 fn validate_session(session: &SketchDocumentSession) {
     let accepted = session.accepted_result();
     let result = accepted.accepted_view();
-    let report = &result.core_report;
+    let report = &result.unstable_core_report();
     assert!(result.accepted(), "{:#?}", result.rejection);
     assert_eq!(report.hard_validity, HardValidity::Valid);
     assert!(report.hard_residuals_validated);

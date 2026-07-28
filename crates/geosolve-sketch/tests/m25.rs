@@ -21,10 +21,16 @@ fn solve(sketch: &mut Sketch) -> geosolve_sketch::SketchSolveResult {
 
 fn assert_accepted(result: &geosolve_sketch::SketchSolveResult) {
     assert!(result.accepted(), "{:#?}", result.rejection);
-    assert_eq!(result.core_report.termination, SolveTermination::Converged);
-    assert_eq!(result.core_report.hard_validity, HardValidity::Valid);
-    assert!(result.core_report.hard_residuals_validated);
-    assert!(result.core_report.hard_residual_max <= TOLERANCE);
+    assert_eq!(
+        result.unstable_core_report().termination,
+        SolveTermination::Converged
+    );
+    assert_eq!(
+        result.unstable_core_report().hard_validity,
+        HardValidity::Valid
+    );
+    assert!(result.unstable_core_report().hard_residuals_validated);
+    assert!(result.unstable_core_report().hard_residual_max <= TOLERANCE);
     assert!(result.acceptance_hard_residual_max.unwrap() <= TOLERANCE);
 }
 
@@ -112,8 +118,13 @@ fn offset_modes_have_analytic_jacobians_audits_and_truthful_dof_at_all_scales() 
                 }));
                 let supporting_result = solve(&mut supporting);
                 assert_accepted(&supporting_result);
-                assert_eq!(supporting_result.core_report.rank, 2);
-                assert_eq!(supporting_result.core_report.local_degrees_of_freedom, 2);
+                assert_eq!(supporting_result.unstable_core_report().rank, 2);
+                assert_eq!(
+                    supporting_result
+                        .unstable_core_report()
+                        .local_degrees_of_freedom,
+                    2
+                );
 
                 let (mut exact, source, target_segment) = line_pair(scale, right_side, reversed);
                 exact
@@ -141,8 +152,11 @@ fn offset_modes_have_analytic_jacobians_audits_and_truthful_dof_at_all_scales() 
                 );
                 let exact_result = solve(&mut exact);
                 assert_accepted(&exact_result);
-                assert_eq!(exact_result.core_report.rank, 4);
-                assert_eq!(exact_result.core_report.local_degrees_of_freedom, 0);
+                assert_eq!(exact_result.unstable_core_report().rank, 4);
+                assert_eq!(
+                    exact_result.unstable_core_report().local_degrees_of_freedom,
+                    0
+                );
             }
         }
     }
@@ -304,7 +318,10 @@ fn offset_validation_rejects_invalid_inputs_and_the_antiparallel_root() {
         result.rejection,
         Some(SolveRejection::LineOffsetBranchFlipped(dimension))
     );
-    assert_eq!(result.core_report.hard_validity, HardValidity::Invalid);
+    assert_eq!(
+        result.unstable_core_report().hard_validity,
+        HardValidity::Invalid
+    );
 }
 
 #[test]

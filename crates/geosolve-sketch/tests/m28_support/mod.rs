@@ -1132,9 +1132,12 @@ fn transformed_scaled_solve_cover_hits_every_family_role_and_all_branch_codes() 
                 FAMILIES[second].label(),
                 result.rejection
             );
-            assert_eq!(result.core_report.hard_validity, HardValidity::Valid);
+            assert_eq!(
+                result.unstable_core_report().hard_validity,
+                HardValidity::Valid
+            );
             assert!(result.acceptance_hard_residual_max.unwrap() <= 1.0e-9);
-            assert!(result.core_report.hard_residuals_validated);
+            assert!(result.unstable_core_report().hard_residuals_validated);
             assert_geometry(&fixture, 3.0e-8 * scale);
             if mode == DimensionMode::Reference {
                 let dimension = fixture.radius_dimension.unwrap();
@@ -1177,8 +1180,8 @@ fn transformed_scaled_solve_cover_hits_every_family_role_and_all_branch_codes() 
             .unwrap();
         assert!(driving.accepted() && reference.accepted());
         assert_eq!(
-            reference.core_report.local_degrees_of_freedom,
-            driving.core_report.local_degrees_of_freedom + 1
+            reference.unstable_core_report().local_degrees_of_freedom,
+            driving.unstable_core_report().local_degrees_of_freedom + 1
         );
     }
 }

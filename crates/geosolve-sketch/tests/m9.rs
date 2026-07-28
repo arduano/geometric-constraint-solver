@@ -26,10 +26,13 @@ fn domain_valid_secondary_iteration_limit_keeps_authoritative_hard_validity() {
         )
         .unwrap();
 
-    assert_eq!(result.core_report.hard_validity, HardValidity::Valid);
-    assert!(result.core_report.hard_residuals_validated);
     assert_eq!(
-        result.core_report.temporary_status,
+        result.unstable_core_report().hard_validity,
+        HardValidity::Valid
+    );
+    assert!(result.unstable_core_report().hard_residuals_validated);
+    assert_eq!(
+        result.unstable_core_report().temporary_status,
         SecondaryStatus::IterationLimit
     );
     assert_eq!(
@@ -73,15 +76,18 @@ fn branch_validation_precedes_compatibility_secondary_iteration_limit() {
         .unwrap();
 
     assert_eq!(
-        result.core_report.temporary_status,
+        result.unstable_core_report().temporary_status,
         SecondaryStatus::IterationLimit
     );
     assert_eq!(
-        result.core_report.termination,
+        result.unstable_core_report().termination,
         SolveTermination::IterationLimit
     );
-    assert_eq!(result.core_report.hard_validity, HardValidity::Invalid);
-    assert!(result.core_report.hard_residuals_validated);
+    assert_eq!(
+        result.unstable_core_report().hard_validity,
+        HardValidity::Invalid
+    );
+    assert!(result.unstable_core_report().hard_residuals_validated);
     assert_eq!(
         result.rejection,
         Some(SolveRejection::SegmentBranchFlipped(segment))
@@ -119,10 +125,13 @@ fn tangent_distance_gradients_report_scale_invariant_numerical_dependence() {
             "scale={scale:e}: {:#?}",
             result.rejection
         );
-        assert_eq!(result.core_report.hard_validity, HardValidity::Valid);
-        assert!(result.core_report.hard_residuals_validated);
         assert_eq!(
-            result.core_report.hard_residual_max.to_bits(),
+            result.unstable_core_report().hard_validity,
+            HardValidity::Valid
+        );
+        assert!(result.unstable_core_report().hard_residuals_validated);
+        assert_eq!(
+            result.unstable_core_report().hard_residual_max.to_bits(),
             0.0_f64.to_bits()
         );
         let solved = result.geometry.point(point).unwrap();
@@ -130,19 +139,19 @@ fn tangent_distance_gradients_report_scale_invariant_numerical_dependence() {
         assert!((solved.x / scale - 1.0).abs() <= 1.0e-12);
         assert!((solved.y / scale).abs() <= 1.0e-12);
 
-        assert_eq!(result.core_report.rank, 1);
-        assert_eq!(result.core_report.left_nullity, 1);
-        assert_eq!(result.core_report.right_nullity, 1);
-        assert_eq!(result.core_report.local_degrees_of_freedom, 1);
-        assert!(result.core_report.is_singular);
-        assert!(!result.core_report.near_singular);
+        assert_eq!(result.unstable_core_report().rank, 1);
+        assert_eq!(result.unstable_core_report().left_nullity, 1);
+        assert_eq!(result.unstable_core_report().right_nullity, 1);
+        assert_eq!(result.unstable_core_report().local_degrees_of_freedom, 1);
+        assert!(result.unstable_core_report().is_singular);
+        assert!(!result.unstable_core_report().near_singular);
         let component = result
-            .core_report
+            .unstable_core_report()
             .component_solves
             .iter()
             .find(|component| {
-                let structural =
-                    &result.core_report.structural.component_summaries[component.component_index];
+                let structural = &result.unstable_core_report().structural.component_summaries
+                    [component.component_index];
                 structural.active_tangent_dimensions == 2 && structural.active_hard_rows == 2
             })
             .unwrap();
@@ -167,7 +176,7 @@ fn tangent_distance_gradients_report_scale_invariant_numerical_dependence() {
             assert_eq!(mapping.residual_ids.len(), 1);
             let source_id = mapping.core_source_id.unwrap();
             let audit_source = result
-                .core_report
+                .unstable_core_report()
                 .audit
                 .sources
                 .iter()
@@ -185,10 +194,10 @@ fn tangent_distance_gradients_report_scale_invariant_numerical_dependence() {
         }
 
         classifications.push((
-            result.core_report.rank,
-            result.core_report.left_nullity,
-            result.core_report.right_nullity,
-            result.core_report.is_singular,
+            result.unstable_core_report().rank,
+            result.unstable_core_report().left_nullity,
+            result.unstable_core_report().right_nullity,
+            result.unstable_core_report().is_singular,
             component.rank_machine_tolerance,
             component.rank_threshold,
         ));

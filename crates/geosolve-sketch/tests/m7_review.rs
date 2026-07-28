@@ -25,9 +25,12 @@ fn solve_with(sketch: &mut Sketch, config: SolverConfig) -> geosolve_sketch::Ske
 
 fn assert_accepted(result: &geosolve_sketch::SketchSolveResult) {
     assert!(result.accepted(), "{:#?}", result.rejection);
-    assert_eq!(result.core_report.termination, SolveTermination::Converged);
-    assert!(result.core_report.hard_residuals_validated);
-    assert!(result.core_report.hard_residual_max <= TOLERANCE);
+    assert_eq!(
+        result.unstable_core_report().termination,
+        SolveTermination::Converged
+    );
+    assert!(result.unstable_core_report().hard_residuals_validated);
+    assert!(result.unstable_core_report().hard_residual_max <= TOLERANCE);
     assert!(result.acceptance_hard_residual_max.unwrap() <= TOLERANCE);
 }
 
@@ -158,7 +161,7 @@ fn normalized_direction_rows_reject_short_nonzero_false_roots_and_reparameterize
         assert!(row.template.contains("unit_direction"));
         let result = solve(&mut sketch);
         assert!(!result.accepted());
-        assert!(result.core_report.hard_residual_max > TOLERANCE);
+        assert!(result.unstable_core_report().hard_residual_max > TOLERANCE);
     }
 
     for length in [1.0e-12, 1.0, 1.0e6] {
@@ -233,7 +236,7 @@ fn symmetry_and_line_tangency_use_unit_directions_for_short_lines() {
     assert!(rows.iter().all(|row| row.template.contains("unit_line")));
     let result = solve(&mut symmetry);
     assert!(!result.accepted());
-    assert!(result.core_report.hard_residual_max > TOLERANCE);
+    assert!(result.unstable_core_report().hard_residual_max > TOLERANCE);
 
     let angle = -FRAC_PI_2 + error;
     let radial = [angle.cos(), angle.sin()];
@@ -281,7 +284,7 @@ fn symmetry_and_line_tangency_use_unit_directions_for_short_lines() {
     assert!(alignment.template.contains("unit_line_direction"));
     let result = solve(&mut tangent);
     assert!(!result.accepted());
-    assert!(result.core_report.hard_residual_max > TOLERANCE);
+    assert!(result.unstable_core_report().hard_residual_max > TOLERANCE);
 
     for half_length in [0.5e-12, 0.5, 0.5e6] {
         let mut reparameterized = Sketch::new(1.0).unwrap();
@@ -363,7 +366,10 @@ fn every_candidate_segment_is_validated_and_midpoint_collapse_is_transactional()
     induced.add_midpoint(midpoint, segment).unwrap();
     let retained = induced.geometry();
     let result = solve(&mut induced);
-    assert_eq!(result.core_report.termination, SolveTermination::Converged);
+    assert_eq!(
+        result.unstable_core_report().termination,
+        SolveTermination::Converged
+    );
     assert_eq!(
         result.rejection,
         Some(SolveRejection::DegenerateSegment(segment))
@@ -471,7 +477,10 @@ fn bounded_roundoff_is_clamped_audited_and_real_escape_rejects_at_all_scales() {
         let mut direct = sketch.clone();
         let direct_result = solve_with(&mut direct, config);
         assert!(direct_result.accepted(), "{:#?}", direct_result.rejection);
-        assert_complete_analysis_matches(&result.core_report, &direct_result.core_report);
+        assert_complete_analysis_matches(
+            result.unstable_core_report(),
+            direct_result.unstable_core_report(),
+        );
         assert_eq!(result.display_audit, direct_result.display_audit);
 
         let endpoint_angle = PI * (1.0 + endpoint_offset);
@@ -1170,7 +1179,10 @@ fn circle_tangency_literal_matrix_covers_every_mode_and_similarity() {
         result.rejection,
         Some(SolveRejection::CenterDirectionFlipped(tangency))
     );
-    assert_eq!(result.core_report.hard_validity, HardValidity::Invalid);
+    assert_eq!(
+        result.unstable_core_report().hard_validity,
+        HardValidity::Invalid
+    );
 }
 
 #[test]

@@ -562,10 +562,13 @@ impl RetainedEditorCoordinator {
         let document = self.session.design_document();
         let mut elements = BTreeSet::new();
 
-        for source in &solve.core_report.conflicting_sources {
-            if let Some(source) = attempt.persistent_core_source(*source) {
-                insert_source_owner(&mut elements, document, source);
-            }
+        for source in self
+            .session
+            .latest_attempt_diagnostics()
+            .conflicts
+            .candidates
+        {
+            insert_source_owner(&mut elements, document, source);
         }
         insert_rejection_elements(&mut elements, attempt, document, rejection);
 

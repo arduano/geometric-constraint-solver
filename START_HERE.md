@@ -14,7 +14,7 @@ M39-M44 established a desktop-only CAD-like workbench. Cleanup M46-M50 replaced 
 retained assertion with direct owning-layer tests and removed the separately routed legacy
 application and browser E2E stack. M51 hardened the one surviving workbench; M52 completed the
 direct-qualified post-cleanup host-semantics candidate, M53 received supervising-human approval,
-and M54 is now active. The workbench is a
+M54 completed stable sketch-owned diagnostics and M55 is now active. The workbench is a
 non-authoritative demo consumer, not a production UI or third solver. Mobile support and
 physics remain outside future acceptance.
 
@@ -62,8 +62,10 @@ presentation, persistence and typed evidence transformations. M52 is complete: i
 in-memory host-semantics candidate passed direct native/WASM qualification and independent
 verification. M53 is complete: the supervising human rated every M53-S5 scorecard area Pass,
 reported no concern or blocker and explicitly approved the host-semantics gate on 2026-07-28. Its
-objective state claims remain backed by M52 tests and the final direct-qualified candidate. The
-active milestone is **M54: stable diagnostics and mobility evidence**. Old Chromium/CDP, HTTP
+objective state claims remain backed by M52 tests and the final direct-qualified candidate. M54
+then completed persistent-ID diagnostic DTOs, separated rank/mobility evidence and isolated raw
+core reports behind explicitly unstable seams. The active milestone is **M55: alpha constraint,
+dimension and branch-action parity**. Old Chromium/CDP, HTTP
 serving, DOM-scraping, screenshot, wall-clock browser-timing and source-substring-scan gates remain
 retired.
 
@@ -106,6 +108,7 @@ Durable cleanup records:
 - `docs/M50_IMPLEMENTATION.md`
 - `docs/M51_IMPLEMENTATION.md`
 - `docs/M52_IMPLEMENTATION.md`
+- `docs/M54_IMPLEMENTATION.md`
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

@@ -97,7 +97,10 @@ fn nurbs_curvature_and_normal_constraints_validate_all_active_derivatives() {
             .solve(SketchSolveRequest::default(), SolverConfig::default())
             .unwrap();
         assert!(solved.accepted(), "{solved:#?}");
-        assert_eq!(solved.core_report.hard_validity, HardValidity::Valid);
+        assert_eq!(
+            solved.unstable_core_report().hard_validity,
+            HardValidity::Valid
+        );
         assert!(solved.acceptance_hard_residual_max.unwrap() <= 1.0e-9);
     }
 }
@@ -173,7 +176,10 @@ fn g2_and_rate_explicit_parametric_c2_are_distinct_and_differentiable() {
             .solve(SketchSolveRequest::default(), SolverConfig::default())
             .unwrap();
         assert!(solved.accepted(), "{solved:#?}");
-        assert_eq!(solved.core_report.hard_validity, HardValidity::Valid);
+        assert_eq!(
+            solved.unstable_core_report().hard_validity,
+            HardValidity::Valid
+        );
         assert!(solved.acceptance_hard_residual_max.unwrap() <= 1.0e-9);
     }
 }

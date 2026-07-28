@@ -426,7 +426,7 @@ impl PreparedWorkload {
             accepted
                 .accepted_result()
                 .accepted_view()
-                .core_report
+                .unstable_core_report()
                 .structural
                 .tangent_dimensions
         );
@@ -515,7 +515,7 @@ pub fn validate_session(session: &SketchDocumentSession) {
     session.document().validate().unwrap();
     let result = session.accepted_result();
     let accepted = result.accepted_view();
-    let report = &accepted.core_report;
+    let report = &accepted.unstable_core_report();
     assert!(accepted.accepted(), "{:#?}", accepted.rejection);
     assert_eq!(report.hard_validity, HardValidity::Valid);
     assert!(report.hard_residuals_validated);
@@ -1024,7 +1024,7 @@ fn document_signature(document: &SketchDocument) -> DocumentSignature {
 fn solve_signature(session: &SketchDocumentSession) -> SolveSignature {
     let result = session.accepted_result();
     let accepted = result.accepted_view();
-    let report = &accepted.core_report;
+    let report = &accepted.unstable_core_report();
     SolveSignature {
         tangent_dimensions: report.structural.tangent_dimensions,
         active_hard_rows: report.structural.active_hard_rows,

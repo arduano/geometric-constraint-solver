@@ -638,8 +638,11 @@ fn resolve_parameter_batch(
     document: &SketchDocument,
     batch: &ParameterBatch,
     unavailable_external: &BTreeSet<DocumentElementId>,
-) -> Result<ResolvedDocumentParameters, DocumentError> {
-    document.validate()?;
+) -> Result<ResolvedDocumentParameters, ParameterInputFailure> {
+    document.validate().map_err(|error| ParameterInputFailure {
+        issue: crate::SketchParameterInputIssue::InvalidDocument,
+        error,
+    })?;
     let mut activation_required = BTreeSet::new();
     for binding in document.parameter_bindings() {
         if matches!(binding.target, DocumentParameterTarget::Activation(_)) {
@@ -650,14 +653,24 @@ fn resolve_parameter_batch(
     for entry in batch.entries() {
         let declaration = document
             .parameter(entry.parameter)
-            .ok_or(DocumentError::UnknownId {
-                kind: "parameter batch entry",
-                id: entry.parameter.0,
+            .ok_or(ParameterInputFailure {
+                issue: crate::SketchParameterInputIssue::Unknown(entry.parameter),
+                error: DocumentError::UnknownId {
+                    kind: "parameter batch entry",
+                    id: entry.parameter.0,
+                },
             })?;
         if declaration.kind != entry.value.kind() {
-            return Err(DocumentError::InvalidField {
-                field: "parameter batch",
-                message: format!("parameter {} has the wrong kind", entry.parameter),
+            return Err(ParameterInputFailure {
+                issue: crate::SketchParameterInputIssue::WrongKind {
+                    parameter: entry.parameter,
+                    expected: declaration.kind,
+                    actual: entry.value.kind(),
+                },
+                error: DocumentError::InvalidField {
+                    field: "parameter batch",
+                    message: format!("parameter {} has the wrong kind", entry.parameter),
+                },
             });
         }
         supplied.insert(entry.parameter, entry.value);
@@ -666,9 +679,12 @@ fn resolve_parameter_batch(
         .iter()
         .find(|id| !supplied.contains_key(id))
     {
-        return Err(DocumentError::InvalidField {
-            field: "parameter batch",
-            message: format!("required parameter {missing} is missing"),
+        return Err(ParameterInputFailure {
+            issue: crate::SketchParameterInputIssue::Missing(*missing),
+            error: DocumentError::InvalidField {
+                field: "parameter batch",
+                message: format!("required parameter {missing} is missing"),
+            },
         });
     }
 
@@ -698,15 +714,21 @@ fn resolve_parameter_batch(
         }
     }
     if let Some(unexpected) = supplied.keys().find(|id| !required.contains(id)) {
-        return Err(DocumentError::InvalidField {
-            field: "parameter batch",
-            message: format!("parameter {unexpected} is not a required input"),
+        return Err(ParameterInputFailure {
+            issue: crate::SketchParameterInputIssue::Unexpected(*unexpected),
+            error: DocumentError::InvalidField {
+                field: "parameter batch",
+                message: format!("parameter {unexpected} is not a required input"),
+            },
         });
     }
     if let Some(missing) = required.iter().find(|id| !supplied.contains_key(id)) {
-        return Err(DocumentError::InvalidField {
-            field: "parameter batch",
-            message: format!("required parameter {missing} is missing"),
+        return Err(ParameterInputFailure {
+            issue: crate::SketchParameterInputIssue::Missing(*missing),
+            error: DocumentError::InvalidField {
+                field: "parameter batch",
+                message: format!("required parameter {missing} is missing"),
+            },
         });
     }
     let mut dimensions = BTreeMap::new();
@@ -729,13 +751,23 @@ fn resolve_parameter_batch(
             DocumentParameterTarget::DrivingDimension(dimension)
                 if activity.is_active(dimension) =>
             {
-                document.validate_parameter_dimension_value(dimension, value)?;
+                document
+                    .validate_parameter_dimension_value(dimension, value)
+                    .map_err(|error| ParameterInputFailure {
+                        issue: crate::SketchParameterInputIssue::InvalidValue(binding.parameter),
+                        error,
+                    })?;
                 dimensions.insert(dimension, resolved);
             }
             DocumentParameterTarget::DimensionlessFixedScalar(property)
                 if document.dimensionless_parameter_target_is_active(property, &activity) =>
             {
-                document.validate_parameter_scalar_value(property.scalar, value)?;
+                document
+                    .validate_parameter_scalar_value(property.scalar, value)
+                    .map_err(|error| ParameterInputFailure {
+                        issue: crate::SketchParameterInputIssue::InvalidValue(binding.parameter),
+                        error,
+                    })?;
                 dimensionless.insert(property.scalar, resolved);
             }
             DocumentParameterTarget::DrivingDimension(_)
@@ -840,11 +872,16 @@ fn resolve_attempt_inputs(
 }
 
 enum AttemptInputError {
-    Parameter(DocumentError),
+    Parameter(ParameterInputFailure),
     External {
         error: ExternalSnapshotInputError,
         activity: crate::EffectiveActivity,
     },
+}
+
+struct ParameterInputFailure {
+    issue: crate::SketchParameterInputIssue,
+    error: DocumentError,
 }
 
 /// Persistent drag request lowered only after runtime IDs have been allocated.
@@ -954,7 +991,7 @@ impl DocumentSolveResult {
         &self.attempted_mappings
     }
 
-    /// Candidate bound identities corresponding to `solve().core_report.bounds`.
+    /// Candidate bound identities corresponding to `solve().unstable_core_report().bounds`.
     #[must_use]
     pub fn attempted_bound_mappings(&self) -> &[crate::SketchBoundMapping] {
         &self.attempted_bound_mappings
@@ -1218,6 +1255,7 @@ pub enum SketchAttemptFailureKind {
 pub struct SketchAttemptFailure {
     kind: SketchAttemptFailureKind,
     message: String,
+    parameter_issue: Option<crate::SketchParameterInputIssue>,
     external_error: Option<ExternalSnapshotInputError>,
     effective_activity: Option<crate::EffectiveActivity>,
 }
@@ -1231,6 +1269,11 @@ impl SketchAttemptFailure {
     #[must_use]
     pub fn message(&self) -> &str {
         &self.message
+    }
+
+    #[must_use]
+    pub const fn parameter_input_issue(&self) -> Option<crate::SketchParameterInputIssue> {
+        self.parameter_issue
     }
 
     #[must_use]
@@ -1255,6 +1298,7 @@ pub struct SketchDocumentAttempt {
     solve: Option<SketchSolveResult>,
     attempted_geometry: Option<crate::SketchGeometry>,
     mappings: Option<DocumentRuntimeMap>,
+    effective_activity: Option<crate::EffectiveActivity>,
     failure: Option<SketchAttemptFailure>,
 }
 
@@ -1303,6 +1347,13 @@ impl SketchDocumentAttempt {
         self.mappings.as_ref()
     }
 
+    /// Returns the exact effective activation closure used by this attempt, when
+    /// input resolution reached that stage.
+    #[must_use]
+    pub const fn effective_activity(&self) -> Option<&crate::EffectiveActivity> {
+        self.effective_activity.as_ref()
+    }
+
     #[must_use]
     pub const fn failure(&self) -> Option<&SketchAttemptFailure> {
         self.failure.as_ref()
@@ -1349,6 +1400,7 @@ pub struct SketchAcceptedDocumentState {
     document: SketchDocument,
     runtime: SketchSession,
     mappings: DocumentRuntimeMap,
+    effective_activity: crate::EffectiveActivity,
     redundancy: SketchAcceptedDocumentRedundancy,
     parameter_outputs: Vec<DocumentParameterOutputProposal>,
 }
@@ -1437,6 +1489,12 @@ impl SketchAcceptedDocumentState {
         &self.mappings
     }
 
+    /// Returns the exact effective activation closure accepted with this state.
+    #[must_use]
+    pub const fn effective_activity(&self) -> &crate::EffectiveActivity {
+        &self.effective_activity
+    }
+
     /// Returns accepted geometry, audit, measurements, rank, and diagnostics from one state.
     #[must_use]
     pub const fn solve_result(&self) -> &SketchSolveResult {
@@ -1453,6 +1511,30 @@ impl SketchAcceptedDocumentState {
     #[must_use]
     pub fn parameter_output_proposals(&self) -> &[DocumentParameterOutputProposal] {
         &self.parameter_outputs
+    }
+
+    /// Returns stable persistent-ID diagnostics for this exact accepted state.
+    #[must_use]
+    pub fn diagnostics(&self) -> crate::SketchDiagnosticSnapshot {
+        let variable_elements =
+            crate::diagnostics::diagnostic_variable_elements(self.solve_result(), &self.mappings);
+        crate::diagnostics::build_diagnostic_snapshot(
+            &crate::diagnostics::SketchDiagnosticBuildInput {
+                provenance: crate::SketchDiagnosticProvenance::Accepted {
+                    accepted: self.identity,
+                    originating_attempt: self.originating_attempt,
+                    design: self.design_identity(),
+                },
+                input: self.input,
+                document: &self.solved_design,
+                solve: Some(self.solve_result()),
+                mappings: Some(&self.mappings),
+                activity: &self.effective_activity,
+                parameter_issue: None,
+                external_issue: None,
+                variable_elements: &variable_elements,
+            },
+        )
     }
 
     /// Returns one accepted reference measurement by persistent dimension identity.
@@ -3139,6 +3221,56 @@ impl RetainedSketchDocumentSession {
         self.accepted.as_ref()
     }
 
+    /// Returns stable persistent-ID diagnostics for the latest attempt.
+    #[must_use]
+    pub fn latest_attempt_diagnostics(&self) -> crate::SketchDiagnosticSnapshot {
+        let attempt = &self.last_attempt;
+        let fallback_activity;
+        let activity = if let Some(activity) = attempt.effective_activity() {
+            activity
+        } else {
+            fallback_activity = self.design.effective_activity();
+            &fallback_activity
+        };
+        let variable_elements = attempt
+            .solve_result()
+            .zip(attempt.mappings())
+            .map_or_else(BTreeMap::new, |(solve, mappings)| {
+                crate::diagnostics::diagnostic_variable_elements(solve, mappings)
+            });
+        let parameter_issue = attempt
+            .failure()
+            .and_then(SketchAttemptFailure::parameter_input_issue);
+        let external_issue = attempt
+            .failure()
+            .and_then(SketchAttemptFailure::external_snapshot_error);
+        crate::diagnostics::build_diagnostic_snapshot(
+            &crate::diagnostics::SketchDiagnosticBuildInput {
+                provenance: crate::SketchDiagnosticProvenance::Attempt {
+                    attempt: attempt.identity(),
+                    design: attempt.design_identity(),
+                    parent_accepted: attempt.parent_accepted_identity(),
+                },
+                input: attempt.input(),
+                document: &self.design,
+                solve: attempt.solve_result(),
+                mappings: attempt.mappings(),
+                activity,
+                parameter_issue,
+                external_issue,
+                variable_elements: &variable_elements,
+            },
+        )
+    }
+
+    /// Returns stable persistent-ID diagnostics for the last accepted state.
+    #[must_use]
+    pub fn accepted_diagnostics(&self) -> Option<crate::SketchDiagnosticSnapshot> {
+        self.accepted
+            .as_ref()
+            .map(SketchAcceptedDocumentState::diagnostics)
+    }
+
     #[must_use]
     pub const fn request(&self) -> DocumentSolveRequest {
         self.request
@@ -4149,6 +4281,7 @@ struct RetainedAttemptExecution {
     solve: Option<SketchSolveResult>,
     attempted_geometry: Option<crate::SketchGeometry>,
     mappings: Option<DocumentRuntimeMap>,
+    effective_activity: Option<crate::EffectiveActivity>,
     accepted: Option<(
         SketchDocument,
         SketchSession,
@@ -4158,8 +4291,9 @@ struct RetainedAttemptExecution {
     failure: Option<SketchAttemptFailure>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct RetainedAttemptInputStamps {
+    activity: crate::EffectiveActivity,
     activation_revision: u64,
     activation_digest: ActivationDigest,
     parameter_revision: u64,
@@ -4174,10 +4308,29 @@ impl RetainedAttemptExecution {
             solve: None,
             attempted_geometry: None,
             mappings: None,
+            effective_activity: None,
             accepted: None,
             failure: Some(SketchAttemptFailure {
                 kind,
                 message,
+                parameter_issue: None,
+                external_error: None,
+                effective_activity: None,
+            }),
+        }
+    }
+
+    fn parameter_input_failure(error: &ParameterInputFailure) -> Self {
+        Self {
+            solve: None,
+            attempted_geometry: None,
+            mappings: None,
+            accepted: None,
+            effective_activity: None,
+            failure: Some(SketchAttemptFailure {
+                kind: SketchAttemptFailureKind::ParameterInput,
+                message: error.error.to_string(),
+                parameter_issue: Some(error.issue),
                 external_error: None,
                 effective_activity: None,
             }),
@@ -4192,10 +4345,12 @@ impl RetainedAttemptExecution {
             solve: None,
             attempted_geometry: None,
             mappings: None,
+            effective_activity: Some(activity.clone()),
             accepted: None,
             failure: Some(SketchAttemptFailure {
                 kind: SketchAttemptFailureKind::ExternalSnapshotInput,
                 message: error.to_string(),
+                parameter_issue: None,
                 external_error: Some(error),
                 effective_activity: Some(activity),
             }),
@@ -4215,16 +4370,14 @@ fn run_retained_attempt(
     let resolved = match resolve_attempt_inputs(candidate, parameters, snapshots) {
         Ok(resolved) => resolved,
         Err(AttemptInputError::Parameter(error)) => {
-            return RetainedAttemptExecution::failure(
-                SketchAttemptFailureKind::ParameterInput,
-                error.to_string(),
-            );
+            return RetainedAttemptExecution::parameter_input_failure(&error);
         }
         Err(AttemptInputError::External { error, activity }) => {
             return RetainedAttemptExecution::external_input_failure(error, activity);
         }
     };
     let input_stamps = RetainedAttemptInputStamps {
+        activity: resolved.activity.clone(),
         activation_revision: resolved.activity.activation_revision(),
         activation_digest: resolved.activity.activation_digest(),
         parameter_revision: parameters.revision(),
@@ -4235,10 +4388,13 @@ fn run_retained_attempt(
     let lowered = match candidate.lower_with_resolved_parameters(&resolved) {
         Ok(lowered) => lowered,
         Err(error) => {
-            return RetainedAttemptExecution::failure(
-                SketchAttemptFailureKind::Lowering,
-                error.to_string(),
-            );
+            return RetainedAttemptExecution {
+                effective_activity: Some(resolved.activity.clone()),
+                ..RetainedAttemptExecution::failure(
+                    SketchAttemptFailureKind::Lowering,
+                    error.to_string(),
+                )
+            };
         }
     };
     let (mut sketch, mappings) = lowered.into_parts();
@@ -4247,6 +4403,7 @@ fn run_retained_attempt(
         Err(error) => {
             return RetainedAttemptExecution {
                 mappings: Some(mappings),
+                effective_activity: Some(resolved.activity.clone()),
                 ..RetainedAttemptExecution::failure(
                     SketchAttemptFailureKind::Request,
                     error.to_string(),
@@ -4260,6 +4417,7 @@ fn run_retained_attempt(
             Err(error) => {
                 return RetainedAttemptExecution {
                     mappings: Some(mappings),
+                    effective_activity: Some(resolved.activity.clone()),
                     ..RetainedAttemptExecution::failure(
                         SketchAttemptFailureKind::Request,
                         error.to_string(),
@@ -4272,6 +4430,7 @@ fn run_retained_attempt(
         Err(error) => {
             return RetainedAttemptExecution {
                 mappings: Some(mappings),
+                effective_activity: Some(resolved.activity.clone()),
                 ..RetainedAttemptExecution::failure(
                     SketchAttemptFailureKind::Solve,
                     error.to_string(),
@@ -4285,6 +4444,7 @@ fn run_retained_attempt(
             solve: Some(solve),
             attempted_geometry,
             mappings: Some(mappings),
+            effective_activity: Some(resolved.activity.clone()),
             accepted: None,
             failure: None,
         };
@@ -4297,10 +4457,12 @@ fn run_retained_attempt(
                 solve: None,
                 attempted_geometry,
                 mappings: Some(mappings),
+                effective_activity: Some(resolved.activity.clone()),
                 accepted: None,
                 failure: Some(SketchAttemptFailure {
                     kind: SketchAttemptFailureKind::AcceptedSession,
                     message: error.to_string(),
+                    parameter_issue: None,
                     external_error: None,
                     effective_activity: None,
                 }),
@@ -4320,6 +4482,7 @@ fn run_retained_attempt(
             attempted_geometry: rejected.attempted_geometry.clone(),
             solve: Some(rejected),
             mappings: Some(mappings),
+            effective_activity: Some(resolved.activity.clone()),
             accepted: None,
             failure: None,
         };
@@ -4329,6 +4492,7 @@ fn run_retained_attempt(
         attempted_geometry: solve.attempted_geometry.clone(),
         solve: Some(solve),
         mappings: Some(mappings.clone()),
+        effective_activity: Some(resolved.activity),
         accepted: Some((document, runtime, mappings, input_stamps)),
         failure: None,
     }
@@ -4347,10 +4511,7 @@ fn run_retained_attempt_controlled(
     let resolved = match resolve_attempt_inputs(candidate, parameters, snapshots) {
         Ok(resolved) => resolved,
         Err(AttemptInputError::Parameter(error)) => {
-            return Some(RetainedAttemptExecution::failure(
-                SketchAttemptFailureKind::ParameterInput,
-                error.to_string(),
-            ));
+            return Some(RetainedAttemptExecution::parameter_input_failure(&error));
         }
         Err(AttemptInputError::External { error, activity }) => {
             return Some(RetainedAttemptExecution::external_input_failure(
@@ -4359,6 +4520,7 @@ fn run_retained_attempt_controlled(
         }
     };
     let input_stamps = RetainedAttemptInputStamps {
+        activity: resolved.activity.clone(),
         activation_revision: resolved.activity.activation_revision(),
         activation_digest: resolved.activity.activation_digest(),
         parameter_revision: parameters.revision(),
@@ -4371,10 +4533,13 @@ fn run_retained_attempt_controlled(
             Ok(Some(lowered)) => lowered,
             Ok(None) => return None,
             Err(error) => {
-                return Some(RetainedAttemptExecution::failure(
-                    SketchAttemptFailureKind::Lowering,
-                    error.to_string(),
-                ));
+                return Some(RetainedAttemptExecution {
+                    effective_activity: Some(resolved.activity.clone()),
+                    ..RetainedAttemptExecution::failure(
+                        SketchAttemptFailureKind::Lowering,
+                        error.to_string(),
+                    )
+                });
             }
         };
     let (mut sketch, mappings) = lowered.into_parts();
@@ -4384,6 +4549,7 @@ fn run_retained_attempt_controlled(
         Err(error) => {
             return Some(RetainedAttemptExecution {
                 mappings: Some(mappings),
+                effective_activity: Some(resolved.activity.clone()),
                 ..RetainedAttemptExecution::failure(
                     SketchAttemptFailureKind::Request,
                     error.to_string(),
@@ -4397,6 +4563,7 @@ fn run_retained_attempt_controlled(
             Err(error) => {
                 return Some(RetainedAttemptExecution {
                     mappings: Some(mappings),
+                    effective_activity: Some(resolved.activity.clone()),
                     ..RetainedAttemptExecution::failure(
                         SketchAttemptFailureKind::Request,
                         error.to_string(),
@@ -4410,6 +4577,7 @@ fn run_retained_attempt_controlled(
         Err(error) => {
             return Some(RetainedAttemptExecution {
                 mappings: Some(mappings),
+                effective_activity: Some(resolved.activity.clone()),
                 ..RetainedAttemptExecution::failure(
                     SketchAttemptFailureKind::Solve,
                     error.to_string(),
@@ -4423,6 +4591,7 @@ fn run_retained_attempt_controlled(
             solve: Some(solve),
             attempted_geometry,
             mappings: Some(mappings),
+            effective_activity: Some(resolved.activity.clone()),
             accepted: None,
             failure: None,
         });
@@ -4441,10 +4610,12 @@ fn run_retained_attempt_controlled(
                 solve: None,
                 attempted_geometry,
                 mappings: Some(mappings),
+                effective_activity: Some(resolved.activity.clone()),
                 accepted: None,
                 failure: Some(SketchAttemptFailure {
                     kind: SketchAttemptFailureKind::AcceptedSession,
                     message: error.to_string(),
+                    parameter_issue: None,
                     external_error: None,
                     effective_activity: None,
                 }),
@@ -4466,10 +4637,12 @@ fn run_retained_attempt_controlled(
                 solve: None,
                 attempted_geometry,
                 mappings: Some(mappings),
+                effective_activity: Some(resolved.activity.clone()),
                 accepted: None,
                 failure: Some(SketchAttemptFailure {
                     kind: SketchAttemptFailureKind::AcceptedSession,
                     message: error.to_string(),
+                    parameter_issue: None,
                     external_error: None,
                     effective_activity: None,
                 }),
@@ -4500,6 +4673,7 @@ fn run_retained_attempt_controlled(
             attempted_geometry: rejected.attempted_geometry.clone(),
             solve: Some(rejected),
             mappings: Some(mappings),
+            effective_activity: Some(resolved.activity.clone()),
             accepted: None,
             failure: None,
         });
@@ -4509,6 +4683,7 @@ fn run_retained_attempt_controlled(
         attempted_geometry: solve.attempted_geometry.clone(),
         solve: Some(solve),
         mappings: Some(mappings.clone()),
+        effective_activity: Some(resolved.activity),
         accepted: Some((document, runtime, mappings, input_stamps)),
         failure: None,
     })
@@ -4543,10 +4718,12 @@ fn publish_retained_attempt(
             None
         };
         if let Some(message) = stale_input {
+            let effective_activity = execution.effective_activity.take();
             execution = RetainedAttemptExecution::failure(
                 SketchAttemptFailureKind::Publication,
                 message.into(),
             );
+            execution.effective_activity = effective_activity;
         } else if let Some(revision) = next_accepted_revision {
             let identity = SketchAcceptedStateIdentity {
                 document: design_identity.document,
@@ -4581,6 +4758,7 @@ fn publish_retained_attempt(
                 document,
                 runtime,
                 mappings,
+                effective_activity: stamps.activity,
                 redundancy,
                 parameter_outputs,
             });
@@ -4589,6 +4767,7 @@ fn publish_retained_attempt(
             execution.failure = Some(SketchAttemptFailure {
                 kind: SketchAttemptFailureKind::Publication,
                 message: "accepted revision space is exhausted".into(),
+                parameter_issue: None,
                 external_error: None,
                 effective_activity: None,
             });
@@ -4602,6 +4781,7 @@ fn publish_retained_attempt(
         solve: execution.solve,
         attempted_geometry: execution.attempted_geometry,
         mappings: execution.mappings,
+        effective_activity: execution.effective_activity,
         failure: execution.failure,
     };
     debug_assert!(

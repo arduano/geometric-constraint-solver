@@ -155,7 +155,7 @@ fn reusable_trimmed_fillet_alpha_scenario_is_accepted_and_scale_invariant() {
             SketchDocumentSession::new(fixture.document, fixture.request, SolverConfig::default())
                 .unwrap();
         let accepted = session.accepted_result();
-        let report = &accepted.accepted_view().core_report;
+        let report = &accepted.accepted_view().unstable_core_report();
         assert_eq!(report.hard_validity, geosolve_core::HardValidity::Valid);
         assert!(report.hard_residual_max <= 1.0e-9);
         let circle = session

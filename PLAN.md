@@ -2305,15 +2305,27 @@ concern or blocker and explicitly approved M53 on 2026-07-28.
 
 ### M54: stable diagnostics and mobility evidence
 
-Status: active.
+Status: complete.
 
 Scope: publish stable sketch-owned diagnostics, revision identities, structural/numerical
 rank and mobility evidence, bounded conflict/repair information, and move direct core
 reports behind an unstable seam.
 
+M54 completion note (2026-07-29): `SketchDiagnosticSnapshot` now publishes exact
+accepted/attempt provenance and input identities; stable solve, source, component, dependency,
+activation, parameter, external-reference and bound evidence; separate structural/numerical rank
+and equality/bidirectional/one-sided mobility; completeness-aware conflict/redundancy searches; and
+typed non-mutating repair suggestions using persistent document identities. Raw core reports and
+bound reports are available only through explicitly named unstable compatibility seams. The
+headless editor attributes current problems through stable persistent conflict candidates, and the
+sole workbench renders the stable DTO without reconstructing core audit semantics. Nine focused M54
+regressions, editor 60/60, workbench 31/31, warnings-denied workspace Clippy, the complete
+all-feature workspace test suite, all-feature WASM check and Trunk 0.21.14 release build pass.
+`docs/M54_IMPLEMENTATION.md` records the exact API, acceptance and qualification evidence.
+
 ### M55: alpha constraint, dimension and branch-action parity
 
-Status: planned; begins after M54 passes.
+Status: active.
 
 Goal: expose the complete preserved M13-M14 alpha constraint, dimension and explicit branch-action
 surface early through reusable headless-editor policy and the sole visible workbench, without

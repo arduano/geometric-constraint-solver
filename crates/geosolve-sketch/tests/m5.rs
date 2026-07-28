@@ -29,11 +29,14 @@ fn assert_length(first: Point2<f64>, second: Point2<f64>, expected: f64, scale: 
 
 fn assert_accepted(result: &geosolve_sketch::SketchSolveResult) {
     assert!(result.accepted(), "{:#?}", result.rejection);
-    assert_eq!(result.core_report.termination, SolveTermination::Converged);
-    assert!(result.core_report.hard_residuals_validated);
-    assert!(result.core_report.hard_residual_max <= TOLERANCE);
+    assert_eq!(
+        result.unstable_core_report().termination,
+        SolveTermination::Converged
+    );
+    assert!(result.unstable_core_report().hard_residuals_validated);
+    assert!(result.unstable_core_report().hard_residual_max <= TOLERANCE);
     assert!(result.acceptance_hard_residual_max.unwrap() <= TOLERANCE);
-    assert_eq!(result.display_audit, result.core_report.audit);
+    assert_eq!(result.display_audit, result.unstable_core_report().audit);
 }
 
 fn display_row<'a>(
@@ -166,7 +169,7 @@ fn s1_initial_solve_has_one_dof_and_the_explicit_rightward_branch() {
         .solve(SketchSolveRequest::default(), SolverConfig::default())
         .unwrap();
     assert_accepted(&result);
-    assert_eq!(result.core_report.local_degrees_of_freedom, 1);
+    assert_eq!(result.unstable_core_report().local_degrees_of_freedom, 1);
     assert_point(
         result.geometry.point(ids.b).unwrap(),
         Point2::new(4.0, 0.0),
@@ -182,7 +185,7 @@ fn s1_initial_solve_has_one_dof_and_the_explicit_rightward_branch() {
     assert!(sketch.segment_branch_is_preserved(ids.ab).unwrap());
     assert!(
         result
-            .core_report
+            .unstable_core_report()
             .audit
             .sources
             .iter()
@@ -225,7 +228,7 @@ fn s1_drag_projects_multiple_targets_and_release_preserves_the_last_state() {
         let known_minimum = (target.coords.norm() - 3.0).abs();
         assert!((attained_error - known_minimum).abs() <= 5.0e-8);
         let temporary = result
-            .core_report
+            .unstable_core_report()
             .priority_solves
             .iter()
             .find(|priority| priority.category == ResidualCategory::Temporary)
@@ -260,8 +263,8 @@ fn s1_is_scale_invariant_with_identical_classification_branch_and_source_order()
             )
             .unwrap();
         assert_accepted(&result);
-        assert_eq!(result.core_report.local_degrees_of_freedom, 1);
-        assert_eq!(result.core_report.rank, 3);
+        assert_eq!(result.unstable_core_report().local_degrees_of_freedom, 1);
+        assert_eq!(result.unstable_core_report().rank, 3);
         assert_point(
             result.geometry.point(ids.b).unwrap(),
             Point2::new(4.0 * scale, 0.0),
@@ -355,7 +358,10 @@ fn s2_compiles_deterministically_and_maps_only_both_widths_as_conflicting() {
     let retained = sketch.geometry();
     let result = sketch.solve(request, SolverConfig::default()).unwrap();
     assert!(!result.accepted());
-    assert_ne!(result.core_report.termination, SolveTermination::Converged);
+    assert_ne!(
+        result.unstable_core_report().termination,
+        SolveTermination::Converged
+    );
     assert_eq!(result.geometry, retained);
     assert_eq!(sketch.geometry(), retained);
     assert!(
@@ -367,16 +373,16 @@ fn s2_compiles_deterministically_and_maps_only_both_widths_as_conflicting() {
     );
     assert!(
         result
-            .core_report
+            .unstable_core_report()
             .accepted_state
             .ambient()
             .iter()
             .all(|value| value.is_finite())
     );
-    assert!(result.core_report.hard_residuals_validated);
-    assert!(result.core_report.hard_residual_max > TOLERANCE);
+    assert!(result.unstable_core_report().hard_residuals_validated);
+    assert!(result.unstable_core_report().hard_residual_max > TOLERANCE);
     assert_eq!(
-        mapped_sketch_sources(&result, &result.core_report.conflicting_sources),
+        mapped_sketch_sources(&result, &result.unstable_core_report().conflicting_sources),
         vec![
             SketchSource::Dimension(ids.width_4),
             SketchSource::Dimension(ids.width_5),
@@ -432,15 +438,17 @@ fn s2_equal_width_variant_marks_only_the_second_width_redundant() {
         )
         .unwrap();
     assert_accepted(&result);
-    assert!(result.core_report.conflicting_sources.is_empty());
+    assert!(result.unstable_core_report().conflicting_sources.is_empty());
     assert_eq!(
-        mapped_sketch_sources(&result, &result.core_report.redundant_sources),
+        mapped_sketch_sources(&result, &result.unstable_core_report().redundant_sources),
         vec![SketchSource::Dimension(ids.width_5)]
     );
     assert_eq!(
         mapped_sketch_sources(
             &result,
-            &result.core_report.sources_containing_redundant_rows,
+            &result
+                .unstable_core_report()
+                .sources_containing_redundant_rows,
         ),
         vec![SketchSource::Dimension(ids.width_5)]
     );
@@ -458,13 +466,16 @@ fn s2_conflict_and_redundancy_diagnostics_are_scale_invariant() {
             .unwrap();
         assert!(!conflict.accepted());
         assert_ne!(
-            conflict.core_report.termination,
+            conflict.unstable_core_report().termination,
             SolveTermination::Converged
         );
-        assert!(conflict.core_report.hard_residuals_validated);
-        assert!(conflict.core_report.hard_residual_max > TOLERANCE);
+        assert!(conflict.unstable_core_report().hard_residuals_validated);
+        assert!(conflict.unstable_core_report().hard_residual_max > TOLERANCE);
         assert_eq!(
-            mapped_sketch_sources(&conflict, &conflict.core_report.conflicting_sources),
+            mapped_sketch_sources(
+                &conflict,
+                &conflict.unstable_core_report().conflicting_sources
+            ),
             vec![
                 SketchSource::Dimension(conflict_ids.width_4),
                 SketchSource::Dimension(conflict_ids.width_5),
@@ -479,9 +490,17 @@ fn s2_conflict_and_redundancy_diagnostics_are_scale_invariant() {
             )
             .unwrap();
         assert_accepted(&redundancy);
-        assert!(redundancy.core_report.conflicting_sources.is_empty());
+        assert!(
+            redundancy
+                .unstable_core_report()
+                .conflicting_sources
+                .is_empty()
+        );
         assert_eq!(
-            mapped_sketch_sources(&redundancy, &redundancy.core_report.redundant_sources),
+            mapped_sketch_sources(
+                &redundancy,
+                &redundancy.unstable_core_report().redundant_sources
+            ),
             vec![SketchSource::Dimension(redundant_ids.width_5)]
         );
     }
@@ -592,7 +611,7 @@ fn fixed_point_and_coordinate_exact_and_perturbed_fixtures_recover() {
             2.0,
             2.0e-9,
         );
-        assert_eq!(result.core_report.local_degrees_of_freedom, 1);
+        assert_eq!(result.unstable_core_report().local_degrees_of_freedom, 1);
     }
 }
 
@@ -643,7 +662,7 @@ fn coincident_horizontal_and_vertical_exact_and_perturbed_fixtures_recover() {
             4.0,
             TOLERANCE,
         );
-        assert_eq!(result.core_report.local_degrees_of_freedom, 2);
+        assert_eq!(result.unstable_core_report().local_degrees_of_freedom, 2);
     }
 
     for (end, vertical) in [
@@ -697,7 +716,7 @@ fn point_distance_and_segment_length_exact_and_perturbed_fixtures_recover() {
             4.0,
             4.0,
         );
-        assert_eq!(result.core_report.local_degrees_of_freedom, 3);
+        assert_eq!(result.unstable_core_report().local_degrees_of_freedom, 3);
     }
 
     for initial_length in [4.0, 2.5] {
@@ -763,7 +782,7 @@ fn distance_recovery_is_translation_rotation_and_scale_metamorphic() {
             4.0 * scale,
             scale,
         );
-        assert_eq!(result.core_report.local_degrees_of_freedom, 3);
+        assert_eq!(result.unstable_core_report().local_degrees_of_freedom, 3);
     }
 }
 
@@ -1021,7 +1040,7 @@ fn driving_reference_toggle_preserves_id_and_order_but_changes_rows_and_dof() {
         .solve(SketchSolveRequest::default(), SolverConfig::default())
         .unwrap();
     assert_accepted(&driving);
-    assert_eq!(driving.core_report.local_degrees_of_freedom, 1);
+    assert_eq!(driving.unstable_core_report().local_degrees_of_freedom, 1);
 
     sketch
         .set_dimension_mode(dimension, DimensionMode::Reference)
@@ -1052,7 +1071,7 @@ fn driving_reference_toggle_preserves_id_and_order_but_changes_rows_and_dof() {
         .solve(SketchSolveRequest::default(), SolverConfig::default())
         .unwrap();
     assert_accepted(&reference);
-    assert_eq!(reference.core_report.local_degrees_of_freedom, 2);
+    assert_eq!(reference.unstable_core_report().local_degrees_of_freedom, 2);
     assert_eq!(reference.reference_values.len(), 1);
     assert_eq!(reference.reference_values[0].dimension_id, dimension);
     assert!((reference.reference_values[0].value - 4.0).abs() <= 4.0e-9);
@@ -1294,7 +1313,7 @@ fn zero_length_distance_derivative_is_invalid_and_retains_geometry() {
             .unwrap()
             .contains("distance derivative")
     );
-    let attempted_row = audit_row(&result.core_report.audit, "distance A-B");
+    let attempted_row = audit_row(&result.unstable_core_report().audit, "distance A-B");
     assert_eq!(
         row.annotations.conflicting,
         attempted_row.annotations.conflicting
@@ -1326,9 +1345,15 @@ fn explicit_segment_branch_rejects_a_converged_flipped_root_without_committing()
     let result = sketch
         .solve(SketchSolveRequest::default(), SolverConfig::default())
         .unwrap();
-    assert_eq!(result.core_report.termination, SolveTermination::Converged);
-    assert_eq!(result.core_report.hard_validity, HardValidity::Invalid);
-    assert!(result.core_report.hard_residuals_validated);
+    assert_eq!(
+        result.unstable_core_report().termination,
+        SolveTermination::Converged
+    );
+    assert_eq!(
+        result.unstable_core_report().hard_validity,
+        HardValidity::Invalid
+    );
+    assert!(result.unstable_core_report().hard_residuals_validated);
     assert_eq!(
         result.rejection,
         Some(SolveRejection::SegmentBranchFlipped(segment))
@@ -1353,7 +1378,7 @@ fn explicit_segment_branch_rejects_a_converged_flipped_root_without_committing()
     assert_eq!(row.evaluation_status, AuditEvaluationStatus::Evaluated);
     assert_eq!(row.evaluation_error, None);
     assert!(!row.annotations.conflicting);
-    let attempted_row = audit_row(&result.core_report.audit, "length AB");
+    let attempted_row = audit_row(&result.unstable_core_report().audit, "length AB");
     assert!(attempted_row.raw_residual.abs() <= TOLERANCE);
     assert_point(
         incident_point(attempted_row, 1),

@@ -347,7 +347,7 @@ fn conflicting_edit_is_retained_and_an_ordinary_repair_is_accepted() {
     assert_eq!(accepted.originating_attempt(), repaired.attempt_identity());
     assert!(accepted.solve_result().accepted());
     assert_eq!(
-        accepted.solve_result().core_report.hard_validity,
+        accepted.solve_result().unstable_core_report().hard_validity,
         HardValidity::Valid
     );
 }
@@ -552,7 +552,7 @@ fn underconstrained_parent_warm_start_is_joined_by_persistent_identity() {
             .accepted_state()
             .unwrap()
             .solve_result()
-            .core_report
+            .unstable_core_report()
             .right_nullity,
         2
     );

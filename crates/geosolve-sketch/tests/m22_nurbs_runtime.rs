@@ -97,7 +97,10 @@ fn runtime_nurbs_uses_local_control_and_weight_incidence_with_gauge_removed() {
             .solve(SketchSolveRequest::default(), SolverConfig::default())
             .unwrap();
         assert!(solved.accepted(), "{solved:#?}");
-        assert_eq!(solved.core_report.hard_validity, HardValidity::Valid);
+        assert_eq!(
+            solved.unstable_core_report().hard_validity,
+            HardValidity::Valid
+        );
         assert!(solved.acceptance_hard_residual_max.unwrap() <= 1.0e-9);
         assert_eq!(
             solved.geometry.nurbs(nurbs).unwrap().weights[3].to_bits(),

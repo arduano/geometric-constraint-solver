@@ -172,6 +172,7 @@ impl SketchSession {
             reference_values: sketch.reference_values()?,
             source_mappings: compiled.source_mappings().to_vec(),
             bound_mappings: compiled.bound_mappings().to_vec(),
+            diagnostic_variable_owners: compiled.diagnostic_variable_owners(),
             core_report: report,
             rejection: None,
             acceptance_hard_residual_max: Some(
@@ -309,6 +310,7 @@ impl SketchSession {
             reference_values: sketch.reference_values()?,
             source_mappings: compiled.source_mappings().to_vec(),
             bound_mappings: compiled.bound_mappings().to_vec(),
+            diagnostic_variable_owners: compiled.diagnostic_variable_owners(),
             core_report: report,
             rejection: None,
             acceptance_hard_residual_max: solve.acceptance_hard_residual_max,
@@ -367,9 +369,15 @@ impl SketchSession {
             .find(|mapping| mapping.source == source)
     }
 
-    /// Returns the accepted core bound audit for one domain bound.
+    /// Returns the accepted raw core bound audit for one domain bound.
+    ///
+    /// This is an explicitly unstable advanced-diagnostic seam. Stable document
+    /// consumers should use [`crate::SketchDiagnosticSnapshot::bounds`].
     #[must_use]
-    pub fn bound_report(&self, bound: crate::SketchBound) -> Option<&geosolve_core::BoundReport> {
+    pub fn unstable_bound_report(
+        &self,
+        bound: crate::SketchBound,
+    ) -> Option<&geosolve_core::BoundReport> {
         let bound_id = self
             .compiled
             .bound_mappings()
@@ -580,6 +588,7 @@ impl SketchSession {
                 reference_values: self.accepted_result.reference_values.clone(),
                 source_mappings: self.accepted_result.source_mappings.clone(),
                 bound_mappings: self.accepted_result.bound_mappings.clone(),
+                diagnostic_variable_owners: self.accepted_result.diagnostic_variable_owners.clone(),
                 core_report: transaction.report,
                 rejection: Some(rejection),
                 acceptance_hard_residual_max: acceptance_max,
@@ -606,6 +615,10 @@ impl SketchSession {
                     reference_values: self.accepted_result.reference_values.clone(),
                     source_mappings: self.accepted_result.source_mappings.clone(),
                     bound_mappings: self.accepted_result.bound_mappings.clone(),
+                    diagnostic_variable_owners: self
+                        .accepted_result
+                        .diagnostic_variable_owners
+                        .clone(),
                     core_report: sync_report,
                     rejection: Some(rejection),
                     acceptance_hard_residual_max: acceptance_max,
@@ -637,6 +650,7 @@ impl SketchSession {
             reference_values: complete.reference_values,
             source_mappings: accepted_compiled.source_mappings().to_vec(),
             bound_mappings: accepted_compiled.bound_mappings().to_vec(),
+            diagnostic_variable_owners: accepted_compiled.diagnostic_variable_owners(),
             acceptance_hard_residual_max: Some(
                 report
                     .hard_residual_max
@@ -785,6 +799,7 @@ impl SketchSession {
             reference_values,
             source_mappings: compiled.source_mappings().to_vec(),
             bound_mappings: compiled.bound_mappings().to_vec(),
+            diagnostic_variable_owners: compiled.diagnostic_variable_owners(),
             core_report: report,
             rejection: None,
             acceptance_hard_residual_max: Some(

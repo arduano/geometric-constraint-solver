@@ -120,7 +120,10 @@ fn runtime_bspline_contacts_use_only_active_support_and_match_finite_differences
             .solve(SketchSolveRequest::default(), SolverConfig::default())
             .unwrap();
         assert!(solved.accepted(), "{solved:#?}");
-        assert_eq!(solved.core_report.hard_validity, HardValidity::Valid);
+        assert_eq!(
+            solved.unstable_core_report().hard_validity,
+            HardValidity::Valid
+        );
         assert!(solved.acceptance_hard_residual_max.unwrap() <= 1.0e-9);
         assert!(
             solved

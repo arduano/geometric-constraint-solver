@@ -168,8 +168,14 @@ fn runtime_line_fillet_rows_derive_the_accepted_arc() {
         .solve(SketchSolveRequest::default(), SolverConfig::default())
         .unwrap();
     assert!(result.accepted(), "{:#?}", result.rejection);
-    assert_eq!(result.core_report.termination, SolveTermination::Converged);
-    assert_eq!(result.core_report.hard_validity, HardValidity::Valid);
+    assert_eq!(
+        result.unstable_core_report().termination,
+        SolveTermination::Converged
+    );
+    assert_eq!(
+        result.unstable_core_report().hard_validity,
+        HardValidity::Valid
+    );
     let solved = result.geometry.arc(arc).unwrap();
     assert!((solved.center.x - 3.0).abs() <= 1.0e-9);
     assert!((solved.center.y - 1.0).abs() <= 1.0e-9);
@@ -177,7 +183,7 @@ fn runtime_line_fillet_rows_derive_the_accepted_arc() {
     let (start, end) = solved.endpoints().unwrap();
     assert!((start - Point2::new(3.0, 0.0)).norm() <= 1.0e-9);
     assert!((end - Point2::new(4.0, 1.0)).norm() <= 1.0e-9);
-    assert_eq!(result.core_report.local_degrees_of_freedom, 0);
+    assert_eq!(result.unstable_core_report().local_degrees_of_freedom, 0);
     assert!(
         (sketch
             .measure_curve(
@@ -598,7 +604,7 @@ fn every_side_order_and_sweep_is_similarity_covariant_at_all_scales() {
                             session
                                 .runtime()
                                 .accepted_result()
-                                .core_report
+                                .unstable_core_report()
                                 .local_degrees_of_freedom,
                             0
                         );
@@ -675,7 +681,7 @@ fn reference_radius_keeps_one_fillet_dof_and_reports_its_measurement() {
         session
             .runtime()
             .accepted_result()
-            .core_report
+            .unstable_core_report()
             .local_degrees_of_freedom,
         1
     );

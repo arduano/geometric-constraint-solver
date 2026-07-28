@@ -24,13 +24,13 @@ fn mappings(session: &SketchSession) -> MappingSnapshot {
     MappingSnapshot {
         layout: session
             .accepted_result()
-            .core_report
+            .unstable_core_report()
             .accepted_state
             .layout()
             .clone(),
         bounds: session
             .accepted_result()
-            .core_report
+            .unstable_core_report()
             .bounds
             .iter()
             .map(|bound| (bound.bound_id, bound.label.clone()))
@@ -231,7 +231,7 @@ fn line_and_arc_endpoints_and_positive_radii_have_stable_active_bound_reports() 
     .unwrap();
 
     let line_report = session
-        .bound_report(SketchBound::Contact {
+        .unstable_bound_report(SketchBound::Contact {
             constraint_id: line_contact,
             role: geosolve_sketch::LatentVariableRole::LineParameter,
         })
@@ -261,7 +261,7 @@ fn line_and_arc_endpoints_and_positive_radii_have_stable_active_bound_reports() 
     assert!(line_audit.annotations.redundancy_diagnostics.is_some());
     let line_component = session
         .accepted_result()
-        .core_report
+        .unstable_core_report()
         .component_solves
         .iter()
         .find(|component| component.active_bounds.contains(&line_report.bound_id))
@@ -273,7 +273,7 @@ fn line_and_arc_endpoints_and_positive_radii_have_stable_active_bound_reports() 
     assert_eq!(line_component.one_sided_mobility, OneSidedMobility::Exists);
 
     let arc_result = session
-        .bound_report(SketchBound::Contact {
+        .unstable_bound_report(SketchBound::Contact {
             constraint_id: arc_contact,
             role: geosolve_sketch::LatentVariableRole::ArcSpanParameter,
         })
@@ -281,7 +281,7 @@ fn line_and_arc_endpoints_and_positive_radii_have_stable_active_bound_reports() 
     assert_eq!(arc_result.status, BoundStatus::ActiveLower);
     let arc_component = session
         .accepted_result()
-        .core_report
+        .unstable_core_report()
         .component_solves
         .iter()
         .find(|component| component.active_bounds.contains(&arc_result.bound_id))
@@ -293,7 +293,7 @@ fn line_and_arc_endpoints_and_positive_radii_have_stable_active_bound_reports() 
     assert_eq!(arc_component.one_sided_mobility, OneSidedMobility::Exists);
 
     let radius_report = session
-        .bound_report(SketchBound::CircleRadius(circle))
+        .unstable_bound_report(SketchBound::CircleRadius(circle))
         .unwrap();
     assert_eq!(radius_report.lower, Some(MIN_REPRESENTABLE_RADIUS));
     assert_eq!(radius_report.status, BoundStatus::ActiveLower);
@@ -423,14 +423,14 @@ fn disconnected_edits_reuse_other_components_and_periodic_audit_matches_commit()
     assert!(result.accepted(), "{:#?}", result.rejection);
     assert!(
         result
-            .core_report
+            .unstable_core_report()
             .component_solves
             .iter()
             .any(|component| component.reused)
     );
     assert!(
         result
-            .core_report
+            .unstable_core_report()
             .component_solves
             .iter()
             .any(|component| !component.reused)
@@ -541,7 +541,10 @@ fn circle_arc_branch_failure_is_transactional_through_session() {
         assert_eq!(session.accepted_result(), &retained);
     }
     assert_eq!(
-        session.accepted_result().core_report.hard_validity,
+        session
+            .accepted_result()
+            .unstable_core_report()
+            .hard_validity,
         HardValidity::Valid
     );
 }
@@ -691,7 +694,7 @@ fn reference_overflow_rejection_is_fully_atomic_and_not_evaluated() {
         Some(SolveRejection::IndependentValidationFailed(_))
     ));
     assert_eq!(
-        rejected.core_report.hard_validity,
+        rejected.unstable_core_report().hard_validity,
         HardValidity::NotEvaluated
     );
     assert_eq!(session.sketch().geometry(), retained_sketch.geometry());
@@ -761,7 +764,7 @@ fn representable_radius_above_the_lower_bound_remains_interior() {
     )
     .unwrap();
     let bound = session
-        .bound_report(SketchBound::CircleRadius(circle))
+        .unstable_bound_report(SketchBound::CircleRadius(circle))
         .unwrap();
     assert_eq!(bound.lower, Some(f64::from_bits(1)));
     assert_eq!(bound.value.to_bits(), 2);
@@ -788,7 +791,10 @@ fn domain_rejection_precedes_secondary_compatibility_and_marks_attempt_invalid()
         rejected.rejection,
         Some(SolveRejection::CenterDirectionFlipped(ids.tangency))
     );
-    assert_eq!(rejected.core_report.hard_validity, HardValidity::Invalid);
+    assert_eq!(
+        rejected.unstable_core_report().hard_validity,
+        HardValidity::Invalid
+    );
 }
 
 #[test]
@@ -820,7 +826,7 @@ fn reference_dimension_edits_advance_domain_source_revision_without_dirtying_geo
     assert_eq!(session.revisions().state, before.state + 1);
     assert!(
         result
-            .core_report
+            .unstable_core_report()
             .component_solves
             .iter()
             .all(|item| item.reused)

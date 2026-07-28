@@ -24,7 +24,7 @@ fn session(kind: AlphaScenarioKind, scale: f64) -> (SketchDocumentSession, Alpha
 }
 
 fn assert_valid(result: &geosolve_sketch::DocumentSolveResult) {
-    let report = &result.accepted_view().core_report;
+    let report = &result.accepted_view().unstable_core_report();
     assert_eq!(report.hard_validity, HardValidity::Valid, "{report:#?}");
     assert!(report.hard_residuals_validated);
     assert!(report.hard_residual_max <= 1.0e-9, "{report:#?}");
@@ -68,7 +68,7 @@ fn alpha_fixtures_solve_with_scale_invariant_ids_and_explicit_branches() {
             let value: serde_json::Value =
                 serde_json::from_str(&session.export_json().unwrap()).unwrap();
             let accepted_result = session.accepted_result();
-            let report = &accepted_result.accepted_view().core_report;
+            let report = &accepted_result.accepted_view().unstable_core_report();
             let conflicting_sources = report
                 .conflicting_sources
                 .iter()
@@ -196,7 +196,7 @@ fn advanced_diagnostic_examples_expose_rank_bounds_and_redundancy() {
         panic!("rank-drop IDs expected");
     };
     let rank_result = rank_drop.accepted_result();
-    let rank_report = &rank_result.accepted_view().core_report;
+    let rank_report = &rank_result.accepted_view().unstable_core_report();
     assert_eq!(
         (rank_report.left_nullity, rank_report.right_nullity),
         (1, 1)
@@ -220,7 +220,7 @@ fn advanced_diagnostic_examples_expose_rank_bounds_and_redundancy() {
         panic!("endpoint-bound IDs expected");
     };
     let endpoint_result = endpoint.accepted_result();
-    let endpoint_report = &endpoint_result.accepted_view().core_report;
+    let endpoint_report = &endpoint_result.accepted_view().unstable_core_report();
     assert_eq!(endpoint_report.right_nullity, 2);
     assert_eq!(endpoint_report.bidirectional_degrees_of_freedom, 0);
     assert_eq!(endpoint_report.one_sided_mobility, OneSidedMobility::Exists);
@@ -239,7 +239,7 @@ fn advanced_diagnostic_examples_expose_rank_bounds_and_redundancy() {
         panic!("redundancy IDs expected");
     };
     let redundancy_result = redundancy.accepted_result();
-    let redundancy_report = &redundancy_result.accepted_view().core_report;
+    let redundancy_report = &redundancy_result.accepted_view().unstable_core_report();
     assert_eq!(
         (
             redundancy_report.left_nullity,
@@ -276,7 +276,7 @@ fn compass_stress_example_exposes_and_locks_rotational_mobility() {
         panic!("compass IDs expected");
     };
     let compass_result = compass.accepted_result();
-    let compass_report = &compass_result.accepted_view().core_report;
+    let compass_report = &compass_result.accepted_view().unstable_core_report();
     assert_eq!(compass_report.right_nullity, 1);
     assert_eq!(compass_report.left_nullity, 1);
     let outcome = compass
@@ -293,7 +293,7 @@ fn compass_stress_example_exposes_and_locks_rotational_mobility() {
         compass
             .accepted_result()
             .accepted_view()
-            .core_report
+            .unstable_core_report()
             .right_nullity,
         0
     );
@@ -306,7 +306,7 @@ fn bridge_stress_example_exposes_mobility_and_rejects_degeneracy() {
         panic!("bridge IDs expected");
     };
     let bridge_result = bridge.accepted_result();
-    let bridge_report = &bridge_result.accepted_view().core_report;
+    let bridge_report = &bridge_result.accepted_view().unstable_core_report();
     assert_eq!(bridge_report.right_nullity, 3);
     assert_eq!(bridge_report.bidirectional_degrees_of_freedom, 1);
     let equal_handles_source = bridge
@@ -330,7 +330,7 @@ fn bridge_stress_example_exposes_mobility_and_rejects_degeneracy() {
         bridge
             .accepted_result()
             .accepted_view()
-            .core_report
+            .unstable_core_report()
             .bidirectional_degrees_of_freedom,
         0
     );
@@ -395,7 +395,7 @@ fn cam_motion_projects_one_roller_while_stabilizing_the_other() {
         panic!("cam IDs expected");
     };
     let cam_result = cam.accepted_result();
-    let cam_report = &cam_result.accepted_view().core_report;
+    let cam_report = &cam_result.accepted_view().unstable_core_report();
     assert_eq!(cam_report.right_nullity, 2);
     assert_eq!(cam_report.bidirectional_degrees_of_freedom, 2);
     let right_before = cam.document().point(cam_ids.right_center).unwrap().position;
@@ -436,7 +436,7 @@ fn tangent_orbit_projected_drag_traverses_all_quadrants() {
             panic!("orbit IDs expected");
         };
         let orbit_result = orbit.accepted_result();
-        let orbit_report = &orbit_result.accepted_view().core_report;
+        let orbit_report = &orbit_result.accepted_view().unstable_core_report();
         assert_eq!(orbit_report.right_nullity, 1);
         assert_eq!(orbit_report.bidirectional_degrees_of_freedom, 1);
 
@@ -480,7 +480,13 @@ fn tangent_orbit_projected_drag_traverses_all_quadrants() {
             "scale={scale:e}: {:#?}",
             released.solve()
         );
-        assert_eq!(released.accepted_view().core_report.right_nullity, 1);
+        assert_eq!(
+            released
+                .accepted_view()
+                .unstable_core_report()
+                .right_nullity,
+            1
+        );
     }
 }
 
@@ -496,7 +502,7 @@ fn compound_constraint_mechanisms_follow_their_emergent_motion() {
             trammel
                 .accepted_result()
                 .accepted_view()
-                .core_report
+                .unstable_core_report()
                 .right_nullity,
             1
         );
@@ -540,7 +546,7 @@ fn compound_constraint_mechanisms_follow_their_emergent_motion() {
         assert_eq!(
             yoke.accepted_result()
                 .accepted_view()
-                .core_report
+                .unstable_core_report()
                 .right_nullity,
             1
         );
@@ -570,7 +576,7 @@ fn compound_constraint_mechanisms_follow_their_emergent_motion() {
             square
                 .accepted_result()
                 .accepted_view()
-                .core_report
+                .unstable_core_report()
                 .right_nullity,
             1
         );
@@ -603,7 +609,7 @@ fn compound_constraint_mechanisms_follow_their_emergent_motion() {
             scissor
                 .accepted_result()
                 .accepted_view()
-                .core_report
+                .unstable_core_report()
                 .right_nullity,
             1
         );
@@ -650,7 +656,7 @@ fn advanced_linkage_examples_propagate_one_driver_through_every_bar() {
             tower
                 .accepted_result()
                 .accepted_view()
-                .core_report
+                .unstable_core_report()
                 .right_nullity,
             1
         );
@@ -689,7 +695,7 @@ fn advanced_linkage_examples_propagate_one_driver_through_every_bar() {
         assert_eq!(
             cell.accepted_result()
                 .accepted_view()
-                .core_report
+                .unstable_core_report()
                 .right_nullity,
             1
         );
@@ -798,7 +804,7 @@ fn a1_dimension_edits_and_a2_projected_drag_match_the_canonical_workflows() {
             triangle
                 .accepted_result()
                 .accepted_view()
-                .core_report
+                .unstable_core_report()
                 .right_nullity,
             1
         );
@@ -830,7 +836,13 @@ fn a1_dimension_edits_and_a2_projected_drag_match_the_canonical_workflows() {
             )
             .unwrap();
         assert!(released.accepted());
-        assert_eq!(released.accepted_view().core_report.right_nullity, 1);
+        assert_eq!(
+            released
+                .accepted_view()
+                .unstable_core_report()
+                .right_nullity,
+            1
+        );
         assert_point(
             triangle.document().point(ids.c).unwrap().position,
             [0.0, 3.0 * scale],
@@ -926,7 +938,7 @@ fn a3_a4_contacts_retain_explicit_state_and_reject_branch_escape() {
             circle_arc
                 .accepted_result()
                 .accepted_view()
-                .core_report
+                .unstable_core_report()
                 .right_nullity,
             2
         );
@@ -980,7 +992,13 @@ fn a3_a4_contacts_retain_explicit_state_and_reject_branch_escape() {
             .rebuild_request(circle_arc.revision(), DocumentSolveRequest::default())
             .unwrap();
         assert!(released.accepted());
-        assert_eq!(released.accepted_view().core_report.right_nullity, 2);
+        assert_eq!(
+            released
+                .accepted_view()
+                .unstable_core_report()
+                .right_nullity,
+            2
+        );
         let before = circle_arc.export_json().unwrap();
         let rejected = circle_arc
             .rebuild_request(
@@ -1115,12 +1133,12 @@ fn a5_and_a8_round_trip_preserve_geometry_ids_and_branches() {
             imported
                 .accepted_result()
                 .accepted_view()
-                .core_report
+                .unstable_core_report()
                 .right_nullity,
             combined
                 .accepted_result()
                 .accepted_view()
-                .core_report
+                .unstable_core_report()
                 .right_nullity
         );
         assert!(
@@ -1174,7 +1192,12 @@ fn a6_a7_a9_conflict_history_and_import_failures_are_atomic() {
             .unwrap();
         assert!(!attempted.accepted());
         assert_eq!(
-            attempted.outcome.result.solve().core_report.hard_validity,
+            attempted
+                .outcome
+                .result
+                .solve()
+                .unstable_core_report()
+                .hard_validity,
             HardValidity::Invalid
         );
         assert_eq!(
@@ -1182,7 +1205,7 @@ fn a6_a7_a9_conflict_history_and_import_failures_are_atomic() {
                 .outcome
                 .result
                 .solve()
-                .core_report
+                .unstable_core_report()
                 .conflict_diagnostics
                 .status,
             DiagnosticStatus::Complete
@@ -1191,7 +1214,7 @@ fn a6_a7_a9_conflict_history_and_import_failures_are_atomic() {
             .outcome
             .result
             .solve()
-            .core_report
+            .unstable_core_report()
             .conflicting_sources
             .iter()
             .filter_map(|source| attempted.outcome.result.persistent_core_source(*source))

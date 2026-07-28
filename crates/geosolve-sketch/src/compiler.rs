@@ -190,6 +190,19 @@ pub struct LatentVariableMapping {
     pub variable_id: VariableId,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum DiagnosticVariableOwner {
+    Point(PointId),
+    Circle(CircleId),
+    Arc(ArcId),
+    Conic(ConicId),
+    Nurbs(NurbsId),
+    Contact {
+        constraint_id: SketchConstraintId,
+        role: LatentVariableRole,
+    },
+}
+
 /// Domain role of one generated core coordinate bound.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SketchBound {
@@ -318,6 +331,63 @@ impl CompiledSketch {
     #[must_use]
     pub fn source_mappings(&self) -> &[SketchSourceMapping] {
         &self.source_mappings
+    }
+
+    pub(crate) fn diagnostic_variable_owners(&self) -> Vec<(VariableId, DiagnosticVariableOwner)> {
+        self.point_variables
+            .iter()
+            .map(|mapping| {
+                (
+                    mapping.variable_id,
+                    DiagnosticVariableOwner::Point(mapping.point_id),
+                )
+            })
+            .chain(self.circle_radius_variables.iter().map(|mapping| {
+                (
+                    mapping.variable_id,
+                    DiagnosticVariableOwner::Circle(mapping.circle_id),
+                )
+            }))
+            .chain(self.arc_radius_variables.iter().map(|mapping| {
+                (
+                    mapping.variable_id,
+                    DiagnosticVariableOwner::Arc(mapping.arc_id),
+                )
+            }))
+            .chain(self.arc_angle_variables.iter().map(|mapping| {
+                (
+                    mapping.variable_id,
+                    DiagnosticVariableOwner::Arc(mapping.arc_id),
+                )
+            }))
+            .chain(self.conic_scalar_variables.iter().map(|mapping| {
+                (
+                    mapping.variable_id,
+                    DiagnosticVariableOwner::Conic(mapping.conic_id),
+                )
+            }))
+            .chain(self.conic_vector_variables.iter().map(|mapping| {
+                (
+                    mapping.variable_id,
+                    DiagnosticVariableOwner::Conic(mapping.conic_id),
+                )
+            }))
+            .chain(self.nurbs_weight_variables.iter().map(|mapping| {
+                (
+                    mapping.variable_id,
+                    DiagnosticVariableOwner::Nurbs(mapping.nurbs_id),
+                )
+            }))
+            .chain(self.latent_variables.iter().map(|mapping| {
+                (
+                    mapping.variable_id,
+                    DiagnosticVariableOwner::Contact {
+                        constraint_id: mapping.constraint_id,
+                        role: mapping.role,
+                    },
+                )
+            }))
+            .collect()
     }
 
     #[must_use]
@@ -1150,11 +1220,14 @@ pub struct SketchSolveResult {
     pub display_audit: AuditSnapshot,
     pub reference_values: Vec<ReferenceDimensionValue>,
     pub source_mappings: Vec<SketchSourceMapping>,
-    /// Stable domain identities for every bound in `core_report.bounds`.
+    /// Stable domain identities for every bound in the unstable core report.
     pub bound_mappings: Vec<SketchBoundMapping>,
-    /// Attempt report whose `hard_validity` includes sketch equation/domain/branch validation.
-    /// Its audit remains the candidate-state audit on rejection.
-    pub core_report: SolveReport,
+    pub(crate) diagnostic_variable_owners: Vec<(VariableId, DiagnosticVariableOwner)>,
+    /// Raw numerical-kernel report retained behind [`Self::unstable_core_report`].
+    ///
+    /// Stable hosts should consume sketch-owned diagnostic DTOs from the retained
+    /// document session instead.
+    pub(crate) core_report: SolveReport,
     pub rejection: Option<SolveRejection>,
     pub acceptance_hard_residual_max: Option<f64>,
 }
@@ -1185,6 +1258,16 @@ impl SketchSolveResult {
     #[must_use]
     pub const fn accepted(&self) -> bool {
         self.rejection.is_none()
+    }
+
+    /// Returns the evolving direct numerical-kernel report.
+    ///
+    /// This is an explicitly unstable advanced-diagnostic compatibility seam.
+    /// Application and editor integrations should consume
+    /// [`crate::SketchDiagnosticSnapshot`] instead.
+    #[must_use]
+    pub const fn unstable_core_report(&self) -> &geosolve_core::SolveReport {
+        &self.core_report
     }
 
     /// Returns authoritative redundancy only for an independently accepted result.
@@ -1905,6 +1988,7 @@ impl Sketch {
             retained_audit
         };
 
+        let diagnostic_variable_owners = compiled.diagnostic_variable_owners();
         Ok(Some(SketchSolveResult {
             geometry: self.geometry(),
             attempted_geometry,
@@ -1912,6 +1996,7 @@ impl Sketch {
             reference_values: self.reference_values()?,
             source_mappings: compiled.source_mappings,
             bound_mappings: compiled.bound_mappings,
+            diagnostic_variable_owners,
             core_report,
             rejection,
             acceptance_hard_residual_max,

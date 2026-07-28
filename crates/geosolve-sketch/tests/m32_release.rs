@@ -95,10 +95,13 @@ fn snapshot(session: &SketchDocumentSession) -> SessionSnapshot {
 
 fn assert_finite_solve(result: &SketchSolveResult) {
     assert!(result.accepted(), "{:#?}", result.rejection);
-    assert_eq!(result.core_report.hard_validity, HardValidity::Valid);
-    assert!(result.core_report.hard_residuals_validated);
-    assert!(result.core_report.hard_residual_max.is_finite());
-    assert!(result.core_report.hard_residual_max <= 1.0e-9);
+    assert_eq!(
+        result.unstable_core_report().hard_validity,
+        HardValidity::Valid
+    );
+    assert!(result.unstable_core_report().hard_residuals_validated);
+    assert!(result.unstable_core_report().hard_residual_max.is_finite());
+    assert!(result.unstable_core_report().hard_residual_max <= 1.0e-9);
     let acceptance_max = result
         .acceptance_hard_residual_max
         .expect("accepted result has independent sketch validation");
@@ -106,7 +109,7 @@ fn assert_finite_solve(result: &SketchSolveResult) {
     assert!(acceptance_max <= 1.0e-9);
     assert!(
         result
-            .core_report
+            .unstable_core_report()
             .singular_values
             .iter()
             .all(|value| value.is_finite())

@@ -93,11 +93,14 @@ fn solve(sketch: &mut Sketch) -> geosolve_sketch::SketchSolveResult {
 
 fn assert_accepted(result: &geosolve_sketch::SketchSolveResult) {
     assert!(result.accepted(), "{:#?}", result.rejection);
-    assert_eq!(result.core_report.termination, SolveTermination::Converged);
-    assert!(result.core_report.hard_residuals_validated);
-    assert!(result.core_report.hard_residual_max <= TOLERANCE);
+    assert_eq!(
+        result.unstable_core_report().termination,
+        SolveTermination::Converged
+    );
+    assert!(result.unstable_core_report().hard_residuals_validated);
+    assert!(result.unstable_core_report().hard_residual_max <= TOLERANCE);
     assert!(result.acceptance_hard_residual_max.unwrap() <= TOLERANCE);
-    assert_eq!(result.display_audit, result.core_report.audit);
+    assert_eq!(result.display_audit, result.unstable_core_report().audit);
 }
 
 fn contact(sketch: &Sketch, constraint: SketchConstraintId) -> (f64, f64) {
@@ -175,7 +178,7 @@ fn exact_outside_and_inside_fixtures_converge_with_two_local_dof_and_no_circle_d
 
         let result = solve(&mut sketch);
         assert_accepted(&result);
-        assert_eq!(result.core_report.local_degrees_of_freedom, 2);
+        assert_eq!(result.unstable_core_report().local_degrees_of_freedom, 2);
         assert_eq!(
             result.geometry.point(ids.arc_center).unwrap(),
             Point2::new(0.0, 0.0)
@@ -212,7 +215,7 @@ fn perturbed_radius_and_contacts_recover_without_a_circle_radius_equation() {
         let initial_center = sketch.point(ids.circle_center).unwrap().position();
         let result = solve(&mut sketch);
         assert_accepted(&result);
-        assert_eq!(result.core_report.local_degrees_of_freedom, 2);
+        assert_eq!(result.unstable_core_report().local_degrees_of_freedom, 2);
         assert!(
             (result.geometry.point(ids.circle_center).unwrap() - initial_center).norm() <= 5.0e-9
         );
@@ -261,10 +264,10 @@ fn temporary_center_drags_solve_radius_and_contacts_then_release_with_two_dof() 
             dragged.accepted(),
             "drag distance={distance}, angle={angle}: rejection={:#?}, report={:#?}",
             dragged.rejection,
-            dragged.core_report
+            dragged.unstable_core_report()
         );
         assert_accepted(&dragged);
-        assert_eq!(dragged.core_report.local_degrees_of_freedom, 2);
+        assert_eq!(dragged.unstable_core_report().local_degrees_of_freedom, 2);
         assert!((dragged.geometry.point(ids.circle_center).unwrap() - target).norm() <= 5.0e-9);
         assert!(
             (dragged.geometry.circle(ids.circle).unwrap().radius - (distance - 2.0)).abs()
@@ -274,7 +277,7 @@ fn temporary_center_drags_solve_radius_and_contacts_then_release_with_two_dof() 
 
         let released = solve(&mut sketch);
         assert_accepted(&released);
-        assert_eq!(released.core_report.local_degrees_of_freedom, 2);
+        assert_eq!(released.unstable_core_report().local_degrees_of_freedom, 2);
         assert!((released.geometry.point(ids.circle_center).unwrap() - target).norm() <= 5.0e-9);
         assert!(
             (released.geometry.circle(ids.circle).unwrap().radius - (distance - 2.0)).abs()
@@ -349,7 +352,7 @@ fn similarity_transforms_preserve_both_sides_and_direct_geometric_oracles() {
                 .unwrap();
             let result = solve(&mut sketch);
             assert_accepted(&result);
-            assert_eq!(result.core_report.local_degrees_of_freedom, 2);
+            assert_eq!(result.unstable_core_report().local_degrees_of_freedom, 2);
             let expected_center = transform(Point2::new(distance, 0.0), scale, rotation, offset);
             assert!(
                 (result.geometry.point(circle_center).unwrap() - expected_center).norm() / scale
@@ -608,9 +611,12 @@ fn tiny_feature_radius_and_radial_root_mismatches_reject_independently_and_roll_
             .audit_snapshot()
             .unwrap();
         let result = solve(&mut wrong_radius);
-        assert_eq!(result.core_report.termination, SolveTermination::Converged);
-        assert!(result.core_report.hard_residuals_validated);
-        assert!(result.core_report.hard_residual_max < TOLERANCE);
+        assert_eq!(
+            result.unstable_core_report().termination,
+            SolveTermination::Converged
+        );
+        assert!(result.unstable_core_report().hard_residuals_validated);
+        assert!(result.unstable_core_report().hard_residual_max < TOLERANCE);
         assert!(result.acceptance_hard_residual_max.unwrap() < TOLERANCE);
         assert_eq!(
             result.rejection,
@@ -645,9 +651,12 @@ fn tiny_feature_radius_and_radial_root_mismatches_reject_independently_and_roll_
             .audit_snapshot()
             .unwrap();
         let result = solve(&mut wrong_root);
-        assert_eq!(result.core_report.termination, SolveTermination::Converged);
-        assert!(result.core_report.hard_residuals_validated);
-        assert!(result.core_report.hard_residual_max < TOLERANCE);
+        assert_eq!(
+            result.unstable_core_report().termination,
+            SolveTermination::Converged
+        );
+        assert!(result.unstable_core_report().hard_residuals_validated);
+        assert!(result.unstable_core_report().hard_residual_max < TOLERANCE);
         assert!(result.acceptance_hard_residual_max.unwrap() < TOLERANCE);
         assert_eq!(
             result.rejection,
@@ -684,9 +693,12 @@ fn mixed_scale_circle_gaps_reject_mismatch_and_unresolvable_exact_state() {
             .audit_snapshot()
             .unwrap();
         let result = solve(&mut wrong);
-        assert_eq!(result.core_report.termination, SolveTermination::Converged);
-        assert!(result.core_report.hard_residuals_validated);
-        assert!(result.core_report.hard_residual_max < TOLERANCE);
+        assert_eq!(
+            result.unstable_core_report().termination,
+            SolveTermination::Converged
+        );
+        assert!(result.unstable_core_report().hard_residuals_validated);
+        assert!(result.unstable_core_report().hard_residual_max < TOLERANCE);
         assert!(result.acceptance_hard_residual_max.unwrap() < TOLERANCE);
         assert_eq!(
             result.rejection,
@@ -705,8 +717,11 @@ fn mixed_scale_circle_gaps_reject_mismatch_and_unresolvable_exact_state() {
         let retained_geometry = exact_but_unresolvable.geometry();
         let retained_contact = exact_but_unresolvable.contact_state(ids.tangency).unwrap();
         let result = solve(&mut exact_but_unresolvable);
-        assert_eq!(result.core_report.termination, SolveTermination::Converged);
-        assert!(result.core_report.hard_residual_max < TOLERANCE);
+        assert_eq!(
+            result.unstable_core_report().termination,
+            SolveTermination::Converged
+        );
+        assert!(result.unstable_core_report().hard_residual_max < TOLERANCE);
         assert_eq!(
             result.rejection,
             Some(SolveRejection::AmbiguousTangencyScale(ids.tangency))
@@ -758,7 +773,10 @@ fn span_escape_rolls_back_all_state_and_endpoint_roundoff_gets_full_reanalysis()
     assert_eq!(rejected.geometry, retained_geometry);
     assert_eq!(escaped.contact_state(tangency).unwrap(), retained_contact);
     assert_eq!(rejected.display_audit, retained_audit);
-    assert_ne!(rejected.display_audit, rejected.core_report.audit);
+    assert_ne!(
+        rejected.display_audit,
+        rejected.unstable_core_report().audit
+    );
 
     for scale in [1.0e-6, 1.0, 1.0e6] {
         let parameter_offset = 4.0 * f64::EPSILON;
@@ -806,8 +824,8 @@ fn span_escape_rolls_back_all_state_and_endpoint_roundoff_gets_full_reanalysis()
             .unwrap();
         assert!(result.accepted(), "{:#?}", result.rejection);
         assert_eq!(contact(&rounded, tangency).0.to_bits(), 1.0_f64.to_bits());
-        assert_eq!(result.display_audit, result.core_report.audit);
-        assert_eq!(result.core_report.local_degrees_of_freedom, 0);
+        assert_eq!(result.display_audit, result.unstable_core_report().audit);
+        assert_eq!(result.unstable_core_report().local_degrees_of_freedom, 0);
         let mapping = result
             .source_mappings
             .iter()
@@ -828,12 +846,20 @@ fn span_escape_rolls_back_all_state_and_endpoint_roundoff_gets_full_reanalysis()
         let mut direct = rounded.clone();
         let direct_result = direct.solve(SketchSolveRequest::default(), config).unwrap();
         assert!(direct_result.accepted(), "{:#?}", direct_result.rejection);
-        assert_eq!(result.core_report.rank, direct_result.core_report.rank);
         assert_eq!(
-            result.core_report.local_degrees_of_freedom,
-            direct_result.core_report.local_degrees_of_freedom
+            result.unstable_core_report().rank,
+            direct_result.unstable_core_report().rank
         );
-        assert_eq!(result.core_report.audit, direct_result.core_report.audit);
+        assert_eq!(
+            result.unstable_core_report().local_degrees_of_freedom,
+            direct_result
+                .unstable_core_report()
+                .local_degrees_of_freedom
+        );
+        assert_eq!(
+            result.unstable_core_report().audit,
+            direct_result.unstable_core_report().audit
+        );
         assert_eq!(result.display_audit, direct_result.display_audit);
     }
 }
@@ -1135,10 +1161,13 @@ fn tiny_radius_tangent_row_is_dimensionless_and_zero_arc_derivative_is_invalid()
         .solve(SketchSolveRequest::default(), SolverConfig::default())
         .unwrap();
     assert!(!result.accepted());
-    assert_eq!(result.core_report.hard_validity, HardValidity::Invalid);
+    assert_eq!(
+        result.unstable_core_report().hard_validity,
+        HardValidity::Invalid
+    );
     assert!(
         result
-            .core_report
+            .unstable_core_report()
             .audit
             .sources
             .iter()

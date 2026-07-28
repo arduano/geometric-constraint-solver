@@ -22,6 +22,9 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   with deterministic typed evidence and direct owning-layer regressions.
 - Structured current-attempt problem metadata at the headless-editor seam, including persistent
   element targets and an explicit global fallback for unattributable failures.
+- Stable sketch-owned diagnostic snapshots with exact attempt/accepted provenance, persistent
+  source/component/dependency identities, separate structural/numerical rank and
+  equality/bounded/one-sided mobility, typed host-input failures and non-mutating repair hints.
 
 ### Changed
 
@@ -57,6 +60,9 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   accessible non-mutating markers while the Problems panel remains canonical.
 - Consolidated the WASM consumer to one directly tested workbench and removed the legacy
   playground, routes, browser E2E, serving/download glue and browser-owned qualification path.
+- Moved raw sketch core reports and bound reports behind explicitly named unstable compatibility
+  seams; the headless editor and workbench now consume stable sketch diagnostics without
+  interpreting runtime core IDs or audit enums.
 
 ## [0.2.0] - 2026-07-22
 

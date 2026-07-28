@@ -22,7 +22,7 @@ fn assert_success_is_valid(document: SketchDocument) {
     ) {
         let accepted = session.accepted_result();
         assert!(accepted.accepted());
-        let report = &accepted.accepted_view().core_report;
+        let report = &accepted.accepted_view().unstable_core_report();
         assert_eq!(report.hard_validity, HardValidity::Valid);
         assert!(report.hard_residuals_validated);
         assert!(report.hard_residual_max.is_finite());

@@ -23,9 +23,9 @@ M23-M31 subsequently complete spatial kinematics, sketch embedding identities,
 advanced constructions, generic fillets and persistent trim views, interactive
 construction/NURBS UAT and certified all-family visual profiles.
 
-- **Baseline:** implemented and accepted behavior through M53. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval. M1-M7 remain the frozen regression baseline.
-- **Active target:** M54 owns stable sketch diagnostics and mobility evidence.
-- **Planned sequence:** M55 owns early alpha action-surface parity; M56-M64 preserve prepared
+- **Baseline:** implemented and accepted behavior through M54. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams. M1-M7 remain the frozen regression baseline.
+- **Active target:** M55 owns early alpha action-surface parity.
+- **Planned sequence:** M56-M64 preserve prepared
   concurrency through production release scope.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
@@ -33,7 +33,7 @@ A target statement must not be exposed as an implemented capability before its m
 `PLAN.md` owns current execution numbering. Milestone labels in the preserved M8
 completion record and in ADRs accepted before the playground rebaseline describe the
 allocation at acceptance time; their architectural decisions remain accepted, but
-current ownership is the completed M10-M53 sequence and executable M54-M64 sequence listed in
+current ownership is the completed M10-M54 sequence and executable M55-M64 sequence listed in
 section 15.
 
 ## 3. Crate responsibilities
@@ -547,8 +547,8 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
 - M51: completed single-workbench consolidation and direct-qualification hardening.
 - M52: completed direct-qualified post-cleanup candidate preparation.
 - M53: completed selector-led supervising-human UAT 2 gate.
-- M54: stable diagnostics and mobility evidence; active.
-- M55: planned alpha constraint, dimension and explicit branch-action parity in the headless editor
+- M54: completed stable diagnostics and mobility evidence.
+- M55: active alpha constraint, dimension and explicit branch-action parity in the headless editor
   and sole workbench.
 - M56-M57: planned prepared jobs and incremental production-scale solving.
 - M58-M59: planned sketch-operation and production-topology companions.

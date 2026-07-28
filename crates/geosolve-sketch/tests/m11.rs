@@ -54,11 +54,24 @@ fn session(document: SketchDocument) -> SketchDocumentSession {
 fn assert_accepted(result: &geosolve_sketch::DocumentCommandOutcome) {
     assert!(result.accepted(), "{:#?}", result.result.solve().rejection);
     assert_eq!(
-        result.result.solve().core_report.hard_validity,
+        result.result.solve().unstable_core_report().hard_validity,
         HardValidity::Valid
     );
-    assert!(result.result.solve().core_report.hard_residuals_validated);
-    assert!(result.result.solve().core_report.hard_residual_max <= TOLERANCE);
+    assert!(
+        result
+            .result
+            .solve()
+            .unstable_core_report()
+            .hard_residuals_validated
+    );
+    assert!(
+        result
+            .result
+            .solve()
+            .unstable_core_report()
+            .hard_residual_max
+            <= TOLERANCE
+    );
 }
 
 #[test]
@@ -145,7 +158,7 @@ fn rectangle_macro_expands_to_ordinary_geometry_and_solves() {
         session
             .runtime()
             .accepted_result()
-            .core_report
+            .unstable_core_report()
             .hard_residuals_validated
     );
 }
@@ -896,7 +909,7 @@ fn conflicting_command_retains_document_and_maps_both_persistent_sources() {
         outcome
             .result
             .solve()
-            .core_report
+            .unstable_core_report()
             .conflict_diagnostics
             .status,
         DiagnosticStatus::Complete
@@ -904,7 +917,7 @@ fn conflicting_command_retains_document_and_maps_both_persistent_sources() {
     let persistent: BTreeSet<_> = outcome
         .result
         .solve()
-        .core_report
+        .unstable_core_report()
         .conflicting_sources
         .iter()
         .filter_map(|source| outcome.result.persistent_core_source(*source))

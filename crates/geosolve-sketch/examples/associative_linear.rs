@@ -80,11 +80,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         session.document().version(),
         mirror.point_pairs.len(),
         mirror.symmetry_constraints.len(),
-        session.runtime().accepted_result().core_report.rank,
         session
             .runtime()
             .accepted_result()
-            .core_report
+            .unstable_core_report()
+            .rank,
+        session
+            .runtime()
+            .accepted_result()
+            .unstable_core_report()
             .local_degrees_of_freedom,
     );
     Ok(())

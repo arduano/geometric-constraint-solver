@@ -86,19 +86,19 @@ fn controlled_patch_matches_incremental_revision_and_component_reuse() {
     assert_eq!(controlled.revisions(), legacy.revisions());
     assert_eq!(controlled.topology_compilations(), compilations);
     assert_eq!(
-        controlled_result.core_report.component_solves,
-        legacy_result.core_report.component_solves
+        controlled_result.unstable_core_report().component_solves,
+        legacy_result.unstable_core_report().component_solves
     );
     assert!(
         controlled_result
-            .core_report
+            .unstable_core_report()
             .component_solves
             .iter()
             .any(|component| component.reused)
     );
     assert!(
         controlled_result
-            .core_report
+            .unstable_core_report()
             .component_solves
             .iter()
             .any(|component| !component.reused)

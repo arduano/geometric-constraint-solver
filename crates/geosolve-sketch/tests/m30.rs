@@ -40,9 +40,12 @@ fn assert_accepted(session: &SketchDocumentSession) {
     let accepted = session.accepted_result();
     let result = accepted.accepted_view();
     assert!(result.accepted(), "{:#?}", result.rejection);
-    assert_eq!(result.core_report.hard_validity, HardValidity::Valid);
-    assert!(result.core_report.hard_residuals_validated);
-    assert!(result.core_report.hard_residual_max <= 1.0e-9);
+    assert_eq!(
+        result.unstable_core_report().hard_validity,
+        HardValidity::Valid
+    );
+    assert!(result.unstable_core_report().hard_residuals_validated);
+    assert!(result.unstable_core_report().hard_residual_max <= 1.0e-9);
     assert!(result.acceptance_hard_residual_max.unwrap() <= 1.0e-9);
 }
 
@@ -71,7 +74,7 @@ fn m30_scenarios_start_accepted_with_exact_documented_dof() {
         let (session, _) = session(kind);
         assert_accepted(&session);
         let accepted = session.accepted_result();
-        let report = &accepted.accepted_view().core_report;
+        let report = &accepted.accepted_view().unstable_core_report();
         assert_eq!(report.right_nullity, equality_dof, "{}", kind.key());
         assert_eq!(
             report.bidirectional_degrees_of_freedom,
@@ -235,7 +238,7 @@ fn directed_angle_crosses_cut_then_target_mode_and_orientation_edit_transactiona
         session
             .accepted_result()
             .accepted_view()
-            .core_report
+            .unstable_core_report()
             .right_nullity,
         0
     );

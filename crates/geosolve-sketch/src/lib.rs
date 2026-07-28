@@ -31,6 +31,7 @@ mod characterization;
 mod compiler;
 mod conics;
 mod curves;
+mod diagnostics;
 mod document;
 mod document_lowering;
 mod document_session;
@@ -78,6 +79,17 @@ pub use curves::{
     CIRCLE_ARC_TANGENCY_SCALE_UNCERTAINTY_MULTIPLIER, CONTACT_PARAMETER_ROUNDOFF_TOLERANCE,
     CenterDirectionBranch, Circle, CircleContainment, CircleTangencyMode, CircularArc,
     ContactState, LineOffsetOrientation, LineParameterDomain, LineSide,
+};
+pub use diagnostics::{
+    SketchBoundDiagnostic, SketchBoundStatus, SketchComponentDiagnostic,
+    SketchDependencyDiagnostic, SketchDiagnosticBudget, SketchDiagnosticComponentIdentity,
+    SketchDiagnosticIncompleteReason, SketchDiagnosticInputIdentity, SketchDiagnosticProvenance,
+    SketchDiagnosticSearch, SketchDiagnosticSearchStatus, SketchDiagnosticSnapshot,
+    SketchDiagnosticWork, SketchExternalReferenceDiagnostic, SketchExternalReferenceState,
+    SketchHardValidity, SketchMobilityDiagnostic, SketchOneSidedMobility,
+    SketchParameterDiagnostic, SketchParameterInputIssue, SketchParameterState,
+    SketchRankDiagnostic, SketchRepairSuggestion, SketchSolveDiagnostic, SketchSolveTermination,
+    SketchSolverPolicyDigest, SketchSourceDiagnostic, SketchStructuralClassification,
 };
 pub use document::{
     ActivationDigest, ContactDefinition, ContactDomain, ContactId, ContactNeighborhood,

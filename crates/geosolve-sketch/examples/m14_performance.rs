@@ -183,7 +183,7 @@ fn report(name: &str, measurement: &str, samples: &[Duration], budget: Duration)
 
 fn validate(session: &SketchDocumentSession) {
     let accepted = session.accepted_result();
-    let report = &accepted.accepted_view().core_report;
+    let report = &accepted.accepted_view().unstable_core_report();
     assert_eq!(report.hard_validity, HardValidity::Valid);
     assert!(report.hard_residuals_validated);
     assert!(report.hard_residual_max <= 1.0e-9);

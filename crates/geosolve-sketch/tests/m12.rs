@@ -144,7 +144,7 @@ fn a5_cubic_tangent_edit_solves_and_zero_speed_rolls_back() {
         assert!(
             edited.accepted(),
             "{:#?}",
-            edited.result.solve().core_report
+            edited.result.solve().unstable_core_report()
         );
         let expected = [4.0 * scale / 5.0f64.sqrt(), 2.0 * scale / 5.0f64.sqrt()];
         let solved_b = session.document().point(b).unwrap().position;
@@ -167,8 +167,15 @@ fn a5_cubic_tangent_edit_solves_and_zero_speed_rolls_back() {
             (solved_p1[1] - 0.5 * scale).abs() <= tolerance,
             "{solved_p1:?}"
         );
-        assert!(edited.result.solve().core_report.hard_residual_max <= 1.0e-9);
-        let report = &edited.result.solve().core_report;
+        assert!(
+            edited
+                .result
+                .solve()
+                .unstable_core_report()
+                .hard_residual_max
+                <= 1.0e-9
+        );
+        let report = &edited.result.solve().unstable_core_report();
         assert!(report.rank_is_valid);
         assert_eq!(
             (report.rank, report.left_nullity, report.right_nullity),
@@ -427,33 +434,41 @@ fn every_alpha_curve_family_recovers_through_common_contact_and_tangency_ad_at_a
             )
             .unwrap();
         assert!(solved.accepted(), "scale={scale:e}: {solved:#?}");
-        assert_eq!(solved.core_report.hard_validity, HardValidity::Valid);
-        assert!(solved.core_report.hard_residual_max <= 1.0e-9);
-        assert!(solved.core_report.rank_is_valid);
+        assert_eq!(
+            solved.unstable_core_report().hard_validity,
+            HardValidity::Valid
+        );
+        assert!(solved.unstable_core_report().hard_residual_max <= 1.0e-9);
+        assert!(solved.unstable_core_report().rank_is_valid);
         assert_eq!(
             (
-                solved.core_report.rank,
-                solved.core_report.left_nullity,
-                solved.core_report.right_nullity,
+                solved.unstable_core_report().rank,
+                solved.unstable_core_report().left_nullity,
+                solved.unstable_core_report().right_nullity,
             ),
             (70, 17, 24)
         );
-        assert_eq!(solved.core_report.bidirectional_degrees_of_freedom, 24);
         assert_eq!(
-            solved.core_report.one_sided_mobility,
+            solved
+                .unstable_core_report()
+                .bidirectional_degrees_of_freedom,
+            24
+        );
+        assert_eq!(
+            solved.unstable_core_report().one_sided_mobility,
             geosolve_core::OneSidedMobility::Exists
         );
-        assert_eq!(solved.core_report.bounds.len(), 57);
+        assert_eq!(solved.unstable_core_report().bounds.len(), 57);
         assert!(
             solved
-                .core_report
+                .unstable_core_report()
                 .bounds
                 .iter()
                 .all(|bound| bound.status == geosolve_core::BoundStatus::Inactive)
         );
         assert!(
             solved
-                .core_report
+                .unstable_core_report()
                 .audit
                 .sources
                 .iter()
@@ -577,10 +592,10 @@ fn generic_curve_pair_document_round_trips_ids_contacts_and_accepted_audit() {
     let result = session.accepted_result();
     assert!(result.accepted());
     assert_eq!(
-        result.solve().core_report.hard_validity,
+        result.solve().unstable_core_report().hard_validity,
         HardValidity::Valid
     );
-    assert!(result.solve().core_report.hard_residual_max <= 1.0e-9);
+    assert!(result.solve().unstable_core_report().hard_residual_max <= 1.0e-9);
     let source = session.document().constraint(tangency).unwrap().source_id;
     let runtime = session.mappings().runtime_source(source).unwrap();
     let geosolve_sketch::RuntimeSource::Constraint(runtime) = runtime else {
@@ -661,7 +676,7 @@ fn explicit_local_neighborhood_retains_one_of_two_bezier_contact_roots() {
         })
         .and_then(|mapping| {
             solved
-                .core_report
+                .unstable_core_report()
                 .bounds
                 .iter()
                 .find(|bound| bound.bound_id == mapping.bound_id)
@@ -727,7 +742,7 @@ fn retained_legacy_line_bezier_parameter_edit_replaces_its_fixed_bound() {
         .unwrap();
     assert!(result.accepted(), "{result:#?}");
     let bound = session
-        .bound_report(geosolve_sketch::SketchBound::Contact {
+        .unstable_bound_report(geosolve_sketch::SketchBound::Contact {
             constraint_id: tangency,
             role: geosolve_sketch::LatentVariableRole::BezierParameter,
         })
@@ -784,6 +799,7 @@ fn document_drag_request_updates_and_releases_without_command_history() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn perturbed_generic_line_circle_tangency_recovers_with_scale_invariant_rank_and_branch() {
     for scale in [1.0e-6, 1.0, 1.0e6] {
         let mut sketch = Sketch::new(scale).unwrap();
@@ -828,28 +844,31 @@ fn perturbed_generic_line_circle_tangency_recovers_with_scale_invariant_rank_and
             )
             .unwrap();
         assert!(solved.accepted(), "scale={scale:e}: {solved:#?}");
-        assert_eq!(solved.core_report.hard_validity, HardValidity::Valid);
-        assert!(solved.core_report.hard_residual_max <= 1.0e-9);
+        assert_eq!(
+            solved.unstable_core_report().hard_validity,
+            HardValidity::Valid
+        );
+        assert!(solved.unstable_core_report().hard_residual_max <= 1.0e-9);
         let solved_center = solved.geometry.point(center).unwrap();
         assert!(solved_center.y > 0.0, "scale={scale:e}: {solved_center:?}");
         assert!(
             (solved_center.y / scale - 1.0).abs() <= 1.0e-8,
             "scale={scale:e}: {solved_center:?}"
         );
-        assert!(solved.core_report.rank_is_valid);
-        assert_eq!(solved.core_report.rank, 5);
-        assert_eq!(solved.core_report.left_nullity, 0);
-        assert_eq!(solved.core_report.right_nullity, 0);
-        assert_eq!(solved.core_report.local_degrees_of_freedom, 0);
+        assert!(solved.unstable_core_report().rank_is_valid);
+        assert_eq!(solved.unstable_core_report().rank, 5);
+        assert_eq!(solved.unstable_core_report().left_nullity, 0);
+        assert_eq!(solved.unstable_core_report().right_nullity, 0);
+        assert_eq!(solved.unstable_core_report().local_degrees_of_freedom, 0);
         assert_eq!(solved.bound_mappings.len(), 2);
-        assert_eq!(solved.core_report.bounds.len(), 2);
+        assert_eq!(solved.unstable_core_report().bounds.len(), 2);
         let radius_mapping = solved
             .bound_mappings
             .iter()
             .find(|mapping| mapping.bound == geosolve_sketch::SketchBound::CircleRadius(circle))
             .unwrap();
         let radius_bound = solved
-            .core_report
+            .unstable_core_report()
             .bounds
             .iter()
             .find(|bound| bound.bound_id == radius_mapping.bound_id)
@@ -873,7 +892,7 @@ fn perturbed_generic_line_circle_tangency_recovers_with_scale_invariant_rank_and
             })
             .unwrap();
         let contact_bound = solved
-            .core_report
+            .unstable_core_report()
             .bounds
             .iter()
             .find(|bound| bound.bound_id == contact_mapping.bound_id)
@@ -962,7 +981,7 @@ fn rejected_document_attempt_retains_candidate_bound_mappings_separately() {
     assert_eq!(rejected.result.attempted_bound_mappings().len(), 1);
     assert_eq!(
         rejected.result.attempted_bound_mappings().len(),
-        rejected.result.solve().core_report.bounds.len()
+        rejected.result.solve().unstable_core_report().bounds.len()
     );
 }
 

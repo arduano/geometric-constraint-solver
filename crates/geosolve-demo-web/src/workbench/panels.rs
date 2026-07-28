@@ -8,7 +8,8 @@ use geosolve_constraint_editor::{LifecycleStatus, SelectionItem};
 use geosolve_sketch::{
     DocumentMeasurementProvenance, DocumentParameterTarget, ExternalSnapshotInputError,
     GeometryRole, InactivityReason, ParameterValue, SketchAcceptedDocumentRedundancy,
-    SketchDocument, SketchSolveResult, VisualProfileOptions,
+    SketchDiagnosticSearch, SketchDiagnosticSearchStatus, SketchDiagnosticSnapshot, SketchDocument,
+    VisualProfileOptions,
 };
 
 pub(crate) fn accepted_redundancy_markup(
@@ -409,6 +410,7 @@ fn diagnostic_evidence_markup(
     match accepted {
         Some(accepted) => {
             let identity = accepted.identity();
+            let diagnostics = accepted.diagnostics();
             let _ = write!(
                 output,
                 "<div data-accepted-diagnostic-provenance=\"accepted\" data-accepted-diagnostic-document=\"{}\" data-accepted-diagnostic-revision=\"{}\"><p>Accepted diagnostics from accepted state <code>{}@{}</code>.</p>{}</div>",
@@ -416,7 +418,7 @@ fn diagnostic_evidence_markup(
                 identity.revision().get(),
                 identity.document(),
                 identity.revision().get(),
-                accepted_report_markup(accepted.solve_result()),
+                accepted_report_markup(&diagnostics),
             );
         }
         None => output.push_str("<p data-accepted-diagnostic-provenance=\"none\">Accepted diagnostics unavailable because there is no accepted state.</p>"),
@@ -425,19 +427,10 @@ fn diagnostic_evidence_markup(
     output
 }
 
-fn accepted_report_markup(result: &SketchSolveResult) -> String {
-    let report = &result.core_report;
-    let conflict = diagnostic_candidates_markup(
-        "conflict",
-        report.conflicting_sources.len(),
-        report.conflict_diagnostics,
-    );
-    let redundancy = diagnostic_candidates_markup(
-        "redundancy",
-        report.redundant_sources.len(),
-        report.redundancy_diagnostics,
-    );
-    let hard_residual = accepted_hard_residual_max(result).map_or_else(
+fn accepted_report_markup(diagnostics: &SketchDiagnosticSnapshot) -> String {
+    let conflict = diagnostic_candidates_markup("conflict", &diagnostics.conflicts);
+    let redundancy = diagnostic_candidates_markup("redundancy", &diagnostics.redundancy);
+    let hard_residual = accepted_hard_residual_max(diagnostics).map_or_else(
         || "<p data-accepted-hard-residual-valid=\"false\">Validated hard residual not reported.</p>".into(),
         |value| {
             format!(
@@ -445,73 +438,75 @@ fn accepted_report_markup(result: &SketchSolveResult) -> String {
             )
         },
     );
-    let numerical = if report.rank_is_valid {
+    let numerical = diagnostics.rank.as_ref().map_or_else(
+        || "<p data-accepted-rank-is-valid=\"false\">Numerical diagnostics not reported.</p>".into(),
+        |rank| if rank.numerical_valid {
         format!(
-            "<p data-accepted-rank=\"{}\" data-accepted-dof=\"{}\" data-accepted-singularity=\"{}\">Rank {} · DOF {} · singularity {}</p>",
-            report.rank,
-            report.right_nullity,
-            report.is_singular,
-            report.rank,
-            report.right_nullity,
-            report.is_singular,
+            "<p data-accepted-rank=\"{}\" data-accepted-left-nullity=\"{}\" data-accepted-right-nullity=\"{}\" data-accepted-singularity=\"{}\">Numerical rank {} · left nullity {} · right nullity {} · singularity {}</p>",
+            rank.numerical_rank.unwrap_or(0),
+            rank.numerical_left_nullity.unwrap_or(0),
+            rank.numerical_right_nullity.unwrap_or(0),
+            rank.singular.unwrap_or(false),
+            rank.numerical_rank.unwrap_or(0),
+            rank.numerical_left_nullity.unwrap_or(0),
+            rank.numerical_right_nullity.unwrap_or(0),
+            rank.singular.unwrap_or(false),
         )
     } else {
         "<p data-accepted-rank-is-valid=\"false\">Numerical diagnostics not reported.</p>".into()
-    };
-    format!("{hard_residual}{numerical}{conflict}{redundancy}")
+    });
+    let structural = diagnostics.rank.as_ref().map_or_else(
+        || "<p data-accepted-structural-rank-valid=\"false\">Structural diagnostics not reported.</p>".into(),
+        |rank| format!(
+            "<p data-accepted-structural-rank=\"{}\" data-accepted-structural-left-nullity=\"{}\" data-accepted-structural-right-nullity=\"{}\">Structural rank {} · left nullity {} · right nullity {} · {:?}</p>",
+            rank.structural_rank,
+            rank.structural_left_nullity,
+            rank.structural_right_nullity,
+            rank.structural_rank,
+            rank.structural_left_nullity,
+            rank.structural_right_nullity,
+            rank.structural_classification,
+        ),
+    );
+    let mobility = diagnostics.mobility.as_ref().map_or_else(
+        || "<p data-accepted-mobility-valid=\"false\">Mobility diagnostics not reported.</p>".into(),
+        |mobility| format!(
+            "<p data-accepted-equality-dof=\"{}\" data-accepted-bidirectional-bounded-dof=\"{}\" data-accepted-one-sided-mobility=\"{:?}\">Equality DOF {} · bounded bidirectional DOF {} · one-sided {:?}</p>",
+            mobility.equality_degrees_of_freedom.map_or_else(|| "unknown".into(), |value| value.to_string()),
+            mobility.bidirectional_bounded_degrees_of_freedom.map_or_else(|| "unknown".into(), |value| value.to_string()),
+            mobility.one_sided,
+            mobility.equality_degrees_of_freedom.map_or_else(|| "unknown".into(), |value| value.to_string()),
+            mobility.bidirectional_bounded_degrees_of_freedom.map_or_else(|| "unknown".into(), |value| value.to_string()),
+            mobility.one_sided,
+        ),
+    );
+    let repairs = format!(
+        "<p data-accepted-repair-suggestions=\"{}\">Non-mutating repair suggestions: {}</p>",
+        diagnostics.repair_suggestions.len(),
+        diagnostics.repair_suggestions.len(),
+    );
+    format!("{hard_residual}{numerical}{structural}{mobility}{conflict}{redundancy}{repairs}")
 }
 
-fn accepted_hard_residual_max(result: &SketchSolveResult) -> Option<f64> {
-    result
-        .acceptance_hard_residual_max
+fn accepted_hard_residual_max(diagnostics: &SketchDiagnosticSnapshot) -> Option<f64> {
+    diagnostics
+        .solve
+        .and_then(|solve| solve.maximum_normalized_hard_residual)
         .filter(|value| value.is_finite())
-        .or_else(|| {
-            (result.core_report.hard_residuals_validated
-                && result.core_report.hard_residual_max.is_finite())
-            .then_some(result.core_report.hard_residual_max)
-        })
-        .or_else(|| {
-            let mut maximum = 0.0_f64;
-            let mut has_hard_row = false;
-            for row in result
-                .display_audit
-                .sources
-                .iter()
-                .flat_map(|source| &source.rows)
-            {
-                if row.category != geosolve_core::ResidualCategory::Hard {
-                    continue;
-                }
-                has_hard_row = true;
-                if row.evaluation_status != geosolve_core::AuditEvaluationStatus::Evaluated
-                    || !row.normalized_residual.is_finite()
-                {
-                    return None;
-                }
-                maximum = maximum.max(row.normalized_residual.abs());
-            }
-            has_hard_row.then_some(maximum)
-        })
 }
 
-fn diagnostic_candidates_markup(
-    kind: &str,
-    candidates: usize,
-    completeness: geosolve_core::DiagnosticCompleteness,
-) -> String {
+fn diagnostic_candidates_markup(kind: &str, search: &SketchDiagnosticSearch) -> String {
+    let candidates = search.candidates.len();
     let description = if candidates != 0 {
-        format!("{candidates} reported ({:?})", completeness.status)
-    } else if completeness.status == geosolve_core::DiagnosticStatus::Complete {
+        format!("{candidates} reported ({:?})", search.status)
+    } else if search.status == SketchDiagnosticSearchStatus::Complete {
         "none".into()
     } else {
-        format!(
-            "not reported ({:?}/{:?})",
-            completeness.status, completeness.reason
-        )
+        format!("not reported ({:?}/{:?})", search.status, search.reason)
     };
     format!(
         "<p data-accepted-{kind}-status=\"{:?}\" data-accepted-{kind}-candidates=\"{candidates}\">{kind}: {description}</p>",
-        completeness.status,
+        search.status,
     )
 }
 
@@ -707,9 +702,7 @@ pub(crate) fn escape(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use geosolve_constraint_editor::{LifecycleStatus, RetainedEditorCoordinator, SelectionItem};
-    use geosolve_core::{
-        DiagnosticCompleteness, DiagnosticIncompleteReason, DiagnosticStatus, SolverConfig,
-    };
+    use geosolve_core::SolverConfig;
     use geosolve_sketch::{
         CurveDefinition, CurveSpan, DocumentConstraintDefinition, DocumentDimensionDefinition,
         DocumentDimensionMode, DocumentDirectionSense, DocumentElementId,
@@ -718,7 +711,8 @@ mod tests {
         ExternalLineOrientationV1, ExternalSnapshotDigest, ExternalSnapshotEntry,
         ExternalSnapshotFeatureV1, ExternalSnapshotResourcesV1, ExternalSnapshotSet,
         ExternalTopologyDigest, GeometryRole, ParameterBatch, ParameterBatchEntry, ParameterValue,
-        RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
+        RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDiagnosticIncompleteReason,
+        SketchDiagnosticSearchStatus, SketchDocument,
     };
 
     use super::{
@@ -1199,42 +1193,46 @@ mod tests {
             ParameterBatch::default(),
             ExternalSnapshotSet::default(),
         );
-        let mut result = coordinator
+        let mut diagnostics = coordinator
             .session()
             .accepted_state()
             .unwrap()
-            .solve_result()
-            .clone();
-        result.acceptance_hard_residual_max = None;
-        result.core_report.hard_residuals_validated = false;
-        result.core_report.hard_residual_max = f64::NAN;
-        let audit_max = accepted_hard_residual_max(&result).expect("audit residual fallback");
-        result.core_report.rank_is_valid = false;
-        result.core_report.conflicting_sources.clear();
-        result.core_report.redundant_sources.clear();
-        result.core_report.conflict_diagnostics = DiagnosticCompleteness {
-            status: DiagnosticStatus::Truncated,
-            reason: Some(DiagnosticIncompleteReason::TrialBudget),
-            ..result.core_report.conflict_diagnostics
-        };
-        result.core_report.redundancy_diagnostics = DiagnosticCompleteness {
-            status: DiagnosticStatus::Skipped,
-            reason: Some(DiagnosticIncompleteReason::InvalidRank),
-            ..result.core_report.redundancy_diagnostics
-        };
+            .diagnostics();
+        diagnostics
+            .solve
+            .as_mut()
+            .unwrap()
+            .maximum_normalized_hard_residual = None;
+        let rank = diagnostics.rank.as_mut().unwrap();
+        rank.numerical_valid = false;
+        rank.numerical_rank = None;
+        rank.numerical_left_nullity = None;
+        rank.numerical_right_nullity = None;
+        rank.singular = None;
+        rank.near_singular = None;
+        diagnostics.conflicts.candidates.clear();
+        diagnostics.redundancy.candidates.clear();
+        diagnostics.conflicts.status = SketchDiagnosticSearchStatus::Truncated;
+        diagnostics.conflicts.reason = Some(SketchDiagnosticIncompleteReason::TrialBudget);
+        diagnostics.redundancy.status = SketchDiagnosticSearchStatus::Skipped;
+        diagnostics.redundancy.reason = Some(SketchDiagnosticIncompleteReason::InvalidRank);
 
-        let markup = accepted_report_markup(&result);
-        assert!(markup.contains(&format!("data-accepted-hard-residual=\"{audit_max}\"")));
+        assert!(accepted_hard_residual_max(&diagnostics).is_none());
+        let markup = accepted_report_markup(&diagnostics);
+        assert!(markup.contains("data-accepted-hard-residual-valid=\"false\""));
         assert!(markup.contains("data-accepted-rank-is-valid=\"false\""));
         assert!(!markup.contains("data-accepted-rank="));
-        assert!(!markup.contains("data-accepted-dof="));
         assert!(!markup.contains("data-accepted-singularity="));
+        assert!(markup.contains("data-accepted-structural-rank="));
+        assert!(markup.contains("data-accepted-equality-dof="));
+        assert!(markup.contains("data-accepted-bidirectional-bounded-dof="));
+        assert!(markup.contains("data-accepted-one-sided-mobility="));
         assert!(markup.contains("conflict: not reported (Truncated/Some(TrialBudget))"));
         assert!(markup.contains("redundancy: not reported (Skipped/Some(InvalidRank))"));
 
-        result.core_report.conflict_diagnostics.status = DiagnosticStatus::Complete;
-        result.core_report.conflict_diagnostics.reason = None;
-        let complete = accepted_report_markup(&result);
+        diagnostics.conflicts.status = SketchDiagnosticSearchStatus::Complete;
+        diagnostics.conflicts.reason = None;
+        let complete = accepted_report_markup(&diagnostics);
         assert!(complete.contains("conflict: none"));
     }
 

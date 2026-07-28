@@ -34,9 +34,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "sketch v{}: rank {}, local DOF {}, max normalized residual {:.3e}",
         restored.document().version(),
-        report.accepted_view().core_report.rank,
-        report.accepted_view().core_report.local_degrees_of_freedom,
-        report.accepted_view().core_report.hard_residual_max,
+        report.accepted_view().unstable_core_report().rank,
+        report
+            .accepted_view()
+            .unstable_core_report()
+            .local_degrees_of_freedom,
+        report
+            .accepted_view()
+            .unstable_core_report()
+            .hard_residual_max,
     );
     Ok(())
 }

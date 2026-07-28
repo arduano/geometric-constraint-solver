@@ -21,11 +21,14 @@ fn solve(sketch: &mut Sketch) -> geosolve_sketch::SketchSolveResult {
 
 fn assert_accepted(result: &geosolve_sketch::SketchSolveResult) {
     assert!(result.accepted(), "{:#?}", result.rejection);
-    assert_eq!(result.core_report.termination, SolveTermination::Converged);
-    assert!(result.core_report.hard_residuals_validated);
-    assert!(result.core_report.hard_residual_max <= TOLERANCE);
+    assert_eq!(
+        result.unstable_core_report().termination,
+        SolveTermination::Converged
+    );
+    assert!(result.unstable_core_report().hard_residuals_validated);
+    assert!(result.unstable_core_report().hard_residual_max <= TOLERANCE);
     assert!(result.acceptance_hard_residual_max.unwrap() <= TOLERANCE);
-    assert_eq!(result.display_audit, result.core_report.audit);
+    assert_eq!(result.display_audit, result.unstable_core_report().audit);
 }
 
 fn assert_point(actual: Point2<f64>, expected: Point2<f64>, scale: f64, tolerance: f64) {
@@ -805,7 +808,10 @@ fn equal_radii_clockwise_angles_and_center_direction_flips_are_explicit() {
         .unwrap();
     let retained = s3.geometry();
     let result = solve(&mut s3);
-    assert_eq!(result.core_report.termination, SolveTermination::Converged);
+    assert_eq!(
+        result.unstable_core_report().termination,
+        SolveTermination::Converged
+    );
     assert_eq!(
         result.rejection,
         Some(SolveRejection::CenterDirectionFlipped(ids.tangency))
@@ -841,7 +847,7 @@ fn radius_diameter_and_oriented_angle_driving_reference_modes_change_rows_dof_an
     assert_eq!(compiled.problem().audit_rows().unwrap().len(), 3);
     let result = solve(&mut sketch);
     assert_accepted(&result);
-    assert_eq!(result.core_report.local_degrees_of_freedom, 1);
+    assert_eq!(result.unstable_core_report().local_degrees_of_freedom, 1);
     assert!((result.geometry.circle(circle).unwrap().radius - 2.0).abs() <= TOLERANCE);
     assert_eq!(result.reference_values[0].dimension_id, arc_diameter);
     assert!((result.reference_values[0].value - 5.0).abs() <= TOLERANCE);
@@ -859,7 +865,7 @@ fn radius_diameter_and_oriented_angle_driving_reference_modes_change_rows_dof_an
         .unwrap();
     let toggled = solve(&mut sketch);
     assert_accepted(&toggled);
-    assert_eq!(toggled.core_report.local_degrees_of_freedom, 1);
+    assert_eq!(toggled.unstable_core_report().local_degrees_of_freedom, 1);
     assert!((toggled.geometry.arc(arc).unwrap().radius - 3.0).abs() <= TOLERANCE);
     assert_eq!(toggled.reference_values[0].dimension_id, circle_radius);
     assert!((toggled.reference_values[0].value - 2.0).abs() <= TOLERANCE);

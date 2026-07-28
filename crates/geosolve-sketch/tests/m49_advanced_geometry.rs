@@ -15,7 +15,7 @@ fn assert_independently_valid(session: &SketchDocumentSession) {
     let solve = accepted.solve();
     assert!(accepted.accepted(), "{solve:#?}");
     assert_eq!(
-        solve.core_report.hard_validity,
+        solve.unstable_core_report().hard_validity,
         HardValidity::Valid,
         "{solve:#?}"
     );

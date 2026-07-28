@@ -635,8 +635,11 @@ fn perturbed_shape_scalars_and_contacts_recover_for_every_family() {
             )
             .unwrap();
         assert!(result.accepted(), "scale={scale:e}: {result:#?}");
-        assert_eq!(result.core_report.hard_validity, HardValidity::Valid);
-        assert!(result.core_report.hard_residual_max <= 1.0e-9);
+        assert_eq!(
+            result.unstable_core_report().hard_validity,
+            HardValidity::Valid
+        );
+        assert!(result.unstable_core_report().hard_residual_max <= 1.0e-9);
         let scalar = |id| sketch.conic(id).unwrap().kind();
         assert!(
             matches!(scalar(ids.ellipse), ConicKind::Ellipse { minor_axis_ratio, .. } if (minor_axis_ratio - 0.5).abs() <= 1.0e-8)
@@ -652,7 +655,7 @@ fn perturbed_shape_scalars_and_contacts_recover_for_every_family() {
         );
         assert!(
             result
-                .core_report
+                .unstable_core_report()
                 .audit
                 .sources
                 .iter()
@@ -702,8 +705,8 @@ fn full_ellipse_is_periodic_and_circle_limit_has_one_orientation_gauge() {
         )
         .unwrap();
     assert!(solved.accepted(), "{solved:#?}");
-    assert_eq!(solved.core_report.rank, 4);
-    assert_eq!(solved.core_report.right_nullity, 1);
+    assert_eq!(solved.unstable_core_report().rank, 4);
+    assert_eq!(solved.unstable_core_report().right_nullity, 1);
     assert_eq!(
         sketch.conic_axis_observability(ellipse).unwrap(),
         Some(EllipseAxisObservability::UnobservableCircleLimit)
@@ -760,8 +763,13 @@ fn circle_limit_arc_trim_makes_directed_orientation_observable() {
         )
         .unwrap();
     assert!(solved.accepted(), "{solved:#?}");
-    assert_eq!(solved.core_report.right_nullity, 1);
-    assert_eq!(solved.core_report.bidirectional_degrees_of_freedom, 0);
+    assert_eq!(solved.unstable_core_report().right_nullity, 1);
+    assert_eq!(
+        solved
+            .unstable_core_report()
+            .bidirectional_degrees_of_freedom,
+        0
+    );
     assert_eq!(sketch.conic_endpoints(arc).unwrap().unwrap(), endpoints);
     assert_eq!(
         sketch.conic_axis_observability(arc).unwrap(),
@@ -784,9 +792,16 @@ fn direct_and_session_conic_acceptance_clamp_loose_solver_tolerances() {
         )
         .unwrap();
     assert!(!rejected.accepted(), "{rejected:#?}");
-    assert_eq!(rejected.core_report.hard_validity, HardValidity::Invalid);
-    assert!(rejected.core_report.hard_residual_max > SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE);
-    assert!(rejected.core_report.hard_residual_max < loose.normalized_residual_tolerance);
+    assert_eq!(
+        rejected.unstable_core_report().hard_validity,
+        HardValidity::Invalid
+    );
+    assert!(
+        rejected.unstable_core_report().hard_residual_max > SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE
+    );
+    assert!(
+        rejected.unstable_core_report().hard_residual_max < loose.normalized_residual_tolerance
+    );
 
     let (inconsistent, _) = rational_endpoint_fixture(5.0e-8);
     let session_rejection = SketchSession::new(
@@ -844,11 +859,12 @@ fn direct_and_session_conic_acceptance_clamp_loose_solver_tolerances() {
         .unwrap();
     assert!(!stricter_rejection.accepted(), "{stricter_rejection:#?}");
     assert_eq!(
-        stricter_rejection.core_report.hard_validity,
+        stricter_rejection.unstable_core_report().hard_validity,
         HardValidity::Invalid
     );
     assert!(
-        stricter_rejection.core_report.hard_residual_max > strict.normalized_residual_tolerance
+        stricter_rejection.unstable_core_report().hard_residual_max
+            > strict.normalized_residual_tolerance
     );
 }
 
@@ -1528,8 +1544,12 @@ fn persistent_generic_conic_sources_use_common_audit_templates() {
     )
     .unwrap();
     let accepted = session.accepted_result();
-    assert!(accepted.accepted(), "{:#?}", accepted.solve().core_report);
-    assert!(accepted.solve().core_report.hard_residual_max <= 1.0e-9);
+    assert!(
+        accepted.accepted(),
+        "{:#?}",
+        accepted.solve().unstable_core_report()
+    );
+    assert!(accepted.solve().unstable_core_report().hard_residual_max <= 1.0e-9);
     let compiled = session
         .runtime()
         .sketch()
@@ -2177,15 +2197,25 @@ fn public_conic_examples_validate_lower_round_trip_solve_and_render_at_all_scale
             let accepted_result = session.accepted_result();
             let accepted = accepted_result.solve();
             assert!(accepted.accepted(), "{key}, scale={scale:e}: {accepted:#?}");
-            assert_eq!(accepted.core_report.hard_validity, HardValidity::Valid);
+            assert_eq!(
+                accepted.unstable_core_report().hard_validity,
+                HardValidity::Valid
+            );
             assert!(accepted.acceptance_hard_residual_max.unwrap() <= 1.0e-9);
-            assert!(accepted.core_report.audit.sources.iter().all(|source| {
-                source.rows.iter().all(|row| {
-                    row.evaluation_status == AuditEvaluationStatus::Evaluated
-                        && row.raw_residual.is_finite()
-                        && row.normalized_residual.is_finite()
-                })
-            }));
+            assert!(
+                accepted
+                    .unstable_core_report()
+                    .audit
+                    .sources
+                    .iter()
+                    .all(|source| {
+                        source.rows.iter().all(|row| {
+                            row.evaluation_status == AuditEvaluationStatus::Evaluated
+                                && row.raw_residual.is_finite()
+                                && row.normalized_residual.is_finite()
+                        })
+                    })
+            );
         }
     }
 }
@@ -2293,7 +2323,7 @@ fn conic_gallery_and_tangency_examples_retain_scalar_and_contact_semantics() {
         let accepted_result = session.accepted_result();
         let audit = accepted_result
             .solve()
-            .core_report
+            .unstable_core_report()
             .audit
             .sources
             .iter()
@@ -2354,7 +2384,7 @@ fn conic_circle_limit_example_exposes_unobservable_full_axis_and_directed_arc_ra
             SketchDocumentSession::new(fixture.document, fixture.request, SolverConfig::default())
                 .unwrap();
         let accepted_result = session.accepted_result();
-        let report = &accepted_result.solve().core_report;
+        let report = &accepted_result.solve().unstable_core_report();
         assert_eq!(report.rank, 8, "scale={scale:e}: {report:#?}");
         assert_eq!(report.right_nullity, 2, "scale={scale:e}: {report:#?}");
         assert_eq!(
