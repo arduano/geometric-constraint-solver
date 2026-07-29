@@ -1722,6 +1722,23 @@ circle/arc Normal. Simple Horizontal, Vertical, Parallel, line-line Perpendicula
 and Equal Radius definitions carry no contact choices and therefore cannot be rejected for hidden
 branch input.
 
+### M62-F004 - Closed constraint-authoring path audit
+
+Two direct headless matrices freeze the complete M62 relation boundary without adding a
+scenario-menu leaf. The request-level matrix enumerates every one of the sixteen resolved
+constraint families and asserts exactly which contact, tangent-orientation and relation metadata
+each family owns. It also picks the same semantic span at parameters `0.2` and `0.8` and requires
+the two generated contacts to retain those values in occurrence order; identity-based recovery of
+the first parameter for both operands fails the fixture.
+
+The integration matrix starts from public `AuthoringState` activation for each family, checks the
+resolved kind, lowers through `RetainedEditorCoordinator::apply_authoring`, requires accepted
+publication and verifies that the ordinary persistent constraint exists. Endpoint continuity
+uses an End pick followed by a Start pick, so swapping the parameter-compatible neighborhoods is
+also detected. A third matrix drives all five dimension families through the same public authoring
+adapter to accepted persistent dimensions; the dimension path measures accepted state and does
+not manufacture contacts.
+
 ### UAT evidence and recheck policy
 
 Each checkpoint provides one manual entry point, deterministic resets and concise instructions.

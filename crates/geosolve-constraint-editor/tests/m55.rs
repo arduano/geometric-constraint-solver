@@ -5,10 +5,11 @@
 )]
 
 use geosolve_constraint_editor::{
-    ActionChoice, ActionState, BranchAction, ConstraintActionRequest, ConstraintIntent,
-    ConstraintRelationChoice, ContactActionChoice, CoordinatorActionKind, DimensionActionRequest,
-    DimensionKind, EditorScene, Modifiers, PointerInput, ResolvedConstraintKind,
-    RetainedEditorCoordinator, ScreenPoint, SelectionItem, Viewport,
+    ActionChoice, ActionState, AuthoringMutation, AuthoringOperand, AuthoringOptions,
+    AuthoringOutcome, AuthoringState, AuthoringTool, BranchAction, ConstraintActionRequest,
+    ConstraintIntent, ConstraintRelationChoice, ContactActionChoice, CoordinatorActionKind,
+    DimensionActionRequest, DimensionKind, EditorScene, Modifiers, PointerInput,
+    ResolvedConstraintKind, RetainedEditorCoordinator, ScreenPoint, SelectionItem, Viewport,
 };
 use geosolve_sketch::{
     AlphaScenarioIds, AlphaScenarioKind, ContactBranchEdit, ContactDomain, ContactNeighborhood,
@@ -705,6 +706,261 @@ fn every_required_relation_executes_through_the_typed_coordinator_action() {
                 .constraints()
                 .iter()
                 .any(|constraint| constraint.id == outcome.value)
+        );
+    }
+}
+
+#[test]
+fn every_resolved_relation_executes_through_the_authoring_adapter() {
+    let mut fixture = matrix_fixture();
+    let radial_start = fixture
+        .document
+        .add_point("radial start", [-4.0, 3.0])
+        .unwrap();
+    let radial_end = fixture
+        .document
+        .add_point("radial end", [-2.0, 3.0])
+        .unwrap();
+    let radial_line = CurveSpan::line(
+        fixture
+            .document
+            .add_curve(
+                "radial line",
+                CurveDefinition::Line {
+                    start: radial_start,
+                    end: radial_end,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .unwrap(),
+    );
+    let selected = |item| AuthoringOperand::selected(item);
+    let picked =
+        |span, parameter| AuthoringOperand::picked(SelectionItem::Curve(span), Some(parameter));
+    let cases = [
+        (
+            ConstraintIntent::Lock,
+            ResolvedConstraintKind::FixedPoint,
+            vec![selected(SelectionItem::Point(fixture.points[0]))],
+        ),
+        (
+            ConstraintIntent::Coincident,
+            ResolvedConstraintKind::CoincidentPoints,
+            fixture.points[0..2]
+                .iter()
+                .copied()
+                .map(SelectionItem::Point)
+                .map(selected)
+                .collect(),
+        ),
+        (
+            ConstraintIntent::Coincident,
+            ResolvedConstraintKind::PointOnCurve,
+            vec![
+                selected(SelectionItem::Point(fixture.midpoint)),
+                picked(fixture.lines[0], 0.5),
+            ],
+        ),
+        (
+            ConstraintIntent::Coincident,
+            ResolvedConstraintKind::CurveContact,
+            fixture.lines.map(|span| picked(span, 0.5)).to_vec(),
+        ),
+        (
+            ConstraintIntent::Horizontal,
+            ResolvedConstraintKind::HorizontalLine,
+            vec![selected(SelectionItem::Curve(fixture.lines[0]))],
+        ),
+        (
+            ConstraintIntent::Vertical,
+            ResolvedConstraintKind::VerticalLine,
+            vec![selected(SelectionItem::Curve(fixture.lines[1]))],
+        ),
+        (
+            ConstraintIntent::Parallel,
+            ResolvedConstraintKind::ParallelLines,
+            vec![
+                selected(SelectionItem::Curve(fixture.lines[0])),
+                selected(SelectionItem::Curve(fixture.overlapping_line)),
+            ],
+        ),
+        (
+            ConstraintIntent::Perpendicular,
+            ResolvedConstraintKind::PerpendicularLines,
+            fixture
+                .lines
+                .map(SelectionItem::Curve)
+                .map(selected)
+                .to_vec(),
+        ),
+        (
+            ConstraintIntent::Perpendicular,
+            ResolvedConstraintKind::RadialLine,
+            vec![picked(fixture.circles[0], 0.0), picked(radial_line, 0.5)],
+        ),
+        (
+            ConstraintIntent::Equal,
+            ResolvedConstraintKind::EqualLength,
+            fixture
+                .lines
+                .map(SelectionItem::Curve)
+                .map(selected)
+                .to_vec(),
+        ),
+        (
+            ConstraintIntent::Equal,
+            ResolvedConstraintKind::EqualRadius,
+            fixture
+                .circles
+                .map(SelectionItem::Curve)
+                .map(selected)
+                .to_vec(),
+        ),
+        (
+            ConstraintIntent::Equal,
+            ResolvedConstraintKind::EqualCurvature,
+            fixture.beziers.map(|span| picked(span, 0.5)).to_vec(),
+        ),
+        (
+            ConstraintIntent::Midpoint,
+            ResolvedConstraintKind::Midpoint,
+            vec![
+                selected(SelectionItem::Point(fixture.midpoint)),
+                selected(SelectionItem::Curve(fixture.lines[0])),
+            ],
+        ),
+        (
+            ConstraintIntent::Symmetric,
+            ResolvedConstraintKind::SymmetricAboutLine,
+            vec![
+                selected(SelectionItem::Point(fixture.points[4])),
+                selected(SelectionItem::Point(fixture.points[5])),
+                selected(SelectionItem::Curve(fixture.lines[1])),
+            ],
+        ),
+        (
+            ConstraintIntent::Tangent,
+            ResolvedConstraintKind::CurveTangency,
+            vec![
+                picked(fixture.lines[0], 0.5),
+                picked(fixture.overlapping_line, 0.5),
+            ],
+        ),
+        (
+            ConstraintIntent::Continuity,
+            ResolvedConstraintKind::EndpointContinuity,
+            vec![
+                picked(fixture.beziers[0], 1.0),
+                picked(fixture.beziers[1], 0.0),
+            ],
+        ),
+    ];
+    assert_eq!(cases.len(), 16);
+    for (intent, expected_resolution, operands) in cases {
+        let mut coordinator = coordinator(fixture.document.clone());
+        let mut authoring = AuthoringState::default();
+        authoring.set_options(AuthoringOptions {
+            curvature_relation: DocumentCurveCurvatureRelation::MagnitudeOppositeSign,
+            ..AuthoringOptions::default()
+        });
+        let application = authoring.activate(
+            coordinator.session().design_document(),
+            AuthoringTool::Constraint(intent),
+            &operands,
+        );
+        let AuthoringOutcome::Apply(application) = application else {
+            panic!("{expected_resolution:?} did not produce an application");
+        };
+        assert_eq!(
+            application.resolved_constraint,
+            Some(expected_resolution),
+            "{intent:?} resolution"
+        );
+        let AuthoringMutation::Constraint(outcome) = coordinator
+            .apply_authoring(coordinator.session().design_identity(), &application)
+            .unwrap_or_else(|error| panic!("{expected_resolution:?}: {error}"))
+        else {
+            panic!("{expected_resolution:?} did not create a constraint");
+        };
+        assert!(
+            outcome.published_accepted.is_some(),
+            "{expected_resolution:?} retained a rejected attempt"
+        );
+        assert!(
+            coordinator
+                .session()
+                .design_document()
+                .constraint(outcome.value)
+                .is_some(),
+            "{expected_resolution:?} did not persist its constraint"
+        );
+    }
+}
+
+#[test]
+fn every_dimension_executes_through_the_authoring_adapter() {
+    let fixture = matrix_fixture();
+    let selected = |item| AuthoringOperand::selected(item);
+    let cases = [
+        (
+            DimensionKind::PointDistance,
+            fixture.points[0..2]
+                .iter()
+                .copied()
+                .map(SelectionItem::Point)
+                .map(selected)
+                .collect(),
+        ),
+        (
+            DimensionKind::SegmentLength,
+            vec![selected(SelectionItem::Curve(fixture.lines[0]))],
+        ),
+        (
+            DimensionKind::Radius,
+            vec![selected(SelectionItem::Curve(fixture.circles[0]))],
+        ),
+        (
+            DimensionKind::Diameter,
+            vec![selected(SelectionItem::Curve(fixture.circles[0]))],
+        ),
+        (
+            DimensionKind::OrientedAngle,
+            fixture
+                .lines
+                .map(SelectionItem::Curve)
+                .map(selected)
+                .to_vec(),
+        ),
+    ];
+    assert_eq!(cases.len(), 5);
+    for (kind, operands) in cases {
+        let mut coordinator = coordinator(fixture.document.clone());
+        let application = AuthoringState::default().activate(
+            coordinator.session().design_document(),
+            AuthoringTool::Dimension(kind),
+            &operands,
+        );
+        let AuthoringOutcome::Apply(application) = application else {
+            panic!("{kind:?} did not produce an application");
+        };
+        assert_eq!(application.resolved_constraint, None);
+        let AuthoringMutation::Dimension(outcome) = coordinator
+            .apply_authoring(coordinator.session().design_identity(), &application)
+            .unwrap_or_else(|error| panic!("{kind:?}: {error}"))
+        else {
+            panic!("{kind:?} did not create a dimension");
+        };
+        assert!(
+            outcome.published_accepted.is_some(),
+            "{kind:?} retained a rejected attempt"
+        );
+        assert!(
+            coordinator
+                .session()
+                .design_document()
+                .dimension(outcome.value)
+                .is_some(),
+            "{kind:?} did not persist its dimension"
         );
     }
 }

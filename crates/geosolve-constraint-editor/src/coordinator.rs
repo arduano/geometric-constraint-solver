@@ -1708,15 +1708,28 @@ impl RetainedEditorCoordinator {
         options: AuthoringOptions,
     ) -> Result<ConstraintActionRequest, CoordinatorError> {
         let document = self.session.design_document();
-        let contact_spans = match resolved {
+        let contact_operands = match resolved {
             ResolvedConstraintKind::RadialLine => selected_radial_line(document, selection)
-                .map(|(line, _, _)| vec![line])
+                .and_then(|(line, _, _)| {
+                    operands
+                        .iter()
+                        .find(|operand| operand.item == SelectionItem::Curve(line))
+                        .map(|operand| vec![(line, operand.curve_parameter)])
+                })
                 .unwrap_or_default(),
             ResolvedConstraintKind::PointOnCurve
             | ResolvedConstraintKind::CurveContact
             | ResolvedConstraintKind::CurveTangency
             | ResolvedConstraintKind::EqualCurvature
-            | ResolvedConstraintKind::EndpointContinuity => selected_curve_spans(selection),
+            | ResolvedConstraintKind::EndpointContinuity => operands
+                .iter()
+                .filter_map(|operand| match operand.item {
+                    SelectionItem::Curve(span) => Some((span, operand.curve_parameter)),
+                    SelectionItem::Point(_)
+                    | SelectionItem::Constraint(_)
+                    | SelectionItem::Dimension(_) => None,
+                })
+                .collect(),
             ResolvedConstraintKind::FixedPoint
             | ResolvedConstraintKind::CoincidentPoints
             | ResolvedConstraintKind::HorizontalLine
@@ -1730,15 +1743,10 @@ impl RetainedEditorCoordinator {
         };
         let tangency = resolved == ResolvedConstraintKind::CurveTangency;
         let endpoint_only = resolved == ResolvedConstraintKind::EndpointContinuity;
-        let contacts = contact_spans
+        let contacts = contact_operands
             .into_iter()
             .enumerate()
-            .map(|(index, span)| {
-                let picked_parameter = operands.iter().find_map(|operand| {
-                    (operand.item == SelectionItem::Curve(span))
-                        .then_some(operand.curve_parameter)
-                        .flatten()
-                });
+            .map(|(index, (span, picked_parameter))| {
                 let ActionChoice::Contact {
                     domains,
                     default_parameter,
@@ -3593,7 +3601,23 @@ fn contact_action_choice(
         })
         .unwrap_or(semantic_default);
     let neighborhoods = if endpoint_only {
-        vec![ContactNeighborhood::Start, ContactNeighborhood::End]
+        match first {
+            ContactDomain::Bounded { upper, .. }
+                if default_parameter.to_bits() == upper.to_bits() =>
+            {
+                vec![ContactNeighborhood::End, ContactNeighborhood::Start]
+            }
+            ContactDomain::Bounded { lower, .. }
+                if default_parameter.to_bits() == lower.to_bits() =>
+            {
+                vec![ContactNeighborhood::Start, ContactNeighborhood::End]
+            }
+            ContactDomain::Bounded { .. }
+            | ContactDomain::SupportingLine
+            | ContactDomain::Periodic { .. } => {
+                unreachable!("endpoint-only contact defaults to a bounded endpoint")
+            }
+        }
     } else {
         contact_neighborhood_options(first, default_parameter)
     };
@@ -5394,6 +5418,235 @@ mod tests {
             DocumentConstraintDefinition::Perpendicular { first: actual_first, second: actual_second }
                 if actual_first == first && actual_second == second
         ));
+    }
+
+    #[test]
+    #[allow(clippy::default_trait_access, clippy::too_many_lines)]
+    fn every_resolved_authoring_family_emits_only_its_owned_metadata() {
+        let mut document = SketchDocument::new(1.0).unwrap();
+        let points = [
+            document.add_point("a", [0.0, 0.0]).unwrap(),
+            document.add_point("b", [2.0, 0.0]).unwrap(),
+            document.add_point("c", [0.0, 1.0]).unwrap(),
+            document.add_point("d", [2.0, 1.0]).unwrap(),
+        ];
+        let first_line = CurveSpan::line(
+            document
+                .add_curve(
+                    "first line",
+                    CurveDefinition::Line {
+                        start: points[0],
+                        end: points[1],
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .unwrap(),
+        );
+        let second_line = CurveSpan::line(
+            document
+                .add_curve(
+                    "second line",
+                    CurveDefinition::Line {
+                        start: points[2],
+                        end: points[3],
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .unwrap(),
+        );
+        let radius = document
+            .add_scalar("radius", 1.0, ScalarUnit::Length, ScalarDomain::Positive)
+            .unwrap();
+        let circle = CurveSpan::line(
+            document
+                .add_curve(
+                    "circle",
+                    CurveDefinition::Circle {
+                        center: points[2],
+                        radius,
+                    },
+                )
+                .unwrap(),
+        );
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            Default::default(),
+        )
+        .unwrap();
+        let coordinator = RetainedEditorCoordinator::new(session).unwrap();
+        let options = AuthoringOptions {
+            tangent_orientation: TangentOrientation::Opposed,
+            curvature_relation: DocumentCurveCurvatureRelation::MagnitudeOppositeSign,
+            continuity: DocumentCurveContinuity::G2,
+            ..AuthoringOptions::default()
+        };
+        let point = |index| SelectionItem::Point(points[index]);
+        let curve = SelectionItem::Curve;
+        let cases = [
+            (
+                ConstraintIntent::Lock,
+                ResolvedConstraintKind::FixedPoint,
+                vec![point(0)],
+                0,
+            ),
+            (
+                ConstraintIntent::Coincident,
+                ResolvedConstraintKind::CoincidentPoints,
+                vec![point(0), point(1)],
+                0,
+            ),
+            (
+                ConstraintIntent::Coincident,
+                ResolvedConstraintKind::PointOnCurve,
+                vec![point(0), curve(first_line)],
+                1,
+            ),
+            (
+                ConstraintIntent::Coincident,
+                ResolvedConstraintKind::CurveContact,
+                vec![curve(first_line), curve(second_line)],
+                2,
+            ),
+            (
+                ConstraintIntent::Horizontal,
+                ResolvedConstraintKind::HorizontalLine,
+                vec![curve(first_line)],
+                0,
+            ),
+            (
+                ConstraintIntent::Vertical,
+                ResolvedConstraintKind::VerticalLine,
+                vec![curve(first_line)],
+                0,
+            ),
+            (
+                ConstraintIntent::Parallel,
+                ResolvedConstraintKind::ParallelLines,
+                vec![curve(first_line), curve(second_line)],
+                0,
+            ),
+            (
+                ConstraintIntent::Perpendicular,
+                ResolvedConstraintKind::PerpendicularLines,
+                vec![curve(first_line), curve(second_line)],
+                0,
+            ),
+            (
+                ConstraintIntent::Perpendicular,
+                ResolvedConstraintKind::RadialLine,
+                vec![curve(circle), curve(first_line)],
+                1,
+            ),
+            (
+                ConstraintIntent::Equal,
+                ResolvedConstraintKind::EqualLength,
+                vec![curve(first_line), curve(second_line)],
+                0,
+            ),
+            (
+                ConstraintIntent::Equal,
+                ResolvedConstraintKind::EqualRadius,
+                vec![curve(circle), curve(circle)],
+                0,
+            ),
+            (
+                ConstraintIntent::Equal,
+                ResolvedConstraintKind::EqualCurvature,
+                vec![curve(first_line), curve(second_line)],
+                2,
+            ),
+            (
+                ConstraintIntent::Midpoint,
+                ResolvedConstraintKind::Midpoint,
+                vec![point(0), curve(first_line)],
+                0,
+            ),
+            (
+                ConstraintIntent::Symmetric,
+                ResolvedConstraintKind::SymmetricAboutLine,
+                vec![point(0), point(1), curve(second_line)],
+                0,
+            ),
+            (
+                ConstraintIntent::Tangent,
+                ResolvedConstraintKind::CurveTangency,
+                vec![curve(first_line), curve(second_line)],
+                2,
+            ),
+            (
+                ConstraintIntent::Continuity,
+                ResolvedConstraintKind::EndpointContinuity,
+                vec![curve(first_line), curve(second_line)],
+                2,
+            ),
+        ];
+        assert_eq!(cases.len(), 16);
+        for (intent, resolved, selection, expected_contacts) in cases {
+            let mut curve_occurrence = 0_u8;
+            let operands = selection
+                .iter()
+                .copied()
+                .map(|item| {
+                    let parameter = matches!(item, SelectionItem::Curve(_)).then(|| {
+                        curve_occurrence += 1;
+                        f64::from(curve_occurrence) * 0.25
+                    });
+                    AuthoringOperand::picked(item, parameter)
+                })
+                .collect::<Vec<_>>();
+            let request = coordinator
+                .authoring_constraint_request(intent, resolved, &selection, &operands, options)
+                .unwrap_or_else(|error| panic!("{resolved:?}: {error}"));
+            assert_eq!(
+                request.contacts.len(),
+                expected_contacts,
+                "{resolved:?} contact count"
+            );
+            for contact in &request.contacts {
+                assert_eq!(
+                    contact.tangent_orientation,
+                    (resolved == ResolvedConstraintKind::CurveTangency)
+                        .then_some(TangentOrientation::Opposed),
+                    "{resolved:?} tangent metadata"
+                );
+            }
+            let expected_relation = match resolved {
+                ResolvedConstraintKind::EqualCurvature => {
+                    Some(ConstraintRelationChoice::EqualCurvature(
+                        DocumentCurveCurvatureRelation::MagnitudeOppositeSign,
+                    ))
+                }
+                ResolvedConstraintKind::EndpointContinuity => Some(
+                    ConstraintRelationChoice::Continuity(DocumentCurveContinuity::G2),
+                ),
+                _ => None,
+            };
+            assert_eq!(
+                request.relation, expected_relation,
+                "{resolved:?} relation metadata"
+            );
+            if resolved == ResolvedConstraintKind::RadialLine {
+                assert_eq!(request.contacts[0].support.span, first_line);
+                assert_eq!(request.contacts[0].parameter.to_bits(), 0.5_f64.to_bits());
+            }
+        }
+
+        let repeated = [
+            AuthoringOperand::picked(curve(first_line), Some(0.2)),
+            AuthoringOperand::picked(curve(first_line), Some(0.8)),
+        ];
+        let request = coordinator
+            .authoring_constraint_request(
+                ConstraintIntent::Coincident,
+                ResolvedConstraintKind::CurveContact,
+                &[curve(first_line), curve(first_line)],
+                &repeated,
+                options,
+            )
+            .unwrap();
+        assert_eq!(request.contacts[0].parameter.to_bits(), 0.2_f64.to_bits());
+        assert_eq!(request.contacts[1].parameter.to_bits(), 0.8_f64.to_bits());
     }
 
     #[test]

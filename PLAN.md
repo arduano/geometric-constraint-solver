@@ -2777,6 +2777,18 @@ authors Horizontal and line-line Perpendicular on skew free lines, verifies acce
 and inspects the exact persistent definitions. No residual, equation, branch, schema or scenario
 changed.
 
+UAT follow-up `M62-F004` completes a closed-path audit before approval. All sixteen
+`ResolvedConstraintKind` families now pass both an exhaustive metadata-ownership regression and
+the complete `AuthoringState -> AuthoringApplication -> RetainedEditorCoordinator -> accepted
+persistent constraint` path. The audit found two further contact translation defects: repeated
+picks on one semantic curve span were recovered by identity and both inherited the first picked
+parameter, while endpoint continuity preserved an End parameter but always chose the Start
+neighborhood. Contact operands now preserve occurrence order, radial Normal still selects only its
+line operand, and endpoint choices put the parameter-matching neighborhood first. The five
+dimension families pass a separate complete authoring-to-accepted-transaction matrix and do not
+pass through contact metadata. No residual, equation, branch definition, schema, scenario or
+browser rule changed.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

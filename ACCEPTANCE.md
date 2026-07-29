@@ -1158,6 +1158,11 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
 - Contact domain, parameter, neighborhood, winding and tangent-orientation choices are emitted
   only for resolved definitions that own contact state. Simple line and radius relations carry no
   hidden contact metadata.
+- Repeated occurrences of the same curve span retain their own picked parameters in operand order.
+  Endpoint continuity pairs each endpoint parameter with its matching Start/End neighborhood.
+  Direct metadata and accepted-transaction regressions cover every resolved relation family.
+- A separate accepted-transaction matrix covers all five dimension authoring families without
+  routing any of them through relation contact metadata.
 - Canvas and tree operands use the same headless input path. Ordinary selection and point dragging
   are suppressed during authoring; pending operands and the expected next operand are visibly
   identified. Canvas pointer-down exclusively owns the parameter-bearing canvas pick; its later

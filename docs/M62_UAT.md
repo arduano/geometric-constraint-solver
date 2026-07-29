@@ -37,7 +37,9 @@ a production deployment.
 8. Use a canvas curve pick and a tree pick in the same constraint. Confirm both follow the same
    guidance and pending highlighting.
 9. Open Tangent, Equal and Continuity option flyouts. Confirm explicit orientation, curvature and
-   continuity choices remain understandable and are remembered during this session only.
+   continuity choices remain understandable and are remembered during this session only. For
+   Continuity, pick the End of one bounded curve and the Start of another; confirm the constraint
+   applies rather than reporting inconsistent contact metadata.
 10. Create all five dimension kinds at their current accepted values. For oriented angle, draw two
    lines at roughly 45 degrees with either endpoint order, enter angle authoring and pick them one
    at a time. Confirm creation does not move either line and the annotation/editor reports the
@@ -64,6 +66,12 @@ a production deployment.
   Horizontal and line-line Normal reached full arity but were rejected before document creation.
   Contact choices are now limited to contact-owning definitions; direct skew-line applications
   publish accepted Horizontal and Perpendicular constraints.
+- `M62-F004` — resolved mechanically, pending human recheck: the closed-path audit found that two
+  picks on the same curve span both recovered the first pick parameter, and an End pick for
+  continuity was paired with the Start neighborhood. Contact operands now preserve occurrence
+  order and endpoint neighborhoods follow the actual parameter. Request-level and accepted
+  transaction matrices cover all sixteen resolved relation families; a separate accepted
+  transaction matrix covers all five dimension paths, which do not translate contact metadata.
 
 ## Approval
 

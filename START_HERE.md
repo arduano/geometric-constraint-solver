@@ -102,6 +102,10 @@ terminal application attempt.
 Follow-up `M62-F003` restricts generated contact-branch choices to contact-owning relation
 families, allowing simple line/radius relations such as Horizontal and Perpendicular to execute
 without incompatible hidden metadata.
+Follow-up `M62-F004` audits all sixteen resolved relation paths end to end, preserves repeated
+same-span pick parameters by operand occurrence and pairs endpoint-continuity neighborhoods with
+the endpoint actually picked. A separate accepted-transaction matrix covers all five dimension
+paths, which share no contact-metadata translation.
 Old Chromium/CDP, HTTP serving, DOM-scraping, screenshot, wall-clock browser-timing and
 source-substring-scan gates remain retired.
 

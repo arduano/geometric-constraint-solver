@@ -54,6 +54,11 @@ Every mutation still passes through retained sketch transactions and independent
 Contact branch choices are generated only for definitions that own contact state. Simple
 Horizontal, Vertical, Parallel, Perpendicular, Equal Length and Equal Radius authoring therefore
 emits only its exact persistent definition rather than incompatible latent contact metadata.
+`M62-F004` additionally preserves contact operands by occurrence rather than looking parameters up
+again by span identity. Two picks on one curve can therefore retain different parameters. For
+endpoint continuity, the default Start/End neighborhood is ordered from the retained endpoint
+parameter instead of always defaulting to Start. Radial Normal remains deliberately asymmetric:
+only its line operand owns the point-on-curve contact.
 
 Dimensions are created at their current independently accepted measurement rather than retained
 design coordinates that may differ from the visible accepted canvas. Numeric editing locates the
@@ -104,6 +109,12 @@ manual performance/cancellation measurements.
   complete state-machine/coordinator path, requires accepted publication and inspects the exact
   persistent definitions. The exhaustive resolved-kind dispatch keeps every other simple
   line/radius relation contact-free.
+- `M62-F004` exhaustively covers all sixteen resolved relation families twice: a request-level
+  matrix checks exact contact/relation/orientation ownership and occurrence-ordered picked
+  parameters, while an integration matrix requires accepted publication and the expected
+  persistent constraint through the public authoring adapter. A second integration matrix requires
+  accepted publication for all five dimension families; they lower directly from accepted
+  measurements and explicit mode/angle options and have no contact-metadata adapter.
 - The static workbench contract directly proves all sixteen palette identities exist and the old
   creation controls, action aliases and deleted `/#/dev/lab` route do not.
 - Canvas/tree pending presentation, read-only scenario behavior, WASM compilation and the release
