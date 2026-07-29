@@ -1454,6 +1454,24 @@ metadata clears. Direct editor tests additionally prove accepted same-curve sema
 End-to-Start migration, bounded-to-supporting-line domain replacement, parameter scalar identity,
 periodic winding edits and oriented-angle direction changes.
 
+### M55-AP2 - Contextual constraint intent dispatch
+
+The ordinary workbench and the reusable M55 scenario subtree use the same headless intent
+resolver. Direct cases cover:
+
+1. Coincident resolving to point/point coincidence, point-on-curve and curve/curve contact;
+2. Equal resolving to line length, circular radius and explicit equal curvature;
+3. Parallel/Perpendicular resolving to line-pair relations or explicit tangent/normal
+   line-to-curve direction;
+4. Tangent resolving to generic all-family curve tangency with explicit contact orientation; and
+5. Continuity resolving to ordered endpoint G0/G1/G2/parametric-C2 state with positive finite
+   explicit rates.
+
+The selector adds reusable demonstrations only after their direct fixture builders pass. Scenario
+definitions contain no equation, coordinate-derived branch choice or browser-owned applicability
+rule. The former Point-on-curve, Equal-length, Equal-radius, Generic-contact and Generic-tangency
+workbench action identities are removed rather than retained as aliases.
+
 ### M56-C1 - Prepared worker ordering and cancellation
 
 The direct M56 corpus uses the accepted A2 document as one immutable worker input. The prepared

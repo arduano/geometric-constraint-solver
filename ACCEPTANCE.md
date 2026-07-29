@@ -980,6 +980,23 @@ persistence or restoring any retired route/harness. Focused native editor, sketc
 tests, full locked workspace tests, warnings-denied Clippy, all-feature WASM and release Trunk pass.
 No browser equation, branch heuristic, browser E2E or human-approval claim is part of this gate.
 
+M55 contextual-authoring follow-up acceptance:
+
+- The visible relation vocabulary is Lock, Coincident, Horizontal, Vertical, Parallel,
+  Perpendicular, Equal, Midpoint, Symmetric, Tangent and Continuity.
+- The headless editor publishes the exact persistent definition resolved for the current typed
+  selection. Coincident covers point/point, point/curve and curve/curve contact; Equal covers
+  line length, circular radius and branch-explicit curve curvature.
+- Parallel and Perpendicular accept two lines, or one line and one regular curve with explicit
+  tangent-orientation or normal-side state. Arbitrary curve-pair direction is disabled rather than
+  emulated.
+- Tangency, curvature and continuity retain complete explicit contact/span/domain/winding/
+  neighborhood/orientation/order/rate state. No coordinate heuristic selects a discrete branch.
+- Semantic-catalog-only relations remain unavailable through the retained coordinator until their
+  persistence, history, prepared-input and workspace-schema ownership is frozen.
+- Direct native, presentation and WASM qualification replaces the former action identities
+  without restoring a legacy application or harness.
+
 ### M56: prepared jobs and concurrency
 
 Status: complete (2026-07-29); direct evidence is recorded in

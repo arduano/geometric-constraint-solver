@@ -2368,6 +2368,29 @@ retention and bounded undo recovery. Editor, sketch, workbench, full workspace, 
 and release Trunk qualification pass; `docs/M55_IMPLEMENTATION.md` records exact commands and
 limitations. No residual equation, schema version, legacy route/harness or mobile claim was added.
 
+#### M55 contextual-authoring follow-up during M61 remediation
+
+Status: active; approved by the supervising caller on 2026-07-29.
+
+Goal: preserve M55 mathematical coverage while replacing equation-shaped workbench actions with
+selection-sensitive authoring intents owned by the reusable headless editor.
+
+- [ ] Replace Point-on-curve/Generic-contact with one contextual Coincident intent.
+- [ ] Replace Equal-length/Equal-radius with one contextual Equal intent and expose existing
+  branch-explicit equal curvature where applicable.
+- [ ] Replace Generic-tangency with Tangent, and route line-to-curve Parallel/Perpendicular through
+  explicit tangent-orientation/normal-side curve-direction state.
+- [ ] Expose existing ordered endpoint Continuity with explicit G0/G1/G2/parametric-C2 choices.
+- [ ] Publish resolved underlying definition metadata and typed disabled reasons at the headless
+  boundary; the browser owns labels and controls only.
+- [ ] Add direct matrix/lifecycle/presentation/WASM regressions and reusable UAT demonstrations
+  without restoring `/#/dev/lab`, browser E2E or a legacy harness.
+
+`docs/M55_CONTEXTUAL_AUTHORING.md` freezes the approved dispatch matrix and explicit branch rules.
+M36/M37 semantic-catalog-only relations and a new arbitrary curve-pair angle residual remain
+outside this follow-up until their retained lifecycle/schema or mathematical contracts are
+deliberately implemented in milestone order.
+
 ### M56: prepared jobs and concurrency contract
 
 Status: complete as of 2026-07-29.
