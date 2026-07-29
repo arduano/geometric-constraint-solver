@@ -91,8 +91,8 @@ drag, unclipped recursive flyouts, full Bezier/conic/NURBS authoring and an insp
 camera. Follow-up `M61-F001` restores the twin-roller fixture's passive stability target at the
 headless/UI seam. Follow-up `M61-F005` makes compact circle Tangent contact-bearing and circle/arc
 Normal explicitly radial while retaining the public direction-at-contact domain API. M61 is
-complete and approved; **M62 is the active CAD-style constraint and dimension authoring
-milestone**.
+complete and approved; **M62 is a mechanically qualified CAD-style constraint and dimension
+authoring candidate awaiting ordinary-workspace human UAT**.
 Old Chromium/CDP, HTTP serving, DOM-scraping, screenshot, wall-clock browser-timing and
 source-substring-scan gates remain retired.
 

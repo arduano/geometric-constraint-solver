@@ -2,7 +2,7 @@
 
 # M62 human UAT — CAD constraint authoring
 
-Status: pending objective qualification and supervising-human review.
+Status: mechanically qualified candidate; pending supervising-human review.
 
 This review uses the ordinary workspace. Do not load a scenario: M62 adds no scenario definitions
 or UAT-only geometry. Existing scenarios remain read-only.
@@ -34,7 +34,8 @@ or UAT-only geometry. Existing scenarios remain read-only.
 
 ## Approval
 
-- Candidate commit: pending.
-- Mechanical qualification: pending.
+- Candidate implementation: `53e7867` (including headless base `0ec560b`).
+- Mechanical qualification: Pass on 2026-07-29; exact commands are recorded in
+  `docs/M62_IMPLEMENTATION.md`.
 - Human rating: pending.
 - Approval: pending explicit supervising-human decision.
