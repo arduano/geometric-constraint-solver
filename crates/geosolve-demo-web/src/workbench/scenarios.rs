@@ -42,11 +42,14 @@ pub(crate) enum VerificationPointId {
     P27,
     P28,
     P29,
+    P30,
+    P31,
+    P32,
 }
 
 impl VerificationPointId {
     #[cfg(test)]
-    pub(crate) const ALL: [Self; 29] = [
+    pub(crate) const ALL: [Self; 32] = [
         Self::P1,
         Self::P2,
         Self::P3,
@@ -76,6 +79,9 @@ impl VerificationPointId {
         Self::P27,
         Self::P28,
         Self::P29,
+        Self::P30,
+        Self::P31,
+        Self::P32,
     ];
 
     pub(crate) const fn number(self) -> u8 {
@@ -109,6 +115,9 @@ impl VerificationPointId {
             Self::P27 => 27,
             Self::P28 => 28,
             Self::P29 => 29,
+            Self::P30 => 30,
+            Self::P31 => 31,
+            Self::P32 => 32,
         }
     }
 }
@@ -161,11 +170,14 @@ pub(crate) enum ScenarioId {
     ScissorJack,
     ScissorTower,
     PeaucellierLinkage,
+    CanvasAngleDimensions,
+    CanvasRelationGlyphs,
+    CanvasCrowdedAnnotations,
 }
 
 impl ScenarioId {
     #[cfg(test)]
-    pub(crate) const ALL: [Self; 25] = [
+    pub(crate) const ALL: [Self; 28] = [
         Self::RoleProfileParticipation,
         Self::ActivationDimensionMode,
         Self::SharedParameterProposal,
@@ -191,6 +203,9 @@ impl ScenarioId {
         Self::ScissorJack,
         Self::ScissorTower,
         Self::PeaucellierLinkage,
+        Self::CanvasAngleDimensions,
+        Self::CanvasRelationGlyphs,
+        Self::CanvasCrowdedAnnotations,
     ];
 
     pub(crate) fn from_key(value: &str) -> Option<Self> {
@@ -220,6 +235,9 @@ impl ScenarioId {
             "scissor-jack" => Self::ScissorJack,
             "five-stage-scissor-tower" => Self::ScissorTower,
             "peaucellier-linkage" => Self::PeaucellierLinkage,
+            "canvas-angle-dimensions" => Self::CanvasAngleDimensions,
+            "canvas-relation-glyphs" => Self::CanvasRelationGlyphs,
+            "canvas-crowded-annotations" => Self::CanvasCrowdedAnnotations,
             _ => return None,
         })
     }
@@ -251,6 +269,9 @@ impl ScenarioId {
             Self::ScissorJack => "scissor-jack",
             Self::ScissorTower => "five-stage-scissor-tower",
             Self::PeaucellierLinkage => "peaucellier-linkage",
+            Self::CanvasAngleDimensions => "canvas-angle-dimensions",
+            Self::CanvasRelationGlyphs => "canvas-relation-glyphs",
+            Self::CanvasCrowdedAnnotations => "canvas-crowded-annotations",
         }
     }
 
@@ -275,6 +296,7 @@ pub(crate) enum ScenarioGroupId {
     CompactMechanisms,
     LinkageMechanisms,
     AdvancedCurvesTopology,
+    M63CanvasConstraints,
 }
 
 impl ScenarioGroupId {
@@ -292,6 +314,7 @@ impl ScenarioGroupId {
             Self::CompactMechanisms => "compact-mechanisms",
             Self::LinkageMechanisms => "linkage-mechanisms",
             Self::AdvancedCurvesTopology => "advanced-curves-topology",
+            Self::M63CanvasConstraints => "m63-canvas-constraints",
         }
     }
 }
@@ -466,7 +489,7 @@ pub(crate) const ALL_SCENARIO_ACTIONS: [ScenarioAction; 32] = [
     ScenarioAction::CaptureEvidence,
 ];
 
-const VERIFICATION_POINTS: [VerificationPoint; 29] = [
+const VERIFICATION_POINTS: [VerificationPoint; 32] = [
     VerificationPoint {
         id: VerificationPointId::P1,
         objective: "Role changes profile participation while geometry remains solver-active and accepted.",
@@ -612,6 +635,21 @@ const VERIFICATION_POINTS: [VerificationPoint; 29] = [
         objective: "Circle tangency includes shared contact and tangent direction, while a circle normal is a radial line constrained through the circle center.",
         human_judgment: "Judge whether the two visible relationships and their persistent definitions make the authoring behavior predictable.",
     },
+    VerificationPoint {
+        id: VerificationPointId::P30,
+        objective: "Driving dimensions and every angle remain geometry-anchored and visible, while non-angle reference dimensions remain contextual.",
+        human_judgment: "Judge whether angle arcs, witnesses, values, and driving/reference styling read like an intuitive CAD sketch.",
+    },
+    VerificationPoint {
+        id: VerificationPointId::P31,
+        objective: "Hovering or selecting geometry reveals only its direct constraint symbols; selecting a symbol highlights all of its operands.",
+        human_judgment: "Judge whether constraint discovery, selection, and related-geometry emphasis are immediate without persistent clutter.",
+    },
+    VerificationPoint {
+        id: VerificationPointId::P32,
+        objective: "Shared annotation anchors fan out deterministically with compact leaders and remain selectable through zoom and pan.",
+        human_judgment: "Judge whether a constrained dense junction remains legible and easy to navigate.",
+    },
 ];
 
 const ROLE_PROFILE_POINTS: [VerificationPointId; 1] = [VerificationPointId::P1];
@@ -645,6 +683,9 @@ const ROTATING_SQUARE_POINTS: [VerificationPointId; 1] = [VerificationPointId::P
 const SCISSOR_POINTS: [VerificationPointId; 1] = [VerificationPointId::P26];
 const SCISSOR_TOWER_POINTS: [VerificationPointId; 1] = [VerificationPointId::P27];
 const PEAUCELLIER_POINTS: [VerificationPointId; 1] = [VerificationPointId::P28];
+const CANVAS_ANGLE_POINTS: [VerificationPointId; 1] = [VerificationPointId::P30];
+const CANVAS_GLYPH_POINTS: [VerificationPointId; 1] = [VerificationPointId::P31];
+const CANVAS_CROWDING_POINTS: [VerificationPointId; 1] = [VerificationPointId::P32];
 
 const ROLE_PROFILE_STEPS: [ScenarioStep; 3] = [
     ScenarioStep {
@@ -1064,7 +1105,71 @@ const INTERACTIVE_MOTION_STEPS: [ScenarioStep; 4] = [
     },
 ];
 
-const SCENARIOS: [ScenarioDefinition; 25] = [
+const CANVAS_ANGLE_STEPS: [ScenarioStep; 4] = [
+    ScenarioStep {
+        instruction: "Fit the scene, then inspect every visible driving dimension and angle.",
+        action: None,
+        expected: "Angles use geometry-anchored arcs, witness rays, arrowheads, and acute-degree values; other driving dimensions use anchored leaders.",
+    },
+    ScenarioStep {
+        instruction: "Select an angle value and edit its target in the existing dimension inspector.",
+        action: None,
+        expected: "The selected arc and operands highlight, and the accepted angle updates without changing its explicit branch.",
+    },
+    ScenarioStep {
+        instruction: "Hover nearby geometry that owns a reference dimension.",
+        action: None,
+        expected: "Non-angle reference dimensions appear contextually while angle dimensions remain visible at rest.",
+    },
+    ScenarioStep {
+        instruction: "Zoom and pan around the dimension geometry.",
+        action: None,
+        expected: "Annotations remain attached to accepted geometry and camera changes do not alter the document.",
+    },
+];
+
+const CANVAS_GLYPH_STEPS: [ScenarioStep; 4] = [
+    ScenarioStep {
+        instruction: "Hover several points and curves without selecting them.",
+        action: None,
+        expected: "Only directly incident constraint symbols appear; unrelated constraint clusters remain hidden.",
+    },
+    ScenarioStep {
+        instruction: "Move onto a revealed symbol and click it.",
+        action: None,
+        expected: "The persistent constraint becomes selected and every participating operand receives related-geometry emphasis.",
+    },
+    ScenarioStep {
+        instruction: "Use Tab and Enter to focus and activate a visible annotation.",
+        action: None,
+        expected: "The same persistent selection and inspector behavior is available without a pointer.",
+    },
+    ScenarioStep {
+        instruction: "Enter a constraint authoring mode and pick geometry near a symbol.",
+        action: None,
+        expected: "Authoring continues to collect geometry operands only; annotations never obstruct or duplicate a physical pick.",
+    },
+];
+
+const CANVAS_CROWDING_STEPS: [ScenarioStep; 3] = [
+    ScenarioStep {
+        instruction: "Hover and select each line around the constrained square.",
+        action: None,
+        expected: "Coincident, parallel, perpendicular, equal-length, and fixed relations appear near their geometry rather than in a detached strip.",
+    },
+    ScenarioStep {
+        instruction: "Inspect locations shared by multiple revealed relations.",
+        action: None,
+        expected: "Symbols fan out in stable compact positions and displaced symbols retain a short leader to their semantic anchor.",
+    },
+    ScenarioStep {
+        instruction: "Zoom, pan, select symbols, then reset the scenario.",
+        action: None,
+        expected: "Every annotation remains independently selectable and reset reproduces the same accepted geometry and layout.",
+    },
+];
+
+const SCENARIOS: [ScenarioDefinition; 28] = [
     ScenarioDefinition {
         id: ScenarioId::RoleProfileParticipation,
         title: "Role & profile participation",
@@ -1290,6 +1395,33 @@ const SCENARIOS: [ScenarioDefinition; 25] = [
         points: &PEAUCELLIER_POINTS,
         steps: &INTERACTIVE_MOTION_STEPS,
     },
+    ScenarioDefinition {
+        id: ScenarioId::CanvasAngleDimensions,
+        title: "Canvas angle & dimension presentation",
+        description: "Inspect always-visible angles, driving dimensions, contextual reference dimensions, and geometry-anchored target editing.",
+        human_question: "Do the dimension arcs, leaders, values, selection, and reference distinction feel like a coherent CAD sketch?",
+        fixture: ScenarioFixture::M63Angles,
+        points: &CANVAS_ANGLE_POINTS,
+        steps: &CANVAS_ANGLE_STEPS,
+    },
+    ScenarioDefinition {
+        id: ScenarioId::CanvasRelationGlyphs,
+        title: "Contextual constraint symbols",
+        description: "Discover direct constraint relations from geometry hover or selection, then select symbols and inspect all related operands.",
+        human_question: "Can you discover and understand each nearby relation quickly without filling the canvas with permanent icons?",
+        fixture: ScenarioFixture::CircleRelations,
+        points: &CANVAS_GLYPH_POINTS,
+        steps: &CANVAS_GLYPH_STEPS,
+    },
+    ScenarioDefinition {
+        id: ScenarioId::CanvasCrowdedAnnotations,
+        title: "Crowded relation fan-out",
+        description: "Use a constraint-built rotating square to inspect deterministic fan-out, leaders, hit targets, and camera stability at dense anchors.",
+        human_question: "Does the compact fan-out keep a heavily constrained junction readable and selectable?",
+        fixture: ScenarioFixture::MotionRotatingSquare,
+        points: &CANVAS_CROWDING_POINTS,
+        steps: &CANVAS_CROWDING_STEPS,
+    },
 ];
 
 const GEOMETRY_INTENT_CHILDREN: [ScenarioNode; 2] = [
@@ -1435,10 +1567,24 @@ const M61_ADVANCED_TOPOLOGY_GROUP: ScenarioGroup = ScenarioGroup {
     children: &M61_ADVANCED_TOPOLOGY_CHILDREN,
 };
 
-const ROOT_CHILDREN: [ScenarioNode; 3] = [
+const M63_CANVAS_CONSTRAINTS_CHILDREN: [ScenarioNode; 3] = [
+    ScenarioNode::Scenario(ScenarioId::CanvasAngleDimensions),
+    ScenarioNode::Scenario(ScenarioId::CanvasRelationGlyphs),
+    ScenarioNode::Scenario(ScenarioId::CanvasCrowdedAnnotations),
+];
+
+const M63_CANVAS_CONSTRAINTS_GROUP: ScenarioGroup = ScenarioGroup {
+    id: ScenarioGroupId::M63CanvasConstraints,
+    title: "M63 Canvas constraints",
+    description: "Geometry-anchored dimensions, contextual constraint discovery, and deterministic dense-annotation layout.",
+    children: &M63_CANVAS_CONSTRAINTS_CHILDREN,
+};
+
+const ROOT_CHILDREN: [ScenarioNode; 4] = [
     ScenarioNode::Group(M53_HOST_SEMANTICS_GROUP),
     ScenarioNode::Group(M55_ACTION_PARITY_GROUP),
     ScenarioNode::Group(M61_ADVANCED_TOPOLOGY_GROUP),
+    ScenarioNode::Group(M63_CANVAS_CONSTRAINTS_GROUP),
 ];
 
 const ROOT_GROUP: ScenarioGroup = ScenarioGroup {
@@ -1823,7 +1969,7 @@ mod tests {
         collect_catalog(*SCENARIO_CATALOG.root(), &mut groups, &mut scenarios);
 
         assert_eq!(SCENARIO_CATALOG.root().title(), "GeoSolve scenarios");
-        assert_eq!(groups.len(), 12);
+        assert_eq!(groups.len(), 13);
         assert_eq!(scenarios.len(), ScenarioId::ALL.len());
         let unique_groups: HashSet<_> = groups.iter().copied().collect();
         let unique_scenarios: HashSet<_> = scenarios.iter().copied().collect();
@@ -1921,9 +2067,9 @@ mod tests {
             .unwrap();
         let markup = state.menu_markup();
 
-        assert_eq!(markup.matches("data-scenario-group-trigger=").count(), 11);
-        assert_eq!(markup.matches("class=\"wb-scenario-flyout\"").count(), 11);
-        assert_eq!(markup.matches("data-scenario-id=").count(), 25);
+        assert_eq!(markup.matches("data-scenario-group-trigger=").count(), 12);
+        assert_eq!(markup.matches("class=\"wb-scenario-flyout\"").count(), 12);
+        assert_eq!(markup.matches("data-scenario-id=").count(), 28);
         assert!(markup.contains("class=\"wb-scenario-catalog-header\""));
         assert!(markup.contains("aria-expanded=\"false\""));
         assert!(markup.contains("aria-controls=\"wb-scenario-flyout-host-owned-inputs\""));

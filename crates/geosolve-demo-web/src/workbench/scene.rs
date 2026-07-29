@@ -6,12 +6,14 @@ use std::{collections::BTreeSet, fmt::Write as _};
 use geosolve_constraint_editor::{
     AdvancedConstructionKind, ConstructionPreview, ConstructionPreviewGeometry,
     DimensionTargetDisplayUnit, EditorProblemCategory, EditorProblemMetadata, EditorProblemScope,
-    EditorProblemTarget, EditorScene, ScreenPoint, SelectionItem, Viewport,
-    display_dimension_target,
+    EditorProblemTarget, EditorScene, SceneAnnotationGeometry, SceneAnnotationKind,
+    SceneConstraintGlyph, ScreenPoint, SelectionItem, Viewport, display_dimension_target,
 };
+#[cfg(test)]
+use geosolve_sketch::DocumentConstraintDefinition;
 use geosolve_sketch::{
-    DesignScalarId, DocumentConstraintDefinition, DocumentDimensionDefinition,
-    DocumentDimensionMode, GeometryRole, ScalarUnit, SketchAcceptedDocumentState,
+    DesignScalarId, DocumentDimensionDefinition, DocumentDimensionMode, GeometryRole, ScalarUnit,
+    SketchAcceptedDocumentState,
 };
 
 const SCREEN_SIZE: [f64; 2] = [1000.0, 700.0];
@@ -160,9 +162,53 @@ pub(crate) fn svg_markup_with_pending(
     problem: Option<&EditorProblemMetadata>,
     viewport: Viewport,
 ) -> String {
+    svg_markup_with_context(
+        scene,
+        accepted,
+        selection,
+        pending,
+        None,
+        construction_preview,
+        problem,
+        viewport,
+    )
+}
+
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+pub(crate) fn svg_markup_with_context(
+    scene: Option<&EditorScene>,
+    accepted: Option<&SketchAcceptedDocumentState>,
+    selection: &[SelectionItem],
+    pending: &[SelectionItem],
+    hovered: Option<SelectionItem>,
+    construction_preview: Option<&ConstructionPreview>,
+    problem: Option<&EditorProblemMetadata>,
+    viewport: Viewport,
+) -> String {
     let mut output = String::new();
     let mut problem_markers = String::new();
     let mut resolved_targets = BTreeSet::new();
+    let problem_items = problem
+        .map(|problem| {
+            problem
+                .targets
+                .iter()
+                .filter_map(|target| problem_selection_item(*target, scene))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let related = scene
+        .map(|scene| {
+            scene
+                .annotations
+                .iter()
+                .filter(|annotation| {
+                    selection.contains(&annotation.item) || hovered == Some(annotation.item)
+                })
+                .flat_map(|annotation| annotation.operands.iter().copied())
+                .collect::<BTreeSet<_>>()
+        })
+        .unwrap_or_default();
     if let Some(accepted) = accepted {
         let identity = accepted.identity();
         let input = accepted.input();
@@ -181,6 +227,9 @@ pub(crate) fn svg_markup_with_pending(
     } else {
         output.push_str("<g class=\"wb-accepted-scene\" data-scene-provenance=\"none\">");
     }
+    output.push_str(
+        "<defs><marker id=\"wb-dimension-arrow\" markerWidth=\"6\" markerHeight=\"6\" refX=\"3\" refY=\"3\" orient=\"auto-start-reverse\"><path d=\"M0 0L6 3L0 6Z\"/></marker></defs>",
+    );
     let origin = viewport.model_to_screen([0.0, 0.0]);
     let _ = write!(
         output,
@@ -200,11 +249,17 @@ pub(crate) fn svg_markup_with_pending(
             let role = accepted
                 .and_then(|state| state.document().geometry_role(curve.span.curve))
                 .unwrap_or(GeometryRole::Profile);
+            let item = SelectionItem::Curve(curve.span);
             let _ = write!(
                 output,
-                "<path class=\"wb-curve{}{}{}{}\" d=\"{path}\" data-persistent-id=\"{}\" data-editor-segment=\"{}\" data-role=\"{}\"/>",
+                "<path class=\"wb-curve{}{}{}{}{}\" d=\"{path}\" data-persistent-id=\"{}\" data-editor-item=\"curve\" data-editor-segment=\"{}\" data-role=\"{}\"/>",
                 if selected { " selected" } else { "" },
                 if pending { " authoring-pending" } else { "" },
+                if related.contains(&item) {
+                    " related"
+                } else {
+                    ""
+                },
                 if role == GeometryRole::Construction {
                     " construction"
                 } else {
@@ -238,9 +293,14 @@ pub(crate) fn svg_markup_with_pending(
             let has_problem = problem.is_some_and(|problem| problem.targets.contains(&target));
             let _ = write!(
                 output,
-                "<circle class=\"wb-point{}{}{}\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"5\" data-persistent-id=\"{}\"/>",
+                "<circle class=\"wb-point{}{}{}{}\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"5\" data-persistent-id=\"{}\" data-editor-item=\"point\"/>",
                 if selected { " selected" } else { "" },
                 if pending { " authoring-pending" } else { "" },
+                if related.contains(&SelectionItem::Point(point.id)) {
+                    " related"
+                } else {
+                    ""
+                },
                 if has_problem { " has-problem" } else { "" },
                 point.screen_position.x,
                 point.screen_position.y,
@@ -260,13 +320,16 @@ pub(crate) fn svg_markup_with_pending(
         output.push_str("</g><g class=\"wb-points\">");
     }
     output.push_str("</g><g class=\"wb-annotations\">");
-    if let Some(accepted) = accepted {
-        annotations(
+    if let (Some(scene), Some(accepted)) = (scene, accepted) {
+        render_annotations(
             &mut output,
             &mut problem_markers,
             &mut resolved_targets,
+            scene,
             accepted,
             selection,
+            hovered,
+            &problem_items,
             problem,
         );
     }
@@ -308,98 +371,406 @@ fn digest(bytes: [u8; 32]) -> String {
     output
 }
 
-#[allow(clippy::cast_precision_loss)]
-fn annotations(
+#[allow(clippy::too_many_arguments)]
+fn render_annotations(
     output: &mut String,
     problem_markers: &mut String,
     resolved_targets: &mut BTreeSet<EditorProblemTarget>,
+    scene: &EditorScene,
     accepted: &SketchAcceptedDocumentState,
     selection: &[SelectionItem],
+    hovered: Option<SelectionItem>,
+    problem_items: &[SelectionItem],
     problem: Option<&EditorProblemMetadata>,
 ) {
     let document = accepted.document();
-    for (index, constraint) in document.constraints().iter().enumerate() {
-        let x = 26.0 + (index % 8) as f64 * 24.0;
-        let selected = selection.contains(&SelectionItem::Constraint(constraint.id));
-        let target = EditorProblemTarget::Constraint(constraint.id);
-        let has_problem = problem.is_some_and(|problem| problem.targets.contains(&target));
-        let (kind, glyph) = constraint_glyph(&constraint.definition);
-        let _ = write!(
-            output,
-            "<text class=\"wb-glyph{}{}\" x=\"{x}\" y=\"32\" data-persistent-id=\"{}\" data-constraint-kind=\"{kind}\">{glyph}</text>",
+    for annotation in &scene.annotations {
+        if !annotation.is_visible(selection, hovered, problem_items) {
+            continue;
+        }
+        let selected = selection.contains(&annotation.item);
+        let is_hovered = hovered == Some(annotation.item);
+        let has_problem = problem_items.contains(&annotation.item);
+        let class = format!(
+            "{}{}{}{}",
             if selected { " selected" } else { "" },
+            if is_hovered { " hovered" } else { "" },
             if has_problem { " has-problem" } else { "" },
-            constraint.id,
-        );
-        if has_problem && resolved_targets.insert(target) {
-            problem_marker(
-                problem_markers,
-                ScreenPoint { x, y: 18.0 },
-                Some(target),
-                problem.expect("targeted marker has problem metadata"),
-                false,
-            );
-        }
-    }
-    for (index, dimension) in document.dimensions().iter().enumerate() {
-        let y = 58.0 + index as f64 * 20.0;
-        let label = escape(&dimension.label);
-        let mode = match dimension.mode {
-            DocumentDimensionMode::Driving => "driving",
-            DocumentDimensionMode::Reference => "reference",
-        };
-        let stored_value = match dimension.mode {
-            DocumentDimensionMode::Driving => document
-                .scalar(dimension_target(&dimension.definition))
-                .map(|scalar| scalar.value),
-            DocumentDimensionMode::Reference => accepted.reference_value(dimension.id),
-        }
-        .filter(|value| value.is_finite());
-        let unit = if matches!(
-            &dimension.definition,
-            DocumentDimensionDefinition::OrientedAngle { .. }
-        ) {
-            ScalarUnit::Angle
-        } else {
-            ScalarUnit::Length
-        };
-        let display = stored_value.and_then(|value| display_dimension_target(value, unit));
-        let value_attribute = display.map_or_else(String::new, |display| display.value.to_string());
-        let displayed = display.map_or_else(
-            || "unavailable".into(),
-            |display| match display.unit {
-                DimensionTargetDisplayUnit::ModelUnits => display.value.to_string(),
-                DimensionTargetDisplayUnit::AcuteDegrees => {
-                    format!("{:.3}°", display.value)
-                }
+            if annotation.suppressed {
+                " suppressed"
+            } else {
+                ""
             },
         );
-        let selected = selection.contains(&SelectionItem::Dimension(dimension.id));
-        let target = EditorProblemTarget::Dimension(dimension.id);
-        let kind = dimension_kind(&dimension.definition);
-        let has_problem = problem.is_some_and(|problem| problem.targets.contains(&target));
+        let (editor_kind, id, kind, label, value, mode) = match annotation.item {
+            SelectionItem::Constraint(id) => {
+                let Some(constraint) = document.constraint(id) else {
+                    continue;
+                };
+                (
+                    "constraint",
+                    id.to_string(),
+                    annotation_kind(annotation.kind),
+                    constraint.label.clone(),
+                    String::new(),
+                    String::new(),
+                )
+            }
+            SelectionItem::Dimension(id) => {
+                let Some(dimension) = document.dimension(id) else {
+                    continue;
+                };
+                let (value_attribute, displayed) = dimension_display(accepted, dimension);
+                (
+                    "dimension",
+                    id.to_string(),
+                    annotation_kind(annotation.kind),
+                    format!("{} = {displayed}", dimension.label),
+                    value_attribute,
+                    match dimension.mode {
+                        DocumentDimensionMode::Driving => "driving".into(),
+                        DocumentDimensionMode::Reference => "reference".into(),
+                    },
+                )
+            }
+            SelectionItem::Point(_) | SelectionItem::Curve(_) => continue,
+        };
+        let escaped_label = escape(&label);
         let _ = write!(
             output,
-            "<text class=\"wb-dimension{}{}\" x=\"26\" y=\"{y}\" data-persistent-id=\"{}\" data-dimension-kind=\"{kind}\" data-dimension-mode=\"{mode}\" data-dimension-value=\"{value_attribute}\">{label} = {displayed}</text>",
-            if selected { " selected" } else { "" },
-            if has_problem { " has-problem" } else { "" },
-            dimension.id,
+            "<g class=\"wb-annotation wb-{editor_kind}{class}\" tabindex=\"0\" role=\"button\" aria-label=\"{escaped_label}\" data-editor-item=\"{editor_kind}\" data-persistent-id=\"{id}\" data-{editor_kind}-kind=\"{kind}\"{}{} data-annotation-kind=\"{kind}\">",
+            if mode.is_empty() {
+                String::new()
+            } else {
+                format!(" data-dimension-mode=\"{mode}\"")
+            },
+            if value.is_empty() {
+                String::new()
+            } else {
+                format!(" data-dimension-value=\"{value}\"")
+            },
         );
-        if has_problem && resolved_targets.insert(target) {
-            problem_marker(
-                problem_markers,
+        annotation_geometry(
+            output,
+            annotation.kind,
+            &annotation.geometry,
+            &escaped_label,
+        );
+        output.push_str("</g>");
+
+        if has_problem {
+            let target = match annotation.item {
+                SelectionItem::Constraint(id) => EditorProblemTarget::Constraint(id),
+                SelectionItem::Dimension(id) => EditorProblemTarget::Dimension(id),
+                SelectionItem::Point(_) | SelectionItem::Curve(_) => unreachable!(),
+            };
+            if resolved_targets.insert(target)
+                && let Some(anchor) = annotation_anchor(&annotation.geometry)
+            {
+                problem_marker(
+                    problem_markers,
+                    anchor,
+                    Some(target),
+                    problem.expect("targeted marker has problem metadata"),
+                    false,
+                );
+            }
+        }
+    }
+}
+
+fn dimension_display(
+    accepted: &SketchAcceptedDocumentState,
+    dimension: &geosolve_sketch::DocumentDimension,
+) -> (String, String) {
+    let document = accepted.document();
+    let stored_value = match dimension.mode {
+        DocumentDimensionMode::Driving => document
+            .scalar(dimension_target(&dimension.definition))
+            .map(|scalar| scalar.value),
+        DocumentDimensionMode::Reference => accepted.reference_value(dimension.id),
+    }
+    .filter(|value| value.is_finite());
+    let unit = if matches!(
+        &dimension.definition,
+        DocumentDimensionDefinition::OrientedAngle { .. }
+    ) {
+        ScalarUnit::Angle
+    } else {
+        ScalarUnit::Length
+    };
+    let display = stored_value.and_then(|value| display_dimension_target(value, unit));
+    (
+        display.map_or_else(String::new, |display| display.value.to_string()),
+        display.map_or_else(
+            || "unavailable".into(),
+            |display| match display.unit {
+                DimensionTargetDisplayUnit::ModelUnits => format!("{:.3}", display.value),
+                DimensionTargetDisplayUnit::AcuteDegrees => format!("{:.3}°", display.value),
+            },
+        ),
+    )
+}
+
+#[allow(clippy::too_many_lines)]
+fn annotation_geometry(
+    output: &mut String,
+    kind: SceneAnnotationKind,
+    geometry: &SceneAnnotationGeometry,
+    label: &str,
+) {
+    match geometry {
+        SceneAnnotationGeometry::Glyph { markers } => {
+            let SceneAnnotationKind::Constraint(glyph) = kind else {
+                return;
+            };
+            for marker in markers {
+                if let Some(origin) = marker.leader_from {
+                    let _ = write!(
+                        output,
+                        "<path class=\"wb-annotation-leader\" d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>",
+                        origin.x, origin.y, marker.anchor.x, marker.anchor.y,
+                    );
+                }
+                let _ = write!(
+                    output,
+                    "<g class=\"wb-constraint-symbol\" transform=\"translate({:.3} {:.3})\"><circle class=\"wb-annotation-hit\" r=\"12\"/>{}</g>",
+                    marker.anchor.x,
+                    marker.anchor.y,
+                    constraint_symbol(glyph),
+                );
+            }
+        }
+        SceneAnnotationGeometry::LinearDimension {
+            first,
+            second,
+            label_anchor,
+        } => {
+            let _ = write!(
+                output,
+                concat!(
+                    "<path class=\"wb-dimension-line\" d=\"M{:.3} {:.3}L{:.3} {:.3}",
+                    "M{:.3} {:.3}L{:.3} {:.3}M{:.3} {:.3}L{:.3} {:.3}\"/>",
+                    "<circle class=\"wb-annotation-hit\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"12\"/>",
+                    "<text x=\"{:.3}\" y=\"{:.3}\">{}</text>"
+                ),
+                first.x,
+                first.y,
+                second.x,
+                second.y,
+                first.x,
+                first.y,
+                label_anchor.x,
+                label_anchor.y,
+                second.x,
+                second.y,
+                label_anchor.x,
+                label_anchor.y,
+                label_anchor.x,
+                label_anchor.y,
+                label_anchor.x,
+                label_anchor.y - 5.0,
+                label,
+            );
+        }
+        SceneAnnotationGeometry::RadialDimension {
+            center,
+            edge,
+            label_anchor,
+            diameter,
+        } => {
+            let opposite = if *diameter {
                 ScreenPoint {
-                    x: 14.0,
-                    y: y - 5.0,
-                },
-                Some(target),
-                problem.expect("targeted marker has problem metadata"),
-                false,
+                    x: center.x.mul_add(2.0, -edge.x),
+                    y: center.y.mul_add(2.0, -edge.y),
+                }
+            } else {
+                *center
+            };
+            let _ = write!(
+                output,
+                concat!(
+                    "<path class=\"wb-dimension-line\" d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>",
+                    "<circle class=\"wb-annotation-hit\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"12\"/>",
+                    "<text x=\"{:.3}\" y=\"{:.3}\">{}</text>"
+                ),
+                opposite.x,
+                opposite.y,
+                edge.x,
+                edge.y,
+                label_anchor.x,
+                label_anchor.y,
+                label_anchor.x,
+                label_anchor.y - 5.0,
+                label,
+            );
+        }
+        SceneAnnotationGeometry::AngularDimension {
+            vertex,
+            first_ray,
+            second_ray,
+            radius,
+            clockwise,
+            label_anchor,
+        } => {
+            let first_arc = ray_point(*vertex, *first_ray, *radius);
+            let second_arc = ray_point(*vertex, *second_ray, *radius);
+            let _ = write!(
+                output,
+                concat!(
+                    "<path class=\"wb-dimension-witness\" d=\"M{:.3} {:.3}L{:.3} {:.3}",
+                    "M{:.3} {:.3}L{:.3} {:.3}\"/>",
+                    "<path class=\"wb-angle-arc\" marker-start=\"url(#wb-dimension-arrow)\" ",
+                    "marker-end=\"url(#wb-dimension-arrow)\" d=\"M{:.3} {:.3}A{:.3} {:.3} 0 0 {} {:.3} {:.3}\"/>",
+                    "<circle class=\"wb-annotation-hit\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"12\"/>",
+                    "<text x=\"{:.3}\" y=\"{:.3}\">{}</text>"
+                ),
+                vertex.x,
+                vertex.y,
+                first_ray.x,
+                first_ray.y,
+                vertex.x,
+                vertex.y,
+                second_ray.x,
+                second_ray.y,
+                first_arc.x,
+                first_arc.y,
+                radius,
+                radius,
+                u8::from(*clockwise),
+                second_arc.x,
+                second_arc.y,
+                label_anchor.x,
+                label_anchor.y,
+                label_anchor.x,
+                label_anchor.y - 5.0,
+                label,
+            );
+        }
+        SceneAnnotationGeometry::Label { anchor } => {
+            let _ = write!(
+                output,
+                "<circle class=\"wb-annotation-hit\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"12\"/><text x=\"{:.3}\" y=\"{:.3}\">{}</text>",
+                anchor.x,
+                anchor.y,
+                anchor.x,
+                anchor.y - 5.0,
+                label,
             );
         }
     }
 }
 
+const fn annotation_kind(kind: SceneAnnotationKind) -> &'static str {
+    match kind {
+        SceneAnnotationKind::Constraint(glyph) => constraint_glyph_key(glyph),
+        SceneAnnotationKind::PointDistance => "point-distance",
+        SceneAnnotationKind::CurveLength => "segment-length",
+        SceneAnnotationKind::Radius => "radius",
+        SceneAnnotationKind::Diameter => "diameter",
+        SceneAnnotationKind::OrientedAngle => "oriented-angle",
+        SceneAnnotationKind::SupportingLineOffset => "supporting-line-offset",
+        SceneAnnotationKind::ExactTranslatedSegmentOffset => "translated-segment-offset",
+    }
+}
+
+const fn constraint_glyph_key(glyph: SceneConstraintGlyph) -> &'static str {
+    match glyph {
+        SceneConstraintGlyph::Fixed => "fixed",
+        SceneConstraintGlyph::Coincident => "coincident",
+        SceneConstraintGlyph::Horizontal => "horizontal",
+        SceneConstraintGlyph::Vertical => "vertical",
+        SceneConstraintGlyph::PointOnCurve => "point-on-curve",
+        SceneConstraintGlyph::Parallel => "parallel",
+        SceneConstraintGlyph::Perpendicular => "perpendicular",
+        SceneConstraintGlyph::Collinear => "collinear",
+        SceneConstraintGlyph::EqualLength => "equal-length",
+        SceneConstraintGlyph::EqualRadius => "equal-radius",
+        SceneConstraintGlyph::Midpoint => "midpoint",
+        SceneConstraintGlyph::Symmetry => "symmetry",
+        SceneConstraintGlyph::Contact => "generic-contact",
+        SceneConstraintGlyph::Tangency => "tangency",
+        SceneConstraintGlyph::Direction => "curve-direction",
+        SceneConstraintGlyph::Normal => "normal",
+        SceneConstraintGlyph::EqualCurvature => "equal-curvature",
+        SceneConstraintGlyph::Continuity => "continuity",
+        SceneConstraintGlyph::Fillet => "fillet",
+    }
+}
+
+const fn constraint_symbol(glyph: SceneConstraintGlyph) -> &'static str {
+    match glyph {
+        SceneConstraintGlyph::Fixed => "<path d=\"M-5 5V-3A5 5 0 0 1 5-3V5M-8 5H8\"/>",
+        SceneConstraintGlyph::Coincident => "<circle cx=\"-3\" r=\"4\"/><circle cx=\"3\" r=\"4\"/>",
+        SceneConstraintGlyph::Horizontal => "<path d=\"M-7 0H7M-5-3V3M5-3V3\"/>",
+        SceneConstraintGlyph::Vertical => "<path d=\"M0-7V7M-3-5H3M-3 5H3\"/>",
+        SceneConstraintGlyph::PointOnCurve => {
+            "<path d=\"M-8 4Q0-6 8 4\"/><circle cy=\"-1\" r=\"2\"/>"
+        }
+        SceneConstraintGlyph::Parallel => "<path d=\"M-7 4L4-7M-3 7L8-4\"/>",
+        SceneConstraintGlyph::Perpendicular => "<path d=\"M-7-6V6H7\"/>",
+        SceneConstraintGlyph::Collinear => "<path d=\"M-8 4L8-4M-5 1L-2 4M2-4L5-1\"/>",
+        SceneConstraintGlyph::EqualLength => "<path d=\"M-8-3H8M-8 3H8M-2-6V0M2 0V6\"/>",
+        SceneConstraintGlyph::EqualRadius => {
+            "<circle r=\"7\"/><path d=\"M0 0L6-4M-4-1H4M-4 3H4\"/>"
+        }
+        SceneConstraintGlyph::Midpoint => "<path d=\"M-8 5L0-6L8 5ZM-5 5H5\"/><circle r=\"1.5\"/>",
+        SceneConstraintGlyph::Symmetry => "<path d=\"M0-8V8M-7-5L-3 0L-7 5M7-5L3 0L7 5\"/>",
+        SceneConstraintGlyph::Contact => {
+            "<path d=\"M-8 3Q-4-4 0 3Q4 10 8 3\"/><circle cy=\"3\" r=\"2\"/>"
+        }
+        SceneConstraintGlyph::Tangency => "<circle cy=\"-2\" r=\"5\"/><path d=\"M-8 3H8\"/>",
+        SceneConstraintGlyph::Direction => "<path d=\"M-8 4H6M2 0L6 4L2 8\"/>",
+        SceneConstraintGlyph::Normal => "<path d=\"M-7 5H5V-7M1-3H5V1\"/>",
+        SceneConstraintGlyph::EqualCurvature => {
+            "<path d=\"M-8 5Q-4-7 0 1Q4 9 8-3M-4-7H4M-4-3H4\"/>"
+        }
+        SceneConstraintGlyph::Continuity => "<path d=\"M-8 4Q-3-7 0 0Q3 7 8-4M-2-6L2-6\"/>",
+        SceneConstraintGlyph::Fillet => "<path d=\"M-8 6H-3A9 9 0 0 1 6-3V-8\"/>",
+    }
+}
+
+fn annotation_anchor(geometry: &SceneAnnotationGeometry) -> Option<ScreenPoint> {
+    Some(match geometry {
+        SceneAnnotationGeometry::Glyph { markers } => markers.first()?.anchor,
+        SceneAnnotationGeometry::LinearDimension { label_anchor, .. }
+        | SceneAnnotationGeometry::RadialDimension { label_anchor, .. }
+        | SceneAnnotationGeometry::AngularDimension { label_anchor, .. } => *label_anchor,
+        SceneAnnotationGeometry::Label { anchor } => *anchor,
+    })
+}
+
+fn ray_point(vertex: ScreenPoint, ray: ScreenPoint, radius: f64) -> ScreenPoint {
+    let delta = [ray.x - vertex.x, ray.y - vertex.y];
+    let length = delta[0].hypot(delta[1]);
+    if length <= f64::EPSILON {
+        return vertex;
+    }
+    ScreenPoint {
+        x: vertex.x + delta[0] * radius / length,
+        y: vertex.y + delta[1] * radius / length,
+    }
+}
+
+pub(crate) fn problem_selection_item(
+    target: EditorProblemTarget,
+    scene: Option<&EditorScene>,
+) -> Option<SelectionItem> {
+    Some(match target {
+        EditorProblemTarget::Point(id) => SelectionItem::Point(id),
+        EditorProblemTarget::Curve(id) => SelectionItem::Curve(
+            scene?
+                .curves
+                .iter()
+                .find(|curve| curve.span.curve == id)?
+                .span,
+        ),
+        EditorProblemTarget::Constraint(id) => SelectionItem::Constraint(id),
+        EditorProblemTarget::Dimension(id) => SelectionItem::Dimension(id),
+    })
+}
+
+#[cfg(test)]
 const fn constraint_glyph(
     definition: &DocumentConstraintDefinition,
 ) -> (&'static str, &'static str) {
@@ -432,6 +803,7 @@ const fn constraint_glyph(
     }
 }
 
+#[cfg(test)]
 const fn dimension_kind(definition: &DocumentDimensionDefinition) -> &'static str {
     match definition {
         DocumentDimensionDefinition::PointDistance { .. } => "point-distance",
@@ -1000,19 +1372,39 @@ mod tests {
         assert!(tree.contains(&point_identity));
         assert!(tree.contains("aria-selected=\"true\""));
         for constraint in accepted.document().constraints() {
+            let contextual = svg_markup(
+                Some(&scene),
+                Some(accepted),
+                &[SelectionItem::Constraint(constraint.id)],
+                None,
+                None,
+                viewport(),
+            );
             assert_eq!(
-                markup
+                contextual
                     .matches(&format!("data-persistent-id=\"{}\"", constraint.id))
                     .count(),
                 1,
-                "constraint glyph identity must be unique"
+                "selected contextual constraint identity must be unique"
             );
         }
         assert!(markup.contains(&format!(
             "data-persistent-id=\"{}\" data-dimension-kind=\"segment-length\" data-dimension-mode=\"driving\" data-dimension-value=\"4\"",
             rectangle.dimensions[0]
         )));
-        assert!(markup.contains(&format!(
+        assert!(!markup.contains(&format!(
+            "data-persistent-id=\"{}\" data-dimension-kind=\"segment-length\" data-dimension-mode=\"reference\" data-dimension-value=\"3\"",
+            rectangle.dimensions[1]
+        )));
+        let reference_markup = svg_markup(
+            Some(&scene),
+            Some(accepted),
+            &[SelectionItem::Dimension(rectangle.dimensions[1])],
+            None,
+            None,
+            viewport(),
+        );
+        assert!(reference_markup.contains(&format!(
             "data-persistent-id=\"{}\" data-dimension-kind=\"segment-length\" data-dimension-mode=\"reference\" data-dimension-value=\"3\"",
             rectangle.dimensions[1]
         )));

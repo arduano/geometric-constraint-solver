@@ -340,6 +340,12 @@ pub(crate) mod wasm {
                 activate_authoring(&callback_document, &mut wb, tool);
             } else if target.has_attribute("data-editor-item") {
                 if let Some(item) = selection_item(&target) {
+                    let is_canvas_item = target
+                        .closest("#wb-viewport")
+                        .is_ok_and(|viewport| viewport.is_some());
+                    let is_pointer_click = event
+                        .dyn_ref::<MouseEvent>()
+                        .is_some_and(|event| event.detail() > 0);
                     let modifiers = event
                         .dyn_ref::<MouseEvent>()
                         .map(|event| Modifiers {
@@ -350,10 +356,7 @@ pub(crate) mod wasm {
                         .unwrap_or_default();
                     let mut wb = callback_workbench.borrow_mut();
                     if wb.authoring.active_tool().is_some() && !wb.scenarios.is_active() {
-                        let input = if target
-                            .closest("#wb-viewport")
-                            .is_ok_and(|viewport| viewport.is_some())
-                        {
+                        let input = if is_canvas_item {
                             super::AuthoringItemInput::CanvasClick
                         } else {
                             super::AuthoringItemInput::TreeClick
@@ -365,7 +368,7 @@ pub(crate) mod wasm {
                                 .pick(&document, AuthoringOperand::selected(item));
                             handle_authoring_outcome(&mut wb, outcome);
                         }
-                    } else {
+                    } else if !is_canvas_item || !is_pointer_click {
                         let coordinator = wb.interaction_coordinator_mut();
                         coordinator.editor_mut().select_item(item, modifiers);
                     }
@@ -458,7 +461,13 @@ pub(crate) mod wasm {
             workbench,
             &viewport,
             "pointerdown",
-            |coordinator, scene, input| coordinator.editor_mut().pointer_down(scene, input),
+            |coordinator, scene, input, problem_items| {
+                coordinator.editor_mut().pointer_down_with_problem_items(
+                    scene,
+                    input,
+                    problem_items,
+                )
+            },
         )?;
         install_pointer_move_listener(document, workbench, &viewport, &pointer_moves)?;
         install_pointer_up_listener(document, workbench, &viewport, &pointer_moves)?;
@@ -478,6 +487,25 @@ pub(crate) mod wasm {
         viewport
             .add_event_listener_with_callback("pointercancel", cancel.as_ref().unchecked_ref())?;
         cancel.forget();
+
+        let leave_document = document.clone();
+        let leave_workbench = Rc::clone(workbench);
+        let leave = Closure::<dyn FnMut(PointerEvent)>::new(move |_event| {
+            let mut wb = leave_workbench.borrow_mut();
+            let effects = wb
+                .interaction_coordinator_mut()
+                .editor_mut()
+                .pointer_leave();
+            if effects.is_empty() {
+                return;
+            }
+            dispatch_effects(&mut wb, effects);
+            drop(wb);
+            let _ = render(&leave_document, &leave_workbench);
+        });
+        viewport
+            .add_event_listener_with_callback("pointerleave", leave.as_ref().unchecked_ref())?;
+        leave.forget();
 
         let double_document = document.clone();
         let double_workbench = Rc::clone(workbench);
@@ -739,6 +767,7 @@ pub(crate) mod wasm {
             &mut RetainedEditorCoordinator,
             &EditorScene,
             PointerInput,
+            &[SelectionItem],
         ) -> Vec<EditorEffect>,
     ) -> Result<(), JsValue> {
         let callback_document = document.clone();
@@ -782,9 +811,22 @@ pub(crate) mod wasm {
                 }
                 return;
             }
+            let problem_items = wb
+                .interaction_coordinator_mut()
+                .current_problem_metadata()
+                .map(|problem| {
+                    problem
+                        .targets
+                        .iter()
+                        .filter_map(|target| {
+                            super::scene::problem_selection_item(*target, Some(&scene))
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
             let effects = {
                 let coordinator = wb.interaction_coordinator_mut();
-                transition(coordinator, &scene, input)
+                transition(coordinator, &scene, input, &problem_items)
             };
             dispatch_effects(&mut wb, effects);
             save(&wb);
@@ -819,6 +861,31 @@ pub(crate) mod wasm {
                     .closest("[data-problem-marker]")
                     .is_ok_and(|marker| marker.is_some())
             {
+                return;
+            }
+            if matches!(event.key().as_str(), "Enter" | " ")
+                && let Some(target) = event
+                    .target()
+                    .and_then(|target| target.dyn_into::<Element>().ok())
+                && target.has_attribute("data-editor-item")
+                && target
+                    .closest("#wb-viewport")
+                    .is_ok_and(|viewport| viewport.is_some())
+                && let Some(item) = selection_item(&target)
+            {
+                event.prevent_default();
+                let modifiers = Modifiers {
+                    shift: event.shift_key(),
+                    control: event.ctrl_key(),
+                    command: event.meta_key(),
+                };
+                let mut wb = callback_workbench.borrow_mut();
+                wb.interaction_coordinator_mut()
+                    .editor_mut()
+                    .select_item(item, modifiers);
+                save(&wb);
+                drop(wb);
+                let _ = render(&callback_document, &callback_workbench);
                 return;
             }
             if let Some(target) = event
@@ -954,7 +1021,7 @@ pub(crate) mod wasm {
                 EditorEffect::ClearPointPreview => {
                     wb.interaction_coordinator_mut().clear_transient();
                 }
-                EditorEffect::SelectionChanged(_) => {}
+                EditorEffect::SelectionChanged(_) | EditorEffect::HoverChanged(_) => {}
                 EditorEffect::CommitPointMove { .. } => {
                     match wb
                         .interaction_coordinator_mut()
@@ -1469,11 +1536,12 @@ pub(crate) mod wasm {
         } else {
             wb.construction_preview.as_ref()
         };
-        required(document, "wb-viewport")?.set_inner_html(&super::scene::svg_markup_with_pending(
+        required(document, "wb-viewport")?.set_inner_html(&super::scene::svg_markup_with_context(
             scene.as_ref(),
             accepted,
             selection,
             &pending,
+            coordinator.editor().hovered(),
             construction_preview,
             coordinator.current_problem_metadata().as_ref(),
             wb.camera.viewport(),

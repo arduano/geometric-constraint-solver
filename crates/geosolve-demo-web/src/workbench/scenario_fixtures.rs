@@ -41,6 +41,7 @@ pub(crate) enum ScenarioFixture {
     AlphaParity,
     AlphaBranchRecovery,
     CircleRelations,
+    M63Angles,
     AdvancedGallery,
     NurbsBranches,
     Operations,
@@ -68,6 +69,7 @@ impl ScenarioFixture {
             Self::AlphaParity => "Alpha relation and dimension parity",
             Self::AlphaBranchRecovery => "Explicit contact branches and recovery",
             Self::CircleRelations => "Circle tangent and normal relations",
+            Self::M63Angles => "Canvas angle and dimensions",
             Self::AdvancedGallery => "Advanced curve gallery",
             Self::NurbsBranches => "NURBS topology and branch state",
             Self::Operations => "Associative and companion operations",
@@ -436,6 +438,7 @@ pub(crate) struct ScenarioCandidate {
     alpha_parity: Box<RetainedEditorCoordinator>,
     alpha_branch: Box<AlphaBranchFixture>,
     circle_relations: Box<RetainedEditorCoordinator>,
+    m63_angles: Box<RetainedEditorCoordinator>,
     advanced_gallery: Box<RetainedEditorCoordinator>,
     nurbs_branches: Box<NurbsBranchFixture>,
     operations: Box<OperationFixture>,
@@ -462,6 +465,7 @@ impl ScenarioCandidate {
             alpha_parity: Box::new(alpha_parity_fixture()?),
             alpha_branch: Box::new(alpha_branch_fixture()?),
             circle_relations: Box::new(circle_relations_fixture()?),
+            m63_angles: Box::new(m63_angles_fixture()?),
             advanced_gallery: Box::new(advanced_gallery_fixture()?),
             nurbs_branches: Box::new(nurbs_branch_fixture()?),
             operations: Box::new(operation_fixture()?),
@@ -498,6 +502,7 @@ impl ScenarioCandidate {
             ScenarioFixture::AlphaParity => &self.alpha_parity,
             ScenarioFixture::AlphaBranchRecovery => &self.alpha_branch.coordinator,
             ScenarioFixture::CircleRelations => &self.circle_relations,
+            ScenarioFixture::M63Angles => &self.m63_angles,
             ScenarioFixture::AdvancedGallery => &self.advanced_gallery,
             ScenarioFixture::NurbsBranches => &self.nurbs_branches.coordinator,
             ScenarioFixture::Operations => &self.operations.coordinator,
@@ -521,6 +526,7 @@ impl ScenarioCandidate {
             ScenarioFixture::AlphaParity => &mut self.alpha_parity,
             ScenarioFixture::AlphaBranchRecovery => &mut self.alpha_branch.coordinator,
             ScenarioFixture::CircleRelations => &mut self.circle_relations,
+            ScenarioFixture::M63Angles => &mut self.m63_angles,
             ScenarioFixture::AdvancedGallery => &mut self.advanced_gallery,
             ScenarioFixture::NurbsBranches => &mut self.nurbs_branches.coordinator,
             ScenarioFixture::Operations => &mut self.operations.coordinator,
@@ -1235,6 +1241,51 @@ fn alpha_parity_fixture() -> Result<RetainedEditorCoordinator, String> {
     let mut fixture =
         alpha_scenario(AlphaScenarioKind::Corpus, 1.0).map_err(|error| error.to_string())?;
     add_contextual_constraint_examples(&mut fixture.document).map_err(|error| error.to_string())?;
+    let session = RetainedSketchDocumentSession::new(
+        fixture.document,
+        fixture.request,
+        SolverConfig::default(),
+    )
+    .map_err(|error| error.to_string())?;
+    RetainedEditorCoordinator::new(session).map_err(|error| error.to_string())
+}
+
+fn m63_angles_fixture() -> Result<RetainedEditorCoordinator, String> {
+    let mut fixture =
+        alpha_scenario(AlphaScenarioKind::DirectedAngle, 1.0).map_err(|error| error.to_string())?;
+    let AlphaScenarioIds::DirectedAngle(ids) = fixture.ids else {
+        return Err("directed-angle fixture returned incompatible roles".into());
+    };
+    let (first, second) = match &fixture
+        .document
+        .curve(ids.first)
+        .ok_or("directed-angle first line is missing")?
+        .definition
+    {
+        CurveDefinition::Line { start, end, .. } => (*start, *end),
+        _ => return Err("directed-angle first curve is not a line".into()),
+    };
+    let reference_target = fixture
+        .document
+        .add_scalar(
+            "M63 reference distance target",
+            1.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .map_err(|error| error.to_string())?;
+    fixture
+        .document
+        .add_dimension(
+            "reference line length",
+            DocumentDimensionDefinition::PointDistance {
+                first,
+                second,
+                target: reference_target,
+            },
+            DocumentDimensionMode::Reference,
+        )
+        .map_err(|error| error.to_string())?;
     let session = RetainedSketchDocumentSession::new(
         fixture.document,
         fixture.request,

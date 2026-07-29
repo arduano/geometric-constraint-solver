@@ -377,6 +377,11 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-point:hover { stroke: #efb856; }
 .wb-curve.selected,
 .wb-point.selected { stroke: #efb856; filter: drop-shadow(0 0 3px rgb(239 184 86 / 45%)); }
+.wb-curve.related,
+.wb-point.related {
+  stroke: #79bfc4;
+  filter: drop-shadow(0 0 4px rgb(121 191 196 / 48%));
+}
 .wb-curve.authoring-pending,
 .wb-point.authoring-pending {
   stroke: #79bfc4;
@@ -430,14 +435,55 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   transform: translateX(-50%);
 }
 .wb-draft-guide button { padding: 0.32rem 0.5rem; }
-.wb-glyph,
-.wb-dimension { fill: #d29a45; font: 700 13px ui-monospace, monospace; cursor: pointer; }
-.wb-dimension { fill: #79bfc4; font-weight: 500; }
-.wb-glyph.selected,
-.wb-dimension.selected { fill: #fff2c8; }
-.wb-glyph.has-problem,
+.wb-annotation { cursor: pointer; outline: none; }
+.wb-annotation.suppressed { opacity: 0.48; }
+.wb-annotation-hit { fill: transparent; stroke: none; pointer-events: all; }
+.wb-constraint-symbol {
+  fill: none;
+  stroke: #d7a654;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  vector-effect: non-scaling-stroke;
+}
+.wb-annotation-leader {
+  fill: none;
+  stroke: #8d774f;
+  stroke-dasharray: 2 2;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.wb-dimension {
+  fill: #79bfc4;
+  font: 500 12px ui-monospace, monospace;
+}
+.wb-dimension-line,
+.wb-dimension-witness,
+.wb-angle-arc {
+  fill: none;
+  stroke: #79bfc4;
+  stroke-linecap: round;
+  stroke-width: 1.25;
+  vector-effect: non-scaling-stroke;
+}
+.wb-dimension-witness { opacity: 0.62; }
+#wb-dimension-arrow path { fill: #79bfc4; stroke: none; }
+.wb-annotation:hover .wb-constraint-symbol,
+.wb-annotation.hovered .wb-constraint-symbol,
+.wb-annotation:focus .wb-constraint-symbol,
+.wb-annotation.selected .wb-constraint-symbol,
+.wb-dimension:hover,
+.wb-dimension.hovered,
+.wb-dimension:focus,
+.wb-dimension.selected {
+  fill: #fff2c8;
+  stroke: #fff2c8;
+  filter: drop-shadow(0 0 3px rgb(239 184 86 / 50%));
+}
+.wb-annotation.has-problem .wb-constraint-symbol,
 .wb-dimension.has-problem {
   fill: #ff8b7d;
+  stroke: #ff8b7d;
   filter: drop-shadow(0 0 4px rgb(255 82 69 / 60%));
 }
 .wb-error-overlay { pointer-events: none; }

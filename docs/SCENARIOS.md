@@ -1266,7 +1266,8 @@ scenarios above. Cleanup M46-M53 preserves their durable behavior through direct
 approved post-cleanup UAT. M54-M59 complete stable diagnostics, early alpha action parity,
 prepared concurrency, incremental scale and the separate operations/production-topology
 companions; M60 completes the advanced workbench and M61 completes its approved advanced UAT.
-M62 completes approved CAD-style constraint/dimension authoring. M63 is an unscoped placeholder
+M62 completes approved CAD-style constraint/dimension authoring. M63 adds the active
+geometry-anchored canvas constraint/dimension presentation candidate
 and no later release sequence is currently scheduled. Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -1758,7 +1759,8 @@ this pass: endpoint parameters may never be emitted with an Interior default nei
 
 Each checkpoint provides one manual entry point, deterministic resets and concise instructions.
 The top **Scenarios** entry now contains the eight stable M53 leaves, three direct-qualified M55
-leaves, four direct-qualified M60 leaves and ten movable M61-remediation leaves. The added M55
+leaves, four direct-qualified M60 leaves, ten movable M61-remediation leaves and three focused
+M63 canvas-constraint leaves. The added M55
 circle-relations leaf does not alter the M53 approval record. Each newly scoped milestone from M63
 onward will add its own focused UAT material only after its goals are approved.
 Findings capture the candidate revision, selected scenario,
@@ -1767,6 +1769,34 @@ human may attach an OS screenshot for a visual finding. Objective defects receiv
 owning-layer regressions. A targeted human recheck is preferred; a full checkpoint repeats
 only after a material API, schema or primary-workflow change. Completed M40.7, M53, M61 and M62
 required explicit supervising-human sign-off; future milestones require the same explicit closure.
+
+### M63-C1 - Geometry-anchored constraint annotations
+
+`EditorScene` now projects every active persistent constraint and dimension into typed finite
+screen-space presentation. Each annotation retains its constraint/dimension ID, semantic kind,
+direct point/curve operands, visibility policy and hit geometry. Constraints resolve point,
+curve-midpoint and evaluated-contact anchors through accepted public document data. Dimensions
+publish linear, radial, label or angular geometry. The browser renders these DTOs and owns no
+constraint-definition interpretation.
+
+All angles and all driving dimensions are visible at rest. Non-angle reference dimensions and
+constraint symbols appear only through direct operand hover/selection, annotation selection or a
+targeted current problem. Selecting a symbol emphasizes its direct operands without adding them
+to the editable selection. Shared glyph anchors fan out deterministically with compact leaders.
+Select-mode pointer hits prefer visible annotations; authoring remains geometry-only.
+
+### M63-U1 - Focused canvas-constraint UAT leaves
+
+One new root group, `m63-canvas-constraints` (**M63 Canvas constraints**), owns three stable leaves:
+
+| Stable scenario ID | Scenario title | Review purpose |
+| --- | --- | --- |
+| `canvas-angle-dimensions` | Canvas angle & dimension presentation | Always-visible angle arcs and values, driving dimensions, contextual reference dimensions and target editing. |
+| `canvas-relation-glyphs` | Contextual constraint symbols | Direct-relation hover discovery, persistent symbol selection, operand emphasis and authoring isolation. |
+| `canvas-crowded-annotations` | Crowded relation fan-out | Dense rotating-square relations, deterministic offsets/leaders, zoom/pan and independent selection. |
+
+The leaves reuse public deterministic fixtures and change neither canonical workspace persistence
+nor solver behavior. `docs/M63_UAT.md` owns the pending human scorecard.
 
 ## Frozen near-singular fixtures
 

@@ -2299,6 +2299,7 @@ impl RetainedEditorCoordinator {
                 }))
             }
             EditorEffect::SelectionChanged(_)
+            | EditorEffect::HoverChanged(_)
             | EditorEffect::PreviewPointMove { .. }
             | EditorEffect::RequestProjectedPointMove { .. }
             | EditorEffect::ClearPointPreview

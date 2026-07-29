@@ -706,6 +706,7 @@ fn pick_matrix(input: &Value) -> Result<String, String> {
             PickTolerance {
                 point_pixels: 0.0,
                 curve_pixels: 51.0,
+                annotation_pixels: 10.0,
             },
         )
         .ok_or("equal-distance curve tie missed")?;

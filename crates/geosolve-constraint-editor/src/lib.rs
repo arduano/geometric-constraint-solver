@@ -7,10 +7,15 @@
 //! sketch identities, and emits typed effects for a host to apply. It owns no solver
 //! equations, renderer, DOM integration, persistence, or platform event loop.
 
+mod annotations;
 mod authoring;
 mod coordinator;
 mod qualification;
 
+pub use annotations::{
+    SceneAnnotation, SceneAnnotationGeometry, SceneAnnotationKind, SceneAnnotationVisibility,
+    SceneConstraintGlyph, SceneGlyphMarker,
+};
 pub use authoring::{
     AuthoringApplication, AuthoringOperand, AuthoringOperandKind, AuthoringOptions,
     AuthoringOutcome, AuthoringState, AuthoringTool, AuthoringWarning,
@@ -168,6 +173,8 @@ pub struct EditorScene {
     pub viewport: Viewport,
     pub points: Vec<ScenePoint>,
     pub curves: Vec<SceneCurve>,
+    /// Accepted, geometry-derived constraint and dimension presentation.
+    pub annotations: Vec<SceneAnnotation>,
     construction_snap_points: Vec<ScenePoint>,
 }
 
@@ -280,12 +287,14 @@ impl EditorScene {
                 }
             }
         }
+        let annotations = annotations::build_annotations(document, &points, &curves, viewport);
         Ok(Self {
             accepted_revision,
             design_identity,
             viewport,
             points,
             curves,
+            annotations,
             construction_snap_points,
         })
     }
@@ -336,6 +345,31 @@ impl EditorScene {
             })
             .min_by(compare_hits)
     }
+
+    /// Returns the nearest visible annotation hit, preserving persistent identity.
+    #[must_use]
+    pub fn annotation_hit_test(
+        &self,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        selection: &[SelectionItem],
+        hovered: Option<SelectionItem>,
+        problem_items: &[SelectionItem],
+    ) -> Option<Hit> {
+        if !position.is_finite() || !tolerance.is_valid() {
+            return None;
+        }
+        self.annotations
+            .iter()
+            .filter(|annotation| annotation.is_visible(selection, hovered, problem_items))
+            .filter(|annotation| annotation.hit_test(position, tolerance.annotation_pixels))
+            .map(|annotation| Hit {
+                item: annotation.item,
+                distance_pixels: 0.0,
+                curve_parameter: None,
+            })
+            .next()
+    }
 }
 
 /// Screen-space picking tolerances. These are interaction policy, not geometry tolerance.
@@ -343,6 +377,7 @@ impl EditorScene {
 pub struct PickTolerance {
     pub point_pixels: f64,
     pub curve_pixels: f64,
+    pub annotation_pixels: f64,
 }
 
 impl Default for PickTolerance {
@@ -350,6 +385,7 @@ impl Default for PickTolerance {
         Self {
             point_pixels: 8.0,
             curve_pixels: 7.0,
+            annotation_pixels: 10.0,
         }
     }
 }
@@ -360,6 +396,8 @@ impl PickTolerance {
             && self.point_pixels >= 0.0
             && self.curve_pixels.is_finite()
             && self.curve_pixels >= 0.0
+            && self.annotation_pixels.is_finite()
+            && self.annotation_pixels >= 0.0
     }
 }
 
@@ -399,6 +437,8 @@ pub struct PointerInput {
 #[derive(Clone, Debug, PartialEq)]
 pub enum EditorEffect {
     SelectionChanged(Vec<SelectionItem>),
+    /// The persistent item currently under a presentation pointer changed.
+    HoverChanged(Option<SelectionItem>),
     PreviewPointMove {
         point: DesignPointId,
         model_position: [f64; 2],
@@ -1134,6 +1174,7 @@ struct Draft {
 #[derive(Clone, Debug)]
 pub struct ConstraintEditor {
     selection: Vec<SelectionItem>,
+    hovered: Option<SelectionItem>,
     curve_pick_parameters: Vec<(CurveSpan, f64)>,
     pick_tolerance: PickTolerance,
     drag_threshold_pixels: f64,
@@ -1152,6 +1193,7 @@ impl Default for ConstraintEditor {
     fn default() -> Self {
         Self {
             selection: Vec::new(),
+            hovered: None,
             curve_pick_parameters: Vec::new(),
             pick_tolerance: PickTolerance::default(),
             drag_threshold_pixels: 3.0,
@@ -1281,6 +1323,12 @@ impl ConstraintEditor {
         &self.selection
     }
 
+    /// Returns the persistent item currently under the pointer.
+    #[must_use]
+    pub const fn hovered(&self) -> Option<SelectionItem> {
+        self.hovered
+    }
+
     /// Returns the explicit user-picked parameter for one selected curve span.
     #[must_use]
     pub fn curve_pick_parameter(&self, span: CurveSpan) -> Option<f64> {
@@ -1321,6 +1369,16 @@ impl ConstraintEditor {
 
     /// Resolves a pointer press and changes selection immediately.
     pub fn pointer_down(&mut self, scene: &EditorScene, input: PointerInput) -> Vec<EditorEffect> {
+        self.pointer_down_with_problem_items(scene, input, &[])
+    }
+
+    /// Resolves a pointer press while including diagnostically forced annotations.
+    pub fn pointer_down_with_problem_items(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        problem_items: &[SelectionItem],
+    ) -> Vec<EditorEffect> {
         if !input.position.is_finite() {
             return Vec::new();
         }
@@ -1334,7 +1392,15 @@ impl ConstraintEditor {
         {
             effects.extend(self.cancel_point_gesture());
         }
-        let hit = scene.hit_test(input.position, self.pick_tolerance);
+        let hit = scene
+            .annotation_hit_test(
+                input.position,
+                self.pick_tolerance,
+                &self.selection,
+                self.hovered,
+                problem_items,
+            )
+            .or_else(|| scene.hit_test(input.position, self.pick_tolerance));
         let before = self.selection.clone();
         if let Some(hit) = hit {
             self.select_item(hit.item, input.modifiers);
@@ -1375,7 +1441,20 @@ impl ConstraintEditor {
             return self.draft_move(scene, input);
         }
         let Some(mut gesture) = self.point_gesture else {
-            return Vec::new();
+            if !input.position.is_finite() {
+                return Vec::new();
+            }
+            let hovered = scene
+                .annotation_hit_test(
+                    input.position,
+                    self.pick_tolerance,
+                    &self.selection,
+                    self.hovered,
+                    &[],
+                )
+                .or_else(|| scene.hit_test(input.position, self.pick_tolerance))
+                .map(|hit| hit.item);
+            return self.set_hovered(hovered);
         };
         if gesture.pointer_id != input.pointer_id || !input.position.is_finite() {
             return Vec::new();
@@ -1398,6 +1477,19 @@ impl ConstraintEditor {
             point: gesture.point,
             model_position: scene.viewport.screen_to_model(input.position),
         }]
+    }
+
+    /// Clears pointer hover when a presentation surface is left.
+    pub fn pointer_leave(&mut self) -> Vec<EditorEffect> {
+        self.set_hovered(None)
+    }
+
+    fn set_hovered(&mut self, hovered: Option<SelectionItem>) -> Vec<EditorEffect> {
+        if self.hovered == hovered {
+            return Vec::new();
+        }
+        self.hovered = hovered;
+        vec![EditorEffect::HoverChanged(hovered)]
     }
 
     /// Completes an active point gesture. A click emits no geometry edit.
@@ -1444,6 +1536,7 @@ impl ConstraintEditor {
     pub fn cancel(&mut self) -> Vec<EditorEffect> {
         let mut effects = self.cancel_draft();
         effects.extend(self.cancel_point_gesture());
+        effects.extend(self.set_hovered(None));
         effects
     }
 
@@ -2738,6 +2831,152 @@ mod tests {
             position: ScreenPoint { x, y },
             modifiers,
         }
+    }
+
+    #[test]
+    fn m63_annotations_are_geometry_anchored_contextual_and_pointer_selectable() {
+        let mut document = SketchDocument::new(8.0).expect("document");
+        let rectangle = document
+            .add_rectangle("annotated", [0.0, 0.0], 4.0, 3.0)
+            .expect("rectangle");
+        document
+            .set_dimension_mode(rectangle.dimensions[1], DocumentDimensionMode::Reference)
+            .expect("reference dimension");
+        let duplicate = document
+            .add_constraint(
+                "duplicate horizontal",
+                DocumentConstraintDefinition::Horizontal {
+                    line: CurveSpan::line(rectangle.curves[0]),
+                },
+            )
+            .expect("duplicate constraint");
+        let scene = scene(&document);
+        let horizontal_annotation = scene
+            .annotations
+            .iter()
+            .find(|annotation| {
+                annotation.kind == SceneAnnotationKind::Constraint(SceneConstraintGlyph::Horizontal)
+            })
+            .expect("horizontal annotation");
+        let horizontal = horizontal_annotation.item;
+        assert_eq!(
+            horizontal_annotation.visibility,
+            SceneAnnotationVisibility::Contextual
+        );
+        let related_curve = horizontal_annotation
+            .operands
+            .iter()
+            .find_map(|item| match item {
+                SelectionItem::Curve(span) => Some(*span),
+                _ => None,
+            })
+            .expect("constraint curve operand");
+        assert!(!horizontal_annotation.is_visible(&[], None, &[]));
+        assert!(horizontal_annotation.is_visible(
+            &[SelectionItem::Curve(related_curve)],
+            None,
+            &[]
+        ));
+        let driving = scene
+            .annotations
+            .iter()
+            .find(|annotation| annotation.item == SelectionItem::Dimension(rectangle.dimensions[0]))
+            .expect("driving dimension");
+        let reference = scene
+            .annotations
+            .iter()
+            .find(|annotation| annotation.item == SelectionItem::Dimension(rectangle.dimensions[1]))
+            .expect("reference dimension");
+        assert_eq!(driving.visibility, SceneAnnotationVisibility::Always);
+        assert_eq!(reference.visibility, SceneAnnotationVisibility::Contextual);
+        let duplicate_annotation = scene
+            .annotations
+            .iter()
+            .find(|annotation| annotation.item == SelectionItem::Constraint(duplicate))
+            .expect("duplicate annotation");
+        assert!(matches!(
+            &duplicate_annotation.geometry,
+            SceneAnnotationGeometry::Glyph { markers }
+                if markers.iter().any(|marker| marker.leader_from.is_some())
+        ));
+
+        let marker = match &horizontal_annotation.geometry {
+            SceneAnnotationGeometry::Glyph { markers } => markers[0].anchor,
+            _ => panic!("horizontal must be a glyph"),
+        };
+        let mut editor = ConstraintEditor::default();
+        editor.set_selection([SelectionItem::Curve(related_curve)]);
+        let effects =
+            editor.pointer_move(&scene, pointer(9, marker.x, marker.y, Modifiers::default()));
+        assert_eq!(effects, vec![EditorEffect::HoverChanged(Some(horizontal))]);
+        let effects =
+            editor.pointer_down(&scene, pointer(9, marker.x, marker.y, Modifiers::default()));
+        assert_eq!(editor.selection(), &[horizontal]);
+        assert_eq!(
+            effects,
+            vec![EditorEffect::SelectionChanged(vec![horizontal])]
+        );
+        assert_eq!(
+            editor.pointer_leave(),
+            vec![EditorEffect::HoverChanged(None)]
+        );
+    }
+
+    #[test]
+    fn m63_catalog_projects_every_constraint_in_representative_public_scenarios() {
+        for kind in [
+            geosolve_sketch::AlphaScenarioKind::Corpus,
+            geosolve_sketch::AlphaScenarioKind::NurbsDifferential,
+            geosolve_sketch::AlphaScenarioKind::M27ReferenceFillet,
+            geosolve_sketch::AlphaScenarioKind::M28TrimmedFillet,
+            geosolve_sketch::AlphaScenarioKind::SupportingOffset,
+            geosolve_sketch::AlphaScenarioKind::ExactTranslatedOffset,
+        ] {
+            let fixture = geosolve_sketch::alpha_scenario(kind, 1.0).expect("alpha scenario");
+            let scene = scene(&fixture.document);
+            let expected = fixture.document.constraints().iter().count();
+            let actual = scene
+                .annotations
+                .iter()
+                .filter(|annotation| matches!(annotation.kind, SceneAnnotationKind::Constraint(_)))
+                .count();
+            assert_eq!(
+                actual, expected,
+                "{kind:?} must project every active constraint"
+            );
+            let expected_dimensions = fixture.document.dimensions().iter().count();
+            let actual_dimensions = scene
+                .annotations
+                .iter()
+                .filter(|annotation| !matches!(annotation.kind, SceneAnnotationKind::Constraint(_)))
+                .count();
+            assert_eq!(
+                actual_dimensions, expected_dimensions,
+                "{kind:?} must project every active dimension"
+            );
+        }
+
+        let mut directed =
+            geosolve_sketch::alpha_scenario(geosolve_sketch::AlphaScenarioKind::DirectedAngle, 1.0)
+                .expect("directed angle");
+        let geosolve_sketch::AlphaScenarioIds::DirectedAngle(ids) = directed.ids else {
+            panic!("directed angle ids");
+        };
+        directed
+            .document
+            .set_dimension_mode(ids.dimension, DocumentDimensionMode::Reference)
+            .expect("reference angle");
+        let scene = scene(&directed.document);
+        let angle = scene
+            .annotations
+            .iter()
+            .find(|annotation| annotation.item == SelectionItem::Dimension(ids.dimension))
+            .expect("angle annotation");
+        assert_eq!(angle.visibility, SceneAnnotationVisibility::Always);
+        assert!(matches!(
+            angle.geometry,
+            SceneAnnotationGeometry::AngularDimension { .. }
+        ));
     }
 
     fn assert_relation_edit_is_available(

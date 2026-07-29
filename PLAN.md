@@ -35,7 +35,8 @@ M22 completed the built-in curve and generic differential-constraint surface, no
 the complete production embedding contract. M33-M45 close the first ordinary-CAD,
 host-integration and interaction-consumer cut; M46-M53 perform the cleanup rebase and approved
 host-semantics UAT; M54-M62 complete the subsequent functional work, approved advanced UAT and
-approved CAD-style authoring. M63 is intentionally unscoped pending supervising-user goals. This deliverable
+approved CAD-style authoring. M63 adds geometry-anchored canvas constraint and dimension
+presentation and is awaiting its human UAT. This deliverable
 does not include a solid B-rep kernel, meshing or 3D sketch curves.
 
 ### Deliverable 2: 2D and 3D rigid-body kinematics
@@ -2025,8 +2026,8 @@ M46-M53 are the completed cleanup and host-semantics UAT sequence. M54-M60 subse
 the functional sequence, M61 completed the advanced human UAT gate and M62 completed approved
 CAD-style authoring. On 2026-07-29 the
 supervising user withdrew the previously forecast M62-M64 hardening sequence so that additional
-UI, cleanup and product milestones can be scoped one at a time. M63 is now only the next empty
-placeholder and owns no inherited hardening scope.
+UI, cleanup and product milestones can be scoped one at a time. M63 is the active
+canvas-constraint presentation milestone and owns no inherited hardening scope.
 
 ## Pre-cleanup phase
 
@@ -2807,11 +2808,34 @@ Approval record (2026-07-29): after findings `M62-F001` through `M62-F005` were 
 mechanically requalified, the supervising human explicitly approved M62. This closes the
 milestone for the scope recorded above without assigning any scope to M63.
 
-### M63: unscoped placeholder
+### M63: canvas constraint visualization and interaction
 
-Status: intentionally empty pending supervising-user goals.
+Status: implementation candidate complete; supervising-human UAT pending.
 
-No goal, requirements, acceptance criteria or implementation work are assigned yet.
+Goal: make constraints and dimensions understandable and directly selectable at their accepted
+geometry without turning the canvas into a permanent icon cloud.
+
+- [x] Publish typed, finite, geometry-derived constraint/dimension annotations from
+  `geosolve-constraint-editor`, including persistent identity, semantic kind, direct operands,
+  visibility policy, selectable hit geometry and deterministic fan-out.
+- [x] Keep every angle and every driving dimension visible at its accepted geometry; keep
+  non-angle reference dimensions and ordinary constraint glyphs contextual.
+- [x] Give headless hover, selection and pointer hit testing ownership of annotation interaction.
+  Visible annotation hits precede geometry in Select mode, while constraint authoring remains
+  geometry-only.
+- [x] Render accessible CAD-like SVG symbols, angle arcs, witness lines, leaders, values,
+  selected/problem states and related-operand emphasis in the sole workbench.
+- [x] Cover the complete persistent constraint/dimension catalog through direct headless tests,
+  including contextual visibility, reference-angle override, fan-out, pointer selection and
+  public advanced-scenario projection.
+- [x] Add three focused reusable scenario leaves under **M63 Canvas constraints** for angle and
+  dimension presentation, contextual relation discovery and crowded annotation fan-out.
+- [x] Pass the common clean format, warnings-denied Clippy, workspace-test, WASM and release Trunk
+  gates from the final candidate.
+- [ ] Complete and explicitly approve `docs/M63_UAT.md`.
+
+No solver equation, residual, persistent document schema, branch rule, mobile claim, legacy E2E
+harness or `/#/dev/lab` route is added.
 
 ## Explicit non-goals
 

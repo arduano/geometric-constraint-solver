@@ -25,8 +25,9 @@ advanced constructions, generic fillets and persistent trim views, interactive
 construction/NURBS UAT and certified all-family visual profiles.
 
 - **Baseline:** implemented and accepted behavior through M62. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology; M59 adds the read-only production-topology companion with exact accepted-input provenance and fail-closed completeness; M60 exposes the advanced curves, explicit NURBS branches, companion operations, production topology and versioned desktop workspace through the sole directly tested workbench; M61 completes approved supervising-human advanced geometry/topology UAT after targeted remediation; M62 completes approved CAD-style constraint and dimension authoring. M1-M7 remain the frozen regression baseline.
-- **Active target:** M63 is an intentionally empty placeholder awaiting supervising-user goals.
-- **Planned sequence:** none beyond the empty M63 placeholder; every newly scoped milestone will
+- **Active target:** M63 is the geometry-anchored canvas constraint/dimension presentation
+  candidate awaiting its dedicated supervising-human UAT.
+- **Planned sequence:** none beyond M63; every newly scoped milestone will
   end in its own human UAT.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
@@ -34,7 +35,7 @@ A target statement must not be exposed as an implemented capability before its m
 `PLAN.md` owns current execution numbering. Milestone labels in the preserved M8
 completion record and in ADRs accepted before the playground rebaseline describe the
 allocation at acceptance time; their architectural decisions remain accepted, but
-current ownership is the completed M10-M62 sequence and empty M63 placeholder listed in section
+current ownership is the completed M10-M62 sequence and active M63 canvas-constraint milestone listed in section
 15.
 
 ## 3. Crate responsibilities
@@ -636,4 +637,5 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   metadata, parameter-consistent bounded-contact neighborhoods, accepted-geometry dimension
   seeding, branch-explicit acute-degree line-angle presentation, retained dimension target
   editing and ordinary-workspace UAT.
-- M63: intentionally empty placeholder awaiting supervising-user goals.
+- M63: typed geometry-anchored constraint/dimension annotations, headless hover and picking,
+  contextual density policy, accessible SVG presentation and a dedicated human UAT.

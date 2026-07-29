@@ -155,7 +155,8 @@ M8 is ready for review only when every item below is objectively present. These 
 
 The checked wording below is the preserved M8 completion record. Its then-current M8-M22
 allocations are historical; `PLAN.md` now governs completed work through the approved M61 gate
-and approved M62 authoring milestone, with M63 retained only as an empty placeholder.
+and approved M62 authoring milestone, with M63 now owning the active canvas-constraint
+presentation candidate.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -938,7 +939,7 @@ finding dispositions and approval record are retained in `docs/M53_UAT.md`.
 ## M54-M63 acceptance
 
 M54-M62 are the completed post-M53 sequence. M62 received explicit supervising-human approval on
-2026-07-29. M63 is an empty placeholder with no acceptance criteria. No old browser E2E
+2026-07-29. M63 is the active canvas-constraint visualization milestone. No old browser E2E
 qualification may return.
 
 ### M54: stable diagnostics
@@ -1186,9 +1187,26 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
 - The supervising human explicitly approved `docs/M62_UAT.md` in the ordinary workspace on
   2026-07-29.
 
-### M63: unscoped placeholder
+### M63: canvas constraint visualization and interaction
 
-No acceptance criteria exist until the supervising user assigns M63 a goal and scope.
+- Accepted editor scenes expose typed constraint/dimension annotations with persistent identity,
+  direct operands, finite geometry anchors, semantic kind, visibility policy and hit geometry.
+- The headless editor owns hover identity and annotation-first Select-mode picking. Constraint
+  authoring continues to pick geometry only and one physical canvas click has one owner.
+- Every angle dimension is always visible. Other driving dimensions are always visible;
+  non-angle reference dimensions and constraint symbols appear through direct geometry context,
+  their own selection/hover or targeted problem state.
+- Selecting or hovering an annotation reveals and emphasizes all direct operands without adding
+  them to the editable selection. Unrelated relation clusters remain hidden.
+- Every persistent constraint and dimension family receives geometry-appropriate accepted-state
+  placement. Shared glyph anchors use deterministic compact fan-out and leaders.
+- The sole workbench renders accessible vector symbols, angle arcs, dimension/witness lines,
+  values, focus, selection and problem states without reconstructing constraint semantics.
+- Three stable **M63 Canvas constraints** leaves directly exercise angle/dimension presentation,
+  contextual relation symbols and crowded fan-out. Scenario state remains ephemeral.
+- Direct native editor and workbench presentation tests, locked all-feature workspace tests,
+  warnings-denied Clippy, WASM check and release Trunk build pass.
+- `docs/M63_UAT.md` receives explicit supervising-human approval before M63 closes.
 
 ## Regression and oracle policy
 
