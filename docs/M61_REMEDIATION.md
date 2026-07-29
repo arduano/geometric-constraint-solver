@@ -6,7 +6,7 @@ Date: 2026-07-29
 
 Status: objective remediation complete; replacement human UAT pending
 
-Implementation source: `1f5fd59`
+Implementation source: `1f5fd59`; targeted interaction repair: `1c314e9`
 
 ## 1. Files and APIs added
 
@@ -53,7 +53,7 @@ nix-shell shell.nix --run 'cargo check --locked -p geosolve-demo-web --target wa
 nix-shell shell.nix --run 'cd crates/geosolve-demo-web && env -u NO_COLOR trunk build --release'
 ```
 
-Outcome: pass. The editor passes 63 unit and seven M55 integration tests; demo-web passes 44
+Outcome: pass. The editor passes 63 unit and seven M55 integration tests; demo-web passes 45
 direct tests. WASM check and release Trunk build pass.
 
 Complete release qualification:
@@ -68,6 +68,8 @@ test suite, all three WASM checks and the release Trunk build completed successf
 ## 4. Acceptance criteria passed
 
 - Every new mechanism reports the documented nonzero mobility and one valid selected driver.
+- Repeated bidirectional twin-roller drags include the opposite persistent center as a transient
+  stability target and retain that passive center within `1e-9` of its accepted position.
 - A projected scissor drag advances accepted state and moves dependent geometry; Reset restores
   exact initial geometry/selection.
 - Active scenario interaction and camera controls do not publish ordinary workspace persistence.
@@ -81,6 +83,17 @@ test suite, all three WASM checks and the release Trunk build completed successf
 
 No new residual was added, so no new residual Jacobian implementation or finite-difference
 Jacobian test is required.
+
+### Post-candidate interaction repair
+
+Human review found `M61-F001`: the generic web projected-drag path omitted the `MotionCam`
+fixture's passive stability target, so the other independent roller could jump along its own DOF
+and make dragging severely laggy. Repair `1c314e9` adds a small headless coordinator method that
+accepts only the passive persistent point identity, obtains its authoritative accepted position
+and constructs the temporary stability request. Scenario metadata maps both roller directions to
+their opposite passive center. A direct repeated-drag regression checks both directions and
+inspects the actual transient request; no solver equation, persistent constraint or browser-owned
+coordinate policy was added.
 
 ## 5. Known limitations and next blocker
 

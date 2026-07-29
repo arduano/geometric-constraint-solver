@@ -261,7 +261,11 @@ Expected behavior:
 
 - `stress-compass`: a fixed 30-degree bisector carries two symmetric equal-length arms, a reference 60-degree oriented angle, and reference arm/chord dimensions. It loads with one rotational DOF so either tip drives the symmetric mechanism; switching the angle to driving locks the compass at zero DOF and exposes one intentionally redundant hard row.
 - `stress-bridge`: two cubic Beziers meet through explicit End/Start contacts and aligned generic curve-curve tangency. The equal seam-handle source loads suppressed, exposing one bounded seam-sliding DOF; restoring it locks the C1 seam. A drag toward a collapsed handle projects to valid geometry, while an exact edit/import collapse rejects as degenerate and retains the accepted bridge.
-- `motion-cam`: two equal-radius circles have independent generic tangencies to a fixed quadratic Bezier cam. The document loads with two DOF; dragging either center makes that roller follow the cam's normal-offset path while a transient stability target leaves the other roller stationary.
+- `motion-cam`: two equal-radius circles have independent generic tangencies to a fixed quadratic
+  Bezier cam. The document loads with two DOF; dragging either center makes that roller follow the
+  cam's normal-offset path while a transient stability target leaves the other roller stationary.
+  `M61-F001` directly regresses the workbench route in both directions so that this domain fixture
+  policy cannot be dropped at the headless/UI seam.
 - `motion-orbit`: a radius-1 satellite circle is externally tangent to a fixed radius-3 circle through generic curve contact with explicit opposed tangent orientation and periodic contact state. It loads with one orbital DOF; center drag follows the complete radius-4 locus while retaining the external-tangency branch.
 - `motion-trammel`: the ends of a length-5 bar slide on perpendicular bounded rails. Two nested midpoint constraints place a tracer one quarter of the way from the vertical slider, so projected drag reveals an exact ellipse without an ellipse primitive or equation in the browser.
 - `motion-scotch-yoke`: a length-5 crank rotates about a fixed center while a vertical slot shares its pin and its opposite end is restricted to a horizontal guide. Crank rotation therefore emerges as sinusoidal slider travel from only distance, vertical and fixed-coordinate constraints.
@@ -1618,6 +1622,11 @@ Canvas selection and projected point movement dispatch to the rendered scenario 
 Accepted release changes only that ephemeral candidate; save remains suppressed. Reset rebuilds
 the same public fixture and selected persistent driver. Exit reveals the ordinary coordinator
 whose canonical workspace bytes never changed.
+
+For `twin-roller-bezier-cam`, motion metadata names both active/passive directions. The scenario
+passes only the passive persistent point identity to the headless coordinator; the coordinator
+reads its current accepted position and owns the transient stability target. Thus the selected
+roller consumes one independent cam-contact freedom without allowing the other roller to wander.
 
 Ordinary mode now exposes reusable headless construction tools for quadratic/cubic Beziers,
 ellipse, directed elliptical arc, rational quadratic conic, trimmed parabola, chosen-branch

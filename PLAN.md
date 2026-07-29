@@ -2606,6 +2606,9 @@ review after objective direct qualification.
   topology atomically; sample advanced previews only through public sketch curve evaluation.
 - [x] Revoke the original scorecard candidate and replace its instructions with the expanded
   mechanism, camera, authoring, navigation, branch, operation and topology review.
+- [x] Resolve `M61-F001` by routing the twin-roller cam's active/passive persistent identities
+  through headless stabilized projection; directly regress repeated drags in both directions with
+  the passive center stationary.
 
 Remediation notes (2026-07-29): the M61 subtree now contains an **Interactive mechanisms** branch
 with **Compact mechanisms** and **Linkage mechanisms** grandchildren plus the four preserved
@@ -2615,6 +2618,9 @@ Peaucellier linkage. The active scenario owns all selection/projected-drag effec
 persistence remains disabled. The editor/workbench construct every requested advanced family
 through public document/session APIs; no equation, deleted playground, `/#/dev/lab` or browser
 harness returned. `docs/M61_UAT.md` records the replacement scorecard and no human approval.
+Targeted repair `1c314e9` preserves the motion-cam fixture's intended independent freedoms while
+holding the non-dragged roller at its accepted position through an interaction-only stability
+target. It adds no equation or persistent constraint; targeted human recheck remains pending.
 
 ### M62: API and schema release-candidate freeze
 

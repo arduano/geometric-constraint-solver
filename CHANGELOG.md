@@ -132,6 +132,9 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   and projected drag now target the rendered ephemeral coordinator; recursive third-level desktop
   flyouts no longer clip; invalid advanced construction remains atomic. No deleted playground,
   `/#/dev/lab`, browser E2E or legacy UAT harness returned.
+- Fixed `M61-F001`: twin-roller cam drag now preserves the non-dragged roller through a
+  coordinator-owned transient stability target in either direction, preventing independent-DOF
+  jumps and the associated interaction lag.
 
 ## [0.2.0] - 2026-07-22
 

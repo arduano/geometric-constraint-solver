@@ -85,9 +85,10 @@ M60 added public companion presentation, four deterministic advanced/topology sc
 a versioned canonical-v4/draft-v5 desktop workspace envelope while retaining the full M55 action
 surface. M61 remediation adds ten movable nonzero-DOF mechanism leaves, active-scenario projected
 drag, unclipped recursive flyouts, full Bezier/conic/NURBS authoring and an inspectable canvas
-camera. The active milestone is **M61: human UAT 3 — advanced geometry and topology**. Old Chromium/CDP, HTTP
-serving, DOM-scraping, screenshot, wall-clock browser-timing and source-substring-scan gates remain
-retired.
+camera. Follow-up `M61-F001` restores the twin-roller fixture's passive stability target at the
+headless/UI seam. The active milestone is **M61: human UAT 3 — advanced geometry and topology**.
+Old Chromium/CDP, HTTP serving, DOM-scraping, screenshot, wall-clock browser-timing and
+source-substring-scan gates remain retired.
 
 Completed M53 finding M53-P011 replaced only the M52 candidate's one-off launcher and overlay with
 six reusable typed host-semantics scenario definitions, a nested **Scenarios** selector and a

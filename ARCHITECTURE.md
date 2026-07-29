@@ -296,6 +296,13 @@ public alpha fixture and exit reveals the unchanged ordinary workspace. Ten mech
 public `alpha_scenario` constructors and preselect their documented persistent driver. Canvas
 camera state remains web-only and affects only the supplied editor viewport.
 
+`M61-F001` preserves multi-freedom interaction policy at that same boundary. A scenario may name
+one passive persistent point for a projected drag; the headless coordinator, not the browser,
+reads its authoritative accepted position and adds the temporary stability target. The
+twin-roller cam maps either roller to the other, so one independent contact can be manipulated
+without the passive contact wandering. This is interaction state, not a new residual or persistent
+constraint.
+
 ## 4. Numerical representation and linearization
 
 A problem contains variable blocks `x` and residual blocks `r_i(x_incident)`. Every variable has an ambient representation, a tangent dimension, a local retraction and positive finite characteristic step scales. Every residual declares its source, priority category, ordered local incidence, output dimension, positive finite residual scales, evaluator, Jacobian path and audit rows.

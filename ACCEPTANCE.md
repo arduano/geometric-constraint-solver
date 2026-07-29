@@ -1098,6 +1098,8 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
 - Ten representative public alpha mechanisms expose documented nonzero equality/bounded mobility,
   preselect one persistent driver, accept projected drag through the active ephemeral coordinator,
   reset exactly and never mutate ordinary workspace persistence.
+- Twin-roller cam projected drag supplies the opposite roller as a headless transient stability
+  target in both directions; repeated previews retain the passive accepted center within `1e-9`.
 - Recursive desktop scenario branches expand to the right through the compact/linkage third level
   without flyout clipping or nested scroll overflow.
 - Wheel zoom is cursor-anchored; middle-drag pan, explicit zoom controls and Fit remain available

@@ -4,7 +4,8 @@
 
 Status: remediated candidate ready for supervising-human review; approval not yet recorded
 
-Candidate source: `1f5fd59` plus its documentation-only qualification commit.
+Candidate source: `1f5fd59`, targeted interaction repair `1c314e9`, plus the
+documentation-only qualification commit.
 
 ## Candidate history
 
@@ -25,6 +26,14 @@ The replacement candidate:
 - provides cursor-anchored wheel zoom, middle-drag pan, zoom buttons, scale feedback, and Fit.
 
 No deleted playground, `/#/dev/lab`, browser E2E, CDP, or legacy UAT harness was restored.
+
+After the replacement candidate entered human review, `M61-F001` found that
+`twin-roller-bezier-cam` omitted its public fixture's passive-roller stability target in the
+workbench interaction adapter. The unconstrained independent roller could therefore move along
+its own cam-contact DOF while the selected roller was dragged. Commit `1c314e9` routes the
+scenario's persistent active/passive identities through a headless coordinator API that reads the
+accepted passive position and constructs the transient stability target. Repeated bidirectional
+drag is directly regressed; only the targeted human recheck remains.
 
 ## Entry point
 
@@ -95,6 +104,11 @@ Pass when dependent geometry follows solver-permitted motion, hard validity rema
 branches do not flip accidentally, and reset exactly restores the start. Record a blocker if a
 documented movable fixture cannot move, reports zero usable mobility, or changes the ordinary
 workspace.
+
+For **Twin-roller Bezier cam**, drag the left roller repeatedly and confirm the right roller
+remains stationary. Then select and drag the right roller and confirm the left remains stationary.
+Record a blocker for passive motion, contact jumping, or pointer-event lag that makes the
+interaction unusable.
 
 Then sample the trammel, Scotch yoke, rotating square, Bezier bridge, and Peaucellier linkage.
 These provide representative curve-contact, ordinary-constraint, rigid-link, scissor, and exact
@@ -174,6 +188,24 @@ Problems, diagnostics, and typed evidence without following every instruction.
 
 Pass when navigation stays quick through third-level flyouts, accepted-versus-attempted truth is
 clear, and interaction feels responsive enough for a desktop diagnostic workbench.
+
+## Recorded findings
+
+### M61-F001 — passive twin-roller motion and drag lag
+
+- Scenario: `twin-roller-bezier-cam`.
+- Reproduction: repeatedly drag either roller along the quadratic Bezier cam.
+- Expected: only the selected roller follows its independent contact DOF; the passive roller stays
+  at its current accepted position.
+- Original observation: the passive roller could jump along its independent contact and repeated
+  synchronous solves/redraws became severely laggy.
+- Classification: objective defect.
+- Cause: the generic workbench projected-drag route disabled previous-state preferences but did
+  not forward the `MotionCam` fixture's transient stability target.
+- Resolution: `1c314e9` adds a headless stabilized-projection seam, bidirectional scenario
+  active/passive metadata, and a repeated-drag regression proving the passive center remains
+  within `1e-9` of its accepted position.
+- Status: mechanically requalified; targeted supervising-human recheck pending.
 
 ## Scorecard
 
