@@ -25,9 +25,8 @@ M61 UAT resumes.
 | Horizontal | linear span | `Horizontal` |
 | Vertical | linear span | `Vertical` |
 | Parallel | two linear spans | `Parallel` |
-| Parallel | linear span + regular curve | tangent `CurveDirection` |
 | Perpendicular | two linear spans | `Perpendicular` |
-| Perpendicular | linear span + regular curve | sided-normal `CurveDirection` |
+| Perpendicular / Normal | linear span + circle or circular arc | `PointOnCurve` placing the circular centre on the line |
 | Equal | two linear spans | `EqualLength` |
 | Equal | two circles/arcs | `EqualRadius` |
 | Equal | two other regular curves | branch-explicit `EqualCurvature` |
@@ -51,10 +50,11 @@ parity evidence; it must never be a coordinate-derived substitution.
 
 Contact-bearing actions carry the complete semantic span, parameter domain and
 value, winding, neighborhood and optional aligned/opposed tangent orientation.
-Line-to-curve direction carries aligned/opposed tangent orientation or left/right
-normal side. Equal curvature carries signed, magnitude-same-sign or
-magnitude-opposite-sign state. Continuity carries order and, for parametric C2,
-positive finite first/second rates.
+Equal curvature carries signed, magnitude-same-sign or magnitude-opposite-sign
+state. Continuity carries order and, for parametric C2, positive finite
+first/second rates. A circular normal needs no left/right branch: centre-on-line
+incidence makes the selected line radial, and its two circle intersections are
+the two possible normal contact locations.
 
 The resolver must not infer internal/external containment, side, orientation,
 contact span, winding, neighborhood, curvature sign or continuity order from
@@ -69,11 +69,16 @@ EqualAngle and BlockEntity relations. It is not part of
 workspace envelope. Those relations must not be presented as ordinary retained
 actions until M62 deliberately freezes their lifecycle and schema integration.
 
-Likewise, arbitrary curve-to-curve direction-only parallel/perpendicular is not
-an implemented residual. The supported contextual form is one linear reference
-plus one regular curve contact. A future general curve-pair angle residual would
-require structured audit metadata, an independent finite-difference Jacobian
-test and explicit contact/orientation regression scenarios.
+The public sketch domain retains `CurveDirection` for callers that deliberately
+need a direction at an explicit curve contact. Compact authoring does not expose
+it as Parallel, Tangent, Perpendicular, or Normal. On a full circle a free
+direction contact can move to wherever the requested direction occurs, so that
+relation does not establish either contact with the selected line or a radial
+normal. Arbitrary curve-pair direction-only parallel/perpendicular therefore
+remains outside this authoring vocabulary. A future general curve-pair angle
+residual would require structured audit metadata, an independent
+finite-difference Jacobian test and explicit contact/orientation regression
+scenarios.
 
 ## Qualification
 
@@ -82,8 +87,9 @@ test and explicit contact/orientation regression scenarios.
 - Workbench tests freeze the compact identity catalog, contextual labels and
   absence of the former Point-on-curve/Equal-length/Equal-radius/Generic-contact/
   Generic-tangency action identities.
-- Reusable scenarios demonstrate point/curve contact, curve/curve contact,
-  line/curve normal direction, equal curvature and endpoint continuity.
+- Reusable scenarios demonstrate point/curve contact, true curve/curve
+  tangency, circular radial normal incidence, equal curvature and endpoint
+  continuity.
 - Format, warnings-denied workspace Clippy, complete locked workspace tests,
   all-feature demo-web WASM check and release Trunk build must pass.
 

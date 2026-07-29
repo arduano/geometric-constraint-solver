@@ -126,15 +126,16 @@ identities are removed rather than retained as aliases.
 ### 2. Mathematical behavior implemented
 
 No residual equation was added or changed. Typed selected operands resolve Coincident to point
-coincidence, point-on-curve or curve contact; Equal to equal length, radius or curvature;
-Parallel/Perpendicular to a line-pair relation or explicit line-to-curve tangent/normal direction;
-Tangent to generic curve-pair tangency; and Continuity to endpoint G0/G1/G2 or rate-explicit
-parametric C2.
+coincidence, point-on-curve or curve contact; Equal to equal length, radius or curvature; Parallel
+to a line-pair relation; Perpendicular / Normal to either a line-pair relation or circular-centre
+incidence on a selected line; Tangent to generic curve-pair tangency; and Continuity to endpoint
+G0/G1/G2 or rate-explicit parametric C2.
 
-Contact span/domain/parameter/winding/neighborhood/orientation, tangent orientation or normal side,
-curvature sign/magnitude branch, continuity order and positive C2 rates remain explicit choices.
-Curve hit testing retains the selected parameter for contact seeding, and endpoint Start/End
-selection maps to exact bounded endpoint parameters.
+Contact span/domain/parameter/winding/neighborhood/orientation, tangent orientation, curvature
+sign/magnitude branch, continuity order and positive C2 rates remain explicit choices. Curve hit
+testing retains the selected parameter for contact seeding, and endpoint Start/End selection maps
+to exact bounded endpoint parameters. A circular normal has no arbitrary side choice: the existing
+point-on-curve definition constrains the circle or arc centre onto the selected line.
 
 ### 3. Exact commands run and outcomes
 
@@ -162,22 +163,40 @@ Formatting, warnings-denied workspace Clippy, the complete locked all-feature wo
 all-feature demo-web WASM check and Trunk 0.21.14 release build pass. The final documentation commit
 also passes formatting and diff checks.
 
+`M61-F005` requalification after replacing direction-only circle authoring:
+
+```bash
+nix-shell shell.nix --run 'cargo test --locked -p geosolve-constraint-editor --all-features --test m55'
+nix-shell shell.nix --run 'cargo test --locked -p geosolve-demo-web --all-features'
+nix-shell shell.nix --run 'cargo clippy --locked -p geosolve-constraint-editor -p geosolve-demo-web --all-targets --all-features -- -D warnings'
+nix-shell shell.nix --run 'cargo fmt --all -- --check && cargo clippy --locked --workspace --all-targets --all-features -- -D warnings && cargo test --locked --workspace --all-features && cargo check --locked -p geosolve-demo-web --target wasm32-unknown-unknown'
+nix-shell ../../shell.nix --run 'env -u NO_COLOR trunk build --release'
+git diff --check
+```
+
+The focused M55 integration suite passes 13/13, demo-web passes 49/49, focused and workspace
+warnings-denied Clippy pass, the complete locked all-feature workspace suite passes, the
+all-feature WASM check passes, Trunk 0.21.14 produces the release distribution, and the diff check
+is clean.
+
 ### 4. Acceptance criteria passed
 
 - One compact intent vocabulary preserves the complete relevant M55 mathematical surface.
 - The headless boundary owns contextual resolution, underlying-definition metadata, branch-choice
   progression and typed disabled reasons.
 - The browser owns labels and controls only; former equation-shaped action identities are absent.
-- Curve contact, line/curve direction, equal curvature and endpoint continuity execute through
-  public retained sketch edits with accepted/rejected lifecycle coverage.
+- Curve contact, true curve tangency, circular radial normal incidence, equal curvature and
+  endpoint continuity execute through public retained sketch edits with accepted/rejected
+  lifecycle coverage.
 - Reusable UAT scenarios demonstrate the new relations without restoring `/#/dev/lab`, browser
   E2E or a legacy harness.
 
 ### 5. Known limitations and next blocker
 
-Arbitrary curve-to-curve direction-only Parallel/Perpendicular remains unsupported; the supported
-contextual direction form is one line plus one regular curve. Concentric, Collinear, point-pair
-Horizontal/Vertical, Point/Entity Symmetry, EqualDistance, EqualAngle and BlockEntity remain in the
-separate M36/M37 semantic catalog until M62 freezes their retained lifecycle and schema.
+The public domain-level `CurveDirection` definition remains available for explicit-contact
+consumers, but compact Parallel/Perpendicular authoring intentionally does not expose
+direction-only line/curve relations. Concentric, Collinear, point-pair Horizontal/Vertical,
+Point/Entity Symmetry, EqualDistance, EqualAngle and BlockEntity remain in the separate M36/M37
+semantic catalog until M62 freezes their retained lifecycle and schema.
 
 The active product gate remains the remediated M61 human advanced geometry/topology UAT.

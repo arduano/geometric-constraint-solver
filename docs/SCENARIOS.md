@@ -1430,13 +1430,14 @@ definitions may construct deterministic alpha operands that ordinary core tools 
 but accepted geometry and outcomes still come exclusively from public sketch/editor APIs. No
 scenario contains an equation, expected-coordinate shortcut or browser-owned compatibility rule.
 
-The reusable catalog root is now `uat-scenarios` (**GeoSolve scenarios**). It retains the complete
-eight-leaf `m53-host-semantics` subtree and adds this independent M55 subtree:
+The reusable catalog root is `uat-scenarios` (**GeoSolve scenarios**). It retains the complete
+eight-leaf `m53-host-semantics` subtree and contains this independent M55 subtree:
 
 | Selector group | Stable scenario ID | Scenario title | Direct purpose |
 | --- | --- | --- | --- |
-| `m55-action-parity` (**M55 Action parity**) | `alpha-parity-catalog` | Alpha relation & dimension catalog | Inspect the accepted public alpha corpus, semantic relation glyphs and all five dimension annotations without a legacy app. |
-| `m55-action-parity` (**M55 Action parity**) | `alpha-branch-recovery` | Contact branch & rejection recovery | Exercise typed A3 tangent-orientation state, a retained impossible fixed contact, accepted-state truth and bounded Undo recovery. |
+| `m55-action-parity` (**M55 Contextual constraints**) | `alpha-parity-catalog` | Contextual relation & dimension catalog | Inspect the accepted public alpha corpus, semantic relation glyphs and all five dimension annotations without a legacy app. |
+| `m55-action-parity` (**M55 Contextual constraints**) | `alpha-branch-recovery` | Contact branch & rejection recovery | Exercise typed A3 tangent-orientation state, a retained impossible fixed contact, accepted-state truth and bounded Undo recovery. |
+| `m55-action-parity` (**M55 Contextual constraints**) | `circle-tangent-normal` | Circle tangent & radial normal | Compare true shared-contact tangency with circle-centre-on-line radial normal incidence. |
 
 `alpha-parity-catalog` uses `AlphaScenarioKind::Corpus` through the public sketch scenario
 constructor. It adds no workbench-owned fixture equation or expected-coordinate shortcut. The
@@ -1461,16 +1462,19 @@ resolver. Direct cases cover:
 
 1. Coincident resolving to point/point coincidence, point-on-curve and curve/curve contact;
 2. Equal resolving to line length, circular radius and explicit equal curvature;
-3. Parallel/Perpendicular resolving to line-pair relations or explicit tangent/normal
-   line-to-curve direction;
+3. Parallel resolving to line pairs, and Perpendicular / Normal resolving to either line pairs or
+   radial circle/arc centre-on-line incidence;
 4. Tangent resolving to generic all-family curve tangency with explicit contact orientation; and
 5. Continuity resolving to ordered endpoint G0/G1/G2/parametric-C2 state with positive finite
    explicit rates.
 
 The selector adds reusable demonstrations only after their direct fixture builders pass. Scenario
 definitions contain no equation, coordinate-derived branch choice or browser-owned applicability
-rule. The former Point-on-curve, Equal-length, Equal-radius, Generic-contact and Generic-tangency
-workbench action identities are removed rather than retained as aliases.
+rule. The public domain-level `CurveDirection` relation remains available for deliberate explicit
+contact consumers, but is not exposed as compact line/curve Parallel or Perpendicular because it
+does not establish contact and is direction-vacuous on a full circle. The former Point-on-curve,
+Equal-length, Equal-radius, Generic-contact and Generic-tangency workbench action identities are
+removed rather than retained as aliases.
 
 ### M56-C1 - Prepared worker ordering and cancellation
 
@@ -1582,8 +1586,8 @@ identity contract exists. The companion depends directly only on `geosolve-sketc
 
 ### M60-W1 - Advanced workbench and deterministic M61 scenarios
 
-The sole directly tested workbench retains the complete M55 action surface and the exact ten
-existing M53/M55 scenario IDs. M60 adds one sibling root group,
+The sole directly tested workbench retains the complete M55 action surface and the ten M53/M55
+scenario IDs that existed at the M60 freeze. M60 adds one sibling root group,
 `m61-advanced-topology` (**M61 Advanced geometry & topology**), with four stable leaves:
 
 | Stable scenario ID | Scenario title | Direct purpose |
@@ -1683,12 +1687,11 @@ matrix.
 
 ### UAT evidence and recheck policy
 
-Each checkpoint provides one manual entry point, deterministic resets and concise
-instructions. The top **Scenarios** entry now contains the eight stable M53 leaves, two
-direct-qualified M55 leaves, four direct-qualified M60 leaves and ten movable M61-remediation
-leaves; the M53/M55
-subtrees and M53 approval record are unchanged. UAT-C3 is ready after M60; the catalog machinery
-may host UAT-C4 only after its preceding milestone is executed.
+Each checkpoint provides one manual entry point, deterministic resets and concise instructions.
+The top **Scenarios** entry now contains the eight stable M53 leaves, three direct-qualified M55
+leaves, four direct-qualified M60 leaves and ten movable M61-remediation leaves. The added M55
+circle-relations leaf does not alter the M53 approval record. UAT-C3 is ready after M60; the
+catalog machinery may host UAT-C4 only after its preceding milestone is executed.
 Findings capture the candidate revision, selected scenario,
 workspace input, action transcript and accepted/attempted diagnostics from public APIs; a
 human may attach an OS screenshot for a visual finding. Objective defects receive direct

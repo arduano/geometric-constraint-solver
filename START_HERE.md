@@ -89,7 +89,9 @@ explicit relation choice at the headless boundary, and retains picked curve para
 seeding. M61 remediation adds ten movable nonzero-DOF mechanism leaves, active-scenario projected
 drag, unclipped recursive flyouts, full Bezier/conic/NURBS authoring and an inspectable canvas
 camera. Follow-up `M61-F001` restores the twin-roller fixture's passive stability target at the
-headless/UI seam. The active milestone is **M61: human UAT 3 — advanced geometry and topology**.
+headless/UI seam. Follow-up `M61-F005` makes compact circle Tangent contact-bearing and circle/arc
+Normal explicitly radial while retaining the public direction-at-contact domain API. The active
+milestone is **M61: human UAT 3 — advanced geometry and topology**.
 Old Chromium/CDP, HTTP serving, DOM-scraping, screenshot, wall-clock browser-timing and
 source-substring-scan gates remain retired.
 

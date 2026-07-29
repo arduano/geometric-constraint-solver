@@ -2378,8 +2378,8 @@ selection-sensitive authoring intents owned by the reusable headless editor.
 - [x] Replace Point-on-curve/Generic-contact with one contextual Coincident intent.
 - [x] Replace Equal-length/Equal-radius with one contextual Equal intent and expose existing
   branch-explicit equal curvature where applicable.
-- [x] Replace Generic-tangency with Tangent, and route line-to-curve Parallel/Perpendicular through
-  explicit tangent-orientation/normal-side curve-direction state.
+- [x] Replace Generic-tangency with Tangent; retain Parallel for line pairs and resolve a
+  line-plus-circle/arc Perpendicular / Normal intent to explicit radial centre-on-line incidence.
 - [x] Expose existing ordered endpoint Continuity with explicit G0/G1/G2/parametric-C2 choices.
 - [x] Publish resolved underlying definition metadata and typed disabled reasons at the headless
   boundary; the browser owns labels and controls only.
@@ -2398,10 +2398,11 @@ endpoint continuity resolves Start/End to exact bounded endpoint parameters. The
 only the compact contextual vocabulary and renders the resolved relation, choice progression and
 typed disabled reason returned by the editor.
 
-The existing `alpha-parity-catalog` scenario now demonstrates line-to-curve direction, equal
-curvature and endpoint continuity; `alpha-branch-recovery` creates its impossible contact through
-Coincident. Direct qualification passes 63/63 editor unit tests, 10/10 focused M55 integration
-tests and 46/46 workbench tests, plus the complete warnings-denied workspace Clippy, locked
+The existing `alpha-parity-catalog` scenario demonstrates equal curvature and endpoint continuity;
+`alpha-branch-recovery` creates its impossible contact through Coincident; and
+`circle-tangent-normal` contrasts true contact-bearing tangency with radial centre-on-line normal
+incidence. Direct qualification includes 13 focused M55 integration tests and 49 workbench tests,
+plus the complete warnings-denied workspace Clippy, locked
 all-feature workspace test suite, all-feature demo-web WASM check and Trunk 0.21.14 release build.
 No residual equation, persistence schema, old route/harness or mobile scope was added.
 
@@ -2655,6 +2656,9 @@ review after objective direct qualification.
 - [x] Resolve `M61-F004` by removing obsolete full visual-profile analysis from the synchronous
   host-state render path. Retain cheap accepted geometry-role declarations and use the separately
   qualified production-topology companion as the sole consumability authority.
+- [x] Resolve `M61-F005` by removing direction-only line/curve Parallel and Perpendicular from
+  compact authoring, retaining true generic Tangent contact, and lowering circle/arc Normal to
+  radial centre-on-line incidence with a dedicated reusable UAT scenario.
 
 Remediation notes (2026-07-29): the M61 subtree now contains an **Interactive mechanisms** branch
 with **Compact mechanisms** and **Linkage mechanisms** grandchildren plus the four preserved
@@ -2681,6 +2685,13 @@ host-state panel recomputed accepted visual-profile analysis on every render. Th
 graph cost about 2.3 seconds per panel render even in optimized native code. Replacing that
 duplicate analysis with declared accepted geometry roles reduces the same panel generation to
 about 0.12 ms; the independently validated production-topology card remains authoritative.
+`M61-F005` then identified that direction-only curve relations made Tangent/Normal authoring
+appear non-geometric, especially on a full circle whose free contact parameter can satisfy any
+requested direction. Compact Tangent remains generic shared-contact plus tangent alignment;
+Perpendicular / Normal on a line plus circle or arc now reuses point-on-curve to constrain the
+circular centre onto the line. Parallel is line-pair only, arbitrary nonlinear direction-only
+dispatch is disabled, and `circle-tangent-normal` plus direct mathematical regressions freeze the
+distinction. The public domain-level `CurveDirection` definition is retained.
 
 ### M62: API and schema release-candidate freeze
 

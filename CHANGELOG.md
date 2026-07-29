@@ -146,6 +146,10 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   during every synchronous render. It now reports cheap accepted geometry-role declarations and
   leaves consumability to the qualified production-topology companion, eliminating the supplied
   workspace's startup and post-interaction render lock.
+- Fixed `M61-F005`: compact circle Tangent now unambiguously means shared contact plus tangent
+  alignment, while Perpendicular / Normal constrains the circle or arc centre onto the selected
+  line. Direction-only line/curve Parallel/Perpendicular dispatch is no longer exposed, and a
+  reusable circle-relations scenario demonstrates both geometric meanings.
 
 ## [0.2.0] - 2026-07-22
 

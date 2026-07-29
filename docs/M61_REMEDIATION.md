@@ -143,6 +143,15 @@ That sidebar content duplicated the separately qualified production-topology sur
 only accepted profile/construction role declarations, with an explicit non-consumability caveat.
 Exact native panel generation falls to about 0.12 ms and production topology remains unchanged.
 
+Human review next found `M61-F005`: compact line/curve Parallel and Perpendicular used the public
+direction-at-contact relation, which does not establish line/curve contact and becomes
+direction-vacuous when its parameter is free on a full circle. The headless resolver now leaves
+Parallel as line-pair only, retains generic Tangent as shared contact plus tangent alignment, and
+maps line-plus-circle/arc Perpendicular / Normal to existing centre-on-line point-on-curve
+incidence. Direct evaluation regressions and the reusable `circle-tangent-normal` scenario own the
+distinction. The domain-level direction relation remains public; no residual, equation, schema, or
+coordinate-derived branch rule changed.
+
 ## 5. Known limitations and next blocker
 
 - The workbench remains a replaceable desktop diagnostic consumer, not a production renderer.

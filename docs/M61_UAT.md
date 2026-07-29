@@ -4,7 +4,8 @@
 
 Status: remediated candidate ready for supervising-human review; approval not yet recorded
 
-Candidate source: `1f5fd59`, targeted interaction repair `1c314e9`, plus the
+Candidate source: `5140f85` for the latest `M61-F005` interaction repair, with the prior
+replacement candidate and `M61-F001`-`M61-F004` repairs retained in its history, plus the
 documentation-only qualification commit.
 
 ## Candidate history
@@ -56,6 +57,15 @@ on the accepted graph during every render. That duplicate analysis took about 2.
 render even in optimized native code. The sidebar now exposes only cheap accepted geometry-role
 declarations and explicitly defers consumability to the separately qualified production-topology
 card.
+
+`M61-F005` then found that the compact Tangent and Normal authoring story was misleading for
+circles. Tangent already lowered to true shared contact plus tangent alignment, but the contextual
+line/curve Parallel and Perpendicular paths lowered to direction at a free curve parameter. On a
+full circle that parameter can move to satisfy any direction without line contact. Compact
+authoring now keeps Parallel for line pairs, keeps Tangent as true generic tangency, and resolves a
+line plus circle/arc Perpendicular / Normal to radial centre-on-line incidence. The public
+domain-level direction relation remains available but is no longer presented as this authoring
+intent.
 
 ## Entry point
 
@@ -279,6 +289,25 @@ clear, and interaction feels responsive enough for a desktop diagnostic workbenc
   0.12 ms. Solver, accepted geometry and production-topology semantics are unchanged.
 - Status: mechanically requalified; targeted supervising-human recheck pending.
 
+### M61-F005 — circle tangent and normal authoring was direction-vacuous
+
+- Reproduction: author a line and circle, then compare the UI-facing Tangent and
+  Perpendicular / Normal actions.
+- Expected: Tangent establishes shared line/circle contact and aligned tangent directions; Normal
+  makes the line radial by constraining it through the circle or circular-arc centre.
+- Original observation: direction-only line/curve dispatch exposed a movable curve contact. On a
+  full circle the contact could move to whichever parameter has the requested direction, so the
+  result neither established line contact nor clearly represented a radial normal.
+- Resolution: Tangent remains `CurveCurveTangency`; circle/arc Normal lowers atomically to
+  centre-on-line `PointOnCurve`; Parallel is line-pair only; arbitrary nonlinear direction-only
+  Parallel/Perpendicular is disabled in compact authoring.
+- Regression: the focused editor test evaluates tangent contact positions and derivatives and
+  evaluates the radial line contact against the persistent circle centre. The reusable
+  `circle-tangent-normal` scenario records verification point P29 and explains both meanings.
+- Solver impact: none. Existing validated residuals are reused; no equation, schema, tolerance, or
+  branch inference changed.
+- Status: mechanically requalified; targeted supervising-human recheck pending.
+
 ## Scorecard
 
 Record `Pass`, `Concern`, or `Blocker` for each:
@@ -293,6 +322,7 @@ Record `Pass`, `Concern`, or `Blocker` for each:
 | Bezier authoring and preview coherence |  |  |
 | Conic authoring, trims, sweep, and branch clarity |  |  |
 | Clamped/periodic NURBS authoring and gauge clarity |  |  |
+| Circle tangent and radial-normal authoring clarity |  |  |
 | Periodic NURBS span/winding and refinement clarity |  |  |
 | Associative/companion operation coherence |  |  |
 | Complete/incomplete/cancelled topology trust |  |  |
