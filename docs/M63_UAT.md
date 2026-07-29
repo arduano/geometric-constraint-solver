@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+
 # M63 UAT — canvas constraints
 
 Status: candidate awaiting supervising-human review.
@@ -5,10 +7,13 @@ Status: candidate awaiting supervising-human review.
 ## Candidate
 
 - Branch: `main`
-- Entry point: sole desktop workbench served through the usual temporary UAT endpoint.
+- Implementation commit: `9727b60`.
+- Temporary Tailscale endpoint: `http://100.94.63.83:8080/`.
 - Scenario group: **Scenarios → M63 Canvas constraints**
 - Mechanical gate: format, warnings-denied workspace Clippy, all-feature workspace tests,
   all-feature WASM check and release Trunk build passed on 2026-07-30.
+- Delivery check: all seven served files matched the local release distribution byte-for-byte on
+  2026-07-30. The endpoint is temporary and is not a production deployment.
 
 ## Scorecard
 

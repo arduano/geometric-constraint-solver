@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+
 # M63 implementation — canvas constraint visualization
 
 Status: implementation and mechanical qualification complete; human UAT pending.
