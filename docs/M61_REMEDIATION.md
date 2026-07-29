@@ -19,6 +19,8 @@ Implementation source: `1f5fd59`; targeted interaction repair: `1c314e9`
   fitting. Recursive scenario flyouts preserve visible overflow at every desktop level.
 - Dynamic branch selectors preserve a previous value only when the current headless option set
   still contains it; first use and curve-family changes select the first published default.
+- Projected browser pointer moves use a latest-sample animation-frame queue. Pointer-up flushes at
+  most the latest pending sample once; cancellation and stale frames cannot replay old positions.
 - No solver, residual, public schema, operation/topology companion, old route or browser harness
   was added.
 
@@ -41,6 +43,13 @@ bytes remain isolated. Reset reconstructs the exact public fixture.
 
 Camera transforms change only the web-supplied editor viewport. They never enter the sketch,
 scenario evidence or persistence model.
+
+The supplied pathological retained workspace contains five points, two circles, two lines, one
+quadratic Bezier, four contacts, two point-on-circle constraints, one line/Bezier tangency and two
+driving line-length dimensions. Replaying retained revision 42/attempt 44 against accepted revision
+41 reaches a finite numerical solution but remains correctly rejected as
+`AmbiguousContactNeighborhood`. The interaction repair changes only when browser samples are
+submitted; it does not alter this mathematical result.
 
 ## 3. Commands run and outcomes
 
@@ -67,6 +76,19 @@ nix-shell shell.nix --run 'cargo fmt --all -- --check && cargo clippy --locked -
 Outcome: pass. Formatting, warnings-denied workspace Clippy, the complete workspace all-feature
 test suite, all three WASM checks and the release Trunk build completed successfully.
 
+Post-candidate `M61-F003` qualification:
+
+```bash
+nix-shell shell.nix --run 'cargo test --locked -p geosolve-constraint-editor --all-features --test m55'
+nix-shell shell.nix --run 'cargo test --locked -p geosolve-demo-web --all-features'
+nix-shell shell.nix --run 'cargo clippy --locked -p geosolve-constraint-editor -p geosolve-demo-web --all-targets --all-features -- -D warnings'
+nix-shell shell.nix --run 'cargo check --locked -p geosolve-demo-web --target wasm32-unknown-unknown'
+nix-shell shell.nix --run 'cargo fmt --all -- --check'
+```
+
+Outcome: pass. The exact retained-payload regression is one of 12 passing M55 integration tests;
+demo-web passes 48 direct tests, including the pointer queue lifecycle regression.
+
 ## 4. Acceptance criteria passed
 
 - Every new mechanism reports the documented nonzero mobility and one valid selected driver.
@@ -75,6 +97,10 @@ test suite, all three WASM checks and the release Trunk build completed successf
 - An authored line endpoint plus circle resolves Coincident to point-on-curve and publishes using
   the untouched periodic contact defaults; empty or obsolete dynamic browser choices cannot
   override those defaults.
+- The exact supplied retained contact graph remains rejected for its ambiguous neighborhood, then
+  accepts a small projected retry without weakening validation.
+- Browser projected drag retains only the latest pending sample per animation frame, drains it at
+  most once on pointer-up and invalidates stale callbacks.
 - A projected scissor drag advances accepted state and moves dependent geometry; Reset restores
   exact initial geometry/selection.
 - Active scenario interaction and camera controls do not publish ordinary workspace persistence.
@@ -99,6 +125,14 @@ and constructs the temporary stability request. Scenario metadata maps both roll
 their opposite passive center. A direct repeated-drag regression checks both directions and
 inspects the actual transient request; no solver equation, persistent constraint or browser-owned
 coordinate policy was added.
+
+Human review then supplied `M61-F003`, a retained workspace whose coupled contact graph makes some
+projected centre solves materially more expensive. The WASM listener previously ran every raw
+move synchronously, allowing stale events to queue behind an expensive solve. The workbench now
+coalesces to the latest sample per animation frame and performs one terminal drain before
+pointer-up. An exact native regression preserves the original accepted/design revision split,
+asserts the retained ambiguity rejection and proves a small projected retry can recover. No solver
+equation, validation rule or schema changed.
 
 ## 5. Known limitations and next blocker
 

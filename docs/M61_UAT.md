@@ -43,6 +43,13 @@ published default is selected. A direct editor regression executes the exact aut
 endpoint plus circle contact, and a presentation-policy regression covers empty, obsolete and
 still-valid option values.
 
+`M61-F003` came from a supplied persisted workspace built by stacking contacts and constraints.
+Its retained design correctly rejects an ambiguous contact neighborhood, but raw browser
+`pointermove` events each ran a synchronous projected solve on the WASM main thread. Expensive
+samples allowed stale pointer events to accumulate and made the tab appear permanently frozen.
+The adapter now keeps only the latest pending sample for each animation frame and flushes at most
+that sample before pointer-up. The solver's ambiguity validation remains unchanged.
+
 ## Entry point
 
 The qualified shared endpoint is:
@@ -213,6 +220,38 @@ clear, and interaction feels responsive enough for a desktop diagnostic workbenc
 - Resolution: `1c314e9` adds a headless stabilized-projection seam, bidirectional scenario
   active/passive metadata, and a repeated-drag regression proving the passive center remains
   within `1e-9` of its accepted position.
+- Status: mechanically requalified; targeted supervising-human recheck pending.
+
+### M61-F002 — untouched point-on-circle defaults did not dispatch
+
+- Reproduction: author a circle and line, select a line endpoint and the circle circumference,
+  leave the first published contact branch values untouched, and apply **Coincident**.
+- Expected: the contextual intent resolves to a periodic point-on-curve contact and dispatches
+  with the headless defaults.
+- Original observation: the browser retained an empty or obsolete option value and stopped before
+  dispatch.
+- Resolution: dynamic selectors restore a value only while it remains in the current published
+  choices; otherwise they select the first current default.
+- Status: mechanically requalified; targeted supervising-human recheck pending.
+
+### M61-F003 — pathological retained contact workspace froze on interaction
+
+- Reproduction payload: retained revision 42/attempt 44 over accepted revision 41, containing five
+  points; two circles, two lines and one quadratic Bezier; four contacts; two point-on-circle
+  constraints; one line/Bezier tangency; and two driving line-length dimensions.
+- Expected: the ambiguous retained attempt remains visibly rejected, while a subsequent pointer
+  interaction is processed without an unbounded backlog of stale positions.
+- Original observation: native replay truthfully reported
+  `AmbiguousContactNeighborhood`; in the browser, every raw move synchronously triggered a solve,
+  so expensive centre projections queued more moves and eventually made the tab unresponsive.
+- Resolution: projected pointer moves are latest-sample coalesced to animation frames. Pointer-up
+  processes at most the latest pending sample once before commit, cancellation discards it, stale
+  frame callbacks are invalidated, and scheduling failure allows a later move to retry.
+- Regression: the exact graph transitions from its accepted snapshot to the retained rejected
+  design, asserts ambiguity, then accepts a small projected centre retry. A pure queue regression
+  covers replacement, terminal drain, stale-frame invalidation and scheduling retry.
+- Solver impact: none. No residual, equation, branch rule, solver policy or persisted schema
+  changed; ambiguity is not converted into success.
 - Status: mechanically requalified; targeted supervising-human recheck pending.
 
 ## Scorecard

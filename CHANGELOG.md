@@ -138,6 +138,10 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - Fixed `M61-F002`: dynamic contact/relation selectors now fall back to the first current
   headless-provided choice instead of restoring an empty or obsolete option, allowing untouched
   point-on-circle contact defaults to dispatch.
+- Fixed `M61-F003`: projected WASM pointer moves now retain only the latest pending sample per
+  animation frame and flush it at most once before release, preventing expensive contact solves
+  from accumulating a stale-event backlog. Exact payload replay preserves the truthful ambiguous
+  contact rejection and demonstrates recovery on a small projected retry.
 
 ## [0.2.0] - 2026-07-22
 

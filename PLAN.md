@@ -2649,6 +2649,9 @@ review after objective direct qualification.
 - [x] Resolve `M61-F002` by retaining a dynamic branch-selector value only while it remains among
   the current headless choices; otherwise select the first published default so point-on-circle
   Coincident authoring cannot submit an empty stale domain.
+- [x] Resolve `M61-F003` by coalescing projected pointer moves to the latest sample per animation
+  frame and flushing at most that latest sample before pointer-up, while retaining the solver's
+  truthful ambiguous-contact rejection for the supplied pathological workspace.
 
 Remediation notes (2026-07-29): the M61 subtree now contains an **Interactive mechanisms** branch
 with **Compact mechanisms** and **Linkage mechanisms** grandchildren plus the four preserved
@@ -2663,7 +2666,13 @@ holding the non-dragged roller at its accepted position through an interaction-o
 target. `M61-F002` confirms the exact authored line-endpoint plus circle selection resolves and
 publishes a periodic point-on-curve contact, while the workbench now discards invalid stale/empty
 dynamic option values before dispatch. Neither repair adds an equation or persistent constraint;
-targeted human recheck remains pending.
+targeted human recheck remains pending. `M61-F003` reconstructs the supplied retained workspace
+with five points, two circles, two lines, one quadratic Bezier, four contacts, three constraints
+and two driving line-length dimensions. Native replay retains
+`AmbiguousContactNeighborhood` rather than laundering the rejected design into convergence, and a
+small projected retry recovers. The WASM adapter no longer synchronously solves every queued raw
+pointer sample: one scheduled frame owns only the latest pending sample, pointer-up drains it once,
+and stale frames are invalidated. No solver equation, solver policy or persistence schema changed.
 
 ### M62: API and schema release-candidate freeze
 

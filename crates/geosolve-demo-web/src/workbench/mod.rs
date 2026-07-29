@@ -24,6 +24,49 @@ fn should_restore_selected_option(selected: Option<&str>, options: &[(&str, &str
     selected.is_some_and(|selected| options.iter().any(|(value, _)| *value == selected))
 }
 
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Default)]
+struct PointerMoveQueue {
+    pending: Option<geosolve_constraint_editor::PointerInput>,
+    next_generation: u64,
+    scheduled_generation: Option<u64>,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl PointerMoveQueue {
+    fn push(&mut self, input: geosolve_constraint_editor::PointerInput) -> Option<u64> {
+        self.pending = Some(input);
+        if self.scheduled_generation.is_some() {
+            return None;
+        }
+        self.next_generation = self.next_generation.wrapping_add(1);
+        self.scheduled_generation = Some(self.next_generation);
+        Some(self.next_generation)
+    }
+
+    fn take_for_frame(
+        &mut self,
+        generation: u64,
+    ) -> Option<geosolve_constraint_editor::PointerInput> {
+        if self.scheduled_generation != Some(generation) {
+            return None;
+        }
+        self.scheduled_generation = None;
+        self.pending.take()
+    }
+
+    fn cancel_frame(&mut self, generation: u64) {
+        if self.scheduled_generation == Some(generation) {
+            self.scheduled_generation = None;
+        }
+    }
+
+    fn drain_before_terminal(&mut self) -> Option<geosolve_constraint_editor::PointerInput> {
+        self.scheduled_generation = None;
+        self.pending.take()
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod wasm {
     use std::cell::RefCell;
@@ -356,6 +399,7 @@ pub(crate) mod wasm {
         workbench: &Rc<RefCell<Workbench>>,
     ) -> Result<(), JsValue> {
         let viewport = required(document, "wb-viewport")?;
+        let pointer_moves = Rc::new(RefCell::new(super::PointerMoveQueue::default()));
         install_pan_listeners(document, workbench, &viewport)?;
         install_pointer_listener(
             document,
@@ -364,27 +408,14 @@ pub(crate) mod wasm {
             "pointerdown",
             |coordinator, scene, input| coordinator.editor_mut().pointer_down(scene, input),
         )?;
-        install_pointer_listener(
-            document,
-            workbench,
-            &viewport,
-            "pointermove",
-            |coordinator, scene, input| coordinator.editor_mut().pointer_move(scene, input),
-        )?;
-        install_pointer_listener(
-            document,
-            workbench,
-            &viewport,
-            "pointerup",
-            |coordinator, scene, input| {
-                let expected = coordinator.session().design_identity();
-                coordinator.editor_mut().pointer_up(scene, expected, input)
-            },
-        )?;
+        install_pointer_move_listener(document, workbench, &viewport, &pointer_moves)?;
+        install_pointer_up_listener(document, workbench, &viewport, &pointer_moves)?;
 
         let cancel_document = document.clone();
         let cancel_workbench = Rc::clone(workbench);
+        let cancel_pointer_moves = Rc::clone(&pointer_moves);
         let cancel = Closure::<dyn FnMut(PointerEvent)>::new(move |_event| {
+            cancel_pointer_moves.borrow_mut().drain_before_terminal();
             let mut wb = cancel_workbench.borrow_mut();
             let effects = wb.interaction_coordinator_mut().editor_mut().cancel();
             dispatch_effects(&mut wb, effects);
@@ -423,6 +454,125 @@ pub(crate) mod wasm {
         double.forget();
         install_wheel_zoom(document, workbench, &viewport)?;
         Ok(())
+    }
+
+    fn install_pointer_move_listener(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+        viewport: &Element,
+        pointer_moves: &Rc<RefCell<super::PointerMoveQueue>>,
+    ) -> Result<(), JsValue> {
+        let callback_document = document.clone();
+        let callback_workbench = Rc::clone(workbench);
+        let callback_viewport = viewport.clone();
+        let callback_pointer_moves = Rc::clone(pointer_moves);
+        let callback = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
+            if event_targets_problem_marker(&event) {
+                return;
+            }
+            let input = {
+                let wb = callback_workbench.borrow();
+                if wb.pan_gesture.is_some() {
+                    return;
+                }
+                let Some(scene) = editor_scene(&wb) else {
+                    return;
+                };
+                let Some(input) = pointer_input(&callback_viewport, scene.viewport, &event) else {
+                    return;
+                };
+                input
+            };
+            let Some(generation) = callback_pointer_moves.borrow_mut().push(input) else {
+                return;
+            };
+            let frame_document = callback_document.clone();
+            let frame_workbench = Rc::clone(&callback_workbench);
+            let frame_pointer_moves = Rc::clone(&callback_pointer_moves);
+            let frame = Closure::once_into_js(move || {
+                let Some(input) = frame_pointer_moves.borrow_mut().take_for_frame(generation)
+                else {
+                    return;
+                };
+                let mut wb = frame_workbench.borrow_mut();
+                if wb.pan_gesture.is_some() {
+                    return;
+                }
+                let Some(scene) = editor_scene(&wb) else {
+                    return;
+                };
+                let effects = wb
+                    .interaction_coordinator_mut()
+                    .editor_mut()
+                    .pointer_move(&scene, input);
+                dispatch_effects(&mut wb, effects);
+                save(&wb);
+                drop(wb);
+                let _ = render(&frame_document, &frame_workbench);
+            });
+            let scheduled = super::platform::window()
+                .and_then(|window| window.request_animation_frame(frame.unchecked_ref()));
+            if scheduled.is_err() {
+                callback_pointer_moves.borrow_mut().cancel_frame(generation);
+            }
+        });
+        viewport
+            .add_event_listener_with_callback("pointermove", callback.as_ref().unchecked_ref())?;
+        callback.forget();
+        Ok(())
+    }
+
+    fn install_pointer_up_listener(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+        viewport: &Element,
+        pointer_moves: &Rc<RefCell<super::PointerMoveQueue>>,
+    ) -> Result<(), JsValue> {
+        let callback_document = document.clone();
+        let callback_workbench = Rc::clone(workbench);
+        let callback_viewport = viewport.clone();
+        let callback_pointer_moves = Rc::clone(pointer_moves);
+        let callback = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
+            if event_targets_problem_marker(&event) {
+                return;
+            }
+            let mut wb = callback_workbench.borrow_mut();
+            if wb.pan_gesture.is_some() {
+                return;
+            }
+            let Some(scene) = editor_scene(&wb) else {
+                return;
+            };
+            let Some(input) = pointer_input(&callback_viewport, scene.viewport, &event) else {
+                return;
+            };
+            if let Some(pending) = callback_pointer_moves.borrow_mut().drain_before_terminal() {
+                let effects = wb
+                    .interaction_coordinator_mut()
+                    .editor_mut()
+                    .pointer_move(&scene, pending);
+                dispatch_effects(&mut wb, effects);
+            }
+            let coordinator = wb.interaction_coordinator_mut();
+            let expected = coordinator.session().design_identity();
+            let effects = coordinator.editor_mut().pointer_up(&scene, expected, input);
+            dispatch_effects(&mut wb, effects);
+            save(&wb);
+            drop(wb);
+            let _ = render(&callback_document, &callback_workbench);
+        });
+        viewport
+            .add_event_listener_with_callback("pointerup", callback.as_ref().unchecked_ref())?;
+        callback.forget();
+        Ok(())
+    }
+
+    fn event_targets_problem_marker(event: &PointerEvent) -> bool {
+        event
+            .target()
+            .and_then(|target| target.dyn_into::<Element>().ok())
+            .and_then(|target| target.closest("[data-problem-marker]").ok().flatten())
+            .is_some()
     }
 
     fn install_pan_listeners(
@@ -2107,7 +2257,9 @@ pub(crate) mod wasm {
 
 #[cfg(test)]
 mod tests {
-    use super::should_restore_selected_option;
+    use geosolve_constraint_editor::{Modifiers, PointerInput, ScreenPoint};
+
+    use super::{PointerMoveQueue, should_restore_selected_option};
 
     #[test]
     fn dynamic_choice_selects_first_new_default_instead_of_restoring_an_invalid_value() {
@@ -2115,5 +2267,33 @@ mod tests {
         assert!(!should_restore_selected_option(Some(""), &periodic));
         assert!(!should_restore_selected_option(Some("bounded"), &periodic));
         assert!(should_restore_selected_option(Some("periodic"), &periodic));
+    }
+
+    #[test]
+    fn pointer_move_queue_keeps_only_latest_sample_and_terminal_invalidates_old_frame() {
+        let input = |x| PointerInput {
+            pointer_id: 7,
+            position: ScreenPoint { x, y: 3.0 },
+            modifiers: Modifiers::default(),
+        };
+        let mut queue = PointerMoveQueue::default();
+        let first_frame = queue.push(input(1.0)).unwrap();
+        assert_eq!(queue.push(input(2.0)), None);
+        assert_eq!(queue.take_for_frame(first_frame), Some(input(2.0)));
+        assert_eq!(queue.take_for_frame(first_frame), None);
+
+        let failed_frame = queue.push(input(2.5)).unwrap();
+        queue.cancel_frame(failed_frame);
+        let retried_frame = queue.push(input(2.75)).unwrap();
+        assert_ne!(retried_frame, failed_frame);
+        assert_eq!(queue.take_for_frame(retried_frame), Some(input(2.75)));
+
+        let stale_frame = queue.push(input(3.0)).unwrap();
+        assert_eq!(queue.push(input(4.0)), None);
+        assert_eq!(queue.drain_before_terminal(), Some(input(4.0)));
+        let next_frame = queue.push(input(5.0)).unwrap();
+        assert_ne!(next_frame, stale_frame);
+        assert_eq!(queue.take_for_frame(stale_frame), None);
+        assert_eq!(queue.take_for_frame(next_frame), Some(input(5.0)));
     }
 }

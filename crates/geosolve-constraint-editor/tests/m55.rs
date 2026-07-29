@@ -11,11 +11,12 @@ use geosolve_constraint_editor::{
     RetainedEditorCoordinator, ScreenPoint, SelectionItem, Viewport,
 };
 use geosolve_sketch::{
-    AlphaScenarioIds, AlphaScenarioKind, ContactDomain, ContactNeighborhood, CurveDefinition,
-    CurveSpan, DocumentAngleOrientation, DocumentConstraintDefinition, DocumentCurveContinuity,
-    DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation, DocumentCurveSpanRef,
-    DocumentDimensionDefinition, DocumentDimensionMode, DocumentSolveRequest,
-    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument, TangentOrientation,
+    AlphaScenarioIds, AlphaScenarioKind, ContactBranchEdit, ContactDomain, ContactNeighborhood,
+    CurveDefinition, CurveSpan, DocumentAngleOrientation, DocumentConstraintDefinition,
+    DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation,
+    DocumentCurveSpanRef, DocumentDimensionDefinition, DocumentDimensionMode, DocumentSolveRequest,
+    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
+    SketchLifecycleRevisionHighWater, SolveRejection, SolverConfig, TangentOrientation,
     alpha_scenario,
 };
 
@@ -747,6 +748,283 @@ fn authored_line_endpoint_can_use_default_contextual_contact_on_circle() {
             .definition,
         DocumentConstraintDefinition::PointOnCurve { .. }
     ));
+}
+
+#[test]
+fn retained_cursed_contact_payload_rejects_ambiguity_and_projected_retry_recovers() {
+    let mut accepted = SketchDocument::new(10.0).unwrap();
+    let accepted_positions = [
+        [-4.108_016_184_188_926, 1.061_352_761_640_428_4],
+        [1.615_725_990_263_041_6, 1.849_911_182_145_521],
+        [-2.355_914_250_237_194_4, -0.748_926_683_942_713_8],
+        [1.305_812_479_089_582_6, 0.757_494_098_512_779_4],
+        [0.016_920_189_296_906_276, -1.335_536_308_188_942_2],
+    ];
+    let points = accepted_positions.map(|position| {
+        accepted
+            .add_point("payload point", position)
+            .expect("finite payload point")
+    });
+    let radii = [
+        accepted
+            .add_scalar(
+                "first radius",
+                2.519_319_919_802_534_4,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .unwrap(),
+        accepted
+            .add_scalar(
+                "second radius",
+                1.135_526_956_548_755_6,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .unwrap(),
+    ];
+    let circles = [
+        accepted
+            .add_curve(
+                "first circle",
+                CurveDefinition::Circle {
+                    center: points[0],
+                    radius: radii[0],
+                },
+            )
+            .unwrap(),
+        accepted
+            .add_curve(
+                "second circle",
+                CurveDefinition::Circle {
+                    center: points[1],
+                    radius: radii[1],
+                },
+            )
+            .unwrap(),
+    ];
+    let center_line = CurveSpan::line(
+        accepted
+            .add_curve(
+                "center line",
+                CurveDefinition::Line {
+                    start: points[0],
+                    end: points[1],
+                    branch_direction: [0.997_067_333_546_924_6, -0.076_529_290_952_066_56],
+                },
+            )
+            .unwrap(),
+    );
+    let tangent_line = CurveSpan::line(
+        accepted
+            .add_curve(
+                "tangent line",
+                CurveDefinition::Line {
+                    start: points[2],
+                    end: points[3],
+                    branch_direction: [0.985_233_792_620_910_7, 0.171_214_409_083_512_13],
+                },
+            )
+            .unwrap(),
+    );
+    let bezier = CurveSpan::line(
+        accepted
+            .add_curve(
+                "quadratic Bezier",
+                CurveDefinition::QuadraticBezier {
+                    controls: [points[0], points[4], points[1]],
+                },
+            )
+            .unwrap(),
+    );
+    let periodic = ContactDomain::Periodic {
+        period: std::f64::consts::TAU,
+    };
+    let point_contacts = [
+        accepted
+            .add_curve_contact_with_domain(
+                "right endpoint on second circle",
+                CurveSpan::line(circles[1]),
+                periodic,
+                4.435_956_993_200_776,
+                0,
+                ContactNeighborhood::Interior,
+                None,
+            )
+            .unwrap(),
+        accepted
+            .add_curve_contact_with_domain(
+                "left endpoint on first circle",
+                CurveSpan::line(circles[0]),
+                periodic,
+                5.481_457_522_095_779,
+                0,
+                ContactNeighborhood::Interior,
+                None,
+            )
+            .unwrap(),
+    ];
+    accepted
+        .add_constraint(
+            "right endpoint contact",
+            DocumentConstraintDefinition::PointOnCurve {
+                point: points[3],
+                contact: point_contacts[0],
+            },
+        )
+        .unwrap();
+    accepted
+        .add_constraint(
+            "left endpoint contact",
+            DocumentConstraintDefinition::PointOnCurve {
+                point: points[2],
+                contact: point_contacts[1],
+            },
+        )
+        .unwrap();
+    let bounded = ContactDomain::Bounded {
+        lower: 0.0,
+        upper: 1.0,
+    };
+    let tangent_contacts = [
+        accepted
+            .add_curve_contact_with_domain(
+                "line tangent contact",
+                tangent_line,
+                bounded,
+                0.650_751_748_196_425_1,
+                0,
+                ContactNeighborhood::Interior,
+                Some(TangentOrientation::Aligned),
+            )
+            .unwrap(),
+        accepted
+            .add_curve_contact_with_domain(
+                "Bezier tangent contact",
+                bezier,
+                bounded,
+                0.618_262_446_398_752_7,
+                0,
+                ContactNeighborhood::Interior,
+                Some(TangentOrientation::Aligned),
+            )
+            .unwrap(),
+    ];
+    accepted
+        .add_constraint(
+            "line Bezier tangency",
+            DocumentConstraintDefinition::CurveCurveTangency {
+                first_contact: tangent_contacts[0],
+                second_contact: tangent_contacts[1],
+            },
+        )
+        .unwrap();
+    for (label, curve, value) in [
+        ("tangent line length", tangent_line, 3.959_488_125_404_189),
+        ("center line length", center_line, 5.777_806_578_660_964_5),
+    ] {
+        let target = accepted
+            .add_scalar(label, value, ScalarUnit::Length, ScalarDomain::Positive)
+            .unwrap();
+        accepted
+            .add_dimension(
+                label,
+                DocumentDimensionDefinition::CurveLength { curve, target },
+                DocumentDimensionMode::Driving,
+            )
+            .unwrap();
+    }
+
+    let mut design = accepted.clone();
+    for (point, position) in points.into_iter().zip([
+        [-4.911_903_637_222_483, 1.479_014_708_252_145_6],
+        [1.624_809_741_247_961, 2.160_902_075_070_983],
+        [-1.161_523_119_719_15, -0.837_051_003_183_769_5],
+        [1.460_216_238_911_857_8, -0.061_110_206_459_898_49],
+        [-0.620_715_897_758_882_5, -0.213_947_030_056_782_53],
+    ]) {
+        design.set_point_position(point, position).unwrap();
+    }
+    for (radius, value) in radii
+        .into_iter()
+        .zip([1.577_323_970_902_071_4, 1.639_371_788_184_938_3])
+    {
+        design.set_scalar_value(radius, value).unwrap();
+    }
+    for (contact, curve, value) in [
+        (
+            point_contacts[0],
+            CurveSpan::line(circles[1]),
+            4.446_883_202_009_624,
+        ),
+        (
+            point_contacts[1],
+            CurveSpan::line(circles[0]),
+            5.476_769_923_396_541_5,
+        ),
+    ] {
+        design
+            .set_contact_branches(&[ContactBranchEdit {
+                contact,
+                curve,
+                domain: periodic,
+                value,
+                winding: 0,
+                neighborhood: ContactNeighborhood::Interior,
+                tangent_orientation: None,
+            }])
+            .unwrap();
+    }
+    design
+        .set_contact_branches(&[
+            ContactBranchEdit {
+                contact: tangent_contacts[0],
+                curve: tangent_line,
+                domain: bounded,
+                value: 0.688_047_990_609_921_9,
+                winding: 0,
+                neighborhood: ContactNeighborhood::Interior,
+                tangent_orientation: Some(TangentOrientation::Aligned),
+            },
+            ContactBranchEdit {
+                contact: tangent_contacts[1],
+                curve: bezier,
+                domain: bounded,
+                value: 0.625_226_048_869_715_2,
+                winding: 0,
+                neighborhood: ContactNeighborhood::Interior,
+                tangent_orientation: Some(TangentOrientation::Aligned),
+            },
+        ])
+        .unwrap();
+
+    let session = RetainedSketchDocumentSession::restore_design_with_accepted(
+        design,
+        accepted,
+        SketchLifecycleRevisionHighWater::from_raw(42, 44, Some(41)),
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .unwrap();
+    assert!(matches!(
+        session
+            .last_attempt()
+            .solve_result()
+            .and_then(|solve| solve.rejection.as_ref()),
+        Some(SolveRejection::AmbiguousContactNeighborhood(_))
+    ));
+    let mut retry = session.clone();
+    let mut target = retry.design_document().point(points[1]).unwrap().position;
+    target[0] += 0.01;
+    let request = retry
+        .last_attempt()
+        .input()
+        .candidate_request()
+        .without_previous_state_preferences()
+        .with_drag(points[1], target);
+    let expected = retry.design_identity();
+    let attempt = retry.reattempt(expected, request).unwrap();
+    assert!(attempt.accepted_state_identity().is_some());
 }
 
 #[test]
