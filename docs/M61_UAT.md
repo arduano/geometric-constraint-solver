@@ -50,6 +50,13 @@ samples allowed stale pointer events to accumulate and made the tab appear perma
 The adapter now keeps only the latest pending sample for each animation frame and flushes at most
 that sample before pointer-up. The solver's ambiguity validation remains unchanged.
 
+The first `M61-F003` recheck exposed separate `M61-F004`: restoring the exact graph in optimized
+WASM takes about 171 ms, but the host-state sidebar also ran legacy full visual-profile analysis
+on the accepted graph during every render. That duplicate analysis took about 2.3 seconds per
+render even in optimized native code. The sidebar now exposes only cheap accepted geometry-role
+declarations and explicitly defers consumability to the separately qualified production-topology
+card.
+
 ## Entry point
 
 The qualified shared endpoint is:
@@ -252,6 +259,24 @@ clear, and interaction feels responsive enough for a desktop diagnostic workbenc
   covers replacement, terminal drain, stale-frame invalidation and scheduling retry.
 - Solver impact: none. No residual, equation, branch rule, solver policy or persisted schema
   changed; ambiguity is not converted into success.
+- Status: mechanically requalified; targeted supervising-human recheck pending.
+
+### M61-F004 — persisted workspace locked during initial and repeated render
+
+- Reproduction: retain the `M61-F003` payload in local storage and force-refresh the workbench.
+- Expected: restore and first presentation complete promptly; ordinary renders do not rerun
+  expensive topology analysis.
+- Original observation: the main thread remained locked after the cached workspace appeared, even
+  with pointer-event coalescing active.
+- Isolation: exact optimized `wasm32` restore under Node takes about 171 ms. In contrast,
+  `host_state_markup` took about 2.3 seconds in optimized native code because it synchronously ran
+  legacy accepted visual-profile analysis; the qualified production-topology query itself took
+  only microseconds for this graph.
+- Resolution: remove full visual-profile analysis from ordinary host-state rendering. The card now
+  lists accepted profile/construction role declarations, clearly states that these do not prove
+  consumability, and leaves that decision to **Production topology**.
+- Measured result: exact native host-state generation falls from about 2.3 seconds to about
+  0.12 ms. Solver, accepted geometry and production-topology semantics are unchanged.
 - Status: mechanically requalified; targeted supervising-human recheck pending.
 
 ## Scorecard

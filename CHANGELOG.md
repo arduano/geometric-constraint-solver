@@ -142,6 +142,10 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   animation frame and flush it at most once before release, preventing expensive contact solves
   from accumulating a stale-event backlog. Exact payload replay preserves the truthful ambiguous
   contact rejection and demonstrates recovery on a small projected retry.
+- Fixed `M61-F004`: the host-state sidebar no longer performs legacy full visual-profile analysis
+  during every synchronous render. It now reports cheap accepted geometry-role declarations and
+  leaves consumability to the qualified production-topology companion, eliminating the supplied
+  workspace's startup and post-interaction render lock.
 
 ## [0.2.0] - 2026-07-22
 

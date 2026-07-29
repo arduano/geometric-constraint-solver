@@ -2652,6 +2652,9 @@ review after objective direct qualification.
 - [x] Resolve `M61-F003` by coalescing projected pointer moves to the latest sample per animation
   frame and flushing at most that latest sample before pointer-up, while retaining the solver's
   truthful ambiguous-contact rejection for the supplied pathological workspace.
+- [x] Resolve `M61-F004` by removing obsolete full visual-profile analysis from the synchronous
+  host-state render path. Retain cheap accepted geometry-role declarations and use the separately
+  qualified production-topology companion as the sole consumability authority.
 
 Remediation notes (2026-07-29): the M61 subtree now contains an **Interactive mechanisms** branch
 with **Compact mechanisms** and **Linkage mechanisms** grandchildren plus the four preserved
@@ -2673,6 +2676,11 @@ and two driving line-length dimensions. Native replay retains
 small projected retry recovers. The WASM adapter no longer synchronously solves every queued raw
 pointer sample: one scheduled frame owns only the latest pending sample, pointer-up drains it once,
 and stale frames are invalidated. No solver equation, solver policy or persistence schema changed.
+Targeted replay then isolated `M61-F004`: the exact WASM restore takes about 171 ms, but the legacy
+host-state panel recomputed accepted visual-profile analysis on every render. The supplied accepted
+graph cost about 2.3 seconds per panel render even in optimized native code. Replacing that
+duplicate analysis with declared accepted geometry roles reduces the same panel generation to
+about 0.12 ms; the independently validated production-topology card remains authoritative.
 
 ### M62: API and schema release-candidate freeze
 

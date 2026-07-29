@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 
-use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
 use geosolve_constraint_editor::{LifecycleStatus, SelectionItem};
@@ -9,7 +8,7 @@ use geosolve_sketch::{
     DocumentMeasurementProvenance, DocumentParameterTarget, ExternalSnapshotInputError,
     GeometryRole, InactivityReason, OperationControl, OperationOutcome, ParameterValue,
     RetainedSketchDocumentSession, SketchAcceptedDocumentRedundancy, SketchDiagnosticSearch,
-    SketchDiagnosticSearchStatus, SketchDiagnosticSnapshot, SketchDocument, VisualProfileOptions,
+    SketchDiagnosticSearchStatus, SketchDiagnosticSnapshot, SketchDocument,
 };
 use geosolve_sketch_topology::{TopologyCompleteness, TopologyRequest, TopologySnapshot};
 
@@ -431,39 +430,28 @@ pub(crate) fn host_state_markup(
     activity_markup(&mut output, session);
     external_markup(&mut output, session);
     if let Some(accepted) = accepted {
-        let profiles = accepted
-            .document()
-            .analyze_visual_profiles(VisualProfileOptions::default());
-        let spans = profiles
-            .faces
-            .iter()
-            .flat_map(|face| &face.contours)
-            .flat_map(|contour| &contour.edges)
-            .map(|edge| edge.source_span)
-            .collect::<BTreeSet<_>>();
-        let _ = write!(
-            output,
-            "<section class=\"wb-host-card\" data-profile-status=\"{:?}\" data-profile-faces=\"{}\" data-profile-families=\"{}\"><h3>Accepted profile</h3><p>{:?}: {} face(s), {} participating family entries</p><ul class=\"wb-host-list\">",
-            profiles.status,
-            profiles.faces.len(),
-            profiles.families.len(),
-            profiles.status,
-            profiles.faces.len(),
-            profiles.families.len(),
+        let document = accepted.document();
+        output.push_str(
+            "<section class=\"wb-host-card\" data-accepted-geometry-roles=\"true\"><h3>Accepted geometry roles</h3><p>Declared profile participation only. Consumable regions are reported separately by Production topology.</p><ul class=\"wb-host-list\">",
         );
-        for span in spans {
-            let _ = write!(
-                output,
-                "<li data-profile-span=\"true\" data-profile-curve=\"{}\" data-profile-segment=\"{}\"><code>{}:{}</code></li>",
-                span.curve, span.segment, span.curve, span.segment,
-            );
-        }
-        output.push_str("</ul><ul class=\"wb-host-list\" data-profile-family-list=\"accepted\">");
-        for family in &profiles.families {
-            let _ = write!(
-                output,
-                "<li data-profile-family=\"{family:?}\">{family:?}</li>",
-            );
+        for curve in document
+            .curves()
+            .iter()
+            .filter(|curve| document.geometry_role(curve.id) != Some(GeometryRole::Construction))
+        {
+            if let Ok(spans) = document.curve_spans(curve.id) {
+                for span in spans {
+                    let _ = write!(
+                        output,
+                        "<li data-profile-span=\"true\" data-profile-curve=\"{}\" data-profile-segment=\"{}\"><code>{}:{}</code> {}</li>",
+                        span.curve,
+                        span.segment,
+                        span.curve,
+                        span.segment,
+                        escape(&curve.label),
+                    );
+                }
+            }
         }
         output.push_str("</ul></section>");
     }
@@ -1027,6 +1015,9 @@ mod tests {
             .geometry
             .clone();
         let profile = host_state_markup(coordinator.session());
+        assert!(profile.contains("data-accepted-geometry-roles=\"true\""));
+        assert!(profile.contains("Declared profile participation only"));
+        assert!(!profile.contains("data-profile-status="));
         assert!(profile.contains(&format!("data-profile-curve=\"{role_curve}\"")));
 
         let expected = coordinator.session().design_identity();

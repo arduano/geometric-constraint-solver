@@ -21,6 +21,8 @@ Implementation source: `1f5fd59`; targeted interaction repair: `1c314e9`
   still contains it; first use and curve-family changes select the first published default.
 - Projected browser pointer moves use a latest-sample animation-frame queue. Pointer-up flushes at
   most the latest pending sample once; cancellation and stale frames cannot replay old positions.
+- The host-state card reports accepted geometry-role declarations without running legacy visual
+  profile analysis. The production-topology companion remains the sole consumability authority.
 - No solver, residual, public schema, operation/topology companion, old route or browser harness
   was added.
 
@@ -133,6 +135,13 @@ coalesces to the latest sample per animation frame and performs one terminal dra
 pointer-up. An exact native regression preserves the original accepted/design revision split,
 asserts the retained ambiguity rejection and proves a small projected retry can recover. No solver
 equation, validation rule or schema changed.
+
+The targeted recheck exposed `M61-F004`: startup restore was not the dominant lock. Direct
+`wasm32` replay completes in about 171 ms, while legacy full accepted-profile analysis inside
+`host_state_markup` took about 2.3 seconds in optimized native code and reran after every render.
+That sidebar content duplicated the separately qualified production-topology surface. It now lists
+only accepted profile/construction role declarations, with an explicit non-consumability caveat.
+Exact native panel generation falls to about 0.12 ms and production topology remains unchanged.
 
 ## 5. Known limitations and next blocker
 
