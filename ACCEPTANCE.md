@@ -1155,6 +1155,9 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
 - Flyout options are remembered only for the current process and default to aligned tangency,
   signed equal curvature, G1 continuity, parametric-C2 rates 1/1, Driving dimensions and
   counter-clockwise angles.
+- Contact domain, parameter, neighborhood, winding and tangent-orientation choices are emitted
+  only for resolved definitions that own contact state. Simple line and radius relations carry no
+  hidden contact metadata.
 - Canvas and tree operands use the same headless input path. Ordinary selection and point dragging
   are suppressed during authoring; pending operands and the expected next operand are visibly
   identified. Canvas pointer-down exclusively owns the parameter-bearing canvas pick; its later

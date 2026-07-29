@@ -59,6 +59,11 @@ a production deployment.
   pointer-down pick and a bubbled generic click, duplicating operands and leaving failed terminal
   candidates at full arity. Canvas pointer-down now owns the canvas pick exactly once, tree clicks
   retain their separate one-event route and every terminal attempt re-arms repeated authoring.
+- `M62-F003` — resolved mechanically, pending human recheck: the headless request adapter attached
+  contact branch choices to simple curve relations that explicitly accept no contact state, so
+  Horizontal and line-line Normal reached full arity but were rejected before document creation.
+  Contact choices are now limited to contact-owning definitions; direct skew-line applications
+  publish accepted Horizontal and Perpendicular constraints.
 
 ## Approval
 

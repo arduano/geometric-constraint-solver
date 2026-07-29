@@ -51,6 +51,9 @@ the existing eleven M55 contextual intents and five dimension definitions agains
 persistent operands. Curve picks retain their public semantic parameter. Tangency orientation,
 curvature sign policy, continuity order/rates, dimension mode and angle direction remain explicit.
 Every mutation still passes through retained sketch transactions and independent validation.
+Contact branch choices are generated only for definitions that own contact state. Simple
+Horizontal, Vertical, Parallel, Perpendicular, Equal Length and Equal Radius authoring therefore
+emits only its exact persistent definition rather than incompatible latent contact metadata.
 
 Dimensions are created at their current independently accepted measurement rather than retained
 design coordinates that may differ from the visible accepted canvas. Numeric editing locates the
@@ -97,6 +100,10 @@ manual performance/cancellation measurements.
   and Normal/Perpendicular collection. Each physical click contributes exactly one operand,
   single-item repetition re-arms, pair collection applies after two distinct lines, and tree
   clicks remain independently owned.
+- `M62-F003` applies authored Horizontal and line-line Perpendicular to skew free lines through the
+  complete state-machine/coordinator path, requires accepted publication and inspects the exact
+  persistent definitions. The exhaustive resolved-kind dispatch keeps every other simple
+  line/radius relation contact-free.
 - The static workbench contract directly proves all sixteen palette identities exist and the old
   creation controls, action aliases and deleted `/#/dev/lab` route do not.
 - Canvas/tree pending presentation, read-only scenario behavior, WASM compilation and the release

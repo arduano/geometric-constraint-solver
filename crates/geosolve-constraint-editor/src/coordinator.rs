@@ -1708,12 +1708,25 @@ impl RetainedEditorCoordinator {
         options: AuthoringOptions,
     ) -> Result<ConstraintActionRequest, CoordinatorError> {
         let document = self.session.design_document();
-        let contact_spans = if resolved == ResolvedConstraintKind::RadialLine {
-            selected_radial_line(document, selection)
+        let contact_spans = match resolved {
+            ResolvedConstraintKind::RadialLine => selected_radial_line(document, selection)
                 .map(|(line, _, _)| vec![line])
-                .unwrap_or_default()
-        } else {
-            selected_curve_spans(selection)
+                .unwrap_or_default(),
+            ResolvedConstraintKind::PointOnCurve
+            | ResolvedConstraintKind::CurveContact
+            | ResolvedConstraintKind::CurveTangency
+            | ResolvedConstraintKind::EqualCurvature
+            | ResolvedConstraintKind::EndpointContinuity => selected_curve_spans(selection),
+            ResolvedConstraintKind::FixedPoint
+            | ResolvedConstraintKind::CoincidentPoints
+            | ResolvedConstraintKind::HorizontalLine
+            | ResolvedConstraintKind::VerticalLine
+            | ResolvedConstraintKind::ParallelLines
+            | ResolvedConstraintKind::PerpendicularLines
+            | ResolvedConstraintKind::EqualLength
+            | ResolvedConstraintKind::EqualRadius
+            | ResolvedConstraintKind::Midpoint
+            | ResolvedConstraintKind::SymmetricAboutLine => Vec::new(),
         };
         let tangency = resolved == ResolvedConstraintKind::CurveTangency;
         let endpoint_only = resolved == ResolvedConstraintKind::EndpointContinuity;
@@ -3912,7 +3925,10 @@ fn source_availability(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{EditorScene, EditorTool, Modifiers, PointerInput, Viewport};
+    use crate::{
+        AuthoringOutcome, AuthoringState, EditorScene, EditorTool, Modifiers, PointerInput,
+        Viewport,
+    };
     use geosolve_sketch::{
         DocumentConstraintDefinition, DocumentExternalPointRef, DocumentM38DimensionDefinition,
         DocumentMeasurementDefinition, DocumentParameterKind, DocumentPointRef,
@@ -5281,6 +5297,103 @@ mod tests {
             .position;
         assert!((accepted_after[0] - accepted_before[0]).abs() < 1.0e-9);
         assert!((accepted_after[1] - accepted_before[1]).abs() < 1.0e-9);
+    }
+
+    #[test]
+    #[allow(clippy::default_trait_access, clippy::too_many_lines)]
+    fn authored_horizontal_and_perpendicular_publish_from_skew_free_lines() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let first_start = document.add_point("first start", [-2.0, -1.0]).unwrap();
+        let first_end = document.add_point("first end", [1.0, 0.5]).unwrap();
+        let second_start = document.add_point("second start", [-1.0, 2.0]).unwrap();
+        let second_end = document.add_point("second end", [1.0, -1.0]).unwrap();
+        let first_direction = [2.0 / 5.0_f64.sqrt(), 1.0 / 5.0_f64.sqrt()];
+        let second_direction = [2.0 / 13.0_f64.sqrt(), -3.0 / 13.0_f64.sqrt()];
+        let first = CurveSpan::line(
+            document
+                .add_curve(
+                    "first",
+                    CurveDefinition::Line {
+                        start: first_start,
+                        end: first_end,
+                        branch_direction: first_direction,
+                    },
+                )
+                .unwrap(),
+        );
+        let second = CurveSpan::line(
+            document
+                .add_curve(
+                    "second",
+                    CurveDefinition::Line {
+                        start: second_start,
+                        end: second_end,
+                        branch_direction: second_direction,
+                    },
+                )
+                .unwrap(),
+        );
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            Default::default(),
+        )
+        .unwrap();
+        let mut coordinator = RetainedEditorCoordinator::new(session).unwrap();
+
+        let horizontal = AuthoringState::default().activate(
+            coordinator.session().design_document(),
+            AuthoringTool::Constraint(ConstraintIntent::Horizontal),
+            &[AuthoringOperand::selected(SelectionItem::Curve(first))],
+        );
+        let AuthoringOutcome::Apply(horizontal) = horizontal else {
+            panic!("horizontal application");
+        };
+        let AuthoringMutation::Constraint(horizontal) = coordinator
+            .apply_authoring(coordinator.session().design_identity(), &horizontal)
+            .unwrap()
+        else {
+            panic!("horizontal mutation");
+        };
+        assert!(horizontal.published_accepted.is_some());
+        assert!(matches!(
+            coordinator
+                .session()
+                .design_document()
+                .constraint(horizontal.value)
+                .unwrap()
+                .definition,
+            DocumentConstraintDefinition::Horizontal { line } if line == first
+        ));
+
+        let perpendicular = AuthoringState::default().activate(
+            coordinator.session().design_document(),
+            AuthoringTool::Constraint(ConstraintIntent::Perpendicular),
+            &[
+                AuthoringOperand::selected(SelectionItem::Curve(first)),
+                AuthoringOperand::selected(SelectionItem::Curve(second)),
+            ],
+        );
+        let AuthoringOutcome::Apply(perpendicular) = perpendicular else {
+            panic!("perpendicular application");
+        };
+        let AuthoringMutation::Constraint(perpendicular) = coordinator
+            .apply_authoring(coordinator.session().design_identity(), &perpendicular)
+            .unwrap()
+        else {
+            panic!("perpendicular mutation");
+        };
+        assert!(perpendicular.published_accepted.is_some());
+        assert!(matches!(
+            coordinator
+                .session()
+                .design_document()
+                .constraint(perpendicular.value)
+                .unwrap()
+                .definition,
+            DocumentConstraintDefinition::Perpendicular { first: actual_first, second: actual_second }
+                if actual_first == first && actual_second == second
+        ));
     }
 
     #[test]

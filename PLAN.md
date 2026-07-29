@@ -2766,6 +2766,17 @@ including coordinator errors. A direct workbench regression exercises the exact 
 click sequence for Horizontal and Normal/Perpendicular. No solver, equation, branch, persistence or
 scenario behavior changed.
 
+UAT follow-up `M62-F003` corrects simple curve-constraint execution before approval. The headless
+authoring adapter generated contact-domain, parameter and neighborhood choices for every selected
+curve, even when the resolved definition was a simple Horizontal, Vertical, Parallel,
+Perpendicular, Equal Length or Equal Radius relation that accepts no contact state. The retained
+coordinator therefore rejected the complete application before creating a document constraint.
+Contact choices are now generated only for point-on-curve, curve contact/tangency, equal
+curvature, endpoint continuity and radial circle/arc Normal. A direct coordinator regression
+authors Horizontal and line-line Perpendicular on skew free lines, verifies accepted publication
+and inspects the exact persistent definitions. No residual, equation, branch, schema or scenario
+changed.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

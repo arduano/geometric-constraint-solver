@@ -99,6 +99,9 @@ recheck remains part of the open M62 UAT.
 Follow-up `M62-F002` gives canvas pointer-down exclusive ownership of canvas authoring picks,
 prevents the later bubbled click from duplicating operands, and re-arms repeated mode after every
 terminal application attempt.
+Follow-up `M62-F003` restricts generated contact-branch choices to contact-owning relation
+families, allowing simple line/radius relations such as Horizontal and Perpendicular to execute
+without incompatible hidden metadata.
 Old Chromium/CDP, HTTP serving, DOM-scraping, screenshot, wall-clock browser-timing and
 source-substring-scan gates remain retired.
 

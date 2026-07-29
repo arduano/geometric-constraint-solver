@@ -1708,6 +1708,20 @@ the second produces one complete application, and terminal processing returns to
 set. Terminal coordinator refusal follows the same re-arm rule so a failed complete candidate
 cannot wedge the collector at full arity.
 
+### M62-F003 - Relation-scoped authoring metadata
+
+One direct coordinator fixture starts with two skew free lines. It builds Horizontal and
+line-line Normal/Perpendicular applications through the public authoring state, applies them
+through the retained coordinator, requires accepted publication and inspects the resulting
+ordinary `Horizontal` and `Perpendicular` persistent definitions.
+
+The regression owns the boundary that failed: picked curves are not automatically contact
+operands. Contact domain, parameter, neighborhood, winding and tangent orientation are generated
+only for point-on-curve, curve contact/tangency, equal curvature, endpoint continuity and radial
+circle/arc Normal. Simple Horizontal, Vertical, Parallel, line-line Perpendicular, Equal Length
+and Equal Radius definitions carry no contact choices and therefore cannot be rejected for hidden
+branch input.
+
 ### UAT evidence and recheck policy
 
 Each checkpoint provides one manual entry point, deterministic resets and concise instructions.
