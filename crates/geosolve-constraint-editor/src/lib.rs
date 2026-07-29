@@ -2923,6 +2923,68 @@ mod tests {
     }
 
     #[test]
+    fn m63_hover_crosses_a_visible_leader_and_clears_off_context() {
+        let mut document = SketchDocument::new(8.0).expect("document");
+        let rectangle = document
+            .add_rectangle("hover bridge", [0.0, 0.0], 4.0, 3.0)
+            .expect("rectangle");
+        let duplicate = document
+            .add_constraint(
+                "duplicate horizontal",
+                DocumentConstraintDefinition::Horizontal {
+                    line: CurveSpan::line(rectangle.curves[0]),
+                },
+            )
+            .expect("duplicate constraint");
+        let scene = scene(&document);
+        let duplicate_annotation = scene
+            .annotations
+            .iter()
+            .find(|annotation| annotation.item == SelectionItem::Constraint(duplicate))
+            .expect("duplicate annotation");
+        let related_curve = duplicate_annotation
+            .operands
+            .iter()
+            .find_map(|item| match item {
+                SelectionItem::Curve(span) => Some(*span),
+                _ => None,
+            })
+            .expect("related curve");
+        let displaced_marker = match &duplicate_annotation.geometry {
+            SceneAnnotationGeometry::Glyph { markers } => markers
+                .iter()
+                .find(|marker| marker.leader_from.is_some())
+                .expect("duplicate marker must fan out"),
+            _ => panic!("duplicate horizontal must be a glyph"),
+        };
+        let leader_from = displaced_marker.leader_from.expect("leader origin");
+        let bridge = ScreenPoint {
+            x: (leader_from.x + displaced_marker.anchor.x) * 0.5,
+            y: (leader_from.y + displaced_marker.anchor.y) * 0.5,
+        };
+        let mut hover_editor = ConstraintEditor::default();
+        assert_eq!(
+            hover_editor.set_hovered(Some(SelectionItem::Curve(related_curve))),
+            vec![EditorEffect::HoverChanged(Some(SelectionItem::Curve(
+                related_curve
+            )))]
+        );
+        assert_eq!(
+            hover_editor.pointer_move(
+                &scene,
+                pointer(10, bridge.x, bridge.y, Modifiers::default()),
+            ),
+            vec![EditorEffect::HoverChanged(Some(SelectionItem::Constraint(
+                duplicate
+            )))]
+        );
+        assert_eq!(
+            hover_editor.pointer_move(&scene, pointer(10, 10.0, 10.0, Modifiers::default())),
+            vec![EditorEffect::HoverChanged(None)]
+        );
+    }
+
+    #[test]
     fn m63_radius_dimension_uses_a_stable_semantic_circle_branch() {
         let mut document = SketchDocument::new(8.0).expect("document");
         let center = document.add_point("center", [0.0, 0.0]).expect("center");

@@ -130,9 +130,13 @@ impl SceneAnnotation {
             return false;
         }
         match &self.geometry {
-            SceneAnnotationGeometry::Glyph { markers } => markers
-                .iter()
-                .any(|marker| position.distance(marker.anchor) <= tolerance_pixels),
+            SceneAnnotationGeometry::Glyph { markers } => markers.iter().any(|marker| {
+                position.distance(marker.anchor) <= tolerance_pixels
+                    || marker.leader_from.is_some_and(|leader_from| {
+                        point_segment_distance(position, leader_from, marker.anchor)
+                            <= tolerance_pixels
+                    })
+            }),
             SceneAnnotationGeometry::LinearDimension {
                 label_anchor,
                 first,
