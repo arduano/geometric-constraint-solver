@@ -2978,6 +2978,45 @@ mod tests {
     }
 
     #[test]
+    fn m63_rotating_square_glyphs_have_non_overlapping_final_anchors() {
+        let fixture = geosolve_sketch::alpha_scenario(
+            geosolve_sketch::AlphaScenarioKind::MotionRotatingSquare,
+            1.0,
+        )
+        .expect("rotating square");
+        let scene = scene(&fixture.document);
+        let markers = scene
+            .annotations
+            .iter()
+            .flat_map(|annotation| match &annotation.geometry {
+                SceneAnnotationGeometry::Glyph { markers } => markers.as_slice(),
+                _ => &[],
+            })
+            .map(|marker| marker.anchor)
+            .collect::<Vec<_>>();
+        assert!(
+            markers.len() >= 8,
+            "crowded fixture must retain representative density"
+        );
+        for (index, first) in markers.iter().enumerate() {
+            for second in &markers[index + 1..] {
+                assert!(
+                    first.distance(*second) >= 22.0 - 1.0e-9,
+                    "glyph anchors overlap at {first:?} and {second:?}"
+                );
+            }
+        }
+        assert!(
+            scene.annotations.iter().any(|annotation| matches!(
+                &annotation.geometry,
+                SceneAnnotationGeometry::Glyph { markers }
+                    if markers.iter().any(|marker| marker.leader_from.is_some())
+            )),
+            "crowded fixture must exercise displaced leaders"
+        );
+    }
+
+    #[test]
     fn m63_catalog_projects_every_constraint_in_representative_public_scenarios() {
         for kind in [
             geosolve_sketch::AlphaScenarioKind::Corpus,

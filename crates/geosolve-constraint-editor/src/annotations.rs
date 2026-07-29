@@ -766,6 +766,10 @@ fn radial_geometry(
     Some((center, edge))
 }
 
+const GLYPH_MIN_SEPARATION_PIXELS: f64 = 22.0;
+const GLYPH_RING_STEP_PIXELS: f64 = 24.0;
+const GLYPH_MAX_SEARCH_RINGS: u32 = 64;
+
 fn fan_out_glyphs(annotations: &mut [SceneAnnotation]) {
     let mut occupied = Vec::<ScreenPoint>::new();
     for annotation in annotations {
@@ -774,20 +778,46 @@ fn fan_out_glyphs(annotations: &mut [SceneAnnotation]) {
         };
         for marker in markers {
             let original = marker.anchor;
-            let collisions = occupied
-                .iter()
-                .filter(|anchor| anchor.distance(original) < 18.0)
-                .count();
-            if collisions > 0 {
-                let ring_index = u32::try_from(collisions / 8).unwrap_or(u32::MAX);
-                let phase_index = u8::try_from(collisions % 8).expect("modulo eight fits in u8");
-                let ring = 12.0 + 6.0 * f64::from(ring_index);
-                let phase = f64::from(phase_index) * std::f64::consts::FRAC_PI_4;
-                marker.anchor = offset(original, ring * phase.cos(), ring * phase.sin());
+            if !glyph_position_is_clear(original, &occupied) {
+                marker.anchor = glyph_fan_out_position(original, &occupied);
                 marker.leader_from = Some(original);
             }
             occupied.push(marker.anchor);
         }
+    }
+}
+
+fn glyph_position_is_clear(candidate: ScreenPoint, occupied: &[ScreenPoint]) -> bool {
+    occupied
+        .iter()
+        .all(|anchor| anchor.distance(candidate) >= GLYPH_MIN_SEPARATION_PIXELS)
+}
+
+fn glyph_fan_out_position(original: ScreenPoint, occupied: &[ScreenPoint]) -> ScreenPoint {
+    for ring_index in 1..=GLYPH_MAX_SEARCH_RINGS {
+        let radius = GLYPH_RING_STEP_PIXELS * f64::from(ring_index);
+        // Six slots per 24 px of radius keep neighboring candidates about
+        // 25 px apart without a lossy float-to-integer conversion.
+        let slots = 6 * ring_index;
+        for phase_index in 0..slots {
+            let phase = std::f64::consts::TAU * f64::from(phase_index) / f64::from(slots);
+            let candidate = offset(original, radius * phase.cos(), radius * phase.sin());
+            if glyph_position_is_clear(candidate, occupied) {
+                return candidate;
+            }
+        }
+    }
+
+    // The document resource limits keep ordinary sketches far below this path.
+    // Still fail visibly and deterministically to the right instead of overlapping.
+    let rightmost = occupied
+        .iter()
+        .map(|anchor| anchor.x)
+        .max_by(f64::total_cmp)
+        .unwrap_or(original.x);
+    ScreenPoint {
+        x: rightmost + GLYPH_MIN_SEPARATION_PIXELS,
+        y: original.y,
     }
 }
 
