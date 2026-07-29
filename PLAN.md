@@ -2700,14 +2700,45 @@ Approval record (2026-07-29): after the five original blockers and findings `M61
 approved for the scope recorded above. This approval does not freeze future UI scope or imply
 release hardening.
 
-### M62: placeholder — goals pending
+### M62: CAD-style constraint and dimension authoring
 
-Status: planned placeholder; do not begin until the supervising user supplies and approves its
-goals.
+Status: active; implementation and direct qualification are authorized. The milestone remains
+open until its ordinary-workspace UAT is explicitly approved by the supervising human.
 
-Scope: intentionally empty. The former API/schema freeze, integrated release-candidate UAT and
-production-embedding release milestones have been removed rather than deferred under these
-numbers. M62 will receive a fresh goal, direct qualification criteria and its own final UAT.
+Goal: replace inspector-driven relation creation with a compact CAD authoring workflow while
+making the headless editor, rather than the browser, own operand collection and contextual
+dispatch.
+
+- [ ] Add a selection-independent headless authoring state machine with explicit immutable
+  selection snapshots and picked operands, typed expected-operand guidance, warnings and outcomes.
+- [ ] Preserve the eleven compact contextual constraint intents and five dimension tools without
+  adding a residual, equation-shaped alias or browser-owned compatibility rule.
+- [ ] Apply a compatible non-empty host selection once; reject an incompatible selection without
+  mutation; enter persistent repeated authoring mode from an empty selection.
+- [ ] Support one-operand repetition, two-pick repetition, ordered continuity/angle operands,
+  normalized role-distinct operands, and point/point/axis Symmetric collection.
+- [ ] Keep pending operands separate from ordinary selection, reconcile stale operands after
+  topology changes, retain operands after pre-transaction input errors, and clear completed
+  operands after retained accepted or rejected mutations.
+- [ ] Provide two-stage Escape: clear pending operands first, then exit authoring mode.
+- [ ] Replace inspector creation dropdowns with a wider two-column left palette containing
+  geometry, constraint and dimension tools plus non-persisted option flyouts.
+- [ ] Route canvas and tree picks through the same authoring operand API, suppress ordinary
+  selection and point drag while authoring, and render pending operands plus concise canvas
+  guidance.
+- [ ] Preserve explicit defaults in memory only: aligned tangency, signed curvature, G1
+  continuity, parametric-C2 rates 1/1, driving dimensions and counter-clockwise angles.
+- [ ] Add retained selected-dimension target editing in the inspector using the owned target
+  scalar and ordinary history/replay.
+- [ ] Directly qualify headless transitions, contextual dispatch, rejected-state retention,
+  history, stale reconciliation, palette presentation and WASM adaptation.
+- [ ] Run formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature WASM
+  check and release Trunk build.
+- [ ] Complete and explicitly approve `docs/M62_UAT.md` in the ordinary workspace.
+
+Gate: every visible creation tool is driven by public headless authoring metadata and emits only
+ordinary retained document edits. Scenario mode remains non-editable, no scenario is added, and no
+legacy harness or `/#/dev/lab` route returns.
 
 ## Explicit non-goals
 

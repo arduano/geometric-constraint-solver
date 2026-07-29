@@ -155,7 +155,7 @@ M8 is ready for review only when every item below is objectively present. These 
 
 The checked wording below is the preserved M8 completion record. Its then-current M8-M22
 allocations are historical; `PLAN.md` now governs completed work through the approved M61 gate
-and the unscoped M62 placeholder.
+and active M62 authoring milestone.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -935,10 +935,10 @@ finding dispositions and approval record are retained in `docs/M53_UAT.md`.
   regression/requalification plus human retest; deferred future scope retains an explicit roadmap
   owner.
 
-## M54-M61 acceptance and M62 placeholder
+## M54-M62 acceptance
 
-M54-M61 are the completed post-M53 sequence. M62 has no acceptance criteria until the supervising
-user supplies its goals. No old browser E2E qualification may return.
+M54-M61 are the completed post-M53 sequence. M62 is the active CAD-style constraint and dimension
+authoring milestone. No old browser E2E qualification may return.
 
 ### M54: stable diagnostics
 
@@ -1134,12 +1134,37 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
 - Advanced controls, branch transitions, associated operations, topology claims and representative interaction performance are understandable and trustworthy.
 - No unresolved wrong-branch, misleading-profile, advanced-interaction or responsiveness blocker remains.
 
-### M62: placeholder — goals pending
+### M62: CAD-style constraint and dimension authoring
 
-- No implementation or acceptance scope is authorized yet.
-- The supervising user will supply its goals before work begins.
-- Once scoped, M62 will include direct automated qualification and will end in its own explicit
-  human UAT approval.
+- A public presentation-independent authoring state machine consumes explicit immutable selection
+  snapshots and picks; it never reads or owns application selection.
+- A compatible non-empty selection applies once and returns to Select with selection preserved. An
+  incompatible non-empty selection returns a typed warning without mutation. An empty selection
+  enters a persistent authoring mode.
+- One-operand tools apply on each pick; pair tools apply after two valid picks and remain active;
+  Symmetric collects point, point and axis. Role-distinct operands normalize safely, while
+  continuity and oriented-angle order remains explicit.
+- Pending operands are not ordinary selection. The first Escape clears them and the second exits
+  mode. External topology changes remove stale operands without panics or accidental retargeting.
+- Accepted and retained-rejected transactions clear the completed operand set and keep authoring
+  active. Pre-transaction validation failures retain operands for correction.
+- The desktop workbench has one two-column left palette for geometry, eleven contextual relations
+  and five dimensions. Constraint and dimension creation dropdowns and Apply buttons no longer
+  exist in the inspector.
+- Flyout options are remembered only for the current process and default to aligned tangency,
+  signed equal curvature, G1 continuity, parametric-C2 rates 1/1, Driving dimensions and
+  counter-clockwise angles.
+- Canvas and tree operands use the same headless input path. Ordinary selection and point dragging
+  are suppressed during authoring; pending operands and the expected next operand are visibly
+  identified.
+- Dimensions are created at the current independently accepted value. A selected dimension exposes
+  retained numeric target editing through its owned scalar, ordinary history and replay.
+- Scenario mode remains read-only. No new scenario, schema, equation, residual, browser
+  compatibility rule, E2E harness, mobile claim or `/#/dev/lab` route is introduced.
+- Direct native state-machine/coordinator and workbench presentation tests, locked all-feature
+  workspace tests, warnings-denied Clippy, all-feature WASM check and release Trunk build pass.
+- The milestone remains incomplete until the supervising human performs and explicitly approves
+  `docs/M62_UAT.md` in the ordinary workspace.
 
 ## Regression and oracle policy
 

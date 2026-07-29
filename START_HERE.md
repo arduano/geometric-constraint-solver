@@ -91,8 +91,8 @@ drag, unclipped recursive flyouts, full Bezier/conic/NURBS authoring and an insp
 camera. Follow-up `M61-F001` restores the twin-roller fixture's passive stability target at the
 headless/UI seam. Follow-up `M61-F005` makes compact circle Tangent contact-bearing and circle/arc
 Normal explicitly radial while retaining the public direction-at-contact domain API. M61 is
-complete and approved; **M62 is an intentionally unscoped placeholder awaiting supervising-user
-goals**.
+complete and approved; **M62 is the active CAD-style constraint and dimension authoring
+milestone**.
 Old Chromium/CDP, HTTP serving, DOM-scraping, screenshot, wall-clock browser-timing and
 source-substring-scan gates remain retired.
 
@@ -119,7 +119,8 @@ human endpoint. The targeted attribution review passed as part of final M53-S5 a
 The completed M54-M61 sequence covers stable diagnostics, alpha
 constraint/dimension/branch-action parity, prepared jobs, incremental scale, operations,
 production topology, the advanced workbench and approved advanced UAT. The previously forecast
-M62-M64 hardening sequence was withdrawn on 2026-07-29; only an unscoped M62 placeholder remains.
+M62-M64 hardening sequence was withdrawn on 2026-07-29. M62 has since been freshly scoped to
+headless CAD-style constraint/dimension authoring; no later milestone is currently scheduled.
 
 Durable cleanup records:
 
