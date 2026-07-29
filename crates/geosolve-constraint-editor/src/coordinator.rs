@@ -466,13 +466,78 @@ impl RetainedEditorCoordinator {
         point: DesignPointId,
         model_position: [f64; 2],
     ) -> Vec<EditorEffect> {
+        self.resolve_projected_point_move_with_optional_stability(
+            pointer_id,
+            request_id,
+            point,
+            model_position,
+            None,
+        )
+    }
+
+    /// Executes one projected point-move preview while retaining another accepted point at its
+    /// current position through a temporary stability target.
+    ///
+    /// This is intended for interactions with multiple independent freedoms. The presentation
+    /// adapter supplies only persistent point identities; this coordinator reads the authoritative
+    /// accepted stability position and owns construction of the transient solve request.
+    pub fn resolve_projected_point_move_stabilizing(
+        &mut self,
+        pointer_id: u64,
+        request_id: u64,
+        point: DesignPointId,
+        model_position: [f64; 2],
+        stability_point: DesignPointId,
+    ) -> Vec<EditorEffect> {
+        self.resolve_projected_point_move_with_optional_stability(
+            pointer_id,
+            request_id,
+            point,
+            model_position,
+            Some(stability_point),
+        )
+    }
+
+    fn resolve_projected_point_move_with_optional_stability(
+        &mut self,
+        pointer_id: u64,
+        request_id: u64,
+        point: DesignPointId,
+        model_position: [f64; 2],
+        stability_point: Option<DesignPointId>,
+    ) -> Vec<EditorEffect> {
+        let stability_target = match stability_point {
+            None => None,
+            Some(stability_point) if stability_point == point => {
+                return self
+                    .editor
+                    .projected_drag_result(pointer_id, request_id, point, None);
+            }
+            Some(stability_point) => {
+                let Some(position) = self
+                    .session
+                    .accepted_state()
+                    .and_then(|state| state.document().point(stability_point))
+                    .map(|value| value.position)
+                    .filter(|position| position.iter().all(|value| value.is_finite()))
+                else {
+                    return self
+                        .editor
+                        .projected_drag_result(pointer_id, request_id, point, None);
+                };
+                Some((stability_point, position))
+            }
+        };
         let mut candidate = self.session.clone();
-        let request = candidate
+        let mut request = candidate
             .last_attempt()
             .input()
             .candidate_request()
             .without_previous_state_preferences()
             .with_drag(point, model_position);
+        if let Some((stability_point, position)) = stability_target {
+            request = request.with_stability_target(stability_point, position);
+        }
         let accepted_position = candidate
             .reattempt(candidate.design_identity(), request)
             .ok()

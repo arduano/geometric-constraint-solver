@@ -3,7 +3,8 @@
 
 use std::fmt::{self, Write as _};
 
-use geosolve_constraint_editor::RetainedEditorCoordinator;
+use geosolve_constraint_editor::{EditorEffect, RetainedEditorCoordinator};
+use geosolve_sketch::DesignPointId;
 
 use super::persistence::WorkspaceSnapshot;
 use super::scenario_fixtures::{
@@ -1491,6 +1492,27 @@ impl ScenarioWorkbenchState {
             .map_or(ordinary, |runner| runner.candidate.active_coordinator_mut())
     }
 
+    pub(crate) fn resolve_projected_point_move(
+        &mut self,
+        ordinary: &mut RetainedEditorCoordinator,
+        pointer_id: u64,
+        request_id: u64,
+        point: DesignPointId,
+        model_position: [f64; 2],
+    ) -> Vec<EditorEffect> {
+        self.runner.as_mut().map_or_else(
+            || ordinary.resolve_projected_point_move(pointer_id, request_id, point, model_position),
+            |runner| {
+                runner.candidate.resolve_projected_point_move(
+                    pointer_id,
+                    request_id,
+                    point,
+                    model_position,
+                )
+            },
+        )
+    }
+
     pub(crate) fn ordinary_action_allowed(&self, action: &str) -> bool {
         !self.is_active() || matches!(action, "problems" | "zoom-in" | "zoom-out" | "zoom-fit")
     }
@@ -1727,6 +1749,7 @@ mod tests {
     use std::collections::{HashMap, HashSet};
 
     use geosolve_constraint_editor::{EditorEffect, SelectionItem};
+    use geosolve_sketch::{AlphaScenarioIds, AlphaScenarioKind, alpha_scenario};
 
     use super::{
         ALL_SCENARIO_ACTIONS, SCENARIO_CATALOG, ScenarioAction, ScenarioCandidate, ScenarioFixture,
@@ -2047,6 +2070,78 @@ mod tests {
                 "{}",
                 id.key()
             );
+        }
+    }
+
+    #[test]
+    fn twin_roller_drag_keeps_the_passive_circle_at_its_accepted_position() {
+        let ordinary_candidate = ScenarioCandidate::new(ScenarioFixture::RoleActivity).unwrap();
+        let mut ordinary = ScenarioCandidate::new(ScenarioFixture::RoleActivity).unwrap();
+        let expected = alpha_scenario(AlphaScenarioKind::MotionCam, 1.0).unwrap();
+        let AlphaScenarioIds::MotionCam(ids) = expected.ids else {
+            panic!("motion-cam IDs");
+        };
+        let mut state = ScenarioWorkbenchState::new();
+        state.select(ScenarioId::TwinRollerCam).unwrap();
+        let initial = state
+            .coordinator_for_render(ordinary_candidate.active_coordinator())
+            .session()
+            .accepted_state()
+            .unwrap()
+            .document()
+            .clone();
+
+        for (driver, passive, parameters) in [
+            (
+                ids.left_center,
+                ids.right_center,
+                [0.26_f64, 0.28, 0.30, 0.32, 0.34, 0.32, 0.29, 0.27],
+            ),
+            (
+                ids.right_center,
+                ids.left_center,
+                [0.74_f64, 0.72, 0.70, 0.68, 0.66, 0.68, 0.71, 0.73],
+            ),
+        ] {
+            let passive_before = initial.point(passive).unwrap().position;
+            for (request_id, parameter) in (1_u64..=8).zip(parameters) {
+                let tangent = [8.0, 8.0 - 16.0 * parameter];
+                let tangent_norm = f64::hypot(tangent[0], tangent[1]);
+                let target = [
+                    -4.0 + 8.0 * parameter - tangent[1] / tangent_norm,
+                    8.0 * parameter * (1.0 - parameter) + tangent[0] / tangent_norm,
+                ];
+                let _effects = state.resolve_projected_point_move(
+                    ordinary.active_coordinator_mut(),
+                    7,
+                    request_id,
+                    driver,
+                    target,
+                );
+                let preview = state
+                    .coordinator_for_render(ordinary_candidate.active_coordinator())
+                    .solved_preview_session()
+                    .expect("accepted projected preview");
+                let request = preview.last_attempt().input().candidate_request();
+                assert_eq!(
+                    request.stability_target.map(|target| target.point),
+                    Some(passive)
+                );
+                let passive_after = preview
+                    .accepted_state()
+                    .unwrap()
+                    .document()
+                    .point(passive)
+                    .unwrap()
+                    .position;
+                assert!(
+                    f64::hypot(
+                        passive_after[0] - passive_before[0],
+                        passive_after[1] - passive_before[1]
+                    ) <= 1.0e-9,
+                    "passive roller moved from {passive_before:?} to {passive_after:?}"
+                );
+            }
         }
     }
 

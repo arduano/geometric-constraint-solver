@@ -67,6 +67,22 @@ pub(crate) mod wasm {
             self.scenarios
                 .coordinator_for_interaction_mut(&mut self.coordinator)
         }
+
+        fn resolve_projected_point_move(
+            &mut self,
+            pointer_id: u64,
+            request_id: u64,
+            point: geosolve_sketch::DesignPointId,
+            model_position: [f64; 2],
+        ) -> Vec<EditorEffect> {
+            self.scenarios.resolve_projected_point_move(
+                &mut self.coordinator,
+                pointer_id,
+                request_id,
+                point,
+                model_position,
+            )
+        }
     }
 
     #[derive(Clone, Copy)]
@@ -685,14 +701,12 @@ pub(crate) mod wasm {
                     point,
                     model_position,
                 } => {
-                    let next = wb
-                        .interaction_coordinator_mut()
-                        .resolve_projected_point_move(
-                            *pointer_id,
-                            *request_id,
-                            *point,
-                            *model_position,
-                        );
+                    let next = wb.resolve_projected_point_move(
+                        *pointer_id,
+                        *request_id,
+                        *point,
+                        *model_position,
+                    );
                     pending.extend(next);
                 }
                 EditorEffect::PreviewPointMove { .. } => {

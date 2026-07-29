@@ -8,16 +8,17 @@ use geosolve_constraint_editor::{
 use geosolve_core::SolverConfig;
 use geosolve_sketch::{
     AlphaScenarioIds, AlphaScenarioKind, ContactDomain, ContactNeighborhood, CurveDefinition,
-    CurveSpan, DocumentBSplineSpanDirection, DocumentConstraintDefinition, DocumentCurveSpanRef,
-    DocumentDimensionDefinition, DocumentDimensionMode, DocumentDirectionSense, DocumentEdit,
-    DocumentElementId, DocumentExternalLineSupportRef, DocumentId, DocumentLineSupportRef,
-    DocumentParameterKind, DocumentParameterTarget, DocumentSessionError, DocumentSolveRequest,
-    ExternalFeatureKindV1, ExternalLineOrientationV1, ExternalSnapshotDigest,
-    ExternalSnapshotEntry, ExternalSnapshotFeatureV1, ExternalSnapshotResourcesV1,
-    ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole, HostActivationOverride,
-    HostConfigurationActivation, OperationControl, OperationOutcome, ParameterBatch,
-    ParameterBatchEntry, ParameterValue, PersistentId, RetainedSketchDocumentSession, ScalarDomain,
-    ScalarUnit, SketchDocument, TangentOrientation, alpha_scenario, cancellation_pair,
+    CurveSpan, DesignPointId, DocumentBSplineSpanDirection, DocumentConstraintDefinition,
+    DocumentCurveSpanRef, DocumentDimensionDefinition, DocumentDimensionMode,
+    DocumentDirectionSense, DocumentEdit, DocumentElementId, DocumentExternalLineSupportRef,
+    DocumentId, DocumentLineSupportRef, DocumentParameterKind, DocumentParameterTarget,
+    DocumentSessionError, DocumentSolveRequest, ExternalFeatureKindV1, ExternalLineOrientationV1,
+    ExternalSnapshotDigest, ExternalSnapshotEntry, ExternalSnapshotFeatureV1,
+    ExternalSnapshotResourcesV1, ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole,
+    HostActivationOverride, HostConfigurationActivation, OperationControl, OperationOutcome,
+    ParameterBatch, ParameterBatchEntry, ParameterValue, PersistentId,
+    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument, TangentOrientation,
+    alpha_scenario, cancellation_pair,
 };
 use geosolve_sketch_ops::{
     SketchOperationRequest, SketchOperationResult, SketchOperationSnapshot, SplitRetainedPiece,
@@ -406,6 +407,17 @@ struct ProductionTopologyFixture {
     coordinator: RetainedEditorCoordinator,
 }
 
+#[derive(Clone, Copy)]
+struct DragStability {
+    driver: DesignPointId,
+    passive: DesignPointId,
+}
+
+struct MotionFixture {
+    coordinator: RetainedEditorCoordinator,
+    drag_stability: Vec<DragStability>,
+}
+
 #[derive(Default)]
 struct ScenarioTransition {
     explicit_declaration: bool,
@@ -425,7 +437,7 @@ pub(crate) struct ScenarioCandidate {
     nurbs_branches: Box<NurbsBranchFixture>,
     operations: Box<OperationFixture>,
     production_topology: Box<ProductionTopologyFixture>,
-    motion: Option<Box<RetainedEditorCoordinator>>,
+    motion: Option<Box<MotionFixture>>,
     transcript: Vec<ScenarioObservation>,
     evidence_text: String,
 }
@@ -488,6 +500,7 @@ impl ScenarioCandidate {
             fixture if fixture.motion_kind().is_some() => self
                 .motion
                 .as_deref()
+                .map(|fixture| &fixture.coordinator)
                 .expect("active motion fixture exists"),
             _ => unreachable!("all scenario fixtures are matched"),
         }
@@ -509,8 +522,41 @@ impl ScenarioCandidate {
             fixture if fixture.motion_kind().is_some() => self
                 .motion
                 .as_deref_mut()
+                .map(|fixture| &mut fixture.coordinator)
                 .expect("active motion fixture exists"),
             _ => unreachable!("all scenario fixtures are matched"),
+        }
+    }
+
+    pub(crate) fn resolve_projected_point_move(
+        &mut self,
+        pointer_id: u64,
+        request_id: u64,
+        point: DesignPointId,
+        model_position: [f64; 2],
+    ) -> Vec<geosolve_constraint_editor::EditorEffect> {
+        let stability = self.motion.as_deref().and_then(|fixture| {
+            fixture
+                .drag_stability
+                .iter()
+                .find(|stability| stability.driver == point)
+                .map(|stability| stability.passive)
+        });
+        let coordinator = self.active_coordinator_mut();
+        match stability {
+            Some(stability) => coordinator.resolve_projected_point_move_stabilizing(
+                pointer_id,
+                request_id,
+                point,
+                model_position,
+                stability,
+            ),
+            None => coordinator.resolve_projected_point_move(
+                pointer_id,
+                request_id,
+                point,
+                model_position,
+            ),
         }
     }
 
@@ -1189,19 +1235,31 @@ fn alpha_parity_fixture() -> Result<RetainedEditorCoordinator, String> {
     RetainedEditorCoordinator::new(session).map_err(|error| error.to_string())
 }
 
-fn motion_fixture(kind: AlphaScenarioKind) -> Result<RetainedEditorCoordinator, String> {
+fn motion_fixture(kind: AlphaScenarioKind) -> Result<MotionFixture, String> {
     let fixture = alpha_scenario(kind, 1.0).map_err(|error| error.to_string())?;
-    let driver = match &fixture.ids {
-        AlphaScenarioIds::StressCompass(ids) => ids.first_tip,
-        AlphaScenarioIds::StressBridge(ids) => ids.left_seam,
-        AlphaScenarioIds::MotionCam(ids) => ids.left_center,
-        AlphaScenarioIds::MotionOrbit(ids) => ids.moving_center,
-        AlphaScenarioIds::MotionTrammel(ids) => ids.horizontal_slider,
-        AlphaScenarioIds::MotionScotchYoke(ids) => ids.crank_pin,
-        AlphaScenarioIds::MotionRotatingSquare(ids) => ids.corners[1],
-        AlphaScenarioIds::MotionScissor(ids) => ids.slider,
-        AlphaScenarioIds::MotionScissorTower(ids) => ids.right_levels[0],
-        AlphaScenarioIds::MotionPeaucellier(ids) => ids.input,
+    let (driver, drag_stability) = match &fixture.ids {
+        AlphaScenarioIds::StressCompass(ids) => (ids.first_tip, Vec::new()),
+        AlphaScenarioIds::StressBridge(ids) => (ids.left_seam, Vec::new()),
+        AlphaScenarioIds::MotionCam(ids) => (
+            ids.left_center,
+            vec![
+                DragStability {
+                    driver: ids.left_center,
+                    passive: ids.right_center,
+                },
+                DragStability {
+                    driver: ids.right_center,
+                    passive: ids.left_center,
+                },
+            ],
+        ),
+        AlphaScenarioIds::MotionOrbit(ids) => (ids.moving_center, Vec::new()),
+        AlphaScenarioIds::MotionTrammel(ids) => (ids.horizontal_slider, Vec::new()),
+        AlphaScenarioIds::MotionScotchYoke(ids) => (ids.crank_pin, Vec::new()),
+        AlphaScenarioIds::MotionRotatingSquare(ids) => (ids.corners[1], Vec::new()),
+        AlphaScenarioIds::MotionScissor(ids) => (ids.slider, Vec::new()),
+        AlphaScenarioIds::MotionScissorTower(ids) => (ids.right_levels[0], Vec::new()),
+        AlphaScenarioIds::MotionPeaucellier(ids) => (ids.input, Vec::new()),
         _ => return Err(format!("{} is not a motion fixture", kind.key())),
     };
     let session = RetainedSketchDocumentSession::new(
@@ -1215,7 +1273,10 @@ fn motion_fixture(kind: AlphaScenarioKind) -> Result<RetainedEditorCoordinator, 
     coordinator
         .editor_mut()
         .set_selection([SelectionItem::Point(driver)]);
-    Ok(coordinator)
+    Ok(MotionFixture {
+        coordinator,
+        drag_stability,
+    })
 }
 
 fn advanced_gallery_fixture() -> Result<RetainedEditorCoordinator, String> {
