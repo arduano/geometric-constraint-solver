@@ -34,8 +34,8 @@ The library must support independently editable 2D sketch geometry, including:
 M22 completed the built-in curve and generic differential-constraint surface, not
 the complete production embedding contract. M33-M45 close the first ordinary-CAD,
 host-integration and interaction-consumer cut; M46-M53 perform the cleanup rebase and approved
-host-semantics UAT; M54-M61 complete the subsequent functional work and approved advanced UAT.
-M62 is intentionally unscoped pending supervising-user goals. This deliverable
+host-semantics UAT; M54-M62 complete the subsequent functional work, approved advanced UAT and
+approved CAD-style authoring. M63 is intentionally unscoped pending supervising-user goals. This deliverable
 does not include a solid B-rep kernel, meshing or 3D sketch curves.
 
 ### Deliverable 2: 2D and 3D rigid-body kinematics
@@ -135,8 +135,8 @@ engine that a real CAD host can use. The accepted personality is:
   geometry enter one attempt as immutable revisioned values.
 - Keep cross-system expressions, B-rep projection, topological naming, feature
   history and application undo outside the sketch solver contract.
-- Keep human acceptance records explicit: M40.7, M53 and M61 are complete and approved, and every
-  newly scoped milestone from M62 onward ends in its own supervising-human UAT. Every objective correctness, persistence,
+- Keep human acceptance records explicit: M40.7, M53, M61 and M62 are complete and approved, and every
+  newly scoped milestone from M63 onward ends in its own supervising-human UAT. Every objective correctness, persistence,
   compatibility and presentation-adapter assertion must pass through direct unit or
   integration tests at its owning layer before a human checkpoint begins; old CDP E2E
   suites are not a qualification path.
@@ -2022,9 +2022,10 @@ M45; the M46 follow-up cleared it without changing behavior.
 ## Post-cleanup numbering record
 
 M46-M53 are the completed cleanup and host-semantics UAT sequence. M54-M60 subsequently completed
-the functional sequence and M61 completed the advanced human UAT gate. On 2026-07-29 the
+the functional sequence, M61 completed the advanced human UAT gate and M62 completed approved
+CAD-style authoring. On 2026-07-29 the
 supervising user withdrew the previously forecast M62-M64 hardening sequence so that additional
-UI, cleanup and product milestones can be scoped one at a time. M62 is now only the next
+UI, cleanup and product milestones can be scoped one at a time. M63 is now only the next empty
 placeholder and owns no inherited hardening scope.
 
 ## Pre-cleanup phase
@@ -2702,8 +2703,7 @@ release hardening.
 
 ### M62: CAD-style constraint and dimension authoring
 
-Status: mechanically qualified UAT candidate as of 2026-07-29. The milestone remains open until
-its ordinary-workspace UAT is explicitly approved by the supervising human.
+Status: complete and explicitly approved by the supervising human on 2026-07-29.
 
 Goal: replace inspector-driven relation creation with a compact CAD authoring workflow while
 making the headless editor, rather than the browser, own operand collection and contextual
@@ -2734,7 +2734,7 @@ dispatch.
   history, stale reconciliation, palette presentation and WASM adaptation.
 - [x] Run formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature WASM
   check and release Trunk build.
-- [ ] Complete and explicitly approve `docs/M62_UAT.md` in the ordinary workspace.
+- [x] Complete and explicitly approve `docs/M62_UAT.md` in the ordinary workspace.
 
 Gate: every visible creation tool is driven by public headless authoring metadata and emits only
 ordinary retained document edits. Scenario mode remains non-editable, no scenario is added, and no
@@ -2743,7 +2743,8 @@ legacy harness or `/#/dev/lab` route returns.
 Candidate notes (2026-07-29): commits `0ec560b` and `53e7867` add the public operand collector,
 explicit retained coordinator entry points, two-column palette, flyout options, shared canvas/tree
 picking, pending highlights and target editing. Direct editor/workbench tests, the locked complete
-workspace gate and release WASM bundle pass. `docs/M62_UAT.md` is the only remaining gate.
+workspace gate and release WASM bundle pass. Follow-ups `M62-F001` through `M62-F005` were
+mechanically requalified before final approval.
 
 UAT follow-up `M62-F001` corrects angle creation before approval. Dimension creation now measures
 the exact independently accepted document rather than potentially divergent retained design
@@ -2801,6 +2802,16 @@ one last metadata variant: ordinary bounded point-on-curve picks at parameter en
 to `Interior`. Bounded contact choices now put `Start` or `End` first when the picked parameter is
 the corresponding endpoint. No residual, equation, branch definition, schema, scenario or
 browser-owned compatibility rule changed.
+
+Approval record (2026-07-29): after findings `M62-F001` through `M62-F005` were remediated and
+mechanically requalified, the supervising human explicitly approved M62. This closes the
+milestone for the scope recorded above without assigning any scope to M63.
+
+### M63: unscoped placeholder
+
+Status: intentionally empty pending supervising-user goals.
+
+No goal, requirements, acceptance criteria or implementation work are assigned yet.
 
 ## Explicit non-goals
 

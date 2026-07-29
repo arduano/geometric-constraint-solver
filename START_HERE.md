@@ -21,7 +21,8 @@ production-scale evidence, M58 completed the deterministic equation-free sketch 
 companion and multi-interval visible topology, M59 completed the revision-stamped production
 topology companion, and M60 completed the directly qualified advanced workbench and prepared M61
 scorecard. The first M61 candidate was withdrawn for five interaction/coverage blockers; the
-remediated scope is now explicitly approved and closed. The workbench is a
+remediated scope is now explicitly approved and closed. M62 subsequently completed and received
+supervising-human approval for CAD-style constraint and dimension authoring. The workbench is a
 non-authoritative demo consumer, not a production UI or third solver. Mobile support and
 physics remain outside future acceptance.
 
@@ -91,11 +92,10 @@ drag, unclipped recursive flyouts, full Bezier/conic/NURBS authoring and an insp
 camera. Follow-up `M61-F001` restores the twin-roller fixture's passive stability target at the
 headless/UI seam. Follow-up `M61-F005` makes compact circle Tangent contact-bearing and circle/arc
 Normal explicitly radial while retaining the public direction-at-contact domain API. M61 is
-complete and approved; **M62 is a mechanically qualified CAD-style constraint and dimension
-authoring candidate awaiting ordinary-workspace human UAT**.
+complete and approved; **M62 is also complete and approved, and M63 is an intentionally empty
+placeholder awaiting supervising-user goals**.
 M62 follow-up `M62-F001` corrects accepted-state line-angle seeding and exposes acute-degree
-presentation while retaining the explicit directed-radian solver branch; its targeted human
-recheck remains part of the open M62 UAT.
+presentation while retaining the explicit directed-radian solver branch.
 Follow-up `M62-F002` gives canvas pointer-down exclusive ownership of canvas authoring picks,
 prevents the later bubbled click from duplicating operands, and re-arms repeated mode after every
 terminal application attempt.
@@ -135,11 +135,12 @@ are complete, growing the catalog to eight scenarios. The complete clean release
 build-source commit `f72116b`; `docs/M53_UAT.md` records the frozen M53-S5 manifest and temporary
 human endpoint. The targeted attribution review passed as part of final M53-S5 approval.
 
-The completed M54-M61 sequence covers stable diagnostics, alpha
+The completed M54-M62 sequence covers stable diagnostics, alpha
 constraint/dimension/branch-action parity, prepared jobs, incremental scale, operations,
-production topology, the advanced workbench and approved advanced UAT. The previously forecast
-M62-M64 hardening sequence was withdrawn on 2026-07-29. M62 has since been freshly scoped to
-headless CAD-style constraint/dimension authoring; no later milestone is currently scheduled.
+production topology, the advanced workbench, approved advanced UAT and approved CAD-style
+authoring. The previously forecast M62-M64 hardening sequence was withdrawn on 2026-07-29 and M62
+was freshly scoped and completed. M63 now exists only as an empty placeholder; no later milestone
+is currently scheduled.
 
 Durable cleanup records:
 
@@ -164,6 +165,8 @@ Durable cleanup records:
 - `docs/M60_IMPLEMENTATION.md`
 - `docs/M61_REMEDIATION.md`
 - `docs/M61_UAT.md` (approved M61 scorecard and finding ledger)
+- `docs/M62_IMPLEMENTATION.md`
+- `docs/M62_UAT.md` (approved M62 scorecard and finding ledger)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

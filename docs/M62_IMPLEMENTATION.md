@@ -2,8 +2,8 @@
 
 # M62 CAD-style constraint and dimension authoring
 
-Status: mechanically complete as of 2026-07-29. Human approval belongs only in
-`docs/M62_UAT.md`, so M62 remains open.
+Status: complete as of 2026-07-29. Mechanical evidence is recorded here and supervising-human
+approval is recorded in `docs/M62_UAT.md`.
 
 ## Scope
 
@@ -129,7 +129,7 @@ manual performance/cancellation measurements.
 - Canvas/tree pending presentation, read-only scenario behavior, WASM compilation and the release
   bundle pass without adding a scenario or persistence field.
 
-## 5. Known limitations and next gate
+## 5. Known limitations and closure
 
 - Creation-time option flyouts intentionally expose only the approved M62 choices. Contact
   domain/neighborhood/winding details use deterministic headless defaults; their existing
@@ -139,5 +139,5 @@ manual performance/cancellation measurements.
   dimension. The persisted dimension remains directed and branch-explicit; no schema migration is
   required.
 - Responsive/mobile behavior and browser E2E remain out of scope.
-- The only remaining M62 blocker is explicit supervising-human approval of
-  `docs/M62_UAT.md` in the ordinary workspace.
+- The supervising human explicitly approved the recorded M62 scope on 2026-07-29. M63 remains an
+  empty placeholder and inherits none of these limitations as planned work.

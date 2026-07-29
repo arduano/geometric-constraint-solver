@@ -155,7 +155,7 @@ M8 is ready for review only when every item below is objectively present. These 
 
 The checked wording below is the preserved M8 completion record. Its then-current M8-M22
 allocations are historical; `PLAN.md` now governs completed work through the approved M61 gate
-and active M62 authoring milestone.
+and approved M62 authoring milestone, with M63 retained only as an empty placeholder.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -935,10 +935,11 @@ finding dispositions and approval record are retained in `docs/M53_UAT.md`.
   regression/requalification plus human retest; deferred future scope retains an explicit roadmap
   owner.
 
-## M54-M62 acceptance
+## M54-M63 acceptance
 
-M54-M61 are the completed post-M53 sequence. M62 is the active CAD-style constraint and dimension
-authoring milestone. No old browser E2E qualification may return.
+M54-M62 are the completed post-M53 sequence. M62 received explicit supervising-human approval on
+2026-07-29. M63 is an empty placeholder with no acceptance criteria. No old browser E2E
+qualification may return.
 
 ### M54: stable diagnostics
 
@@ -1182,8 +1183,12 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
   compatibility rule, E2E harness, mobile claim or `/#/dev/lab` route is introduced.
 - Direct native state-machine/coordinator and workbench presentation tests, locked all-feature
   workspace tests, warnings-denied Clippy, all-feature WASM check and release Trunk build pass.
-- The milestone remains incomplete until the supervising human performs and explicitly approves
-  `docs/M62_UAT.md` in the ordinary workspace.
+- The supervising human explicitly approved `docs/M62_UAT.md` in the ordinary workspace on
+  2026-07-29.
+
+### M63: unscoped placeholder
+
+No acceptance criteria exist until the supervising user assigns M63 a goal and scope.
 
 ## Regression and oracle policy
 

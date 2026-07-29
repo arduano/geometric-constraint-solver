@@ -1266,7 +1266,8 @@ scenarios above. Cleanup M46-M53 preserves their durable behavior through direct
 approved post-cleanup UAT. M54-M59 complete stable diagnostics, early alpha action parity,
 prepared concurrency, incremental scale and the separate operations/production-topology
 companions; M60 completes the advanced workbench and M61 completes its approved advanced UAT.
-M62 is an unscoped placeholder and no later release sequence is currently scheduled. Every new
+M62 completes approved CAD-style constraint/dimension authoring. M63 is an unscoped placeholder
+and no later release sequence is currently scheduled. Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
 required.
@@ -1274,7 +1275,7 @@ required.
 Objective geometry, residual, derivative, rank, branch, persistence, migration, resource,
 cancellation, presentation-adapter and topology assertions are directly automated at their
 owning Rust/WASM layer. Old browser E2E is not a qualification path. Human review is
-recorded at completed M40.7, M53 and M61. Every newly scoped milestone from M62 onward ends in its
+recorded at completed M40.7, M53, M61 and M62. Every newly scoped milestone from M63 onward ends in its
 own UAT after direct automated qualification.
 
 ### M40-ES1 - Headless persistent line selection and relation action
@@ -1758,15 +1759,14 @@ this pass: endpoint parameters may never be emitted with an Interior default nei
 Each checkpoint provides one manual entry point, deterministic resets and concise instructions.
 The top **Scenarios** entry now contains the eight stable M53 leaves, three direct-qualified M55
 leaves, four direct-qualified M60 leaves and ten movable M61-remediation leaves. The added M55
-circle-relations leaf does not alter the M53 approval record. Each newly scoped milestone from M62
+circle-relations leaf does not alter the M53 approval record. Each newly scoped milestone from M63
 onward will add its own focused UAT material only after its goals are approved.
 Findings capture the candidate revision, selected scenario,
 workspace input, action transcript and accepted/attempted diagnostics from public APIs; a
 human may attach an OS screenshot for a visual finding. Objective defects receive direct
 owning-layer regressions. A targeted human recheck is preferred; a full checkpoint repeats
-only after a material API, schema or primary-workflow change. Completed M40.7 and M53 required
-explicit supervising-human sign-off. M61 is complete and approved; future milestones require the
-same explicit closure.
+only after a material API, schema or primary-workflow change. Completed M40.7, M53, M61 and M62
+required explicit supervising-human sign-off; future milestones require the same explicit closure.
 
 ## Frozen near-singular fixtures
 

@@ -2,7 +2,7 @@
 
 # M62 human UAT — CAD constraint authoring
 
-Status: mechanically qualified candidate; pending supervising-human review.
+Status: approved by the supervising human on 2026-07-29.
 
 This review uses the ordinary workspace. Do not load a scenario: M62 adds no scenario definitions
 or UAT-only geometry. Existing scenarios remain read-only.
@@ -55,27 +55,27 @@ a production deployment.
 
 ## Finding ledger
 
-- `M62-F001` — resolved mechanically, pending human recheck: angle creation measured retained
+- `M62-F001` — resolved and accepted: angle creation measured retained
   design seeds instead of the accepted canvas, exposed raw directed radians and did not distinguish
   retained rejection from accepted publication. The corrected candidate measures accepted
   geometry, presents acute supporting-line degrees, preserves the directed solver branch during
   edits and reports rejected publication explicitly.
-- `M62-F002` — resolved mechanically, pending human recheck: one canvas click was routed as both a
+- `M62-F002` — resolved and accepted: one canvas click was routed as both a
   pointer-down pick and a bubbled generic click, duplicating operands and leaving failed terminal
   candidates at full arity. Canvas pointer-down now owns the canvas pick exactly once, tree clicks
   retain their separate one-event route and every terminal attempt re-arms repeated authoring.
-- `M62-F003` — resolved mechanically, pending human recheck: the headless request adapter attached
+- `M62-F003` — resolved and accepted: the headless request adapter attached
   contact branch choices to simple curve relations that explicitly accept no contact state, so
   Horizontal and line-line Normal reached full arity but were rejected before document creation.
   Contact choices are now limited to contact-owning definitions; direct skew-line applications
   publish accepted Horizontal and Perpendicular constraints.
-- `M62-F004` — resolved mechanically, pending human recheck: the closed-path audit found that two
+- `M62-F004` — resolved and accepted: the closed-path audit found that two
   picks on the same curve span both recovered the first pick parameter, and an End pick for
   continuity was paired with the Start neighborhood. Contact operands now preserve occurrence
   order and endpoint neighborhoods follow the actual parameter. Request-level and accepted
   transaction matrices cover all sixteen resolved relation families; a separate accepted
   transaction matrix covers all five dimension paths, which do not translate contact metadata.
-- `M62-F005` — resolved mechanically, pending human recheck: pre-closure headless hardening found
+- `M62-F005` — resolved and accepted: pre-closure headless hardening found
   that an ordinary bounded point-on-curve pick at a line endpoint retained parameter `0` or `1`
   but defaulted to the invalid Interior neighborhood. Bounded contacts now default to the matching
   Start/End neighborhood. Direct tests also cover repeated mode for every relation/dimension
@@ -88,5 +88,5 @@ a production deployment.
   `10f95d5`, `435e898`, `3a59767`, `e49d124` and `b0d3913`.
 - Mechanical qualification: Pass on 2026-07-29; exact commands are recorded in
   `docs/M62_IMPLEMENTATION.md`.
-- Human rating: pending.
-- Approval: pending explicit supervising-human decision.
+- Human rating: Pass for the recorded M62 scope.
+- Approval: explicitly approved by the supervising human on 2026-07-29.
