@@ -7,6 +7,15 @@ Status: mechanically qualified candidate; pending supervising-human review.
 This review uses the ordinary workspace. Do not load a scenario: M62 adds no scenario definitions
 or UAT-only geometry. Existing scenarios remain read-only.
 
+Temporary Tailscale endpoint:
+
+```text
+http://100.94.63.83:8080/
+```
+
+The release watcher is serving the current M62 palette build. The endpoint is temporary and is not
+a production deployment.
+
 ## Review scorecard
 
 1. Create simple point, line and circle geometry. Confirm the wider two-column palette keeps
