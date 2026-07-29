@@ -34,12 +34,23 @@ a production deployment.
    guidance and pending highlighting.
 8. Open Tangent, Equal and Continuity option flyouts. Confirm explicit orientation, curvature and
    continuity choices remain understandable and are remembered during this session only.
-9. Create all five dimension kinds at their current accepted values. Verify Driving/Reference and
-   oriented-angle direction options.
-10. Select a dimension, change its numeric target in the inspector, then Undo and Redo. Confirm
-    retained geometry, history and selected-dimension metadata remain coherent.
+9. Create all five dimension kinds at their current accepted values. For oriented angle, draw two
+   lines at roughly 45 degrees with either endpoint order, enter angle authoring and pick them one
+   at a time. Confirm creation does not move either line and the annotation/editor reports the
+   acute angle in degrees rather than raw directed radians.
+10. Select the angle dimension and change its acute-degree target to 60, then Undo and Redo.
+    Confirm the visible acute angle, retained directed branch, history and selected-dimension
+    metadata remain coherent. Values above 90 degrees must reject without mutation.
 11. Load any existing scenario and confirm ordinary authoring is disabled and the scenario remains
-    unchanged. Exit it and resume ordinary authoring.
+   unchanged. Exit it and resume ordinary authoring.
+
+## Finding ledger
+
+- `M62-F001` — resolved mechanically, pending human recheck: angle creation measured retained
+  design seeds instead of the accepted canvas, exposed raw directed radians and did not distinguish
+  retained rejection from accepted publication. The corrected candidate measures accepted
+  geometry, presents acute supporting-line degrees, preserves the directed solver branch during
+  edits and reports rejected publication explicitly.
 
 ## Approval
 

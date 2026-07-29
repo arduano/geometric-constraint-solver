@@ -5,12 +5,13 @@ use std::{collections::BTreeSet, fmt::Write as _};
 
 use geosolve_constraint_editor::{
     AdvancedConstructionKind, ConstructionPreview, ConstructionPreviewGeometry,
-    EditorProblemCategory, EditorProblemMetadata, EditorProblemScope, EditorProblemTarget,
-    EditorScene, ScreenPoint, SelectionItem, Viewport,
+    DimensionTargetDisplayUnit, EditorProblemCategory, EditorProblemMetadata, EditorProblemScope,
+    EditorProblemTarget, EditorScene, ScreenPoint, SelectionItem, Viewport,
+    display_dimension_target,
 };
 use geosolve_sketch::{
     DesignScalarId, DocumentConstraintDefinition, DocumentDimensionDefinition,
-    DocumentDimensionMode, GeometryRole, SketchAcceptedDocumentState,
+    DocumentDimensionMode, GeometryRole, ScalarUnit, SketchAcceptedDocumentState,
 };
 
 const SCREEN_SIZE: [f64; 2] = [1000.0, 700.0];
@@ -347,15 +348,32 @@ fn annotations(
             DocumentDimensionMode::Driving => "driving",
             DocumentDimensionMode::Reference => "reference",
         };
-        let value = match dimension.mode {
+        let stored_value = match dimension.mode {
             DocumentDimensionMode::Driving => document
                 .scalar(dimension_target(&dimension.definition))
                 .map(|scalar| scalar.value),
             DocumentDimensionMode::Reference => accepted.reference_value(dimension.id),
         }
         .filter(|value| value.is_finite());
-        let value_attribute = value.map_or_else(String::new, |value| value.to_string());
-        let displayed = value.map_or_else(|| "unavailable".into(), |value| value.to_string());
+        let unit = if matches!(
+            &dimension.definition,
+            DocumentDimensionDefinition::OrientedAngle { .. }
+        ) {
+            ScalarUnit::Angle
+        } else {
+            ScalarUnit::Length
+        };
+        let display = stored_value.and_then(|value| display_dimension_target(value, unit));
+        let value_attribute = display.map_or_else(String::new, |display| display.value.to_string());
+        let displayed = display.map_or_else(
+            || "unavailable".into(),
+            |display| match display.unit {
+                DimensionTargetDisplayUnit::ModelUnits => display.value.to_string(),
+                DimensionTargetDisplayUnit::AcuteDegrees => {
+                    format!("{:.3}°", display.value)
+                }
+            },
+        );
         let selected = selection.contains(&SelectionItem::Dimension(dimension.id));
         let target = EditorProblemTarget::Dimension(dimension.id);
         let kind = dimension_kind(&dimension.definition);
@@ -698,10 +716,11 @@ mod tests {
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
         ContactId, CurveDefinition, CurveId, CurveSpan, DesignPointId, DesignScalarId,
-        DocumentConstraintDefinition, DocumentDimensionDefinition, DocumentDimensionMode,
-        DocumentEdit, DocumentParameterId, DocumentParameterKind, DocumentParameterTarget,
-        DocumentSolveRequest, ParameterBatch, ParameterBatchEntry, ParameterValue, PersistentId,
-        RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
+        DocumentAngleOrientation, DocumentConstraintDefinition, DocumentDimensionDefinition,
+        DocumentDimensionMode, DocumentEdit, DocumentParameterId, DocumentParameterKind,
+        DocumentParameterTarget, DocumentSolveRequest, ParameterBatch, ParameterBatchEntry,
+        ParameterValue, PersistentId, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
+        SketchDocument,
     };
 
     use super::{
@@ -997,6 +1016,108 @@ mod tests {
             "data-persistent-id=\"{}\" data-dimension-kind=\"segment-length\" data-dimension-mode=\"reference\" data-dimension-value=\"3\"",
             rectangle.dimensions[1]
         )));
+    }
+
+    #[test]
+    fn oriented_angle_annotation_uses_acute_degrees_for_reversed_line_direction() {
+        let mut document = SketchDocument::new(1.0).unwrap();
+        let intersection = document.add_point("intersection", [0.0, 0.0]).unwrap();
+        let x = document.add_point("x", [2.0, 0.0]).unwrap();
+        let tip = document
+            .add_point(
+                "tip",
+                [
+                    2.0 * std::f64::consts::FRAC_1_SQRT_2,
+                    2.0 * std::f64::consts::FRAC_1_SQRT_2,
+                ],
+            )
+            .unwrap();
+        let first = CurveSpan::line(
+            document
+                .add_curve(
+                    "first",
+                    CurveDefinition::Line {
+                        start: intersection,
+                        end: x,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .unwrap(),
+        );
+        let second = CurveSpan::line(
+            document
+                .add_curve(
+                    "second",
+                    CurveDefinition::Line {
+                        start: tip,
+                        end: intersection,
+                        branch_direction: [
+                            -std::f64::consts::FRAC_1_SQRT_2,
+                            -std::f64::consts::FRAC_1_SQRT_2,
+                        ],
+                    },
+                )
+                .unwrap(),
+        );
+        for (label, point, target) in [
+            ("fix intersection", intersection, [0.0, 0.0]),
+            ("fix x", x, [2.0, 0.0]),
+            (
+                "fix tip",
+                tip,
+                [
+                    2.0 * std::f64::consts::FRAC_1_SQRT_2,
+                    2.0 * std::f64::consts::FRAC_1_SQRT_2,
+                ],
+            ),
+        ] {
+            document
+                .add_constraint(
+                    label,
+                    DocumentConstraintDefinition::FixedPoint { point, target },
+                )
+                .unwrap();
+        }
+        let target = document
+            .add_scalar(
+                "angle",
+                5.0 * std::f64::consts::FRAC_PI_4,
+                ScalarUnit::Angle,
+                ScalarDomain::Positive,
+            )
+            .unwrap();
+        let dimension = document
+            .add_dimension(
+                "angle",
+                DocumentDimensionDefinition::OrientedAngle {
+                    first,
+                    second,
+                    target,
+                    orientation: DocumentAngleOrientation::CounterClockwise,
+                },
+                DocumentDimensionMode::Driving,
+            )
+            .unwrap();
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .unwrap();
+        let accepted = session.accepted_state().unwrap();
+        let scene = EditorScene::from_accepted(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            viewport(),
+            0.8,
+        )
+        .unwrap();
+        let markup = svg_markup(Some(&scene), Some(accepted), &[], None, None, viewport());
+        assert!(markup.contains(&format!(
+            "data-persistent-id=\"{dimension}\" data-dimension-kind=\"oriented-angle\" data-dimension-mode=\"driving\" data-dimension-value=\"45\""
+        )));
+        assert!(markup.contains("angle = 45.000°"));
     }
 
     #[test]

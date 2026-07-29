@@ -262,9 +262,57 @@ pub enum AuthoringMutation {
 pub struct DimensionTargetMetadata {
     pub dimension: DocumentDimensionId,
     pub scalar: geosolve_sketch::DesignScalarId,
+    /// Exact persisted solver-domain value. Angles are radians and retain their
+    /// explicit directed branch.
     pub value: f64,
     pub unit: ScalarUnit,
+    /// Presentation value owned by this headless adapter. Oriented line angles
+    /// are exposed as the acute supporting-line angle in degrees.
+    pub display_value: f64,
+    pub display_unit: DimensionTargetDisplayUnit,
     pub mode: DocumentDimensionMode,
+}
+
+/// Presentation unit for an editable dimension target.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DimensionTargetDisplayUnit {
+    ModelUnits,
+    AcuteDegrees,
+}
+
+/// Presentation-neutral conversion of one solver-domain target.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DisplayDimensionTarget {
+    pub value: f64,
+    pub unit: DimensionTargetDisplayUnit,
+}
+
+/// Converts one finite solver-domain dimension value for presentation.
+///
+/// Angle storage remains explicit directed radians. Presentation uses the acute
+/// angle between the two supporting lines, which is independent of invisible
+/// endpoint direction and of which intersection ray is chosen.
+#[must_use]
+pub fn display_dimension_target(value: f64, unit: ScalarUnit) -> Option<DisplayDimensionTarget> {
+    if !value.is_finite() {
+        return None;
+    }
+    let display = match unit {
+        ScalarUnit::Angle => {
+            let line_angle = value.rem_euclid(std::f64::consts::PI);
+            DisplayDimensionTarget {
+                value: line_angle
+                    .min(std::f64::consts::PI - line_angle)
+                    .to_degrees(),
+                unit: DimensionTargetDisplayUnit::AcuteDegrees,
+            }
+        }
+        ScalarUnit::Length | ScalarUnit::Parameter => DisplayDimensionTarget {
+            value,
+            unit: DimensionTargetDisplayUnit::ModelUnits,
+        },
+    };
+    display.value.is_finite().then_some(display)
 }
 
 /// Measurement publication preserves the exact M38 value and audit provenance.
@@ -1550,8 +1598,14 @@ impl RetainedEditorCoordinator {
         request: DimensionActionRequest,
     ) -> Result<MutationOutcome<DocumentDimensionId>, CoordinatorError> {
         self.ensure_expected(expected)?;
+        let accepted = self
+            .session
+            .accepted_state()
+            .ok_or(CoordinatorError::ActionUnavailable(
+                DisabledReason::MissingObject,
+            ))?;
         let target = dimension_target(
-            self.session.design_document(),
+            accepted.document(),
             selection,
             request.kind,
             request.angle_orientation,
@@ -1749,11 +1803,14 @@ impl RetainedEditorCoordinator {
             .find(|dimension| dimension.id == *id)?;
         let scalar = dimension_target_scalar(&dimension.definition);
         let target = self.session.design_document().scalar(scalar)?;
+        let display = display_dimension_target(target.value, target.unit)?;
         Some(DimensionTargetMetadata {
             dimension: *id,
             scalar,
             value: target.value,
             unit: target.unit,
+            display_value: display.value,
+            display_unit: display.unit,
             mode: dimension.mode,
         })
     }
@@ -1788,6 +1845,31 @@ impl RetainedEditorCoordinator {
                 value,
             },
         )
+    }
+
+    /// Retains one finite presentation-domain target edit through ordinary history.
+    ///
+    /// Lengths use model units. Oriented angles use acute supporting-line degrees;
+    /// the existing directed radian quadrant and complete-turn branch remain
+    /// explicit and unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns a missing-dimension, invalid display value, invalid-scalar,
+    /// stale-design, retained-session or checkpoint error.
+    pub fn set_dimension_display_target(
+        &mut self,
+        expected: SketchDesignIdentity,
+        dimension: DocumentDimensionId,
+        display_value: f64,
+    ) -> Result<MutationOutcome<DocumentCommandEffect>, CoordinatorError> {
+        let metadata = self
+            .dimension_target_metadata_for(&[SelectionItem::Dimension(dimension)])
+            .ok_or(CoordinatorError::ActionUnavailable(
+                DisabledReason::MissingObject,
+            ))?;
+        let value = storage_dimension_target(metadata, display_value)?;
+        self.set_dimension_target(expected, dimension, value)
     }
 
     /// Applies complete explicit branch edits for one selected contact source.
@@ -3158,6 +3240,74 @@ pub(crate) fn dimension_target(
     }
 }
 
+pub(crate) fn validate_dimension_selection(
+    document: &SketchDocument,
+    selection: &[SelectionItem],
+    kind: DimensionKind,
+) -> Result<(), DisabledReason> {
+    match (kind, selection) {
+        (
+            DimensionKind::PointDistance,
+            [SelectionItem::Point(first), SelectionItem::Point(second)],
+        ) => {
+            if first == second {
+                return Err(DisabledReason::WrongOperandKind);
+            }
+            document
+                .point(*first)
+                .ok_or(DisabledReason::MissingObject)?;
+            document
+                .point(*second)
+                .ok_or(DisabledReason::MissingObject)?;
+        }
+        (DimensionKind::SegmentLength, [SelectionItem::Curve(span)]) => {
+            let (first, second) = line_endpoints(document, *span)?;
+            document.point(first).ok_or(DisabledReason::MissingObject)?;
+            document
+                .point(second)
+                .ok_or(DisabledReason::MissingObject)?;
+        }
+        (DimensionKind::Radius | DimensionKind::Diameter, [SelectionItem::Curve(span)]) => {
+            let curve = document
+                .curve(span.curve)
+                .ok_or(DisabledReason::MissingObject)?;
+            let (CurveDefinition::Circle { radius, .. }
+            | CurveDefinition::CircularArc { radius, .. }) = curve.definition
+            else {
+                return Err(DisabledReason::WrongOperandKind);
+            };
+            document
+                .scalar(radius)
+                .ok_or(DisabledReason::MissingObject)?;
+        }
+        (
+            DimensionKind::OrientedAngle,
+            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
+        ) => {
+            if first == second {
+                return Err(DisabledReason::WrongOperandKind);
+            }
+            for span in [first, second] {
+                let (start, end) = line_endpoints(document, *span)?;
+                document.point(start).ok_or(DisabledReason::MissingObject)?;
+                document.point(end).ok_or(DisabledReason::MissingObject)?;
+            }
+        }
+        (_, values) => {
+            let expected = match kind {
+                DimensionKind::PointDistance | DimensionKind::OrientedAngle => 2,
+                DimensionKind::SegmentLength | DimensionKind::Radius | DimensionKind::Diameter => 1,
+            };
+            return Err(if values.len() == expected {
+                DisabledReason::WrongOperandKind
+            } else {
+                DisabledReason::WrongArity
+            });
+        }
+    }
+    Ok(())
+}
+
 const fn dimension_action_label(kind: DimensionKind) -> &'static str {
     match kind {
         DimensionKind::PointDistance => "Point distance",
@@ -3180,6 +3330,44 @@ const fn dimension_target_scalar(
         | DocumentDimensionDefinition::SupportingLineOffset { target, .. }
         | DocumentDimensionDefinition::ExactTranslatedSegmentOffset { target, .. } => *target,
     }
+}
+
+fn storage_dimension_target(
+    metadata: DimensionTargetMetadata,
+    display_value: f64,
+) -> Result<f64, CoordinatorError> {
+    if !display_value.is_finite() {
+        return Err(CoordinatorError::InvalidActionInput(
+            "dimension target must be finite",
+        ));
+    }
+    if metadata.display_unit == DimensionTargetDisplayUnit::ModelUnits {
+        return Ok(display_value);
+    }
+    if display_value <= 0.0 || display_value > 90.0 {
+        return Err(CoordinatorError::InvalidActionInput(
+            "acute angle target must be greater than zero and at most 90 degrees",
+        ));
+    }
+
+    let acute = display_value.to_radians();
+    let principal = metadata.value.rem_euclid(std::f64::consts::TAU);
+    let turns = metadata.value - principal;
+    let branch_value = if principal <= std::f64::consts::FRAC_PI_2 {
+        acute
+    } else if principal <= std::f64::consts::PI {
+        std::f64::consts::PI - acute
+    } else if principal <= 3.0 * std::f64::consts::FRAC_PI_2 {
+        std::f64::consts::PI + acute
+    } else {
+        std::f64::consts::TAU - acute
+    };
+    let value = turns + branch_value;
+    (value.is_finite() && value > 0.0)
+        .then_some(value)
+        .ok_or(CoordinatorError::InvalidActionInput(
+            "display target does not map to a positive finite solver target",
+        ))
 }
 
 #[derive(Clone, Copy)]
@@ -3241,13 +3429,8 @@ fn dimension_operands(
         ) => DimensionOperands::OrientedAngle(*first, *second),
         _ => return Err(CoordinatorError::IncompatibleDimension),
     };
-    dimension_target(
-        document,
-        selection,
-        kind,
-        DocumentAngleOrientation::CounterClockwise,
-    )
-    .map_err(CoordinatorError::ActionUnavailable)?;
+    validate_dimension_selection(document, selection, kind)
+        .map_err(CoordinatorError::ActionUnavailable)?;
     Ok(operands)
 }
 
@@ -4311,7 +4494,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::default_trait_access, clippy::too_many_lines)]
     fn current_problem_metadata_uses_attempted_owner_dependencies_and_clears_on_recovery() {
         let (session, points, span, target) = fixed_line_session();
         let accepted_identity = session.accepted_state().expect("accepted").identity();
@@ -4991,6 +5174,232 @@ mod tests {
                 .abs()
                 < 1.0e-12
         );
+    }
+
+    #[test]
+    #[allow(clippy::default_trait_access, clippy::too_many_lines)]
+    fn angle_authoring_measures_accepted_geometry_and_does_not_move_it() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let origin = document.add_point("origin", [0.0, 0.0]).expect("point");
+        let x = document.add_point("x", [2.0, 0.0]).expect("point");
+        let moving = document
+            .add_point("moving", [2.0 * 0.5_f64.cos(), 2.0 * 0.5_f64.sin()])
+            .expect("point");
+        let first = CurveSpan::line(
+            document
+                .add_curve(
+                    "first",
+                    CurveDefinition::Line {
+                        start: origin,
+                        end: x,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .expect("line"),
+        );
+        let second = CurveSpan::line(
+            document
+                .add_curve(
+                    "second",
+                    CurveDefinition::Line {
+                        start: origin,
+                        end: moving,
+                        branch_direction: [0.5_f64.cos(), 0.5_f64.sin()],
+                    },
+                )
+                .expect("line"),
+        );
+        for (label, point, target) in [("fix origin", origin, [0.0, 0.0]), ("fix x", x, [2.0, 0.0])]
+        {
+            document
+                .add_constraint(
+                    label,
+                    DocumentConstraintDefinition::FixedPoint { point, target },
+                )
+                .expect("constraint");
+        }
+        document
+            .add_constraint(
+                "accepted vertical",
+                DocumentConstraintDefinition::Vertical { line: second },
+            )
+            .expect("vertical");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            Default::default(),
+        )
+        .expect("session");
+        let accepted_before = session
+            .accepted_state()
+            .expect("accepted")
+            .document()
+            .point(moving)
+            .expect("accepted point")
+            .position;
+        assert!((accepted_before[0]).abs() < 1.0e-9);
+        assert!(
+            (session
+                .design_document()
+                .point(moving)
+                .expect("design point")
+                .position[0])
+                .abs()
+                > 1.0
+        );
+
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let created = coordinator
+            .apply_dimension_action_for(
+                coordinator.session().design_identity(),
+                &[SelectionItem::Curve(first), SelectionItem::Curve(second)],
+                DimensionActionRequest {
+                    kind: DimensionKind::OrientedAngle,
+                    mode: DocumentDimensionMode::Driving,
+                    label: "accepted angle".into(),
+                    angle_orientation: DocumentAngleOrientation::CounterClockwise,
+                },
+            )
+            .expect("angle dimension");
+        assert!(created.published_accepted.is_some());
+        let metadata = coordinator
+            .dimension_target_metadata_for(&[SelectionItem::Dimension(created.value)])
+            .expect("metadata");
+        assert!((metadata.value - std::f64::consts::FRAC_PI_2).abs() < 1.0e-9);
+        assert!((metadata.display_value - 90.0).abs() < 1.0e-8);
+        assert_eq!(
+            metadata.display_unit,
+            DimensionTargetDisplayUnit::AcuteDegrees
+        );
+        let accepted_after = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted")
+            .document()
+            .point(moving)
+            .expect("accepted point")
+            .position;
+        assert!((accepted_after[0] - accepted_before[0]).abs() < 1.0e-9);
+        assert!((accepted_after[1] - accepted_before[1]).abs() < 1.0e-9);
+    }
+
+    #[test]
+    #[allow(clippy::default_trait_access, clippy::too_many_lines)]
+    fn reversed_line_angle_displays_and_edits_the_acute_intersection_branch() {
+        for stored_degrees in [30.0_f64, 150.0, 210.0, 330.0] {
+            let display = display_dimension_target(stored_degrees.to_radians(), ScalarUnit::Angle)
+                .expect("finite display");
+            assert!((display.value - 30.0).abs() < 1.0e-12);
+            assert_eq!(display.unit, DimensionTargetDisplayUnit::AcuteDegrees);
+        }
+
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let intersection = document
+            .add_point("intersection", [0.0, 0.0])
+            .expect("point");
+        let x = document.add_point("x", [2.0, 0.0]).expect("point");
+        let tip = document
+            .add_point(
+                "tip",
+                [
+                    2.0 * std::f64::consts::FRAC_1_SQRT_2,
+                    2.0 * std::f64::consts::FRAC_1_SQRT_2,
+                ],
+            )
+            .expect("point");
+        let first = CurveSpan::line(
+            document
+                .add_curve(
+                    "first",
+                    CurveDefinition::Line {
+                        start: intersection,
+                        end: x,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .expect("line"),
+        );
+        let second = CurveSpan::line(
+            document
+                .add_curve(
+                    "reversed second",
+                    CurveDefinition::Line {
+                        start: tip,
+                        end: intersection,
+                        branch_direction: [
+                            -std::f64::consts::FRAC_1_SQRT_2,
+                            -std::f64::consts::FRAC_1_SQRT_2,
+                        ],
+                    },
+                )
+                .expect("line"),
+        );
+        for (label, point, target) in [
+            ("fix intersection", intersection, [0.0, 0.0]),
+            ("fix x", x, [2.0, 0.0]),
+        ] {
+            document
+                .add_constraint(
+                    label,
+                    DocumentConstraintDefinition::FixedPoint { point, target },
+                )
+                .expect("constraint");
+        }
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            Default::default(),
+        )
+        .expect("session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let created = coordinator
+            .apply_dimension_action_for(
+                coordinator.session().design_identity(),
+                &[SelectionItem::Curve(first), SelectionItem::Curve(second)],
+                DimensionActionRequest {
+                    kind: DimensionKind::OrientedAngle,
+                    mode: DocumentDimensionMode::Driving,
+                    label: "acute angle".into(),
+                    angle_orientation: DocumentAngleOrientation::CounterClockwise,
+                },
+            )
+            .expect("angle dimension");
+        assert!(created.published_accepted.is_some());
+        let metadata = coordinator
+            .dimension_target_metadata_for(&[SelectionItem::Dimension(created.value)])
+            .expect("metadata");
+        assert!((metadata.value - 5.0 * std::f64::consts::FRAC_PI_4).abs() < 1.0e-9);
+        assert!((metadata.display_value - 45.0).abs() < 1.0e-8);
+        let design = coordinator.session().design_identity();
+        assert!(matches!(
+            coordinator.set_dimension_display_target(design, created.value, 91.0),
+            Err(CoordinatorError::InvalidActionInput(_))
+        ));
+        assert_eq!(coordinator.session().design_identity(), design);
+
+        let edited = coordinator
+            .set_dimension_display_target(
+                coordinator.session().design_identity(),
+                created.value,
+                60.0,
+            )
+            .expect("display edit");
+        assert!(edited.published_accepted.is_some());
+        let metadata = coordinator
+            .dimension_target_metadata_for(&[SelectionItem::Dimension(created.value)])
+            .expect("metadata");
+        assert!((metadata.value - 4.0 * std::f64::consts::PI / 3.0).abs() < 1.0e-9);
+        assert!((metadata.display_value - 60.0).abs() < 1.0e-8);
+        let tip = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted")
+            .document()
+            .point(tip)
+            .expect("tip")
+            .position;
+        let visible = tip[1].atan2(tip[0]).abs().to_degrees();
+        assert!((visible - 60.0).abs() < 1.0e-7);
     }
 
     #[test]

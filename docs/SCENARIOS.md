@@ -1677,6 +1677,22 @@ coherent associated motion, topology trust and perceived desktop responsiveness.
 `docs/M61_UAT.md` owns the scorecard; objective facts remain directly qualified and the
 supervising human approved M61 for its recorded scope on 2026-07-29.
 
+### M62-F001 - Accepted acute line-angle authoring
+
+Two direct headless fixtures freeze the M62 UAT correction without adding a scenario-menu leaf.
+The first retains line seed coordinates at 0.5 radians while an accepted vertical constraint
+places the visible line at 90 degrees. Adding an angle dimension must measure the accepted
+90-degree state, publish without moving either accepted endpoint and expose 90 acute degrees.
+
+The second draws two 45-degree supporting lines with the second line's stored endpoints reversed.
+Its persisted counter-clockwise target is therefore on the 225-degree directed branch, while
+headless presentation and the canvas both report the unambiguous 45-degree acute intersection
+angle. Editing the presented target to 60 degrees maps to 240 directed degrees on the same branch,
+publishes a visible 60-degree acute angle and does not rewrite endpoint order, orientation or
+persistence. Equivalent stored targets in all four directed quadrants present the same acute
+angle. Inputs above 90 degrees reject before mutation. Retained-rejected creation or editing keeps
+the prior accepted canvas and is labelled as rejected rather than accepted.
+
 ### UAT evidence and recheck policy
 
 Each checkpoint provides one manual entry point, deterministic resets and concise instructions.

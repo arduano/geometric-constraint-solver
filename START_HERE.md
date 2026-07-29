@@ -93,6 +93,9 @@ headless/UI seam. Follow-up `M61-F005` makes compact circle Tangent contact-bear
 Normal explicitly radial while retaining the public direction-at-contact domain API. M61 is
 complete and approved; **M62 is a mechanically qualified CAD-style constraint and dimension
 authoring candidate awaiting ordinary-workspace human UAT**.
+M62 follow-up `M62-F001` corrects accepted-state line-angle seeding and exposes acute-degree
+presentation while retaining the explicit directed-radian solver branch; its targeted human
+recheck remains part of the open M62 UAT.
 Old Chromium/CDP, HTTP serving, DOM-scraping, screenshot, wall-clock browser-timing and
 source-substring-scan gates remain retired.
 

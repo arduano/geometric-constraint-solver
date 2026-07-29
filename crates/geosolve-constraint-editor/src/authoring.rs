@@ -7,7 +7,7 @@ use geosolve_sketch::{
     DocumentCurveCurvatureRelation, DocumentDimensionMode, SketchDocument, TangentOrientation,
 };
 
-use crate::coordinator::{dimension_target, resolve_constraint, selection_exists};
+use crate::coordinator::{resolve_constraint, selection_exists, validate_dimension_selection};
 use crate::{
     ConstraintIntent, DimensionKind, DisabledReason, ResolvedConstraintKind, SelectionItem,
 };
@@ -342,7 +342,7 @@ fn application(
                 .map_err(|reason| warning(document, tool, &operands, reason))?,
         ),
         AuthoringTool::Dimension(kind) => {
-            dimension_target(document, &selection, kind, options.angle_orientation)
+            validate_dimension_selection(document, &selection, kind)
                 .map_err(|reason| warning(document, tool, &operands, reason))?;
             None
         }

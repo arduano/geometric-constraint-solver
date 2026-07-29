@@ -17,10 +17,11 @@ pub use authoring::{
 };
 pub use coordinator::{
     ActionAvailability, ActionState, AuditDto, AuditProvenance, AuthoringMutation, BranchAction,
-    ContactBranchAction, CoordinatorActionKind, CoordinatorError, DimensionTargetMetadata,
-    DisabledReason, EditorMutation, EditorProblemCategory, EditorProblemMetadata,
-    EditorProblemScope, EditorProblemTarget, LifecycleDto, LifecycleStatus, MeasurementPublication,
-    MutationOutcome, ProblemsDto, ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator,
+    ContactBranchAction, CoordinatorActionKind, CoordinatorError, DimensionTargetDisplayUnit,
+    DimensionTargetMetadata, DisabledReason, DisplayDimensionTarget, EditorMutation,
+    EditorProblemCategory, EditorProblemMetadata, EditorProblemScope, EditorProblemTarget,
+    LifecycleDto, LifecycleStatus, MeasurementPublication, MutationOutcome, ProblemsDto,
+    ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator, display_dimension_target,
 };
 pub use geosolve_sketch::SketchAcceptedDocumentRedundancy;
 #[doc(hidden)]

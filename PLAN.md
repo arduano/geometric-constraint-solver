@@ -2745,6 +2745,16 @@ explicit retained coordinator entry points, two-column palette, flyout options, 
 picking, pending highlights and target editing. Direct editor/workbench tests, the locked complete
 workspace gate and release WASM bundle pass. `docs/M62_UAT.md` is the only remaining gate.
 
+UAT follow-up `M62-F001` corrects angle creation before approval. Dimension creation now measures
+the exact independently accepted document rather than potentially divergent retained design
+coordinates, so adding an angle cannot move geometry merely because its seed came from another
+lifecycle state. The headless target metadata presents the acute supporting-line intersection
+angle in degrees while retaining the persisted directed-radian quadrant and winding branch.
+Degree edits map back through that same branch, and retained-rejected authoring/target edits are
+reported distinctly from accepted publication. Direct regressions cover accepted/design
+divergence, reversed endpoint direction, all four directed quadrants, no-move creation, a 45-to-60
+degree edit and acute canvas annotation. No residual, equation or persistence schema changed.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

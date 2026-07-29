@@ -632,5 +632,6 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
 - M59: completed production-topology companion.
 - M60: completed advanced-workbench integration and direct qualification.
 - M61: completed and approved supervising-human advanced geometry/topology UAT.
-- M62: active CAD-style constraint/dimension palette, headless operand collection, retained
-  dimension target editing and ordinary-workspace UAT.
+- M62: active CAD-style constraint/dimension palette, headless operand collection,
+  accepted-geometry dimension seeding, branch-explicit acute-degree line-angle presentation,
+  retained dimension target editing and ordinary-workspace UAT.

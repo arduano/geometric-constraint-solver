@@ -1157,8 +1157,11 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
 - Canvas and tree operands use the same headless input path. Ordinary selection and point dragging
   are suppressed during authoring; pending operands and the expected next operand are visibly
   identified.
-- Dimensions are created at the current independently accepted value. A selected dimension exposes
-  retained numeric target editing through its owned scalar, ordinary history and replay.
+- Dimensions are created at the current independently accepted value, never at a potentially
+  divergent retained-design seed. Line-angle authoring uses the acute supporting-line intersection
+  angle for presentation, independent of invisible endpoint direction, while retaining its
+  explicit directed solver branch. A selected dimension exposes model-unit or acute-degree target
+  editing through its owned scalar, ordinary history and replay.
 - Scenario mode remains read-only. No new scenario, schema, equation, residual, browser
   compatibility rule, E2E harness, mobile claim or `/#/dev/lab` route is introduced.
 - Direct native state-machine/coordinator and workbench presentation tests, locked all-feature

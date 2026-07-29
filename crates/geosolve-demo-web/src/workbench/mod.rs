@@ -72,9 +72,9 @@ pub(crate) mod wasm {
     use geosolve_constraint_editor::{
         ActionState, AuthoringApplication, AuthoringOperand, AuthoringOptions, AuthoringOutcome,
         AuthoringState, AuthoringTool, BranchAction, ConicConstructionOptions, ConstructionPreview,
-        CoordinatorActionKind, DisabledReason, EditorEffect, EditorScene, EditorTool, Modifiers,
-        NurbsConstructionOptions, PickTolerance, PointerInput, ProvisionalInferenceCandidate,
-        RetainedEditorCoordinator, SelectionItem,
+        CoordinatorActionKind, DimensionTargetDisplayUnit, DisabledReason, EditorEffect,
+        EditorScene, EditorTool, Modifiers, NurbsConstructionOptions, PickTolerance, PointerInput,
+        ProvisionalInferenceCandidate, RetainedEditorCoordinator, SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -1028,7 +1028,7 @@ pub(crate) mod wasm {
         wb.notice = result.map_or_else(
             |error| error,
             |()| match action {
-                "problems" | "cancel" => wb.notice.clone(),
+                "problems" | "cancel" | "dimension-target" => wb.notice.clone(),
                 _ => "Action retained".into(),
             },
         );
@@ -1043,14 +1043,21 @@ pub(crate) mod wasm {
             .coordinator
             .selected_dimension_target_metadata()
             .ok_or_else(|| "select exactly one dimension".to_owned())?;
-        wb.coordinator
-            .set_dimension_target(
+        let outcome = wb
+            .coordinator
+            .set_dimension_display_target(
                 wb.coordinator.session().design_identity(),
                 metadata.dimension,
                 value,
             )
-            .map(|_| ())
-            .map_err(|error| error.to_string())
+            .map_err(|error| error.to_string())?;
+        wb.notice = if outcome.published_accepted.is_some() {
+            "Dimension target updated and accepted".into()
+        } else {
+            "Dimension target retained, but the solve rejected; prior accepted geometry remains"
+                .into()
+        };
+        Ok(())
     }
 
     fn select_scenario(wb: &mut Workbench, key: &str) -> bool {
@@ -1186,19 +1193,32 @@ pub(crate) mod wasm {
     fn apply_authoring_application(wb: &mut Workbench, application: &AuthoringApplication) {
         let expected = wb.coordinator.session().design_identity();
         match wb.coordinator.apply_authoring(expected, application) {
-            Ok(_) => {
+            Ok(mutation) => {
+                let accepted = match &mutation {
+                    geosolve_constraint_editor::AuthoringMutation::Constraint(outcome) => {
+                        outcome.published_accepted.is_some()
+                    }
+                    geosolve_constraint_editor::AuthoringMutation::Dimension(outcome) => {
+                        outcome.published_accepted.is_some()
+                    }
+                };
                 let repeated = wb.authoring.active_tool().is_some();
                 wb.authoring.transaction_completed();
                 let _ = wb
                     .authoring
                     .reconcile(wb.coordinator.session().design_document());
-                wb.notice = if repeated {
+                wb.notice = if !accepted {
                     format!(
-                        "{} retained; select the next operands",
+                        "{} retained, but the solve rejected; prior accepted geometry remains",
+                        authoring_tool_label(application.tool)
+                    )
+                } else if repeated {
+                    format!(
+                        "{} accepted; select the next operands",
                         authoring_tool_label(application.tool)
                     )
                 } else {
-                    format!("{} retained", authoring_tool_label(application.tool))
+                    format!("{} accepted", authoring_tool_label(application.tool))
                 };
             }
             Err(error) => wb.notice = error.to_string(),
@@ -1624,17 +1644,38 @@ pub(crate) mod wasm {
         };
         section.remove_attribute("hidden")?;
         let input = required(document, "wb-dimension-target")?;
+        let (label, meta) = match metadata.display_unit {
+            DimensionTargetDisplayUnit::ModelUnits => {
+                input.remove_attribute("max")?;
+                (
+                    "Dimension target",
+                    format!("{:?} · model units", metadata.mode),
+                )
+            }
+            DimensionTargetDisplayUnit::AcuteDegrees => {
+                input.set_attribute("max", "90")?;
+                (
+                    "Acute angle target (degrees)",
+                    format!(
+                        "{:?} · acute supporting-line angle · directed branch retained",
+                        metadata.mode
+                    ),
+                )
+            }
+        };
+        if let Some(element) = document.query_selector("label[for=\"wb-dimension-target\"]")? {
+            element.set_text_content(Some(label));
+        }
         if let Ok(input) = input.dyn_into::<HtmlInputElement>() {
             let editing = document
                 .active_element()
                 .is_some_and(|element| element.id() == "wb-dimension-target");
-            if !editing && input.value_as_number().to_bits() != metadata.value.to_bits() {
-                input.set_value_as_number(metadata.value);
+            if !editing && input.value_as_number().to_bits() != metadata.display_value.to_bits() {
+                input.set_value_as_number(metadata.display_value);
             }
             input.set_disabled(scenario_active);
         }
-        required(document, "wb-dimension-target-meta")?
-            .set_text_content(Some(&format!("{:?} · {:?}", metadata.mode, metadata.unit)));
+        required(document, "wb-dimension-target-meta")?.set_text_content(Some(&meta));
         if let Some(button) = document.query_selector("[data-wb-action=\"dimension-target\"]")? {
             set_disabled(&button, scenario_active)?;
         }
