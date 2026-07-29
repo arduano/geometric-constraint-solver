@@ -11,7 +11,7 @@ pub(crate) const CONSTRAINT_ACTIONS: [(&str, &str, ConstraintIntent); 11] = [
     ("parallel", "Parallel", ConstraintIntent::Parallel),
     (
         "perpendicular",
-        "Perpendicular",
+        "Perpendicular / Normal",
         ConstraintIntent::Perpendicular,
     ),
     ("equal", "Equal", ConstraintIntent::Equal),

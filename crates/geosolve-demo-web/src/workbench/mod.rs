@@ -85,10 +85,9 @@ pub(crate) mod wasm {
     use geosolve_sketch::{
         ContactBranchEdit, ContactDomain, ContactNeighborhood, CurveId, CurveSpan, DesignPointId,
         DocumentAngleOrientation, DocumentArcSweep, DocumentBSplineForm, DocumentConstraintId,
-        DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation,
-        DocumentCurveNormalSide, DocumentCurveSpanRef, DocumentDimensionId, DocumentDimensionMode,
-        DocumentHyperbolaBranch, DocumentSolveRequest, PersistentId, RetainedSketchDocumentSession,
-        SketchDocument, TangentOrientation,
+        DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentCurveSpanRef,
+        DocumentDimensionId, DocumentDimensionMode, DocumentHyperbolaBranch, DocumentSolveRequest,
+        PersistentId, RetainedSketchDocumentSession, SketchDocument, TangentOrientation,
     };
     use wasm_bindgen::JsCast;
     use wasm_bindgen::closure::Closure;
@@ -1028,7 +1027,6 @@ pub(crate) mod wasm {
             .filter_map(|choice| match choice {
                 ActionChoice::Contact { .. } => Some(contact_choice(document, choice)),
                 ActionChoice::AngleOrientation { .. }
-                | ActionChoice::CurveDirection { .. }
                 | ActionChoice::EqualCurvature { .. }
                 | ActionChoice::Continuity { .. } => None,
             })
@@ -1153,15 +1151,6 @@ pub(crate) mod wasm {
         let key = select_value(document, "wb-relation-kind").unwrap_or_default();
         for choice in choices {
             match choice {
-                ActionChoice::CurveDirection { values } => {
-                    return values
-                        .iter()
-                        .copied()
-                        .find(|value| curve_direction_option(*value).0 == key)
-                        .map(ConstraintRelationChoice::CurveDirection)
-                        .map(Some)
-                        .ok_or_else(|| "selected curve-direction branch is unavailable".into());
-                }
                 ActionChoice::EqualCurvature { values } => {
                     return values
                         .iter()
@@ -1586,13 +1575,6 @@ pub(crate) mod wasm {
                         document,
                         &format!("wb-contact-winding-{operand}"),
                         *default_winding,
-                    )?;
-                }
-                ActionChoice::CurveDirection { values } => {
-                    show_relation_options(
-                        document,
-                        values.iter().copied().map(curve_direction_option),
-                        scenario_active,
                     )?;
                 }
                 ActionChoice::EqualCurvature { values } => {
@@ -2162,24 +2144,6 @@ pub(crate) mod wasm {
         match orientation {
             TangentOrientation::Aligned => "Aligned",
             TangentOrientation::Opposed => "Opposed",
-        }
-    }
-    const fn curve_direction_option(
-        relation: DocumentCurveDirectionRelation,
-    ) -> (&'static str, &'static str) {
-        match relation {
-            DocumentCurveDirectionRelation::Tangent {
-                orientation: TangentOrientation::Aligned,
-            } => ("tangent-aligned", "Tangent · aligned"),
-            DocumentCurveDirectionRelation::Tangent {
-                orientation: TangentOrientation::Opposed,
-            } => ("tangent-opposed", "Tangent · opposed"),
-            DocumentCurveDirectionRelation::Normal {
-                side: DocumentCurveNormalSide::Left,
-            } => ("normal-left", "Normal · left side"),
-            DocumentCurveDirectionRelation::Normal {
-                side: DocumentCurveNormalSide::Right,
-            } => ("normal-right", "Normal · right side"),
         }
     }
     const fn curvature_option(

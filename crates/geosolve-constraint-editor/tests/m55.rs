@@ -13,8 +13,8 @@ use geosolve_constraint_editor::{
 use geosolve_sketch::{
     AlphaScenarioIds, AlphaScenarioKind, ContactBranchEdit, ContactDomain, ContactNeighborhood,
     CurveDefinition, CurveSpan, DocumentAngleOrientation, DocumentConstraintDefinition,
-    DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation,
-    DocumentCurveSpanRef, DocumentDimensionDefinition, DocumentDimensionMode, DocumentSolveRequest,
+    DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentCurveSpanRef,
+    DocumentDimensionDefinition, DocumentDimensionMode, DocumentSolveRequest,
     RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
     SketchLifecycleRevisionHighWater, SolveRejection, SolverConfig, TangentOrientation,
     alpha_scenario,
@@ -404,18 +404,10 @@ fn contextual_intents_publish_the_exact_resolved_definition_family() {
         (
             vec![
                 SelectionItem::Curve(fixture.lines[0]),
-                SelectionItem::Curve(fixture.beziers[0]),
-            ],
-            ConstraintIntent::Parallel,
-            ResolvedConstraintKind::CurveTangentDirection,
-        ),
-        (
-            vec![
-                SelectionItem::Curve(fixture.lines[0]),
-                SelectionItem::Curve(fixture.beziers[0]),
+                SelectionItem::Curve(fixture.circles[0]),
             ],
             ConstraintIntent::Perpendicular,
-            ResolvedConstraintKind::CurveNormalDirection,
+            ResolvedConstraintKind::RadialLine,
         ),
         (
             fixture.beziers.map(SelectionItem::Curve).to_vec(),
@@ -432,6 +424,18 @@ fn contextual_intents_publish_the_exact_resolved_definition_family() {
         coordinator.editor_mut().set_selection(selection);
         assert_eq!(coordinator.resolved_constraint(intent), Some(expected));
     }
+    coordinator.editor_mut().set_selection([
+        SelectionItem::Curve(fixture.lines[0]),
+        SelectionItem::Curve(fixture.beziers[0]),
+    ]);
+    assert_eq!(
+        coordinator.resolved_constraint(ConstraintIntent::Parallel),
+        None
+    );
+    assert_eq!(
+        coordinator.resolved_constraint(ConstraintIntent::Perpendicular),
+        None
+    );
 }
 
 #[test]
@@ -448,43 +452,62 @@ fn advanced_contextual_branches_lower_to_existing_persistent_definitions() {
         tangent_orientation: None,
     };
 
-    let mut direction = coordinator(fixture.document.clone());
-    direction.editor_mut().set_selection([
-        SelectionItem::Curve(fixture.lines[0]),
-        SelectionItem::Curve(fixture.beziers[0]),
+    let mut radial_document = fixture.document.clone();
+    let radial_start = radial_document
+        .add_point("radial start", [-3.0, 1.0])
+        .unwrap();
+    let radial_end = radial_document
+        .add_point("radial end", [-3.0, 5.0])
+        .unwrap();
+    let radial_line = CurveSpan::line(
+        radial_document
+            .add_curve(
+                "radial line",
+                CurveDefinition::Line {
+                    start: radial_start,
+                    end: radial_end,
+                    branch_direction: [0.0, 1.0],
+                },
+            )
+            .unwrap(),
+    );
+    let mut radial = coordinator(radial_document);
+    radial.editor_mut().set_selection([
+        SelectionItem::Curve(radial_line),
+        SelectionItem::Curve(fixture.circles[0]),
     ]);
-    let outcome = direction
+    let outcome = radial
         .apply_constraint_action(
-            direction.session().design_identity(),
+            radial.session().design_identity(),
             ConstraintActionRequest {
-                intent: ConstraintIntent::Parallel,
-                label: "tangent direction".into(),
-                contacts: vec![contact(
-                    fixture.beziers[0],
-                    0.5,
-                    ContactNeighborhood::Interior,
-                )],
-                relation: Some(ConstraintRelationChoice::CurveDirection(
-                    DocumentCurveDirectionRelation::Tangent {
-                        orientation: TangentOrientation::Aligned,
+                intent: ConstraintIntent::Perpendicular,
+                label: "normal to circle".into(),
+                contacts: vec![ContactActionChoice {
+                    support: DocumentCurveSpanRef {
+                        span: radial_line,
+                        winding: 0,
                     },
-                )),
+                    domain: ContactDomain::SupportingLine,
+                    parameter: 0.5,
+                    neighborhood: ContactNeighborhood::Interior,
+                    tangent_orientation: None,
+                }],
+                relation: None,
             },
         )
         .unwrap();
+    assert!(outcome.published_accepted.is_some());
     assert!(matches!(
-        direction
+        radial
             .session()
             .design_document()
             .constraint(outcome.value)
             .unwrap()
             .definition,
-        DocumentConstraintDefinition::CurveDirection {
-            relation: DocumentCurveDirectionRelation::Tangent {
-                orientation: TangentOrientation::Aligned
-            },
+        DocumentConstraintDefinition::PointOnCurve {
+            point,
             ..
-        }
+        } if point == fixture.points[4]
     ));
 
     let mut curvature = coordinator(fixture.document.clone());
@@ -748,6 +771,171 @@ fn authored_line_endpoint_can_use_default_contextual_contact_on_circle() {
             .definition,
         DocumentConstraintDefinition::PointOnCurve { .. }
     ));
+}
+
+#[test]
+fn line_circle_tangent_and_normal_intents_enforce_true_incidence() {
+    let fixture = matrix_fixture();
+    let mut tangent_document = fixture.document.clone();
+    let tangent_start = tangent_document
+        .add_point("tangent start", [-5.0, 4.0])
+        .unwrap();
+    let tangent_end = tangent_document
+        .add_point("tangent end", [-1.0, 4.0])
+        .unwrap();
+    let tangent_line = CurveSpan::line(
+        tangent_document
+            .add_curve(
+                "circle tangent",
+                CurveDefinition::Line {
+                    start: tangent_start,
+                    end: tangent_end,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .unwrap(),
+    );
+    let line_contact = ContactActionChoice {
+        support: DocumentCurveSpanRef {
+            span: tangent_line,
+            winding: 0,
+        },
+        domain: ContactDomain::SupportingLine,
+        parameter: 0.5,
+        neighborhood: ContactNeighborhood::Interior,
+        tangent_orientation: Some(TangentOrientation::Opposed),
+    };
+    let circle_contact = ContactActionChoice {
+        support: DocumentCurveSpanRef {
+            span: fixture.circles[0],
+            winding: 0,
+        },
+        domain: ContactDomain::Periodic {
+            period: std::f64::consts::TAU,
+        },
+        parameter: std::f64::consts::FRAC_PI_2,
+        neighborhood: ContactNeighborhood::Interior,
+        tangent_orientation: Some(TangentOrientation::Opposed),
+    };
+    let mut tangent = coordinator(tangent_document);
+    tangent.editor_mut().set_selection([
+        SelectionItem::Curve(tangent_line),
+        SelectionItem::Curve(fixture.circles[0]),
+    ]);
+    assert_eq!(
+        tangent.resolved_constraint(ConstraintIntent::Tangent),
+        Some(ResolvedConstraintKind::CurveTangency)
+    );
+    let tangent_outcome = tangent
+        .apply_constraint_action(
+            tangent.session().design_identity(),
+            ConstraintActionRequest {
+                intent: ConstraintIntent::Tangent,
+                label: "line tangent to circle".into(),
+                contacts: vec![line_contact, circle_contact],
+                relation: None,
+            },
+        )
+        .unwrap();
+    assert!(tangent_outcome.published_accepted.is_some());
+    let tangent_document = tangent.session().accepted_state().unwrap().document();
+    let DocumentConstraintDefinition::CurveCurveTangency {
+        first_contact,
+        second_contact,
+    } = tangent_document
+        .constraint(tangent_outcome.value)
+        .unwrap()
+        .definition
+    else {
+        panic!("line/circle Tangent must persist true curve tangency");
+    };
+    let contact_jet = |contact| {
+        let contact = tangent_document.contact(contact).unwrap();
+        tangent_document
+            .evaluate_curve_jet(
+                contact.curve,
+                tangent_document.scalar(contact.parameter).unwrap().value,
+            )
+            .unwrap()
+    };
+    let first = contact_jet(first_contact);
+    let second = contact_jet(second_contact);
+    assert!((first.position[0] - second.position[0]).abs() < 1.0e-8);
+    assert!((first.position[1] - second.position[1]).abs() < 1.0e-8);
+    let cross = first.first_derivative[0] * second.first_derivative[1]
+        - first.first_derivative[1] * second.first_derivative[0];
+    assert!(cross.abs() < 1.0e-8);
+
+    let mut normal_document = fixture.document;
+    let normal_start = normal_document
+        .add_point("normal start", [-3.0, 1.0])
+        .unwrap();
+    let normal_end = normal_document
+        .add_point("normal end", [-3.0, 5.0])
+        .unwrap();
+    let normal_line = CurveSpan::line(
+        normal_document
+            .add_curve(
+                "circle normal",
+                CurveDefinition::Line {
+                    start: normal_start,
+                    end: normal_end,
+                    branch_direction: [0.0, 1.0],
+                },
+            )
+            .unwrap(),
+    );
+    let mut normal = coordinator(normal_document);
+    normal.editor_mut().set_selection([
+        SelectionItem::Curve(normal_line),
+        SelectionItem::Curve(fixture.circles[0]),
+    ]);
+    assert_eq!(
+        normal.resolved_constraint(ConstraintIntent::Perpendicular),
+        Some(ResolvedConstraintKind::RadialLine)
+    );
+    let radial_contact = ContactActionChoice {
+        support: DocumentCurveSpanRef {
+            span: normal_line,
+            winding: 0,
+        },
+        domain: ContactDomain::SupportingLine,
+        parameter: 0.5,
+        neighborhood: ContactNeighborhood::Interior,
+        tangent_orientation: None,
+    };
+    let normal_outcome = normal
+        .apply_constraint_action(
+            normal.session().design_identity(),
+            ConstraintActionRequest {
+                intent: ConstraintIntent::Perpendicular,
+                label: "line normal to circle".into(),
+                contacts: vec![radial_contact],
+                relation: None,
+            },
+        )
+        .unwrap();
+    assert!(normal_outcome.published_accepted.is_some());
+    let normal_document = normal.session().accepted_state().unwrap().document();
+    let DocumentConstraintDefinition::PointOnCurve { point, contact } = normal_document
+        .constraint(normal_outcome.value)
+        .unwrap()
+        .definition
+    else {
+        panic!("circle normal must persist centre-on-line incidence");
+    };
+    let contact = normal_document.contact(contact).unwrap();
+    assert_eq!(contact.curve, normal_line);
+    let line_point = normal_document
+        .evaluate_curve_jet(
+            contact.curve,
+            normal_document.scalar(contact.parameter).unwrap().value,
+        )
+        .unwrap()
+        .position;
+    let center = normal_document.point(point).unwrap().position;
+    assert!((line_point[0] - center[0]).abs() < 1.0e-8);
+    assert!((line_point[1] - center[1]).abs() < 1.0e-8);
 }
 
 #[test]

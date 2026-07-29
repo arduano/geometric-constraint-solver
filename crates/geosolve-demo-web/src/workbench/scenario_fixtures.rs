@@ -9,17 +9,16 @@ use geosolve_core::SolverConfig;
 use geosolve_sketch::{
     AlphaScenarioIds, AlphaScenarioKind, ContactDomain, ContactNeighborhood, CurveDefinition,
     CurveSpan, DesignPointId, DocumentBSplineSpanDirection, DocumentConstraintDefinition,
-    DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation,
-    DocumentCurveSpanRef, DocumentDimensionDefinition, DocumentDimensionMode,
-    DocumentDirectionSense, DocumentEdit, DocumentElementId, DocumentError,
-    DocumentExternalLineSupportRef, DocumentId, DocumentLineSupportRef, DocumentParameterKind,
-    DocumentParameterTarget, DocumentSessionError, DocumentSolveRequest, ExternalFeatureKindV1,
-    ExternalLineOrientationV1, ExternalSnapshotDigest, ExternalSnapshotEntry,
-    ExternalSnapshotFeatureV1, ExternalSnapshotResourcesV1, ExternalSnapshotSet,
-    ExternalTopologyDigest, GeometryRole, HostActivationOverride, HostConfigurationActivation,
-    OperationControl, OperationOutcome, ParameterBatch, ParameterBatchEntry, ParameterValue,
-    PersistentId, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
-    TangentOrientation, alpha_scenario, cancellation_pair,
+    DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentCurveSpanRef,
+    DocumentDimensionDefinition, DocumentDimensionMode, DocumentDirectionSense, DocumentEdit,
+    DocumentElementId, DocumentError, DocumentExternalLineSupportRef, DocumentId,
+    DocumentLineSupportRef, DocumentParameterKind, DocumentParameterTarget, DocumentSessionError,
+    DocumentSolveRequest, ExternalFeatureKindV1, ExternalLineOrientationV1, ExternalSnapshotDigest,
+    ExternalSnapshotEntry, ExternalSnapshotFeatureV1, ExternalSnapshotResourcesV1,
+    ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole, HostActivationOverride,
+    HostConfigurationActivation, OperationControl, OperationOutcome, ParameterBatch,
+    ParameterBatchEntry, ParameterValue, PersistentId, RetainedSketchDocumentSession, ScalarDomain,
+    ScalarUnit, SketchDocument, TangentOrientation, alpha_scenario, cancellation_pair,
 };
 use geosolve_sketch_ops::{
     SketchOperationRequest, SketchOperationResult, SketchOperationSnapshot, SplitRetainedPiece,
@@ -41,6 +40,7 @@ pub(crate) enum ScenarioFixture {
     ErrorAttribution,
     AlphaParity,
     AlphaBranchRecovery,
+    CircleRelations,
     AdvancedGallery,
     NurbsBranches,
     Operations,
@@ -67,6 +67,7 @@ impl ScenarioFixture {
             Self::ErrorAttribution => "Canvas error attribution",
             Self::AlphaParity => "Alpha relation and dimension parity",
             Self::AlphaBranchRecovery => "Explicit contact branches and recovery",
+            Self::CircleRelations => "Circle tangent and normal relations",
             Self::AdvancedGallery => "Advanced curve gallery",
             Self::NurbsBranches => "NURBS topology and branch state",
             Self::Operations => "Associative and companion operations",
@@ -434,6 +435,7 @@ pub(crate) struct ScenarioCandidate {
     error_attribution: Box<ErrorAttributionFixture>,
     alpha_parity: Box<RetainedEditorCoordinator>,
     alpha_branch: Box<AlphaBranchFixture>,
+    circle_relations: Box<RetainedEditorCoordinator>,
     advanced_gallery: Box<RetainedEditorCoordinator>,
     nurbs_branches: Box<NurbsBranchFixture>,
     operations: Box<OperationFixture>,
@@ -459,6 +461,7 @@ impl ScenarioCandidate {
             error_attribution: Box::new(error_attribution_fixture()?),
             alpha_parity: Box::new(alpha_parity_fixture()?),
             alpha_branch: Box::new(alpha_branch_fixture()?),
+            circle_relations: Box::new(circle_relations_fixture()?),
             advanced_gallery: Box::new(advanced_gallery_fixture()?),
             nurbs_branches: Box::new(nurbs_branch_fixture()?),
             operations: Box::new(operation_fixture()?),
@@ -494,6 +497,7 @@ impl ScenarioCandidate {
             ScenarioFixture::ErrorAttribution => &self.error_attribution.coordinator,
             ScenarioFixture::AlphaParity => &self.alpha_parity,
             ScenarioFixture::AlphaBranchRecovery => &self.alpha_branch.coordinator,
+            ScenarioFixture::CircleRelations => &self.circle_relations,
             ScenarioFixture::AdvancedGallery => &self.advanced_gallery,
             ScenarioFixture::NurbsBranches => &self.nurbs_branches.coordinator,
             ScenarioFixture::Operations => &self.operations.coordinator,
@@ -516,6 +520,7 @@ impl ScenarioCandidate {
             ScenarioFixture::ErrorAttribution => &mut self.error_attribution.coordinator,
             ScenarioFixture::AlphaParity => &mut self.alpha_parity,
             ScenarioFixture::AlphaBranchRecovery => &mut self.alpha_branch.coordinator,
+            ScenarioFixture::CircleRelations => &mut self.circle_relations,
             ScenarioFixture::AdvancedGallery => &mut self.advanced_gallery,
             ScenarioFixture::NurbsBranches => &mut self.nurbs_branches.coordinator,
             ScenarioFixture::Operations => &mut self.operations.coordinator,
@@ -1033,7 +1038,7 @@ impl ScenarioCandidate {
             .collect::<Vec<_>>()
             .join("\n");
         Ok(format!(
-            "SCENARIO CATALOG EVIDENCE\nprovenance=fixed-scenario-not-runtime-platform\nobjective_checks=direct Rust/WASM state transitions\nhuman_clarity_and_trust=human-UAT judgment only\nSCENARIO_TRANSCRIPT\n{}\nACTIVE_RENDERED_SCENARIO\n{}\nROLE_ACTIVITY\n{}\nPARAMETER\n{}\nSUBMITTED_PARAMETER_TYPED\n{}\nEXTERNAL\n{}\nSUBMITTED_EXTERNAL_TYPED\n{}\nLIFECYCLE\n{}\nERROR_ATTRIBUTION\n{}\nALPHA_PARITY\n{}\nALPHA_BRANCH_RECOVERY\n{}\nADVANCED_ALL_FAMILIES\n{}\nNURBS_BRANCH_TOPOLOGY\n{}\nASSOCIATIVE_COMPANION_OPERATIONS\n{}\nPRODUCTION_TOPOLOGY\n{}\nPRODUCTION_TOPOLOGY_PRESENTATION\n{}",
+            "SCENARIO CATALOG EVIDENCE\nprovenance=fixed-scenario-not-runtime-platform\nobjective_checks=direct Rust/WASM state transitions\nhuman_clarity_and_trust=human-UAT judgment only\nSCENARIO_TRANSCRIPT\n{}\nACTIVE_RENDERED_SCENARIO\n{}\nROLE_ACTIVITY\n{}\nPARAMETER\n{}\nSUBMITTED_PARAMETER_TYPED\n{}\nEXTERNAL\n{}\nSUBMITTED_EXTERNAL_TYPED\n{}\nLIFECYCLE\n{}\nERROR_ATTRIBUTION\n{}\nALPHA_PARITY\n{}\nALPHA_BRANCH_RECOVERY\n{}\nCIRCLE_TANGENT_NORMAL\n{}\nADVANCED_ALL_FAMILIES\n{}\nNURBS_BRANCH_TOPOLOGY\n{}\nASSOCIATIVE_COMPANION_OPERATIONS\n{}\nPRODUCTION_TOPOLOGY\n{}\nPRODUCTION_TOPOLOGY_PRESENTATION\n{}",
             scenario_transcript,
             serialize("scenario://active-rendered", self.active_coordinator())?,
             serialize("scenario://role-activity", &self.role.coordinator)?,
@@ -1054,6 +1059,7 @@ impl ScenarioCandidate {
                 "scenario://alpha-branch-recovery",
                 &self.alpha_branch.coordinator
             )?,
+            serialize("scenario://circle-tangent-normal", &self.circle_relations)?,
             serialize("scenario://advanced-all-families", &self.advanced_gallery)?,
             serialize(
                 "scenario://nurbs-branch-topology",
@@ -1238,53 +1244,7 @@ fn alpha_parity_fixture() -> Result<RetainedEditorCoordinator, String> {
     RetainedEditorCoordinator::new(session).map_err(|error| error.to_string())
 }
 
-#[allow(
-    clippy::too_many_lines,
-    reason = "the three independent typed scenario examples are clearest as one fixture composition"
-)]
 fn add_contextual_constraint_examples(document: &mut SketchDocument) -> Result<(), DocumentError> {
-    let direction_controls = [
-        document.add_point("contextual direction A", [230.0, 0.0])?,
-        document.add_point("contextual direction B", [231.0, 0.0])?,
-        document.add_point("contextual direction C", [232.0, 0.0])?,
-    ];
-    let direction_curve = document.add_curve(
-        "contextual direction curve",
-        CurveDefinition::QuadraticBezier {
-            controls: direction_controls,
-        },
-    )?;
-    let line_points = [
-        document.add_point("contextual direction line A", [230.0, -1.0])?,
-        document.add_point("contextual direction line B", [232.0, -1.0])?,
-    ];
-    let direction_line = document.add_curve(
-        "contextual direction line",
-        CurveDefinition::Line {
-            start: line_points[0],
-            end: line_points[1],
-            branch_direction: [1.0, 0.0],
-        },
-    )?;
-    let direction_contact = document.add_curve_contact(
-        "contextual direction contact",
-        CurveSpan::line(direction_curve),
-        0.5,
-        0,
-        ContactNeighborhood::Interior,
-        None,
-    )?;
-    document.add_constraint(
-        "Parallel intent → tangent curve direction",
-        DocumentConstraintDefinition::CurveDirection {
-            line: CurveSpan::line(direction_line),
-            curve_contact: direction_contact,
-            relation: DocumentCurveDirectionRelation::Tangent {
-                orientation: TangentOrientation::Aligned,
-            },
-        },
-    )?;
-
     let mut curvature_curves = Vec::new();
     for offset in [0.0, 3.0] {
         let controls = [
@@ -1583,6 +1543,161 @@ fn alpha_branch_fixture() -> Result<AlphaBranchFixture, String> {
     })
 }
 
+fn circle_relations_fixture() -> Result<RetainedEditorCoordinator, String> {
+    let mut document = fixed_document(8.0, 6)?;
+    let center = document
+        .add_point("Circle relation center", [0.0, 0.0])
+        .map_err(|error| error.to_string())?;
+    document
+        .add_constraint(
+            "Fix circle relation center",
+            DocumentConstraintDefinition::FixedPoint {
+                point: center,
+                target: [0.0, 0.0],
+            },
+        )
+        .map_err(|error| error.to_string())?;
+    let radius = document
+        .add_scalar(
+            "Circle relation radius",
+            2.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .map_err(|error| error.to_string())?;
+    let circle = document
+        .add_curve(
+            "Reference circle",
+            CurveDefinition::Circle { center, radius },
+        )
+        .map_err(|error| error.to_string())?;
+    let radius_target = document
+        .add_scalar(
+            "Circle relation radius target",
+            2.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .map_err(|error| error.to_string())?;
+    document
+        .add_dimension(
+            "Circle radius 2",
+            DocumentDimensionDefinition::Radius {
+                curve: circle,
+                target: radius_target,
+            },
+            DocumentDimensionMode::Driving,
+        )
+        .map_err(|error| error.to_string())?;
+
+    add_circle_relation_tangent(&mut document, circle)?;
+    add_circle_relation_normal(&mut document, center)?;
+
+    make_coordinator(
+        document,
+        ParameterBatch::default(),
+        ExternalSnapshotSet::default(),
+    )
+}
+
+fn add_circle_relation_tangent(
+    document: &mut SketchDocument,
+    circle: geosolve_sketch::CurveId,
+) -> Result<(), String> {
+    let tangent_line = add_fixture_line(
+        document,
+        "True tangent line",
+        ("True tangent start", [-4.0, 2.0]),
+        ("True tangent end", [4.0, 2.0]),
+    )?;
+    let tangent_line_contact = document
+        .add_curve_contact(
+            "True tangent line contact",
+            CurveSpan::line(tangent_line),
+            0.5,
+            0,
+            ContactNeighborhood::Interior,
+            Some(TangentOrientation::Opposed),
+        )
+        .map_err(|error| error.to_string())?;
+    let tangent_circle_contact = document
+        .add_curve_contact(
+            "True tangent circle contact",
+            CurveSpan::line(circle),
+            std::f64::consts::FRAC_PI_2,
+            0,
+            ContactNeighborhood::Interior,
+            Some(TangentOrientation::Opposed),
+        )
+        .map_err(|error| error.to_string())?;
+    document
+        .add_constraint(
+            "Tangent = shared contact + tangent direction",
+            DocumentConstraintDefinition::CurveCurveTangency {
+                first_contact: tangent_line_contact,
+                second_contact: tangent_circle_contact,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn add_circle_relation_normal(
+    document: &mut SketchDocument,
+    center: DesignPointId,
+) -> Result<(), String> {
+    let normal_line = add_fixture_line(
+        document,
+        "Radial normal line",
+        ("Radial normal start", [-4.0, 0.0]),
+        ("Radial normal end", [4.0, 0.0]),
+    )?;
+    let normal_contact = document
+        .add_curve_contact(
+            "Radial normal line contact",
+            CurveSpan::line(normal_line),
+            0.5,
+            0,
+            ContactNeighborhood::Interior,
+            None,
+        )
+        .map_err(|error| error.to_string())?;
+    document
+        .add_constraint(
+            "Normal = circle center on line",
+            DocumentConstraintDefinition::PointOnCurve {
+                point: center,
+                contact: normal_contact,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn add_fixture_line(
+    document: &mut SketchDocument,
+    label: &str,
+    start: (&str, [f64; 2]),
+    end: (&str, [f64; 2]),
+) -> Result<geosolve_sketch::CurveId, String> {
+    let start = document
+        .add_point(start.0, start.1)
+        .map_err(|error| error.to_string())?;
+    let end = document
+        .add_point(end.0, end.1)
+        .map_err(|error| error.to_string())?;
+    document
+        .add_curve(
+            label,
+            CurveDefinition::Line {
+                start,
+                end,
+                branch_direction: [1.0, 0.0],
+            },
+        )
+        .map_err(|error| error.to_string())
+}
+
 fn external_fixture() -> Result<ExternalFixture, String> {
     let mut document = fixed_document(8.0, 3)?;
     let start = document
@@ -1744,7 +1859,7 @@ mod tests {
     use crate::workbench::panels::{host_state_markup, production_topology_markup, tree_markup};
 
     #[test]
-    fn alpha_catalog_contains_contextual_direction_curvature_and_continuity_examples() {
+    fn alpha_catalog_contains_contextual_curvature_and_continuity_examples() {
         let candidate = ScenarioCandidate::new(ScenarioFixture::AlphaParity).unwrap();
         let definitions = candidate
             .alpha_parity
@@ -1756,16 +1871,40 @@ mod tests {
             .collect::<Vec<_>>();
         assert!(definitions.iter().any(|definition| matches!(
             definition,
-            DocumentConstraintDefinition::CurveDirection { .. }
-        )));
-        assert!(definitions.iter().any(|definition| matches!(
-            definition,
             DocumentConstraintDefinition::EqualCurvature { .. }
         )));
         assert!(definitions.iter().any(|definition| matches!(
             definition,
             DocumentConstraintDefinition::EndpointContinuity { .. }
         )));
+    }
+
+    #[test]
+    fn circle_relation_scenario_uses_true_tangency_and_radial_incidence() {
+        let candidate = ScenarioCandidate::new(ScenarioFixture::CircleRelations).unwrap();
+        let definitions = candidate
+            .circle_relations
+            .session()
+            .design_document()
+            .constraints()
+            .iter()
+            .map(|constraint| &constraint.definition)
+            .collect::<Vec<_>>();
+        assert!(definitions.iter().any(|definition| matches!(
+            definition,
+            DocumentConstraintDefinition::CurveCurveTangency { .. }
+        )));
+        assert!(definitions.iter().any(|definition| matches!(
+            definition,
+            DocumentConstraintDefinition::PointOnCurve { .. }
+        )));
+        assert!(
+            candidate
+                .circle_relations
+                .session()
+                .accepted_state()
+                .is_some()
+        );
     }
 
     #[test]
@@ -2311,6 +2450,7 @@ mod tests {
             "human_clarity_and_trust=human-UAT judgment only",
             "scenario://alpha-parity",
             "scenario://alpha-branch-recovery",
+            "scenario://circle-tangent-normal",
             "scenario://advanced-all-families",
             "scenario://nurbs-branch-topology",
             "scenario://associative-companion-operations",
@@ -2330,6 +2470,7 @@ mod tests {
             &candidate.lifecycle.coordinator,
             &candidate.alpha_parity,
             &candidate.alpha_branch.coordinator,
+            &candidate.circle_relations,
             &candidate.advanced_gallery,
             &candidate.nurbs_branches.coordinator,
             &candidate.operations.coordinator,

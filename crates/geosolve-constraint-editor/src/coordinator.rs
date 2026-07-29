@@ -8,13 +8,12 @@ use geosolve_sketch::{
     ContactBranchEdit, ContactDomain, ContactId, ContactNeighborhood, CurveDefinition, CurveId,
     CurveSpan, DesignPointId, DocumentAngleOrientation, DocumentCommandEffect,
     DocumentConstraintDefinition, DocumentCurveContinuity, DocumentCurveCurvatureRelation,
-    DocumentCurveDirectionRelation, DocumentCurveNormalSide, DocumentDimensionDefinition,
-    DocumentDimensionId, DocumentDimensionMode, DocumentEdit, DocumentElementId,
-    DocumentExternalBindingId, DocumentMeasurementCatalog, DocumentMeasurementProvenance,
-    DocumentMeasurementValue, DocumentObjectId, DocumentRuntimeMap, DocumentSessionError,
-    DocumentSolveRequest, DocumentSourceId, DocumentSourceOwner, ExternalFeatureKindV1,
-    ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole, ParameterBatch,
-    RetainedSketchDocumentSession, RuntimeCurve, ScalarDomain, ScalarUnit,
+    DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode, DocumentEdit,
+    DocumentElementId, DocumentExternalBindingId, DocumentMeasurementCatalog,
+    DocumentMeasurementProvenance, DocumentMeasurementValue, DocumentObjectId, DocumentRuntimeMap,
+    DocumentSessionError, DocumentSolveRequest, DocumentSourceId, DocumentSourceOwner,
+    ExternalFeatureKindV1, ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole,
+    ParameterBatch, RetainedSketchDocumentSession, RuntimeCurve, ScalarDomain, ScalarUnit,
     SketchAcceptedDocumentRedundancy, SketchAcceptedStateIdentity, SketchAttemptFailure,
     SketchAttemptFailureKind, SketchAttemptIdentity, SketchBound, SketchDesignIdentity,
     SketchDocument, SketchLifecycleRevisionHighWater, SketchSolveResult, SketchSource,
@@ -968,6 +967,21 @@ impl RetainedEditorCoordinator {
                 let Some(resolved) = self.resolved_constraint(intent) else {
                     return Vec::new();
                 };
+                if resolved == ResolvedConstraintKind::RadialLine {
+                    return selected_radial_line(document, selection)
+                        .and_then(|(line, _, operand)| {
+                            contact_action_choice(
+                                document,
+                                operand,
+                                line,
+                                false,
+                                false,
+                                self.editor.curve_pick_parameter(line),
+                            )
+                        })
+                        .into_iter()
+                        .collect();
+                }
                 let (spans, tangency) = match resolved {
                     ResolvedConstraintKind::PointOnCurve
                     | ResolvedConstraintKind::CurveContact
@@ -978,13 +992,6 @@ impl RetainedEditorCoordinator {
                     ResolvedConstraintKind::CurveTangency => {
                         (selected_curve_spans(selection), true)
                     }
-                    ResolvedConstraintKind::CurveTangentDirection
-                    | ResolvedConstraintKind::CurveNormalDirection => (
-                        selected_direction_curve(document, selection)
-                            .into_iter()
-                            .collect(),
-                        false,
-                    ),
                     _ => (Vec::new(), false),
                 };
                 let mut choices = spans
@@ -1002,30 +1009,6 @@ impl RetainedEditorCoordinator {
                     })
                     .collect::<Vec<_>>();
                 choices.extend(match resolved {
-                    ResolvedConstraintKind::CurveTangentDirection => {
-                        vec![ActionChoice::CurveDirection {
-                            values: vec![
-                                DocumentCurveDirectionRelation::Tangent {
-                                    orientation: TangentOrientation::Aligned,
-                                },
-                                DocumentCurveDirectionRelation::Tangent {
-                                    orientation: TangentOrientation::Opposed,
-                                },
-                            ],
-                        }]
-                    }
-                    ResolvedConstraintKind::CurveNormalDirection => {
-                        vec![ActionChoice::CurveDirection {
-                            values: vec![
-                                DocumentCurveDirectionRelation::Normal {
-                                    side: DocumentCurveNormalSide::Left,
-                                },
-                                DocumentCurveDirectionRelation::Normal {
-                                    side: DocumentCurveNormalSide::Right,
-                                },
-                            ],
-                        }]
-                    }
                     ResolvedConstraintKind::EqualCurvature => {
                         vec![ActionChoice::EqualCurvature {
                             values: vec![
@@ -1320,11 +1303,9 @@ impl RetainedEditorCoordinator {
                 &request.contacts,
                 request.relation,
             )?,
-            ResolvedConstraintKind::CurveTangentDirection
-            | ResolvedConstraintKind::CurveNormalDirection => self.apply_curve_direction_action(
+            ResolvedConstraintKind::RadialLine => self.apply_radial_line_action(
                 expected,
                 &selection,
-                resolved,
                 request.label,
                 &request.contacts,
                 request.relation,
@@ -1465,11 +1446,10 @@ impl RetainedEditorCoordinator {
         })?)
     }
 
-    fn apply_curve_direction_action(
+    fn apply_radial_line_action(
         &mut self,
         expected: SketchDesignIdentity,
         selection: &[SelectionItem],
-        resolved: ResolvedConstraintKind,
         label: String,
         contacts: &[crate::ContactActionChoice],
         relation: Option<ConstraintRelationChoice>,
@@ -1477,46 +1457,29 @@ impl RetainedEditorCoordinator {
         geosolve_sketch::RetainedDocumentTransactionOutcome<geosolve_sketch::DocumentConstraintId>,
         CoordinatorError,
     > {
-        let (line, curve) = selected_line_curve(self.session.design_document(), selection).ok_or(
-            CoordinatorError::InvalidActionInput(
-                "curve direction requires one line and one non-linear curve",
-            ),
-        )?;
+        let (line, center, _) = selected_radial_line(self.session.design_document(), selection)
+            .ok_or(CoordinatorError::InvalidActionInput(
+                "circle normal requires one line and one circle or circular arc",
+            ))?;
         let [choice] = contacts else {
             return Err(CoordinatorError::InvalidActionInput(
-                "curve direction requires one explicit curve contact",
+                "circle normal requires one explicit line contact",
             ));
         };
-        validate_contact_choice(curve, choice, false)?;
-        let Some(ConstraintRelationChoice::CurveDirection(relation)) = relation else {
+        validate_contact_choice(line, choice, false)?;
+        if relation.is_some() {
             return Err(CoordinatorError::InvalidActionInput(
-                "curve direction requires one explicit orientation or side",
-            ));
-        };
-        let valid_relation = matches!(
-            (resolved, relation),
-            (
-                ResolvedConstraintKind::CurveTangentDirection,
-                DocumentCurveDirectionRelation::Tangent { .. }
-            ) | (
-                ResolvedConstraintKind::CurveNormalDirection,
-                DocumentCurveDirectionRelation::Normal { .. }
-            )
-        );
-        if !valid_relation {
-            return Err(CoordinatorError::InvalidActionInput(
-                "curve direction choice does not match the requested intent",
+                "circle normal accepts no separate direction branch",
             ));
         }
         let choice = *choice;
         Ok(self.session.transact(expected, move |document| {
-            let curve_contact = add_action_contact(document, &label, 0, choice)?;
+            let line_contact = add_action_contact(document, &label, 0, choice)?;
             document.add_constraint(
                 label,
-                DocumentConstraintDefinition::CurveDirection {
-                    line,
-                    curve_contact,
-                    relation,
+                DocumentConstraintDefinition::PointOnCurve {
+                    point: center,
+                    contact: line_contact,
                 },
             )
         })?)
@@ -2711,9 +2674,6 @@ fn resolve_constraint(
         {
             ResolvedConstraintKind::ParallelLines
         }
-        (ConstraintIntent::Parallel, _) if selected_line_curve(document, selection).is_some() => {
-            ResolvedConstraintKind::CurveTangentDirection
-        }
         (
             ConstraintIntent::Perpendicular,
             [SelectionItem::Curve(first), SelectionItem::Curve(second)],
@@ -2723,9 +2683,9 @@ fn resolve_constraint(
             ResolvedConstraintKind::PerpendicularLines
         }
         (ConstraintIntent::Perpendicular, _)
-            if selected_line_curve(document, selection).is_some() =>
+            if selected_radial_line(document, selection).is_some() =>
         {
-            ResolvedConstraintKind::CurveNormalDirection
+            ResolvedConstraintKind::RadialLine
         }
         (ConstraintIntent::Equal, [SelectionItem::Curve(first), SelectionItem::Curve(second)])
             if line_endpoints(document, *first).is_ok()
@@ -3060,28 +3020,33 @@ fn selected_point_curve(selection: &[SelectionItem]) -> Option<(DesignPointId, C
     }
 }
 
-fn selected_line_curve(
+fn selected_radial_line(
     document: &SketchDocument,
     selection: &[SelectionItem],
-) -> Option<(CurveSpan, CurveSpan)> {
+) -> Option<(CurveSpan, DesignPointId, u8)> {
     let [SelectionItem::Curve(first), SelectionItem::Curve(second)] = selection else {
         return None;
     };
     match (
-        line_endpoints(document, *first).is_ok(),
-        line_endpoints(document, *second).is_ok(),
+        line_endpoints(document, *first),
+        radial_center(document, *second),
     ) {
-        (true, false) if supports_curve_contact(document, *second) => Some((*first, *second)),
-        (false, true) if supports_curve_contact(document, *first) => Some((*second, *first)),
+        (Ok(_), Some(center)) => Some((*first, center, 0)),
+        _ if line_endpoints(document, *second).is_ok() => {
+            radial_center(document, *first).map(|center| (*second, center, 1))
+        }
         _ => None,
     }
 }
 
-fn selected_direction_curve(
-    document: &SketchDocument,
-    selection: &[SelectionItem],
-) -> Option<CurveSpan> {
-    selected_line_curve(document, selection).map(|(_, curve)| curve)
+fn radial_center(document: &SketchDocument, span: CurveSpan) -> Option<DesignPointId> {
+    let curve = document.curve(span.curve)?;
+    match &curve.definition {
+        CurveDefinition::Circle { center, .. } | CurveDefinition::CircularArc { center, .. } => {
+            Some(*center)
+        }
+        _ => None,
+    }
 }
 
 fn supports_curve_contact(document: &SketchDocument, span: CurveSpan) -> bool {
@@ -3119,8 +3084,7 @@ const fn simple_constraint_kind(resolved: ResolvedConstraintKind) -> Option<Cons
         ResolvedConstraintKind::SymmetricAboutLine => Some(ConstraintKind::Symmetry),
         ResolvedConstraintKind::PointOnCurve
         | ResolvedConstraintKind::CurveContact
-        | ResolvedConstraintKind::CurveTangentDirection
-        | ResolvedConstraintKind::CurveNormalDirection
+        | ResolvedConstraintKind::RadialLine
         | ResolvedConstraintKind::EqualCurvature
         | ResolvedConstraintKind::CurveTangency
         | ResolvedConstraintKind::EndpointContinuity => None,

@@ -30,10 +30,10 @@ use geosolve_sketch::{
     ContactDomain, ContactNeighborhood, CurveDefinition, CurveId, CurveSpan, DesignPointId,
     DesignScalarId, DocumentAngleOrientation, DocumentArcSweep, DocumentBSplineForm,
     DocumentConstraintDefinition, DocumentConstraintId, DocumentCurveContinuity,
-    DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation, DocumentCurveSpanRef,
-    DocumentDimensionId, DocumentDimensionMode, DocumentEdit, DocumentHyperbolaBranch,
-    DocumentObjectId, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, ScalarDomain, ScalarUnit,
-    SketchDesignIdentity, SketchDocument, TangentOrientation,
+    DocumentCurveCurvatureRelation, DocumentCurveSpanRef, DocumentDimensionId,
+    DocumentDimensionMode, DocumentEdit, DocumentHyperbolaBranch, DocumentObjectId,
+    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, ScalarDomain, ScalarUnit, SketchDesignIdentity,
+    SketchDocument, TangentOrientation,
 };
 use thiserror::Error;
 
@@ -1718,9 +1718,8 @@ pub enum ResolvedConstraintKind {
     HorizontalLine,
     VerticalLine,
     ParallelLines,
-    CurveTangentDirection,
     PerpendicularLines,
-    CurveNormalDirection,
+    RadialLine,
     EqualLength,
     EqualRadius,
     EqualCurvature,
@@ -1742,9 +1741,8 @@ impl ResolvedConstraintKind {
             Self::HorizontalLine => "Horizontal",
             Self::VerticalLine => "Vertical",
             Self::ParallelLines => "Parallel",
-            Self::CurveTangentDirection => "Line tangent to curve",
             Self::PerpendicularLines => "Perpendicular",
-            Self::CurveNormalDirection => "Line normal to curve",
+            Self::RadialLine => "Normal to circle / arc",
             Self::EqualLength => "Equal length",
             Self::EqualRadius => "Equal radius",
             Self::EqualCurvature => "Equal curvature",
@@ -1788,7 +1786,6 @@ pub struct ConstraintActionRequest {
 /// Explicit non-contact branch state for a contextual relation.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ConstraintRelationChoice {
-    CurveDirection(DocumentCurveDirectionRelation),
     EqualCurvature(DocumentCurveCurvatureRelation),
     Continuity(DocumentCurveContinuity),
 }
@@ -1816,9 +1813,6 @@ pub enum ActionChoice {
     },
     AngleOrientation {
         values: Vec<DocumentAngleOrientation>,
-    },
-    CurveDirection {
-        values: Vec<DocumentCurveDirectionRelation>,
     },
     EqualCurvature {
         values: Vec<DocumentCurveCurvatureRelation>,

@@ -41,11 +41,12 @@ pub(crate) enum VerificationPointId {
     P26,
     P27,
     P28,
+    P29,
 }
 
 impl VerificationPointId {
     #[cfg(test)]
-    pub(crate) const ALL: [Self; 28] = [
+    pub(crate) const ALL: [Self; 29] = [
         Self::P1,
         Self::P2,
         Self::P3,
@@ -74,6 +75,7 @@ impl VerificationPointId {
         Self::P26,
         Self::P27,
         Self::P28,
+        Self::P29,
     ];
 
     pub(crate) const fn number(self) -> u8 {
@@ -106,6 +108,7 @@ impl VerificationPointId {
             Self::P26 => 26,
             Self::P27 => 27,
             Self::P28 => 28,
+            Self::P29 => 29,
         }
     }
 }
@@ -143,6 +146,7 @@ pub(crate) enum ScenarioId {
     GlobalCanvasError,
     AlphaParityCatalog,
     AlphaBranchRecovery,
+    CircleTangentNormal,
     AdvancedAllFamilies,
     NurbsBranchTopology,
     AssociativeCompanionOperations,
@@ -161,7 +165,7 @@ pub(crate) enum ScenarioId {
 
 impl ScenarioId {
     #[cfg(test)]
-    pub(crate) const ALL: [Self; 24] = [
+    pub(crate) const ALL: [Self; 25] = [
         Self::RoleProfileParticipation,
         Self::ActivationDimensionMode,
         Self::SharedParameterProposal,
@@ -172,6 +176,7 @@ impl ScenarioId {
         Self::GlobalCanvasError,
         Self::AlphaParityCatalog,
         Self::AlphaBranchRecovery,
+        Self::CircleTangentNormal,
         Self::AdvancedAllFamilies,
         Self::NurbsBranchTopology,
         Self::AssociativeCompanionOperations,
@@ -200,6 +205,7 @@ impl ScenarioId {
             "global-canvas-error" => Self::GlobalCanvasError,
             "alpha-parity-catalog" => Self::AlphaParityCatalog,
             "alpha-branch-recovery" => Self::AlphaBranchRecovery,
+            "circle-tangent-normal" => Self::CircleTangentNormal,
             "advanced-all-families" => Self::AdvancedAllFamilies,
             "nurbs-branch-topology" => Self::NurbsBranchTopology,
             "associative-companion-operations" => Self::AssociativeCompanionOperations,
@@ -230,6 +236,7 @@ impl ScenarioId {
             Self::GlobalCanvasError => "global-canvas-error",
             Self::AlphaParityCatalog => "alpha-parity-catalog",
             Self::AlphaBranchRecovery => "alpha-branch-recovery",
+            Self::CircleTangentNormal => "circle-tangent-normal",
             Self::AdvancedAllFamilies => "advanced-all-families",
             Self::NurbsBranchTopology => "nurbs-branch-topology",
             Self::AssociativeCompanionOperations => "associative-companion-operations",
@@ -459,7 +466,7 @@ pub(crate) const ALL_SCENARIO_ACTIONS: [ScenarioAction; 32] = [
     ScenarioAction::CaptureEvidence,
 ];
 
-const VERIFICATION_POINTS: [VerificationPoint; 28] = [
+const VERIFICATION_POINTS: [VerificationPoint; 29] = [
     VerificationPoint {
         id: VerificationPointId::P1,
         objective: "Role changes profile participation while geometry remains solver-active and accepted.",
@@ -600,6 +607,11 @@ const VERIFICATION_POINTS: [VerificationPoint; 28] = [
         objective: "The Peaucellier linkage reports one DOF and maps circular input motion to straight output motion using ordinary bars.",
         human_judgment: "Judge whether the dependent output path makes the solver behavior trustworthy.",
     },
+    VerificationPoint {
+        id: VerificationPointId::P29,
+        objective: "Circle tangency includes shared contact and tangent direction, while a circle normal is a radial line constrained through the circle center.",
+        human_judgment: "Judge whether the two visible relationships and their persistent definitions make the authoring behavior predictable.",
+    },
 ];
 
 const ROLE_PROFILE_POINTS: [VerificationPointId; 1] = [VerificationPointId::P1];
@@ -618,6 +630,7 @@ const ATTRIBUTED_ERROR_POINTS: [VerificationPointId; 1] = [VerificationPointId::
 const GLOBAL_ERROR_POINTS: [VerificationPointId; 1] = [VerificationPointId::P12];
 const ALPHA_PARITY_POINTS: [VerificationPointId; 1] = [VerificationPointId::P13];
 const ALPHA_BRANCH_POINTS: [VerificationPointId; 1] = [VerificationPointId::P14];
+const CIRCLE_RELATIONS_POINTS: [VerificationPointId; 1] = [VerificationPointId::P29];
 const ADVANCED_ALL_FAMILIES_POINTS: [VerificationPointId; 1] = [VerificationPointId::P15];
 const NURBS_BRANCH_POINTS: [VerificationPointId; 1] = [VerificationPointId::P16];
 const OPERATIONS_POINTS: [VerificationPointId; 1] = [VerificationPointId::P17];
@@ -856,7 +869,7 @@ const ALPHA_PARITY_STEPS: [ScenarioStep; 3] = [
     ScenarioStep {
         instruction: "Inspect the accepted contextual-constraint corpus on the canvas and in the sketch tree.",
         action: None,
-        expected: "Coincidence/contact, equal length/radius/curvature, line/curve direction, midpoint/symmetry, tangency and endpoint continuity retain persistent selectable identities.",
+        expected: "Coincidence/contact, equal length/radius/curvature, midpoint/symmetry, tangency and endpoint continuity retain persistent selectable identities.",
     },
     ScenarioStep {
         instruction: "Compare each contextual intent with the selection-specific label, relation glyph kind and driving/reference dimension annotations.",
@@ -867,6 +880,29 @@ const ALPHA_PARITY_STEPS: [ScenarioStep; 3] = [
         instruction: "Open diagnostics and capture typed evidence if useful.",
         action: None,
         expected: "Accepted provenance, rank, mobility and source identities agree with the visible accepted catalog.",
+    },
+];
+
+const CIRCLE_RELATIONS_STEPS: [ScenarioStep; 4] = [
+    ScenarioStep {
+        instruction: "Inspect the upper line and its generic tangency source against the circle.",
+        action: None,
+        expected: "The persistent definition owns two contacts: their evaluated positions coincide and their curve derivatives are parallel.",
+    },
+    ScenarioStep {
+        instruction: "Inspect the horizontal line through the center and its normal source.",
+        action: None,
+        expected: "The compact Perpendicular / Normal intent is represented as circle-center-on-line incidence, so the line is genuinely radial.",
+    },
+    ScenarioStep {
+        instruction: "Select a line and circle in an ordinary workspace and compare Tangent with Perpendicular / Normal.",
+        action: None,
+        expected: "Tangent requests contact plus tangent direction; Normal requests a radial line. Parallel is not offered as direction-only contact against a circle.",
+    },
+    ScenarioStep {
+        instruction: "Inspect branch metadata and diagnostics, then reset the scenario.",
+        action: None,
+        expected: "Tangency retains explicit contact/orientation state, the radial normal needs no arbitrary left/right branch, and reset reproduces the accepted scene.",
     },
 ];
 
@@ -1028,7 +1064,7 @@ const INTERACTIVE_MOTION_STEPS: [ScenarioStep; 4] = [
     },
 ];
 
-const SCENARIOS: [ScenarioDefinition; 24] = [
+const SCENARIOS: [ScenarioDefinition; 25] = [
     ScenarioDefinition {
         id: ScenarioId::RoleProfileParticipation,
         title: "Role & profile participation",
@@ -1104,7 +1140,7 @@ const SCENARIOS: [ScenarioDefinition; 24] = [
     ScenarioDefinition {
         id: ScenarioId::AlphaParityCatalog,
         title: "Contextual relation & dimension catalog",
-        description: "Inspect contextual contact/equality/direction/tangency/continuity dispatch, dimensions and explicit branches through the sole workbench.",
+        description: "Inspect contextual contact/equality/tangency/continuity dispatch, dimensions and explicit branches through the sole workbench.",
         human_question: "Do the compact intents, selection-specific labels, selectable glyphs, operands and branch diagnostics form a coherent reusable authoring catalog?",
         fixture: ScenarioFixture::AlphaParity,
         points: &ALPHA_PARITY_POINTS,
@@ -1118,6 +1154,15 @@ const SCENARIOS: [ScenarioDefinition; 24] = [
         fixture: ScenarioFixture::AlphaBranchRecovery,
         points: &ALPHA_BRANCH_POINTS,
         steps: &ALPHA_BRANCH_STEPS,
+    },
+    ScenarioDefinition {
+        id: ScenarioId::CircleTangentNormal,
+        title: "Circle tangent & radial normal",
+        description: "Compare a true line-circle tangency with a radial normal constrained through the circle center.",
+        human_question: "Are Tangent and Perpendicular / Normal now geometrically distinct, predictable, and easy to reproduce?",
+        fixture: ScenarioFixture::CircleRelations,
+        points: &CIRCLE_RELATIONS_POINTS,
+        steps: &CIRCLE_RELATIONS_STEPS,
     },
     ScenarioDefinition {
         id: ScenarioId::AdvancedAllFamilies,
@@ -1309,9 +1354,10 @@ const M53_HOST_SEMANTICS_GROUP: ScenarioGroup = ScenarioGroup {
     children: &M53_HOST_SEMANTICS_CHILDREN,
 };
 
-const M55_ACTION_PARITY_CHILDREN: [ScenarioNode; 2] = [
+const M55_ACTION_PARITY_CHILDREN: [ScenarioNode; 3] = [
     ScenarioNode::Scenario(ScenarioId::AlphaParityCatalog),
     ScenarioNode::Scenario(ScenarioId::AlphaBranchRecovery),
+    ScenarioNode::Scenario(ScenarioId::CircleTangentNormal),
 ];
 
 const M55_ACTION_PARITY_GROUP: ScenarioGroup = ScenarioGroup {
@@ -1877,7 +1923,7 @@ mod tests {
 
         assert_eq!(markup.matches("data-scenario-group-trigger=").count(), 11);
         assert_eq!(markup.matches("class=\"wb-scenario-flyout\"").count(), 11);
-        assert_eq!(markup.matches("data-scenario-id=").count(), 24);
+        assert_eq!(markup.matches("data-scenario-id=").count(), 25);
         assert!(markup.contains("class=\"wb-scenario-catalog-header\""));
         assert!(markup.contains("aria-expanded=\"false\""));
         assert!(markup.contains("aria-controls=\"wb-scenario-flyout-host-owned-inputs\""));
