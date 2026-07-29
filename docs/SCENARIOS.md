@@ -1792,11 +1792,16 @@ One new root group, `m63-canvas-constraints` (**M63 Canvas constraints**), owns 
 | Stable scenario ID | Scenario title | Review purpose |
 | --- | --- | --- |
 | `canvas-angle-dimensions` | Canvas angle & dimension presentation | Always-visible angle arcs and values, driving dimensions, contextual reference dimensions and target editing. |
-| `canvas-relation-glyphs` | Contextual constraint symbols | Direct-relation hover discovery, persistent symbol selection, operand emphasis and authoring isolation. |
+| `canvas-relation-glyphs` | Contextual constraint symbols | Direct-relation hover discovery, persistent symbol selection, operand emphasis, stable radial placement and authoring isolation. |
 | `canvas-crowded-annotations` | Crowded relation fan-out | Dense rotating-square relations, deterministic offsets/leaders, zoom/pan and independent selection. |
 
 The leaves reuse public deterministic fixtures and change neither canonical workspace persistence
 nor solver behavior. `docs/M63_UAT.md` owns the pending human scorecard.
+
+`M63-F001` adds an explicit radius-stability step to `canvas-relation-glyphs`: moving the tangent
+line must not move the radius leader between mathematically equivalent circumference samples.
+Headless presentation uses canonical public curve parameters rather than adaptive tessellation to
+own that branch.
 
 ## Frozen near-singular fixtures
 

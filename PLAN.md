@@ -2837,6 +2837,11 @@ geometry without turning the canvas into a permanent icon cloud.
 No solver equation, residual, persistent document schema, branch rule, mobile claim, legacy E2E
 harness or `/#/dev/lab` route is added.
 
+UAT finding `M63-F001` (2026-07-30) corrected radial annotation jitter caused by choosing among
+mathematically tied adaptive-tessellation samples. Full circles now use canonical parameter zero
+and circular arcs use their semantic midpoint through public accepted-curve evaluation. Direct
+regression and mechanical requalification pass; focused human retest remains pending.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

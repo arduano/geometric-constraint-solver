@@ -46,6 +46,11 @@ ordinary and advanced scenarios, contextual visibility, always-visible reference
 deterministic fan-out, hover transitions, annotation selection and presentation metadata.
 Human acceptance remains pending in `docs/M63_UAT.md`.
 
+Follow-up `M63-F001` removes tessellation-dependent radial placement. Full-circle radius and
+diameter annotations use canonical parameter zero, while circular arcs use their bounded semantic
+midpoint. Both are evaluated through the public accepted curve API. The focused headless
+regression and editor/web qualification slice pass; human retest remains pending.
+
 ## 5. Known limitations
 
 - Annotation layout is intentionally compact and deterministic, not a general-purpose CAD

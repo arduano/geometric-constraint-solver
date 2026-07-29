@@ -1128,11 +1128,16 @@ const CANVAS_ANGLE_STEPS: [ScenarioStep; 4] = [
     },
 ];
 
-const CANVAS_GLYPH_STEPS: [ScenarioStep; 4] = [
+const CANVAS_GLYPH_STEPS: [ScenarioStep; 5] = [
     ScenarioStep {
         instruction: "Hover several points and curves without selecting them.",
         action: None,
         expected: "Only directly incident constraint symbols appear; unrelated constraint clusters remain hidden.",
+    },
+    ScenarioStep {
+        instruction: "Drag the tangent line through several accepted positions while watching the circle radius annotation.",
+        action: None,
+        expected: "The radius stays on its canonical circle branch without jumping to unrelated points around the circumference.",
     },
     ScenarioStep {
         instruction: "Move onto a revealed symbol and click it.",

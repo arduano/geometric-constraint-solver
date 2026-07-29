@@ -7,7 +7,7 @@ Status: candidate awaiting supervising-human review.
 ## Candidate
 
 - Branch: `main`
-- Implementation commit: `9727b60`.
+- Implementation commits: `9727b60`, with `M63-F001` remediation in `8fcf270`.
 - Temporary Tailscale endpoint: `http://100.94.63.83:8080/`.
 - Scenario group: **Scenarios → M63 Canvas constraints**
 - Mechanical gate: format, warnings-denied workspace Clippy, all-feature workspace tests,
@@ -33,6 +33,18 @@ Status: candidate awaiting supervising-human review.
 3. Record any finding with the stable scenario ID, selected persistent item and visible accepted
    diagnostics.
 4. Explicitly approve or reject M63 for the scope above.
+
+## Finding ledger
+
+- `M63-F001` — resolved; human retest pending. In `canvas-relation-glyphs`, moving the tangent
+  line left the circle radius numerically correct but made its leader jump unpredictably around
+  the circumference. The presentation layer was choosing the farthest adaptively tessellated
+  sample from an inferred center; all samples on a circle are mathematically tied, so tiny
+  accepted-state differences changed the winner. Radial dimensions now use accepted persistent
+  curve semantics and public curve evaluation: full circles use canonical parameter zero and
+  circular arcs use their semantic midpoint. A headless regression perturbs the accepted radius
+  and requires the anchor to remain on that branch. Recheck the new stability step in
+  `canvas-relation-glyphs`.
 
 ## Approval
 
