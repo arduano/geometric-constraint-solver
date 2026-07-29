@@ -266,8 +266,12 @@ impl AuthoringState {
         }
     }
 
-    /// Clears a completed transaction while retaining the repeated tool.
-    pub fn transaction_completed(&mut self) {
+    /// Clears a terminal application attempt while retaining the repeated tool.
+    ///
+    /// Hosts call this after processing [`AuthoringOutcome::Apply`], whether the
+    /// coordinator accepted, retained-rejected or refused that application. A
+    /// terminal candidate must never leave repeated authoring wedged at full arity.
+    pub fn transaction_finished(&mut self) {
         self.pending.clear();
     }
 
@@ -587,7 +591,7 @@ mod tests {
             AuthoringOutcome::Apply(_)
         ));
         assert_eq!(state.pending().len(), 2);
-        state.transaction_completed();
+        state.transaction_finished();
         assert!(state.pending().is_empty());
         assert_eq!(
             state.active_tool(),

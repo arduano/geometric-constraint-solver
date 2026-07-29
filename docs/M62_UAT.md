@@ -27,21 +27,25 @@ a production deployment.
 4. Clear selection, enter Coincident, then repeatedly click point pairs. Confirm each second click
    applies and the tool remains active with a fresh operand set.
 5. Exercise Lock, Horizontal or Vertical in repeated single-pick mode; then Symmetric in
-   point/point/axis order.
-6. While one operand is pending, press Escape twice. Confirm the first clears operands and the
+   point/point/axis order. Confirm one canvas click contributes exactly one operand and immediately
+   re-arms each single-pick tool.
+6. Enter Normal with no selection and click two different lines once each. Confirm the first line
+   is pending, the second applies Perpendicular, and the active tool immediately requests a fresh
+   first line rather than remaining stuck at two operands.
+7. While one operand is pending, press Escape twice. Confirm the first clears operands and the
    second exits authoring.
-7. Use a canvas curve pick and a tree pick in the same constraint. Confirm both follow the same
+8. Use a canvas curve pick and a tree pick in the same constraint. Confirm both follow the same
    guidance and pending highlighting.
-8. Open Tangent, Equal and Continuity option flyouts. Confirm explicit orientation, curvature and
+9. Open Tangent, Equal and Continuity option flyouts. Confirm explicit orientation, curvature and
    continuity choices remain understandable and are remembered during this session only.
-9. Create all five dimension kinds at their current accepted values. For oriented angle, draw two
+10. Create all five dimension kinds at their current accepted values. For oriented angle, draw two
    lines at roughly 45 degrees with either endpoint order, enter angle authoring and pick them one
    at a time. Confirm creation does not move either line and the annotation/editor reports the
    acute angle in degrees rather than raw directed radians.
-10. Select the angle dimension and change its acute-degree target to 60, then Undo and Redo.
+11. Select the angle dimension and change its acute-degree target to 60, then Undo and Redo.
     Confirm the visible acute angle, retained directed branch, history and selected-dimension
     metadata remain coherent. Values above 90 degrees must reject without mutation.
-11. Load any existing scenario and confirm ordinary authoring is disabled and the scenario remains
+12. Load any existing scenario and confirm ordinary authoring is disabled and the scenario remains
    unchanged. Exit it and resume ordinary authoring.
 
 ## Finding ledger
@@ -51,6 +55,10 @@ a production deployment.
   retained rejection from accepted publication. The corrected candidate measures accepted
   geometry, presents acute supporting-line degrees, preserves the directed solver branch during
   edits and reports rejected publication explicitly.
+- `M62-F002` — resolved mechanically, pending human recheck: one canvas click was routed as both a
+  pointer-down pick and a bubbled generic click, duplicating operands and leaving failed terminal
+  candidates at full arity. Canvas pointer-down now owns the canvas pick exactly once, tree clicks
+  retain their separate one-event route and every terminal attempt re-arms repeated authoring.
 
 ## Approval
 

@@ -1693,6 +1693,21 @@ persistence. Equivalent stored targets in all four directed quadrants present th
 angle. Inputs above 90 degrees reject before mutation. Retained-rejected creation or editing keeps
 the prior accepted canvas and is labelled as rejected rather than accepted.
 
+### M62-F002 - Single-owner authoring input
+
+One direct workbench fixture reproduces the browser event sequence without adding a scenario-menu
+leaf. Every physical canvas click generates a parameter-bearing pointer-down followed by a
+bubbled generic click. Only pointer-down owns the canvas authoring operand; the click is ignored
+for authoring on that surface. Tree items have no canvas pointer-down and retain their single click
+owner.
+
+The fixture enters Horizontal and sends both events for one line: exactly one application is
+produced and terminal processing re-arms the tool. It then enters Normal/Perpendicular and sends
+both events for each of two distinct lines: the first physical click produces one pending operand,
+the second produces one complete application, and terminal processing returns to an empty pending
+set. Terminal coordinator refusal follows the same re-arm rule so a failed complete candidate
+cannot wedge the collector at full arity.
+
 ### UAT evidence and recheck policy
 
 Each checkpoint provides one manual entry point, deterministic resets and concise instructions.

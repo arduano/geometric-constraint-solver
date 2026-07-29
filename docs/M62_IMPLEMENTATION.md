@@ -22,8 +22,8 @@ history and independent validation for every mutation.
 - Compatible preselection applies once, preserves selection and remains in Select.
 - Incompatible preselection warns without mutation.
 - Empty preselection enters a persistent tool mode.
-- Completed operand sets clear after accepted or retained-rejected mutation and the tool remains
-  active; input errors retain operands.
+- Completed operand sets clear after every terminal application attempt and the tool remains
+  active; pre-application warnings retain the valid pending prefix.
 - Escape clears pending operands before exiting the mode.
 - Scenario mode remains read-only and ordinary persistence remains unchanged.
 
@@ -38,7 +38,9 @@ history and independent validation for every mutation.
   `display_dimension_target` and branch-preserving `set_dimension_display_target`.
 - The workbench index and styles replace the narrow geometry strip with a wider two-column palette.
   `workbench/mod.rs` routes palette, tree and canvas events; `scene.rs` and `panels.rs` render
-  authoring-pending identities separately from selection.
+  authoring-pending identities separately from selection. Follow-up `M62-F002` assigns canvas
+  authoring exclusively to the parameter-bearing pointer-down path, leaves tree authoring on its
+  single click path and removes completed operands after every terminal coordinator attempt.
 - The right inspector retains post-creation branch editing and adds a selected-dimension target
   editor. Its constraint/dimension creation forms are deleted.
 
@@ -91,6 +93,10 @@ manual performance/cancellation measurements.
 - `M62-F001` directly covers accepted/design coordinate divergence, no-move angle creation,
   reversed line endpoints, all four directed quadrants, a branch-preserving 45-to-60 degree edit,
   invalid values above 90 degrees and acute-degree canvas annotation.
+- `M62-F002` directly feeds the real canvas pointer-down plus bubbled-click sequence to Horizontal
+  and Normal/Perpendicular collection. Each physical click contributes exactly one operand,
+  single-item repetition re-arms, pair collection applies after two distinct lines, and tree
+  clicks remain independently owned.
 - The static workbench contract directly proves all sixteen palette identities exist and the old
   creation controls, action aliases and deleted `/#/dev/lab` route do not.
 - Canvas/tree pending presentation, read-only scenario behavior, WASM compilation and the release

@@ -2755,6 +2755,17 @@ reported distinctly from accepted publication. Direct regressions cover accepted
 divergence, reversed endpoint direction, all four directed quadrants, no-move creation, a 45-to-60
 degree edit and acute canvas annotation. No residual, equation or persistence schema changed.
 
+UAT follow-up `M62-F002` corrects repeated constraint collection before approval. Canvas
+authoring previously consumed one physical click first through the parameter-preserving
+pointer-down path and then again through the bubbled generic item-click path. That duplicated the
+first operand: single-item tools attempted an immediate duplicate transaction, while pair tools
+could fill both slots with the same line and remain wedged at full arity after the coordinator
+refused it. Canvas pointer-down now exclusively owns canvas picks, tree clicks retain their one
+click path, and the headless collector is re-armed after every terminal application attempt,
+including coordinator errors. A direct workbench regression exercises the exact pointer-down plus
+click sequence for Horizontal and Normal/Perpendicular. No solver, equation, branch, persistence or
+scenario behavior changed.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

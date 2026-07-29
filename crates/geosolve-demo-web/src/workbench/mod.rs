@@ -62,6 +62,22 @@ impl PointerMoveQueue {
     }
 }
 
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum AuthoringItemInput {
+    CanvasPointerDown,
+    CanvasClick,
+    TreeClick,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+const fn owns_authoring_pick(input: AuthoringItemInput) -> bool {
+    matches!(
+        input,
+        AuthoringItemInput::CanvasPointerDown | AuthoringItemInput::TreeClick
+    )
+}
+
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod wasm {
     use std::cell::RefCell;
@@ -334,11 +350,21 @@ pub(crate) mod wasm {
                         .unwrap_or_default();
                     let mut wb = callback_workbench.borrow_mut();
                     if wb.authoring.active_tool().is_some() && !wb.scenarios.is_active() {
-                        let document = wb.coordinator.session().design_document().clone();
-                        let outcome = wb
-                            .authoring
-                            .pick(&document, AuthoringOperand::selected(item));
-                        handle_authoring_outcome(&mut wb, outcome);
+                        let input = if target
+                            .closest("#wb-viewport")
+                            .is_ok_and(|viewport| viewport.is_some())
+                        {
+                            super::AuthoringItemInput::CanvasClick
+                        } else {
+                            super::AuthoringItemInput::TreeClick
+                        };
+                        if super::owns_authoring_pick(input) {
+                            let document = wb.coordinator.session().design_document().clone();
+                            let outcome = wb
+                                .authoring
+                                .pick(&document, AuthoringOperand::selected(item));
+                            handle_authoring_outcome(&mut wb, outcome);
+                        }
                     } else {
                         let coordinator = wb.interaction_coordinator_mut();
                         coordinator.editor_mut().select_item(item, modifiers);
@@ -741,7 +767,9 @@ pub(crate) mod wasm {
                 if event.button() != 0 {
                     return;
                 }
-                if let Some(hit) = scene.hit_test(input.position, PickTolerance::default()) {
+                if super::owns_authoring_pick(super::AuthoringItemInput::CanvasPointerDown)
+                    && let Some(hit) = scene.hit_test(input.position, PickTolerance::default())
+                {
                     let document = wb.coordinator.session().design_document().clone();
                     let outcome = wb.authoring.pick(
                         &document,
@@ -1192,7 +1220,12 @@ pub(crate) mod wasm {
 
     fn apply_authoring_application(wb: &mut Workbench, application: &AuthoringApplication) {
         let expected = wb.coordinator.session().design_identity();
-        match wb.coordinator.apply_authoring(expected, application) {
+        let result = wb.coordinator.apply_authoring(expected, application);
+        wb.authoring.transaction_finished();
+        let _ = wb
+            .authoring
+            .reconcile(wb.coordinator.session().design_document());
+        match result {
             Ok(mutation) => {
                 let accepted = match &mutation {
                     geosolve_constraint_editor::AuthoringMutation::Constraint(outcome) => {
@@ -1203,10 +1236,6 @@ pub(crate) mod wasm {
                     }
                 };
                 let repeated = wb.authoring.active_tool().is_some();
-                wb.authoring.transaction_completed();
-                let _ = wb
-                    .authoring
-                    .reconcile(wb.coordinator.session().design_document());
                 wb.notice = if !accepted {
                     format!(
                         "{} retained, but the solve rejected; prior accepted geometry remains",
@@ -2214,9 +2243,13 @@ pub(crate) mod wasm {
 
 #[cfg(test)]
 mod tests {
-    use geosolve_constraint_editor::{Modifiers, PointerInput, ScreenPoint};
+    use geosolve_constraint_editor::{
+        AuthoringOperand, AuthoringOutcome, AuthoringState, AuthoringTool, ConstraintIntent,
+        Modifiers, PointerInput, ScreenPoint, SelectionItem,
+    };
+    use geosolve_sketch::{CurveDefinition, CurveSpan, SketchDocument};
 
-    use super::PointerMoveQueue;
+    use super::{AuthoringItemInput, PointerMoveQueue, owns_authoring_pick};
 
     #[test]
     fn pointer_move_queue_keeps_only_latest_sample_and_terminal_invalidates_old_frame() {
@@ -2244,5 +2277,84 @@ mod tests {
         assert_ne!(next_frame, stale_frame);
         assert_eq!(queue.take_for_frame(stale_frame), None);
         assert_eq!(queue.take_for_frame(next_frame), Some(input(5.0)));
+    }
+
+    #[test]
+    fn canvas_authoring_click_sequence_contributes_one_operand_and_rearms_after_terminal_attempt() {
+        let mut document = SketchDocument::new(1.0).unwrap();
+        let origin = document.add_point("origin", [0.0, 0.0]).unwrap();
+        let first_tip = document.add_point("first tip", [2.0, 0.0]).unwrap();
+        let second_tip = document.add_point("second tip", [0.0, 2.0]).unwrap();
+        let first = SelectionItem::Curve(CurveSpan::line(
+            document
+                .add_curve(
+                    "first",
+                    CurveDefinition::Line {
+                        start: origin,
+                        end: first_tip,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .unwrap(),
+        ));
+        let second = SelectionItem::Curve(CurveSpan::line(
+            document
+                .add_curve(
+                    "second",
+                    CurveDefinition::Line {
+                        start: origin,
+                        end: second_tip,
+                        branch_direction: [0.0, 1.0],
+                    },
+                )
+                .unwrap(),
+        ));
+
+        let mut horizontal = AuthoringState::default();
+        let _ = horizontal.activate(
+            &document,
+            AuthoringTool::Constraint(ConstraintIntent::Horizontal),
+            &[],
+        );
+        let horizontal_outcomes = [
+            AuthoringItemInput::CanvasPointerDown,
+            AuthoringItemInput::CanvasClick,
+        ]
+        .into_iter()
+        .filter(|input| owns_authoring_pick(*input))
+        .map(|_| horizontal.pick(&document, AuthoringOperand::selected(first)))
+        .collect::<Vec<_>>();
+        assert_eq!(horizontal_outcomes.len(), 1);
+        assert!(matches!(horizontal_outcomes[0], AuthoringOutcome::Apply(_)));
+        horizontal.transaction_finished();
+        assert!(horizontal.pending().is_empty());
+
+        let mut normal = AuthoringState::default();
+        let _ = normal.activate(
+            &document,
+            AuthoringTool::Constraint(ConstraintIntent::Perpendicular),
+            &[],
+        );
+        let mut normal_outcomes = Vec::new();
+        for item in [first, second] {
+            for input in [
+                AuthoringItemInput::CanvasPointerDown,
+                AuthoringItemInput::CanvasClick,
+            ] {
+                if owns_authoring_pick(input) {
+                    normal_outcomes.push(normal.pick(&document, AuthoringOperand::selected(item)));
+                }
+            }
+        }
+        assert_eq!(normal_outcomes.len(), 2);
+        assert!(matches!(
+            normal_outcomes[0],
+            AuthoringOutcome::Collecting { .. }
+        ));
+        assert!(matches!(normal_outcomes[1], AuthoringOutcome::Apply(_)));
+        normal.transaction_finished();
+        assert!(normal.pending().is_empty());
+
+        assert!(owns_authoring_pick(AuthoringItemInput::TreeClick));
     }
 }

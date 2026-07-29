@@ -1146,8 +1146,9 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
   continuity and oriented-angle order remains explicit.
 - Pending operands are not ordinary selection. The first Escape clears them and the second exits
   mode. External topology changes remove stale operands without panics or accidental retargeting.
-- Accepted and retained-rejected transactions clear the completed operand set and keep authoring
-  active. Pre-transaction validation failures retain operands for correction.
+- Accepted and retained-rejected transactions, plus terminal coordinator errors, clear the
+  completed operand set and keep authoring active. Pre-application validation warnings retain the
+  valid pending prefix for correction.
 - The desktop workbench has one two-column left palette for geometry, eleven contextual relations
   and five dimensions. Constraint and dimension creation dropdowns and Apply buttons no longer
   exist in the inspector.
@@ -1156,7 +1157,8 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
   counter-clockwise angles.
 - Canvas and tree operands use the same headless input path. Ordinary selection and point dragging
   are suppressed during authoring; pending operands and the expected next operand are visibly
-  identified.
+  identified. Canvas pointer-down exclusively owns the parameter-bearing canvas pick; its later
+  bubbled click cannot contribute the same item again, while tree clicks contribute once.
 - Dimensions are created at the current independently accepted value, never at a potentially
   divergent retained-design seed. Line-angle authoring uses the acute supporting-line intersection
   angle for presentation, independent of invisible endpoint direction, while retaining its

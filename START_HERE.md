@@ -96,6 +96,9 @@ authoring candidate awaiting ordinary-workspace human UAT**.
 M62 follow-up `M62-F001` corrects accepted-state line-angle seeding and exposes acute-degree
 presentation while retaining the explicit directed-radian solver branch; its targeted human
 recheck remains part of the open M62 UAT.
+Follow-up `M62-F002` gives canvas pointer-down exclusive ownership of canvas authoring picks,
+prevents the later bubbled click from duplicating operands, and re-arms repeated mode after every
+terminal application attempt.
 Old Chromium/CDP, HTTP serving, DOM-scraping, screenshot, wall-clock browser-timing and
 source-substring-scan gates remain retired.
 
