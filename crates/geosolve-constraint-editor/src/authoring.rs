@@ -181,6 +181,12 @@ impl AuthoringState {
         self.options = options;
     }
 
+    /// Leaves authoring immediately while preserving remembered options.
+    pub fn deactivate(&mut self) {
+        self.active = None;
+        self.pending.clear();
+    }
+
     /// Activates a tool from an immutable host selection snapshot.
     ///
     /// Empty selection enters repeated mode. A complete compatible selection emits
@@ -429,9 +435,8 @@ fn expected_operands(
             vec![Line]
         }
         AuthoringTool::Constraint(ConstraintIntent::Coincident) => vec![Point, Curve],
-        AuthoringTool::Constraint(ConstraintIntent::Parallel | ConstraintIntent::Continuity) => {
-            vec![Line, Curve]
-        }
+        AuthoringTool::Constraint(ConstraintIntent::Parallel) => vec![Line],
+        AuthoringTool::Constraint(ConstraintIntent::Continuity) => vec![Curve],
         AuthoringTool::Constraint(ConstraintIntent::Perpendicular) => vec![Line, CircleOrArc],
         AuthoringTool::Constraint(ConstraintIntent::Equal | ConstraintIntent::Tangent) => {
             vec![Curve]

@@ -31,26 +31,68 @@
       </header>
 
       <aside class="wb-tool-palette" aria-label="Sketch authoring tools">
-        <button type="button" data-wb-tool="select" aria-pressed="true"><kbd>V</kbd><span>Select</span></button>
-        <div class="wb-tool-rule"></div>
-        <button type="button" data-wb-tool="point" aria-pressed="false"><kbd>·</kbd><span>Point</span></button>
-        <button type="button" data-wb-tool="line" aria-pressed="false"><kbd>L</kbd><span>Line</span></button>
-        <button type="button" data-wb-tool="polyline" aria-pressed="false"><kbd>P</kbd><span>Polyline</span></button>
-        <button type="button" data-wb-tool="rectangle" aria-pressed="false"><kbd>R</kbd><span>Rectangle</span></button>
-        <button type="button" data-wb-tool="circle" aria-pressed="false"><kbd>C</kbd><span>Circle</span></button>
-        <button type="button" data-wb-tool="arc" aria-pressed="false"><kbd>A</kbd><span>Arc</span></button>
-        <div class="wb-tool-rule"></div>
-        <button type="button" data-wb-tool="quadratic-bezier" aria-pressed="false"><kbd>Q</kbd><span>Bezier²</span></button>
-        <button type="button" data-wb-tool="cubic-bezier" aria-pressed="false"><kbd>B</kbd><span>Bezier³</span></button>
-        <button type="button" data-wb-tool="ellipse" aria-pressed="false"><kbd>E</kbd><span>Ellipse</span></button>
-        <button type="button" data-wb-tool="elliptical-arc" aria-pressed="false"><kbd>EA</kbd><span>Ellipse arc</span></button>
-        <button type="button" data-wb-tool="rational-conic" aria-pressed="false"><kbd>RQ</kbd><span>Rational</span></button>
-        <button type="button" data-wb-tool="parabola" aria-pressed="false"><kbd>∪</kbd><span>Parabola</span></button>
-        <button type="button" data-wb-tool="hyperbola" aria-pressed="false"><kbd>)(</kbd><span>Hyperbola</span></button>
-        <button type="button" data-wb-tool="nurbs" aria-pressed="false"><kbd>N</kbd><span>NURBS</span></button>
-        <div class="wb-tool-rule"></div>
-        <button type="button" data-wb-action="finish"><kbd>↵</kbd><span>Finish</span></button>
-        <button type="button" data-wb-action="cancel"><kbd>Esc</kbd><span>Cancel</span></button>
+        <section class="wb-palette-section">
+          <strong>Geometry</strong>
+          <div class="wb-palette-grid">
+            <button type="button" data-wb-tool="select" aria-pressed="true"><kbd>V</kbd><span>Select</span></button>
+            <button type="button" data-wb-tool="point" aria-pressed="false"><kbd>·</kbd><span>Point</span></button>
+            <button type="button" data-wb-tool="line" aria-pressed="false"><kbd>L</kbd><span>Line</span></button>
+            <button type="button" data-wb-tool="polyline" aria-pressed="false"><kbd>P</kbd><span>Polyline</span></button>
+            <button type="button" data-wb-tool="rectangle" aria-pressed="false"><kbd>R</kbd><span>Rectangle</span></button>
+            <button type="button" data-wb-tool="circle" aria-pressed="false"><kbd>C</kbd><span>Circle</span></button>
+            <button type="button" data-wb-tool="arc" aria-pressed="false"><kbd>A</kbd><span>Arc</span></button>
+            <button type="button" data-wb-tool="quadratic-bezier" aria-pressed="false"><kbd>Q</kbd><span>Bezier²</span></button>
+            <button type="button" data-wb-tool="cubic-bezier" aria-pressed="false"><kbd>B</kbd><span>Bezier³</span></button>
+            <button type="button" data-wb-tool="ellipse" aria-pressed="false"><kbd>E</kbd><span>Ellipse</span></button>
+            <button type="button" data-wb-tool="elliptical-arc" aria-pressed="false"><kbd>EA</kbd><span>Ellipse arc</span></button>
+            <button type="button" data-wb-tool="rational-conic" aria-pressed="false"><kbd>RQ</kbd><span>Rational</span></button>
+            <button type="button" data-wb-tool="parabola" aria-pressed="false"><kbd>∪</kbd><span>Parabola</span></button>
+            <button type="button" data-wb-tool="hyperbola" aria-pressed="false"><kbd>)(</kbd><span>Hyperbola</span></button>
+            <button type="button" data-wb-tool="nurbs" aria-pressed="false"><kbd>N</kbd><span>NURBS</span></button>
+          </div>
+        </section>
+        <section class="wb-palette-section">
+          <strong>Constraints</strong>
+          <div class="wb-palette-grid">
+            <button type="button" data-wb-authoring="lock" aria-pressed="false"><kbd>⌖</kbd><span>Lock</span></button>
+            <button type="button" data-wb-authoring="coincident" aria-pressed="false"><kbd>⊙</kbd><span>Coincident</span></button>
+            <button type="button" data-wb-authoring="horizontal" aria-pressed="false"><kbd>—</kbd><span>Horizontal</span></button>
+            <button type="button" data-wb-authoring="vertical" aria-pressed="false"><kbd>|</kbd><span>Vertical</span></button>
+            <button type="button" data-wb-authoring="parallel" aria-pressed="false"><kbd>∥</kbd><span>Parallel</span></button>
+            <button type="button" data-wb-authoring="perpendicular" aria-pressed="false"><kbd>⊥</kbd><span>Normal</span></button>
+            <div class="wb-palette-option-tool">
+              <button type="button" data-wb-authoring="equal" aria-pressed="false"><kbd>=</kbd><span>Equal</span></button>
+              <details><summary aria-label="Equal options">›</summary><div class="wb-palette-flyout"><label>Curvature<select id="wb-authoring-curvature"><option value="signed">Signed</option><option value="same-sign">Magnitude, same sign</option><option value="opposite-sign">Magnitude, opposite sign</option></select></label></div></details>
+            </div>
+            <button type="button" data-wb-authoring="midpoint" aria-pressed="false"><kbd>◇</kbd><span>Midpoint</span></button>
+            <button type="button" data-wb-authoring="symmetric" aria-pressed="false"><kbd>↔</kbd><span>Symmetric</span></button>
+            <div class="wb-palette-option-tool">
+              <button type="button" data-wb-authoring="tangent" aria-pressed="false"><kbd>∿</kbd><span>Tangent</span></button>
+              <details><summary aria-label="Tangent options">›</summary><div class="wb-palette-flyout"><label>Orientation<select id="wb-authoring-tangent-orientation"><option value="aligned">Aligned</option><option value="opposed">Opposed</option></select></label></div></details>
+            </div>
+            <div class="wb-palette-option-tool">
+              <button type="button" data-wb-authoring="continuity" aria-pressed="false"><kbd>G</kbd><span>Continuity</span></button>
+              <details><summary aria-label="Continuity options">›</summary><div class="wb-palette-flyout"><label>Order<select id="wb-authoring-continuity"><option value="g0">G0</option><option value="g1" selected>G1</option><option value="g2">G2</option><option value="c2">Parametric C2</option></select></label><label>First C2 rate<input id="wb-authoring-first-rate" type="number" min="0" step="any" value="1" /></label><label>Second C2 rate<input id="wb-authoring-second-rate" type="number" min="0" step="any" value="1" /></label></div></details>
+            </div>
+          </div>
+        </section>
+        <section class="wb-palette-section">
+          <strong>Dimensions</strong>
+          <div class="wb-palette-grid">
+            <button type="button" data-wb-authoring="point-distance" aria-pressed="false"><kbd>↔</kbd><span>Distance</span></button>
+            <button type="button" data-wb-authoring="segment-length" aria-pressed="false"><kbd>↦</kbd><span>Length</span></button>
+            <button type="button" data-wb-authoring="radius" aria-pressed="false"><kbd>R</kbd><span>Radius</span></button>
+            <button type="button" data-wb-authoring="diameter" aria-pressed="false"><kbd>Ø</kbd><span>Diameter</span></button>
+            <button type="button" data-wb-authoring="oriented-angle" aria-pressed="false"><kbd>∠</kbd><span>Angle</span></button>
+          </div>
+          <details class="wb-palette-group-options"><summary>Dimension options ›</summary><div class="wb-palette-flyout"><label>Mode<select id="wb-authoring-dimension-mode"><option value="driving">Driving</option><option value="reference">Reference</option></select></label><label>Angle direction<select id="wb-authoring-angle-orientation"><option value="counter-clockwise">Counter-clockwise</option><option value="clockwise">Clockwise</option></select></label></div></details>
+        </section>
+        <section class="wb-palette-section wb-palette-terminal">
+          <div class="wb-palette-grid">
+            <button type="button" data-wb-action="finish"><kbd>↵</kbd><span>Finish</span></button>
+            <button type="button" data-wb-action="cancel"><kbd>Esc</kbd><span>Cancel</span></button>
+          </div>
+        </section>
       </aside>
 
       <aside class="wb-tree-panel" aria-label="Sketch tree">
@@ -62,7 +104,7 @@
         <svg id="wb-viewport" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet" role="application" aria-label="Editable sketch canvas"></svg>
         <div id="wb-draft-guide" class="wb-draft-guide" hidden>
           <span id="wb-draft-guide-text">Click to add the next point</span>
-          <button type="button" data-wb-action="finish">Finish curve</button>
+          <button id="wb-guide-finish" type="button" data-wb-action="finish">Finish curve</button>
           <button type="button" data-wb-action="cancel">Cancel</button>
         </div>
         <div class="wb-canvas-hud">
@@ -113,22 +155,11 @@
             <p>Add more than <em>degree</em> controls, then use Finish. Explicit weights must match the final control count.</p>
           </details>
         </section>
-        <section class="wb-inspector-section">
-          <label class="wb-field-label" for="wb-constraint-kind">Constraint</label>
-          <select id="wb-constraint-kind"><option value="lock">Lock</option><option value="coincident">Coincident</option><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option><option value="parallel">Parallel</option><option value="perpendicular">Perpendicular</option><option value="equal">Equal</option><option value="midpoint">Midpoint</option><option value="symmetric">Symmetric</option><option value="tangent">Tangent</option><option value="continuity">Continuity</option></select>
-          <div id="wb-contact-choices" class="wb-branch-choices" aria-label="Explicit contact branch choices">
-            <fieldset id="wb-contact-choice-0" hidden><legend>First contact branch</legend><span id="wb-contact-span-0"></span><label>Domain<select id="wb-contact-domain-0"></select></label><label>Parameter<input id="wb-contact-parameter-0" type="number" step="any" value="0.5" /></label><label>Neighborhood<select id="wb-contact-neighborhood-0"></select></label><label>Winding<input id="wb-contact-winding-0" type="number" step="1" value="0" /></label><label>Orientation<select id="wb-contact-orientation-0"></select></label></fieldset>
-            <fieldset id="wb-contact-choice-1" hidden><legend>Second contact branch</legend><span id="wb-contact-span-1"></span><label>Domain<select id="wb-contact-domain-1"></select></label><label>Parameter<input id="wb-contact-parameter-1" type="number" step="any" value="0.5" /></label><label>Neighborhood<select id="wb-contact-neighborhood-1"></select></label><label>Winding<input id="wb-contact-winding-1" type="number" step="1" value="0" /></label><label>Orientation<select id="wb-contact-orientation-1"></select></label></fieldset>
-            <fieldset id="wb-relation-choice" hidden><legend>Explicit relation branch</legend><label>Relation<select id="wb-relation-kind"></select></label><label>First C2 rate<input id="wb-continuity-first-rate" type="number" min="0" step="any" value="1" /></label><label>Second C2 rate<input id="wb-continuity-second-rate" type="number" min="0" step="any" value="1" /></label></fieldset>
-          </div>
-          <button type="button" data-wb-action="constraint">Apply constraint</button>
-        </section>
-        <section class="wb-inspector-section">
-          <span class="wb-field-label">Dimension at current accepted value</span>
-          <select id="wb-dimension-kind"><option value="point-distance">Point distance</option><option value="segment-length">Segment length</option><option value="radius">Radius</option><option value="diameter">Diameter</option><option value="oriented-angle">Oriented angle</option></select>
-          <select id="wb-dimension-mode"><option value="driving">Driving</option><option value="reference">Reference</option></select>
-          <select id="wb-angle-orientation" aria-label="Oriented angle direction"><option value="counter-clockwise">Counter-clockwise</option><option value="clockwise">Clockwise</option></select>
-          <button type="button" data-wb-action="dimension">Create dimension</button>
+        <section id="wb-dimension-target-editor" class="wb-inspector-section" hidden>
+          <label class="wb-field-label" for="wb-dimension-target">Dimension target</label>
+          <input id="wb-dimension-target" type="number" min="0" step="any" />
+          <span id="wb-dimension-target-meta"></span>
+          <button type="button" data-wb-action="dimension-target">Update target</button>
         </section>
         <section id="wb-branch-editor" class="wb-inspector-section wb-branch-editor" hidden>
           <span class="wb-field-label">Explicit branch state</span>

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 
-use geosolve_constraint_editor::{ConstraintIntent, DimensionKind};
+use geosolve_constraint_editor::{AuthoringTool, ConstraintIntent, DimensionKind};
 
 pub(crate) const CONSTRAINT_ACTIONS: [(&str, &str, ConstraintIntent); 11] = [
     ("lock", "Lock", ConstraintIntent::Lock),
@@ -53,11 +53,18 @@ pub(crate) fn dimension_from_key(key: &str) -> Option<DimensionKind> {
         .find_map(|(candidate, _, kind)| (*candidate == key).then_some(*kind))
 }
 
+#[cfg(test)]
 pub(crate) fn dimension_key(kind: DimensionKind) -> &'static str {
     DIMENSION_ACTIONS
         .iter()
         .find_map(|(key, _, candidate)| (*candidate == kind).then_some(*key))
         .expect("complete dimension action catalog")
+}
+
+pub(crate) fn authoring_tool_from_key(key: &str) -> Option<AuthoringTool> {
+    constraint_from_key(key)
+        .map(AuthoringTool::Constraint)
+        .or_else(|| dimension_from_key(key).map(AuthoringTool::Dimension))
 }
 
 #[cfg(test)]
@@ -67,8 +74,8 @@ mod tests {
     use geosolve_constraint_editor::{ConstraintIntent, DimensionKind};
 
     use super::{
-        CONSTRAINT_ACTIONS, DIMENSION_ACTIONS, constraint_from_key, dimension_from_key,
-        dimension_key,
+        CONSTRAINT_ACTIONS, DIMENSION_ACTIONS, authoring_tool_from_key, constraint_from_key,
+        dimension_from_key, dimension_key,
     };
 
     #[test]
@@ -141,5 +148,51 @@ mod tests {
             );
         }
         assert_eq!(dimension_from_key("unknown"), None);
+        for (key, _, intent) in CONSTRAINT_ACTIONS {
+            assert_eq!(
+                authoring_tool_from_key(key),
+                Some(geosolve_constraint_editor::AuthoringTool::Constraint(
+                    intent
+                ))
+            );
+        }
+        for (key, _, kind) in DIMENSION_ACTIONS {
+            assert_eq!(
+                authoring_tool_from_key(key),
+                Some(geosolve_constraint_editor::AuthoringTool::Dimension(kind))
+            );
+        }
+        assert_eq!(authoring_tool_from_key("unknown"), None);
+    }
+
+    #[test]
+    fn m62_palette_replaces_inspector_creation_without_restoring_a_harness() {
+        let html = include_str!("../../index.html");
+        for (key, _, _) in CONSTRAINT_ACTIONS {
+            assert!(
+                html.contains(&format!("data-wb-authoring=\"{key}\"")),
+                "missing constraint palette action {key}"
+            );
+        }
+        for (key, _, _) in DIMENSION_ACTIONS {
+            assert!(
+                html.contains(&format!("data-wb-authoring=\"{key}\"")),
+                "missing dimension palette action {key}"
+            );
+        }
+        assert!(html.contains("id=\"wb-dimension-target-editor\""));
+        assert!(html.contains("class=\"wb-palette-flyout\""));
+        for retired in [
+            "wb-constraint-kind",
+            "wb-dimension-kind",
+            "data-wb-action=\"constraint\"",
+            "data-wb-action=\"dimension\"",
+            "/#/dev/lab",
+        ] {
+            assert!(
+                !html.contains(retired),
+                "{retired} must not survive in the M62 workbench"
+            );
+        }
     }
 }

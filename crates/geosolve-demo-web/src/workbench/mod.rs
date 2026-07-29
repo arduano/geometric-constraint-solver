@@ -20,11 +20,6 @@ mod scenarios;
 mod scene;
 
 #[cfg(any(target_arch = "wasm32", test))]
-fn should_restore_selected_option(selected: Option<&str>, options: &[(&str, &str)]) -> bool {
-    selected.is_some_and(|selected| options.iter().any(|(value, _)| *value == selected))
-}
-
-#[cfg(any(target_arch = "wasm32", test))]
 #[derive(Default)]
 struct PointerMoveQueue {
     pending: Option<geosolve_constraint_editor::PointerInput>,
@@ -75,19 +70,19 @@ pub(crate) mod wasm {
     use std::str::FromStr as _;
 
     use geosolve_constraint_editor::{
-        ActionChoice, ActionState, BranchAction, ConicConstructionOptions, ConstraintActionRequest,
-        ConstraintIntent, ConstraintRelationChoice, ConstructionPreview, ContactActionChoice,
-        CoordinatorActionKind, DimensionActionRequest, DimensionKind, DisabledReason, EditorEffect,
-        EditorScene, EditorTool, Modifiers, NurbsConstructionOptions, PointerInput,
-        ProvisionalInferenceCandidate, RetainedEditorCoordinator, SelectionItem,
+        ActionState, AuthoringApplication, AuthoringOperand, AuthoringOptions, AuthoringOutcome,
+        AuthoringState, AuthoringTool, BranchAction, ConicConstructionOptions, ConstructionPreview,
+        CoordinatorActionKind, DisabledReason, EditorEffect, EditorScene, EditorTool, Modifiers,
+        NurbsConstructionOptions, PickTolerance, PointerInput, ProvisionalInferenceCandidate,
+        RetainedEditorCoordinator, SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
         ContactBranchEdit, ContactDomain, ContactNeighborhood, CurveId, CurveSpan, DesignPointId,
         DocumentAngleOrientation, DocumentArcSweep, DocumentBSplineForm, DocumentConstraintId,
-        DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentCurveSpanRef,
-        DocumentDimensionId, DocumentDimensionMode, DocumentHyperbolaBranch, DocumentSolveRequest,
-        PersistentId, RetainedSketchDocumentSession, SketchDocument, TangentOrientation,
+        DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentDimensionId,
+        DocumentDimensionMode, DocumentHyperbolaBranch, DocumentSolveRequest, PersistentId,
+        RetainedSketchDocumentSession, SketchDocument, TangentOrientation,
     };
     use wasm_bindgen::JsCast;
     use wasm_bindgen::closure::Closure;
@@ -101,6 +96,7 @@ pub(crate) mod wasm {
 
     struct Workbench {
         coordinator: RetainedEditorCoordinator,
+        authoring: AuthoringState,
         scenarios: super::scenarios::ScenarioWorkbenchState,
         camera: super::scene::CanvasCamera,
         pan_gesture: Option<PanGesture>,
@@ -163,6 +159,7 @@ pub(crate) mod wasm {
         };
         let workbench = Rc::new(RefCell::new(Workbench {
             coordinator,
+            authoring: AuthoringState::default(),
             scenarios: super::scenarios::ScenarioWorkbenchState::new(),
             camera: super::scene::CanvasCamera::default(),
             pan_gesture: None,
@@ -285,7 +282,7 @@ pub(crate) mod wasm {
             }
             let target = origin
                 .closest(concat!(
-                    "[data-wb-tool], [data-editor-item], [data-wb-action], ",
+                    "[data-wb-tool], [data-wb-authoring], [data-editor-item], [data-wb-action], ",
                     "[data-scenario-id], [data-scenario-action], [data-scenario-control], ",
                     "[data-scenario-group-trigger]"
                 ))
@@ -315,9 +312,16 @@ pub(crate) mod wasm {
                     let _ = render(&callback_document, &callback_workbench);
                     return;
                 }
+                wb.authoring.deactivate();
                 let effects = wb.coordinator.editor_mut().activate_tool(tool);
                 dispatch_effects(&mut wb, effects);
                 wb.notice = format!("{} tool active", tool_key(tool));
+            } else if let Some(tool) = target
+                .get_attribute("data-wb-authoring")
+                .and_then(|key| super::action_surface::authoring_tool_from_key(&key))
+            {
+                let mut wb = callback_workbench.borrow_mut();
+                activate_authoring(&callback_document, &mut wb, tool);
             } else if target.has_attribute("data-editor-item") {
                 if let Some(item) = selection_item(&target) {
                     let modifiers = event
@@ -329,8 +333,16 @@ pub(crate) mod wasm {
                         })
                         .unwrap_or_default();
                     let mut wb = callback_workbench.borrow_mut();
-                    let coordinator = wb.interaction_coordinator_mut();
-                    coordinator.editor_mut().select_item(item, modifiers);
+                    if wb.authoring.active_tool().is_some() && !wb.scenarios.is_active() {
+                        let document = wb.coordinator.session().design_document().clone();
+                        let outcome = wb
+                            .authoring
+                            .pick(&document, AuthoringOperand::selected(item));
+                        handle_authoring_outcome(&mut wb, outcome);
+                    } else {
+                        let coordinator = wb.interaction_coordinator_mut();
+                        coordinator.editor_mut().select_item(item, modifiers);
+                    }
                 }
             } else if let Some(key) = target.get_attribute("data-scenario-id") {
                 let mut wb = callback_workbench.borrow_mut();
@@ -382,6 +394,21 @@ pub(crate) mod wasm {
                         |error| error,
                         |()| "Advanced construction options updated".into(),
                     );
+                    drop(wb);
+                } else if target
+                    .closest(".wb-palette-flyout")
+                    .ok()
+                    .flatten()
+                    .is_some()
+                {
+                    let mut wb = change_workbench.borrow_mut();
+                    match authoring_options(&change_document) {
+                        Ok(options) => {
+                            wb.authoring.set_options(options);
+                            wb.notice = "Authoring options updated".into();
+                        }
+                        Err(error) => wb.notice = error,
+                    }
                     drop(wb);
                 }
             }
@@ -471,7 +498,7 @@ pub(crate) mod wasm {
             }
             let input = {
                 let wb = callback_workbench.borrow();
-                if wb.pan_gesture.is_some() {
+                if wb.pan_gesture.is_some() || wb.authoring.active_tool().is_some() {
                     return;
                 }
                 let Some(scene) = editor_scene(&wb) else {
@@ -494,7 +521,7 @@ pub(crate) mod wasm {
                     return;
                 };
                 let mut wb = frame_workbench.borrow_mut();
-                if wb.pan_gesture.is_some() {
+                if wb.pan_gesture.is_some() || wb.authoring.active_tool().is_some() {
                     return;
                 }
                 let Some(scene) = editor_scene(&wb) else {
@@ -545,6 +572,9 @@ pub(crate) mod wasm {
             let Some(input) = pointer_input(&callback_viewport, scene.viewport, &event) else {
                 return;
             };
+            if wb.authoring.active_tool().is_some() {
+                return;
+            }
             if let Some(pending) = callback_pointer_moves.borrow_mut().drain_before_terminal() {
                 let effects = wb
                     .interaction_coordinator_mut()
@@ -707,6 +737,23 @@ pub(crate) mod wasm {
             let Some(input) = pointer_input(&callback_viewport, scene.viewport, &event) else {
                 return;
             };
+            if wb.authoring.active_tool().is_some() {
+                if event.button() != 0 {
+                    return;
+                }
+                if let Some(hit) = scene.hit_test(input.position, PickTolerance::default()) {
+                    let document = wb.coordinator.session().design_document().clone();
+                    let outcome = wb.authoring.pick(
+                        &document,
+                        AuthoringOperand::picked(hit.item, hit.curve_parameter),
+                    );
+                    handle_authoring_outcome(&mut wb, outcome);
+                    save(&wb);
+                    drop(wb);
+                    let _ = render(&callback_document, &callback_workbench);
+                }
+                return;
+            }
             let effects = {
                 let coordinator = wb.interaction_coordinator_mut();
                 transition(coordinator, &scene, input)
@@ -771,6 +818,15 @@ pub(crate) mod wasm {
                 event.prevent_default();
                 perform_action(&callback_document, &mut wb, "delete");
                 save(&wb);
+                drop(wb);
+                let _ = render(&callback_document, &callback_workbench);
+                return;
+            }
+            if event.key() == "Escape" && wb.authoring.active_tool().is_some() {
+                event.prevent_default();
+                let document = wb.coordinator.session().design_document().clone();
+                let outcome = wb.authoring.cancel(&document);
+                handle_authoring_outcome(&mut wb, outcome);
                 drop(wb);
                 let _ = render(&callback_document, &callback_workbench);
                 return;
@@ -903,6 +959,7 @@ pub(crate) mod wasm {
         let result = match action {
             "new" => empty_coordinator().map(|coordinator| {
                 wb.coordinator = coordinator;
+                wb.authoring.deactivate();
                 wb.camera.reset();
                 wb.construction_preview = None;
                 wb.inference_preview = None;
@@ -910,8 +967,14 @@ pub(crate) mod wasm {
             "undo" => wb.coordinator.undo().map_err(|error| error.to_string()),
             "redo" => wb.coordinator.redo().map_err(|error| error.to_string()),
             "cancel" => {
-                let effects = wb.coordinator.editor_mut().cancel();
-                dispatch_effects(wb, effects);
+                if wb.authoring.active_tool().is_some() {
+                    let document = wb.coordinator.session().design_document().clone();
+                    let outcome = wb.authoring.cancel(&document);
+                    handle_authoring_outcome(wb, outcome);
+                } else {
+                    let effects = wb.coordinator.editor_mut().cancel();
+                    dispatch_effects(wb, effects);
+                }
                 Ok(())
             }
             "finish" => {
@@ -931,8 +994,7 @@ pub(crate) mod wasm {
                     .map(|_| ())
                     .map_err(|error| error.to_string())
             }
-            "constraint" => apply_constraint(document, wb),
-            "dimension" => apply_dimension(document, wb),
+            "dimension-target" => apply_dimension_target(document, wb),
             "contact-branches" => apply_contact_branches(document, wb),
             "angle-orientation" => apply_angle_orientation(document, wb),
             "problems" => {
@@ -959,18 +1021,42 @@ pub(crate) mod wasm {
             }
             _ => Ok(()),
         };
+        if result.is_ok() && wb.authoring.active_tool().is_some() {
+            let document = wb.coordinator.session().design_document().clone();
+            let _ = wb.authoring.reconcile(&document);
+        }
         wb.notice = result.map_or_else(
             |error| error,
             |()| match action {
-                "problems" => wb.notice.clone(),
+                "problems" | "cancel" => wb.notice.clone(),
                 _ => "Action retained".into(),
             },
         );
     }
 
+    fn apply_dimension_target(document: &Document, wb: &mut Workbench) -> Result<(), String> {
+        let value = input_value(document, "wb-dimension-target")
+            .and_then(|value| value.parse::<f64>().ok())
+            .filter(|value| value.is_finite())
+            .ok_or_else(|| "dimension target must be finite".to_owned())?;
+        let metadata = wb
+            .coordinator
+            .selected_dimension_target_metadata()
+            .ok_or_else(|| "select exactly one dimension".to_owned())?;
+        wb.coordinator
+            .set_dimension_target(
+                wb.coordinator.session().design_identity(),
+                metadata.dimension,
+                value,
+            )
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    }
+
     fn select_scenario(wb: &mut Workbench, key: &str) -> bool {
         match wb.scenarios.select_key(key) {
             Ok(()) => {
+                wb.authoring.deactivate();
                 fit_camera(wb);
                 wb.notice = format!(
                     "{} loaded; this review state is ephemeral and ordinary save is disabled",
@@ -1015,179 +1101,184 @@ pub(crate) mod wasm {
         }
     }
 
-    fn apply_constraint(document: &Document, wb: &mut Workbench) -> Result<(), String> {
-        let key = select_value(document, "wb-constraint-kind").unwrap_or_else(|| "fixed".into());
-        let intent =
-            constraint_from_key(&key).ok_or_else(|| "unknown constraint action".to_owned())?;
-        let expected = wb.coordinator.session().design_identity();
-        let action = CoordinatorActionKind::Constraint(intent);
-        let choices = wb.coordinator.action_choices(action);
-        let contacts = choices
+    fn activate_authoring(document: &Document, wb: &mut Workbench, tool: AuthoringTool) {
+        if wb.scenarios.is_active() {
+            wb.notice = "Exit the active review scenario before ordinary editing".into();
+            return;
+        }
+        let options = match authoring_options(document) {
+            Ok(options) => options,
+            Err(error) => {
+                wb.notice = error;
+                return;
+            }
+        };
+        wb.authoring.set_options(options);
+        let snapshot = wb
+            .coordinator
+            .editor()
+            .selection()
             .iter()
-            .filter_map(|choice| match choice {
-                ActionChoice::Contact { .. } => Some(contact_choice(document, choice)),
-                ActionChoice::AngleOrientation { .. }
-                | ActionChoice::EqualCurvature { .. }
-                | ActionChoice::Continuity { .. } => None,
+            .copied()
+            .map(|item| {
+                let parameter = match item {
+                    SelectionItem::Curve(span) => {
+                        wb.coordinator.editor().curve_pick_parameter(span)
+                    }
+                    SelectionItem::Point(_)
+                    | SelectionItem::Constraint(_)
+                    | SelectionItem::Dimension(_) => None,
+                };
+                AuthoringOperand::picked(item, parameter)
             })
-            .collect::<Result<Vec<_>, _>>()?;
-        let relation = relation_choice(document, &choices)?;
-        wb.coordinator
-            .apply_constraint_action(
-                expected,
-                ConstraintActionRequest {
-                    intent,
-                    label: key.replace('-', " "),
-                    contacts,
-                    relation,
-                },
-            )
-            .map(|_| ())
-            .map_err(|error| error.to_string())
+            .collect::<Vec<_>>();
+        let outcome =
+            wb.authoring
+                .activate(wb.coordinator.session().design_document(), tool, &snapshot);
+        let effects = wb
+            .coordinator
+            .editor_mut()
+            .activate_tool(EditorTool::Select);
+        dispatch_effects(wb, effects);
+        handle_authoring_outcome(wb, outcome);
     }
 
-    fn apply_dimension(document: &Document, wb: &mut Workbench) -> Result<(), String> {
-        let kind = select_value(document, "wb-dimension-kind")
+    fn handle_authoring_outcome(wb: &mut Workbench, outcome: AuthoringOutcome) {
+        match outcome {
+            AuthoringOutcome::Apply(application) => apply_authoring_application(wb, &application),
+            AuthoringOutcome::ModeEntered { tool, expected } => {
+                wb.notice = format!(
+                    "{} mode: select {} · Escape exits",
+                    authoring_tool_label(tool),
+                    expected_labels(&expected),
+                );
+            }
+            AuthoringOutcome::Collecting {
+                tool,
+                operands,
+                expected,
+            } => {
+                wb.notice = format!(
+                    "{}: {} operand{} ready; select {}",
+                    authoring_tool_label(tool),
+                    operands.len(),
+                    if operands.len() == 1 { "" } else { "s" },
+                    expected_labels(&expected),
+                );
+            }
+            AuthoringOutcome::Warning(warning) => {
+                wb.notice = warning.message;
+            }
+            AuthoringOutcome::PendingCleared { tool, expected } => {
+                wb.notice = format!(
+                    "{} operands cleared; select {} or Escape again to exit",
+                    authoring_tool_label(tool),
+                    expected_labels(&expected),
+                );
+            }
+            AuthoringOutcome::ModeExited => {
+                wb.notice = "Constraint authoring exited; Select active".into();
+            }
+            AuthoringOutcome::Inactive => {}
+        }
+    }
+
+    fn apply_authoring_application(wb: &mut Workbench, application: &AuthoringApplication) {
+        let expected = wb.coordinator.session().design_identity();
+        match wb.coordinator.apply_authoring(expected, application) {
+            Ok(_) => {
+                let repeated = wb.authoring.active_tool().is_some();
+                wb.authoring.transaction_completed();
+                let _ = wb
+                    .authoring
+                    .reconcile(wb.coordinator.session().design_document());
+                wb.notice = if repeated {
+                    format!(
+                        "{} retained; select the next operands",
+                        authoring_tool_label(application.tool)
+                    )
+                } else {
+                    format!("{} retained", authoring_tool_label(application.tool))
+                };
+            }
+            Err(error) => wb.notice = error.to_string(),
+        }
+    }
+
+    fn authoring_options(document: &Document) -> Result<AuthoringOptions, String> {
+        let tangent_orientation = if select_value(document, "wb-authoring-tangent-orientation")
             .as_deref()
-            .and_then(dimension_from_key)
-            .ok_or_else(|| "unknown dimension action".to_owned())?;
-        let mode = if select_value(document, "wb-dimension-mode").as_deref() == Some("reference") {
+            == Some("opposed")
+        {
+            TangentOrientation::Opposed
+        } else {
+            TangentOrientation::Aligned
+        };
+        let curvature_relation = match select_value(document, "wb-authoring-curvature").as_deref() {
+            Some("same-sign") => DocumentCurveCurvatureRelation::MagnitudeSameSign,
+            Some("opposite-sign") => DocumentCurveCurvatureRelation::MagnitudeOppositeSign,
+            _ => DocumentCurveCurvatureRelation::Signed,
+        };
+        let continuity = match select_value(document, "wb-authoring-continuity").as_deref() {
+            Some("g0") => DocumentCurveContinuity::G0,
+            Some("g2") => DocumentCurveContinuity::G2,
+            Some("c2") => DocumentCurveContinuity::ParametricC2 {
+                first_rate: finite_positive_input(
+                    document,
+                    "wb-authoring-first-rate",
+                    "first C2 rate",
+                )?,
+                second_rate: finite_positive_input(
+                    document,
+                    "wb-authoring-second-rate",
+                    "second C2 rate",
+                )?,
+            },
+            _ => DocumentCurveContinuity::G1,
+        };
+        let dimension_mode = if select_value(document, "wb-authoring-dimension-mode").as_deref()
+            == Some("reference")
+        {
             DocumentDimensionMode::Reference
         } else {
             DocumentDimensionMode::Driving
         };
-        let angle_orientation =
-            if select_value(document, "wb-angle-orientation").as_deref() == Some("clockwise") {
-                DocumentAngleOrientation::Clockwise
-            } else {
-                DocumentAngleOrientation::CounterClockwise
-            };
-        let expected = wb.coordinator.session().design_identity();
-        wb.coordinator
-            .apply_dimension_action(
-                expected,
-                DimensionActionRequest {
-                    kind,
-                    mode,
-                    label: dimension_key(kind).replace('-', " "),
-                    angle_orientation,
-                },
-            )
-            .map(|_| ())
-            .map_err(|error| error.to_string())
-    }
-
-    fn contact_choice(
-        document: &Document,
-        choice: &ActionChoice,
-    ) -> Result<ContactActionChoice, String> {
-        let ActionChoice::Contact {
-            operand,
-            span,
-            domains,
-            neighborhoods,
-            tangent_orientations,
-            ..
-        } = choice
-        else {
-            return Err("contact branch metadata expected".into());
-        };
-        let suffix = operand.to_string();
-        let domain_key = select_value(document, &format!("wb-contact-domain-{suffix}"))
-            .ok_or_else(|| "contact domain control is missing".to_owned())?;
-        let domain = domains
-            .iter()
-            .copied()
-            .find(|domain| contact_domain_key(*domain) == domain_key)
-            .ok_or_else(|| "selected contact domain is unavailable".to_owned())?;
-        let neighborhood_key = select_value(document, &format!("wb-contact-neighborhood-{suffix}"))
-            .ok_or_else(|| "contact neighborhood control is missing".to_owned())?;
-        let neighborhood = neighborhoods
-            .iter()
-            .copied()
-            .find(|value| contact_neighborhood_key(*value) == neighborhood_key)
-            .ok_or_else(|| "selected contact neighborhood is unavailable".to_owned())?;
-        let entered_parameter = input_value(document, &format!("wb-contact-parameter-{suffix}"))
-            .and_then(|value| value.parse::<f64>().ok())
-            .filter(|value| value.is_finite())
-            .ok_or_else(|| "contact parameter must be finite".to_owned())?;
-        let parameter = match (domain, neighborhood) {
-            (ContactDomain::Bounded { lower, .. }, ContactNeighborhood::Start) => lower,
-            (ContactDomain::Bounded { upper, .. }, ContactNeighborhood::End) => upper,
-            _ => entered_parameter,
-        };
-        let winding = input_value(document, &format!("wb-contact-winding-{suffix}"))
-            .and_then(|value| value.parse::<i32>().ok())
-            .ok_or_else(|| "contact winding must be an integer".to_owned())?;
-        let tangent_orientation = if tangent_orientations.is_empty() {
-            None
+        let angle_orientation = if select_value(document, "wb-authoring-angle-orientation")
+            .as_deref()
+            == Some("clockwise")
+        {
+            DocumentAngleOrientation::Clockwise
         } else {
-            let key = select_value(document, &format!("wb-contact-orientation-{suffix}"))
-                .ok_or_else(|| "tangent orientation control is missing".to_owned())?;
-            tangent_orientations
-                .iter()
-                .copied()
-                .find(|orientation| tangent_orientation_key(*orientation) == key)
+            DocumentAngleOrientation::CounterClockwise
         };
-        if !tangent_orientations.is_empty() && tangent_orientation.is_none() {
-            return Err("selected tangent orientation is unavailable".into());
-        }
-        Ok(ContactActionChoice {
-            support: DocumentCurveSpanRef {
-                span: *span,
-                winding,
-            },
-            domain,
-            parameter,
-            neighborhood,
+        Ok(AuthoringOptions {
             tangent_orientation,
+            curvature_relation,
+            continuity,
+            dimension_mode,
+            angle_orientation,
         })
     }
 
-    fn relation_choice(
-        document: &Document,
-        choices: &[ActionChoice],
-    ) -> Result<Option<ConstraintRelationChoice>, String> {
-        let key = select_value(document, "wb-relation-kind").unwrap_or_default();
-        for choice in choices {
-            match choice {
-                ActionChoice::EqualCurvature { values } => {
-                    return values
-                        .iter()
-                        .copied()
-                        .find(|value| curvature_option(*value).0 == key)
-                        .map(ConstraintRelationChoice::EqualCurvature)
-                        .map(Some)
-                        .ok_or_else(|| "selected curvature branch is unavailable".into());
-                }
-                ActionChoice::Continuity { values } => {
-                    let mut continuity = values
-                        .iter()
-                        .copied()
-                        .find(|value| continuity_option(*value).0 == key)
-                        .ok_or_else(|| "selected continuity order is unavailable".to_owned())?;
-                    if matches!(continuity, DocumentCurveContinuity::ParametricC2 { .. }) {
-                        let first_rate = finite_positive_input(
-                            document,
-                            "wb-continuity-first-rate",
-                            "first C2 rate",
-                        )?;
-                        let second_rate = finite_positive_input(
-                            document,
-                            "wb-continuity-second-rate",
-                            "second C2 rate",
-                        )?;
-                        continuity = DocumentCurveContinuity::ParametricC2 {
-                            first_rate,
-                            second_rate,
-                        };
-                    }
-                    return Ok(Some(ConstraintRelationChoice::Continuity(continuity)));
-                }
-                ActionChoice::Contact { .. } | ActionChoice::AngleOrientation { .. } => {}
-            }
+    fn expected_labels(values: &[geosolve_constraint_editor::AuthoringOperandKind]) -> String {
+        values
+            .iter()
+            .map(|value| value.label())
+            .collect::<Vec<_>>()
+            .join(" or ")
+    }
+
+    fn authoring_tool_label(tool: AuthoringTool) -> &'static str {
+        match tool {
+            AuthoringTool::Constraint(intent) => super::action_surface::CONSTRAINT_ACTIONS
+                .iter()
+                .find_map(|(_, label, candidate)| (*candidate == intent).then_some(*label))
+                .unwrap_or("Constraint"),
+            AuthoringTool::Dimension(kind) => super::action_surface::DIMENSION_ACTIONS
+                .iter()
+                .find_map(|(_, label, candidate)| (*candidate == kind).then_some(*label))
+                .unwrap_or("Dimension"),
         }
-        Ok(None)
     }
 
     fn finite_positive_input(document: &Document, id: &str, label: &str) -> Result<f64, String> {
@@ -1318,22 +1409,30 @@ pub(crate) mod wasm {
             .unwrap_or(coordinator.session());
         let accepted = source.accepted_state();
         let selection = coordinator.editor().selection();
+        let pending = wb
+            .authoring
+            .pending()
+            .iter()
+            .map(|operand| operand.item)
+            .collect::<Vec<_>>();
         let construction_preview = if wb.scenarios.is_active() {
             None
         } else {
             wb.construction_preview.as_ref()
         };
-        required(document, "wb-viewport")?.set_inner_html(&super::scene::svg_markup(
+        required(document, "wb-viewport")?.set_inner_html(&super::scene::svg_markup_with_pending(
             scene.as_ref(),
             accepted,
             selection,
+            &pending,
             construction_preview,
             coordinator.current_problem_metadata().as_ref(),
             wb.camera.viewport(),
         ));
         let design = coordinator.session().design_document();
-        required(document, "wb-tree")?
-            .set_inner_html(&super::panels::tree_markup(design, selection));
+        required(document, "wb-tree")?.set_inner_html(&super::panels::tree_markup_with_pending(
+            design, selection, &pending,
+        ));
         let lifecycle = coordinator.lifecycle();
         let (key, label) = super::panels::lifecycle_presentation(lifecycle.status);
         let state = required(document, "wb-lifecycle")?;
@@ -1370,15 +1469,30 @@ pub(crate) mod wasm {
             problems.set_attribute("hidden", "")?;
         }
         let guide = required(document, "wb-draft-guide")?;
-        if coordinator.editor().can_complete_draft()
+        if wb.authoring.active_tool().is_some()
+            || coordinator.editor().can_complete_draft()
             || (!wb.scenarios.is_active() && wb.construction_preview.is_some())
         {
             guide.remove_attribute("hidden")?;
         } else {
             guide.set_attribute("hidden", "")?;
         }
-        required(document, "wb-draft-guide-text")?
-            .set_text_content(Some(draft_guide_text(coordinator.editor().tool())));
+        let guide_text = wb.authoring.active_tool().map_or_else(
+            || draft_guide_text(coordinator.editor().tool()).to_owned(),
+            |tool| {
+                format!(
+                    "{} · {} pending · Escape clears/exits",
+                    authoring_tool_label(tool),
+                    wb.authoring.pending().len()
+                )
+            },
+        );
+        required(document, "wb-draft-guide-text")?.set_text_content(Some(&guide_text));
+        if wb.authoring.active_tool().is_some() {
+            required(document, "wb-guide-finish")?.set_attribute("hidden", "")?;
+        } else {
+            required(document, "wb-guide-finish")?.remove_attribute("hidden")?;
+        }
         for tool in [
             EditorTool::Select,
             EditorTool::Point,
@@ -1410,7 +1524,13 @@ pub(crate) mod wasm {
                 )?;
             }
         }
-        render_action_availability(document, coordinator, wb.scenarios.is_active())?;
+        render_action_availability(
+            document,
+            coordinator,
+            &wb.authoring,
+            wb.scenarios.is_active(),
+        )?;
+        render_dimension_target_editor(document, coordinator, wb.scenarios.is_active())?;
         render_branch_editor(document, coordinator, wb.scenarios.is_active())?;
         required(document, "workbench-root")?
             .set_attribute("data-editor-adapter", "retained-coordinator")?;
@@ -1420,41 +1540,16 @@ pub(crate) mod wasm {
     fn render_action_availability(
         document: &Document,
         coordinator: &RetainedEditorCoordinator,
+        authoring: &AuthoringState,
         scenario_active: bool,
     ) -> Result<(), JsValue> {
-        set_select_options(
-            document,
-            "wb-constraint-kind",
-            super::action_surface::CONSTRAINT_ACTIONS
-                .into_iter()
-                .map(|(key, label, intent)| {
-                    (
-                        key,
-                        coordinator
-                            .resolved_constraint(intent)
-                            .map_or(label, |resolved| resolved.label()),
-                    )
-                }),
-        )?;
-        set_select_options(
-            document,
-            "wb-dimension-kind",
-            super::action_surface::DIMENSION_ACTIONS
-                .into_iter()
-                .map(|(key, label, _)| (key, label)),
-        )?;
         for key in ["new", "finish", "cancel", "clear-selection"] {
             if let Some(button) = document.query_selector(&format!("[data-wb-action=\"{key}\"]"))? {
-                set_disabled(&button, scenario_active)?;
+                set_disabled(
+                    &button,
+                    scenario_active || (key == "finish" && authoring.active_tool().is_some()),
+                )?;
             }
-        }
-        for id in [
-            "wb-constraint-kind",
-            "wb-dimension-kind",
-            "wb-dimension-mode",
-            "wb-angle-orientation",
-        ] {
-            set_disabled(&required(document, id)?, scenario_active)?;
         }
         let actions = coordinator.actions();
         let state = |action| {
@@ -1473,142 +1568,77 @@ pub(crate) mod wasm {
                 set_action_state(&button, state(action), scenario_active)?;
             }
         }
-        let constraint_key =
-            select_value(document, "wb-constraint-kind").unwrap_or_else(|| "lock".into());
-        if let Some(intent) = constraint_from_key(&constraint_key)
-            && let Some(button) = document.query_selector("[data-wb-action=\"constraint\"]")?
-        {
-            set_action_state(
-                &button,
-                state(CoordinatorActionKind::Constraint(intent)),
-                scenario_active,
-            )?;
-            render_action_choices(
-                document,
-                &coordinator.action_choices(CoordinatorActionKind::Constraint(intent)),
-                scenario_active,
-            )?;
-        }
-        let dimension_kind = select_value(document, "wb-dimension-kind")
-            .as_deref()
-            .and_then(dimension_from_key)
-            .unwrap_or(DimensionKind::PointDistance);
-        let mode = if select_value(document, "wb-dimension-mode").as_deref() == Some("reference") {
-            DocumentDimensionMode::Reference
-        } else {
-            DocumentDimensionMode::Driving
-        };
-        if let Some(button) = document.query_selector("[data-wb-action=\"dimension\"]")? {
-            set_action_state(
-                &button,
-                state(CoordinatorActionKind::Dimension(dimension_kind, mode)),
-                scenario_active,
-            )?;
-        }
-        set_disabled(
-            &required(document, "wb-angle-orientation")?,
-            scenario_active || dimension_kind != DimensionKind::OrientedAngle,
-        )?;
-        Ok(())
-    }
-
-    fn render_action_choices(
-        document: &Document,
-        choices: &[ActionChoice],
-        scenario_active: bool,
-    ) -> Result<(), JsValue> {
-        for operand in 0..=1_u8 {
-            required(document, &format!("wb-contact-choice-{operand}"))?
-                .set_attribute("hidden", "")?;
-        }
-        required(document, "wb-relation-choice")?.set_attribute("hidden", "")?;
-        for choice in choices {
-            match choice {
-                ActionChoice::Contact {
-                    operand,
-                    span,
-                    domains,
-                    default_parameter,
-                    neighborhoods,
-                    tangent_orientations,
-                    default_winding,
-                } => {
-                    let section = required(document, &format!("wb-contact-choice-{operand}"))?;
-                    section.remove_attribute("hidden")?;
-                    set_disabled(&section, scenario_active)?;
-                    required(document, &format!("wb-contact-span-{operand}"))?.set_text_content(
-                        Some(&format!("Curve {} · span {}", span.curve, span.segment)),
-                    );
-                    set_select_options(
-                        document,
-                        &format!("wb-contact-domain-{operand}"),
-                        domains.iter().copied().map(|domain| {
-                            (contact_domain_key(domain), contact_domain_label(domain))
-                        }),
-                    )?;
-                    set_select_options(
-                        document,
-                        &format!("wb-contact-neighborhood-{operand}"),
-                        neighborhoods.iter().copied().map(|neighborhood| {
-                            (
-                                contact_neighborhood_key(neighborhood),
-                                contact_neighborhood_label(neighborhood),
-                            )
-                        }),
-                    )?;
-                    set_select_options(
-                        document,
-                        &format!("wb-contact-orientation-{operand}"),
-                        tangent_orientations.iter().copied().map(|orientation| {
-                            (
-                                tangent_orientation_key(orientation),
-                                tangent_orientation_label(orientation),
-                            )
-                        }),
-                    )?;
-                    set_input_default(
-                        document,
-                        &format!("wb-contact-parameter-{operand}"),
-                        *default_parameter,
-                    )?;
-                    set_input_default(
-                        document,
-                        &format!("wb-contact-winding-{operand}"),
-                        *default_winding,
-                    )?;
-                }
-                ActionChoice::EqualCurvature { values } => {
-                    show_relation_options(
-                        document,
-                        values.iter().copied().map(curvature_option),
-                        scenario_active,
-                    )?;
-                }
-                ActionChoice::Continuity { values } => {
-                    show_relation_options(
-                        document,
-                        values.iter().copied().map(continuity_option),
-                        scenario_active,
-                    )?;
-                }
-                ActionChoice::AngleOrientation { .. } => {}
+        for (key, _, intent) in super::action_surface::CONSTRAINT_ACTIONS {
+            if let Some(button) =
+                document.query_selector(&format!("[data-wb-authoring=\"{key}\"]"))?
+            {
+                set_disabled(&button, scenario_active)?;
+                button.set_attribute(
+                    "aria-pressed",
+                    if authoring.active_tool() == Some(AuthoringTool::Constraint(intent)) {
+                        "true"
+                    } else {
+                        "false"
+                    },
+                )?;
             }
         }
+        for (key, _, kind) in super::action_surface::DIMENSION_ACTIONS {
+            if let Some(button) =
+                document.query_selector(&format!("[data-wb-authoring=\"{key}\"]"))?
+            {
+                set_disabled(&button, scenario_active)?;
+                button.set_attribute(
+                    "aria-pressed",
+                    if authoring.active_tool() == Some(AuthoringTool::Dimension(kind)) {
+                        "true"
+                    } else {
+                        "false"
+                    },
+                )?;
+            }
+        }
+        for id in [
+            "wb-authoring-curvature",
+            "wb-authoring-tangent-orientation",
+            "wb-authoring-continuity",
+            "wb-authoring-first-rate",
+            "wb-authoring-second-rate",
+            "wb-authoring-dimension-mode",
+            "wb-authoring-angle-orientation",
+        ] {
+            set_disabled(&required(document, id)?, scenario_active)?;
+        }
         Ok(())
     }
 
-    fn show_relation_options<I>(
+    fn render_dimension_target_editor(
         document: &Document,
-        options: I,
+        coordinator: &RetainedEditorCoordinator,
         scenario_active: bool,
-    ) -> Result<(), JsValue>
-    where
-        I: IntoIterator<Item = (&'static str, &'static str)>,
-    {
-        let section = required(document, "wb-relation-choice")?;
+    ) -> Result<(), JsValue> {
+        let section = required(document, "wb-dimension-target-editor")?;
+        let Some(metadata) = coordinator.selected_dimension_target_metadata() else {
+            section.set_attribute("hidden", "")?;
+            return Ok(());
+        };
         section.remove_attribute("hidden")?;
-        set_disabled(&section, scenario_active)?;
-        set_select_options(document, "wb-relation-kind", options)
+        let input = required(document, "wb-dimension-target")?;
+        if let Ok(input) = input.dyn_into::<HtmlInputElement>() {
+            let editing = document
+                .active_element()
+                .is_some_and(|element| element.id() == "wb-dimension-target");
+            if !editing && input.value_as_number().to_bits() != metadata.value.to_bits() {
+                input.set_value_as_number(metadata.value);
+            }
+            input.set_disabled(scenario_active);
+        }
+        required(document, "wb-dimension-target-meta")?
+            .set_text_content(Some(&format!("{:?} · {:?}", metadata.mode, metadata.unit)));
+        if let Some(button) = document.query_selector("[data-wb-action=\"dimension-target\"]")? {
+            set_disabled(&button, scenario_active)?;
+        }
+        Ok(())
     }
 
     fn render_branch_editor(
@@ -1839,52 +1869,6 @@ pub(crate) mod wasm {
         }
     }
 
-    fn set_select_options<I>(document: &Document, id: &str, options: I) -> Result<(), JsValue>
-    where
-        I: IntoIterator<Item = (&'static str, &'static str)>,
-    {
-        let element = required(document, id)?;
-        let selected = element
-            .clone()
-            .dyn_into::<HtmlSelectElement>()
-            .ok()
-            .map(|select| select.value());
-        let options = options.into_iter().collect::<Vec<_>>();
-        let restore_selected = super::should_restore_selected_option(selected.as_deref(), &options);
-        let markup = options
-            .into_iter()
-            .map(|(value, label)| format!("<option value=\"{value}\">{label}</option>"))
-            .collect::<String>();
-        if element.inner_html() != markup {
-            element.set_inner_html(&markup);
-            if restore_selected && let Some(selected) = selected {
-                element
-                    .dyn_into::<HtmlSelectElement>()?
-                    .set_value(&selected);
-            }
-        }
-        Ok(())
-    }
-
-    fn set_input_default<T: ToString>(
-        document: &Document,
-        id: &str,
-        value: T,
-    ) -> Result<(), JsValue> {
-        let element = required(document, id)?;
-        let input = element.clone().dyn_into::<HtmlInputElement>()?;
-        let next = value.to_string();
-        let previous = element.get_attribute("data-headless-default");
-        if previous
-            .as_ref()
-            .is_none_or(|previous| input.value().is_empty() || input.value() == *previous)
-        {
-            input.set_value(&next);
-        }
-        element.set_attribute("data-headless-default", &next)?;
-        Ok(())
-    }
-
     const fn disabled_reason_key(reason: DisabledReason) -> &'static str {
         match reason {
             DisabledReason::EmptySelection => "empty-selection",
@@ -2095,15 +2079,6 @@ pub(crate) mod wasm {
             })
             .map_err(|error| error.to_string())
     }
-    fn constraint_from_key(key: &str) -> Option<ConstraintIntent> {
-        super::action_surface::constraint_from_key(key)
-    }
-    fn dimension_from_key(key: &str) -> Option<DimensionKind> {
-        super::action_surface::dimension_from_key(key)
-    }
-    fn dimension_key(kind: DimensionKind) -> &'static str {
-        super::action_surface::dimension_key(kind)
-    }
     const fn contact_domain_key(domain: ContactDomain) -> &'static str {
         match domain {
             ContactDomain::SupportingLine => "supporting-line",
@@ -2144,29 +2119,6 @@ pub(crate) mod wasm {
         match orientation {
             TangentOrientation::Aligned => "Aligned",
             TangentOrientation::Opposed => "Opposed",
-        }
-    }
-    const fn curvature_option(
-        relation: DocumentCurveCurvatureRelation,
-    ) -> (&'static str, &'static str) {
-        match relation {
-            DocumentCurveCurvatureRelation::Signed => ("signed", "Signed curvature"),
-            DocumentCurveCurvatureRelation::MagnitudeSameSign => {
-                ("magnitude-same-sign", "Magnitude · same sign")
-            }
-            DocumentCurveCurvatureRelation::MagnitudeOppositeSign => {
-                ("magnitude-opposite-sign", "Magnitude · opposite sign")
-            }
-        }
-    }
-    const fn continuity_option(
-        continuity: DocumentCurveContinuity,
-    ) -> (&'static str, &'static str) {
-        match continuity {
-            DocumentCurveContinuity::G0 => ("g0", "G0 · position"),
-            DocumentCurveContinuity::G1 => ("g1", "G1 · tangent"),
-            DocumentCurveContinuity::G2 => ("g2", "G2 · curvature"),
-            DocumentCurveContinuity::ParametricC2 { .. } => ("c2", "C2 · parametric"),
         }
     }
     fn select_value(document: &Document, id: &str) -> Option<String> {
@@ -2223,15 +2175,7 @@ pub(crate) mod wasm {
 mod tests {
     use geosolve_constraint_editor::{Modifiers, PointerInput, ScreenPoint};
 
-    use super::{PointerMoveQueue, should_restore_selected_option};
-
-    #[test]
-    fn dynamic_choice_selects_first_new_default_instead_of_restoring_an_invalid_value() {
-        let periodic = [("periodic", "Periodic")];
-        assert!(!should_restore_selected_option(Some(""), &periodic));
-        assert!(!should_restore_selected_option(Some("bounded"), &periodic));
-        assert!(should_restore_selected_option(Some("periodic"), &periodic));
-    }
+    use super::PointerMoveQueue;
 
     #[test]
     fn pointer_move_queue_keeps_only_latest_sample_and_terminal_invalidates_old_frame() {

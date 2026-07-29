@@ -129,10 +129,32 @@ pub(crate) fn viewport() -> Viewport {
 }
 
 #[allow(clippy::too_many_lines)]
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 pub(crate) fn svg_markup(
     scene: Option<&EditorScene>,
     accepted: Option<&SketchAcceptedDocumentState>,
     selection: &[SelectionItem],
+    construction_preview: Option<&ConstructionPreview>,
+    problem: Option<&EditorProblemMetadata>,
+    viewport: Viewport,
+) -> String {
+    svg_markup_with_pending(
+        scene,
+        accepted,
+        selection,
+        &[],
+        construction_preview,
+        problem,
+        viewport,
+    )
+}
+
+#[allow(clippy::too_many_lines)]
+pub(crate) fn svg_markup_with_pending(
+    scene: Option<&EditorScene>,
+    accepted: Option<&SketchAcceptedDocumentState>,
+    selection: &[SelectionItem],
+    pending: &[SelectionItem],
     construction_preview: Option<&ConstructionPreview>,
     problem: Option<&EditorProblemMetadata>,
     viewport: Viewport,
@@ -171,6 +193,7 @@ pub(crate) fn svg_markup(
             }
             let path = polyline_path(&curve.screen_polyline);
             let selected = selection.contains(&SelectionItem::Curve(curve.span));
+            let pending = pending.contains(&SelectionItem::Curve(curve.span));
             let target = EditorProblemTarget::Curve(curve.span.curve);
             let has_problem = problem.is_some_and(|problem| problem.targets.contains(&target));
             let role = accepted
@@ -178,8 +201,9 @@ pub(crate) fn svg_markup(
                 .unwrap_or(GeometryRole::Profile);
             let _ = write!(
                 output,
-                "<path class=\"wb-curve{}{}{}\" d=\"{path}\" data-persistent-id=\"{}\" data-editor-segment=\"{}\" data-role=\"{}\"/>",
+                "<path class=\"wb-curve{}{}{}{}\" d=\"{path}\" data-persistent-id=\"{}\" data-editor-segment=\"{}\" data-role=\"{}\"/>",
                 if selected { " selected" } else { "" },
+                if pending { " authoring-pending" } else { "" },
                 if role == GeometryRole::Construction {
                     " construction"
                 } else {
@@ -208,12 +232,14 @@ pub(crate) fn svg_markup(
         output.push_str("</g><g class=\"wb-points\">");
         for point in &scene.points {
             let selected = selection.contains(&SelectionItem::Point(point.id));
+            let pending = pending.contains(&SelectionItem::Point(point.id));
             let target = EditorProblemTarget::Point(point.id);
             let has_problem = problem.is_some_and(|problem| problem.targets.contains(&target));
             let _ = write!(
                 output,
-                "<circle class=\"wb-point{}{}\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"5\" data-persistent-id=\"{}\"/>",
+                "<circle class=\"wb-point{}{}{}\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"5\" data-persistent-id=\"{}\"/>",
                 if selected { " selected" } else { "" },
+                if pending { " authoring-pending" } else { "" },
                 if has_problem { " has-problem" } else { "" },
                 point.screen_position.x,
                 point.screen_position.y,

@@ -179,7 +179,16 @@ fn source_list(
     output.push_str("</ul></div>");
 }
 
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 pub(crate) fn tree_markup(document: &SketchDocument, selection: &[SelectionItem]) -> String {
+    tree_markup_with_pending(document, selection, &[])
+}
+
+pub(crate) fn tree_markup_with_pending(
+    document: &SketchDocument,
+    selection: &[SelectionItem],
+    pending: &[SelectionItem],
+) -> String {
     let mut output = String::new();
     for point in document.points() {
         row(
@@ -189,6 +198,7 @@ pub(crate) fn tree_markup(document: &SketchDocument, selection: &[SelectionItem]
             None,
             &point.label,
             selection.contains(&SelectionItem::Point(point.id)),
+            pending.contains(&SelectionItem::Point(point.id)),
             "",
         );
     }
@@ -202,6 +212,7 @@ pub(crate) fn tree_markup(document: &SketchDocument, selection: &[SelectionItem]
                     Some(span.segment),
                     &curve.label,
                     selection.contains(&SelectionItem::Curve(span)),
+                    pending.contains(&SelectionItem::Curve(span)),
                     match document.geometry_role(curve.id) {
                         Some(GeometryRole::Construction) => " data-role=\"construction\"",
                         _ => " data-role=\"profile\"",
@@ -218,6 +229,7 @@ pub(crate) fn tree_markup(document: &SketchDocument, selection: &[SelectionItem]
             None,
             &constraint.label,
             selection.contains(&SelectionItem::Constraint(constraint.id)),
+            pending.contains(&SelectionItem::Constraint(constraint.id)),
             "",
         );
     }
@@ -229,6 +241,7 @@ pub(crate) fn tree_markup(document: &SketchDocument, selection: &[SelectionItem]
             None,
             &dimension.label,
             selection.contains(&SelectionItem::Dimension(dimension.id)),
+            pending.contains(&SelectionItem::Dimension(dimension.id)),
             match dimension.mode {
                 geosolve_sketch::DocumentDimensionMode::Driving => {
                     " data-dimension-mode=\"driving\""
@@ -258,6 +271,10 @@ pub(crate) fn tree_markup(document: &SketchDocument, selection: &[SelectionItem]
     output
 }
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "tree rows keep typed selection and authoring-pending presentation explicit"
+)]
 fn row(
     output: &mut String,
     kind: &str,
@@ -265,6 +282,7 @@ fn row(
     segment: Option<u32>,
     label: &str,
     selected: bool,
+    pending: bool,
     extra: &str,
 ) {
     let label = escape(label);
@@ -273,8 +291,9 @@ fn row(
     });
     let _ = write!(
         output,
-        "<button class=\"wb-tree-row{}\" role=\"treeitem\" aria-selected=\"{}\" data-editor-item=\"{kind}\" data-persistent-id=\"{id}\"{segment}{extra}><span class=\"wb-tree-icon\"></span>{label}</button>",
+        "<button class=\"wb-tree-row{}{}\" role=\"treeitem\" aria-selected=\"{}\" data-editor-item=\"{kind}\" data-persistent-id=\"{id}\"{segment}{extra}><span class=\"wb-tree-icon\"></span>{label}</button>",
         if selected { " selected" } else { "" },
+        if pending { " authoring-pending" } else { "" },
         if selected { "true" } else { "false" },
     );
 }
@@ -794,7 +813,7 @@ mod tests {
     use super::{
         accepted_hard_residual_max, accepted_redundancy_markup, accepted_report_markup,
         host_state_markup, lifecycle_presentation, problem_markup, production_topology_markup,
-        tree_markup,
+        tree_markup, tree_markup_with_pending,
     };
 
     const TOPOLOGY_A: ExternalTopologyDigest = ExternalTopologyDigest::from_bytes([0x41; 32]);
@@ -906,6 +925,9 @@ mod tests {
         assert!(markup.contains("aria-selected=\"true\""));
         assert!(markup.contains(&format!("data-persistent-id=\"{point}\"")));
         assert!(markup.contains("A &lt; origin"));
+        let pending = tree_markup_with_pending(&document, &[], &[SelectionItem::Point(point)]);
+        assert!(pending.contains("wb-tree-row authoring-pending"));
+        assert!(pending.contains("aria-selected=\"false\""));
         assert_eq!(
             lifecycle_presentation(LifecycleStatus::RejectedAttempt),
             ("rejected-attempt", "Rejected attempt")
