@@ -2923,6 +2923,61 @@ mod tests {
     }
 
     #[test]
+    fn m63_radius_dimension_uses_a_stable_semantic_circle_branch() {
+        let mut document = SketchDocument::new(8.0).expect("document");
+        let center = document.add_point("center", [0.0, 0.0]).expect("center");
+        let radius = document
+            .add_scalar("radius", 2.0, ScalarUnit::Length, ScalarDomain::Positive)
+            .expect("radius");
+        let circle = document
+            .add_curve("circle", CurveDefinition::Circle { center, radius })
+            .expect("circle");
+        let target = document
+            .add_scalar(
+                "radius target",
+                2.0,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .expect("target");
+        let dimension = document
+            .add_dimension(
+                "radius dimension",
+                geosolve_sketch::DocumentDimensionDefinition::Radius {
+                    curve: circle,
+                    target,
+                },
+                DocumentDimensionMode::Reference,
+            )
+            .expect("dimension");
+
+        let radial_geometry = |document: &SketchDocument| {
+            let scene = scene(document);
+            let annotation = scene
+                .annotations
+                .iter()
+                .find(|annotation| annotation.item == SelectionItem::Dimension(dimension))
+                .expect("radius annotation");
+            match annotation.geometry {
+                SceneAnnotationGeometry::RadialDimension { center, edge, .. } => (center, edge),
+                _ => panic!("radius dimension must be radial"),
+            }
+        };
+
+        let (first_center, first_edge) = radial_geometry(&document);
+        assert_eq!(first_center, ScreenPoint { x: 500.0, y: 350.0 });
+        assert_eq!(first_edge, ScreenPoint { x: 600.0, y: 350.0 });
+
+        document
+            .set_scalar_value(radius, 2.0 + 1.0e-10)
+            .expect("nearby accepted radius");
+        let (second_center, second_edge) = radial_geometry(&document);
+        assert_eq!(second_center, first_center);
+        assert!(second_edge.x > first_edge.x);
+        assert!((second_edge.y - first_edge.y).abs() <= f64::EPSILON);
+    }
+
+    #[test]
     fn m63_catalog_projects_every_constraint_in_representative_public_scenarios() {
         for kind in [
             geosolve_sketch::AlphaScenarioKind::Corpus,

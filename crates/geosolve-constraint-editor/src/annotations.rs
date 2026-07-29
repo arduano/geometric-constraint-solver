@@ -3,7 +3,7 @@
 //! Geometry-derived, presentation-neutral constraint annotations.
 
 use geosolve_sketch::{
-    ContactId, CurveId, CurveSpan, DocumentConstraintDefinition as Constraint,
+    ContactId, CurveDefinition, CurveId, CurveSpan, DocumentConstraintDefinition as Constraint,
     DocumentDimensionDefinition as Dimension, DocumentDimensionMode, SketchDocument,
 };
 
@@ -203,7 +203,7 @@ pub(crate) fn build_annotations(
     }
     for dimension in document.dimensions() {
         if let Some((kind, operands, geometry)) =
-            dimension_presentation(points, curves, viewport, &dimension.definition)
+            dimension_presentation(document, points, curves, viewport, &dimension.definition)
         {
             annotations.push(SceneAnnotation {
                 item: SelectionItem::Dimension(dimension.id),
@@ -428,6 +428,7 @@ fn constraint_presentation(
 }
 
 fn dimension_presentation(
+    document: &SketchDocument,
     points: &[ScenePoint],
     curves: &[SceneCurve],
     viewport: Viewport,
@@ -459,7 +460,7 @@ fn dimension_presentation(
             },
         )),
         Dimension::Radius { curve, .. } | Dimension::Diameter { curve, .. } => {
-            let (center, edge) = radial_geometry(curves, *curve)?;
+            let (center, edge) = radial_geometry(document, points, curves, viewport, *curve)?;
             let diameter = matches!(definition, Dimension::Diameter { .. });
             Some((
                 if diameter {
@@ -738,36 +739,30 @@ fn curve_operands(curves: &[SceneCurve], id: CurveId) -> Vec<SelectionItem> {
         .collect()
 }
 
-fn radial_geometry(curves: &[SceneCurve], id: CurveId) -> Option<(ScreenPoint, ScreenPoint)> {
-    let points: Vec<_> = curves
-        .iter()
-        .filter(|curve| curve.span.curve == id)
-        .flat_map(|curve| curve.screen_polyline.iter().copied())
-        .collect();
-    let first = *points.first()?;
-    let (min_x, max_x, min_y, max_y) = points.iter().fold(
-        (first.x, first.x, first.y, first.y),
-        |(min_x, max_x, min_y, max_y), point| {
-            (
-                min_x.min(point.x),
-                max_x.max(point.x),
-                min_y.min(point.y),
-                max_y.max(point.y),
-            )
-        },
-    );
-    let center = ScreenPoint {
-        x: (min_x + max_x) * 0.5,
-        y: (min_y + max_y) * 0.5,
+fn radial_geometry(
+    document: &SketchDocument,
+    points: &[ScenePoint],
+    curves: &[SceneCurve],
+    viewport: Viewport,
+    id: CurveId,
+) -> Option<(ScreenPoint, ScreenPoint)> {
+    let definition = &document.curve(id)?.definition;
+    let (center_id, parameter) = match definition {
+        // A full circle has no distinguished presentation point. Parameter zero is
+        // the canonical positive-X branch and therefore stays stable across solves.
+        CurveDefinition::Circle { center, .. } => (*center, 0.0),
+        // Bounded circular arcs use [0, 1], so their semantic midpoint is stable
+        // even when adaptive tessellation changes.
+        CurveDefinition::CircularArc { center, .. } => (*center, 0.5),
+        _ => return None,
     };
-    let edge = points
-        .iter()
-        .max_by(|first, second| {
-            center
-                .distance(**first)
-                .total_cmp(&center.distance(**second))
-        })
-        .copied()?;
+    let center = point_anchor(points, center_id)?;
+    let span = first_curve_span(curves, id)?;
+    let jet = document.evaluate_curve_jet(span, parameter).ok()?;
+    let edge = viewport.model_to_screen([jet.position.x, jet.position.y]);
+    if !center.is_finite() || !edge.is_finite() {
+        return None;
+    }
     Some((center, edge))
 }
 
