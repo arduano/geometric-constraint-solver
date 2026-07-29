@@ -13,9 +13,9 @@ use geosolve_constraint_editor::{
 };
 use geosolve_sketch::{
     AlphaScenarioIds, AlphaScenarioKind, ContactBranchEdit, ContactDomain, ContactNeighborhood,
-    CurveDefinition, CurveSpan, DocumentAngleOrientation, DocumentConstraintDefinition,
-    DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentCurveSpanRef,
-    DocumentDimensionDefinition, DocumentDimensionMode, DocumentSolveRequest,
+    CurveDefinition, CurveSpan, DocumentAngleOrientation, DocumentBSplineForm,
+    DocumentConstraintDefinition, DocumentCurveContinuity, DocumentCurveCurvatureRelation,
+    DocumentCurveSpanRef, DocumentDimensionDefinition, DocumentDimensionMode, DocumentSolveRequest,
     RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
     SketchLifecycleRevisionHighWater, SolveRejection, SolverConfig, TangentOrientation,
     alpha_scenario,
@@ -858,19 +858,50 @@ fn every_resolved_relation_executes_through_the_authoring_adapter() {
     assert_eq!(cases.len(), 16);
     for (intent, expected_resolution, operands) in cases {
         let mut coordinator = coordinator(fixture.document.clone());
-        let mut authoring = AuthoringState::default();
-        authoring.set_options(AuthoringOptions {
+        let options = AuthoringOptions {
             curvature_relation: DocumentCurveCurvatureRelation::MagnitudeOppositeSign,
             ..AuthoringOptions::default()
-        });
-        let application = authoring.activate(
+        };
+        let mut preselected = AuthoringState::default();
+        preselected.set_options(options);
+        let preselected_application = preselected.activate(
             coordinator.session().design_document(),
             AuthoringTool::Constraint(intent),
             &operands,
         );
-        let AuthoringOutcome::Apply(application) = application else {
+        let AuthoringOutcome::Apply(preselected_application) = preselected_application else {
             panic!("{expected_resolution:?} did not produce an application");
         };
+        assert_eq!(preselected.active_tool(), None);
+        assert!(preselected.pending().is_empty());
+
+        let mut repeated = AuthoringState::default();
+        repeated.set_options(options);
+        assert!(matches!(
+            repeated.activate(
+                coordinator.session().design_document(),
+                AuthoringTool::Constraint(intent),
+                &[],
+            ),
+            AuthoringOutcome::ModeEntered { .. }
+        ));
+        let mut repeated_application = None;
+        for (index, operand) in operands.iter().copied().enumerate() {
+            let outcome = repeated.pick(coordinator.session().design_document(), operand);
+            if index + 1 == operands.len() {
+                let AuthoringOutcome::Apply(application) = outcome else {
+                    panic!("{expected_resolution:?} did not complete in repeated mode");
+                };
+                repeated_application = Some(application);
+            } else {
+                assert!(
+                    matches!(outcome, AuthoringOutcome::Collecting { .. }),
+                    "{expected_resolution:?} did not retain its valid pending prefix"
+                );
+            }
+        }
+        let application = repeated_application.expect("complete repeated application");
+        assert_eq!(application, preselected_application);
         assert_eq!(
             application.resolved_constraint,
             Some(expected_resolution),
@@ -893,6 +924,12 @@ fn every_resolved_relation_executes_through_the_authoring_adapter() {
                 .constraint(outcome.value)
                 .is_some(),
             "{expected_resolution:?} did not persist its constraint"
+        );
+        repeated.transaction_finished();
+        assert!(repeated.pending().is_empty());
+        assert_eq!(
+            repeated.active_tool(),
+            Some(AuthoringTool::Constraint(intent))
         );
     }
 }
@@ -935,14 +972,39 @@ fn every_dimension_executes_through_the_authoring_adapter() {
     assert_eq!(cases.len(), 5);
     for (kind, operands) in cases {
         let mut coordinator = coordinator(fixture.document.clone());
-        let application = AuthoringState::default().activate(
+        let mut preselected = AuthoringState::default();
+        let preselected_application = preselected.activate(
             coordinator.session().design_document(),
             AuthoringTool::Dimension(kind),
             &operands,
         );
-        let AuthoringOutcome::Apply(application) = application else {
+        let AuthoringOutcome::Apply(preselected_application) = preselected_application else {
             panic!("{kind:?} did not produce an application");
         };
+
+        let mut repeated = AuthoringState::default();
+        let _ = repeated.activate(
+            coordinator.session().design_document(),
+            AuthoringTool::Dimension(kind),
+            &[],
+        );
+        let mut repeated_application = None;
+        for (index, operand) in operands.iter().copied().enumerate() {
+            let outcome = repeated.pick(coordinator.session().design_document(), operand);
+            if index + 1 == operands.len() {
+                let AuthoringOutcome::Apply(application) = outcome else {
+                    panic!("{kind:?} did not complete in repeated mode");
+                };
+                repeated_application = Some(application);
+            } else {
+                assert!(
+                    matches!(outcome, AuthoringOutcome::Collecting { .. }),
+                    "{kind:?} did not retain its valid pending prefix"
+                );
+            }
+        }
+        let application = repeated_application.expect("complete repeated application");
+        assert_eq!(application, preselected_application);
         assert_eq!(application.resolved_constraint, None);
         let AuthoringMutation::Dimension(outcome) = coordinator
             .apply_authoring(coordinator.session().design_identity(), &application)
@@ -962,6 +1024,185 @@ fn every_dimension_executes_through_the_authoring_adapter() {
                 .is_some(),
             "{kind:?} did not persist its dimension"
         );
+        repeated.transaction_finished();
+        assert!(repeated.pending().is_empty());
+        assert_eq!(repeated.active_tool(), Some(AuthoringTool::Dimension(kind)));
+    }
+}
+
+#[test]
+fn point_on_curve_authoring_preserves_picks_across_representative_curve_families() {
+    let mut document = SketchDocument::new(2.0).unwrap();
+    let contact_point = document.add_point("contact", [1.0, 0.0]).unwrap();
+    let start = document.add_point("start", [0.0, 0.0]).unwrap();
+    let middle = document.add_point("middle", [1.0, 0.0]).unwrap();
+    let end = document.add_point("end", [2.0, 0.0]).unwrap();
+    let center = document.add_point("center", [0.0, 0.0]).unwrap();
+    let radius = document
+        .add_scalar("radius", 1.0, ScalarUnit::Length, ScalarDomain::Positive)
+        .unwrap();
+    let line = CurveSpan::line(
+        document
+            .add_curve(
+                "line",
+                CurveDefinition::Line {
+                    start,
+                    end,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .unwrap(),
+    );
+    let circle = CurveSpan::line(
+        document
+            .add_curve("circle", CurveDefinition::Circle { center, radius })
+            .unwrap(),
+    );
+    let bezier = CurveSpan::line(
+        document
+            .add_curve(
+                "bezier",
+                CurveDefinition::QuadraticBezier {
+                    controls: [start, middle, end],
+                },
+            )
+            .unwrap(),
+    );
+    let weights = [0, 1].map(|index| {
+        document
+            .add_scalar(
+                format!("weight {index}"),
+                1.0,
+                ScalarUnit::Parameter,
+                ScalarDomain::Positive,
+            )
+            .unwrap()
+    });
+    let nurbs = CurveSpan {
+        curve: document
+            .add_curve(
+                "NURBS",
+                CurveDefinition::Nurbs {
+                    form: DocumentBSplineForm::Clamped,
+                    degree: 1,
+                    controls: vec![start, end],
+                    weights: weights.to_vec(),
+                    gauge_weight: weights[0],
+                    knots: vec![0.0, 0.0, 1.0, 1.0],
+                    span_ids: vec![7],
+                    next_span_id: 8,
+                },
+            )
+            .unwrap(),
+        segment: 7,
+    };
+    for (label, span, parameter) in [
+        ("line", line, 0.5),
+        ("circle", circle, 0.0),
+        ("Bezier", bezier, 0.5),
+        ("NURBS", nurbs, 0.5),
+    ] {
+        let mut coordinator = coordinator(document.clone());
+        let application = AuthoringState::default().activate(
+            coordinator.session().design_document(),
+            AuthoringTool::Constraint(ConstraintIntent::Coincident),
+            &[
+                AuthoringOperand::selected(SelectionItem::Point(contact_point)),
+                AuthoringOperand::picked(SelectionItem::Curve(span), Some(parameter)),
+            ],
+        );
+        let AuthoringOutcome::Apply(application) = application else {
+            panic!("{label} point-on-curve did not produce an application");
+        };
+        assert_eq!(
+            application.resolved_constraint,
+            Some(ResolvedConstraintKind::PointOnCurve)
+        );
+        let AuthoringMutation::Constraint(outcome) = coordinator
+            .apply_authoring(coordinator.session().design_identity(), &application)
+            .unwrap_or_else(|error| panic!("{label}: {error}"))
+        else {
+            panic!("{label} did not create a constraint");
+        };
+        assert!(
+            outcome.published_accepted.is_some(),
+            "{label} point-on-curve rejected"
+        );
+        let accepted = coordinator.session().accepted_state().unwrap().document();
+        let DocumentConstraintDefinition::PointOnCurve { contact, .. } =
+            accepted.constraint(outcome.value).unwrap().definition
+        else {
+            panic!("{label} did not persist point-on-curve");
+        };
+        let contact = accepted.contact(contact).unwrap();
+        assert_eq!(contact.curve, span);
+        assert_eq!(
+            accepted.scalar(contact.parameter).unwrap().value.to_bits(),
+            parameter.to_bits(),
+            "{label} picked parameter"
+        );
+    }
+}
+
+#[test]
+fn endpoint_continuity_matches_start_and_end_neighborhoods_in_both_orders() {
+    let fixture = matrix_fixture();
+    for (first, second, expected_neighborhoods) in [
+        (
+            (fixture.beziers[0], 1.0),
+            (fixture.beziers[1], 0.0),
+            [ContactNeighborhood::End, ContactNeighborhood::Start],
+        ),
+        (
+            (fixture.beziers[0], 0.0),
+            (fixture.beziers[1], 1.0),
+            [ContactNeighborhood::Start, ContactNeighborhood::End],
+        ),
+    ] {
+        let mut coordinator = coordinator(fixture.document.clone());
+        let mut authoring = AuthoringState::default();
+        authoring.set_options(AuthoringOptions {
+            continuity: DocumentCurveContinuity::G0,
+            ..AuthoringOptions::default()
+        });
+        let application = authoring.activate(
+            coordinator.session().design_document(),
+            AuthoringTool::Constraint(ConstraintIntent::Continuity),
+            &[
+                AuthoringOperand::picked(SelectionItem::Curve(first.0), Some(first.1)),
+                AuthoringOperand::picked(SelectionItem::Curve(second.0), Some(second.1)),
+            ],
+        );
+        let AuthoringOutcome::Apply(application) = application else {
+            panic!("endpoint continuity did not produce an application");
+        };
+        let AuthoringMutation::Constraint(outcome) = coordinator
+            .apply_authoring(coordinator.session().design_identity(), &application)
+            .unwrap()
+        else {
+            panic!("continuity did not create a constraint");
+        };
+        assert!(outcome.published_accepted.is_some());
+        let accepted = coordinator.session().accepted_state().unwrap().document();
+        let DocumentConstraintDefinition::EndpointContinuity {
+            first_contact,
+            second_contact,
+            ..
+        } = accepted.constraint(outcome.value).unwrap().definition
+        else {
+            panic!("endpoint continuity definition expected");
+        };
+        for (contact, expected_parameter, expected_neighborhood) in [
+            (first_contact, first.1, expected_neighborhoods[0]),
+            (second_contact, second.1, expected_neighborhoods[1]),
+        ] {
+            let contact = accepted.contact(contact).unwrap();
+            assert_eq!(contact.neighborhood, expected_neighborhood);
+            assert_eq!(
+                accepted.scalar(contact.parameter).unwrap().value.to_bits(),
+                expected_parameter.to_bits()
+            );
+        }
     }
 }
 
@@ -1644,7 +1885,7 @@ fn rejected_generic_contact_retains_accepted_state_and_undo_recovers() {
                 .unwrap(),
         ),
     ];
-    for point in points {
+    for point in points.iter().copied() {
         let position = document.point(point).unwrap().position;
         document
             .add_constraint(
@@ -1658,34 +1899,38 @@ fn rejected_generic_contact_retains_accepted_state_and_undo_recovers() {
     }
     let mut coordinator = coordinator(document);
     let accepted_before = coordinator.session().accepted_state().unwrap().identity();
-    coordinator
-        .editor_mut()
-        .set_selection(lines.map(SelectionItem::Curve));
-    let expected = coordinator.session().design_identity();
-    let outcome = coordinator
-        .apply_constraint_action(
-            expected,
-            ConstraintActionRequest {
-                intent: ConstraintIntent::Coincident,
-                label: "impossible fixed contact".into(),
-                contacts: lines
-                    .into_iter()
-                    .map(|span| ContactActionChoice {
-                        support: DocumentCurveSpanRef { span, winding: 0 },
-                        domain: ContactDomain::Bounded {
-                            lower: 0.0,
-                            upper: 1.0,
-                        },
-                        parameter: 0.25,
-                        neighborhood: ContactNeighborhood::Interior,
-                        tangent_orientation: None,
-                    })
-                    .collect(),
-                relation: None,
-            },
-        )
-        .unwrap();
+    let mut authoring = AuthoringState::default();
+    let _ = authoring.activate(
+        coordinator.session().design_document(),
+        AuthoringTool::Constraint(ConstraintIntent::Coincident),
+        &[],
+    );
+    assert!(matches!(
+        authoring.pick(
+            coordinator.session().design_document(),
+            AuthoringOperand::picked(SelectionItem::Curve(lines[0]), Some(0.25)),
+        ),
+        AuthoringOutcome::Collecting { .. }
+    ));
+    let AuthoringOutcome::Apply(application) = authoring.pick(
+        coordinator.session().design_document(),
+        AuthoringOperand::picked(SelectionItem::Curve(lines[1]), Some(0.25)),
+    ) else {
+        panic!("impossible contact application expected");
+    };
+    let AuthoringMutation::Constraint(outcome) = coordinator
+        .apply_authoring(coordinator.session().design_identity(), &application)
+        .unwrap()
+    else {
+        panic!("constraint mutation expected");
+    };
     assert!(outcome.published_accepted.is_none());
+    authoring.transaction_finished();
+    assert!(authoring.pending().is_empty());
+    assert_eq!(
+        authoring.active_tool(),
+        Some(AuthoringTool::Constraint(ConstraintIntent::Coincident))
+    );
     assert_eq!(
         coordinator.session().accepted_state().unwrap().identity(),
         accepted_before
@@ -1696,6 +1941,33 @@ fn rejected_generic_contact_retains_accepted_state_and_undo_recovers() {
     assert_eq!(
         coordinator.session().design_document().constraints().len(),
         4
+    );
+
+    assert!(matches!(
+        authoring.pick(
+            coordinator.session().design_document(),
+            AuthoringOperand::selected(SelectionItem::Point(points[0])),
+        ),
+        AuthoringOutcome::Collecting { .. }
+    ));
+    let AuthoringOutcome::Apply(application) = authoring.pick(
+        coordinator.session().design_document(),
+        AuthoringOperand::picked(SelectionItem::Curve(lines[0]), Some(0.0)),
+    ) else {
+        panic!("recovery point-on-curve application expected");
+    };
+    let AuthoringMutation::Constraint(recovered) = coordinator
+        .apply_authoring(coordinator.session().design_identity(), &application)
+        .unwrap()
+    else {
+        panic!("recovery constraint mutation expected");
+    };
+    assert!(recovered.published_accepted.is_some());
+    authoring.transaction_finished();
+    assert!(authoring.pending().is_empty());
+    assert_eq!(
+        coordinator.session().design_document().constraints().len(),
+        5
     );
 }
 

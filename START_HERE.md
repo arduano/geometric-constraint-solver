@@ -106,6 +106,12 @@ Follow-up `M62-F004` audits all sixteen resolved relation paths end to end, pres
 same-span pick parameters by operand occurrence and pairs endpoint-continuity neighborhoods with
 the endpoint actually picked. A separate accepted-transaction matrix covers all five dimension
 paths, which share no contact-metadata translation.
+Follow-up `M62-F005` turns the remaining closure checklist into direct headless coverage. It
+qualifies preselection and repeated mode for the complete relation/dimension matrices,
+representative line/circle/Bezier/NURBS point-on-curve picks, both continuity endpoint orders,
+retained-rejection recovery, dimension Undo/Redo and process-local option memory. The added
+endpoint fixture also corrects ordinary bounded contacts to default Start/End neighborhoods from
+their picked endpoint parameter.
 Old Chromium/CDP, HTTP serving, DOM-scraping, screenshot, wall-clock browser-timing and
 source-substring-scan gates remain retired.
 

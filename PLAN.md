@@ -2789,6 +2789,19 @@ dimension families pass a separate complete authoring-to-accepted-transaction ma
 pass through contact metadata. No residual, equation, branch definition, schema, scenario or
 browser rule changed.
 
+UAT follow-up `M62-F005` converts the remaining pre-closure review list into direct owning-layer
+tests. The sixteen-relation and five-dimension integration matrices now prove identical
+applications from compatible preselection and repeated operand collection, including terminal
+re-arming. Representative line, circle, quadratic-Bezier and NURBS point-on-curve authoring
+preserves the picked parameter through accepted persistence. Endpoint continuity passes in both
+End/Start and Start/End orders, retained-rejected contact authoring can be undone and retried
+without leaving its active tool, dimension target history passes Undo and Redo, and headless
+options survive tool re-entry while a fresh process state returns to defaults. This work found
+one last metadata variant: ordinary bounded point-on-curve picks at parameter endpoints defaulted
+to `Interior`. Bounded contact choices now put `Start` or `End` first when the picked parameter is
+the corresponding endpoint. No residual, equation, branch definition, schema, scenario or
+browser-owned compatibility rule changed.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

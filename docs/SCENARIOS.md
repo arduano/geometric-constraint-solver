@@ -1739,6 +1739,20 @@ also detected. A third matrix drives all five dimension families through the sam
 adapter to accepted persistent dimensions; the dimension path measures accepted state and does
 not manufacture contacts.
 
+### M62-F005 - Pre-closure headless authoring matrix
+
+The closed relation and dimension matrices now construct every application twice: once from a
+compatible immutable preselection and once by entering repeated mode and supplying each operand
+in sequence. The applications must be identical, intermediate prefixes must remain Collecting,
+and a terminal attempt must clear pending operands while leaving the tool active.
+
+Focused fixtures additionally require accepted point-on-curve persistence for line, circle,
+quadratic Bezier and NURBS picks; exact Start/End parameters and neighborhoods for both continuity
+orders; retained-rejected curve contact followed by Undo and a valid retry in the same active
+Coincident tool; dimension-target Undo/Redo; and process-local option retention across tool
+re-entry. The bounded line-endpoint recovery is the regression for the final defect found during
+this pass: endpoint parameters may never be emitted with an Interior default neighborhood.
+
 ### UAT evidence and recheck policy
 
 Each checkpoint provides one manual entry point, deterministic resets and concise instructions.

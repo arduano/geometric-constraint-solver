@@ -25,7 +25,9 @@ a production deployment.
 3. Preselect incompatible operands and click a relation. Confirm a specific warning appears and no
    design/history mutation occurs.
 4. Clear selection, enter Coincident, then repeatedly click point pairs. Confirm each second click
-   applies and the tool remains active with a fresh operand set.
+   applies and the tool remains active with a fresh operand set. Also click a point and the exact
+   endpoint of a bounded line; confirm point-on-curve applies with the endpoint branch rather than
+   rejecting it as an interior contact.
 5. Exercise Lock, Horizontal or Vertical in repeated single-pick mode; then Symmetric in
    point/point/axis order. Confirm one canvas click contributes exactly one operand and immediately
    re-arms each single-pick tool.
@@ -33,7 +35,8 @@ a production deployment.
    is pending, the second applies Perpendicular, and the active tool immediately requests a fresh
    first line rather than remaining stuck at two operands.
 7. While one operand is pending, press Escape twice. Confirm the first clears operands and the
-   second exits authoring.
+   second exits authoring. Before exiting, deliberately create a retained-rejected pair, Undo it
+   and confirm a valid retry works while the same authoring tool remains active.
 8. Use a canvas curve pick and a tree pick in the same constraint. Confirm both follow the same
    guidance and pending highlighting.
 9. Open Tangent, Equal and Continuity option flyouts. Confirm explicit orientation, curvature and
@@ -72,6 +75,12 @@ a production deployment.
   order and endpoint neighborhoods follow the actual parameter. Request-level and accepted
   transaction matrices cover all sixteen resolved relation families; a separate accepted
   transaction matrix covers all five dimension paths, which do not translate contact metadata.
+- `M62-F005` — resolved mechanically, pending human recheck: pre-closure headless hardening found
+  that an ordinary bounded point-on-curve pick at a line endpoint retained parameter `0` or `1`
+  but defaulted to the invalid Interior neighborhood. Bounded contacts now default to the matching
+  Start/End neighborhood. Direct tests also cover repeated mode for every relation/dimension
+  family, representative line/circle/Bezier/NURBS point-on-curve authoring, both continuity
+  endpoint orders, rejection Undo/retry, dimension Undo/Redo and process-local option memory.
 
 ## Approval
 

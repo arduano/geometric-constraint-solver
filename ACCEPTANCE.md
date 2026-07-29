@@ -1163,6 +1163,12 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
   Direct metadata and accepted-transaction regressions cover every resolved relation family.
 - A separate accepted-transaction matrix covers all five dimension authoring families without
   routing any of them through relation contact metadata.
+- The complete relation and dimension matrices produce the same applications from compatible
+  preselection and repeated collection, and every terminal attempt re-arms the active tool.
+- Point-on-curve authoring retains exact picks across representative line, circle, Bezier and
+  NURBS families. Bounded endpoint parameters default to their matching Start/End neighborhood.
+- Retained-rejected authoring can be undone and retried within the active tool; dimension target
+  edits pass Undo/Redo; process-local options survive tool re-entry and fresh state uses defaults.
 - Canvas and tree operands use the same headless input path. Ordinary selection and point dragging
   are suppressed during authoring; pending operands and the expected next operand are visibly
   identified. Canvas pointer-down exclusively owns the parameter-bearing canvas pick; its later

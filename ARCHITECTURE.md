@@ -634,6 +634,6 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
 - M61: completed and approved supervising-human advanced geometry/topology UAT.
 - M62: active CAD-style constraint/dimension palette, headless operand collection,
   single-owner canvas/tree input routing, relation-scoped and occurrence-preserving contact
-  metadata, endpoint-consistent continuity choices, accepted-geometry dimension seeding,
-  branch-explicit acute-degree line-angle presentation, retained dimension target editing and
-  ordinary-workspace UAT.
+  metadata, parameter-consistent bounded-contact neighborhoods, accepted-geometry dimension
+  seeding, branch-explicit acute-degree line-angle presentation, retained dimension target
+  editing and ordinary-workspace UAT.

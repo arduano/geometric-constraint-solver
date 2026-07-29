@@ -60,6 +60,11 @@ endpoint continuity, the default Start/End neighborhood is ordered from the reta
 parameter instead of always defaulting to Start. Radial Normal remains deliberately asymmetric:
 only its line operand owns the point-on-curve contact.
 
+`M62-F005` applies the same parameter/neighborhood invariant to every bounded contact-bearing
+definition. A picked lower or upper bound now puts Start or End first respectively; interior
+picks retain Interior as their default. This closes the ordinary point-on-line endpoint path that
+the continuity-only correction did not cover.
+
 Dimensions are created at their current independently accepted measurement rather than retained
 design coordinates that may differ from the visible accepted canvas. Numeric editing locates the
 dimension-owned scalar and emits `DocumentEdit::SetScalarValue`; Undo/Redo therefore uses ordinary
@@ -115,6 +120,10 @@ manual performance/cancellation measurements.
   persistent constraint through the public authoring adapter. A second integration matrix requires
   accepted publication for all five dimension families; they lower directly from accepted
   measurements and explicit mode/angle options and have no contact-metadata adapter.
+- `M62-F005` extends both integration matrices to compare preselection with repeated-mode
+  applications and terminal re-arming. Focused accepted tests cover point-on-curve picks on line,
+  circle, quadratic Bezier and NURBS, both continuity endpoint orders, retained-rejection
+  Undo/retry without leaving authoring, dimension-target Undo/Redo and process-local option memory.
 - The static workbench contract directly proves all sixteen palette identities exist and the old
   creation controls, action aliases and deleted `/#/dev/lab` route do not.
 - Canvas/tree pending presentation, read-only scenario behavior, WASM compilation and the release

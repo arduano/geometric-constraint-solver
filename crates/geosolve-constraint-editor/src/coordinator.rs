@@ -3685,15 +3685,34 @@ fn validate_pair_relation_choice(
 
 fn contact_neighborhood_options(domain: ContactDomain, value: f64) -> Vec<ContactNeighborhood> {
     match domain {
-        ContactDomain::Bounded { lower, upper } => vec![
-            ContactNeighborhood::Interior,
-            ContactNeighborhood::Local {
+        ContactDomain::Bounded { lower, upper } => {
+            let local = ContactNeighborhood::Local {
                 lower: lower + (upper - lower) * 0.25,
                 upper: lower + (upper - lower) * 0.75,
-            },
-            ContactNeighborhood::Start,
-            ContactNeighborhood::End,
-        ],
+            };
+            if value.to_bits() == lower.to_bits() {
+                vec![
+                    ContactNeighborhood::Start,
+                    ContactNeighborhood::Interior,
+                    local,
+                    ContactNeighborhood::End,
+                ]
+            } else if value.to_bits() == upper.to_bits() {
+                vec![
+                    ContactNeighborhood::End,
+                    ContactNeighborhood::Interior,
+                    local,
+                    ContactNeighborhood::Start,
+                ]
+            } else {
+                vec![
+                    ContactNeighborhood::Interior,
+                    local,
+                    ContactNeighborhood::Start,
+                    ContactNeighborhood::End,
+                ]
+            }
+        }
         ContactDomain::SupportingLine => vec![
             ContactNeighborhood::Interior,
             ContactNeighborhood::Local {
@@ -5171,7 +5190,7 @@ mod tests {
     }
 
     #[test]
-    fn explicit_dimension_target_edit_is_retained_and_undoable() {
+    fn explicit_dimension_target_edit_is_retained_undoable_and_redoable() {
         let (session, points, _, _) = fixed_line_session();
         let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
         let selection = points.map(SelectionItem::Point);
@@ -5211,6 +5230,16 @@ mod tests {
                 .expect("restored metadata")
                 .value
                 - 2.0)
+                .abs()
+                < 1.0e-12
+        );
+        coordinator.redo().expect("redo target");
+        assert!(
+            (coordinator
+                .dimension_target_metadata_for(&[SelectionItem::Dimension(dimension)])
+                .expect("redone metadata")
+                .value
+                - 3.5)
                 .abs()
                 < 1.0e-12
         );

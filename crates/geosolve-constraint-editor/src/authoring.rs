@@ -653,4 +653,34 @@ mod tests {
         );
         assert!(matches!(angle, AuthoringOutcome::Warning(_)));
     }
+
+    #[test]
+    fn options_are_process_local_and_survive_tool_reentry() {
+        let (document, _) = document();
+        let options = AuthoringOptions {
+            tangent_orientation: TangentOrientation::Opposed,
+            curvature_relation: DocumentCurveCurvatureRelation::MagnitudeOppositeSign,
+            continuity: DocumentCurveContinuity::G2,
+            dimension_mode: DocumentDimensionMode::Reference,
+            angle_orientation: DocumentAngleOrientation::Clockwise,
+        };
+        let mut state = AuthoringState::default();
+        state.set_options(options);
+        let _ = state.activate(
+            &document,
+            AuthoringTool::Constraint(ConstraintIntent::Tangent),
+            &[],
+        );
+        state.deactivate();
+        let _ = state.activate(
+            &document,
+            AuthoringTool::Dimension(DimensionKind::OrientedAngle),
+            &[],
+        );
+        assert_eq!(state.options(), options);
+        assert_eq!(
+            AuthoringState::default().options(),
+            AuthoringOptions::default()
+        );
+    }
 }
