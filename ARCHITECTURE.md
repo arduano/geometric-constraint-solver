@@ -156,6 +156,13 @@ state and persistent contact/scalar identity through accepted or retained-reject
 contact changes are one domain transaction over semantic span, parameter domain/value, winding,
 neighborhood and tangent orientation. No new solver equation was introduced.
 
+The completed M55 contextual-authoring follow-up replaces those equation-shaped workbench
+identities with eleven reusable `ConstraintIntent` values. Selection resolution is headless and
+publishes `ResolvedConstraintKind`, explicit `ConstraintRelationChoice` and typed disabled reasons;
+the workbench does not reproduce the dispatch matrix. Curve hit testing retains the picked
+parameter to seed contact-bearing actions, while endpoint continuity uses exact bounded endpoint
+parameters. All contact, direction, curvature and continuity branches remain explicit state.
+
 M40.7 separates non-authoritative `ConstructionPreview` from complete committable
 `ConstructionProposal`. A preview may represent an incomplete anchor or arc-radius
 guide, while only a complete proposal may enter a document transaction. Terminal

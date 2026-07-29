@@ -83,7 +83,10 @@ multi-interval visible supports without adding residuals or changing canonical v
 independently validated oriented wires/regions/holes and exact native/external source provenance.
 M60 added public companion presentation, four deterministic advanced/topology scenario leaves and
 a versioned canonical-v4/draft-v5 desktop workspace envelope while retaining the full M55 action
-surface. M61 remediation adds ten movable nonzero-DOF mechanism leaves, active-scenario projected
+surface. The completed M55 contextual-authoring follow-up now presents that mathematical coverage
+through eleven selection-sensitive intents, publishes the resolved persistent definition and
+explicit relation choice at the headless boundary, and retains picked curve parameters for contact
+seeding. M61 remediation adds ten movable nonzero-DOF mechanism leaves, active-scenario projected
 drag, unclipped recursive flyouts, full Bezier/conic/NURBS authoring and an inspectable canvas
 camera. Follow-up `M61-F001` restores the twin-roller fixture's passive stability target at the
 headless/UI seam. The active milestone is **M61: human UAT 3 — advanced geometry and topology**.

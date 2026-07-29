@@ -1,6 +1,6 @@
 # M55 contextual constraint authoring follow-up
 
-Status: implementation in progress during the active M61 remediation.
+Status: complete as of 2026-07-29 during the active M61 remediation.
 
 ## Objective
 
