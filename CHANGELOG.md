@@ -74,8 +74,12 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - Rebased the post-M44 roadmap: M45 preserves cleanup evidence without human approval;
   M46-M53 replace and purge legacy browser E2E/playground infrastructure, consolidate one
   directly tested workbench and perform post-cleanup host-semantics UAT. M53 received explicit
-  supervising-human approval. The later functional/release sequence is M54-M64, with a dedicated
-  M55 alpha constraint/dimension/branch-action parity gate inserted before concurrency and scale.
+  supervising-human approval. At that checkpoint the later functional/release sequence was
+  forecast as M54-M64, with a dedicated M55 alpha constraint/dimension/branch-action parity gate
+  inserted before concurrency and scale; the roadmap-reset entry below supersedes that forecast.
+- Closed M61 with explicit supervising-human approval for its recorded advanced-workbench scope.
+  The previously forecast M62-M64 hardening sequence is removed; M62 is now an intentionally
+  unscoped placeholder, and every newly scoped milestone will end in its own UAT.
 - Completed the M46 ownership freeze: every old M14/M40/M44 browser/static assertion and
   legacy inline test has a named direct-test owner or reviewed retirement, while no old
   fixture, E2E script or playground code was deleted early.
@@ -119,7 +123,7 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - Completed M58 without adding residuals, solver/session ownership or a private commit path.
   Unsupported exact transforms are never sampled into approximations; stale, cancelled,
   exhausted and foreign-input proposals cannot mutate the live session. Canonical sketch v4
-  remains frozen and rejects M58-only topology until the planned M62 schema freeze.
+  remains frozen and rejects M58-only topology pending a future explicitly scoped schema freeze.
 - Completed M59 without promoting visual-profile output directly or adding B-rep state.
   Candidate evidence is independently checked for declared-source coverage, parameters,
   endpoints, closure, orientation, area and output limits. Stale, cancelled, exhausted,
@@ -127,7 +131,7 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - Completed M60 without changing equations or restoring a legacy harness. The sole workbench now
   consumes public operations/topology companions directly, labels only complete current production
   profiles consumable, retains the full M55 action surface and all ten prior scenario identities,
-  and is directly qualified for the active M61 human UAT.
+  and was directly qualified for the subsequently approved M61 human UAT.
 - Replaced the withdrawn first M61 candidate after five human blockers. Active scenario selection
   and projected drag now target the rendered ephemeral coordinator; recursive third-level desktop
   flyouts no longer clip; invalid advanced construction remains atomic. No deleted playground,

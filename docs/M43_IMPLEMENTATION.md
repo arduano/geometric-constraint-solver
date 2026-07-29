@@ -57,8 +57,8 @@ M54 stable-diagnostic compatibility.
   valid candidate publishes an accepted revision (ADR 0025:22-100).
 - Frozen sketch v1-v4 fields, variants, readers, writers and canonical v4 bytes remain
   unchanged. Supported v4 export rejects non-default M43 state; a private unsupported
-  draft-v5 document DTO and a separately versioned external-set envelope may evolve
-  until M62 (ADR 0025:102-117; M41 inventory:22-28; M42 inventory:66-69).
+  draft-v5 document DTO and a separately versioned external-set envelope may evolve until a future
+  schema-freeze milestone (ADR 0025:102-117; M41 inventory:22-28; M42 inventory:66-69).
 - A diagnostic capsule may bundle design, parameter batch, activation input and exact
   external set for reproduction, but is diagnostic exchange only: saved status,
   attempted geometry and host identity never become authoritative persistence
@@ -312,13 +312,13 @@ one-sided-span policy and are not necessary for M43's point/curve snapshot gate.
 
 - **External-set codec:** expose `ExternalSnapshotSetV1` and its canonical
   encode/decode/digest API publicly, but mark the API and wire language explicitly
-  **unstable until M62**.  It is a separate, versioned envelope, not draft-v5 document
+  **unstable until a future API/schema freeze**. It is a separate, versioned envelope, not draft-v5 document
   JSON and not supported sketch v1-v4 JSON.  It uses strict version dispatch and
   `deny_unknown_fields`; entries canonicalize by local binding ID and hash version, set
   revision, entry source evidence, variant/domain/orientation/scale/resource evidence,
-  and exact finite `f64` bits.  This is required for a host to construct reproducible
+  and exact finite `f64` bits. This is required for a host to construct reproducible
   immutable input and for a capsule to carry exact input; no stable compatibility claim
-  is made before M62.
+  is made before a future API/schema freeze.
 - **Diagnostic capsule boundary/file:** keep the existing private, disposable scene
   capsule producer/parser in `crates/geosolve-demo-web/src/playground.rs` as the capsule
   boundary.  Extend its `DecodedSceneCapsule` envelope only with canonical public
@@ -346,7 +346,7 @@ one-sided-span policy and are not necessary for M43's point/curve snapshot gate.
   per-entry revision/digest/domain/orientation/scale/resource evidence, fixed
   coefficients, and rebind on family/span/topology/orientation change.  ADR 0025:65-88
   requires separate external-set revision/digest members in immutable attempt and
-  accepted stamps; its M62 rule permits an unstable separate envelope now but forbids
+  accepted stamps; its future-freeze rule permits an unstable separate envelope now but forbids
   presenting it as a supported sketch wire language.
 - Existing native operands are capability-specific: `DocumentPointRef` is closed
   (`document.rs:583-593`) and native curve operands are `CurveSpan` plus explicit
@@ -376,15 +376,15 @@ code, because that is M44/M54 scope.
 
 ### Open questions
 
-None blocking.  The governing documents agree on a closed, revision-and-digest stamped,
+None blocking. The governing documents agree on a closed, revision-and-digest stamped,
 immutable external input boundary; the above deliberately narrow v1 meets that boundary
-without claiming M44, M54, or M62 behavior.
+without claiming later stable-release behavior.
 
 ## Out of scope
 
 - M44 browser/workbench tree entries, styles, status display and rebind interaction.
-- M54 stable diagnostics compatibility/freeze, M56 prepared asynchronous jobs/CAS API,
-  and M62 supported v5/persistence-envelope freeze.
+- M54 stable diagnostics compatibility/freeze, M56 prepared asynchronous jobs/CAS API, and any
+  future supported v5/persistence-envelope freeze.
 - Host formula evaluation, units/display conversion, PDM/topological naming, projection,
   callbacks, host undo/history and host output commit.
 - New solver variables, hidden fixed native geometry, generic curve plugins, new

@@ -197,6 +197,8 @@ The public domain-level `CurveDirection` definition remains available for explic
 consumers, but compact Parallel/Perpendicular authoring intentionally does not expose
 direction-only line/curve relations. Concentric, Collinear, point-pair Horizontal/Vertical,
 Point/Entity Symmetry, EqualDistance, EqualAngle and BlockEntity remain in the separate M36/M37
-semantic catalog until M62 freezes their retained lifecycle and schema.
+semantic catalog until a future milestone explicitly scopes and freezes their retained lifecycle
+and schema.
 
-The active product gate remains the remediated M61 human advanced geometry/topology UAT.
+M61 subsequently completed its remediated human advanced geometry/topology UAT with explicit
+approval.

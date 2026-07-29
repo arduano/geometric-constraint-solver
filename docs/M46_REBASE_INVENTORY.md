@@ -7,8 +7,10 @@
 Rebase decisions are complete and applied to the authoritative roadmap: M45 completed
 without human approval; M46-M53 completed the cleanup/UAT sequence; after M53 approval the
 preserved functional sequence was renumbered, and a later supervising-user decision inserted the
-new M55 alpha action-parity gate. The current final sequence is M54-M64. The evidence below records
-the pre-edit conflicts and remains useful as the consolidation checklist.
+new M55 alpha action-parity gate. The mapping below is a historical record and was superseded on
+2026-07-29 when M61 closed with approval and the forecast M62-M64 hardening sequence was removed.
+Those old numbers below do not define active milestones; the current M62 is an unscoped
+placeholder.
 
 ## Requirements
 
@@ -111,17 +113,17 @@ the pre-edit conflicts and remains useful as the consolidation checklist.
 - M51-specific claims are high risk: they currently combine a future parity/removal requirement with an assertion that the legacy lab is still transitional. Cleanup milestones beginning at M46 must either move that removal work into the cleanup phase or explicitly defer it under its later owner; both statements cannot remain unchanged.
 - **Phase conflicts to eliminate:** (1) “cleanup must not pull deletion forward” versus a cleanup roadmap that removes/rehomes the lab; (2) “M39--M51 replace the playground” versus post-cleanup replacement phases; (3) old UAT 3/4 labels at M52/M54 versus relocated human UAT; (4) M53 v5 freeze before old M54/M55 release language versus any inserted cleanup gates; and (5) “through M55” support/non-goal/release claims versus M55 becoming a cleanup milestone rather than the functional release endpoint.
 
-## Resolved decisions
+## Resolved decisions in the superseded rebase
 
 - The temporary ten-entry sequence retained scope and dependency order until M53 approval. The
-  later M55 action-parity insertion expanded the current final sequence to M54-M64 without merging
-  unrelated acceptance gates.
+  later M55 action-parity insertion expanded the then-current final sequence to M54-M64 without
+  merging unrelated acceptance gates.
 - M46-M49 are pre-cleanup replacement/extraction, M50 is the purge cut, and M51-M53 are
   post-cleanup consolidation/candidate/human-UAT work.
 - Legacy-playground removal occurs at M50, not M60. M60 owns
   only later advanced-workbench completion over the already-clean application.
-- Human UAT 2 relocates to M53; advanced/integrated UAT are M61/M63.
-- Functional support/release horizons formerly phrased “through M55” now use M64 or phase-neutral
+- Human UAT 2 relocated to M53; the superseded map assigned advanced/integrated UAT to M61/M63.
+- Functional support/release horizons formerly phrased “through M55” used M64 or phase-neutral
   wording.
 - The 29-file initial scan remains the provenance inventory; current consistency must be
   proven by a fresh repository search and diff review rather than its original line numbers.

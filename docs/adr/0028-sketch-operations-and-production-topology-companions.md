@@ -106,7 +106,7 @@ silently rewritten into sampled geometry.
 Macros and associations expand to ordinary sketch geometry, source definitions and
 explicit ownership. They are not privileged residuals. Approximate general
 spline/conic offsets and a persistent pattern-object personality remain outside the
-M64 contract; an unsupported exact transformation returns a typed unsupported outcome
+currently approved contract; an unsupported exact transformation returns a typed unsupported outcome
 rather than an approximation.
 
 For the same stamped input, operation policy and public ID-allocation context, a

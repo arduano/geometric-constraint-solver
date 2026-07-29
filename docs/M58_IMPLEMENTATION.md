@@ -36,7 +36,7 @@ The companion publishes:
 The legacy single-interval accessors remain conservative compatibility seams:
 `trim_view` returns only a sole view and `visible_interval` rejects multi-interval supports.
 Canonical v4 serialization returns `UnsupportedM58State` for M58-only topology. The explicitly
-unsupported draft-v5 codec round-trips it pending the M62 schema freeze.
+unsupported draft-v5 codec round-trips it pending a future explicitly scoped schema freeze.
 
 ## 2. Mathematical and transaction behavior
 

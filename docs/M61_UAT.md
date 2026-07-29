@@ -2,7 +2,8 @@
 
 # M61 human UAT 3 — advanced geometry and topology
 
-Status: remediated candidate ready for supervising-human review; approval not yet recorded
+Status: complete; explicitly approved by the supervising human on 2026-07-29 for the recorded M61
+scope
 
 Candidate source: `5140f85` for the latest `M61-F005` interaction repair, with the prior
 replacement candidate and `M61-F001`-`M61-F004` repairs retained in its history, plus the
@@ -237,7 +238,7 @@ clear, and interaction feels responsive enough for a desktop diagnostic workbenc
 - Resolution: `1c314e9` adds a headless stabilized-projection seam, bidirectional scenario
   active/passive metadata, and a repeated-drag regression proving the passive center remains
   within `1e-9` of its accepted position.
-- Status: mechanically requalified; targeted supervising-human recheck pending.
+- Status: mechanically requalified and closed under the final scoped M61 approval.
 
 ### M61-F002 — untouched point-on-circle defaults did not dispatch
 
@@ -249,7 +250,7 @@ clear, and interaction feels responsive enough for a desktop diagnostic workbenc
   dispatch.
 - Resolution: dynamic selectors restore a value only while it remains in the current published
   choices; otherwise they select the first current default.
-- Status: mechanically requalified; targeted supervising-human recheck pending.
+- Status: mechanically requalified and closed under the final scoped M61 approval.
 
 ### M61-F003 — pathological retained contact workspace froze on interaction
 
@@ -269,7 +270,7 @@ clear, and interaction feels responsive enough for a desktop diagnostic workbenc
   covers replacement, terminal drain, stale-frame invalidation and scheduling retry.
 - Solver impact: none. No residual, equation, branch rule, solver policy or persisted schema
   changed; ambiguity is not converted into success.
-- Status: mechanically requalified; targeted supervising-human recheck pending.
+- Status: mechanically requalified and closed under the final scoped M61 approval.
 
 ### M61-F004 — persisted workspace locked during initial and repeated render
 
@@ -287,7 +288,7 @@ clear, and interaction feels responsive enough for a desktop diagnostic workbenc
   consumability, and leaves that decision to **Production topology**.
 - Measured result: exact native host-state generation falls from about 2.3 seconds to about
   0.12 ms. Solver, accepted geometry and production-topology semantics are unchanged.
-- Status: mechanically requalified; targeted supervising-human recheck pending.
+- Status: mechanically requalified and closed under the final scoped M61 approval.
 
 ### M61-F005 — circle tangent and normal authoring was direction-vacuous
 
@@ -306,7 +307,7 @@ clear, and interaction feels responsive enough for a desktop diagnostic workbenc
   `circle-tangent-normal` scenario records verification point P29 and explains both meanings.
 - Solver impact: none. Existing validated residuals are reused; no equation, schema, tolerance, or
   branch inference changed.
-- Status: mechanically requalified; targeted supervising-human recheck pending.
+- Status: mechanically requalified and closed under the final scoped M61 approval.
 
 ## Scorecard
 
@@ -314,24 +315,24 @@ Record `Pass`, `Concern`, or `Blocker` for each:
 
 | Area | Rating | Notes |
 | --- | --- | --- |
-| Nonzero DOF visibility and projected mechanism drag |  |  |
-| Scissor jack/tower propagation and reset |  |  |
-| Representative old-demo mechanism coverage |  |  |
-| Third-level right-expanding selector navigation |  |  |
-| Wheel zoom, middle-pan, Fit, and large-scene inspection |  |  |
-| Bezier authoring and preview coherence |  |  |
-| Conic authoring, trims, sweep, and branch clarity |  |  |
-| Clamped/periodic NURBS authoring and gauge clarity |  |  |
-| Circle tangent and radial-normal authoring clarity |  |  |
-| Periodic NURBS span/winding and refinement clarity |  |  |
-| Associative/companion operation coherence |  |  |
-| Complete/incomplete/cancelled topology trust |  |  |
-| Accepted-state and ordinary-workspace isolation |  |  |
-| Overall advanced-workflow trust and responsiveness |  |  |
+| Nonzero DOF visibility and projected mechanism drag | Pass | Approved for recorded M61 scope. |
+| Scissor jack/tower propagation and reset | Pass | Approved for recorded M61 scope. |
+| Representative old-demo mechanism coverage | Pass | Approved for recorded M61 scope. |
+| Third-level right-expanding selector navigation | Pass | Approved for recorded M61 scope. |
+| Wheel zoom, middle-pan, Fit, and large-scene inspection | Pass | Approved for recorded M61 scope. |
+| Bezier authoring and preview coherence | Pass | Approved for recorded M61 scope. |
+| Conic authoring, trims, sweep, and branch clarity | Pass | Approved for recorded M61 scope. |
+| Clamped/periodic NURBS authoring and gauge clarity | Pass | Approved for recorded M61 scope. |
+| Circle tangent and radial-normal authoring clarity | Pass | Approved for recorded M61 scope. |
+| Periodic NURBS span/winding and refinement clarity | Pass | Approved for recorded M61 scope. |
+| Associative/companion operation coherence | Pass | Approved for recorded M61 scope. |
+| Complete/incomplete/cancelled topology trust | Pass | Approved for recorded M61 scope. |
+| Accepted-state and ordinary-workspace isolation | Pass | Approved for recorded M61 scope. |
+| Overall advanced-workflow trust and responsiveness | Pass | Approved for recorded M61 scope. |
 
-M61 passes only after the supervising human explicitly approves it and no unresolved wrong-branch,
-misleading-profile, immovable-scenario, authoring, navigation, camera, or responsiveness blocker
-remains.
+Approval record: on 2026-07-29 the supervising human explicitly closed M61 as approved for the
+scope captured by this scorecard and findings ledger. Future UI improvements and cleanup are new
+milestone scope, not amendments to M61.
 
 ## Finding policy
 

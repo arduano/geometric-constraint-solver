@@ -88,7 +88,7 @@ repository release gate, and passed.
 ## 5. Known limitations and next blocker
 
 - The raw core-report and runtime/compiler inspection seams remain available only for advanced
-  compatibility users and are intentionally unstable before M62.
+  compatibility users and remain intentionally unstable until a future API-freeze milestone.
 - M54 does not add prepared jobs, sparse incremental rebuilding, operation/topology companions or
   new constraint actions.
 - M55 is the next active gate. It must expose the preserved alpha relation, dimension and explicit

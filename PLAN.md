@@ -34,7 +34,8 @@ The library must support independently editable 2D sketch geometry, including:
 M22 completed the built-in curve and generic differential-constraint surface, not
 the complete production embedding contract. M33-M45 close the first ordinary-CAD,
 host-integration and interaction-consumer cut; M46-M53 perform the cleanup rebase and approved
-host-semantics UAT; M54-M64 complete the later functional/release work. This deliverable
+host-semantics UAT; M54-M61 complete the subsequent functional work and approved advanced UAT.
+M62 is intentionally unscoped pending supervising-user goals. This deliverable
 does not include a solid B-rep kernel, meshing or 3D sketch curves.
 
 ### Deliverable 2: 2D and 3D rigid-body kinematics
@@ -111,7 +112,7 @@ engine that a real CAD host can use. The accepted personality is:
 - an embedding UI may map a platform pointer or 3D camera ray onto a sketch plane and
   render returned DTOs, but it must not recreate the editor's interaction state machine
   or infer geometric assistance independently;
-- supported embedding targets are Rust and WASM only through M64;
+- currently qualified embedding targets are Rust and WASM;
 - the reusable library remains `GPL-3.0-or-later`;
 - the web consumer is a desktop demo of sketch-constraint workflows, not a mobile
   product or solid modeller.
@@ -134,8 +135,8 @@ engine that a real CAD host can use. The accepted personality is:
   geometry enter one attempt as immutable revisioned values.
 - Keep cross-system expressions, B-rep projection, topological naming, feature
   history and application undo outside the sketch solver contract.
-- Keep human acceptance limited to completed M40.7 and M53, active M61 and the planned M63 gate.
-  Every objective correctness, persistence,
+- Keep human acceptance records explicit: M40.7, M53 and M61 are complete and approved, and every
+  newly scoped milestone from M62 onward ends in its own supervising-human UAT. Every objective correctness, persistence,
   compatibility and presentation-adapter assertion must pass through direct unit or
   integration tests at its owning layer before a human checkpoint begins; old CDP E2E
   suites are not a qualification path.
@@ -1869,7 +1870,7 @@ Completion note (2026-07-27): M41 added closed profile/construction roles, immut
 revisioned host activation, one deterministic typed dependency closure, activity-aware
 lowering/profile/branch/ownership consumers and activation revision/digest lifecycle
 stamps. Frozen v1-v4 bytes remain unchanged for representable state; supported v4
-encoding rejects non-default M41 state and the pre-M62 draft-v5 codec remains explicitly
+encoding rejects non-default M41 state and the draft-v5 codec remains explicitly
 unsupported. Focused M41 tests, independent verification, locked all-feature workspace
 tests, warnings-denied workspace Clippy, the WASM check and the release Trunk build all
 passed. M42 and M43 subsequently completed.
@@ -2020,11 +2021,11 @@ M45; the M46 follow-up cleared it without changing behavior.
 
 ## Post-cleanup numbering record
 
-M46-M53 are the completed cleanup and host-semantics UAT sequence. After M53 approval, the future
-sequence was finalized from M54 onward. A subsequent supervising-user decision inserted the
-constraint/dimension/branch-action parity gate at M55, shifting the preserved later sequence by one
-number through M64 without changing its dependency order or scope. M54-M57 are now complete;
-M58-M60 subsequently completed, and M61 is the active human UAT gate.
+M46-M53 are the completed cleanup and host-semantics UAT sequence. M54-M60 subsequently completed
+the functional sequence and M61 completed the advanced human UAT gate. On 2026-07-29 the
+supervising user withdrew the previously forecast M62-M64 hardening sequence so that additional
+UI, cleanup and product milestones can be scoped one at a time. M62 is now only the next
+placeholder and owns no inherited hardening scope.
 
 ## Pre-cleanup phase
 
@@ -2267,7 +2268,7 @@ Execution record (2026-07-28): `docs/M53_UAT.md` is the consolidated durable M53
 change-request and retest ledger. Every observation or UI request must be recorded and classified
 before implementation. Objective defects require direct regressions and targeted requalification;
 clarity/layout changes require an identified candidate rebuild and affected human retest; future
-scope remains in M54-M64 or an explicit open question. One request did not shadow or silently
+scope remains in a subsequently approved milestone or an explicit open question. One request did not shadow or silently
 close another development concern, question or plan. Candidate identities and any temporary
 human-only access details belong exclusively in the M53 ledger; they are not automated gates,
 retained server infrastructure or product routes.
@@ -2502,7 +2503,7 @@ drafting operations solver, residual, session-publication or B-rep ownership.
 - [x] Generalize equation-free visible topology to ordered non-overlapping multi-interval
   supports, exact fixed/contact boundary identity and atomic constraint-owned boundary freezing.
 - [x] Preserve frozen canonical sketch v4: M58-only state is rejected by v4 import/export and
-  round-trips only through the explicitly unsupported pre-M62 draft-v5 codec.
+  round-trips only through the explicitly unsupported draft-v5 codec.
 - [x] Directly qualify stale application, cancellation/work exhaustion, foreign accepted state,
   interval validation, profile adjacency, persistence rejection, operation expansion and
   dependency boundaries under native, workspace and WASM gates.
@@ -2523,7 +2524,7 @@ or guesses.
 point-on-curve-owned trim boundaries, exact semantic profile endpoint keys and a read-only current
 prepared-input stamp. Existing generic fillets remain public sketch associations; chamfer emits
 ordinary contacts, point-on-curve constraints and driving dimensions. Canonical v4 remains frozen,
-while the hidden draft-v5 codec preserves M58 state until M62 freezes the real schema.
+while the hidden draft-v5 codec preserves M58 state pending a future schema-freeze decision.
 
 The 18-case M58 suite covers every request family plus deterministic mappings, stale/cancelled/
 exhausted atomicity, foreign accepted geometry, bounds/non-finite input, interval overlap/order,
@@ -2624,8 +2625,9 @@ behavior and commands; `docs/M61_UAT.md` is the prepared human scorecard.
 
 ### M61: human UAT 3 - advanced geometry and topology
 
-Status: active; the first candidate was withdrawn after five human blockers. The remediated
-candidate is directly qualified and supervising-human approval is now required.
+Status: complete as of 2026-07-29; the first candidate was withdrawn after five human blockers,
+the remediated candidate was directly qualified, and the supervising human explicitly approved
+M61 for its recorded scope.
 
 Scope: advanced authoring, operations, topology, branch clarity and interaction-performance
 review after objective direct qualification.
@@ -2667,13 +2669,13 @@ tangent orbit, trammel, Scotch yoke, rotating square, scissor jack, five-stage s
 Peaucellier linkage. The active scenario owns all selection/projected-drag effects while scenario
 persistence remains disabled. The editor/workbench construct every requested advanced family
 through public document/session APIs; no equation, deleted playground, `/#/dev/lab` or browser
-harness returned. `docs/M61_UAT.md` records the replacement scorecard and no human approval.
+harness returned. `docs/M61_UAT.md` records the replacement scorecard and final scoped approval.
 Targeted repair `1c314e9` preserves the motion-cam fixture's intended independent freedoms while
 holding the non-dragged roller at its accepted position through an interaction-only stability
 target. `M61-F002` confirms the exact authored line-endpoint plus circle selection resolves and
 publishes a periodic point-on-curve contact, while the workbench now discards invalid stale/empty
 dynamic option values before dispatch. Neither repair adds an equation or persistent constraint;
-targeted human recheck remains pending. `M61-F003` reconstructs the supplied retained workspace
+the final scoped M61 approval accepts the requalified behavior. `M61-F003` reconstructs the supplied retained workspace
 with five points, two circles, two lines, one quadratic Bezier, four contacts, three constraints
 and two driving line-length dimensions. Native replay retains
 `AmbiguousContactNeighborhood` rather than laundering the rejected design into convergence, and a
@@ -2693,31 +2695,23 @@ circular centre onto the line. Parallel is line-pair only, arbitrary nonlinear d
 dispatch is disabled, and `circle-tangent-normal` plus direct mathematical regressions freeze the
 distinction. The public domain-level `CurveDirection` definition is retained.
 
-### M62: API and schema release-candidate freeze
+Approval record (2026-07-29): after the five original blockers and findings `M61-F001` through
+`M61-F005` were remediated and mechanically requalified, the supervising human closed M61 as
+approved for the scope recorded above. This approval does not freeze future UI scope or imply
+release hardening.
 
-Status: planned; begins after M61 passes.
+### M62: placeholder — goals pending
 
-Scope: final sketch v5 migration, parameter/external/workspace schemas, supported Rust/WASM
-facade, package/SemVer/schema gates and removal of unstable fixture/compiler surfaces.
+Status: planned placeholder; do not begin until the supervising user supplies and approves its
+goals.
 
-### M63: human UAT 4 - integrated release candidate
-
-Status: planned; human approval required after the M62 candidate freezes.
-
-Scope: one integrated frozen-candidate workflow, conflict recovery, production profiles,
-persistence/history, exploratory authoring and explicit sign-off.
-
-### M64: production embedding release gate
-
-Status: planned; begins after M63 passes.
-
-Scope: mock CAD host, public-API-only embedding, fuzz/resource limits, Linux/Windows/macOS/
-WASM consumers, packaged examples and one reproducible release command covering every
-renumbered automated gate and recorded human approval.
+Scope: intentionally empty. The former API/schema freeze, integrated release-candidate UAT and
+production-embedding release milestones have been removed rather than deferred under these
+numbers. M62 will receive a fresh goal, direct qualification criteria and its own final UAT.
 
 ## Explicit non-goals
 
-The following are not part of the program through M64:
+The following are not part of the currently approved roadmap:
 
 - solid modeling, B-rep booleans, meshing or a production rendering system;
 - 3D sketch curves or a unified 2D/3D sketch entity model;
@@ -2731,4 +2725,4 @@ The following are not part of the program through M64:
 - mass properties, loads, reactions, statics, inverse dynamics or forward dynamics;
 - time integration.
 
-These require separate product decisions after the production embedding gate.
+These require separate product decisions in a future milestone.

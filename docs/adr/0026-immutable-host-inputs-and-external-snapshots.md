@@ -119,8 +119,8 @@ snapshots, digest evidence and explicit rebinding. Later prepared jobs and
 compare-and-swap publication consume these immutable inputs; they do not revise this
 ownership boundary.
 
-The separate parameter and external-snapshot wire envelopes remain subject to the
-M62 freeze described by ADR 0025. This ADR is an M33 contract decision only. M33
+The separate parameter and external-snapshot wire envelopes remain subject to the future
+schema-freeze decision described by ADR 0025. This ADR is an M33 contract decision only. M33
 adds no parameter, external-reference, callback, persistence or public session API.
 
 ## Consequences

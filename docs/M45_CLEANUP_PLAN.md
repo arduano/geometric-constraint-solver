@@ -92,7 +92,7 @@ host-semantics consumer evidence at that checkpoint.
    external inputs plus accepted/attempted evidence.
 7. **Keep scene-capsule semantics only as transitional diagnostic input.** M49 either moves
    retained codec/evidence behavior to direct tests or retires it; M50 removes obsolete
-   glue. M62 owns any later supported release-surface decision.
+   glue. A future explicitly scoped milestone owns any later supported release-surface decision.
 
 ## Ordered cleanup boundary
 

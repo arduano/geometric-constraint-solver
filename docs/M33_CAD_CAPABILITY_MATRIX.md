@@ -15,6 +15,10 @@ family table. Row emission counts are scalar hard rows for driving relations;
 `0_reference` and `0_measurement` mean no equation row. A composite still owns one
 persistent semantic source.
 
+Roadmap note (2026-07-29): the machine-read `unsupported_through_m64` status and `M64` target cells
+below are frozen historical M33 tokens retained for characterization compatibility. They do not
+refer to an active M64 milestone; the current roadmap ends at an unscoped M62 placeholder.
+
 ## Status vocabulary
 
 <!-- M33_TABLE:status_vocabulary:BEGIN -->

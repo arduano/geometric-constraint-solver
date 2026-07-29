@@ -56,7 +56,7 @@ orientation/span/winding/branch state; curvature, G2 and separately named parame
 C2 behavior; driving/reference dimensions; truthful diagnostics; and versioned
 persistence. It did not complete the production host-embedding contract.
 
-Completion of Deliverable 1 at M64 additionally requires the ordinary planar CAD
+Completion of Deliverable 1 in a future production-hardening milestone additionally requires the ordinary planar CAD
 constraint/dimension catalog, retained unsolved design intent separated from accepted
 geometry, construction/activation semantics, typed host parameters, immutable
 external 2D references, cancellation, stable persistent-ID diagnostics, stale-work
@@ -88,7 +88,8 @@ platform events, accessibility and browser storage remain presentation-owned.
 
 ## Frozen M1-M7 regression baseline
 
-All existing M1-M7 tests and the advanced free-radius circle/arc tangency follow-up remain mandatory through M64.
+All existing M1-M7 tests and the advanced free-radius circle/arc tangency follow-up remain
+permanent mandatory regressions.
 
 ### Core representation and solver
 
@@ -146,15 +147,15 @@ Baseline candidate vectors do not yet carry M8 completeness metadata. Until the 
 - Geometry and audit values always come from the same accepted state.
 - It displays termination, hard residual, rank/DOF, branch and candidate diagnostics, plus grouped source audit rows.
 - It preserves prior valid geometry visibly after failed edits.
-- Automated Rust and WASM adapter coverage remains through M64. M13-M14 added the disposable playground and historical browser/mobile E2E as alpha acceptance consumers without making them authoritative; cleanup M46-M50 replaces retained claims with direct owning-layer tests and deletes that old infrastructure.
+- Automated Rust and WASM adapter coverage remains mandatory. M13-M14 added the disposable playground and historical browser/mobile E2E as alpha acceptance consumers without making them authoritative; cleanup M46-M50 replaces retained claims with direct owning-layer tests and deletes that old infrastructure.
 
 ## M8 acceptance: contract rebaseline and representative baselines
 
 M8 is ready for review only when every item below is objectively present. These checkboxes are acceptance criteria and do not mark `PLAN.md` complete.
 
 The checked wording below is the preserved M8 completion record. Its then-current M8-M22
-allocations are historical; `PLAN.md` now governs completed work through M58 and the executable
-M59-M64 sequence.
+allocations are historical; `PLAN.md` now governs completed work through the approved M61 gate
+and the unscoped M62 placeholder.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -934,10 +935,10 @@ finding dispositions and approval record are retained in `docs/M53_UAT.md`.
   regression/requalification plus human retest; deferred future scope retains an explicit roadmap
   owner.
 
-## M54-M64 acceptance
+## M54-M61 acceptance and M62 placeholder
 
-These are the final executable post-M53 milestone numbers. No old browser E2E qualification may
-return.
+M54-M61 are the completed post-M53 sequence. M62 has no acceptance criteria until the supervising
+user supplies its goals. No old browser E2E qualification may return.
 
 ### M54: stable diagnostics
 
@@ -1056,7 +1057,8 @@ geometry return typed outcomes; no curve is sampled into an approximation.
 Multi-interval visibility retains immutable support definitions, validates canonical traversal
 order and non-overlap, uses exact fixed/contact boundary identities in visual profiles and freezes
 constraint-owned boundaries before owner deletion. Canonical sketch v4 rejects this new state;
-the hidden draft-v5 bridge round-trips it until M62. Direct regressions prove deterministic
+the hidden draft-v5 bridge remains explicitly unsupported pending a future schema-freeze
+decision. Direct regressions prove deterministic
 proposal mappings, stale/cancelled/exhausted/foreign-input atomicity, finite/resource bounds,
 profile closure and companion dependency isolation. Native, full-workspace, WASM and release
 qualification pass without a private residual, browser harness or restored legacy route.
@@ -1110,8 +1112,10 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
 
 ### M61: human UAT 3
 
-- Status: active; the original candidate was withdrawn after five UAT blockers. The replacement
-  scorecard in `docs/M61_UAT.md` is prepared and no human approval is recorded yet.
+- Status: complete and explicitly approved by the supervising human on 2026-07-29 for the scope
+  recorded in `docs/M61_UAT.md`. The original candidate was withdrawn after five UAT blockers;
+  the replacement and findings `M61-F001` through `M61-F005` were directly requalified before
+  closure.
 - Ten representative public alpha mechanisms expose documented nonzero equality/bounded mobility,
   preselect one persistent driver, accept projected drag through the active ephemeral coordinator,
   reset exactly and never mutate ordinary workspace persistence.
@@ -1125,28 +1129,17 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
   conic, parabola, hyperbola and clamped/periodic NURBS through reusable headless proposals.
 - Conic/NURBS options, rational gauge state and terminal topology validate atomically; advanced
   previews sample only public domain curve evaluation and contain no browser equation.
-- The supervising human completes the prepared 60-90 minute advanced geometry/topology scorecard.
+- The supervising human completed the advanced geometry/topology review and approved its scoped
+  outcome.
 - Advanced controls, branch transitions, associated operations, topology claims and representative interaction performance are understandable and trustworthy.
 - No unresolved wrong-branch, misleading-profile, advanced-interaction or responsiveness blocker remains.
 
-### M62: release-candidate freeze
+### M62: placeholder — goals pending
 
-- Sketch v5, parameter/snapshot/workspace envelopes and the supported Rust/WASM API are frozen with deterministic migration and compatibility tests.
-- The exact candidate passes SemVer, schema, package, native, WASM, fuzz, mutation, performance, documentation and licence gates through direct automated qualification.
-- Any material API/schema/workflow change revokes the candidate and requires full requalification.
-
-### M63: human UAT 4
-
-- The supervising human completes and signs the 45-60 minute integrated candidate workflow plus exploratory authoring.
-- Normal work, failure recovery, persistence, profiles and advanced diagnostics form one coherent and trustworthy experience.
-- Every objective finding has a direct regression; only targeted human rechecks remain unless the candidate changes materially.
-
-### M64: production embedding release
-
-- A mock CAD host owns expressions, external keys, application metadata/history and worker scheduling while consuming only stable public GeoSolve APIs.
-- Retained intent, immutable inputs, activation, cancellation, stale work, diagnostics and production topology pass end to end.
-- Coverage-guided fuzzing, resource controls, packaged examples and Linux/Windows/macOS/WASM Rust consumers pass without a C ABI.
-- One release command proves every renumbered automated gate and records the required human approvals without false success, false complete topology or stale commit.
+- No implementation or acceptance scope is authorized yet.
+- The supervising user will supply its goals before work begins.
+- Once scoped, M62 will include direct automated qualification and will end in its own explicit
+  human UAT approval.
 
 ## Regression and oracle policy
 

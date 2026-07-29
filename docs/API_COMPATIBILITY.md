@@ -16,12 +16,11 @@ M33 completes the production-embedding contract and baseline freeze without addi
 target APIs. M34 adds the retained-design lifecycle and M35 adds cooperative
 operation-control APIs; M36-M44 complete the current implementation transition. Cleanup
 M46-M53 preserves released v1-v4 wire compatibility and the accepted-state safety contract
-while evolving the new pre-1.0 editor/workbench surface. M62 freezes the next
-release-candidate API and sketch v5 language only after the ordinary, host-state and
-advanced workbench phases pass direct automated acceptance and the required
-M40.7/M53/M61 human UAT gates. M63 then ratifies the integrated
-candidate. Until M62 passes, any draft-v5 representation is explicitly unsupported and
-must not be treated as a released wire language.
+while evolving the new pre-1.0 editor/workbench surface. M61 closes the currently approved
+advanced-workbench scope. No API/schema hardening milestone is presently scheduled; M62 is an
+unscoped placeholder. Any draft-v5 representation remains explicitly unsupported until a future
+schema-freeze milestone is deliberately scoped, qualified and approved, and must not be treated
+as a released wire language.
 
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.
@@ -85,11 +84,11 @@ Runtime generational IDs never form persisted identity. A schema language is nev
 expanded after release; new fields or variants require a new schema version and a
 frozen reader for each retained old version.
 
-The planned sketch v5 transition retains direct deterministic migration from v1-v4
+Any future sketch v5 transition must retain direct deterministic migration from v1-v4
 and uses separately versioned host-parameter, immutable external-snapshot and desktop-
 workspace envelopes. Host expressions, PDM keys, projection callbacks and application
-undo are not added to canonical sketch equations. The current table remains the
-supported contract until M62 acceptance updates it.
+undo are not added to canonical sketch equations. The current table remains the supported
+contract until a future explicitly scoped schema milestone updates it.
 
 The project supports reading every schema listed above throughout the `0.2` line.
 Dropping an input schema requires a minor release before `1.0`, a major release
@@ -105,8 +104,8 @@ behind a private v1 wire DTO in the same manner as sketch persistence.
 
 The release has no optional Cargo feature contract. Native Linux x86-64 and
 `wasm32-unknown-unknown` are release-gated. Other Rust-supported targets are
-best-effort unless added to the release matrix. M64 targets Linux, Windows,
-macOS and WASM Rust consumers. No C ABI is planned through M64. The WASM workbench is
+best-effort unless added to a future release matrix. Linux, Windows and macOS release expansion is
+not currently scheduled. No C ABI is in the currently approved roadmap. The WASM workbench is
 not a separate product API and does not define document semantics; cleanup qualification
 uses direct Rust/WASM tests rather than browser E2E, and there is no mobile or responsive
 support contract.

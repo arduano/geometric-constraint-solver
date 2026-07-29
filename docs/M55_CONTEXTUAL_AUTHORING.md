@@ -1,6 +1,6 @@
 # M55 contextual constraint authoring follow-up
 
-Status: complete as of 2026-07-29 during the active M61 remediation.
+Status: complete as of 2026-07-29 during M61 remediation.
 
 ## Objective
 
@@ -67,7 +67,8 @@ Collinear, point-pair Horizontal/Vertical, Point/Entity Symmetry, EqualDistance,
 EqualAngle and BlockEntity relations. It is not part of
 `RetainedSketchDocumentSession`, its undo/redo history, prepared-input stamp or
 workspace envelope. Those relations must not be presented as ordinary retained
-actions until M62 deliberately freezes their lifecycle and schema integration.
+actions until a future milestone deliberately scopes and freezes their lifecycle and schema
+integration.
 
 The public sketch domain retains `CurveDirection` for callers that deliberately
 need a direction at an explicit curve contact. Compact authoring does not expose

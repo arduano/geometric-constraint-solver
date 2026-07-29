@@ -68,8 +68,8 @@ entries are typed unsolved-design/attempt outcomes, never implicit defaults.
 
 The existing supported v4 JSON codec remains frozen. `to_canonical_json` rejects
 non-default M41/M42 state rather than dropping it. The additive, explicitly unstable
-draft-v5 DTO round-trips M42 declarations, bindings and outputs canonically; M62 remains
-the persistence freeze point.
+draft-v5 DTO round-trips M42 declarations, bindings and outputs canonically; a future explicitly
+scoped milestone remains responsible for any persistence freeze.
 
 ## Immutable batch canonicalization and digest
 

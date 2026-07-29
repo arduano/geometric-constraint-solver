@@ -4,7 +4,8 @@
 
 Date: 2026-07-29
 
-Status: objective remediation complete; replacement human UAT pending
+Status: complete; objective remediation directly qualified and the replacement M61 scope approved
+by the supervising human on 2026-07-29
 
 Implementation source: `1f5fd59`; targeted interaction repair: `1c314e9`
 
@@ -160,5 +161,5 @@ coordinate-derived branch rule changed.
 - NURBS creation uses deterministic clamped-open or periodic-uniform knots. Arbitrary user knot
   vectors are not exposed in this UAT control.
 - Scenario edits deliberately remain ephemeral and are reset/exit scoped.
-- M61 still requires explicit supervising-human approval of the replacement scorecard in
-  `docs/M61_UAT.md`.
+- The supervising human approved and closed M61 for the recorded scope on 2026-07-29. Future UI
+  improvements and cleanup belong to newly scoped milestones.

@@ -20,8 +20,8 @@ compare-and-swap publication, M57 completed dependency-local retained solving an
 production-scale evidence, M58 completed the deterministic equation-free sketch operations
 companion and multi-interval visible topology, M59 completed the revision-stamped production
 topology companion, and M60 completed the directly qualified advanced workbench and prepared M61
-scorecard. The first M61 candidate was withdrawn for five interaction/coverage blockers; its
-remediated human UAT is now active. The workbench is a
+scorecard. The first M61 candidate was withdrawn for five interaction/coverage blockers; the
+remediated scope is now explicitly approved and closed. The workbench is a
 non-authoritative demo consumer, not a production UI or third solver. Mobile support and
 physics remain outside future acceptance.
 
@@ -90,8 +90,9 @@ seeding. M61 remediation adds ten movable nonzero-DOF mechanism leaves, active-s
 drag, unclipped recursive flyouts, full Bezier/conic/NURBS authoring and an inspectable canvas
 camera. Follow-up `M61-F001` restores the twin-roller fixture's passive stability target at the
 headless/UI seam. Follow-up `M61-F005` makes compact circle Tangent contact-bearing and circle/arc
-Normal explicitly radial while retaining the public direction-at-contact domain API. The active
-milestone is **M61: human UAT 3 — advanced geometry and topology**.
+Normal explicitly radial while retaining the public direction-at-contact domain API. M61 is
+complete and approved; **M62 is an intentionally unscoped placeholder awaiting supervising-user
+goals**.
 Old Chromium/CDP, HTTP serving, DOM-scraping, screenshot, wall-clock browser-timing and
 source-substring-scan gates remain retired.
 
@@ -115,10 +116,10 @@ are complete, growing the catalog to eight scenarios. The complete clean release
 build-source commit `f72116b`; `docs/M53_UAT.md` records the frozen M53-S5 manifest and temporary
 human endpoint. The targeted attribution review passed as part of final M53-S5 approval.
 
-The finalized M54-M64 functional/release roadmap covers completed stable diagnostics, alpha
+The completed M54-M61 sequence covers stable diagnostics, alpha
 constraint/dimension/branch-action parity, prepared jobs, incremental scale, operations,
-production topology and advanced workbench, followed by active advanced UAT, API/schema freeze,
-integrated UAT and the production embedding release.
+production topology, the advanced workbench and approved advanced UAT. The previously forecast
+M62-M64 hardening sequence was withdrawn on 2026-07-29; only an unscoped M62 placeholder remains.
 
 Durable cleanup records:
 
@@ -142,7 +143,7 @@ Durable cleanup records:
 - `docs/M59_IMPLEMENTATION.md`
 - `docs/M60_IMPLEMENTATION.md`
 - `docs/M61_REMEDIATION.md`
-- `docs/M61_UAT.md` (prepared scorecard; no M61 approval recorded yet)
+- `docs/M61_UAT.md` (approved M61 scorecard and finding ledger)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

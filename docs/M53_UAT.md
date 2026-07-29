@@ -108,7 +108,7 @@ files retrieved from the non-watching endpoint matched their local SHA-256 value
 | Concern, question or plan | Durable owner | Current disposition |
 | --- | --- | --- |
 | M53 ratings, findings and explicit approval | this scorecard and `PLAN.md` M53 | complete; all areas Pass and explicit approval recorded 2026-07-28 |
-| Later diagnostics, early alpha action parity, concurrency, scale, operations/topology, advanced workbench/UAT and release work | `PLAN.md` M54-M64 | executable ordered roadmap; M54 is active and M55 owns the pulled-forward parity gate |
+| Later diagnostics, early alpha action parity, concurrency, scale, operations/topology and advanced workbench/UAT | `PLAN.md` M54-M61 | complete; M61 approved on 2026-07-29 and M62 now awaits fresh goals |
 | Recovered M38-M52 implementation/evidence and the M53 scenario selector/error overlay on `feat/m53-host-semantics-uat` | Git commits plus completed milestone records | product implementation is complete in dependency-safe commits through `f72116b`; all unique work is in the sole main worktree and no untracked files remain |
 | Cargo duplicate `license`/`license-file` metadata warnings seen during release build | existing package metadata | known nonblocking concern; warnings-denied Clippy and M52 gates pass, and M53 does not broaden into metadata cleanup |
 
