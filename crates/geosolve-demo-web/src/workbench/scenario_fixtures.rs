@@ -2,23 +2,24 @@
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 
 use geosolve_constraint_editor::{
-    BranchAction, ConstraintActionRequest, ConstraintKind, ContactActionChoice, CoordinatorError,
+    BranchAction, ConstraintActionRequest, ConstraintIntent, ContactActionChoice, CoordinatorError,
     RetainedEditorCoordinator, SelectionItem,
 };
 use geosolve_core::SolverConfig;
 use geosolve_sketch::{
     AlphaScenarioIds, AlphaScenarioKind, ContactDomain, ContactNeighborhood, CurveDefinition,
     CurveSpan, DesignPointId, DocumentBSplineSpanDirection, DocumentConstraintDefinition,
+    DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation,
     DocumentCurveSpanRef, DocumentDimensionDefinition, DocumentDimensionMode,
-    DocumentDirectionSense, DocumentEdit, DocumentElementId, DocumentExternalLineSupportRef,
-    DocumentId, DocumentLineSupportRef, DocumentParameterKind, DocumentParameterTarget,
-    DocumentSessionError, DocumentSolveRequest, ExternalFeatureKindV1, ExternalLineOrientationV1,
-    ExternalSnapshotDigest, ExternalSnapshotEntry, ExternalSnapshotFeatureV1,
-    ExternalSnapshotResourcesV1, ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole,
-    HostActivationOverride, HostConfigurationActivation, OperationControl, OperationOutcome,
-    ParameterBatch, ParameterBatchEntry, ParameterValue, PersistentId,
-    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument, TangentOrientation,
-    alpha_scenario, cancellation_pair,
+    DocumentDirectionSense, DocumentEdit, DocumentElementId, DocumentError,
+    DocumentExternalLineSupportRef, DocumentId, DocumentLineSupportRef, DocumentParameterKind,
+    DocumentParameterTarget, DocumentSessionError, DocumentSolveRequest, ExternalFeatureKindV1,
+    ExternalLineOrientationV1, ExternalSnapshotDigest, ExternalSnapshotEntry,
+    ExternalSnapshotFeatureV1, ExternalSnapshotResourcesV1, ExternalSnapshotSet,
+    ExternalTopologyDigest, GeometryRole, HostActivationOverride, HostConfigurationActivation,
+    OperationControl, OperationOutcome, ParameterBatch, ParameterBatchEntry, ParameterValue,
+    PersistentId, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
+    TangentOrientation, alpha_scenario, cancellation_pair,
 };
 use geosolve_sketch_ops::{
     SketchOperationRequest, SketchOperationResult, SketchOperationSnapshot, SplitRetainedPiece,
@@ -853,7 +854,7 @@ impl ScenarioCandidate {
                     .apply_constraint_action(
                         expected,
                         ConstraintActionRequest {
-                            kind: ConstraintKind::GenericContact,
+                            intent: ConstraintIntent::Coincident,
                             label: "Scenario impossible contact".into(),
                             contacts: self
                                 .alpha_branch
@@ -870,6 +871,7 @@ impl ScenarioCandidate {
                                     tangent_orientation: None,
                                 })
                                 .collect(),
+                            relation: None,
                         },
                     )
                     .map_err(|error| error.to_string())?;
@@ -1224,8 +1226,9 @@ fn error_attribution_fixture() -> Result<ErrorAttributionFixture, String> {
 }
 
 fn alpha_parity_fixture() -> Result<RetainedEditorCoordinator, String> {
-    let fixture =
+    let mut fixture =
         alpha_scenario(AlphaScenarioKind::Corpus, 1.0).map_err(|error| error.to_string())?;
+    add_contextual_constraint_examples(&mut fixture.document).map_err(|error| error.to_string())?;
     let session = RetainedSketchDocumentSession::new(
         fixture.document,
         fixture.request,
@@ -1233,6 +1236,141 @@ fn alpha_parity_fixture() -> Result<RetainedEditorCoordinator, String> {
     )
     .map_err(|error| error.to_string())?;
     RetainedEditorCoordinator::new(session).map_err(|error| error.to_string())
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "the three independent typed scenario examples are clearest as one fixture composition"
+)]
+fn add_contextual_constraint_examples(document: &mut SketchDocument) -> Result<(), DocumentError> {
+    let direction_controls = [
+        document.add_point("contextual direction A", [230.0, 0.0])?,
+        document.add_point("contextual direction B", [231.0, 0.0])?,
+        document.add_point("contextual direction C", [232.0, 0.0])?,
+    ];
+    let direction_curve = document.add_curve(
+        "contextual direction curve",
+        CurveDefinition::QuadraticBezier {
+            controls: direction_controls,
+        },
+    )?;
+    let line_points = [
+        document.add_point("contextual direction line A", [230.0, -1.0])?,
+        document.add_point("contextual direction line B", [232.0, -1.0])?,
+    ];
+    let direction_line = document.add_curve(
+        "contextual direction line",
+        CurveDefinition::Line {
+            start: line_points[0],
+            end: line_points[1],
+            branch_direction: [1.0, 0.0],
+        },
+    )?;
+    let direction_contact = document.add_curve_contact(
+        "contextual direction contact",
+        CurveSpan::line(direction_curve),
+        0.5,
+        0,
+        ContactNeighborhood::Interior,
+        None,
+    )?;
+    document.add_constraint(
+        "Parallel intent → tangent curve direction",
+        DocumentConstraintDefinition::CurveDirection {
+            line: CurveSpan::line(direction_line),
+            curve_contact: direction_contact,
+            relation: DocumentCurveDirectionRelation::Tangent {
+                orientation: TangentOrientation::Aligned,
+            },
+        },
+    )?;
+
+    let mut curvature_curves = Vec::new();
+    for offset in [0.0, 3.0] {
+        let controls = [
+            document.add_point("contextual curvature start", [240.0 + offset, 0.0])?,
+            document.add_point("contextual curvature middle", [241.0 + offset, 1.0])?,
+            document.add_point("contextual curvature end", [242.0 + offset, 0.0])?,
+        ];
+        curvature_curves.push(document.add_curve(
+            "contextual equal curvature curve",
+            CurveDefinition::QuadraticBezier { controls },
+        )?);
+    }
+    let mut curvature_contacts = Vec::new();
+    for curve in curvature_curves {
+        curvature_contacts.push(document.add_curve_contact(
+            "contextual curvature contact",
+            CurveSpan::line(curve),
+            0.5,
+            0,
+            ContactNeighborhood::Interior,
+            None,
+        )?);
+    }
+    document.add_constraint(
+        "Equal intent → signed curve curvature",
+        DocumentConstraintDefinition::EqualCurvature {
+            first_contact: curvature_contacts[0],
+            second_contact: curvature_contacts[1],
+            relation: DocumentCurveCurvatureRelation::Signed,
+        },
+    )?;
+
+    let continuity_points = [
+        document.add_point("contextual continuity A", [250.0, 0.0])?,
+        document.add_point("contextual continuity B", [251.0, 0.0])?,
+        document.add_point("contextual continuity seam", [252.0, 0.0])?,
+        document.add_point("contextual continuity D", [253.0, 0.0])?,
+        document.add_point("contextual continuity E", [254.0, 0.0])?,
+    ];
+    let continuity_curves = [
+        document.add_curve(
+            "contextual continuity incoming",
+            CurveDefinition::QuadraticBezier {
+                controls: [
+                    continuity_points[0],
+                    continuity_points[1],
+                    continuity_points[2],
+                ],
+            },
+        )?,
+        document.add_curve(
+            "contextual continuity outgoing",
+            CurveDefinition::QuadraticBezier {
+                controls: [
+                    continuity_points[2],
+                    continuity_points[3],
+                    continuity_points[4],
+                ],
+            },
+        )?,
+    ];
+    let first = document.add_curve_contact(
+        "contextual continuity incoming endpoint",
+        CurveSpan::line(continuity_curves[0]),
+        1.0,
+        0,
+        ContactNeighborhood::End,
+        None,
+    )?;
+    let second = document.add_curve_contact(
+        "contextual continuity outgoing endpoint",
+        CurveSpan::line(continuity_curves[1]),
+        0.0,
+        0,
+        ContactNeighborhood::Start,
+        None,
+    )?;
+    document.add_constraint(
+        "Continuity intent → G2 endpoint continuity",
+        DocumentConstraintDefinition::EndpointContinuity {
+            first_contact: first,
+            second_contact: second,
+            continuity: DocumentCurveContinuity::G2,
+        },
+    )?;
+    Ok(())
 }
 
 fn motion_fixture(kind: AlphaScenarioKind) -> Result<MotionFixture, String> {
@@ -1598,12 +1736,37 @@ fn accepted_evidence(coordinator: &RetainedEditorCoordinator) -> String {
 #[cfg(test)]
 mod tests {
     use geosolve_constraint_editor::{EditorProblemScope, EditorProblemTarget, SelectionItem};
-    use geosolve_sketch::CurveSpan;
+    use geosolve_sketch::{CurveSpan, DocumentConstraintDefinition};
 
     use super::{
         ScenarioAction, ScenarioBoundary, ScenarioCandidate, ScenarioFixture, ScenarioRejection,
     };
     use crate::workbench::panels::{host_state_markup, production_topology_markup, tree_markup};
+
+    #[test]
+    fn alpha_catalog_contains_contextual_direction_curvature_and_continuity_examples() {
+        let candidate = ScenarioCandidate::new(ScenarioFixture::AlphaParity).unwrap();
+        let definitions = candidate
+            .alpha_parity
+            .session()
+            .design_document()
+            .constraints()
+            .iter()
+            .map(|constraint| &constraint.definition)
+            .collect::<Vec<_>>();
+        assert!(definitions.iter().any(|definition| matches!(
+            definition,
+            DocumentConstraintDefinition::CurveDirection { .. }
+        )));
+        assert!(definitions.iter().any(|definition| matches!(
+            definition,
+            DocumentConstraintDefinition::EqualCurvature { .. }
+        )));
+        assert!(definitions.iter().any(|definition| matches!(
+            definition,
+            DocumentConstraintDefinition::EndpointContinuity { .. }
+        )));
+    }
 
     #[test]
     fn scenario_candidate_directly_qualifies_role_activity_and_mode_distinctions() {

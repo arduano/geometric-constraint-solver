@@ -1,38 +1,24 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 
-use geosolve_constraint_editor::{ConstraintKind, DimensionKind};
+use geosolve_constraint_editor::{ConstraintIntent, DimensionKind};
 
-pub(crate) const CONSTRAINT_ACTIONS: [(&str, &str, ConstraintKind); 13] = [
-    ("fixed", "Fixed", ConstraintKind::Fixed),
-    ("coincident", "Coincident", ConstraintKind::Coincident),
-    ("horizontal", "Horizontal", ConstraintKind::Horizontal),
-    ("vertical", "Vertical", ConstraintKind::Vertical),
-    (
-        "point-on-curve",
-        "Point on curve",
-        ConstraintKind::PointOnCurve,
-    ),
-    ("parallel", "Parallel", ConstraintKind::Parallel),
+pub(crate) const CONSTRAINT_ACTIONS: [(&str, &str, ConstraintIntent); 11] = [
+    ("lock", "Lock", ConstraintIntent::Lock),
+    ("coincident", "Coincident", ConstraintIntent::Coincident),
+    ("horizontal", "Horizontal", ConstraintIntent::Horizontal),
+    ("vertical", "Vertical", ConstraintIntent::Vertical),
+    ("parallel", "Parallel", ConstraintIntent::Parallel),
     (
         "perpendicular",
         "Perpendicular",
-        ConstraintKind::Perpendicular,
+        ConstraintIntent::Perpendicular,
     ),
-    ("equal-length", "Equal length", ConstraintKind::EqualLength),
-    ("equal-radius", "Equal radius", ConstraintKind::EqualRadius),
-    ("midpoint", "Midpoint", ConstraintKind::Midpoint),
-    ("symmetry", "Symmetry", ConstraintKind::Symmetry),
-    (
-        "generic-contact",
-        "Generic contact",
-        ConstraintKind::GenericContact,
-    ),
-    (
-        "generic-tangency",
-        "Generic tangency",
-        ConstraintKind::GenericTangency,
-    ),
+    ("equal", "Equal", ConstraintIntent::Equal),
+    ("midpoint", "Midpoint", ConstraintIntent::Midpoint),
+    ("symmetric", "Symmetric", ConstraintIntent::Symmetric),
+    ("tangent", "Tangent", ConstraintIntent::Tangent),
+    ("continuity", "Continuity", ConstraintIntent::Continuity),
 ];
 
 pub(crate) const DIMENSION_ACTIONS: [(&str, &str, DimensionKind); 5] = [
@@ -55,7 +41,7 @@ pub(crate) const DIMENSION_ACTIONS: [(&str, &str, DimensionKind); 5] = [
     ),
 ];
 
-pub(crate) fn constraint_from_key(key: &str) -> Option<ConstraintKind> {
+pub(crate) fn constraint_from_key(key: &str) -> Option<ConstraintIntent> {
     CONSTRAINT_ACTIONS
         .iter()
         .find_map(|(candidate, _, kind)| (*candidate == key).then_some(*kind))
@@ -78,7 +64,7 @@ pub(crate) fn dimension_key(kind: DimensionKind) -> &'static str {
 mod tests {
     use std::collections::HashSet;
 
-    use geosolve_constraint_editor::{ConstraintKind, DimensionKind};
+    use geosolve_constraint_editor::{ConstraintIntent, DimensionKind};
 
     use super::{
         CONSTRAINT_ACTIONS, DIMENSION_ACTIONS, constraint_from_key, dimension_from_key,
@@ -88,19 +74,17 @@ mod tests {
     #[test]
     fn wasm_action_identity_catalog_is_complete_unique_and_round_trips() {
         let expected_constraints = [
-            ConstraintKind::Fixed,
-            ConstraintKind::Coincident,
-            ConstraintKind::Horizontal,
-            ConstraintKind::Vertical,
-            ConstraintKind::PointOnCurve,
-            ConstraintKind::Parallel,
-            ConstraintKind::Perpendicular,
-            ConstraintKind::EqualLength,
-            ConstraintKind::EqualRadius,
-            ConstraintKind::Midpoint,
-            ConstraintKind::Symmetry,
-            ConstraintKind::GenericContact,
-            ConstraintKind::GenericTangency,
+            ConstraintIntent::Lock,
+            ConstraintIntent::Coincident,
+            ConstraintIntent::Horizontal,
+            ConstraintIntent::Vertical,
+            ConstraintIntent::Parallel,
+            ConstraintIntent::Perpendicular,
+            ConstraintIntent::Equal,
+            ConstraintIntent::Midpoint,
+            ConstraintIntent::Symmetric,
+            ConstraintIntent::Tangent,
+            ConstraintIntent::Continuity,
         ];
         let expected_dimensions = [
             DimensionKind::PointDistance,
@@ -141,6 +125,21 @@ mod tests {
             assert_eq!(dimension_key(kind), key);
         }
         assert_eq!(constraint_from_key("unknown"), None);
+        for retired in [
+            "fixed",
+            "point-on-curve",
+            "equal-length",
+            "equal-radius",
+            "symmetry",
+            "generic-contact",
+            "generic-tangency",
+        ] {
+            assert_eq!(
+                constraint_from_key(retired),
+                None,
+                "{retired} must not survive as a hidden equation-shaped alias"
+            );
+        }
         assert_eq!(dimension_from_key("unknown"), None);
     }
 }

@@ -29,10 +29,11 @@ use std::cmp::Ordering;
 use geosolve_sketch::{
     ContactDomain, ContactNeighborhood, CurveDefinition, CurveId, CurveSpan, DesignPointId,
     DesignScalarId, DocumentAngleOrientation, DocumentArcSweep, DocumentBSplineForm,
-    DocumentConstraintDefinition, DocumentConstraintId, DocumentCurveSpanRef, DocumentDimensionId,
-    DocumentDimensionMode, DocumentEdit, DocumentHyperbolaBranch, DocumentObjectId,
-    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, ScalarDomain, ScalarUnit, SketchDesignIdentity,
-    SketchDocument, TangentOrientation,
+    DocumentConstraintDefinition, DocumentConstraintId, DocumentCurveContinuity,
+    DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation, DocumentCurveSpanRef,
+    DocumentDimensionId, DocumentDimensionMode, DocumentEdit, DocumentHyperbolaBranch,
+    DocumentObjectId, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, ScalarDomain, ScalarUnit,
+    SketchDesignIdentity, SketchDocument, TangentOrientation,
 };
 use thiserror::Error;
 
@@ -149,6 +150,8 @@ pub struct ScenePoint {
 pub struct SceneCurve {
     pub span: CurveSpan,
     pub screen_polyline: Vec<ScreenPoint>,
+    /// Curve parameters paired one-to-one with [`Self::screen_polyline`].
+    pub screen_parameters: Vec<f64>,
 }
 
 /// Deterministic presentation-neutral scene derived from one accepted revision.
@@ -249,6 +252,7 @@ impl EditorScene {
                     let start = viewport.model_to_screen([start.position.x, start.position.y]);
                     let end = viewport.model_to_screen([end.position.x, end.position.y]);
                     let mut screen_polyline = vec![start];
+                    let mut screen_parameters = vec![interval.start];
                     tessellate(
                         document,
                         viewport,
@@ -260,10 +264,12 @@ impl EditorScene {
                         chord_tolerance_pixels,
                         0,
                         &mut screen_polyline,
+                        &mut screen_parameters,
                     )?;
                     curves.push(SceneCurve {
                         span,
                         screen_polyline,
+                        screen_parameters,
                     });
                 }
             }
@@ -293,6 +299,7 @@ impl EditorScene {
                 (distance <= tolerance.point_pixels).then_some(Hit {
                     item: SelectionItem::Point(point.id),
                     distance_pixels: distance,
+                    curve_parameter: None,
                 })
             })
             .min_by(compare_hits);
@@ -302,14 +309,23 @@ impl EditorScene {
         self.curves
             .iter()
             .filter_map(|curve| {
-                let distance = curve
+                let (distance, parameter) = curve
                     .screen_polyline
                     .windows(2)
-                    .map(|segment| point_segment_distance(position, segment[0], segment[1]))
-                    .reduce(f64::min)?;
+                    .zip(curve.screen_parameters.windows(2))
+                    .map(|(segment, parameters)| {
+                        let (distance, projection) =
+                            point_segment_projection(position, segment[0], segment[1]);
+                        (
+                            distance,
+                            (parameters[1] - parameters[0]).mul_add(projection, parameters[0]),
+                        )
+                    })
+                    .min_by(|first, second| first.0.total_cmp(&second.0))?;
                 (distance <= tolerance.curve_pixels).then_some(Hit {
                     item: SelectionItem::Curve(curve.span),
                     distance_pixels: distance,
+                    curve_parameter: Some(parameter),
                 })
             })
             .min_by(compare_hits)
@@ -346,6 +362,8 @@ impl PickTolerance {
 pub struct Hit {
     pub item: SelectionItem,
     pub distance_pixels: f64,
+    /// Explicit curve feature picked by the user, when the hit is a curve.
+    pub curve_parameter: Option<f64>,
 }
 
 /// Platform-independent modifier state.
@@ -1110,6 +1128,7 @@ struct Draft {
 #[derive(Clone, Debug)]
 pub struct ConstraintEditor {
     selection: Vec<SelectionItem>,
+    curve_pick_parameters: Vec<(CurveSpan, f64)>,
     pick_tolerance: PickTolerance,
     drag_threshold_pixels: f64,
     point_gesture: Option<PointGesture>,
@@ -1127,6 +1146,7 @@ impl Default for ConstraintEditor {
     fn default() -> Self {
         Self {
             selection: Vec::new(),
+            curve_pick_parameters: Vec::new(),
             pick_tolerance: PickTolerance::default(),
             drag_threshold_pixels: 3.0,
             point_gesture: None,
@@ -1255,9 +1275,18 @@ impl ConstraintEditor {
         &self.selection
     }
 
+    /// Returns the explicit user-picked parameter for one selected curve span.
+    #[must_use]
+    pub fn curve_pick_parameter(&self, span: CurveSpan) -> Option<f64> {
+        self.curve_pick_parameters
+            .iter()
+            .find_map(|(candidate, parameter)| (*candidate == span).then_some(*parameter))
+    }
+
     /// Replaces ordered persistent selection, removing later duplicates.
     pub fn set_selection(&mut self, selection: impl IntoIterator<Item = SelectionItem>) {
         self.selection.clear();
+        self.curve_pick_parameters.clear();
         for item in selection {
             if !self.selection.contains(&item) {
                 self.selection.push(item);
@@ -1270,11 +1299,16 @@ impl ConstraintEditor {
         if modifiers.extends_selection() {
             if let Some(index) = self.selection.iter().position(|selected| *selected == item) {
                 self.selection.remove(index);
+                if let SelectionItem::Curve(span) = item {
+                    self.curve_pick_parameters
+                        .retain(|(candidate, _)| *candidate != span);
+                }
             } else {
                 self.selection.push(item);
             }
         } else {
             self.selection.clear();
+            self.curve_pick_parameters.clear();
             self.selection.push(item);
         }
     }
@@ -1298,6 +1332,13 @@ impl ConstraintEditor {
         let before = self.selection.clone();
         if let Some(hit) = hit {
             self.select_item(hit.item, input.modifiers);
+            if let (SelectionItem::Curve(span), Some(parameter)) = (hit.item, hit.curve_parameter) {
+                self.curve_pick_parameters
+                    .retain(|(candidate, _)| *candidate != span);
+                if self.selection.contains(&hit.item) {
+                    self.curve_pick_parameters.push((span, parameter));
+                }
+            }
             if let SelectionItem::Point(point) = hit.item
                 && self.selection.contains(&hit.item)
             {
@@ -1312,6 +1353,7 @@ impl ConstraintEditor {
             }
         } else if !input.modifiers.extends_selection() {
             self.selection.clear();
+            self.curve_pick_parameters.clear();
         }
         effects.extend(
             (before != self.selection)
@@ -1647,6 +1689,73 @@ pub enum ConstraintKind {
     GenericTangency,
 }
 
+/// Compact selection-sensitive authoring vocabulary.
+///
+/// An intent is not an equation identity. The headless coordinator resolves it
+/// to one [`ResolvedConstraintKind`] from typed selected operands.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ConstraintIntent {
+    Lock,
+    Coincident,
+    Horizontal,
+    Vertical,
+    Parallel,
+    Perpendicular,
+    Equal,
+    Midpoint,
+    Symmetric,
+    Tangent,
+    Continuity,
+}
+
+/// Exact persistent constraint family selected by contextual dispatch.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ResolvedConstraintKind {
+    FixedPoint,
+    CoincidentPoints,
+    PointOnCurve,
+    CurveContact,
+    HorizontalLine,
+    VerticalLine,
+    ParallelLines,
+    CurveTangentDirection,
+    PerpendicularLines,
+    CurveNormalDirection,
+    EqualLength,
+    EqualRadius,
+    EqualCurvature,
+    Midpoint,
+    SymmetricAboutLine,
+    CurveTangency,
+    EndpointContinuity,
+}
+
+impl ResolvedConstraintKind {
+    /// Selection-specific presentation label; equations remain domain-owned.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::FixedPoint => "Lock point",
+            Self::CoincidentPoints => "Coincident",
+            Self::PointOnCurve => "Point on curve",
+            Self::CurveContact => "Curve contact",
+            Self::HorizontalLine => "Horizontal",
+            Self::VerticalLine => "Vertical",
+            Self::ParallelLines => "Parallel",
+            Self::CurveTangentDirection => "Line tangent to curve",
+            Self::PerpendicularLines => "Perpendicular",
+            Self::CurveNormalDirection => "Line normal to curve",
+            Self::EqualLength => "Equal length",
+            Self::EqualRadius => "Equal radius",
+            Self::EqualCurvature => "Equal curvature",
+            Self::Midpoint => "Midpoint",
+            Self::SymmetricAboutLine => "Symmetric about line",
+            Self::CurveTangency => "Tangent",
+            Self::EndpointContinuity => "Endpoint continuity",
+        }
+    }
+}
+
 /// Complete M55 alpha dimension action vocabulary.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DimensionKind {
@@ -1670,9 +1779,18 @@ pub struct ContactActionChoice {
 /// Typed request for one relation action over the coordinator's current selection.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ConstraintActionRequest {
-    pub kind: ConstraintKind,
+    pub intent: ConstraintIntent,
     pub label: String,
     pub contacts: Vec<ContactActionChoice>,
+    pub relation: Option<ConstraintRelationChoice>,
+}
+
+/// Explicit non-contact branch state for a contextual relation.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ConstraintRelationChoice {
+    CurveDirection(DocumentCurveDirectionRelation),
+    EqualCurvature(DocumentCurveCurvatureRelation),
+    Continuity(DocumentCurveContinuity),
 }
 
 /// Typed request for one dimension action over the coordinator's current selection.
@@ -1698,6 +1816,15 @@ pub enum ActionChoice {
     },
     AngleOrientation {
         values: Vec<DocumentAngleOrientation>,
+    },
+    CurveDirection {
+        values: Vec<DocumentCurveDirectionRelation>,
+    },
+    EqualCurvature {
+        values: Vec<DocumentCurveCurvatureRelation>,
+    },
+    Continuity {
+        values: Vec<DocumentCurveContinuity>,
     },
 }
 
@@ -1731,6 +1858,7 @@ fn tessellate(
     tolerance: f64,
     depth: u8,
     output: &mut Vec<ScreenPoint>,
+    parameters: &mut Vec<f64>,
 ) -> Result<(), EditorError> {
     let middle_parameter = (start_parameter + end_parameter) * 0.5;
     let middle = document.evaluate_curve_jet(span, middle_parameter)?;
@@ -1751,6 +1879,7 @@ fn tessellate(
             tolerance,
             depth + 1,
             output,
+            parameters,
         )?;
         tessellate(
             document,
@@ -1763,9 +1892,11 @@ fn tessellate(
             tolerance,
             depth + 1,
             output,
+            parameters,
         )?;
     } else {
         output.push(end);
+        parameters.push(end_parameter);
     }
     Ok(())
 }
@@ -1777,19 +1908,26 @@ fn compare_hits(first: &Hit, second: &Hit) -> Ordering {
         .then_with(|| first.item.cmp(&second.item))
 }
 
-fn point_segment_distance(point: ScreenPoint, start: ScreenPoint, end: ScreenPoint) -> f64 {
+fn point_segment_projection(
+    point: ScreenPoint,
+    start: ScreenPoint,
+    end: ScreenPoint,
+) -> (f64, f64) {
     let dx = end.x - start.x;
     let dy = end.y - start.y;
     let length_squared = dx.mul_add(dx, dy * dy);
     if length_squared == 0.0 {
-        return point.distance(start);
+        return (point.distance(start), 0.0);
     }
     let projection = ((point.x - start.x).mul_add(dx, (point.y - start.y) * dy) / length_squared)
         .clamp(0.0, 1.0);
-    point.distance(ScreenPoint {
-        x: dx.mul_add(projection, start.x),
-        y: dy.mul_add(projection, start.y),
-    })
+    (
+        point.distance(ScreenPoint {
+            x: dx.mul_add(projection, start.x),
+            y: dy.mul_add(projection, start.y),
+        }),
+        projection,
+    )
 }
 
 fn snap_point(
@@ -2649,6 +2787,7 @@ mod tests {
             .expect("line hit within seven pixels");
         assert_eq!(hit.item, SelectionItem::Curve(spans[0]));
         assert!((hit.distance_pixels - 6.5).abs() < 1.0e-12);
+        assert_eq!(hit.curve_parameter, Some(0.5));
         assert!(
             scene
                 .hit_test(ScreenPoint { x: 500.0, y: 292.0 }, PickTolerance::default(),)
@@ -2666,6 +2805,7 @@ mod tests {
             Some(Hit {
                 item: SelectionItem::Point(points[0]),
                 distance_pixels: 0.0,
+                curve_parameter: None,
             })
         );
     }

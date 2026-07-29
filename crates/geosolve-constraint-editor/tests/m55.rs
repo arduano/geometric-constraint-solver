@@ -5,15 +5,18 @@
 )]
 
 use geosolve_constraint_editor::{
-    ActionChoice, ActionState, BranchAction, ConstraintActionRequest, ConstraintKind,
-    ContactActionChoice, CoordinatorActionKind, DimensionActionRequest, DimensionKind,
-    RetainedEditorCoordinator, SelectionItem,
+    ActionChoice, ActionState, BranchAction, ConstraintActionRequest, ConstraintIntent,
+    ConstraintRelationChoice, ContactActionChoice, CoordinatorActionKind, DimensionActionRequest,
+    DimensionKind, EditorScene, Modifiers, PointerInput, ResolvedConstraintKind,
+    RetainedEditorCoordinator, ScreenPoint, SelectionItem, Viewport,
 };
 use geosolve_sketch::{
     AlphaScenarioIds, AlphaScenarioKind, ContactDomain, ContactNeighborhood, CurveDefinition,
-    CurveSpan, DocumentAngleOrientation, DocumentCurveSpanRef, DocumentDimensionDefinition,
-    DocumentDimensionMode, DocumentSolveRequest, RetainedSketchDocumentSession, ScalarDomain,
-    ScalarUnit, SketchDocument, TangentOrientation, alpha_scenario,
+    CurveSpan, DocumentAngleOrientation, DocumentConstraintDefinition, DocumentCurveContinuity,
+    DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation, DocumentCurveSpanRef,
+    DocumentDimensionDefinition, DocumentDimensionMode, DocumentSolveRequest,
+    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument, TangentOrientation,
+    alpha_scenario,
 };
 
 struct MatrixFixture {
@@ -21,6 +24,7 @@ struct MatrixFixture {
     points: [geosolve_sketch::DesignPointId; 6],
     lines: [CurveSpan; 2],
     circles: [CurveSpan; 2],
+    beziers: [CurveSpan; 2],
     midpoint: geosolve_sketch::DesignPointId,
     overlapping_line: CurveSpan,
 }
@@ -90,6 +94,23 @@ fn matrix_fixture() -> MatrixFixture {
         )
         .unwrap();
     let midpoint = document.add_point("midpoint", [0.0, 0.0]).unwrap();
+    let first_bezier_controls = [
+        document.add_point("bezier 1 start", [-4.0, -4.0]).unwrap(),
+        document.add_point("bezier 1 middle", [-2.0, -2.0]).unwrap(),
+        document.add_point("bezier 1 end", [0.0, -4.0]).unwrap(),
+    ];
+    let second_bezier_controls = [
+        document.add_point("bezier 2 start", [0.0, -4.0]).unwrap(),
+        document.add_point("bezier 2 middle", [2.0, -6.0]).unwrap(),
+        document.add_point("bezier 2 end", [4.0, -4.0]).unwrap(),
+    ];
+    let beziers = [first_bezier_controls, second_bezier_controls].map(|controls| {
+        CurveSpan::line(
+            document
+                .add_curve("quadratic", CurveDefinition::QuadraticBezier { controls })
+                .unwrap(),
+        )
+    });
     let overlap_start = document.add_point("overlap a", [-2.0, 0.0]).unwrap();
     let overlap_end = document.add_point("overlap b", [2.0, 0.0]).unwrap();
     let overlapping_line = CurveSpan::line(
@@ -112,6 +133,7 @@ fn matrix_fixture() -> MatrixFixture {
             CurveSpan::line(first_circle),
             CurveSpan::line(second_circle),
         ],
+        beziers,
         midpoint,
         overlapping_line,
     }
@@ -149,7 +171,7 @@ fn complete_relation_and_dimension_matrix_is_headless_and_selection_scoped() {
         .set_selection([SelectionItem::Point(fixture.points[0])]);
     assert_enabled(
         &coordinator,
-        CoordinatorActionKind::Constraint(ConstraintKind::Fixed),
+        CoordinatorActionKind::Constraint(ConstraintIntent::Lock),
     );
 
     coordinator.editor_mut().set_selection(
@@ -160,7 +182,7 @@ fn complete_relation_and_dimension_matrix_is_headless_and_selection_scoped() {
     );
     assert_enabled(
         &coordinator,
-        CoordinatorActionKind::Constraint(ConstraintKind::Coincident),
+        CoordinatorActionKind::Constraint(ConstraintIntent::Coincident),
     );
     for mode in [
         DocumentDimensionMode::Driving,
@@ -175,8 +197,8 @@ fn complete_relation_and_dimension_matrix_is_headless_and_selection_scoped() {
     coordinator
         .editor_mut()
         .set_selection([SelectionItem::Curve(fixture.lines[0])]);
-    for kind in [ConstraintKind::Horizontal, ConstraintKind::Vertical] {
-        assert_enabled(&coordinator, CoordinatorActionKind::Constraint(kind));
+    for intent in [ConstraintIntent::Horizontal, ConstraintIntent::Vertical] {
+        assert_enabled(&coordinator, CoordinatorActionKind::Constraint(intent));
     }
     for mode in [
         DocumentDimensionMode::Driving,
@@ -192,21 +214,22 @@ fn complete_relation_and_dimension_matrix_is_headless_and_selection_scoped() {
         SelectionItem::Point(fixture.points[0]),
         SelectionItem::Curve(fixture.lines[0]),
     ]);
-    for kind in [ConstraintKind::PointOnCurve, ConstraintKind::Midpoint] {
-        assert_enabled(&coordinator, CoordinatorActionKind::Constraint(kind));
+    for intent in [ConstraintIntent::Coincident, ConstraintIntent::Midpoint] {
+        assert_enabled(&coordinator, CoordinatorActionKind::Constraint(intent));
     }
 
     coordinator
         .editor_mut()
         .set_selection(fixture.lines.map(SelectionItem::Curve));
-    for kind in [
-        ConstraintKind::Parallel,
-        ConstraintKind::Perpendicular,
-        ConstraintKind::EqualLength,
-        ConstraintKind::GenericContact,
-        ConstraintKind::GenericTangency,
+    for intent in [
+        ConstraintIntent::Parallel,
+        ConstraintIntent::Perpendicular,
+        ConstraintIntent::Equal,
+        ConstraintIntent::Coincident,
+        ConstraintIntent::Tangent,
+        ConstraintIntent::Continuity,
     ] {
-        assert_enabled(&coordinator, CoordinatorActionKind::Constraint(kind));
+        assert_enabled(&coordinator, CoordinatorActionKind::Constraint(intent));
     }
     for mode in [
         DocumentDimensionMode::Driving,
@@ -221,12 +244,12 @@ fn complete_relation_and_dimension_matrix_is_headless_and_selection_scoped() {
     coordinator
         .editor_mut()
         .set_selection(fixture.circles.map(SelectionItem::Curve));
-    for kind in [
-        ConstraintKind::EqualRadius,
-        ConstraintKind::GenericContact,
-        ConstraintKind::GenericTangency,
+    for intent in [
+        ConstraintIntent::Equal,
+        ConstraintIntent::Coincident,
+        ConstraintIntent::Tangent,
     ] {
-        assert_enabled(&coordinator, CoordinatorActionKind::Constraint(kind));
+        assert_enabled(&coordinator, CoordinatorActionKind::Constraint(intent));
     }
     coordinator
         .editor_mut()
@@ -247,7 +270,7 @@ fn complete_relation_and_dimension_matrix_is_headless_and_selection_scoped() {
     ]);
     assert_enabled(
         &coordinator,
-        CoordinatorActionKind::Constraint(ConstraintKind::Symmetry),
+        CoordinatorActionKind::Constraint(ConstraintIntent::Symmetric),
     );
 }
 
@@ -258,9 +281,8 @@ fn contact_action_metadata_exposes_domain_span_neighborhood_winding_and_orientat
     coordinator
         .editor_mut()
         .set_selection(fixture.lines.map(SelectionItem::Curve));
-    let choices = coordinator.action_choices(CoordinatorActionKind::Constraint(
-        ConstraintKind::GenericTangency,
-    ));
+    let choices =
+        coordinator.action_choices(CoordinatorActionKind::Constraint(ConstraintIntent::Tangent));
     assert_eq!(choices.len(), 2);
     for (index, choice) in choices.iter().enumerate() {
         let ActionChoice::Contact {
@@ -292,6 +314,246 @@ fn contact_action_metadata_exposes_domain_span_neighborhood_winding_and_orientat
 }
 
 #[test]
+fn curve_pick_parameters_seed_contact_actions_without_selecting_a_branch() {
+    let fixture = matrix_fixture();
+    let mut coordinator = coordinator(fixture.document);
+    let accepted = coordinator.session().accepted_state().unwrap();
+    let scene = EditorScene::from_accepted(
+        accepted.identity().revision().get(),
+        coordinator.session().design_identity(),
+        accepted.document(),
+        Viewport::new([1000.0, 700.0], [0.0, 0.0], 100.0).unwrap(),
+        0.5,
+    )
+    .unwrap();
+    coordinator.editor_mut().pointer_down(
+        &scene,
+        PointerInput {
+            pointer_id: 1,
+            position: ScreenPoint { x: 400.0, y: 350.0 },
+            modifiers: Modifiers::default(),
+        },
+    );
+    coordinator.editor_mut().pointer_down(
+        &scene,
+        PointerInput {
+            pointer_id: 2,
+            position: ScreenPoint { x: 500.0, y: 250.0 },
+            modifiers: Modifiers {
+                shift: true,
+                ..Modifiers::default()
+            },
+        },
+    );
+    let parameters = coordinator
+        .action_choices(CoordinatorActionKind::Constraint(ConstraintIntent::Tangent))
+        .into_iter()
+        .filter_map(|choice| match choice {
+            ActionChoice::Contact {
+                default_parameter, ..
+            } => Some(default_parameter),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(parameters, [0.25, 0.75]);
+}
+
+#[test]
+fn contextual_intents_publish_the_exact_resolved_definition_family() {
+    let fixture = matrix_fixture();
+    let mut coordinator = coordinator(fixture.document);
+
+    let cases = [
+        (
+            vec![
+                SelectionItem::Point(fixture.points[0]),
+                SelectionItem::Point(fixture.points[1]),
+            ],
+            ConstraintIntent::Coincident,
+            ResolvedConstraintKind::CoincidentPoints,
+        ),
+        (
+            vec![
+                SelectionItem::Point(fixture.midpoint),
+                SelectionItem::Curve(fixture.lines[0]),
+            ],
+            ConstraintIntent::Coincident,
+            ResolvedConstraintKind::PointOnCurve,
+        ),
+        (
+            fixture.beziers.map(SelectionItem::Curve).to_vec(),
+            ConstraintIntent::Coincident,
+            ResolvedConstraintKind::CurveContact,
+        ),
+        (
+            fixture.lines.map(SelectionItem::Curve).to_vec(),
+            ConstraintIntent::Equal,
+            ResolvedConstraintKind::EqualLength,
+        ),
+        (
+            fixture.circles.map(SelectionItem::Curve).to_vec(),
+            ConstraintIntent::Equal,
+            ResolvedConstraintKind::EqualRadius,
+        ),
+        (
+            fixture.beziers.map(SelectionItem::Curve).to_vec(),
+            ConstraintIntent::Equal,
+            ResolvedConstraintKind::EqualCurvature,
+        ),
+        (
+            vec![
+                SelectionItem::Curve(fixture.lines[0]),
+                SelectionItem::Curve(fixture.beziers[0]),
+            ],
+            ConstraintIntent::Parallel,
+            ResolvedConstraintKind::CurveTangentDirection,
+        ),
+        (
+            vec![
+                SelectionItem::Curve(fixture.lines[0]),
+                SelectionItem::Curve(fixture.beziers[0]),
+            ],
+            ConstraintIntent::Perpendicular,
+            ResolvedConstraintKind::CurveNormalDirection,
+        ),
+        (
+            fixture.beziers.map(SelectionItem::Curve).to_vec(),
+            ConstraintIntent::Tangent,
+            ResolvedConstraintKind::CurveTangency,
+        ),
+        (
+            fixture.beziers.map(SelectionItem::Curve).to_vec(),
+            ConstraintIntent::Continuity,
+            ResolvedConstraintKind::EndpointContinuity,
+        ),
+    ];
+    for (selection, intent, expected) in cases {
+        coordinator.editor_mut().set_selection(selection);
+        assert_eq!(coordinator.resolved_constraint(intent), Some(expected));
+    }
+}
+
+#[test]
+fn advanced_contextual_branches_lower_to_existing_persistent_definitions() {
+    let fixture = matrix_fixture();
+    let contact = |span, parameter, neighborhood| ContactActionChoice {
+        support: DocumentCurveSpanRef { span, winding: 0 },
+        domain: ContactDomain::Bounded {
+            lower: 0.0,
+            upper: 1.0,
+        },
+        parameter,
+        neighborhood,
+        tangent_orientation: None,
+    };
+
+    let mut direction = coordinator(fixture.document.clone());
+    direction.editor_mut().set_selection([
+        SelectionItem::Curve(fixture.lines[0]),
+        SelectionItem::Curve(fixture.beziers[0]),
+    ]);
+    let outcome = direction
+        .apply_constraint_action(
+            direction.session().design_identity(),
+            ConstraintActionRequest {
+                intent: ConstraintIntent::Parallel,
+                label: "tangent direction".into(),
+                contacts: vec![contact(
+                    fixture.beziers[0],
+                    0.5,
+                    ContactNeighborhood::Interior,
+                )],
+                relation: Some(ConstraintRelationChoice::CurveDirection(
+                    DocumentCurveDirectionRelation::Tangent {
+                        orientation: TangentOrientation::Aligned,
+                    },
+                )),
+            },
+        )
+        .unwrap();
+    assert!(matches!(
+        direction
+            .session()
+            .design_document()
+            .constraint(outcome.value)
+            .unwrap()
+            .definition,
+        DocumentConstraintDefinition::CurveDirection {
+            relation: DocumentCurveDirectionRelation::Tangent {
+                orientation: TangentOrientation::Aligned
+            },
+            ..
+        }
+    ));
+
+    let mut curvature = coordinator(fixture.document.clone());
+    curvature
+        .editor_mut()
+        .set_selection(fixture.beziers.map(SelectionItem::Curve));
+    let outcome = curvature
+        .apply_constraint_action(
+            curvature.session().design_identity(),
+            ConstraintActionRequest {
+                intent: ConstraintIntent::Equal,
+                label: "curvature".into(),
+                contacts: fixture
+                    .beziers
+                    .map(|span| contact(span, 0.5, ContactNeighborhood::Interior))
+                    .to_vec(),
+                relation: Some(ConstraintRelationChoice::EqualCurvature(
+                    DocumentCurveCurvatureRelation::MagnitudeOppositeSign,
+                )),
+            },
+        )
+        .unwrap();
+    assert!(matches!(
+        curvature
+            .session()
+            .design_document()
+            .constraint(outcome.value)
+            .unwrap()
+            .definition,
+        DocumentConstraintDefinition::EqualCurvature {
+            relation: DocumentCurveCurvatureRelation::MagnitudeOppositeSign,
+            ..
+        }
+    ));
+
+    let mut continuity = coordinator(fixture.document);
+    continuity
+        .editor_mut()
+        .set_selection(fixture.beziers.map(SelectionItem::Curve));
+    let outcome = continuity
+        .apply_constraint_action(
+            continuity.session().design_identity(),
+            ConstraintActionRequest {
+                intent: ConstraintIntent::Continuity,
+                label: "continuity".into(),
+                contacts: vec![
+                    contact(fixture.beziers[0], 1.0, ContactNeighborhood::End),
+                    contact(fixture.beziers[1], 0.0, ContactNeighborhood::Start),
+                ],
+                relation: Some(ConstraintRelationChoice::Continuity(
+                    DocumentCurveContinuity::G1,
+                )),
+            },
+        )
+        .unwrap();
+    assert!(matches!(
+        continuity
+            .session()
+            .design_document()
+            .constraint(outcome.value)
+            .unwrap()
+            .definition,
+        DocumentConstraintDefinition::EndpointContinuity {
+            continuity: DocumentCurveContinuity::G1,
+            ..
+        }
+    ));
+}
+
+#[test]
 fn every_required_relation_executes_through_the_typed_coordinator_action() {
     let fixture = matrix_fixture();
     let contact = |span, orientation| ContactActionChoice {
@@ -306,12 +568,12 @@ fn every_required_relation_executes_through_the_typed_coordinator_action() {
     };
     let cases = vec![
         (
-            ConstraintKind::Fixed,
+            ConstraintIntent::Lock,
             vec![SelectionItem::Point(fixture.points[0])],
             Vec::new(),
         ),
         (
-            ConstraintKind::Coincident,
+            ConstraintIntent::Coincident,
             vec![
                 SelectionItem::Point(fixture.points[0]),
                 SelectionItem::Point(fixture.points[1]),
@@ -319,17 +581,17 @@ fn every_required_relation_executes_through_the_typed_coordinator_action() {
             Vec::new(),
         ),
         (
-            ConstraintKind::Horizontal,
+            ConstraintIntent::Horizontal,
             vec![SelectionItem::Curve(fixture.lines[0])],
             Vec::new(),
         ),
         (
-            ConstraintKind::Vertical,
+            ConstraintIntent::Vertical,
             vec![SelectionItem::Curve(fixture.lines[1])],
             Vec::new(),
         ),
         (
-            ConstraintKind::PointOnCurve,
+            ConstraintIntent::Coincident,
             vec![
                 SelectionItem::Point(fixture.midpoint),
                 SelectionItem::Curve(fixture.lines[0]),
@@ -337,7 +599,7 @@ fn every_required_relation_executes_through_the_typed_coordinator_action() {
             vec![contact(fixture.lines[0], None)],
         ),
         (
-            ConstraintKind::Parallel,
+            ConstraintIntent::Parallel,
             vec![
                 SelectionItem::Curve(fixture.lines[0]),
                 SelectionItem::Curve(fixture.overlapping_line),
@@ -345,22 +607,22 @@ fn every_required_relation_executes_through_the_typed_coordinator_action() {
             Vec::new(),
         ),
         (
-            ConstraintKind::Perpendicular,
+            ConstraintIntent::Perpendicular,
             fixture.lines.map(SelectionItem::Curve).to_vec(),
             Vec::new(),
         ),
         (
-            ConstraintKind::EqualLength,
+            ConstraintIntent::Equal,
             fixture.lines.map(SelectionItem::Curve).to_vec(),
             Vec::new(),
         ),
         (
-            ConstraintKind::EqualRadius,
+            ConstraintIntent::Equal,
             fixture.circles.map(SelectionItem::Curve).to_vec(),
             Vec::new(),
         ),
         (
-            ConstraintKind::Midpoint,
+            ConstraintIntent::Midpoint,
             vec![
                 SelectionItem::Point(fixture.midpoint),
                 SelectionItem::Curve(fixture.lines[0]),
@@ -368,7 +630,7 @@ fn every_required_relation_executes_through_the_typed_coordinator_action() {
             Vec::new(),
         ),
         (
-            ConstraintKind::Symmetry,
+            ConstraintIntent::Symmetric,
             vec![
                 SelectionItem::Point(fixture.points[4]),
                 SelectionItem::Point(fixture.points[5]),
@@ -377,12 +639,12 @@ fn every_required_relation_executes_through_the_typed_coordinator_action() {
             Vec::new(),
         ),
         (
-            ConstraintKind::GenericContact,
+            ConstraintIntent::Coincident,
             fixture.lines.map(SelectionItem::Curve).to_vec(),
             fixture.lines.map(|span| contact(span, None)).to_vec(),
         ),
         (
-            ConstraintKind::GenericTangency,
+            ConstraintIntent::Tangent,
             vec![
                 SelectionItem::Curve(fixture.lines[0]),
                 SelectionItem::Curve(fixture.overlapping_line),
@@ -393,7 +655,7 @@ fn every_required_relation_executes_through_the_typed_coordinator_action() {
             ],
         ),
     ];
-    for (kind, selection, contacts) in cases {
+    for (intent, selection, contacts) in cases {
         let mut coordinator = coordinator(fixture.document.clone());
         coordinator.editor_mut().set_selection(selection);
         let expected = coordinator.session().design_identity();
@@ -401,15 +663,16 @@ fn every_required_relation_executes_through_the_typed_coordinator_action() {
             .apply_constraint_action(
                 expected,
                 ConstraintActionRequest {
-                    kind,
-                    label: format!("{kind:?}"),
+                    intent,
+                    label: format!("{intent:?}"),
                     contacts,
+                    relation: None,
                 },
             )
-            .unwrap_or_else(|error| panic!("{kind:?} failed: {error}"));
+            .unwrap_or_else(|error| panic!("{intent:?} failed: {error}"));
         assert!(
             outcome.published_accepted.is_some(),
-            "{kind:?} produced a rejected attempt"
+            "{intent:?} produced a rejected attempt"
         );
         assert!(
             coordinator
@@ -617,7 +880,7 @@ fn rejected_generic_contact_retains_accepted_state_and_undo_recovers() {
         .apply_constraint_action(
             expected,
             ConstraintActionRequest {
-                kind: ConstraintKind::GenericContact,
+                intent: ConstraintIntent::Coincident,
                 label: "impossible fixed contact".into(),
                 contacts: lines
                     .into_iter()
@@ -632,6 +895,7 @@ fn rejected_generic_contact_retains_accepted_state_and_undo_recovers() {
                         tangent_orientation: None,
                     })
                     .collect(),
+                relation: None,
             },
         )
         .unwrap();
@@ -661,7 +925,7 @@ fn selected_contact_source_exposes_and_applies_complete_branch_state() {
         .apply_constraint_action(
             expected,
             ConstraintActionRequest {
-                kind: ConstraintKind::GenericContact,
+                intent: ConstraintIntent::Coincident,
                 label: "crossing contact".into(),
                 contacts: fixture
                     .lines
@@ -677,6 +941,7 @@ fn selected_contact_source_exposes_and_applies_complete_branch_state() {
                         tangent_orientation: None,
                     })
                     .collect(),
+                relation: None,
             },
         )
         .unwrap();

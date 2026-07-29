@@ -7,24 +7,26 @@ use std::collections::{BTreeSet, HashSet};
 use geosolve_sketch::{
     ContactBranchEdit, ContactDomain, ContactId, ContactNeighborhood, CurveDefinition, CurveId,
     CurveSpan, DesignPointId, DocumentAngleOrientation, DocumentCommandEffect,
-    DocumentConstraintDefinition, DocumentDimensionDefinition, DocumentDimensionId,
-    DocumentDimensionMode, DocumentEdit, DocumentElementId, DocumentExternalBindingId,
-    DocumentMeasurementCatalog, DocumentMeasurementProvenance, DocumentMeasurementValue,
-    DocumentObjectId, DocumentRuntimeMap, DocumentSessionError, DocumentSolveRequest,
-    DocumentSourceId, DocumentSourceOwner, ExternalFeatureKindV1, ExternalSnapshotSet,
-    ExternalTopologyDigest, GeometryRole, ParameterBatch, RetainedSketchDocumentSession,
-    RuntimeCurve, ScalarDomain, ScalarUnit, SketchAcceptedDocumentRedundancy,
-    SketchAcceptedStateIdentity, SketchAttemptFailure, SketchAttemptFailureKind,
-    SketchAttemptIdentity, SketchBound, SketchDesignIdentity, SketchDocument,
-    SketchLifecycleRevisionHighWater, SketchSolveResult, SketchSource, SolveRejection,
-    TangentOrientation,
+    DocumentConstraintDefinition, DocumentCurveContinuity, DocumentCurveCurvatureRelation,
+    DocumentCurveDirectionRelation, DocumentCurveNormalSide, DocumentDimensionDefinition,
+    DocumentDimensionId, DocumentDimensionMode, DocumentEdit, DocumentElementId,
+    DocumentExternalBindingId, DocumentMeasurementCatalog, DocumentMeasurementProvenance,
+    DocumentMeasurementValue, DocumentObjectId, DocumentRuntimeMap, DocumentSessionError,
+    DocumentSolveRequest, DocumentSourceId, DocumentSourceOwner, ExternalFeatureKindV1,
+    ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole, ParameterBatch,
+    RetainedSketchDocumentSession, RuntimeCurve, ScalarDomain, ScalarUnit,
+    SketchAcceptedDocumentRedundancy, SketchAcceptedStateIdentity, SketchAttemptFailure,
+    SketchAttemptFailureKind, SketchAttemptIdentity, SketchBound, SketchDesignIdentity,
+    SketchDocument, SketchLifecycleRevisionHighWater, SketchSolveResult, SketchSource,
+    SolveRejection, TangentOrientation,
 };
 use thiserror::Error;
 
 use crate::{
-    ActionChoice, ConstraintActionRequest, ConstraintEditor, ConstraintKind, ConstructionProposal,
-    ConstructionResult, DimensionActionRequest, DimensionKind, EditorEffect,
-    ProvisionalInferenceCandidate, SelectionItem,
+    ActionChoice, ConstraintActionRequest, ConstraintEditor, ConstraintIntent, ConstraintKind,
+    ConstraintRelationChoice, ConstructionProposal, ConstructionResult, DimensionActionRequest,
+    DimensionKind, EditorEffect, ProvisionalInferenceCandidate, ResolvedConstraintKind,
+    SelectionItem,
 };
 
 /// Opaque, application-persistable restore material for one history position.
@@ -191,7 +193,7 @@ pub enum ActionState {
 /// Actions whose availability is owned by the retained coordinator.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CoordinatorActionKind {
-    Constraint(ConstraintKind),
+    Constraint(ConstraintIntent),
     Dimension(DimensionKind, DocumentDimensionMode),
     SetDimensionMode(DocumentDimensionMode),
     EditContactBranch,
@@ -876,8 +878,7 @@ impl RetainedEditorCoordinator {
     pub fn actions(&self) -> Vec<ActionAvailability> {
         let document = self.session.design_document();
         let selection = self.editor.selection();
-        let enabled_constraints = self.editor.available_constraints(document);
-        let mut actions = constraint_action_matrix(document, selection, &enabled_constraints);
+        let mut actions = constraint_action_matrix(document, selection);
         actions.extend(dimension_action_matrix(document, selection));
         actions.extend([
             ActionAvailability {
@@ -940,41 +941,117 @@ impl RetainedEditorCoordinator {
         actions
     }
 
+    /// Resolves one contextual intent to the exact persistent definition family.
+    #[must_use]
+    pub fn resolved_constraint(&self, intent: ConstraintIntent) -> Option<ResolvedConstraintKind> {
+        resolve_constraint(
+            self.session.design_document(),
+            self.editor.selection(),
+            intent,
+        )
+        .ok()
+    }
+
     /// Returns explicit branch-choice metadata for one action.
     ///
     /// Defaults are fixed semantic values, never coordinate-derived root choices.
     #[must_use]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the closed contextual branch-choice matrix is clearest in one exhaustive match"
+    )]
     pub fn action_choices(&self, action: CoordinatorActionKind) -> Vec<ActionChoice> {
         let document = self.session.design_document();
         let selection = self.editor.selection();
         match action {
-            CoordinatorActionKind::Constraint(ConstraintKind::PointOnCurve) => {
-                selected_curve_spans(selection)
+            CoordinatorActionKind::Constraint(intent) => {
+                let Some(resolved) = self.resolved_constraint(intent) else {
+                    return Vec::new();
+                };
+                let (spans, tangency) = match resolved {
+                    ResolvedConstraintKind::PointOnCurve
+                    | ResolvedConstraintKind::CurveContact
+                    | ResolvedConstraintKind::EqualCurvature
+                    | ResolvedConstraintKind::EndpointContinuity => {
+                        (selected_curve_spans(selection), false)
+                    }
+                    ResolvedConstraintKind::CurveTangency => {
+                        (selected_curve_spans(selection), true)
+                    }
+                    ResolvedConstraintKind::CurveTangentDirection
+                    | ResolvedConstraintKind::CurveNormalDirection => (
+                        selected_direction_curve(document, selection)
+                            .into_iter()
+                            .collect(),
+                        false,
+                    ),
+                    _ => (Vec::new(), false),
+                };
+                let mut choices = spans
                     .into_iter()
-                    .take(1)
                     .enumerate()
                     .filter_map(|(operand, span)| {
-                        contact_action_choice(document, u8::try_from(operand).ok()?, span, false)
+                        contact_action_choice(
+                            document,
+                            u8::try_from(operand).ok()?,
+                            span,
+                            tangency,
+                            resolved == ResolvedConstraintKind::EndpointContinuity,
+                            self.editor.curve_pick_parameter(span),
+                        )
                     })
-                    .collect()
+                    .collect::<Vec<_>>();
+                choices.extend(match resolved {
+                    ResolvedConstraintKind::CurveTangentDirection => {
+                        vec![ActionChoice::CurveDirection {
+                            values: vec![
+                                DocumentCurveDirectionRelation::Tangent {
+                                    orientation: TangentOrientation::Aligned,
+                                },
+                                DocumentCurveDirectionRelation::Tangent {
+                                    orientation: TangentOrientation::Opposed,
+                                },
+                            ],
+                        }]
+                    }
+                    ResolvedConstraintKind::CurveNormalDirection => {
+                        vec![ActionChoice::CurveDirection {
+                            values: vec![
+                                DocumentCurveDirectionRelation::Normal {
+                                    side: DocumentCurveNormalSide::Left,
+                                },
+                                DocumentCurveDirectionRelation::Normal {
+                                    side: DocumentCurveNormalSide::Right,
+                                },
+                            ],
+                        }]
+                    }
+                    ResolvedConstraintKind::EqualCurvature => {
+                        vec![ActionChoice::EqualCurvature {
+                            values: vec![
+                                DocumentCurveCurvatureRelation::Signed,
+                                DocumentCurveCurvatureRelation::MagnitudeSameSign,
+                                DocumentCurveCurvatureRelation::MagnitudeOppositeSign,
+                            ],
+                        }]
+                    }
+                    ResolvedConstraintKind::EndpointContinuity => {
+                        vec![ActionChoice::Continuity {
+                            values: vec![
+                                DocumentCurveContinuity::G0,
+                                DocumentCurveContinuity::G1,
+                                DocumentCurveContinuity::G2,
+                                DocumentCurveContinuity::ParametricC2 {
+                                    first_rate: 1.0,
+                                    second_rate: 1.0,
+                                },
+                            ],
+                        }]
+                    }
+                    _ => Vec::new(),
+                });
+                choices
             }
-            CoordinatorActionKind::Constraint(
-                ConstraintKind::GenericContact | ConstraintKind::GenericTangency,
-            ) => selected_curve_spans(selection)
-                .into_iter()
-                .enumerate()
-                .filter_map(|(operand, span)| {
-                    contact_action_choice(
-                        document,
-                        u8::try_from(operand).ok()?,
-                        span,
-                        matches!(
-                            action,
-                            CoordinatorActionKind::Constraint(ConstraintKind::GenericTangency)
-                        ),
-                    )
-                })
-                .collect(),
             CoordinatorActionKind::Dimension(DimensionKind::OrientedAngle, _) => {
                 vec![ActionChoice::AngleOrientation {
                     values: vec![
@@ -1217,45 +1294,55 @@ impl RetainedEditorCoordinator {
         request: ConstraintActionRequest,
     ) -> Result<MutationOutcome<geosolve_sketch::DocumentConstraintId>, CoordinatorError> {
         self.ensure_expected(expected)?;
-        if !self
-            .editor
-            .available_constraints(self.session.design_document())
-            .contains(&request.kind)
-        {
-            return Err(CoordinatorError::ActionUnavailable(
-                constraint_disabled_reason(
-                    self.session.design_document(),
-                    self.editor.selection(),
-                    request.kind,
-                ),
-            ));
-        }
+        let resolved = resolve_constraint(
+            self.session.design_document(),
+            self.editor.selection(),
+            request.intent,
+        )
+        .map_err(CoordinatorError::ActionUnavailable)?;
         let replay_request = request.clone();
         let selection = self.editor.selection().to_vec();
-        let outcome = match request.kind {
-            ConstraintKind::PointOnCurve => self.apply_point_curve_action(
+        let outcome = match resolved {
+            ResolvedConstraintKind::PointOnCurve => self.apply_point_curve_action(
                 expected,
                 &selection,
                 request.label,
                 &request.contacts,
             )?,
-            ConstraintKind::GenericContact | ConstraintKind::GenericTangency => self
-                .apply_curve_pair_action(
-                    expected,
-                    &selection,
-                    request.kind,
-                    request.label,
-                    &request.contacts,
-                )?,
+            ResolvedConstraintKind::CurveContact
+            | ResolvedConstraintKind::CurveTangency
+            | ResolvedConstraintKind::EqualCurvature
+            | ResolvedConstraintKind::EndpointContinuity => self.apply_curve_pair_action(
+                expected,
+                &selection,
+                resolved,
+                request.label,
+                &request.contacts,
+                request.relation,
+            )?,
+            ResolvedConstraintKind::CurveTangentDirection
+            | ResolvedConstraintKind::CurveNormalDirection => self.apply_curve_direction_action(
+                expected,
+                &selection,
+                resolved,
+                request.label,
+                &request.contacts,
+                request.relation,
+            )?,
             _ => {
-                if !request.contacts.is_empty() {
+                if !request.contacts.is_empty() || request.relation.is_some() {
                     return Err(CoordinatorError::InvalidActionInput(
-                        "this relation action accepts no contact choices",
+                        "this relation action accepts no explicit branch choices",
                     ));
                 }
+                let kind = simple_constraint_kind(resolved).ok_or(
+                    CoordinatorError::InvalidActionInput(
+                        "contextual relation did not resolve to a simple constraint",
+                    ),
+                )?;
                 let edit = self.editor.constraint_edit(
                     self.session.design_document(),
-                    request.kind,
+                    kind,
                     request.label,
                 )?;
                 let DocumentEdit::CreateConstraint { label, definition } = edit else {
@@ -1309,9 +1396,10 @@ impl RetainedEditorCoordinator {
         &mut self,
         expected: SketchDesignIdentity,
         selection: &[SelectionItem],
-        kind: ConstraintKind,
+        resolved: ResolvedConstraintKind,
         label: String,
         contacts: &[crate::ContactActionChoice],
+        relation: Option<ConstraintRelationChoice>,
     ) -> Result<
         geosolve_sketch::RetainedDocumentTransactionOutcome<geosolve_sketch::DocumentConstraintId>,
         CoordinatorError,
@@ -1324,7 +1412,7 @@ impl RetainedEditorCoordinator {
                 "generic relations require two explicit contact choices",
             ));
         };
-        let tangency = kind == ConstraintKind::GenericTangency;
+        let tangency = resolved == ResolvedConstraintKind::CurveTangency;
         validate_contact_choice(spans[0], first, tangency)?;
         validate_contact_choice(spans[1], second, tangency)?;
         if tangency && first.tangent_orientation != second.tangent_orientation {
@@ -1334,21 +1422,103 @@ impl RetainedEditorCoordinator {
         }
         let first = *first;
         let second = *second;
+        validate_pair_relation_choice(resolved, relation)?;
         Ok(self.session.transact(expected, move |document| {
             let first_contact = add_action_contact(document, &label, 0, first)?;
             let second_contact = add_action_contact(document, &label, 1, second)?;
-            let definition = if tangency {
-                DocumentConstraintDefinition::CurveCurveTangency {
-                    first_contact,
-                    second_contact,
+            let definition = match resolved {
+                ResolvedConstraintKind::CurveTangency => {
+                    DocumentConstraintDefinition::CurveCurveTangency {
+                        first_contact,
+                        second_contact,
+                    }
                 }
-            } else {
-                DocumentConstraintDefinition::CurveCurveContact {
-                    first_contact,
-                    second_contact,
+                ResolvedConstraintKind::CurveContact => {
+                    DocumentConstraintDefinition::CurveCurveContact {
+                        first_contact,
+                        second_contact,
+                    }
                 }
+                ResolvedConstraintKind::EqualCurvature => {
+                    let Some(ConstraintRelationChoice::EqualCurvature(relation)) = relation else {
+                        unreachable!("equal-curvature relation choice validated");
+                    };
+                    DocumentConstraintDefinition::EqualCurvature {
+                        first_contact,
+                        second_contact,
+                        relation,
+                    }
+                }
+                ResolvedConstraintKind::EndpointContinuity => {
+                    let Some(ConstraintRelationChoice::Continuity(continuity)) = relation else {
+                        unreachable!("continuity relation choice validated");
+                    };
+                    DocumentConstraintDefinition::EndpointContinuity {
+                        first_contact,
+                        second_contact,
+                        continuity,
+                    }
+                }
+                _ => unreachable!("curve-pair action resolution validated"),
             };
             document.add_constraint(label, definition)
+        })?)
+    }
+
+    fn apply_curve_direction_action(
+        &mut self,
+        expected: SketchDesignIdentity,
+        selection: &[SelectionItem],
+        resolved: ResolvedConstraintKind,
+        label: String,
+        contacts: &[crate::ContactActionChoice],
+        relation: Option<ConstraintRelationChoice>,
+    ) -> Result<
+        geosolve_sketch::RetainedDocumentTransactionOutcome<geosolve_sketch::DocumentConstraintId>,
+        CoordinatorError,
+    > {
+        let (line, curve) = selected_line_curve(self.session.design_document(), selection).ok_or(
+            CoordinatorError::InvalidActionInput(
+                "curve direction requires one line and one non-linear curve",
+            ),
+        )?;
+        let [choice] = contacts else {
+            return Err(CoordinatorError::InvalidActionInput(
+                "curve direction requires one explicit curve contact",
+            ));
+        };
+        validate_contact_choice(curve, choice, false)?;
+        let Some(ConstraintRelationChoice::CurveDirection(relation)) = relation else {
+            return Err(CoordinatorError::InvalidActionInput(
+                "curve direction requires one explicit orientation or side",
+            ));
+        };
+        let valid_relation = matches!(
+            (resolved, relation),
+            (
+                ResolvedConstraintKind::CurveTangentDirection,
+                DocumentCurveDirectionRelation::Tangent { .. }
+            ) | (
+                ResolvedConstraintKind::CurveNormalDirection,
+                DocumentCurveDirectionRelation::Normal { .. }
+            )
+        );
+        if !valid_relation {
+            return Err(CoordinatorError::InvalidActionInput(
+                "curve direction choice does not match the requested intent",
+            ));
+        }
+        let choice = *choice;
+        Ok(self.session.transact(expected, move |document| {
+            let curve_contact = add_action_contact(document, &label, 0, choice)?;
+            document.add_constraint(
+                label,
+                DocumentConstraintDefinition::CurveDirection {
+                    line,
+                    curve_contact,
+                    relation,
+                },
+            )
         })?)
     }
 
@@ -2417,31 +2587,25 @@ fn availability<T>(result: Result<T, DisabledReason>) -> ActionState {
 fn constraint_action_matrix(
     document: &SketchDocument,
     selection: &[SelectionItem],
-    enabled: &[ConstraintKind],
 ) -> Vec<ActionAvailability> {
     [
-        ConstraintKind::Fixed,
-        ConstraintKind::Coincident,
-        ConstraintKind::Horizontal,
-        ConstraintKind::Vertical,
-        ConstraintKind::PointOnCurve,
-        ConstraintKind::Parallel,
-        ConstraintKind::Perpendicular,
-        ConstraintKind::EqualLength,
-        ConstraintKind::EqualRadius,
-        ConstraintKind::Midpoint,
-        ConstraintKind::Symmetry,
-        ConstraintKind::GenericContact,
-        ConstraintKind::GenericTangency,
+        ConstraintIntent::Lock,
+        ConstraintIntent::Coincident,
+        ConstraintIntent::Horizontal,
+        ConstraintIntent::Vertical,
+        ConstraintIntent::Parallel,
+        ConstraintIntent::Perpendicular,
+        ConstraintIntent::Equal,
+        ConstraintIntent::Midpoint,
+        ConstraintIntent::Symmetric,
+        ConstraintIntent::Tangent,
+        ConstraintIntent::Continuity,
     ]
     .into_iter()
-    .map(|kind| ActionAvailability {
-        action: CoordinatorActionKind::Constraint(kind),
-        state: if enabled.contains(&kind) {
-            ActionState::Enabled
-        } else {
-            ActionState::Disabled(constraint_disabled_reason(document, selection, kind))
-        },
+    .map(|intent| ActionAvailability {
+        action: CoordinatorActionKind::Constraint(intent),
+        state: resolve_constraint(document, selection, intent)
+            .map_or_else(ActionState::Disabled, |_| ActionState::Enabled),
     })
     .collect()
 }
@@ -2493,38 +2657,145 @@ fn selection_reason(document: &SketchDocument, selection: &[SelectionItem]) -> D
     }
 }
 
-fn constraint_disabled_reason(
+#[allow(
+    clippy::too_many_lines,
+    reason = "the closed intent-to-definition dispatch matrix is clearer as one exhaustive match"
+)]
+fn resolve_constraint(
     document: &SketchDocument,
     selection: &[SelectionItem],
-    kind: ConstraintKind,
-) -> DisabledReason {
+    intent: ConstraintIntent,
+) -> Result<ResolvedConstraintKind, DisabledReason> {
     if selection.is_empty() {
-        return DisabledReason::EmptySelection;
+        return Err(DisabledReason::EmptySelection);
     }
     if selection
         .iter()
         .any(|item| !selection_exists(document, *item))
     {
-        return DisabledReason::MissingObject;
+        return Err(DisabledReason::MissingObject);
     }
-    let expected = match kind {
-        ConstraintKind::Fixed | ConstraintKind::Horizontal | ConstraintKind::Vertical => 1,
-        ConstraintKind::Coincident
-        | ConstraintKind::PointOnCurve
-        | ConstraintKind::Parallel
-        | ConstraintKind::Perpendicular
-        | ConstraintKind::EqualLength
-        | ConstraintKind::EqualRadius
-        | ConstraintKind::Midpoint
-        | ConstraintKind::GenericContact
-        | ConstraintKind::GenericTangency => 2,
-        ConstraintKind::Symmetry => 3,
+    let resolved = match (intent, selection) {
+        (ConstraintIntent::Lock, [SelectionItem::Point(_)]) => ResolvedConstraintKind::FixedPoint,
+        (ConstraintIntent::Coincident, [SelectionItem::Point(_), SelectionItem::Point(_)]) => {
+            ResolvedConstraintKind::CoincidentPoints
+        }
+        (
+            ConstraintIntent::Coincident,
+            [SelectionItem::Point(_), SelectionItem::Curve(span)]
+            | [SelectionItem::Curve(span), SelectionItem::Point(_)],
+        ) if supports_curve_contact(document, *span) => ResolvedConstraintKind::PointOnCurve,
+        (
+            ConstraintIntent::Coincident,
+            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
+        ) if supports_curve_contact(document, *first)
+            && supports_curve_contact(document, *second) =>
+        {
+            ResolvedConstraintKind::CurveContact
+        }
+        (ConstraintIntent::Horizontal, [SelectionItem::Curve(span)])
+            if line_endpoints(document, *span).is_ok() =>
+        {
+            ResolvedConstraintKind::HorizontalLine
+        }
+        (ConstraintIntent::Vertical, [SelectionItem::Curve(span)])
+            if line_endpoints(document, *span).is_ok() =>
+        {
+            ResolvedConstraintKind::VerticalLine
+        }
+        (
+            ConstraintIntent::Parallel,
+            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
+        ) if line_endpoints(document, *first).is_ok()
+            && line_endpoints(document, *second).is_ok() =>
+        {
+            ResolvedConstraintKind::ParallelLines
+        }
+        (ConstraintIntent::Parallel, _) if selected_line_curve(document, selection).is_some() => {
+            ResolvedConstraintKind::CurveTangentDirection
+        }
+        (
+            ConstraintIntent::Perpendicular,
+            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
+        ) if line_endpoints(document, *first).is_ok()
+            && line_endpoints(document, *second).is_ok() =>
+        {
+            ResolvedConstraintKind::PerpendicularLines
+        }
+        (ConstraintIntent::Perpendicular, _)
+            if selected_line_curve(document, selection).is_some() =>
+        {
+            ResolvedConstraintKind::CurveNormalDirection
+        }
+        (ConstraintIntent::Equal, [SelectionItem::Curve(first), SelectionItem::Curve(second)])
+            if line_endpoints(document, *first).is_ok()
+                && line_endpoints(document, *second).is_ok() =>
+        {
+            ResolvedConstraintKind::EqualLength
+        }
+        (ConstraintIntent::Equal, [SelectionItem::Curve(first), SelectionItem::Curve(second)])
+            if is_radius_curve(document, first.curve)
+                && is_radius_curve(document, second.curve) =>
+        {
+            ResolvedConstraintKind::EqualRadius
+        }
+        (ConstraintIntent::Equal, [SelectionItem::Curve(first), SelectionItem::Curve(second)])
+            if supports_curve_contact(document, *first)
+                && supports_curve_contact(document, *second) =>
+        {
+            ResolvedConstraintKind::EqualCurvature
+        }
+        (
+            ConstraintIntent::Midpoint,
+            [SelectionItem::Point(_), SelectionItem::Curve(line)]
+            | [SelectionItem::Curve(line), SelectionItem::Point(_)],
+        ) if line_endpoints(document, *line).is_ok() => ResolvedConstraintKind::Midpoint,
+        (
+            ConstraintIntent::Symmetric,
+            [
+                SelectionItem::Point(_),
+                SelectionItem::Point(_),
+                SelectionItem::Curve(line),
+            ],
+        ) if line_endpoints(document, *line).is_ok() => ResolvedConstraintKind::SymmetricAboutLine,
+        (
+            ConstraintIntent::Tangent,
+            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
+        ) if supports_curve_contact(document, *first)
+            && supports_curve_contact(document, *second) =>
+        {
+            ResolvedConstraintKind::CurveTangency
+        }
+        (
+            ConstraintIntent::Continuity,
+            [SelectionItem::Curve(first), SelectionItem::Curve(second)],
+        ) if supports_endpoint_contact(document, *first)
+            && supports_endpoint_contact(document, *second) =>
+        {
+            ResolvedConstraintKind::EndpointContinuity
+        }
+        _ => {
+            let expected = match intent {
+                ConstraintIntent::Lock
+                | ConstraintIntent::Horizontal
+                | ConstraintIntent::Vertical => 1,
+                ConstraintIntent::Coincident
+                | ConstraintIntent::Parallel
+                | ConstraintIntent::Perpendicular
+                | ConstraintIntent::Equal
+                | ConstraintIntent::Midpoint
+                | ConstraintIntent::Tangent
+                | ConstraintIntent::Continuity => 2,
+                ConstraintIntent::Symmetric => 3,
+            };
+            return Err(if selection.len() == expected {
+                DisabledReason::WrongOperandKind
+            } else {
+                DisabledReason::WrongArity
+            });
+        }
     };
-    if selection.len() == expected {
-        DisabledReason::WrongOperandKind
-    } else {
-        DisabledReason::WrongArity
-    }
+    Ok(resolved)
 }
 
 fn selection_exists(document: &SketchDocument, item: SelectionItem) -> bool {
@@ -2789,19 +3060,110 @@ fn selected_point_curve(selection: &[SelectionItem]) -> Option<(DesignPointId, C
     }
 }
 
+fn selected_line_curve(
+    document: &SketchDocument,
+    selection: &[SelectionItem],
+) -> Option<(CurveSpan, CurveSpan)> {
+    let [SelectionItem::Curve(first), SelectionItem::Curve(second)] = selection else {
+        return None;
+    };
+    match (
+        line_endpoints(document, *first).is_ok(),
+        line_endpoints(document, *second).is_ok(),
+    ) {
+        (true, false) if supports_curve_contact(document, *second) => Some((*first, *second)),
+        (false, true) if supports_curve_contact(document, *first) => Some((*second, *first)),
+        _ => None,
+    }
+}
+
+fn selected_direction_curve(
+    document: &SketchDocument,
+    selection: &[SelectionItem],
+) -> Option<CurveSpan> {
+    selected_line_curve(document, selection).map(|(_, curve)| curve)
+}
+
+fn supports_curve_contact(document: &SketchDocument, span: CurveSpan) -> bool {
+    document.curve_contact_domains(span).is_ok()
+}
+
+fn supports_endpoint_contact(document: &SketchDocument, span: CurveSpan) -> bool {
+    document.curve_contact_domains(span).is_ok_and(|domains| {
+        domains
+            .iter()
+            .any(|domain| matches!(domain, ContactDomain::Bounded { .. }))
+    })
+}
+
+fn is_radius_curve(document: &SketchDocument, curve: CurveId) -> bool {
+    document.curve(curve).is_some_and(|curve| {
+        matches!(
+            curve.definition,
+            CurveDefinition::Circle { .. } | CurveDefinition::CircularArc { .. }
+        )
+    })
+}
+
+const fn simple_constraint_kind(resolved: ResolvedConstraintKind) -> Option<ConstraintKind> {
+    match resolved {
+        ResolvedConstraintKind::FixedPoint => Some(ConstraintKind::Fixed),
+        ResolvedConstraintKind::CoincidentPoints => Some(ConstraintKind::Coincident),
+        ResolvedConstraintKind::HorizontalLine => Some(ConstraintKind::Horizontal),
+        ResolvedConstraintKind::VerticalLine => Some(ConstraintKind::Vertical),
+        ResolvedConstraintKind::ParallelLines => Some(ConstraintKind::Parallel),
+        ResolvedConstraintKind::PerpendicularLines => Some(ConstraintKind::Perpendicular),
+        ResolvedConstraintKind::EqualLength => Some(ConstraintKind::EqualLength),
+        ResolvedConstraintKind::EqualRadius => Some(ConstraintKind::EqualRadius),
+        ResolvedConstraintKind::Midpoint => Some(ConstraintKind::Midpoint),
+        ResolvedConstraintKind::SymmetricAboutLine => Some(ConstraintKind::Symmetry),
+        ResolvedConstraintKind::PointOnCurve
+        | ResolvedConstraintKind::CurveContact
+        | ResolvedConstraintKind::CurveTangentDirection
+        | ResolvedConstraintKind::CurveNormalDirection
+        | ResolvedConstraintKind::EqualCurvature
+        | ResolvedConstraintKind::CurveTangency
+        | ResolvedConstraintKind::EndpointContinuity => None,
+    }
+}
+
 fn contact_action_choice(
     document: &SketchDocument,
     operand: u8,
     span: CurveSpan,
     tangency: bool,
+    endpoint_only: bool,
+    picked_parameter: Option<f64>,
 ) -> Option<ActionChoice> {
-    let domains = document.curve_contact_domains(span).ok()?;
+    let mut domains = document.curve_contact_domains(span).ok()?;
+    if endpoint_only {
+        domains.retain(|domain| matches!(domain, ContactDomain::Bounded { .. }));
+    }
     let first = *domains.first()?;
-    let default_parameter = match first {
+    let semantic_default = match first {
+        ContactDomain::Bounded { lower, upper: _ } if endpoint_only => lower,
         ContactDomain::Bounded { lower, upper } => (lower + upper) * 0.5,
         ContactDomain::SupportingLine | ContactDomain::Periodic { .. } => 0.0,
     };
-    let neighborhoods = contact_neighborhood_options(first, default_parameter);
+    let default_parameter = picked_parameter
+        .filter(|parameter| {
+            if endpoint_only {
+                matches!(
+                    first,
+                    ContactDomain::Bounded { lower, upper }
+                        if parameter.to_bits() == lower.to_bits()
+                            || parameter.to_bits() == upper.to_bits()
+                )
+            } else {
+                parameter.is_finite() && contact_domain_contains(first, *parameter)
+            }
+        })
+        .unwrap_or(semantic_default);
+    let neighborhoods = if endpoint_only {
+        vec![ContactNeighborhood::Start, ContactNeighborhood::End]
+    } else {
+        contact_neighborhood_options(first, default_parameter)
+    };
     Some(ActionChoice::Contact {
         operand,
         span,
@@ -2815,6 +3177,53 @@ fn contact_action_choice(
         },
         default_winding: 0,
     })
+}
+
+fn contact_domain_contains(domain: ContactDomain, parameter: f64) -> bool {
+    match domain {
+        ContactDomain::SupportingLine | ContactDomain::Periodic { .. } => parameter.is_finite(),
+        ContactDomain::Bounded { lower, upper } => {
+            parameter.is_finite() && parameter >= lower && parameter <= upper
+        }
+    }
+}
+
+fn validate_pair_relation_choice(
+    resolved: ResolvedConstraintKind,
+    relation: Option<ConstraintRelationChoice>,
+) -> Result<(), CoordinatorError> {
+    let valid = matches!(
+        (resolved, relation),
+        (
+            ResolvedConstraintKind::CurveContact | ResolvedConstraintKind::CurveTangency,
+            None
+        ) | (
+            ResolvedConstraintKind::EqualCurvature,
+            Some(ConstraintRelationChoice::EqualCurvature(_))
+        ) | (
+            ResolvedConstraintKind::EndpointContinuity,
+            Some(ConstraintRelationChoice::Continuity(_))
+        )
+    );
+    if !valid {
+        return Err(CoordinatorError::InvalidActionInput(
+            "relation choice does not match the resolved curve-pair action",
+        ));
+    }
+    if let Some(ConstraintRelationChoice::Continuity(DocumentCurveContinuity::ParametricC2 {
+        first_rate,
+        second_rate,
+    })) = relation
+        && (!first_rate.is_finite()
+            || first_rate <= 0.0
+            || !second_rate.is_finite()
+            || second_rate <= 0.0)
+    {
+        return Err(CoordinatorError::InvalidActionInput(
+            "parametric C2 rates must be finite and positive",
+        ));
+    }
+    Ok(())
 }
 
 fn contact_neighborhood_options(domain: ContactDomain, value: f64) -> Vec<ContactNeighborhood> {
@@ -5039,7 +5448,7 @@ mod tests {
         let transcript = coordinator.transcript().to_vec();
 
         assert!(coordinator.actions().contains(&ActionAvailability {
-            action: CoordinatorActionKind::Constraint(ConstraintKind::Fixed),
+            action: CoordinatorActionKind::Constraint(ConstraintIntent::Lock),
             state: ActionState::Enabled,
         }));
         let edit = coordinator

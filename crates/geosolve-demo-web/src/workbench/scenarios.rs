@@ -522,8 +522,8 @@ const VERIFICATION_POINTS: [VerificationPoint; 28] = [
     },
     VerificationPoint {
         id: VerificationPointId::P13,
-        objective: "The preserved alpha relation and dimension families render from one accepted public-domain scenario without a legacy application.",
-        human_judgment: "Judge whether relation glyphs, dimension annotations, and persistent operands make the family catalog understandable.",
+        objective: "The compact contextual intents preserve the alpha families and visibly include line/curve direction, equal-curvature and endpoint-continuity dispatch without a legacy application.",
+        human_judgment: "Judge whether contextual labels, relation glyphs, explicit branch metadata, dimension annotations and persistent operands make the family catalog understandable.",
     },
     VerificationPoint {
         id: VerificationPointId::P14,
@@ -854,14 +854,14 @@ const GLOBAL_ERROR_STEPS: [ScenarioStep; 4] = [
 
 const ALPHA_PARITY_STEPS: [ScenarioStep; 3] = [
     ScenarioStep {
-        instruction: "Inspect the accepted alpha family corpus on the canvas and in the sketch tree.",
+        instruction: "Inspect the accepted contextual-constraint corpus on the canvas and in the sketch tree.",
         action: None,
-        expected: "Ordinary relations, midpoint/symmetry, point/curve contacts, circular dimensions and explicit tangency branches retain persistent selectable identities.",
+        expected: "Coincidence/contact, equal length/radius/curvature, line/curve direction, midpoint/symmetry, tangency and endpoint continuity retain persistent selectable identities.",
     },
     ScenarioStep {
-        instruction: "Compare relation glyph kinds and driving/reference dimension annotations.",
+        instruction: "Compare each contextual intent with the selection-specific label, relation glyph kind and driving/reference dimension annotations.",
         action: None,
-        expected: "The workbench renders domain-owned definitions and values without a legacy route, equation, or browser applicability rule.",
+        expected: "The workbench presents Lock/Coincident/Equal/Tangent/Continuity intent while rendering the domain-owned underlying definitions and explicit branches.",
     },
     ScenarioStep {
         instruction: "Open diagnostics and capture typed evidence if useful.",
@@ -877,7 +877,7 @@ const ALPHA_BRANCH_STEPS: [ScenarioStep; 4] = [
         expected: "Both source contacts change one explicit orientation together; no coordinate heuristic chooses the branch.",
     },
     ScenarioStep {
-        instruction: "Submit generic contact between two distinct fixed parallel spans.",
+        instruction: "Submit Coincident between two distinct fixed parallel spans.",
         action: Some(ScenarioAction::AlphaRejectedContact),
         expected: "The retained design records the impossible contact while the prior accepted scene and branch evidence remain authoritative.",
     },
@@ -1103,9 +1103,9 @@ const SCENARIOS: [ScenarioDefinition; 24] = [
     },
     ScenarioDefinition {
         id: ScenarioId::AlphaParityCatalog,
-        title: "Alpha relation & dimension catalog",
-        description: "Inspect the preserved ordinary relation, point/curve, circular-dimension and explicit tangency families through the sole workbench.",
-        human_question: "Do the selectable glyphs, annotations, operands and domain diagnostics form a coherent reusable alpha action catalog?",
+        title: "Contextual relation & dimension catalog",
+        description: "Inspect contextual contact/equality/direction/tangency/continuity dispatch, dimensions and explicit branches through the sole workbench.",
+        human_question: "Do the compact intents, selection-specific labels, selectable glyphs, operands and branch diagnostics form a coherent reusable authoring catalog?",
         fixture: ScenarioFixture::AlphaParity,
         points: &ALPHA_PARITY_POINTS,
         steps: &ALPHA_PARITY_STEPS,
@@ -1316,8 +1316,8 @@ const M55_ACTION_PARITY_CHILDREN: [ScenarioNode; 2] = [
 
 const M55_ACTION_PARITY_GROUP: ScenarioGroup = ScenarioGroup {
     id: ScenarioGroupId::M55ActionParity,
-    title: "M55 Action parity",
-    description: "Reusable alpha relation, dimension, contact-branch and rejection-recovery scenarios.",
+    title: "M55 Contextual constraints",
+    description: "Reusable contextual dispatch, dimension, explicit-branch and rejection-recovery scenarios.",
     children: &M55_ACTION_PARITY_CHILDREN,
 };
 
