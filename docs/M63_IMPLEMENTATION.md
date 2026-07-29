@@ -51,6 +51,11 @@ diameter annotations use canonical parameter zero, while circular arcs use their
 midpoint. Both are evaluated through the public accepted curve API. The focused headless
 regression and editor/web qualification slice pass; human retest remains pending.
 
+Follow-up `M63-F002` replaces nominal ring-slot fan-out with deterministic collision-checked
+placement. Every final glyph center maintains at least 22 px separation from every earlier glyph,
+including glyphs whose semantic origins are merely nearby. The rotating-square headless regression
+checks all final pairs and confirms displaced glyphs retain leaders. Human retest remains pending.
+
 ## 5. Known limitations
 
 - Annotation layout is intentionally compact and deterministic, not a general-purpose CAD

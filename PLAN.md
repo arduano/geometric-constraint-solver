@@ -2842,6 +2842,11 @@ mathematically tied adaptive-tessellation samples. Full circles now use canonica
 and circular arcs use their semantic midpoint through public accepted-curve evaluation. Direct
 regression and mechanical requalification pass; focused human retest remains pending.
 
+UAT finding `M63-F002` (2026-07-30) corrected overlapping crowded constraint symbols. Headless
+fan-out now collision-checks deterministic concentric candidates and requires 22 px separation
+between every final glyph center while retaining semantic leaders. The actual rotating-square
+fixture directly verifies all marker pairs; focused human retest remains pending.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

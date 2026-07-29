@@ -7,7 +7,8 @@ Status: candidate awaiting supervising-human review.
 ## Candidate
 
 - Branch: `main`
-- Implementation commits: `9727b60`, with `M63-F001` remediation in `8fcf270`.
+- Implementation commits: `9727b60`, with `M63-F001` remediation in `8fcf270` and `M63-F002`
+  remediation in `e020477`.
 - Temporary Tailscale endpoint: `http://100.94.63.83:8080/`.
 - Scenario group: **Scenarios → M63 Canvas constraints**
 - Mechanical gate: format, warnings-denied workspace Clippy, all-feature workspace tests,
@@ -45,6 +46,13 @@ Status: candidate awaiting supervising-human review.
   circular arcs use their semantic midpoint. A headless regression perturbs the accepted radius
   and requires the anchor to remain on that branch. Recheck the new stability step in
   `canvas-relation-glyphs`.
+- `M63-F002` — resolved; human retest pending. In `canvas-crowded-annotations`, the nominal
+  eight-direction fan-out still placed adjacent symbol centers closer than the rendered glyph and
+  hit-target footprints, and offsets around nearby but non-identical origins could collide again.
+  The headless layout now searches deterministic concentric candidates and accepts one only when
+  its final center is at least 22 px from every already placed glyph. Displaced glyphs retain their
+  semantic leader. A regression builds the actual rotating-square fixture and checks every pair of
+  final anchors plus leader exercise. Recheck all crowded corners after Fit, zoom and pan.
 
 ## Approval
 

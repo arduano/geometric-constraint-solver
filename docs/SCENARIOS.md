@@ -1803,6 +1803,11 @@ line must not move the radius leader between mathematically equivalent circumfer
 Headless presentation uses canonical public curve parameters rather than adaptive tessellation to
 own that branch.
 
+`M63-F002` strengthens `canvas-crowded-annotations`: deterministic fan-out is collision checked
+against every final glyph center with a 22 px minimum separation, rather than merely assigning
+nominal ring slots. The rotating-square headless regression checks every glyph pair and leader
+exercise.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:
