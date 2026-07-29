@@ -7,15 +7,20 @@
 //! sketch identities, and emits typed effects for a host to apply. It owns no solver
 //! equations, renderer, DOM integration, persistence, or platform event loop.
 
+mod authoring;
 mod coordinator;
 mod qualification;
 
+pub use authoring::{
+    AuthoringApplication, AuthoringOperand, AuthoringOperandKind, AuthoringOptions,
+    AuthoringOutcome, AuthoringState, AuthoringTool, AuthoringWarning,
+};
 pub use coordinator::{
-    ActionAvailability, ActionState, AuditDto, AuditProvenance, BranchAction, ContactBranchAction,
-    CoordinatorActionKind, CoordinatorError, DisabledReason, EditorMutation, EditorProblemCategory,
-    EditorProblemMetadata, EditorProblemScope, EditorProblemTarget, LifecycleDto, LifecycleStatus,
-    MeasurementPublication, MutationOutcome, ProblemsDto, ReplayAction, RestoreCheckpoint,
-    RetainedEditorCoordinator,
+    ActionAvailability, ActionState, AuditDto, AuditProvenance, AuthoringMutation, BranchAction,
+    ContactBranchAction, CoordinatorActionKind, CoordinatorError, DimensionTargetMetadata,
+    DisabledReason, EditorMutation, EditorProblemCategory, EditorProblemMetadata,
+    EditorProblemScope, EditorProblemTarget, LifecycleDto, LifecycleStatus, MeasurementPublication,
+    MutationOutcome, ProblemsDto, ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator,
 };
 pub use geosolve_sketch::SketchAcceptedDocumentRedundancy;
 #[doc(hidden)]
@@ -2549,7 +2554,7 @@ fn available_constraints(
     }
 }
 
-fn constraint_edit(
+pub(crate) fn constraint_edit(
     document: &SketchDocument,
     selection: &[SelectionItem],
     kind: ConstraintKind,

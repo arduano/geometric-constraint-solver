@@ -22,7 +22,8 @@ use geosolve_sketch::{
 use thiserror::Error;
 
 use crate::{
-    ActionChoice, ConstraintActionRequest, ConstraintEditor, ConstraintIntent, ConstraintKind,
+    ActionChoice, AuthoringApplication, AuthoringOperand, AuthoringOptions, AuthoringTool,
+    ConstraintActionRequest, ConstraintEditor, ConstraintIntent, ConstraintKind,
     ConstraintRelationChoice, ConstructionProposal, ConstructionResult, DimensionActionRequest,
     DimensionKind, EditorEffect, ProvisionalInferenceCandidate, ResolvedConstraintKind,
     SelectionItem,
@@ -247,6 +248,23 @@ pub enum EditorMutation {
     PointMove(DocumentCommandEffect),
     Construction(ConstructionResult),
     Inference(DocumentCommandEffect),
+}
+
+/// Typed retained mutation emitted by one complete headless authoring application.
+#[derive(Clone, Debug)]
+pub enum AuthoringMutation {
+    Constraint(MutationOutcome<geosolve_sketch::DocumentConstraintId>),
+    Dimension(MutationOutcome<DocumentDimensionId>),
+}
+
+/// Editable target metadata for one selected dimension.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DimensionTargetMetadata {
+    pub dimension: DocumentDimensionId,
+    pub scalar: geosolve_sketch::DesignScalarId,
+    pub value: f64,
+    pub unit: ScalarUnit,
+    pub mode: DocumentDimensionMode,
 }
 
 /// Measurement publication preserves the exact M38 value and audit provenance.
@@ -1276,15 +1294,31 @@ impl RetainedEditorCoordinator {
         expected: SketchDesignIdentity,
         request: ConstraintActionRequest,
     ) -> Result<MutationOutcome<geosolve_sketch::DocumentConstraintId>, CoordinatorError> {
-        self.ensure_expected(expected)?;
-        let resolved = resolve_constraint(
-            self.session.design_document(),
-            self.editor.selection(),
-            request.intent,
-        )
-        .map_err(CoordinatorError::ActionUnavailable)?;
-        let replay_request = request.clone();
         let selection = self.editor.selection().to_vec();
+        self.apply_constraint_action_for(expected, &selection, request)
+    }
+
+    /// Applies one complete relation action over explicit immutable operands.
+    ///
+    /// Unlike [`Self::apply_constraint_action`], this entry point never reads or
+    /// changes application selection.
+    ///
+    /// # Errors
+    ///
+    /// Returns an applicability, branch-input, stale-design, document, solve-setup,
+    /// or checkpoint error.
+    pub fn apply_constraint_action_for(
+        &mut self,
+        expected: SketchDesignIdentity,
+        selection: &[SelectionItem],
+        request: ConstraintActionRequest,
+    ) -> Result<MutationOutcome<geosolve_sketch::DocumentConstraintId>, CoordinatorError> {
+        self.ensure_expected(expected)?;
+        let resolved =
+            resolve_constraint(self.session.design_document(), selection, request.intent)
+                .map_err(CoordinatorError::ActionUnavailable)?;
+        let replay_request = request.clone();
+        let selection = selection.to_vec();
         let outcome = match resolved {
             ResolvedConstraintKind::PointOnCurve => self.apply_point_curve_action(
                 expected,
@@ -1321,8 +1355,9 @@ impl RetainedEditorCoordinator {
                         "contextual relation did not resolve to a simple constraint",
                     ),
                 )?;
-                let edit = self.editor.constraint_edit(
+                let edit = crate::constraint_edit(
                     self.session.design_document(),
+                    &selection,
                     kind,
                     request.label,
                 )?;
@@ -1496,20 +1531,35 @@ impl RetainedEditorCoordinator {
         expected: SketchDesignIdentity,
         request: DimensionActionRequest,
     ) -> Result<MutationOutcome<DocumentDimensionId>, CoordinatorError> {
-        self.ensure_expected(expected)?;
         let selection = self.editor.selection().to_vec();
+        self.apply_dimension_action_for(expected, &selection, request)
+    }
+
+    /// Applies one complete dimension action over explicit immutable operands.
+    ///
+    /// This entry point never reads or changes application selection.
+    ///
+    /// # Errors
+    ///
+    /// Returns an applicability, stale-design, document, solve-setup, or checkpoint
+    /// error.
+    pub fn apply_dimension_action_for(
+        &mut self,
+        expected: SketchDesignIdentity,
+        selection: &[SelectionItem],
+        request: DimensionActionRequest,
+    ) -> Result<MutationOutcome<DocumentDimensionId>, CoordinatorError> {
+        self.ensure_expected(expected)?;
         let target = dimension_target(
             self.session.design_document(),
-            self.editor.selection(),
+            selection,
             request.kind,
             request.angle_orientation,
         )
         .map_err(CoordinatorError::ActionUnavailable)?;
-        let definition = dimension_operands(
-            self.session.design_document(),
-            self.editor.selection(),
-            request.kind,
-        )?;
+        let definition =
+            dimension_operands(self.session.design_document(), selection, request.kind)?;
+        let selection = selection.to_vec();
         let replay_request = request.clone();
         let label = request.label;
         let mode = request.mode;
@@ -1539,6 +1589,205 @@ impl RetainedEditorCoordinator {
             request: replay_request,
         })?;
         Ok(result)
+    }
+
+    /// Applies one complete request produced by [`crate::AuthoringState`].
+    ///
+    /// Branch defaults are explicit values from [`AuthoringOptions`]. Picked curve
+    /// parameters are retained when valid for the selected semantic domain.
+    ///
+    /// # Errors
+    ///
+    /// Returns an applicability, stale-resolution, branch-input, retained-session,
+    /// document or checkpoint error.
+    pub fn apply_authoring(
+        &mut self,
+        expected: SketchDesignIdentity,
+        application: &AuthoringApplication,
+    ) -> Result<AuthoringMutation, CoordinatorError> {
+        let selection = application
+            .operands
+            .iter()
+            .map(|operand| operand.item)
+            .collect::<Vec<_>>();
+        match application.tool {
+            AuthoringTool::Constraint(intent) => {
+                let resolved =
+                    resolve_constraint(self.session.design_document(), &selection, intent)
+                        .map_err(CoordinatorError::ActionUnavailable)?;
+                if application.resolved_constraint != Some(resolved) {
+                    return Err(CoordinatorError::InvalidActionInput(
+                        "authoring resolution is stale",
+                    ));
+                }
+                let request = self.authoring_constraint_request(
+                    intent,
+                    resolved,
+                    &selection,
+                    &application.operands,
+                    application.options,
+                )?;
+                self.apply_constraint_action_for(expected, &selection, request)
+                    .map(AuthoringMutation::Constraint)
+            }
+            AuthoringTool::Dimension(kind) => self
+                .apply_dimension_action_for(
+                    expected,
+                    &selection,
+                    DimensionActionRequest {
+                        kind,
+                        mode: application.options.dimension_mode,
+                        label: dimension_action_label(kind).to_owned(),
+                        angle_orientation: application.options.angle_orientation,
+                    },
+                )
+                .map(AuthoringMutation::Dimension),
+        }
+    }
+
+    fn authoring_constraint_request(
+        &self,
+        intent: ConstraintIntent,
+        resolved: ResolvedConstraintKind,
+        selection: &[SelectionItem],
+        operands: &[AuthoringOperand],
+        options: AuthoringOptions,
+    ) -> Result<ConstraintActionRequest, CoordinatorError> {
+        let document = self.session.design_document();
+        let contact_spans = if resolved == ResolvedConstraintKind::RadialLine {
+            selected_radial_line(document, selection)
+                .map(|(line, _, _)| vec![line])
+                .unwrap_or_default()
+        } else {
+            selected_curve_spans(selection)
+        };
+        let tangency = resolved == ResolvedConstraintKind::CurveTangency;
+        let endpoint_only = resolved == ResolvedConstraintKind::EndpointContinuity;
+        let contacts = contact_spans
+            .into_iter()
+            .enumerate()
+            .map(|(index, span)| {
+                let picked_parameter = operands.iter().find_map(|operand| {
+                    (operand.item == SelectionItem::Curve(span))
+                        .then_some(operand.curve_parameter)
+                        .flatten()
+                });
+                let ActionChoice::Contact {
+                    domains,
+                    default_parameter,
+                    neighborhoods,
+                    default_winding,
+                    ..
+                } = contact_action_choice(
+                    document,
+                    u8::try_from(index).map_err(|_| {
+                        CoordinatorError::InvalidActionInput("too many authoring contacts")
+                    })?,
+                    span,
+                    tangency,
+                    endpoint_only,
+                    picked_parameter,
+                )
+                .ok_or(CoordinatorError::InvalidActionInput(
+                    "selected curve has no valid contact domain",
+                ))?
+                else {
+                    unreachable!("contact choice constructor emits contact metadata");
+                };
+                let domain = *domains.first().ok_or(CoordinatorError::InvalidActionInput(
+                    "selected curve has no valid contact domain",
+                ))?;
+                let neighborhood =
+                    *neighborhoods
+                        .first()
+                        .ok_or(CoordinatorError::InvalidActionInput(
+                            "selected curve has no valid contact neighborhood",
+                        ))?;
+                Ok(crate::ContactActionChoice {
+                    support: geosolve_sketch::DocumentCurveSpanRef {
+                        span,
+                        winding: default_winding,
+                    },
+                    domain,
+                    parameter: default_parameter,
+                    neighborhood,
+                    tangent_orientation: tangency.then_some(options.tangent_orientation),
+                })
+            })
+            .collect::<Result<Vec<_>, CoordinatorError>>()?;
+        let relation = match resolved {
+            ResolvedConstraintKind::EqualCurvature => Some(
+                ConstraintRelationChoice::EqualCurvature(options.curvature_relation),
+            ),
+            ResolvedConstraintKind::EndpointContinuity => {
+                Some(ConstraintRelationChoice::Continuity(options.continuity))
+            }
+            _ => None,
+        };
+        Ok(ConstraintActionRequest {
+            intent,
+            label: resolved.label().to_owned(),
+            contacts,
+            relation,
+        })
+    }
+
+    /// Returns editable target metadata for exactly one explicitly selected dimension.
+    #[must_use]
+    pub fn dimension_target_metadata_for(
+        &self,
+        selection: &[SelectionItem],
+    ) -> Option<DimensionTargetMetadata> {
+        let [SelectionItem::Dimension(id)] = selection else {
+            return None;
+        };
+        let dimension = self
+            .session
+            .design_document()
+            .dimensions()
+            .iter()
+            .find(|dimension| dimension.id == *id)?;
+        let scalar = dimension_target_scalar(&dimension.definition);
+        let target = self.session.design_document().scalar(scalar)?;
+        Some(DimensionTargetMetadata {
+            dimension: *id,
+            scalar,
+            value: target.value,
+            unit: target.unit,
+            mode: dimension.mode,
+        })
+    }
+
+    /// Returns editable target metadata for the current application selection.
+    #[must_use]
+    pub fn selected_dimension_target_metadata(&self) -> Option<DimensionTargetMetadata> {
+        self.dimension_target_metadata_for(self.editor.selection())
+    }
+
+    /// Retains one finite target edit through ordinary document history.
+    ///
+    /// # Errors
+    ///
+    /// Returns a missing-dimension, invalid-scalar, stale-design, retained-session or
+    /// checkpoint error.
+    pub fn set_dimension_target(
+        &mut self,
+        expected: SketchDesignIdentity,
+        dimension: DocumentDimensionId,
+        value: f64,
+    ) -> Result<MutationOutcome<DocumentCommandEffect>, CoordinatorError> {
+        let metadata = self
+            .dimension_target_metadata_for(&[SelectionItem::Dimension(dimension)])
+            .ok_or(CoordinatorError::ActionUnavailable(
+                DisabledReason::MissingObject,
+            ))?;
+        self.apply_edit(
+            expected,
+            DocumentEdit::SetScalarValue {
+                scalar: metadata.scalar,
+                value,
+            },
+        )
     }
 
     /// Applies complete explicit branch edits for one selected contact source.
@@ -2624,7 +2873,7 @@ fn selection_reason(document: &SketchDocument, selection: &[SelectionItem]) -> D
     clippy::too_many_lines,
     reason = "the closed intent-to-definition dispatch matrix is clearer as one exhaustive match"
 )]
-fn resolve_constraint(
+pub(crate) fn resolve_constraint(
     document: &SketchDocument,
     selection: &[SelectionItem],
     intent: ConstraintIntent,
@@ -2758,7 +3007,7 @@ fn resolve_constraint(
     Ok(resolved)
 }
 
-fn selection_exists(document: &SketchDocument, item: SelectionItem) -> bool {
+pub(crate) fn selection_exists(document: &SketchDocument, item: SelectionItem) -> bool {
     match item {
         SelectionItem::Point(id) => document.point(id).is_some(),
         SelectionItem::Curve(span) => document
@@ -2843,7 +3092,7 @@ fn line_endpoints(
     }
 }
 
-fn dimension_target(
+pub(crate) fn dimension_target(
     document: &SketchDocument,
     selection: &[SelectionItem],
     kind: DimensionKind,
@@ -2906,6 +3155,30 @@ fn dimension_target(
                 .then_some(value)
                 .ok_or(DisabledReason::WrongOperandKind)
         }
+    }
+}
+
+const fn dimension_action_label(kind: DimensionKind) -> &'static str {
+    match kind {
+        DimensionKind::PointDistance => "Point distance",
+        DimensionKind::SegmentLength => "Segment length",
+        DimensionKind::Radius => "Radius",
+        DimensionKind::Diameter => "Diameter",
+        DimensionKind::OrientedAngle => "Oriented angle",
+    }
+}
+
+const fn dimension_target_scalar(
+    definition: &DocumentDimensionDefinition,
+) -> geosolve_sketch::DesignScalarId {
+    match definition {
+        DocumentDimensionDefinition::PointDistance { target, .. }
+        | DocumentDimensionDefinition::CurveLength { target, .. }
+        | DocumentDimensionDefinition::Radius { target, .. }
+        | DocumentDimensionDefinition::Diameter { target, .. }
+        | DocumentDimensionDefinition::OrientedAngle { target, .. }
+        | DocumentDimensionDefinition::SupportingLineOffset { target, .. }
+        | DocumentDimensionDefinition::ExactTranslatedSegmentOffset { target, .. } => *target,
     }
 }
 
@@ -4644,6 +4917,80 @@ mod tests {
             assert_eq!(coordinator.history_len(), history);
             assert_eq!(coordinator.transcript().len(), transcript);
         }
+    }
+
+    #[test]
+    fn explicit_authoring_operands_are_selection_independent_and_clear_no_host_selection() {
+        let (session, points, _, _) = fixed_line_session();
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        assert!(coordinator.editor().selection().is_empty());
+        let application = AuthoringApplication {
+            tool: AuthoringTool::Constraint(ConstraintIntent::Coincident),
+            operands: points
+                .map(SelectionItem::Point)
+                .map(AuthoringOperand::selected)
+                .to_vec(),
+            options: AuthoringOptions::default(),
+            resolved_constraint: Some(ResolvedConstraintKind::CoincidentPoints),
+        };
+        let history = coordinator.history_len();
+        let result = coordinator
+            .apply_authoring(coordinator.session().design_identity(), &application)
+            .expect("retained rejected constraint");
+        assert!(matches!(result, AuthoringMutation::Constraint(_)));
+        assert_eq!(coordinator.history_len(), history + 1);
+        assert!(coordinator.editor().selection().is_empty());
+        assert!(coordinator.session().accepted_state().is_some());
+        assert_eq!(
+            coordinator.session().design_document().constraints().len(),
+            3
+        );
+    }
+
+    #[test]
+    fn explicit_dimension_target_edit_is_retained_and_undoable() {
+        let (session, points, _, _) = fixed_line_session();
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let selection = points.map(SelectionItem::Point);
+        let created = coordinator
+            .apply_dimension_action_for(
+                coordinator.session().design_identity(),
+                &selection,
+                DimensionActionRequest {
+                    kind: DimensionKind::PointDistance,
+                    mode: DocumentDimensionMode::Reference,
+                    label: "distance".into(),
+                    angle_orientation: DocumentAngleOrientation::CounterClockwise,
+                },
+            )
+            .expect("reference dimension");
+        let dimension = created.value;
+        let metadata = coordinator
+            .dimension_target_metadata_for(&[SelectionItem::Dimension(dimension)])
+            .expect("target metadata");
+        assert!((metadata.value - 2.0).abs() < 1.0e-12);
+        coordinator
+            .set_dimension_target(coordinator.session().design_identity(), dimension, 3.5)
+            .expect("target edit");
+        assert!(
+            (coordinator
+                .dimension_target_metadata_for(&[SelectionItem::Dimension(dimension)])
+                .expect("edited metadata")
+                .value
+                - 3.5)
+                .abs()
+                < 1.0e-12
+        );
+        coordinator.undo().expect("undo target");
+        assert!(
+            (coordinator
+                .dimension_target_metadata_for(&[SelectionItem::Dimension(dimension)])
+                .expect("restored metadata")
+                .value
+                - 2.0)
+                .abs()
+                < 1.0e-12
+        );
     }
 
     #[test]
