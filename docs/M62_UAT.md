@@ -85,7 +85,7 @@ a production deployment.
 ## Approval
 
 - Candidate implementation: `53e7867` (including headless base `0ec560b`), with UAT follow-ups
-  `10f95d5`, `435e898`, `3a59767` and `e49d124`.
+  `10f95d5`, `435e898`, `3a59767`, `e49d124` and `b0d3913`.
 - Mechanical qualification: Pass on 2026-07-29; exact commands are recorded in
   `docs/M62_IMPLEMENTATION.md`.
 - Human rating: pending.
