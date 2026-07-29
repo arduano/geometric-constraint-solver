@@ -686,6 +686,70 @@ fn every_required_relation_executes_through_the_typed_coordinator_action() {
 }
 
 #[test]
+fn authored_line_endpoint_can_use_default_contextual_contact_on_circle() {
+    let fixture = matrix_fixture();
+    let mut coordinator = coordinator(fixture.document);
+    coordinator.editor_mut().set_selection([
+        SelectionItem::Point(fixture.points[0]),
+        SelectionItem::Curve(fixture.circles[0]),
+    ]);
+    let action = CoordinatorActionKind::Constraint(ConstraintIntent::Coincident);
+    assert_enabled(&coordinator, action);
+    assert_eq!(
+        coordinator.resolved_constraint(ConstraintIntent::Coincident),
+        Some(ResolvedConstraintKind::PointOnCurve)
+    );
+    let choices = coordinator.action_choices(action);
+    let [
+        ActionChoice::Contact {
+            span,
+            domains,
+            default_parameter,
+            neighborhoods,
+            tangent_orientations,
+            default_winding,
+            ..
+        },
+    ] = choices.as_slice()
+    else {
+        panic!("point-on-circle must expose one contact choice");
+    };
+    assert!(tangent_orientations.is_empty());
+    let contact = ContactActionChoice {
+        support: DocumentCurveSpanRef {
+            span: *span,
+            winding: *default_winding,
+        },
+        domain: domains[0],
+        parameter: *default_parameter,
+        neighborhood: neighborhoods[0],
+        tangent_orientation: None,
+    };
+    let expected = coordinator.session().design_identity();
+    let outcome = coordinator
+        .apply_constraint_action(
+            expected,
+            ConstraintActionRequest {
+                intent: ConstraintIntent::Coincident,
+                label: "point on circle".into(),
+                contacts: vec![contact],
+                relation: None,
+            },
+        )
+        .unwrap();
+    assert!(outcome.published_accepted.is_some());
+    assert!(matches!(
+        coordinator
+            .session()
+            .design_document()
+            .constraint(outcome.value)
+            .unwrap()
+            .definition,
+        DocumentConstraintDefinition::PointOnCurve { .. }
+    ));
+}
+
+#[test]
 fn all_alpha_dimension_families_execute_as_reference_actions() {
     let fixture = matrix_fixture();
     let points = fixture.points;

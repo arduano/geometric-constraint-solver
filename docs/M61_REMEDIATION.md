@@ -17,6 +17,8 @@ Implementation source: `1f5fd59`; targeted interaction repair: `1c314e9`
   active-scenario interaction routing and ten mechanism scenario definitions.
 - `CanvasCamera` provides model-center/scale viewport state, cursor-anchored zoom, pan and scene
   fitting. Recursive scenario flyouts preserve visible overflow at every desktop level.
+- Dynamic branch selectors preserve a previous value only when the current headless option set
+  still contains it; first use and curve-family changes select the first published default.
 - No solver, residual, public schema, operation/topology companion, old route or browser harness
   was added.
 
@@ -70,6 +72,9 @@ test suite, all three WASM checks and the release Trunk build completed successf
 - Every new mechanism reports the documented nonzero mobility and one valid selected driver.
 - Repeated bidirectional twin-roller drags include the opposite persistent center as a transient
   stability target and retain that passive center within `1e-9` of its accepted position.
+- An authored line endpoint plus circle resolves Coincident to point-on-curve and publishes using
+  the untouched periodic contact defaults; empty or obsolete dynamic browser choices cannot
+  override those defaults.
 - A projected scissor drag advances accepted state and moves dependent geometry; Reset restores
   exact initial geometry/selection.
 - Active scenario interaction and camera controls do not publish ordinary workspace persistence.

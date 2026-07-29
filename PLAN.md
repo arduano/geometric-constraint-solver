@@ -2646,6 +2646,9 @@ review after objective direct qualification.
 - [x] Resolve `M61-F001` by routing the twin-roller cam's active/passive persistent identities
   through headless stabilized projection; directly regress repeated drags in both directions with
   the passive center stationary.
+- [x] Resolve `M61-F002` by retaining a dynamic branch-selector value only while it remains among
+  the current headless choices; otherwise select the first published default so point-on-circle
+  Coincident authoring cannot submit an empty stale domain.
 
 Remediation notes (2026-07-29): the M61 subtree now contains an **Interactive mechanisms** branch
 with **Compact mechanisms** and **Linkage mechanisms** grandchildren plus the four preserved
@@ -2657,7 +2660,10 @@ through public document/session APIs; no equation, deleted playground, `/#/dev/l
 harness returned. `docs/M61_UAT.md` records the replacement scorecard and no human approval.
 Targeted repair `1c314e9` preserves the motion-cam fixture's intended independent freedoms while
 holding the non-dragged roller at its accepted position through an interaction-only stability
-target. It adds no equation or persistent constraint; targeted human recheck remains pending.
+target. `M61-F002` confirms the exact authored line-endpoint plus circle selection resolves and
+publishes a periodic point-on-curve contact, while the workbench now discards invalid stale/empty
+dynamic option values before dispatch. Neither repair adds an equation or persistent constraint;
+targeted human recheck remains pending.
 
 ### M62: API and schema release-candidate freeze
 

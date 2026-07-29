@@ -135,6 +135,9 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - Fixed `M61-F001`: twin-roller cam drag now preserves the non-dragged roller through a
   coordinator-owned transient stability target in either direction, preventing independent-DOF
   jumps and the associated interaction lag.
+- Fixed `M61-F002`: dynamic contact/relation selectors now fall back to the first current
+  headless-provided choice instead of restoring an empty or obsolete option, allowing untouched
+  point-on-circle contact defaults to dispatch.
 
 ## [0.2.0] - 2026-07-22
 

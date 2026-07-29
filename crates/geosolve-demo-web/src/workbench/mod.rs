@@ -19,6 +19,11 @@ mod scenarios;
 #[cfg(any(target_arch = "wasm32", test))]
 mod scene;
 
+#[cfg(any(target_arch = "wasm32", test))]
+fn should_restore_selected_option(selected: Option<&str>, options: &[(&str, &str)]) -> bool {
+    selected.is_some_and(|selected| options.iter().any(|(value, _)| *value == selected))
+}
+
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod wasm {
     use std::cell::RefCell;
@@ -1712,13 +1717,15 @@ pub(crate) mod wasm {
             .dyn_into::<HtmlSelectElement>()
             .ok()
             .map(|select| select.value());
+        let options = options.into_iter().collect::<Vec<_>>();
+        let restore_selected = super::should_restore_selected_option(selected.as_deref(), &options);
         let markup = options
             .into_iter()
             .map(|(value, label)| format!("<option value=\"{value}\">{label}</option>"))
             .collect::<String>();
         if element.inner_html() != markup {
             element.set_inner_html(&markup);
-            if let Some(selected) = selected {
+            if restore_selected && let Some(selected) = selected {
                 element
                     .dyn_into::<HtmlSelectElement>()?
                     .set_value(&selected);
@@ -2095,5 +2102,18 @@ pub(crate) mod wasm {
         document
             .get_element_by_id(id)
             .ok_or_else(|| JsValue::from_str(&format!("missing #{id}")))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::should_restore_selected_option;
+
+    #[test]
+    fn dynamic_choice_selects_first_new_default_instead_of_restoring_an_invalid_value() {
+        let periodic = [("periodic", "Periodic")];
+        assert!(!should_restore_selected_option(Some(""), &periodic));
+        assert!(!should_restore_selected_option(Some("bounded"), &periodic));
+        assert!(should_restore_selected_option(Some("periodic"), &periodic));
     }
 }

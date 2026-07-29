@@ -35,6 +35,14 @@ scenario's persistent active/passive identities through a headless coordinator A
 accepted passive position and constructs the transient stability target. Repeated bidirectional
 drag is directly regressed; only the targeted human recheck remains.
 
+`M61-F002` then found that first-use dynamic contact controls visually exposed the headless
+point-on-circle defaults but restored an empty or obsolete select value after replacing their
+option set. Apply therefore stopped in the browser adapter before dispatch. The adapter now
+retains a prior value only if it remains in the current headless choices; otherwise the first
+published default is selected. A direct editor regression executes the exact authored line
+endpoint plus circle contact, and a presentation-policy regression covers empty, obsolete and
+still-valid option values.
+
 ## Entry point
 
 The qualified shared endpoint is:
