@@ -1808,6 +1808,11 @@ against every final glyph center with a 22 px minimum separation, rather than me
 nominal ring slots. The rotating-square headless regression checks every glyph pair and leader
 exercise.
 
+`M63-F003` makes those visible leaders contextual hover corridors. Moving from a related operand
+along its leader transfers hover to the constraint so fanned-out symbols remain reachable; moving
+onto unrelated blank canvas clears the context. The reusable relation-glyph instructions and
+headless transition regression cover both sides.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:

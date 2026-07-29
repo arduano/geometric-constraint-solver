@@ -8,7 +8,7 @@ Status: candidate awaiting supervising-human review.
 
 - Branch: `main`
 - Implementation commits: `9727b60`, with `M63-F001` remediation in `8fcf270` and `M63-F002`
-  remediation in `e020477`.
+  remediation in `e020477`, plus `M63-F003` remediation in `e160116`.
 - Temporary Tailscale endpoint: `http://100.94.63.83:8080/`.
 - Scenario group: **Scenarios → M63 Canvas constraints**
 - Mechanical gate: format, warnings-denied workspace Clippy, all-feature workspace tests,
@@ -53,6 +53,13 @@ Status: candidate awaiting supervising-human review.
   its final center is at least 22 px from every already placed glyph. Displaced glyphs retain their
   semantic leader. A regression builds the actual rotating-square fixture and checks every pair of
   final anchors plus leader exercise. Recheck all crowded corners after Fit, zoom and pan.
+- `M63-F003` — resolved; human retest pending. Contextual constraints disappeared when the pointer
+  crossed the blank gap between related geometry and a fanned-out symbol because hover hit-testing
+  recognized only the glyph endpoint. Visible leaders now act as contextual hover corridors using
+  the same screen-space annotation tolerance: following one transfers hover to the persistent
+  constraint, while moving into unrelated blank canvas still emits an explicit hover clear. A
+  headless transition regression covers both behaviors. Recheck geometry-to-symbol navigation in
+  both contextual and crowded leaves.
 
 ## Approval
 

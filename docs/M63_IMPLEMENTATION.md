@@ -56,6 +56,11 @@ placement. Every final glyph center maintains at least 22 px separation from eve
 including glyphs whose semantic origins are merely nearby. The rotating-square headless regression
 checks all final pairs and confirms displaced glyphs retain leaders. Human retest remains pending.
 
+Follow-up `M63-F003` makes visible fan-out leaders contextual hover corridors. Pointer movement
+from related geometry along a leader transfers hover to the persistent constraint; unrelated blank
+canvas still clears hover immediately. Headless transition coverage owns both outcomes. Human
+retest remains pending.
+
 ## 5. Known limitations
 
 - Annotation layout is intentionally compact and deterministic, not a general-purpose CAD
