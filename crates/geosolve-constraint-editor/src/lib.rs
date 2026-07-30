@@ -3398,6 +3398,76 @@ mod tests {
     }
 
     #[test]
+    fn m63_perpendicular_relation_uses_selectable_square_between_lines() {
+        let mut document = SketchDocument::new(8.0).expect("document");
+        let vertex = document.add_point("vertex", [0.0, 0.0]).expect("vertex");
+        let right = document.add_point("right", [4.0, 0.0]).expect("right");
+        let up = document.add_point("up", [0.0, 3.0]).expect("up");
+        let horizontal = CurveSpan::line(
+            document
+                .add_curve(
+                    "horizontal",
+                    CurveDefinition::Line {
+                        start: right,
+                        end: vertex,
+                        branch_direction: [-1.0, 0.0],
+                    },
+                )
+                .expect("horizontal line"),
+        );
+        let vertical = CurveSpan::line(
+            document
+                .add_curve(
+                    "vertical",
+                    CurveDefinition::Line {
+                        start: up,
+                        end: vertex,
+                        branch_direction: [0.0, -1.0],
+                    },
+                )
+                .expect("vertical line"),
+        );
+        let perpendicular = document
+            .add_constraint(
+                "right angle",
+                DocumentConstraintDefinition::Perpendicular {
+                    first: horizontal,
+                    second: vertical,
+                },
+            )
+            .expect("perpendicular constraint");
+
+        let scene = scene(&document);
+        let annotation = scene
+            .annotations
+            .iter()
+            .find(|annotation| annotation.item == SelectionItem::Constraint(perpendicular))
+            .expect("perpendicular annotation");
+        let SceneAnnotationGeometry::RightAngle {
+            vertex,
+            first_arm,
+            corner,
+            second_arm,
+        } = &annotation.geometry
+        else {
+            panic!("perpendicular relation must render a right-angle square");
+        };
+        assert_eq!(*vertex, ScreenPoint { x: 500.0, y: 350.0 });
+        assert_eq!(*first_arm, ScreenPoint { x: 512.0, y: 350.0 });
+        assert_eq!(*corner, ScreenPoint { x: 512.0, y: 338.0 });
+        assert_eq!(*second_arm, ScreenPoint { x: 500.0, y: 338.0 });
+        assert!(annotation.hit_test(*corner, 0.0));
+        assert_eq!(annotation.context_anchors(), vec![*corner]);
+        assert_eq!(
+            annotation.operands,
+            vec![
+                SelectionItem::Curve(horizontal),
+                SelectionItem::Curve(vertical)
+            ]
+        );
+    }
+
+    #[test]
     fn m63_radius_dimension_uses_a_stable_semantic_circle_branch() {
         let mut document = SketchDocument::new(8.0).expect("document");
         let center = document.add_point("center", [0.0, 0.0]).expect("center");
@@ -3453,31 +3523,48 @@ mod tests {
     }
 
     #[test]
-    fn m63_rotating_square_glyphs_have_non_overlapping_final_anchors() {
+    fn m63_rotating_square_annotations_have_non_overlapping_final_anchors() {
         let fixture = geosolve_sketch::alpha_scenario(
             geosolve_sketch::AlphaScenarioKind::MotionRotatingSquare,
             1.0,
         )
         .expect("rotating square");
         let scene = scene(&fixture.document);
-        let markers = scene
+        let right_angle_count = scene
+            .annotations
+            .iter()
+            .filter(|annotation| {
+                matches!(
+                    &annotation.geometry,
+                    SceneAnnotationGeometry::RightAngle { .. }
+                )
+            })
+            .count();
+        assert!(
+            right_angle_count >= 1,
+            "crowded fixture must exercise geometric right-angle presentation"
+        );
+        let anchors = scene
             .annotations
             .iter()
             .flat_map(|annotation| match &annotation.geometry {
-                SceneAnnotationGeometry::Glyph { markers } => markers.as_slice(),
-                _ => &[],
+                SceneAnnotationGeometry::Glyph { markers } => markers
+                    .iter()
+                    .map(|marker| marker.anchor)
+                    .collect::<Vec<_>>(),
+                SceneAnnotationGeometry::RightAngle { corner, .. } => vec![*corner],
+                _ => Vec::new(),
             })
-            .map(|marker| marker.anchor)
             .collect::<Vec<_>>();
         assert!(
-            markers.len() >= 8,
+            anchors.len() >= 8,
             "crowded fixture must retain representative density"
         );
-        for (index, first) in markers.iter().enumerate() {
-            for second in &markers[index + 1..] {
+        for (index, first) in anchors.iter().enumerate() {
+            for second in &anchors[index + 1..] {
                 assert!(
                     first.distance(*second) >= 22.0 - 1.0e-9,
-                    "glyph anchors overlap at {first:?} and {second:?}"
+                    "annotation anchors overlap at {first:?} and {second:?}"
                 );
             }
         }

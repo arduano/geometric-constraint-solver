@@ -566,6 +566,30 @@ fn annotation_geometry(
                 );
             }
         }
+        SceneAnnotationGeometry::RightAngle {
+            first_arm,
+            corner,
+            second_arm,
+            ..
+        } => {
+            let _ = write!(
+                output,
+                concat!(
+                    "<g class=\"wb-constraint-symbol\">",
+                    "<path class=\"wb-right-angle\" d=\"M{:.3} {:.3}L{:.3} {:.3}L{:.3} {:.3}\"/>",
+                    "<circle class=\"wb-annotation-hit\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"12\"/>",
+                    "</g>"
+                ),
+                first_arm.x,
+                first_arm.y,
+                corner.x,
+                corner.y,
+                second_arm.x,
+                second_arm.y,
+                corner.x,
+                corner.y,
+            );
+        }
         SceneAnnotationGeometry::LinearDimension {
             first,
             second,
@@ -702,6 +726,7 @@ const fn annotation_kind(kind: SceneAnnotationKind) -> &'static str {
 fn annotation_anchor(geometry: &SceneAnnotationGeometry) -> Option<ScreenPoint> {
     Some(match geometry {
         SceneAnnotationGeometry::Glyph { markers } => markers.first()?.anchor,
+        SceneAnnotationGeometry::RightAngle { corner, .. } => *corner,
         SceneAnnotationGeometry::LinearDimension { label_anchor, .. }
         | SceneAnnotationGeometry::RadialDimension { label_anchor, .. }
         | SceneAnnotationGeometry::AngularDimension { label_anchor, .. } => *label_anchor,
@@ -1467,6 +1492,84 @@ mod tests {
         assert!(markup.contains("class=\"wb-constraint-symbol hovered\" transform=\"translate("));
         assert!(markup.contains("data-annotation-marker=\"1\""));
         assert!(!markup.contains("class=\"wb-annotation wb-constraint hovered\""));
+    }
+
+    #[test]
+    fn perpendicular_constraint_renders_selectable_right_angle_square() {
+        let mut document = SketchDocument::new(8.0).unwrap();
+        let vertex = document.add_point("vertex", [0.0, 0.0]).unwrap();
+        let right = document.add_point("right", [4.0, 0.0]).unwrap();
+        let up = document.add_point("up", [0.0, 3.0]).unwrap();
+        let horizontal = CurveSpan::line(
+            document
+                .add_curve(
+                    "horizontal",
+                    CurveDefinition::Line {
+                        start: right,
+                        end: vertex,
+                        branch_direction: [-1.0, 0.0],
+                    },
+                )
+                .unwrap(),
+        );
+        let vertical = CurveSpan::line(
+            document
+                .add_curve(
+                    "vertical",
+                    CurveDefinition::Line {
+                        start: up,
+                        end: vertex,
+                        branch_direction: [0.0, -1.0],
+                    },
+                )
+                .unwrap(),
+        );
+        let perpendicular = document
+            .add_constraint(
+                "right angle",
+                DocumentConstraintDefinition::Perpendicular {
+                    first: horizontal,
+                    second: vertical,
+                },
+            )
+            .unwrap();
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .unwrap();
+        let accepted = session.accepted_state().unwrap();
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            viewport(),
+            0.8,
+        )
+        .unwrap();
+        let annotation = scene
+            .annotations
+            .iter()
+            .find(|annotation| annotation.item == SelectionItem::Constraint(perpendicular))
+            .unwrap();
+        assert!(matches!(
+            &annotation.geometry,
+            SceneAnnotationGeometry::RightAngle { .. }
+        ));
+
+        let markup = svg_markup(
+            Some(&scene),
+            Some(accepted),
+            &[annotation.item],
+            None,
+            None,
+            viewport(),
+        );
+        assert!(markup.contains("class=\"wb-right-angle\""));
+        assert!(markup.contains("class=\"wb-constraint-symbol\""));
+        assert!(!markup.contains("data-annotation-marker="));
     }
 
     #[test]

@@ -1160,7 +1160,7 @@ const CANVAS_CROWDING_STEPS: [ScenarioStep; 3] = [
     ScenarioStep {
         instruction: "Hover and select each line around the constrained square.",
         action: None,
-        expected: "Coincident, parallel, perpendicular, equal-length, and fixed relations appear near their geometry rather than in a detached strip.",
+        expected: "Coincident, parallel, equal-length, and fixed relations appear near their geometry, while each perpendicular pair uses a selectable square corner at its line intersection.",
     },
     ScenarioStep {
         instruction: "Inspect locations shared by multiple revealed relations, then move between their fanned-out icons.",

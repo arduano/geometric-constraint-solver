@@ -485,6 +485,7 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-dimension-witness { opacity: 0.62; }
 #wb-dimension-arrow path { fill: #79bfc4; stroke: none; }
 .wb-constraint-symbol.hovered,
+.wb-annotation.hovered .wb-constraint-symbol,
 .wb-annotation:focus .wb-constraint-symbol,
 .wb-annotation.selected .wb-constraint-symbol {
   fill: none;

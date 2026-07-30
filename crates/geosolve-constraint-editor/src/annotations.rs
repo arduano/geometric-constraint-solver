@@ -55,6 +55,14 @@ pub enum SceneAnnotationGeometry {
     Glyph {
         markers: Vec<SceneGlyphMarker>,
     },
+    /// A line-line perpendicular relation drawn as the two free sides of a
+    /// square corner. The accepted lines themselves provide the other sides.
+    RightAngle {
+        vertex: ScreenPoint,
+        first_arm: ScreenPoint,
+        corner: ScreenPoint,
+        second_arm: ScreenPoint,
+    },
     LinearDimension {
         first: ScreenPoint,
         second: ScreenPoint,
@@ -141,53 +149,64 @@ impl SceneAnnotation {
         if !position.is_finite() || !tolerance_pixels.is_finite() || tolerance_pixels < 0.0 {
             return None;
         }
-        let (occurrence, distance) = match &self.geometry {
-            SceneAnnotationGeometry::Glyph { markers } => markers
-                .iter()
-                .enumerate()
-                .map(|(index, marker)| (Some(index), position.distance(marker.anchor)))
-                .min_by(|first, second| first.1.total_cmp(&second.1))?,
-            SceneAnnotationGeometry::LinearDimension {
-                label_anchor,
-                first,
-                second,
-            } => (
-                None,
-                position
-                    .distance(*label_anchor)
-                    .min(point_segment_distance(position, *first, *second)),
-            ),
-            SceneAnnotationGeometry::RadialDimension {
-                center,
-                edge,
-                label_anchor,
-                ..
-            } => (
-                None,
-                position
-                    .distance(*label_anchor)
-                    .min(point_segment_distance(position, *center, *edge)),
-            ),
-            SceneAnnotationGeometry::AngularDimension {
-                vertex,
-                first_ray,
-                second_ray,
-                radius,
-                label_anchor,
-                ..
-            } => {
-                let radial_distance = position.distance(*vertex);
-                (
+        let (occurrence, distance) =
+            match &self.geometry {
+                SceneAnnotationGeometry::Glyph { markers } => markers
+                    .iter()
+                    .enumerate()
+                    .map(|(index, marker)| (Some(index), position.distance(marker.anchor)))
+                    .min_by(|first, second| first.1.total_cmp(&second.1))?,
+                SceneAnnotationGeometry::RightAngle {
+                    first_arm,
+                    corner,
+                    second_arm,
+                    ..
+                } => (
+                    None,
+                    point_segment_distance(position, *first_arm, *corner)
+                        .min(point_segment_distance(position, *corner, *second_arm)),
+                ),
+                SceneAnnotationGeometry::LinearDimension {
+                    label_anchor,
+                    first,
+                    second,
+                } => (
                     None,
                     position
                         .distance(*label_anchor)
-                        .min((radial_distance - radius).abs())
-                        .min(point_segment_distance(position, *vertex, *first_ray))
-                        .min(point_segment_distance(position, *vertex, *second_ray)),
-                )
-            }
-            SceneAnnotationGeometry::Label { anchor } => (None, position.distance(*anchor)),
-        };
+                        .min(point_segment_distance(position, *first, *second)),
+                ),
+                SceneAnnotationGeometry::RadialDimension {
+                    center,
+                    edge,
+                    label_anchor,
+                    ..
+                } => (
+                    None,
+                    position
+                        .distance(*label_anchor)
+                        .min(point_segment_distance(position, *center, *edge)),
+                ),
+                SceneAnnotationGeometry::AngularDimension {
+                    vertex,
+                    first_ray,
+                    second_ray,
+                    radius,
+                    label_anchor,
+                    ..
+                } => {
+                    let radial_distance = position.distance(*vertex);
+                    (
+                        None,
+                        position
+                            .distance(*label_anchor)
+                            .min((radial_distance - radius).abs())
+                            .min(point_segment_distance(position, *vertex, *first_ray))
+                            .min(point_segment_distance(position, *vertex, *second_ray)),
+                    )
+                }
+                SceneAnnotationGeometry::Label { anchor } => (None, position.distance(*anchor)),
+            };
         (distance <= tolerance_pixels).then_some((occurrence, distance))
     }
 
@@ -222,6 +241,9 @@ impl SceneAnnotation {
                 .iter()
                 .map(|marker| point_segment_distance(position, context_origin, marker.anchor))
                 .min_by(f64::total_cmp)?,
+            SceneAnnotationGeometry::RightAngle { corner, .. } => {
+                point_segment_distance(position, context_origin, *corner)
+            }
             SceneAnnotationGeometry::LinearDimension { label_anchor, .. }
             | SceneAnnotationGeometry::RadialDimension { label_anchor, .. }
             | SceneAnnotationGeometry::AngularDimension { label_anchor, .. } => {
@@ -238,6 +260,7 @@ impl SceneAnnotation {
             SceneAnnotationGeometry::Glyph { markers } => {
                 markers.iter().map(|marker| marker.anchor).collect()
             }
+            SceneAnnotationGeometry::RightAngle { corner, .. } => vec![*corner],
             SceneAnnotationGeometry::LinearDimension { label_anchor, .. }
             | SceneAnnotationGeometry::RadialDimension { label_anchor, .. }
             | SceneAnnotationGeometry::AngularDimension { label_anchor, .. } => {
@@ -261,19 +284,18 @@ pub(crate) fn build_annotations(
         if anchors.is_empty() {
             continue;
         }
+        let geometry = match &constraint.definition {
+            Constraint::Perpendicular { first, second } => {
+                right_angle_geometry(curves, viewport, *first, *second)
+                    .unwrap_or_else(|| glyph_geometry(anchors))
+            }
+            _ => glyph_geometry(anchors),
+        };
         annotations.push(SceneAnnotation {
             item: SelectionItem::Constraint(constraint.id),
             kind: SceneAnnotationKind::Constraint(glyph),
             operands,
-            geometry: SceneAnnotationGeometry::Glyph {
-                markers: anchors
-                    .into_iter()
-                    .map(|anchor| SceneGlyphMarker {
-                        anchor,
-                        leader_from: None,
-                    })
-                    .collect(),
-            },
+            geometry,
             visibility: SceneAnnotationVisibility::Contextual,
             suppressed: constraint.suppressed,
         });
@@ -301,6 +323,18 @@ pub(crate) fn build_annotations(
     }
     fan_out_glyphs(&mut annotations);
     annotations
+}
+
+fn glyph_geometry(anchors: Vec<ScreenPoint>) -> SceneAnnotationGeometry {
+    SceneAnnotationGeometry::Glyph {
+        markers: anchors
+            .into_iter()
+            .map(|anchor| SceneGlyphMarker {
+                anchor,
+                leader_from: None,
+            })
+            .collect(),
+    }
 }
 
 #[allow(clippy::too_many_lines)]
@@ -798,6 +832,78 @@ fn line_relation_anchor(curves: &[SceneCurve], span: CurveSpan) -> Option<Screen
     Some(midpoint(start, end))
 }
 
+const RIGHT_ANGLE_SIZE_PIXELS: f64 = 12.0;
+const RIGHT_ANGLE_VIEW_MARGIN_PIXELS: f64 = 24.0;
+
+fn right_angle_geometry(
+    curves: &[SceneCurve],
+    viewport: Viewport,
+    first: CurveSpan,
+    second: CurveSpan,
+) -> Option<SceneAnnotationGeometry> {
+    let [first_start, first_end] = curve_endpoints(curves, first)?;
+    let [second_start, second_end] = curve_endpoints(curves, second)?;
+    let first_line = unit(first_end.x - first_start.x, first_end.y - first_start.y)?;
+    let second_line = unit(second_end.x - second_start.x, second_end.y - second_start.y)?;
+    let vertex = line_intersection(first_start, first_line, second_start, second_line)?;
+    if !point_within_view_margin(vertex, viewport, RIGHT_ANGLE_VIEW_MARGIN_PIXELS) {
+        return None;
+    }
+
+    let first_ray = span_ray_toward_interior(vertex, first_start, first_end)?;
+    let second_ray = span_ray_toward_interior(vertex, second_start, second_end)?;
+    let left_normal = [-first_ray[1], first_ray[0]];
+    let square_normal = if dot(left_normal, second_ray) >= 0.0 {
+        left_normal
+    } else {
+        [-left_normal[0], -left_normal[1]]
+    };
+    let first_arm = offset(
+        vertex,
+        first_ray[0] * RIGHT_ANGLE_SIZE_PIXELS,
+        first_ray[1] * RIGHT_ANGLE_SIZE_PIXELS,
+    );
+    let second_arm = offset(
+        vertex,
+        square_normal[0] * RIGHT_ANGLE_SIZE_PIXELS,
+        square_normal[1] * RIGHT_ANGLE_SIZE_PIXELS,
+    );
+    let corner = offset(
+        first_arm,
+        square_normal[0] * RIGHT_ANGLE_SIZE_PIXELS,
+        square_normal[1] * RIGHT_ANGLE_SIZE_PIXELS,
+    );
+    Some(SceneAnnotationGeometry::RightAngle {
+        vertex,
+        first_arm,
+        corner,
+        second_arm,
+    })
+}
+
+fn span_ray_toward_interior(
+    vertex: ScreenPoint,
+    start: ScreenPoint,
+    end: ScreenPoint,
+) -> Option<[f64; 2]> {
+    let direction = unit(end.x - start.x, end.y - start.y)?;
+    let length = start.distance(end);
+    let vertex_parameter = dot([vertex.x - start.x, vertex.y - start.y], direction);
+    if vertex_parameter >= length - 1.0e-6 {
+        Some([-direction[0], -direction[1]])
+    } else {
+        Some(direction)
+    }
+}
+
+fn point_within_view_margin(point: ScreenPoint, viewport: Viewport, margin: f64) -> bool {
+    point.is_finite()
+        && point.x >= -margin
+        && point.y >= -margin
+        && point.x <= viewport.screen_size[0] + margin
+        && point.y <= viewport.screen_size[1] + margin
+}
+
 fn curve_endpoints(curves: &[SceneCurve], span: CurveSpan) -> Option<[ScreenPoint; 2]> {
     let curve = curves.iter().find(|curve| curve.span == span)?;
     Some([
@@ -853,7 +959,15 @@ const GLYPH_RING_STEP_PIXELS: f64 = 24.0;
 const GLYPH_MAX_SEARCH_RINGS: u32 = 64;
 
 fn fan_out_glyphs(annotations: &mut [SceneAnnotation]) {
-    let mut occupied = Vec::<ScreenPoint>::new();
+    // Geometry-anchored right-angle squares do not move. Reserve their
+    // selectable corners before placing ordinary glyphs around dense junctions.
+    let mut occupied = annotations
+        .iter()
+        .filter_map(|annotation| match &annotation.geometry {
+            SceneAnnotationGeometry::RightAngle { corner, .. } => Some(*corner),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
     for annotation in annotations {
         let SceneAnnotationGeometry::Glyph { markers } = &mut annotation.geometry else {
             continue;
