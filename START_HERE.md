@@ -90,10 +90,10 @@ explicit relation choice at the headless boundary, and retains picked curve para
 seeding. M61 remediation added ten movable nonzero-DOF mechanism leaves, full
 Bezier/conic/NURBS authoring and an inspectable canvas camera. Follow-up `M61-F005` makes compact
 circle Tangent contact-bearing and circle/arc Normal explicitly radial while retaining the public
-direction-at-contact domain API. M61-M63 are complete and approved. **M64 is the active editable
-sample-library cleanup; implementation is being mechanically qualified and its focused human UAT
-is not yet approved.** M64 supersedes active-scenario routing and sample-specific passive-driver
-metadata with one ordinary workspace coordinator and generic headless drag stabilization.
+direction-at-contact domain API. M61-M64 are complete and approved. M64 supersedes active-scenario
+routing and sample-specific passive-driver metadata with one ordinary workspace coordinator and
+generic headless drag stabilization. **M65 is an empty core-hardening/performance placeholder
+awaiting supervising-user scope.**
 M62 follow-up `M62-F001` corrects accepted-state line-angle seeding and exposes acute-degree
 presentation while retaining the explicit directed-radian solver branch.
 Follow-up `M62-F002` gives canvas pointer-down exclusive ownership of canvas authoring picks,
@@ -142,13 +142,13 @@ are complete, growing the catalog to eight scenarios. The complete clean release
 build-source commit `f72116b`; `docs/M53_UAT.md` records the frozen M53-S5 manifest and temporary
 human endpoint. The targeted attribution review passed as part of final M53-S5 approval.
 
-The completed M54-M63 sequence covers stable diagnostics, alpha
+The completed M54-M64 sequence covers stable diagnostics, alpha
 constraint/dimension/branch-action parity, prepared jobs, incremental scale, operations,
 production topology, the advanced workbench, approved advanced UAT and approved CAD-style
 authoring, plus approved canvas constraint visualization and interaction. The previously forecast
-M62-M64 hardening sequence was withdrawn on 2026-07-29; M62 and M63 were subsequently scoped and
-completed. M64 now owns the editable sample-library cleanup and focused UAT; no later milestone is
-currently scheduled.
+M62-M64 hardening sequence was withdrawn on 2026-07-29; M62-M64 were subsequently scoped,
+completed and approved. M65 is reserved for core hardening and performance, but its detailed scope
+has not yet been supplied; no later milestone is currently scheduled.
 
 Durable cleanup records:
 
@@ -178,7 +178,7 @@ Durable cleanup records:
 - `docs/M63_IMPLEMENTATION.md`
 - `docs/M63_UAT.md` (approved M63 scorecard and finding ledger)
 - `docs/M64_IMPLEMENTATION.md`
-- `docs/M64_UAT.md` (pending M64 scorecard)
+- `docs/M64_UAT.md` (approved M64 scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

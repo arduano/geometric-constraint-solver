@@ -1267,9 +1267,9 @@ approved post-cleanup UAT. M54-M59 complete stable diagnostics, early alpha acti
 prepared concurrency, incremental scale and the separate operations/production-topology
 companions; M60 completes the advanced workbench and M61 completes its approved advanced UAT.
 M62 completes approved CAD-style constraint/dimension authoring, and M63 completes approved
-geometry-anchored canvas constraint/dimension presentation. M64 replaces the guided scenario
-harness with an editable purpose-based sample library; no later release sequence is currently
-scheduled. Every new
+geometry-anchored canvas constraint/dimension presentation, and M64 completes the approved editable
+purpose-based sample library. M65 is an empty core-hardening/performance placeholder; no later
+release sequence is currently scheduled. Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
 required.
@@ -1277,8 +1277,8 @@ required.
 Objective geometry, residual, derivative, rank, branch, persistence, migration, resource,
 cancellation, presentation-adapter and topology assertions are directly automated at their
 owning Rust/WASM layer. Old browser E2E is not a qualification path. Human review is
-recorded at completed M40.7, M53, M61, M62 and M63. Every newly scoped milestone from M64 onward ends in its
-own UAT after direct automated qualification.
+recorded at completed M40.7, M53 and M61-M64. Every newly scoped milestone from M65 onward ends in
+its own UAT after direct automated qualification.
 
 ### M40-ES1 - Headless persistent line selection and relation action
 
@@ -1864,7 +1864,7 @@ non-fixed accepted points as a passive temporary stability anchor. This replaces
 twin-roller browser mapping. Temporary targets remain attempt evidence and do not enter the
 publication request or serialized workspace.
 
-`docs/M64_UAT.md` owns the focused pending human scorecard.
+`docs/M64_UAT.md` records the approved focused human scorecard.
 
 ## Frozen near-singular fixtures
 

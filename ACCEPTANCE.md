@@ -155,8 +155,8 @@ M8 is ready for review only when every item below is objectively present. These 
 
 The checked wording below is the preserved M8 completion record. Its then-current M8-M22
 allocations are historical; `PLAN.md` now governs completed work through the approved M61 gate,
-approved M62 authoring milestone and approved M63 canvas-constraint presentation, with M64 active
-as the mechanically qualified editable-sample cleanup pending human UAT.
+approved M62 authoring milestone, approved M63 canvas-constraint presentation and approved M64
+editable-sample cleanup, with M65 awaiting scope.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -939,9 +939,9 @@ finding dispositions and approval record are retained in `docs/M53_UAT.md`.
 ## M54-M64 acceptance
 
 M54-M62 are the completed post-M53 sequence. M62 received explicit supervising-human approval on
-2026-07-29, and M63 received explicit supervising-human approval on 2026-07-30. M64 is the active
-editable sample-library cleanup and remains pending human UAT. No old browser E2E qualification
-may return.
+2026-07-29, and M63 and M64 received explicit supervising-human approval on 2026-07-30. No old
+browser E2E qualification may return. M65 is an empty core-hardening/performance placeholder;
+acceptance criteria will be added only after its scope is supplied.
 
 ### M54: stable diagnostics
 
@@ -1240,7 +1240,7 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
 - No browser E2E/CDP/server harness or `/#/dev/lab` route returns.
 - Formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature WASM check
   and release Trunk build pass before UAT begins.
-- `docs/M64_UAT.md` is explicitly approved by the supervising human before M64 is closed.
+- `docs/M64_UAT.md` was explicitly approved by the supervising human on 2026-07-30.
 
 ## Regression and oracle policy
 

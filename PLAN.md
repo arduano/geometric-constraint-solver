@@ -36,8 +36,9 @@ the complete production embedding contract. M33-M45 close the first ordinary-CAD
 host-integration and interaction-consumer cut; M46-M53 perform the cleanup rebase and approved
 host-semantics UAT; M54-M62 complete the subsequent functional work, approved advanced UAT and
 approved CAD-style authoring, and M63 completes approved geometry-anchored canvas constraint and
-dimension presentation. M64 is the active editable-sample cleanup and focused UAT cut. This deliverable
-does not include a solid B-rep kernel, meshing or 3D sketch curves.
+dimension presentation. M64 completes the approved editable-sample cleanup and focused UAT cut;
+M65 is an empty core-hardening/performance placeholder awaiting scope. This deliverable does not
+include a solid B-rep kernel, meshing or 3D sketch curves.
 
 ### Deliverable 2: 2D and 3D rigid-body kinematics
 
@@ -136,8 +137,8 @@ engine that a real CAD host can use. The accepted personality is:
   geometry enter one attempt as immutable revisioned values.
 - Keep cross-system expressions, B-rep projection, topological naming, feature
   history and application undo outside the sketch solver contract.
-- Keep human acceptance records explicit: M40.7, M53, M61, M62 and M63 are complete and approved, and every
-  newly scoped milestone from M64 onward ends in its own supervising-human UAT. Every objective correctness, persistence,
+- Keep human acceptance records explicit: M40.7, M53 and M61-M64 are complete and approved, and
+  every newly scoped milestone from M65 onward ends in its own supervising-human UAT. Every objective correctness, persistence,
   compatibility and presentation-adapter assertion must pass through direct unit or
   integration tests at its owning layer before a human checkpoint begins; old CDP E2E
   suites are not a qualification path.
@@ -2904,7 +2905,7 @@ assigning any scope to M64.
 
 ### M64: editable sample library and scenario-harness cleanup
 
-Status: mechanically qualified implementation candidate; supervising-human UAT remains required.
+Status: complete and supervising-human approved as of 2026-07-30.
 
 Goal: make every demonstration an ordinary editable save-like workspace, organize the sample
 library by purpose, and add representative multi-freedom mechanisms without retaining the guided
@@ -2926,7 +2927,7 @@ review harness.
   fresh history, fixed-constraint Delete/Undo and complete absence of guided harness markup.
 - [x] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature
   WASM check and release Trunk build.
-- [ ] Complete and explicitly approve `docs/M64_UAT.md`.
+- [x] Complete and explicitly approve `docs/M64_UAT.md`.
 
 Gate: every catalog leaf constructs through public domain APIs and opens as the sole ordinary
 editable workspace; every sample round-trips through `WorkspaceSnapshot`; the new mechanisms
@@ -2939,7 +2940,17 @@ warnings-denied locked workspace Clippy, the locked all-feature workspace test s
 the `wasm32-unknown-unknown` demo-web check, the release Trunk bundle and `git diff --check`
 all pass. The host exports `NO_COLOR=1`, which Trunk 0.21.14 does not accept as a boolean;
 the successful release invocation therefore used `env NO_COLOR=true trunk build --release`.
-M64 remains open only for the focused human UAT.
+
+Approval record (2026-07-30): the supervising human reviewed the mechanically qualified candidate,
+reported satisfaction with the result and explicitly asked to close M64. All five focused
+scorecard areas are recorded Pass in `docs/M64_UAT.md`; no M64 finding remains open.
+
+### M65: core hardening and performance
+
+Status: empty placeholder awaiting supervising-user scope.
+
+Theme: core hardening and performance. Goals, boundaries, acceptance criteria, workloads and the
+required milestone-ending UAT will be defined before implementation begins.
 
 ## Explicit non-goals
 

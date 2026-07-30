@@ -1,7 +1,6 @@
 # M64 editable sample library implementation
 
-Status: implementation and mechanical qualification complete; human UAT remains pending in
-`docs/M64_UAT.md`.
+Status: implementation, mechanical qualification and human UAT complete as of 2026-07-30.
 
 ## 1. Files and APIs
 
@@ -61,9 +60,10 @@ source or bundle.
   state are absent.
 - Browser E2E infrastructure and `/#/dev/lab` remain retired.
 
-## 5. Known limitations and next blocker
+## 5. Known limitations and next step
 
 - The workbench is still a non-authoritative desktop UAT consumer.
 - Samples intentionally contain no tutorial flow or protected starting state; reopening a sample
   is the way to obtain its pristine document.
-- M64 remains open until the supervising human explicitly approves `docs/M64_UAT.md`.
+- `docs/M64_UAT.md` records supervising-human approval. M65 awaits its detailed
+  core-hardening/performance scope.

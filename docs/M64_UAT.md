@@ -1,6 +1,6 @@
 # M64 editable samples UAT
 
-Status: pending supervising-human approval.
+Status: approved by the supervising human on 2026-07-30.
 
 Candidate URL: `http://100.94.63.83:8080/`
 
@@ -27,7 +27,7 @@ Record Pass, Concern or Blocker for each item.
 Expected: Delete and Undo work, ordinary authoring remains enabled, and the edited sample
 autosaves/restores like any other workspace.
 
-Rating:
+Rating: Pass.
 
 ### M64-U2 — mechanism mobility
 
@@ -42,7 +42,7 @@ Open and drag representative free joints in:
 Expected: motion is emergent from constraints, finite and continuous; the examples are neither
 fixed-only nor read-only.
 
-Rating:
+Rating: Pass.
 
 ### M64-U3 — independent twin rollers
 
@@ -53,7 +53,7 @@ Rating:
 Expected: the passive roller remains stable while the dragged roller follows its own tangency.
 The tab remains responsive and either roller can subsequently be used as the driver.
 
-Rating:
+Rating: Pass.
 
 ### M64-U4 — constraints and curves
 
@@ -68,7 +68,7 @@ Inspect:
 Expected: accepted annotations remain selectable/editable, branch/target controls appear when
 applicable, curve families render correctly, and zoom/pan works for large scenes.
 
-Rating:
+Rating: Pass.
 
 ### M64-U5 — catalog cleanup
 
@@ -81,13 +81,17 @@ Expected:
 - no sample prevents ordinary editing;
 - switching samples replaces the current workspace rather than hiding it behind a special mode.
 
-Rating:
+Rating: Pass.
 
 ## Findings
 
 Add each finding as `M64-Fnnn` with the sample key, exact actions, observed result and expected
 result. Objective solver or state failures require an owning-layer regression before recheck.
 
+No findings were reported in the approval review.
+
 ## Approval
 
-M64 closes only when the supervising human explicitly approves this scorecard.
+Approval record (2026-07-30): the supervising human reported satisfaction with the candidate and
+explicitly asked to close M64. This approves the complete scorecard and closes M64 for its recorded
+scope.
