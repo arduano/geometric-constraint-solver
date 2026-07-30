@@ -36,7 +36,7 @@ the complete production embedding contract. M33-M45 close the first ordinary-CAD
 host-integration and interaction-consumer cut; M46-M53 perform the cleanup rebase and approved
 host-semantics UAT; M54-M62 complete the subsequent functional work, approved advanced UAT and
 approved CAD-style authoring, and M63 completes approved geometry-anchored canvas constraint and
-dimension presentation. M64 is intentionally unscoped pending supervising-user goals. This deliverable
+dimension presentation. M64 is the active editable-sample cleanup and focused UAT cut. This deliverable
 does not include a solid B-rep kernel, meshing or 3D sketch curves.
 
 ### Deliverable 2: 2D and 3D rigid-body kinematics
@@ -2026,8 +2026,8 @@ M46-M53 are the completed cleanup and host-semantics UAT sequence. M54-M60 subse
 the functional sequence, M61 completed the advanced human UAT gate and M62 completed approved
 CAD-style authoring; M63 completed approved canvas-constraint presentation. On 2026-07-29 the
 supervising user withdrew the previously forecast M62-M64 hardening sequence so that additional
-UI, cleanup and product milestones can be scoped one at a time. M64 is now only the next empty
-placeholder and owns no inherited hardening scope.
+UI, cleanup and product milestones can be scoped one at a time. M64 now owns only the editable
+sample-library cleanup defined below and inherits no withdrawn hardening scope.
 
 ## Pre-cleanup phase
 
@@ -2902,11 +2902,44 @@ mechanically requalified and reviewed through the focused canvas-constraint UAT,
 human explicitly approved M63. This closes the milestone for the scope recorded above without
 assigning any scope to M64.
 
-### M64: unscoped placeholder
+### M64: editable sample library and scenario-harness cleanup
 
-Status: intentionally empty pending supervising-user goals.
+Status: mechanically qualified implementation candidate; supervising-human UAT remains required.
 
-No goal, requirements, acceptance criteria or implementation work are assigned yet.
+Goal: make every demonstration an ordinary editable save-like workspace, organize the sample
+library by purpose, and add representative multi-freedom mechanisms without retaining the guided
+review harness.
+
+- [x] Replace milestone-owned recursive scenario definitions with exactly three one-level purpose
+  groups: mechanisms, constraints and dimensions, and curves and constructions.
+- [x] Remove guide copy, scripted actions, verification points, transcripts, evidence capture,
+  reset/exit controls, hidden ordinary-workspace isolation and all alternate-coordinator routing.
+- [x] Make opening a sample replace the ordinary coordinator, reset editor history, fit the
+  camera, and participate in normal workspace autosave.
+- [x] Keep ordinary geometry/constraint/dimension authoring, branch editing, selection, Delete,
+  Undo/Redo, zoom/pan and projected dragging available after a sample opens.
+- [x] Add public four-bar coupler, pantograph and three-link drawing-arm fixtures with independently
+  validated 1/2/3-DOF behavior and scale-invariant persistent IDs at `1e-6`, `1` and `1e6`.
+- [x] Generalize passive-freedom drag stabilization in the retained headless coordinator so the
+  twin-roller sample needs no browser/sample-specific driver metadata.
+- [x] Directly qualify the 22 unique sample keys, accepted construction, workspace round-trip,
+  fresh history, fixed-constraint Delete/Undo and complete absence of guided harness markup.
+- [x] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature
+  WASM check and release Trunk build.
+- [ ] Complete and explicitly approve `docs/M64_UAT.md`.
+
+Gate: every catalog leaf constructs through public domain APIs and opens as the sole ordinary
+editable workspace; every sample round-trips through `WorkspaceSnapshot`; the new mechanisms
+publish hard-valid residuals `<= 1e-9` with advertised mobility at all three scales; no guided
+scenario/action/evidence state, browser E2E, `/#/dev/lab` route or browser-owned solver rule
+returns. M64 closes only after the focused human sample UAT is explicitly approved.
+
+Mechanical qualification note (2026-07-30): `cargo fmt --all -- --check`,
+warnings-denied locked workspace Clippy, the locked all-feature workspace test suite,
+the `wasm32-unknown-unknown` demo-web check, the release Trunk bundle and `git diff --check`
+all pass. The host exports `NO_COLOR=1`, which Trunk 0.21.14 does not accept as a boolean;
+the successful release invocation therefore used `env NO_COLOR=true trunk build --release`.
+M64 remains open only for the focused human UAT.
 
 ## Explicit non-goals
 

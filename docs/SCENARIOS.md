@@ -1267,8 +1267,9 @@ approved post-cleanup UAT. M54-M59 complete stable diagnostics, early alpha acti
 prepared concurrency, incremental scale and the separate operations/production-topology
 companions; M60 completes the advanced workbench and M61 completes its approved advanced UAT.
 M62 completes approved CAD-style constraint/dimension authoring, and M63 completes approved
-geometry-anchored canvas constraint/dimension presentation. M64 is an unscoped placeholder and no
-later release sequence is currently scheduled. Every new
+geometry-anchored canvas constraint/dimension presentation. M64 replaces the guided scenario
+harness with an editable purpose-based sample library; no later release sequence is currently
+scheduled. Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
 required.
@@ -1757,14 +1758,12 @@ this pass: endpoint parameters may never be emitted with an Interior default nei
 
 ### UAT evidence and recheck policy
 
-Each checkpoint provides one manual entry point, deterministic resets and concise instructions.
-The top **Scenarios** entry now contains the eight stable M53 leaves, three direct-qualified M55
-leaves, four direct-qualified M60 leaves, ten movable M61-remediation leaves and three approved
-M63 canvas-constraint leaves. The added M55
-circle-relations leaf does not alter the M53 approval record. Each newly scoped milestone from M64
-onward will add its own focused UAT material only after its goals are approved.
-Findings capture the candidate revision, selected scenario,
-workspace input, action transcript and accepted/attempted diagnostics from public APIs; a
+The M53-M63 guided checkpoint catalog is historical approval evidence. M64 removes its runtime
+guide, action, transcript, evidence, reset/exit and alternate-workspace behavior. Current manual
+review uses ordinary editable samples as described below. The earlier scorecards and stable IDs
+remain documented only as records of the approved revisions; they are not current selector keys.
+Findings capture the candidate revision, selected sample, workspace input and accepted/attempted
+diagnostics from public APIs; a
 human may attach an OS screenshot for a visual finding. Objective defects receive direct
 owning-layer regressions. A targeted human recheck is preferred; a full checkpoint repeats
 only after a material API, schema or primary-workflow change. Completed M40.7, M53, M61, M62 and M63
@@ -1832,8 +1831,40 @@ and distinguish contact, direction, normal and curvature variants.
 `M63-F009` completes the adjacent non-scenario icon audit without changing any fixture. The
 fifteen geometry authoring tools receive distinct text-free CAD vector symbols, sketch-tree rows
 distinguish their object category, and targeted/global problem markers use vector alert geometry.
-Ordinary labelled actions, Enter/Esc hints, scenario disclosures and camera controls retain their
+Ordinary labelled actions, Enter/Esc hints, sample disclosures and camera controls retain their
 existing text because they are not placeholder concept icons.
+
+### M64-S1 - Editable purpose-based sample library
+
+The top **Samples** selector has exactly one group level:
+
+| Purpose group | Editable samples |
+| --- | --- |
+| Mechanisms | Drafting compass · 1 DOF; Bezier continuity bridge · 1 DOF; Twin-roller cam · 2 DOF; Tangent orbit · 1 DOF; Elliptic trammel · 1 DOF; Scotch yoke · 1 DOF; Rotating constraint square · 1 DOF; Scissor jack · 1 DOF; Five-stage scissor tower · 1 DOF; Peaucellier inversor · 1 DOF; Four-bar coupler · 1 DOF; Pantograph linkage · 2 DOF; Three-link drawing arm · 3 DOF |
+| Constraints & dimensions | Constraint and dimension sampler; Tangent and radial-normal construction; Contact branch specimen; Angle and dimension annotations; Contextual constraint annotations; Dense constraint junction |
+| Curves & constructions | Construction and reference geometry; Curve family gallery; Periodic NURBS specimen |
+
+Opening a leaf constructs a fresh public document/session/coordinator and replaces the current
+ordinary workspace. It starts one-checkpoint history, fits the web-only camera and immediately
+uses normal autosave. Reopening the same leaf reconstructs its pristine starting document.
+Samples own no guide, scripted action, verification point, preselection, driver identity, read-only
+flag or exit/reset lifecycle. Delete, Undo/Redo, authoring, branch and dimension editing,
+selection, zoom/pan and projected drag are the same actions used for a blank or restored workspace.
+
+Four-bar uses fixed grounds `(0,0)` and `(8,0)`, crank/coupler/rocker lengths `5`, `4` and
+`sqrt(17)`, plus a coupler midpoint tracer, leaving one bidirectional freedom. Pantograph uses a
+fixed origin, two independently rotating arms of lengths `sqrt(17)` and `sqrt(10)`, two parallel
+translated sides and a diagonal midpoint, leaving two freedoms. Three-link drawing arm uses one
+fixed origin and link lengths `3`, `sqrt(8)` and `sqrt(5)`, leaving three freedoms. Each has
+scale-invariant persistent roles and is directly checked at `1e-6`, `1` and `1e6`.
+
+Projected drag is sample-agnostic. The retained coordinator first applies previous-state
+preferences; if that priority pass cannot publish an independently valid preview, it tries finite
+non-fixed accepted points as a passive temporary stability anchor. This replaces the deleted
+twin-roller browser mapping. Temporary targets remain attempt evidence and do not enter the
+publication request or serialized workspace.
+
+`docs/M64_UAT.md` owns the focused pending human scorecard.
 
 ## Frozen near-singular fixtures
 

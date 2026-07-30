@@ -10,7 +10,8 @@ preserved functional sequence was renumbered, and a later supervising-user decis
 new M55 alpha action-parity gate. The mapping below is a historical record and was superseded on
 2026-07-29 when M61 closed with approval and the forecast M62-M64 hardening sequence was removed.
 Those old numbers below do not define active milestones; M62 and M63 were subsequently scoped and
-approved, and the current M64 is an unscoped placeholder.
+approved. M64 was an unscoped placeholder at that checkpoint and was later assigned only the
+editable sample-library cleanup recorded in the active plan.
 
 ## Requirements
 

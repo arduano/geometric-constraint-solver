@@ -154,9 +154,9 @@ Baseline candidate vectors do not yet carry M8 completeness metadata. Until the 
 M8 is ready for review only when every item below is objectively present. These checkboxes are acceptance criteria and do not mark `PLAN.md` complete.
 
 The checked wording below is the preserved M8 completion record. Its then-current M8-M22
-allocations are historical; `PLAN.md` now governs completed work through the approved M61 gate
-and approved M62 authoring milestone plus approved M63 canvas-constraint presentation, with M64
-retained only as an empty placeholder.
+allocations are historical; `PLAN.md` now governs completed work through the approved M61 gate,
+approved M62 authoring milestone and approved M63 canvas-constraint presentation, with M64 active
+as the mechanically qualified editable-sample cleanup pending human UAT.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -939,8 +939,9 @@ finding dispositions and approval record are retained in `docs/M53_UAT.md`.
 ## M54-M64 acceptance
 
 M54-M62 are the completed post-M53 sequence. M62 received explicit supervising-human approval on
-2026-07-29, and M63 received explicit supervising-human approval on 2026-07-30. M64 is an empty
-placeholder with no acceptance criteria. No old browser E2E qualification may return.
+2026-07-29, and M63 received explicit supervising-human approval on 2026-07-30. M64 is the active
+editable sample-library cleanup and remains pending human UAT. No old browser E2E qualification
+may return.
 
 ### M54: stable diagnostics
 
@@ -1216,9 +1217,30 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
   warnings-denied Clippy, WASM check and release Trunk build pass.
 - The supervising human explicitly approved `docs/M63_UAT.md` on 2026-07-30.
 
-### M64: unscoped placeholder
+### M64: editable sample library and harness cleanup
 
-No acceptance criteria exist until the supervising user assigns M64 a goal and scope.
+- The selector contains exactly 22 unique leaves under three one-level purpose groups and exposes
+  no milestone-owned group names.
+- Selecting a sample replaces the current coordinator, starts history at one checkpoint, fits the
+  camera and saves through the ordinary versioned workspace path.
+- A loaded sample is not a special mode: geometry/constraint/dimension authoring, selection,
+  branch and target editing, Delete, Undo/Redo, zoom/pan and projected drag remain available.
+- Every leaf independently constructs an accepted state and round-trips through
+  `WorkspaceSnapshot`.
+- Fixed constraints in samples can be deleted through the ordinary coordinator and restored by
+  Undo.
+- Four-bar coupler, pantograph and three-link drawing arm publish finite, independently validated
+  hard geometry with maximum normalized hard residual `<= 1e-9`, scale-invariant IDs and
+  respectively 1, 2 and 3 bidirectional degrees of freedom at `1e-6`, `1` and `1e6`.
+- Generic projected drag preserves an unrelated passive freedom where feasible without
+  browser/sample-specific metadata, leaves hard mobility unchanged and publishes no temporary
+  target into the retained workspace request.
+- Guided descriptions, scripted scenario actions, verification points, transcripts, evidence,
+  reset/exit controls, alternate scenario coordinators and save suppression are absent.
+- No browser E2E/CDP/server harness or `/#/dev/lab` route returns.
+- Formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature WASM check
+  and release Trunk build pass before UAT begins.
+- `docs/M64_UAT.md` is explicitly approved by the supervising human before M64 is closed.
 
 ## Regression and oracle policy
 

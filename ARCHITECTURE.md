@@ -25,8 +25,9 @@ advanced constructions, generic fillets and persistent trim views, interactive
 construction/NURBS UAT and certified all-family visual profiles.
 
 - **Baseline:** implemented and accepted behavior through M63. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology; M59 adds the read-only production-topology companion with exact accepted-input provenance and fail-closed completeness; M60 exposes the advanced curves, explicit NURBS branches, companion operations, production topology and versioned desktop workspace through the sole directly tested workbench; M61 completes approved supervising-human advanced geometry/topology UAT after targeted remediation; M62 completes approved CAD-style constraint and dimension authoring; M63 completes approved geometry-anchored canvas constraint and dimension presentation. M1-M7 remain the frozen regression baseline.
-- **Active target:** M64 is an intentionally empty placeholder awaiting supervising-user goals.
-- **Planned sequence:** none beyond the empty M64 placeholder; every newly scoped milestone will
+- **Active target:** M64 replaces guided scenario mode with an ordinary editable sample library
+  and adds directly qualified 1/2/3-DOF mechanism fixtures.
+- **Planned sequence:** none beyond M64; every newly scoped milestone will
   end in its own human UAT.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
@@ -34,7 +35,7 @@ A target statement must not be exposed as an implemented capability before its m
 `PLAN.md` owns current execution numbering. Milestone labels in the preserved M8
 completion record and in ADRs accepted before the playground rebaseline describe the
 allocation at acceptance time; their architectural decisions remain accepted, but
-current ownership is the completed M10-M63 sequence and empty M64 placeholder listed in section
+current ownership is the completed M10-M63 sequence and active M64 sample cleanup listed in section
 15.
 
 ## 3. Crate responsibilities
@@ -241,14 +242,13 @@ primary purpose is interactive sanity checking:
   not implementation or acceptance targets;
 - it remains non-authoritative and replaceable.
 
-For the completed M53 review, a crate-private scenario catalog owns stable scenario identities,
-presentation grouping, objective links and guide copy. Selecting, switching or resetting a
-scenario delegates to typed candidate constructors and actions; accepted geometry, lifecycle and
-evidence still come from public domain/audit APIs. Selector expansion and the selected guide are
-ephemeral presentation state: they do not enter the ordinary workspace snapshot, any public API or
-schema, and they add no equation or host callback. Within the top dropdown, recursive plain-list
-group branches use right-expanding hover/focus flyouts; narrow layouts present the same branches
-inline without changing catalog identity or scenario state.
+M64 removes the completed-review harness that historically served M53-M63. A crate-private sample
+catalog now owns only stable sample keys, titles, purpose grouping and public fixture selection.
+Opening a sample constructs a fresh ordinary `RetainedEditorCoordinator`, replaces the sole
+workspace, resets history, fits the camera and then uses normal persistence and editing. There is
+no hidden coordinator, guide/action/transcript/evidence state, reset/exit lifecycle or save
+suppression. The selector is presentation-only and its three one-level groups use right-expanding
+hover/focus flyouts.
 
 The public headless editor publishes only the latest failed/rejected attempt as structured
 `EditorProblemMetadata`: attempt/design identity, high-level category, explicit global/targeted
@@ -283,8 +283,8 @@ applicability, branch selection, equations or accepted-state authority. The dele
 `/#/dev/lab`, legacy harnesses and browser E2E remain retired.
 
 M60 makes the same workbench a direct public consumer of `geosolve-sketch-ops` and
-`geosolve-sketch-topology`. Prepared operation proposals are applied only to ephemeral scenario
-sessions through their ordinary exact-CAS retained transaction boundary. Production-topology
+`geosolve-sketch-topology`. Prepared operation proposals are applied through their ordinary
+exact-CAS retained transaction boundary. Production-topology
 presentation exposes consumable wires/regions only from a complete current
 `TopologyProductionProfile`; skipped, truncated, cancelled, exhausted, unavailable and stale
 evidence remains non-consumable. The application workspace v2 envelope labels each document
@@ -298,20 +298,13 @@ complete preview curves are sampled by applying a localized proposal to a tempor
 toolbar, option parsing, SVG markup and event normalization. Invalid conic/NURBS options and
 topology reject before publication, and a NURBS gauge always names a weight exactly equal to one.
 
-Scenario selection still creates an ephemeral `ScenarioCandidate`, but interaction lookup now
-returns its active mutable `RetainedEditorCoordinator`. Selection, projected point previews and
-accepted release therefore operate on the visible scenario rather than the hidden ordinary
-coordinator. Save remains disabled for the complete scenario lifetime; reset reconstructs the
-public alpha fixture and exit reveals the unchanged ordinary workspace. Ten mechanism leaves use
-public `alpha_scenario` constructors and preselect their documented persistent driver. Canvas
-camera state remains web-only and affects only the supplied editor viewport.
-
-`M61-F001` preserves multi-freedom interaction policy at that same boundary. A scenario may name
-one passive persistent point for a projected drag; the headless coordinator, not the browser,
-reads its authoritative accepted position and adds the temporary stability target. The
-twin-roller cam maps either roller to the other, so one independent contact can be manipulated
-without the passive contact wandering. This is interaction state, not a new residual or persistent
-constraint.
+M64 supersedes M61's temporary active-scenario interaction boundary. Samples have no preselected
+driver or drag metadata. Projected point movement always enters the sole retained coordinator:
+it first uses accepted previous-state preferences and, if that priority pass cannot publish a
+valid preview, headlessly tries finite non-fixed accepted points as passive temporary stability
+anchors. The fallback is generic document state, not a sample key or browser rule. Exact preview
+release retains only the point-position edit; drag/stability targets remain attempt evidence and
+are absent from the publication request. Canvas camera state remains web-only.
 
 ## 4. Numerical representation and linearization
 
@@ -639,4 +632,5 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
 - M63: completed and approved typed geometry-anchored constraint/dimension annotations, separate headless geometry
   reveal context and exact-occurrence proximity/picking, contextual density policy, accessible
   shared CAD SVG icon presentation and a dedicated human UAT.
-- M64: intentionally empty placeholder awaiting supervising-user goals.
+- M64: active editable sample-library cleanup with purpose grouping, ordinary persistence/editing
+  and directly qualified 1/2/3-DOF mechanism examples; human UAT pending.
