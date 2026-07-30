@@ -21,12 +21,15 @@ pub use authoring::{
     AuthoringOutcome, AuthoringState, AuthoringTool, AuthoringWarning,
 };
 pub use coordinator::{
-    ActionAvailability, ActionState, AuditDto, AuditProvenance, AuthoringMutation, BranchAction,
-    ContactBranchAction, CoordinatorActionKind, CoordinatorError, DimensionTargetDisplayUnit,
-    DimensionTargetMetadata, DisabledReason, DisplayDimensionTarget, EditorMutation,
-    EditorProblemCategory, EditorProblemMetadata, EditorProblemScope, EditorProblemTarget,
-    LifecycleDto, LifecycleStatus, MeasurementPublication, MutationOutcome, ProblemsDto,
-    ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator, display_dimension_target,
+    ALTERNATE_BRANCH_MAX_SEEDS, ActionAvailability, ActionState, AlternateBranchProposal,
+    AlternateBranchSearchEvidence, AlternateBranchSearchResult, AlternateBranchSearchStatus,
+    AuditDto, AuditProvenance, AuthoringMutation, BranchAction, ContactBranchAction,
+    CoordinatorActionKind, CoordinatorError, DimensionTargetDisplayUnit, DimensionTargetMetadata,
+    DisabledReason, DisplayDimensionTarget, EditorMutation, EditorProblemCategory,
+    EditorProblemMetadata, EditorProblemScope, EditorProblemTarget, LifecycleDto, LifecycleStatus,
+    MeasurementPublication, MutationOutcome, ProblemsDto, ProjectedDragRejectionStage,
+    ProjectedDragWorkEvidence, ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator,
+    display_dimension_target,
 };
 pub use geosolve_sketch::SketchAcceptedDocumentRedundancy;
 #[doc(hidden)]

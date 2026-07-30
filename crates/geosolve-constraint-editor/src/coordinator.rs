@@ -7,17 +7,18 @@ use std::collections::{BTreeSet, HashSet};
 use geosolve_sketch::{
     ContactBranchEdit, ContactDomain, ContactId, ContactNeighborhood, CurveDefinition, CurveId,
     CurveSpan, DesignPointId, DocumentAngleOrientation, DocumentCommandEffect,
-    DocumentConstraintDefinition, DocumentCurveContinuity, DocumentCurveCurvatureRelation,
-    DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode, DocumentEdit,
-    DocumentElementId, DocumentExternalBindingId, DocumentMeasurementCatalog,
-    DocumentMeasurementProvenance, DocumentMeasurementValue, DocumentObjectId, DocumentRuntimeMap,
-    DocumentSessionError, DocumentSolveRequest, DocumentSourceId, DocumentSourceOwner,
-    ExternalFeatureKindV1, ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole,
+    DocumentConstraintDefinition, DocumentCurveBranchEdit, DocumentCurveContinuity,
+    DocumentCurveCurvatureRelation, DocumentDimensionDefinition, DocumentDimensionId,
+    DocumentDimensionMode, DocumentEdit, DocumentElementId, DocumentExternalBindingId,
+    DocumentMeasurementCatalog, DocumentMeasurementProvenance, DocumentMeasurementValue,
+    DocumentObjectId, DocumentRuntimeMap, DocumentSessionError, DocumentSolveRequest,
+    DocumentSourceId, DocumentSourceOwner, ExternalFeatureKindV1, ExternalSnapshotSet,
+    ExternalTopologyDigest, GeometryRole, OperationControl, OperationOutcome, OperationReport,
     ParameterBatch, RetainedSketchDocumentSession, RuntimeCurve, ScalarDomain, ScalarUnit,
     SketchAcceptedDocumentRedundancy, SketchAcceptedStateIdentity, SketchAttemptFailure,
     SketchAttemptFailureKind, SketchAttemptIdentity, SketchBound, SketchDesignIdentity,
-    SketchDocument, SketchLifecycleRevisionHighWater, SketchSolveResult, SketchSource,
-    SolveRejection, TangentOrientation,
+    SketchDocument, SketchLifecycleRevisionHighWater, SketchSolveResult, SketchSolveWorkSummary,
+    SketchSource, SolveRejection, TangentOrientation,
 };
 use thiserror::Error;
 
@@ -111,6 +112,74 @@ pub struct ProblemsDto<'a> {
     pub parent_accepted: Option<SketchAcceptedStateIdentity>,
     pub failure: Option<&'a SketchAttemptFailure>,
     pub rejection: Option<&'a SolveRejection>,
+}
+
+/// Typed stage at which one projected drag sample stopped before preview publication.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ProjectedDragRejectionStage {
+    ControlledOperation,
+    Session,
+    AttemptInput,
+    Solve,
+    AcceptedState,
+    PreviewPublication,
+}
+
+/// Deterministic work evidence for exactly one projected pointer sample.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ProjectedDragWorkEvidence {
+    pub pointer_id: u64,
+    pub request_id: u64,
+    pub point: DesignPointId,
+    /// Whether the sample used the last independently accepted preview as its numerical parent.
+    pub continued: bool,
+    /// Ordinary projected dragging always performs exactly one retained solve attempt.
+    pub attempts: u8,
+    pub accepted: bool,
+    pub rejection_stage: Option<ProjectedDragRejectionStage>,
+    pub operation: OperationReport,
+    pub solve: Option<SketchSolveWorkSummary>,
+}
+
+pub const ALTERNATE_BRANCH_MAX_SEEDS: u8 = 24;
+
+/// Deterministic bounded-search evidence for one explicit assembly-mode request.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct AlternateBranchSearchEvidence {
+    pub maximum_seeds: u8,
+    pub attempted_seeds: u8,
+    pub independently_valid_candidates: u8,
+    pub representable_modes: u8,
+}
+
+/// Closed result vocabulary for a bounded alternate-branch search.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AlternateBranchSearchStatus {
+    Proposed,
+    NoAlternative,
+    Ambiguous,
+    Unrepresentable,
+    Exhausted,
+}
+
+/// Exact-stamped non-authoritative assembly-mode proposal.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AlternateBranchProposal {
+    pub proposal_id: u64,
+    pub design: SketchDesignIdentity,
+    pub accepted: SketchAcceptedStateIdentity,
+    pub point: DesignPointId,
+    pub position: [f64; 2],
+    pub branches: Vec<DocumentCurveBranchEdit>,
+    pub evidence: AlternateBranchSearchEvidence,
+}
+
+/// Result of requesting a bounded alternate assembly mode.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AlternateBranchSearchResult {
+    pub status: AlternateBranchSearchStatus,
+    pub proposal: Option<AlternateBranchProposal>,
+    pub evidence: AlternateBranchSearchEvidence,
 }
 
 /// Stable high-level classification for one current editor problem.
@@ -391,6 +460,12 @@ pub enum ReplayAction {
     Reattempt {
         expected: SketchDesignIdentity,
     },
+    AlternateBranch {
+        expected: SketchDesignIdentity,
+        point: DesignPointId,
+        position: [f64; 2],
+        branches: Vec<DocumentCurveBranchEdit>,
+    },
     Undo,
     Redo,
 }
@@ -424,6 +499,10 @@ pub enum CoordinatorError {
     MissingSolvedPreview,
     #[error("point-move commit does not match the retained solved preview")]
     SolvedPreviewMismatch,
+    #[error("there is no current alternate-branch proposal")]
+    MissingAlternateBranchProposal,
+    #[error("alternate-branch proposal is stale")]
+    StaleAlternateBranchProposal,
     #[error("history has no earlier checkpoint")]
     NothingToUndo,
     #[error("history has no later checkpoint")]
@@ -440,6 +519,24 @@ pub struct RetainedEditorCoordinator {
     transcript: Vec<ReplayAction>,
     transient: Option<TransientLifecycle>,
     solved_preview: Option<RetainedSketchDocumentSession>,
+    drag_continuation: Option<ProjectedDragContinuation>,
+    projected_drag_work: Option<ProjectedDragWorkEvidence>,
+    alternate_branch: Option<AlternateBranchCandidate>,
+    next_alternate_branch_proposal_id: u64,
+}
+
+#[derive(Clone, Debug)]
+struct AlternateBranchCandidate {
+    proposal: AlternateBranchProposal,
+    preview: RetainedSketchDocumentSession,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ProjectedDragContinuation {
+    pointer_id: u64,
+    point: DesignPointId,
+    design: SketchDesignIdentity,
+    last_request_id: u64,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -467,6 +564,10 @@ impl RetainedEditorCoordinator {
             transcript: Vec::new(),
             transient: None,
             solved_preview: None,
+            drag_continuation: None,
+            projected_drag_work: None,
+            alternate_branch: None,
+            next_alternate_branch_proposal_id: 1,
         })
     }
 
@@ -521,6 +622,273 @@ impl RetainedEditorCoordinator {
         self.solved_preview.as_ref()
     }
 
+    /// Work evidence for the latest projected pointer sample, if one is active.
+    #[must_use]
+    pub const fn projected_drag_work_evidence(&self) -> Option<&ProjectedDragWorkEvidence> {
+        self.projected_drag_work.as_ref()
+    }
+
+    /// Returns the current exact-stamped alternate assembly-mode proposal.
+    #[must_use]
+    pub fn alternate_branch_proposal(&self) -> Option<&AlternateBranchProposal> {
+        self.alternate_branch
+            .as_ref()
+            .map(|candidate| &candidate.proposal)
+    }
+
+    /// Returns the non-authoritative independently accepted ghost preview.
+    #[must_use]
+    pub fn alternate_branch_preview_session(&self) -> Option<&RetainedSketchDocumentSession> {
+        self.alternate_branch
+            .as_ref()
+            .map(|candidate| &candidate.preview)
+    }
+
+    /// Returns the highest-priority visible preview for a presentation adapter.
+    #[must_use]
+    pub fn visible_preview_session(&self) -> Option<&RetainedSketchDocumentSession> {
+        self.alternate_branch_preview_session()
+            .or_else(|| self.solved_preview_session())
+    }
+
+    /// Performs a deterministic bounded search for a representable alternate line branch.
+    ///
+    /// At most eight canonical directions at three component-relative radii are tried.
+    /// Every candidate is solved and independently validated on a cloned lifecycle. Nothing
+    /// becomes authoritative until [`Self::accept_alternate_branch`] is called.
+    #[must_use]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "bounded search keeps seed accounting, candidate validation, deduplication, and exact proposal stamps together"
+    )]
+    pub fn propose_alternate_branch(
+        &mut self,
+        point: DesignPointId,
+    ) -> AlternateBranchSearchResult {
+        self.alternate_branch = None;
+        let Some(base_accepted) = self.session.accepted_state() else {
+            return alternate_branch_search_result(
+                AlternateBranchSearchStatus::Unrepresentable,
+                AlternateBranchSearchEvidence {
+                    maximum_seeds: ALTERNATE_BRANCH_MAX_SEEDS,
+                    ..AlternateBranchSearchEvidence::default()
+                },
+                None,
+            );
+        };
+        let base_document = base_accepted.document();
+        let Some(base_position) = base_document.point(point).map(|value| value.position) else {
+            return alternate_branch_search_result(
+                AlternateBranchSearchStatus::Unrepresentable,
+                AlternateBranchSearchEvidence {
+                    maximum_seeds: ALTERNATE_BRANCH_MAX_SEEDS,
+                    ..AlternateBranchSearchEvidence::default()
+                },
+                None,
+            );
+        };
+        let Some(scale) = incident_line_scale(base_document, point) else {
+            return alternate_branch_search_result(
+                AlternateBranchSearchStatus::Unrepresentable,
+                AlternateBranchSearchEvidence {
+                    maximum_seeds: ALTERNATE_BRANCH_MAX_SEEDS,
+                    ..AlternateBranchSearchEvidence::default()
+                },
+                None,
+            );
+        };
+        let base_dof = self
+            .session
+            .accepted_diagnostics()
+            .and_then(|diagnostics| diagnostics.mobility)
+            .and_then(|mobility| mobility.equality_degrees_of_freedom);
+        let directions = canonical_branch_search_directions();
+        let radii = [0.5, 1.0, 2.0];
+        let mut evidence = AlternateBranchSearchEvidence {
+            maximum_seeds: ALTERNATE_BRANCH_MAX_SEEDS,
+            ..AlternateBranchSearchEvidence::default()
+        };
+        let mut selected: Option<(Vec<CurveSpan>, [f64; 2], AlternateBranchCandidate)> = None;
+        let mut ambiguous = false;
+        for radius in radii {
+            for direction in directions {
+                evidence.attempted_seeds = evidence.attempted_seeds.saturating_add(1);
+                let seed = [
+                    base_position[0] + direction[0] * radius * scale,
+                    base_position[1] + direction[1] * radius * scale,
+                ];
+                let Some((branches, signature)) = incident_branch_edits(
+                    self.session.design_document(),
+                    base_document,
+                    point,
+                    seed,
+                ) else {
+                    continue;
+                };
+                let mut preview = self.session.clone();
+                let Ok(outcome) = preview.attempt_point_and_curve_branches(
+                    preview.design_identity(),
+                    point,
+                    seed,
+                    &branches,
+                ) else {
+                    continue;
+                };
+                if outcome.published_accepted_identity().is_none() {
+                    continue;
+                }
+                let Some(accepted) = preview.accepted_state() else {
+                    continue;
+                };
+                let solve = accepted.solve_result();
+                if solve.rejection.is_some()
+                    || solve
+                        .acceptance_hard_residual_max
+                        .is_none_or(|residual| residual > 1.0e-9)
+                    || preview
+                        .accepted_diagnostics()
+                        .and_then(|diagnostics| diagnostics.mobility)
+                        .and_then(|mobility| mobility.equality_degrees_of_freedom)
+                        != base_dof
+                {
+                    continue;
+                }
+                evidence.independently_valid_candidates =
+                    evidence.independently_valid_candidates.saturating_add(1);
+                let Some(position) = accepted.document().point(point).map(|value| value.position)
+                else {
+                    continue;
+                };
+                if !position.iter().all(|value| value.is_finite()) {
+                    continue;
+                }
+                if (position[0] - base_position[0]).hypot(position[1] - base_position[1])
+                    <= 1.0e-7 * scale
+                {
+                    continue;
+                }
+                if selected
+                    .as_ref()
+                    .is_some_and(|(selected_signature, selected_position, _)| {
+                        *selected_signature != signature
+                            && (selected_position[0] - position[0])
+                                .hypot(selected_position[1] - position[1])
+                                > 1.0e-7 * scale
+                    })
+                {
+                    ambiguous = true;
+                    evidence.representable_modes = 2;
+                    break;
+                }
+                if selected.is_none() {
+                    evidence.representable_modes = 1;
+                    let Some(branches) = alternate_separator_branches(
+                        self.session.design_document(),
+                        accepted.document(),
+                        point,
+                        position,
+                        &signature,
+                    ) else {
+                        continue;
+                    };
+                    let proposal = AlternateBranchProposal {
+                        proposal_id: self.next_alternate_branch_proposal_id,
+                        design: self.session.design_identity(),
+                        accepted: base_accepted.identity(),
+                        point,
+                        position,
+                        branches,
+                        evidence,
+                    };
+                    selected = Some((
+                        signature,
+                        position,
+                        AlternateBranchCandidate { proposal, preview },
+                    ));
+                }
+            }
+            if ambiguous {
+                break;
+            }
+        }
+        if ambiguous {
+            return alternate_branch_search_result(
+                AlternateBranchSearchStatus::Ambiguous,
+                evidence,
+                None,
+            );
+        }
+        let Some((_, _, mut candidate)) = selected else {
+            let status = if evidence.attempted_seeds >= evidence.maximum_seeds {
+                AlternateBranchSearchStatus::NoAlternative
+            } else {
+                AlternateBranchSearchStatus::Exhausted
+            };
+            return alternate_branch_search_result(status, evidence, None);
+        };
+        candidate.proposal.evidence = evidence;
+        self.next_alternate_branch_proposal_id =
+            self.next_alternate_branch_proposal_id.saturating_add(1);
+        let proposal = candidate.proposal.clone();
+        self.alternate_branch = Some(candidate);
+        alternate_branch_search_result(
+            AlternateBranchSearchStatus::Proposed,
+            evidence,
+            Some(proposal),
+        )
+    }
+
+    /// Cancels the current ghost proposal without mutating retained state.
+    pub fn cancel_alternate_branch(&mut self) {
+        self.alternate_branch = None;
+    }
+
+    /// Accepts the current exact-stamped proposal as one atomic point-and-branch edit.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a missing or stale proposal and preserves the authoritative session.
+    pub fn accept_alternate_branch(
+        &mut self,
+        proposal_id: u64,
+    ) -> Result<MutationOutcome<()>, CoordinatorError> {
+        let candidate = self
+            .alternate_branch
+            .clone()
+            .ok_or(CoordinatorError::MissingAlternateBranchProposal)?;
+        let proposal = &candidate.proposal;
+        if proposal.proposal_id != proposal_id
+            || proposal.design != self.session.design_identity()
+            || self
+                .session
+                .accepted_state()
+                .map(geosolve_sketch::SketchAcceptedDocumentState::identity)
+                != Some(proposal.accepted)
+        {
+            return Err(CoordinatorError::StaleAlternateBranchProposal);
+        }
+        let retained = self.session.apply_point_and_curve_branches_from_preview(
+            proposal.design,
+            proposal.point,
+            proposal.position,
+            &proposal.branches,
+            &candidate.preview,
+        )?;
+        let outcome = MutationOutcome {
+            value: (),
+            design: retained.design_identity(),
+            attempt: retained.attempt_identity(),
+            published_accepted: retained.published_accepted_identity(),
+        };
+        self.record_mutation(ReplayAction::AlternateBranch {
+            expected: proposal.design,
+            point: proposal.point,
+            position: proposal.position,
+            branches: proposal.branches.clone(),
+        })?;
+        Ok(outcome)
+    }
+
     /// Executes and publishes one editor-requested projected point-move preview.
     ///
     /// A failed or rejected projection is reported back to the editor without replacing the
@@ -540,74 +908,103 @@ impl RetainedEditorCoordinator {
             .candidate_request()
             .with_previous_state_preferences()
             .with_drag(point, model_position);
-        let mut solved = None;
-        for stability in std::iter::once(None).chain(
-            self.passive_stability_candidates(point)
-                .into_iter()
-                .map(Some),
-        ) {
-            let mut candidate = self.session.clone();
-            let candidate_request = stability.map_or(request, |(passive, target)| {
-                request.with_stability_target(passive, target)
-            });
-            let accepted_position = candidate
-                .reattempt(candidate.design_identity(), candidate_request)
-                .ok()
-                .and_then(geosolve_sketch::SketchDocumentAttempt::accepted_state_identity)
-                .and_then(|_| candidate.accepted_state())
-                .and_then(|state| state.document().point(point))
-                .map(|value| value.position)
-                .filter(|position| position.iter().all(|value| value.is_finite()));
-            if let Some(accepted_position) = accepted_position {
-                solved = Some((candidate, accepted_position));
-                break;
+        let continued = self.drag_continuation.is_some_and(|continuation| {
+            continuation.pointer_id == pointer_id
+                && continuation.point == point
+                && continuation.design == self.session.design_identity()
+                && request_id > continuation.last_request_id
+                && self.solved_preview.is_some()
+        });
+        let mut candidate = self.session.clone();
+        let outcome = if let (true, Some(preview)) = (continued, self.solved_preview.as_ref()) {
+            candidate.reattempt_from_accepted_preview_controlled(
+                candidate.design_identity(),
+                request,
+                preview,
+                OperationControl::unlimited(),
+            )
+        } else {
+            candidate.reattempt_controlled(
+                candidate.design_identity(),
+                request,
+                OperationControl::unlimited(),
+            )
+        };
+        let mut rejection_stage = None;
+        let mut solve_work = None;
+        let mut operation = None;
+        let mut accepted_position = None;
+        match outcome {
+            Ok(OperationOutcome::Completed {
+                value: attempt,
+                report,
+            }) => {
+                operation = Some(report);
+                solve_work = attempt.solve_result().map(SketchSolveResult::work_summary);
+                if attempt.failure().is_some() {
+                    rejection_stage = Some(ProjectedDragRejectionStage::AttemptInput);
+                } else if attempt
+                    .solve_result()
+                    .is_none_or(|solve| solve.rejection.is_some())
+                {
+                    rejection_stage = Some(ProjectedDragRejectionStage::Solve);
+                } else if attempt.accepted_state_identity().is_none() {
+                    rejection_stage = Some(ProjectedDragRejectionStage::AcceptedState);
+                } else {
+                    accepted_position = candidate
+                        .accepted_state()
+                        .and_then(|state| state.document().point(point))
+                        .map(|value| value.position)
+                        .filter(|position| position.iter().all(|value| value.is_finite()));
+                    if accepted_position.is_none() {
+                        rejection_stage = Some(ProjectedDragRejectionStage::AcceptedState);
+                    } else if self.mark_solved_preview(&candidate).is_err() {
+                        accepted_position = None;
+                        rejection_stage = Some(ProjectedDragRejectionStage::PreviewPublication);
+                    }
+                }
+            }
+            Ok(stopped) => {
+                operation = Some(*stopped.report());
+                rejection_stage = Some(ProjectedDragRejectionStage::ControlledOperation);
+            }
+            Err(_) => {
+                rejection_stage = Some(ProjectedDragRejectionStage::Session);
             }
         }
-        let accepted_position = match solved {
-            Some((candidate, accepted_position))
-                if self.mark_solved_preview(&candidate).is_ok() =>
-            {
-                Some(accepted_position)
-            }
-            _ => None,
-        };
+        if accepted_position.is_some() {
+            self.drag_continuation = Some(ProjectedDragContinuation {
+                pointer_id,
+                point,
+                design: self.session.design_identity(),
+                last_request_id: request_id,
+            });
+        }
+        if let Some(operation) = operation {
+            self.projected_drag_work = Some(ProjectedDragWorkEvidence {
+                pointer_id,
+                request_id,
+                point,
+                continued,
+                attempts: 1,
+                accepted: accepted_position.is_some(),
+                rejection_stage,
+                operation,
+                solve: solve_work,
+            });
+        } else {
+            self.projected_drag_work = None;
+        }
         self.editor
             .projected_drag_result(pointer_id, request_id, point, accepted_position)
-    }
-
-    fn passive_stability_candidates(
-        &self,
-        dragged: DesignPointId,
-    ) -> Vec<(DesignPointId, [f64; 2])> {
-        let Some(accepted) = self.session.accepted_state() else {
-            return Vec::new();
-        };
-        let fixed = accepted
-            .document()
-            .constraints()
-            .iter()
-            .filter_map(|constraint| match constraint.definition {
-                DocumentConstraintDefinition::FixedPoint { point, .. } => Some(point),
-                _ => None,
-            })
-            .collect::<HashSet<_>>();
-        accepted
-            .document()
-            .points()
-            .iter()
-            .filter_map(|point| {
-                (point.id != dragged
-                    && !fixed.contains(&point.id)
-                    && point.position.iter().all(|value| value.is_finite()))
-                .then_some((point.id, point.position))
-            })
-            .collect()
     }
 
     /// Explicitly marks an outstanding solve. It does not mutate lifecycle history.
     pub fn mark_solving(&mut self) {
         self.transient = Some(TransientLifecycle::Solving);
         self.solved_preview = None;
+        self.drag_continuation = None;
+        self.projected_drag_work = None;
     }
 
     /// Publishes a solved transient preview proved by a separate retained session.
@@ -664,6 +1061,8 @@ impl RetainedEditorCoordinator {
     pub fn clear_transient(&mut self) {
         self.transient = None;
         self.solved_preview = None;
+        self.drag_continuation = None;
+        self.projected_drag_work = None;
     }
 
     #[must_use]
@@ -915,6 +1314,7 @@ impl RetainedEditorCoordinator {
         self.transcript.clear();
         self.transient = None;
         self.solved_preview = None;
+        self.alternate_branch = None;
         self.reconcile_selection();
         Ok(())
     }
@@ -2370,6 +2770,16 @@ impl RetainedEditorCoordinator {
             ReplayAction::Reattempt { expected } => {
                 self.reattempt(*expected)?;
             }
+            ReplayAction::AlternateBranch {
+                expected,
+                point,
+                position,
+                branches,
+            } => {
+                self.session
+                    .attempt_point_and_curve_branches(*expected, *point, *position, branches)?;
+                self.record_mutation(action.clone())?;
+            }
             ReplayAction::Undo => self.undo()?,
             ReplayAction::Redo => self.redo()?,
             ReplayAction::ConstraintAction { .. }
@@ -2483,6 +2893,7 @@ impl RetainedEditorCoordinator {
         self.history_cursor = target;
         self.transient = None;
         self.solved_preview = None;
+        self.alternate_branch = None;
         self.reconcile_selection();
         Ok(())
     }
@@ -2495,6 +2906,7 @@ impl RetainedEditorCoordinator {
         self.transcript.push(replay);
         self.transient = None;
         self.solved_preview = None;
+        self.alternate_branch = None;
         self.reconcile_selection();
         Ok(())
     }
@@ -2820,7 +3232,8 @@ impl ReplayAction {
             | Self::RebindExternalBinding { expected, .. }
             | Self::Delete { expected, .. }
             | Self::SetSuppressed { expected, .. }
-            | Self::Reattempt { expected } => Some(*expected),
+            | Self::Reattempt { expected }
+            | Self::AlternateBranch { expected, .. } => Some(*expected),
             Self::Undo | Self::Redo => None,
         }
     }
@@ -2835,6 +3248,190 @@ fn mutation_from<T: Clone>(
         attempt: outcome.attempt_identity(),
         published_accepted: outcome.published_accepted_identity(),
     }
+}
+
+fn alternate_branch_search_result(
+    status: AlternateBranchSearchStatus,
+    evidence: AlternateBranchSearchEvidence,
+    proposal: Option<AlternateBranchProposal>,
+) -> AlternateBranchSearchResult {
+    AlternateBranchSearchResult {
+        status,
+        proposal,
+        evidence,
+    }
+}
+
+fn canonical_branch_search_directions() -> [[f64; 2]; 8] {
+    let diagonal = 0.5_f64.sqrt();
+    [
+        [1.0, 0.0],
+        [diagonal, diagonal],
+        [0.0, 1.0],
+        [-diagonal, diagonal],
+        [-1.0, 0.0],
+        [-diagonal, -diagonal],
+        [0.0, -1.0],
+        [diagonal, -diagonal],
+    ]
+}
+
+fn line_segments(document: &SketchDocument) -> Vec<(CurveSpan, DesignPointId, DesignPointId)> {
+    let mut spans = Vec::new();
+    for curve in document.curves() {
+        match &curve.definition {
+            CurveDefinition::Line { start, end, .. } => {
+                spans.push((CurveSpan::line(curve.id), *start, *end));
+            }
+            CurveDefinition::Polyline { points, closed, .. } => {
+                for (segment, pair) in points.windows(2).enumerate() {
+                    spans.push((
+                        CurveSpan {
+                            curve: curve.id,
+                            segment: u32::try_from(segment).unwrap_or(u32::MAX),
+                        },
+                        pair[0],
+                        pair[1],
+                    ));
+                }
+                if *closed
+                    && points.len() > 2
+                    && let (Some(&start), Some(&end)) = (points.last(), points.first())
+                {
+                    spans.push((
+                        CurveSpan {
+                            curve: curve.id,
+                            segment: u32::try_from(points.len() - 1).unwrap_or(u32::MAX),
+                        },
+                        start,
+                        end,
+                    ));
+                }
+            }
+            _ => {}
+        }
+    }
+    spans
+}
+
+fn incident_line_scale(document: &SketchDocument, point: DesignPointId) -> Option<f64> {
+    let lengths = line_segments(document)
+        .into_iter()
+        .filter_map(|(_, start, end)| {
+            (start == point || end == point).then(|| {
+                let first = document.point(start)?.position;
+                let second = document.point(end)?.position;
+                let length = (second[0] - first[0]).hypot(second[1] - first[1]);
+                (length.is_finite() && length > 0.0).then_some(length)
+            })?
+        })
+        .collect::<Vec<_>>();
+    (!lengths.is_empty())
+        .then(|| {
+            let count = f64::from(u32::try_from(lengths.len()).unwrap_or(u32::MAX));
+            lengths.iter().sum::<f64>() / count
+        })
+        .filter(|scale| scale.is_finite() && *scale > 0.0)
+}
+
+fn incident_branch_edits(
+    design: &SketchDocument,
+    accepted: &SketchDocument,
+    point: DesignPointId,
+    target: [f64; 2],
+) -> Option<(Vec<DocumentCurveBranchEdit>, Vec<CurveSpan>)> {
+    if !target.iter().all(|value| value.is_finite()) {
+        return None;
+    }
+    let mut branches = Vec::new();
+    let mut signature = Vec::new();
+    for (span, start, end) in line_segments(design) {
+        if start != point && end != point {
+            continue;
+        }
+        let start_position = if start == point {
+            target
+        } else {
+            accepted.point(start)?.position
+        };
+        let end_position = if end == point {
+            target
+        } else {
+            accepted.point(end)?.position
+        };
+        let delta = [
+            end_position[0] - start_position[0],
+            end_position[1] - start_position[1],
+        ];
+        let norm = delta[0].hypot(delta[1]);
+        if !norm.is_finite() || norm <= f64::EPSILON {
+            return None;
+        }
+        let direction = [delta[0] / norm, delta[1] / norm];
+        let old = design.curve_branch_direction(span)?;
+        if old[0] * direction[0] + old[1] * direction[1] < 0.0 {
+            signature.push(span);
+        }
+        branches.push(DocumentCurveBranchEdit {
+            curve: span,
+            direction,
+        });
+    }
+    (!branches.is_empty() && !signature.is_empty()).then_some((branches, signature))
+}
+
+fn alternate_separator_branches(
+    design: &SketchDocument,
+    accepted: &SketchDocument,
+    point: DesignPointId,
+    position: [f64; 2],
+    signature: &[CurveSpan],
+) -> Option<Vec<DocumentCurveBranchEdit>> {
+    let mut branches = Vec::new();
+    for (span, start, end) in line_segments(design) {
+        if !signature.contains(&span) || (start != point && end != point) {
+            continue;
+        }
+        let start_position = if start == point {
+            position
+        } else {
+            accepted.point(start)?.position
+        };
+        let end_position = if end == point {
+            position
+        } else {
+            accepted.point(end)?.position
+        };
+        let actual_delta = [
+            end_position[0] - start_position[0],
+            end_position[1] - start_position[1],
+        ];
+        let actual_norm = actual_delta[0].hypot(actual_delta[1]);
+        if !actual_norm.is_finite() || actual_norm <= f64::EPSILON {
+            return None;
+        }
+        let actual = [actual_delta[0] / actual_norm, actual_delta[1] / actual_norm];
+        let old = design.curve_branch_direction(span)?;
+        let separator_delta = [actual[0] - old[0], actual[1] - old[1]];
+        let separator_norm = separator_delta[0].hypot(separator_delta[1]);
+        if !separator_norm.is_finite() || separator_norm <= f64::EPSILON {
+            return None;
+        }
+        let separator = [
+            separator_delta[0] / separator_norm,
+            separator_delta[1] / separator_norm,
+        ];
+        if actual[0] * separator[0] + actual[1] * separator[1] <= 0.0
+            || old[0] * separator[0] + old[1] * separator[1] >= 0.0
+        {
+            return None;
+        }
+        branches.push(DocumentCurveBranchEdit {
+            curve: span,
+            direction: separator,
+        });
+    }
+    (!branches.is_empty()).then_some(branches)
 }
 
 fn checkpoint(
@@ -6017,7 +6614,7 @@ mod tests {
 
     #[test]
     #[allow(clippy::too_many_lines)]
-    fn projected_drag_stabilizes_passive_freedoms_without_sample_metadata() {
+    fn projected_drag_preserves_independent_freedoms_without_passive_retries() {
         let fixture = alpha_scenario(AlphaScenarioKind::MotionCam, 1.0).expect("cam sample");
         let AlphaScenarioIds::MotionCam(ids) = fixture.ids else {
             panic!("cam persistent roles");
@@ -6041,12 +6638,14 @@ mod tests {
             8.0 * parameter * (1.0 - parameter) + tangent[0] / tangent_norm,
         ];
         let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
-        assert_eq!(
-            coordinator.passive_stability_candidates(ids.left_center),
-            vec![(ids.right_center, right_before)]
-        );
 
         let _ = coordinator.resolve_projected_point_move(41, 1, ids.left_center, left_target);
+        let work = coordinator
+            .projected_drag_work_evidence()
+            .expect("first drag work");
+        assert_eq!(work.attempts, 1);
+        assert!(!work.continued);
+        assert!(work.accepted);
         let preview = coordinator
             .solved_preview_session()
             .expect("accepted projected preview");
@@ -6054,10 +6653,6 @@ mod tests {
             .accepted_state()
             .expect("preview accepted")
             .document();
-        let left_preview = preview_document
-            .point(ids.left_center)
-            .expect("left roller")
-            .position;
         let right_preview = preview_document
             .point(ids.right_center)
             .expect("right roller")
@@ -6077,6 +6672,71 @@ mod tests {
             2
         );
 
+        let parameter = 0.28;
+        let tangent: [f64; 2] = [8.0, 8.0 - 16.0 * parameter];
+        let tangent_norm = tangent[0].hypot(tangent[1]);
+        let continued_target = [
+            -4.0 + 8.0 * parameter - tangent[1] / tangent_norm,
+            8.0 * parameter * (1.0 - parameter) + tangent[0] / tangent_norm,
+        ];
+        let _ = coordinator.resolve_projected_point_move(41, 2, ids.left_center, continued_target);
+        let continued_work = *coordinator
+            .projected_drag_work_evidence()
+            .expect("continued drag work");
+        assert_eq!(continued_work.attempts, 1);
+        assert!(continued_work.continued);
+        assert!(continued_work.accepted);
+        assert!(continued_work.operation.consumed.factorizations > 0);
+        let retained_preview_identity = coordinator
+            .solved_preview_session()
+            .unwrap()
+            .accepted_state()
+            .unwrap()
+            .identity();
+
+        let _ = coordinator.resolve_projected_point_move(41, 3, ids.left_center, [f64::NAN, 0.0]);
+        let failed_work = coordinator
+            .projected_drag_work_evidence()
+            .expect("failed drag work");
+        assert_eq!(failed_work.attempts, 1);
+        assert!(failed_work.continued);
+        assert!(!failed_work.accepted);
+        assert!(failed_work.rejection_stage.is_some());
+        assert_eq!(
+            coordinator
+                .solved_preview_session()
+                .unwrap()
+                .accepted_state()
+                .unwrap()
+                .identity(),
+            retained_preview_identity,
+            "a rejected sample must retain the last valid preview"
+        );
+
+        let parameter = 0.30;
+        let tangent: [f64; 2] = [8.0, 8.0 - 16.0 * parameter];
+        let tangent_norm = tangent[0].hypot(tangent[1]);
+        let recovered_target = [
+            -4.0 + 8.0 * parameter - tangent[1] / tangent_norm,
+            8.0 * parameter * (1.0 - parameter) + tangent[0] / tangent_norm,
+        ];
+        let _ = coordinator.resolve_projected_point_move(41, 4, ids.left_center, recovered_target);
+        let recovered_work = coordinator
+            .projected_drag_work_evidence()
+            .expect("recovered drag work");
+        assert_eq!(recovered_work.attempts, 1);
+        assert!(recovered_work.continued);
+        assert!(recovered_work.accepted);
+
+        let left_preview = coordinator
+            .solved_preview_session()
+            .unwrap()
+            .accepted_state()
+            .unwrap()
+            .document()
+            .point(ids.left_center)
+            .unwrap()
+            .position;
         coordinator
             .apply_editor_effect(&EditorEffect::CommitPointMove {
                 expected: coordinator.session().design_identity(),
@@ -6134,6 +6794,311 @@ mod tests {
                 .hypot(left_after[1] - left_before_second_drag[1])
                 <= 1.0e-8,
             "first control moved while independently dragging the second"
+        );
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn alternate_branch_is_bounded_ghosted_exact_stamped_and_atomic() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let base = document.add_point("base", [-2.0, 0.0]).expect("point");
+        let elbow = document.add_point("elbow", [0.0, 1.5]).expect("point");
+        let end = document.add_point("end", [2.0, 0.0]).expect("point");
+        let first = document
+            .add_curve(
+                "first link",
+                CurveDefinition::Line {
+                    start: base,
+                    end: elbow,
+                    branch_direction: [0.8, 0.6],
+                },
+            )
+            .expect("line");
+        let second = document
+            .add_curve(
+                "second link",
+                CurveDefinition::Line {
+                    start: elbow,
+                    end,
+                    branch_direction: [0.8, -0.6],
+                },
+            )
+            .expect("line");
+        for (label, point, target) in [
+            ("fixed base", base, [-2.0, 0.0]),
+            ("fixed end", end, [2.0, 0.0]),
+        ] {
+            document
+                .add_constraint(
+                    label,
+                    DocumentConstraintDefinition::FixedPoint { point, target },
+                )
+                .expect("fixed point");
+        }
+        for (label, first_point, second_point) in
+            [("first length", base, elbow), ("second length", elbow, end)]
+        {
+            let target = document
+                .add_scalar(label, 2.5, ScalarUnit::Length, ScalarDomain::Positive)
+                .expect("length target");
+            document
+                .add_dimension(
+                    label,
+                    DocumentDimensionDefinition::PointDistance {
+                        first: first_point,
+                        second: second_point,
+                        target,
+                    },
+                    DocumentDimensionMode::Driving,
+                )
+                .expect("length");
+        }
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("locked elbow");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let base_identity = coordinator.session().design_identity();
+        let base_accepted = coordinator.session().accepted_state().unwrap().identity();
+        let base_json = coordinator.session().export_design_json().unwrap();
+
+        let result = coordinator.propose_alternate_branch(elbow);
+        assert_eq!(result.status, AlternateBranchSearchStatus::Proposed);
+        assert_eq!(result.evidence.maximum_seeds, ALTERNATE_BRANCH_MAX_SEEDS);
+        assert!(result.evidence.attempted_seeds <= ALTERNATE_BRANCH_MAX_SEEDS);
+        assert!(result.evidence.independently_valid_candidates > 0);
+        let proposal = result.proposal.expect("proposal");
+        assert_eq!(proposal.design, base_identity);
+        assert_eq!(proposal.accepted, base_accepted);
+        assert!(proposal.position[1] < 0.0, "{proposal:#?}");
+        assert!(!proposal.branches.is_empty());
+        assert_eq!(
+            coordinator.session().export_design_json().unwrap(),
+            base_json,
+            "ghost search must not mutate authoritative design"
+        );
+        assert!(coordinator.alternate_branch_preview_session().is_some());
+
+        coordinator.cancel_alternate_branch();
+        assert!(coordinator.alternate_branch_proposal().is_none());
+        assert_eq!(coordinator.session().design_identity(), base_identity);
+
+        let proposal = coordinator
+            .propose_alternate_branch(elbow)
+            .proposal
+            .expect("replacement proposal");
+        let accepted = coordinator
+            .accept_alternate_branch(proposal.proposal_id)
+            .expect("accept branch");
+        assert!(accepted.published_accepted.is_some());
+        let crossed = coordinator
+            .session()
+            .accepted_state()
+            .unwrap()
+            .document()
+            .point(elbow)
+            .unwrap()
+            .position;
+        assert!(crossed[1] < 0.0);
+        for branch in &proposal.branches {
+            let old = if branch.curve == CurveSpan::line(first) {
+                [0.8, 0.6]
+            } else {
+                assert_eq!(branch.curve, CurveSpan::line(second));
+                [0.8, -0.6]
+            };
+            let direction = coordinator
+                .session()
+                .design_document()
+                .curve_branch_direction(branch.curve)
+                .unwrap();
+            assert!(old[0] * direction[0] + old[1] * direction[1] < 0.0);
+        }
+        coordinator.undo().expect("undo branch");
+        assert!(
+            coordinator
+                .session()
+                .accepted_state()
+                .unwrap()
+                .document()
+                .point(elbow)
+                .unwrap()
+                .position[1]
+                > 0.0
+        );
+        coordinator.redo().expect("redo branch");
+        assert!(
+            coordinator
+                .session()
+                .accepted_state()
+                .unwrap()
+                .document()
+                .point(elbow)
+                .unwrap()
+                .position[1]
+                < 0.0
+        );
+
+        let stale = coordinator
+            .propose_alternate_branch(elbow)
+            .proposal
+            .expect("stale proposal");
+        coordinator
+            .reattempt(coordinator.session().design_identity())
+            .expect("advance accepted stamp");
+        assert!(matches!(
+            coordinator.accept_alternate_branch(stale.proposal_id),
+            Err(CoordinatorError::StaleAlternateBranchProposal)
+        ));
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the deterministic work gate keeps the four comparable mechanism paths and frozen ratios in one corpus"
+    )]
+    fn deterministic_mechanism_drag_corpus_has_one_attempt_per_sample() {
+        fn run_path(
+            mut coordinator: RetainedEditorCoordinator,
+            point: DesignPointId,
+            targets: &[[f64; 2]],
+        ) -> (usize, usize) {
+            let mut factorizations = 0usize;
+            let mut nonlinear_iterations = 0usize;
+            for (index, target) in targets.iter().copied().enumerate() {
+                let _ = coordinator.resolve_projected_point_move(
+                    91,
+                    u64::try_from(index + 1).unwrap(),
+                    point,
+                    target,
+                );
+                let work = coordinator
+                    .projected_drag_work_evidence()
+                    .expect("drag work");
+                assert_eq!(work.attempts, 1);
+                assert_eq!(work.continued, index > 0);
+                assert!(work.accepted, "{work:#?}");
+                factorizations =
+                    factorizations.saturating_add(work.operation.consumed.factorizations);
+                nonlinear_iterations = nonlinear_iterations
+                    .saturating_add(work.operation.consumed.nonlinear_iterations);
+            }
+            (factorizations, nonlinear_iterations)
+        }
+
+        let mut scotch = RetainedEditorCoordinator::new(
+            RetainedSketchDocumentSession::new(
+                alpha_scenario(AlphaScenarioKind::MotionScotchYoke, 1.0)
+                    .unwrap()
+                    .document,
+                DocumentSolveRequest::default().without_previous_state_preferences(),
+                SolverConfig::default(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let AlphaScenarioIds::MotionScotchYoke(scotch_ids) =
+            alpha_scenario(AlphaScenarioKind::MotionScotchYoke, 1.0)
+                .unwrap()
+                .ids
+        else {
+            unreachable!()
+        };
+        let guide = scotch
+            .session()
+            .design_document()
+            .constraints()
+            .iter()
+            .find(|constraint| constraint.label == "Yoke slider on horizontal guide")
+            .unwrap()
+            .id;
+        scotch
+            .editor_mut()
+            .set_selection([SelectionItem::Constraint(guide)]);
+        scotch
+            .delete_selected(scotch.session().design_identity())
+            .expect("delete yoke guide");
+        let scotch_work = run_path(
+            scotch,
+            scotch_ids.slider,
+            &[[3.1, -5.9], [3.2, -5.8], [3.3, -5.7]],
+        );
+
+        let scissor_fixture = alpha_scenario(AlphaScenarioKind::MotionScissor, 1.0).unwrap();
+        let AlphaScenarioIds::MotionScissor(scissor_ids) = scissor_fixture.ids else {
+            unreachable!()
+        };
+        let scissor_work = run_path(
+            RetainedEditorCoordinator::new(
+                RetainedSketchDocumentSession::new(
+                    scissor_fixture.document,
+                    scissor_fixture.request,
+                    SolverConfig::default(),
+                )
+                .unwrap(),
+            )
+            .unwrap(),
+            scissor_ids.slider,
+            &[[3.9, 0.0], [3.7, 0.0], [3.5, 0.0]],
+        );
+
+        let tower_fixture = alpha_scenario(AlphaScenarioKind::MotionScissorTower, 1.0).unwrap();
+        let AlphaScenarioIds::MotionScissorTower(tower_ids) = tower_fixture.ids else {
+            unreachable!()
+        };
+        let tower_work = run_path(
+            RetainedEditorCoordinator::new(
+                RetainedSketchDocumentSession::new(
+                    tower_fixture.document,
+                    tower_fixture.request,
+                    SolverConfig::default(),
+                )
+                .unwrap(),
+            )
+            .unwrap(),
+            tower_ids.right_levels[0],
+            &[[3.9, 0.0], [3.7, 0.0], [3.5, 0.0]],
+        );
+
+        let pantograph_fixture = alpha_scenario(AlphaScenarioKind::MotionPantograph, 1.0).unwrap();
+        let AlphaScenarioIds::MotionPantograph(pantograph_ids) = pantograph_fixture.ids else {
+            unreachable!()
+        };
+        let radius = 17.0_f64.sqrt();
+        let pantograph_targets =
+            [0.27_f64, 0.30, 0.33].map(|angle| [radius * angle.cos(), radius * angle.sin()]);
+        let pantograph_work = run_path(
+            RetainedEditorCoordinator::new(
+                RetainedSketchDocumentSession::new(
+                    pantograph_fixture.document,
+                    pantograph_fixture.request,
+                    SolverConfig::default(),
+                )
+                .unwrap(),
+            )
+            .unwrap(),
+            pantograph_ids.input,
+            &pantograph_targets,
+        );
+
+        for work in [scotch_work, scissor_work, tower_work, pantograph_work] {
+            assert!(work.0 > 0);
+            assert!(work.1 > 0);
+        }
+        assert!(
+            pantograph_work.0 <= 2 * tower_work.0,
+            "pantograph factorizations {pantograph_work:?} exceeded twice tower {tower_work:?}"
+        );
+        assert!(
+            pantograph_work.1 <= 2 * tower_work.1,
+            "pantograph iterations {pantograph_work:?} exceeded twice tower {tower_work:?}"
+        );
+        assert!(
+            pantograph_work.0 <= 24_482 && pantograph_work.1 <= 24_095,
+            "pantograph work {pantograph_work:?} did not improve by at least 90% from the \
+             starting-commit baseline (244824 factorizations, 240953 iterations)"
         );
     }
 

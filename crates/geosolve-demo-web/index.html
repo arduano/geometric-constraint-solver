@@ -166,6 +166,15 @@
           <button id="wb-apply-contact-branches" type="button" data-wb-action="contact-branches" hidden>Apply contact branches</button>
           <button id="wb-apply-angle-orientation" type="button" data-wb-action="angle-orientation" hidden>Apply angle orientation</button>
         </section>
+        <section id="wb-assembly-branch-editor" class="wb-inspector-section wb-assembly-branch-editor" hidden>
+          <span class="wb-field-label">Assembly branch</span>
+          <p id="wb-assembly-branch-meta">Select one linkage point to search for an alternate assembly mode.</p>
+          <button id="wb-propose-assembly-branch" type="button" data-wb-action="propose-assembly-branch">Preview alternate</button>
+          <div id="wb-assembly-branch-decisions" hidden>
+            <button type="button" data-wb-action="accept-assembly-branch">Accept preview</button>
+            <button type="button" data-wb-action="cancel-assembly-branch">Cancel</button>
+          </div>
+        </section>
         <section id="wb-production-topology" class="wb-inspector-section wb-production-topology" aria-live="polite" aria-label="Production topology"></section>
         <section id="wb-host-state" class="wb-inspector-section wb-host-state" aria-live="polite" aria-label="Host-state evidence"></section>
         <section id="wb-redundancy" class="wb-inspector-section wb-redundancy" aria-live="polite" aria-label="Accepted redundancy"></section>

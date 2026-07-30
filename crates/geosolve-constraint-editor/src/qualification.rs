@@ -1042,7 +1042,33 @@ fn drag_matrix(input: &Value) -> Result<String, String> {
     {
         return Err("foreign or stale projected result was accepted".into());
     }
-    let accepted = [-3.0, 1.25];
+    let nominal_target = [-3.0, 1.25];
+    let session = RetainedSketchDocumentSession::new(
+        document,
+        DocumentSolveRequest::default(),
+        Default::default(),
+    )
+    .map_err(|error| error.to_string())?;
+    let mut retained =
+        RetainedEditorCoordinator::new(session).map_err(|error| error.to_string())?;
+    let mut preview = retained.session().clone();
+    let request = preview
+        .last_attempt()
+        .input()
+        .candidate_request()
+        .without_previous_state_preferences()
+        .with_drag(points[0], nominal_target);
+    preview
+        .reattempt(preview.design_identity(), request)
+        .map_err(|error| error.to_string())?;
+    let accepted = preview
+        .accepted_state()
+        .and_then(|state| state.document().point(points[0]))
+        .map(|point| point.position)
+        .ok_or_else(|| "projected fixture did not publish an accepted point".to_owned())?;
+    retained
+        .mark_solved_preview(&preview)
+        .map_err(|error| error.to_string())?;
     if !matches!(editor.projected_drag_result(9, first, points[0], Some(accepted)).as_slice(),
         [EditorEffect::PreviewPointMove { model_position, .. }] if positions_near(*model_position, accepted))
     {
@@ -1082,27 +1108,6 @@ fn drag_matrix(input: &Value) -> Result<String, String> {
     {
         return Err("release did not commit exactly the retained last-valid preview".into());
     }
-    let session = RetainedSketchDocumentSession::new(
-        document,
-        DocumentSolveRequest::default(),
-        Default::default(),
-    )
-    .map_err(|error| error.to_string())?;
-    let mut retained =
-        RetainedEditorCoordinator::new(session).map_err(|error| error.to_string())?;
-    let mut preview = retained.session().clone();
-    let request = preview
-        .last_attempt()
-        .input()
-        .candidate_request()
-        .without_previous_state_preferences()
-        .with_drag(points[0], accepted);
-    preview
-        .reattempt(preview.design_identity(), request)
-        .map_err(|error| error.to_string())?;
-    retained
-        .mark_solved_preview(&preview)
-        .map_err(|error| error.to_string())?;
     let mut published = 0;
     for effect in &release {
         if retained
