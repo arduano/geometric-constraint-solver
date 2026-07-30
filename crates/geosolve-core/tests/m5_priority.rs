@@ -659,7 +659,15 @@ fn temporary_strictly_dominates_a_conflicting_preference() {
         1.0,
     );
 
-    let report = problem.solve(SolverConfig::default()).unwrap();
+    let OperationOutcome::Completed {
+        value: report,
+        report: work,
+    } = problem
+        .solve_controlled(SolverConfig::default(), OperationControl::unlimited())
+        .unwrap()
+    else {
+        panic!("unlimited priority solve was interrupted")
+    };
     assert_eq!(report.termination, SolveTermination::Converged);
     assert!(report.hard_residual_max <= 1.0e-9);
     assert_normalized_point(point(&problem, variable), [0.0, 1.0], 1.0);
@@ -677,6 +685,10 @@ fn temporary_strictly_dominates_a_conflicting_preference() {
     assert_cost_matches(
         temporary.final_cost.unwrap(),
         audited_category_cost(&report, ResidualCategory::Temporary),
+    );
+    assert!(
+        work.consumed.factorizations <= 256 && work.consumed.nonlinear_iterations <= 256,
+        "{work:#?}"
     );
 }
 

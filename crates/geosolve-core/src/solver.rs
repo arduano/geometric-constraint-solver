@@ -1519,6 +1519,11 @@ enum ComponentIterationObjective<'a> {
         category: ResidualCategory,
         residual_ids: &'a [ResidualId],
     },
+    HardAndPriorityCostLevel {
+        category: ResidualCategory,
+        residual_ids: &'a [ResidualId],
+        attained_cost: f64,
+    },
 }
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
@@ -4686,6 +4691,7 @@ fn optimize_component_priority_inner(
         let step_is_stationary = normalized_step_max <= config.normalized_step_tolerance;
         let model_is_stationary = !objective_decreases(cost, model_cost);
         let mut accepted = None;
+        let mut protected_level_blocked = false;
         if !step_is_stationary && !model_is_stationary && !constrained_step.stationary {
             let mut alpha = 1.0;
             for _ in 0..MAX_PRIORITY_LINE_SEARCH_STEPS {
@@ -4710,19 +4716,22 @@ fn optimize_component_priority_inner(
                     alpha *= 0.5;
                     continue;
                 }
-                let Some((accepted_state, trial_cost)) = evaluate_priority_trial(
-                    problem,
-                    plan,
-                    component,
-                    trial_state,
-                    category,
-                    residual_ids,
-                    protected_priority_ids,
-                    attained_temporary_cost,
-                    config,
-                    reprojection_config,
-                    control.as_deref_mut(),
-                ) else {
+                let Some((accepted_state, trial_cost, used_protected_fallback)) =
+                    evaluate_priority_trial(
+                        problem,
+                        plan,
+                        component,
+                        trial_state,
+                        &state,
+                        category,
+                        residual_ids,
+                        protected_priority_ids,
+                        attained_temporary_cost,
+                        config,
+                        reprojection_config,
+                        control.as_deref_mut(),
+                    )
+                else {
                     if !charge_rejected_priority_trial(&mut control) {
                         return priority_component_report(
                             state,
@@ -4738,6 +4747,10 @@ fn optimize_component_priority_inner(
                     alpha *= 0.5;
                     continue;
                 };
+                if used_protected_fallback {
+                    protected_level_blocked = true;
+                    break;
+                }
                 if objective_decreases(cost, trial_cost)
                     && accepted
                         .as_ref()
@@ -4811,6 +4824,18 @@ fn optimize_component_priority_inner(
             state = accepted_state;
             cost = accepted_cost;
             continue;
+        }
+        if protected_level_blocked {
+            return acceptable_secondary_outcome(priority_component_report(
+                state,
+                component.index,
+                category,
+                iteration,
+                Some(initial_cost),
+                Some(cost),
+                attained_temporary_cost,
+                SolveTermination::Converged,
+            ));
         }
         let stationary_cost_tolerance = 0.5
             * config.normalized_step_tolerance
@@ -5129,6 +5154,10 @@ fn objective_within_limit(candidate: f64, limit: f64) -> bool {
             <= objective_roundoff_tolerance(candidate, limit).max(PRIORITY_ZERO_COST_ROUNDOFF)
 }
 
+fn objective_within_strict_level(candidate: f64, limit: f64) -> bool {
+    candidate <= limit || candidate - limit <= PRIORITY_ZERO_COST_ROUNDOFF
+}
+
 fn priority_zero_cost_limit(residual_rows: usize, config: SolverConfig) -> f64 {
     let rows = f64::from(u32::try_from(residual_rows.max(1)).unwrap_or(u32::MAX));
     let residual_resolution = (PRIORITY_COST_RESOLUTION_FACTOR
@@ -5185,6 +5214,7 @@ fn evaluate_priority_trial(
     plan: &EliminationPlan,
     component: &SolveComponent,
     trial_state: VariableState,
+    protected_fallback_state: &VariableState,
     category: ResidualCategory,
     residual_ids: &[ResidualId],
     protected_temporary_ids: &[ResidualId],
@@ -5192,7 +5222,7 @@ fn evaluate_priority_trial(
     config: SolverConfig,
     reprojection_config: SolverConfig,
     control: Option<&mut OperationController>,
-) -> Option<(VariableState, f64)> {
+) -> Option<(VariableState, f64, bool)> {
     let mut operation = control;
     let mut control = match operation.as_deref_mut() {
         Some(controller) => Some(
@@ -5240,6 +5270,7 @@ fn evaluate_priority_trial(
             return None;
         }
         let mut candidate_state = reprojected.state;
+        let mut used_protected_fallback = false;
         if let Some(limit) = attained_temporary_cost {
             if category != ResidualCategory::Preference || protected_temporary_ids.is_empty() {
                 return None;
@@ -5261,26 +5292,33 @@ fn evaluate_priority_trial(
                     config,
                 ))
             {
-                // Correct back onto a resolved nonlinear Temporary optimum before
-                // measuring Preference. A zero-like level already protects its full
-                // row space and only needs to remain inside the same numerical-zero
-                // envelope; recursively resolving it dominated multi-DOF dragging.
-                let temporary_outcome = optimize_component_priority(
+                // Retract directly onto the attained scalar Temporary level before
+                // measuring Preference. Recursively re-optimizing Temporary here
+                // multiplied every lower-priority line-search trial into another
+                // nonlinear solve. The scalar level equation preserves legitimate
+                // motion along a constant-cost manifold.
+                let mut level_config = reprojection_config;
+                let quadratic_step_resolution =
+                    0.5 * config.normalized_step_tolerance * config.normalized_step_tolerance;
+                if quadratic_step_resolution.is_finite() && quadratic_step_resolution > 0.0 {
+                    level_config.normalized_residual_tolerance = level_config
+                        .normalized_residual_tolerance
+                        .min(quadratic_step_resolution);
+                }
+                let corrected = iterate_component_objective(
                     problem,
                     plan,
                     component,
                     candidate_state,
-                    ResidualCategory::Temporary,
-                    protected_temporary_ids,
-                    &[],
-                    None,
-                    config,
+                    level_config,
+                    ComponentIterationObjective::HardAndPriorityCostLevel {
+                        category: ResidualCategory::Temporary,
+                        residual_ids: protected_temporary_ids,
+                        attained_cost: limit,
+                    },
                     control.as_deref_mut(),
                 )?;
-                if temporary_outcome.report.termination != SolveTermination::Converged {
-                    return None;
-                }
-                candidate_state = temporary_outcome.state;
+                candidate_state = corrected.state;
                 if !validate_component(problem, component, &candidate_state, config).valid
                     || linearized_hard_system(problem, plan, component, &candidate_state).is_err()
                 {
@@ -5296,13 +5334,9 @@ fn evaluate_priority_trial(
                 )
                 .ok()?;
                 temporary_cost = residual_cost(&corrected.residuals)?;
-                if !priority_cost_within_limit(
-                    temporary_cost,
-                    limit,
-                    corrected.residuals.len(),
-                    config,
-                ) {
-                    return None;
+                if !objective_within_strict_level(temporary_cost, limit) {
+                    candidate_state = protected_fallback_state.clone();
+                    used_protected_fallback = true;
                 }
             }
         }
@@ -5316,7 +5350,7 @@ fn evaluate_priority_trial(
         )
         .ok()?;
         let trial_cost = residual_cost(&trial_system.residuals)?;
-        Some((candidate_state, trial_cost))
+        Some((candidate_state, trial_cost, used_protected_fallback))
     })();
     drop(control);
     if operation
@@ -5685,11 +5719,12 @@ fn search_one_sided_curvature(
             alpha *= 0.5;
             continue;
         }
-        let Some((accepted_state, trial_cost)) = evaluate_priority_trial(
+        let Some((accepted_state, trial_cost, _)) = evaluate_priority_trial(
             problem,
             plan,
             component,
             trial_state,
+            state,
             category,
             residual_ids,
             protected_temporary_ids,
@@ -5805,11 +5840,12 @@ fn search_negative_curvature(
                 alpha *= 0.5;
                 continue;
             }
-            let Some((accepted_state, trial_cost)) = evaluate_priority_trial(
+            let Some((accepted_state, trial_cost, _)) = evaluate_priority_trial(
                 problem,
                 plan,
                 component,
                 trial_state,
+                state,
                 category,
                 residual_ids,
                 protected_temporary_ids,
@@ -5875,6 +5911,7 @@ fn sample_reduced_priority_cost(
         plan,
         component,
         trial_state,
+        state,
         category,
         residual_ids,
         protected_temporary_ids,
@@ -5883,7 +5920,7 @@ fn sample_reduced_priority_cost(
         reprojection_config,
         control,
     )
-    .map(|(_, cost)| cost)
+    .map(|(_, cost, _)| cost)
 }
 
 fn linearized_hard_system(
@@ -5919,23 +5956,56 @@ fn linearized_component_objective(
     objective: ComponentIterationObjective<'_>,
 ) -> Result<HardSystem, CoreError> {
     let hard = linearized_hard_system(problem, plan, component, state)?;
-    let ComponentIterationObjective::HardAndPriority {
-        category,
-        residual_ids,
-    } = objective
-    else {
-        return Ok(hard);
+    let priority = match objective {
+        ComponentIterationObjective::Hard => return Ok(hard),
+        ComponentIterationObjective::HardAndPriority {
+            category,
+            residual_ids,
+        } => linearized_category_system(
+            problem,
+            plan,
+            component.index,
+            state,
+            category,
+            residual_ids,
+        )?,
+        ComponentIterationObjective::HardAndPriorityCostLevel {
+            category,
+            residual_ids,
+            attained_cost,
+        } => {
+            let priority = linearized_category_system(
+                problem,
+                plan,
+                component.index,
+                state,
+                category,
+                residual_ids,
+            )?;
+            let current_cost =
+                residual_cost(&priority.residuals).ok_or(CoreError::NonFiniteValue {
+                    context: "priority cost-level retraction",
+                    index: 0,
+                    value: f64::INFINITY,
+                })?;
+            let gradient = priority.jacobian.transpose() * &priority.residuals;
+            if !attained_cost.is_finite() || gradient.iter().any(|value| !value.is_finite()) {
+                return Err(CoreError::NonFiniteValue {
+                    context: "priority cost-level retraction",
+                    index: 0,
+                    value: attained_cost,
+                });
+            }
+            HardSystem {
+                residuals: DVector::from_element(1, current_cost - attained_cost),
+                jacobian: DMatrix::from_fn(1, gradient.len(), |_, column| gradient[column]),
+                rows: Vec::new(),
+                indexed: None,
+            }
+        }
     };
-    let priority = linearized_category_system(
-        problem,
-        plan,
-        component.index,
-        state,
-        category,
-        residual_ids,
-    )?;
     stack_systems(hard, priority).ok_or(CoreError::DimensionMismatch {
-        context: "hard and exact priority feasibility columns",
+        context: "hard and priority retraction columns",
         expected: plan.component_layouts[component.index].tangent_dimension,
         actual: 0,
     })
