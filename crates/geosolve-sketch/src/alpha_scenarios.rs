@@ -34,6 +34,9 @@ pub enum AlphaScenarioKind {
     MotionScissor,
     MotionScissorTower,
     MotionPeaucellier,
+    MotionFourBarCoupler,
+    MotionPantograph,
+    MotionDrawingArm,
     DiagnosticRankDrop,
     DiagnosticEndpointBound,
     DiagnosticRedundancy,
@@ -99,6 +102,9 @@ impl AlphaScenarioKind {
             Self::MotionScissor => "motion-scissor",
             Self::MotionScissorTower => "motion-scissor-tower",
             Self::MotionPeaucellier => "motion-peaucellier",
+            Self::MotionFourBarCoupler => "motion-four-bar-coupler",
+            Self::MotionPantograph => "motion-pantograph",
+            Self::MotionDrawingArm => "motion-drawing-arm",
             Self::DiagnosticRankDrop => "diagnostic-rank-drop",
             Self::DiagnosticEndpointBound => "diagnostic-endpoint-bound",
             Self::DiagnosticRedundancy => "diagnostic-redundancy",
@@ -470,6 +476,34 @@ pub struct MotionPeaucellierIds {
     pub bars: [CurveId; 7],
 }
 
+/// Persistent roles in the four-bar coupler-path example.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MotionFourBarCouplerIds {
+    pub grounds: [DesignPointId; 2],
+    pub joints: [DesignPointId; 2],
+    pub tracer: DesignPointId,
+    pub bars: [CurveId; 3],
+}
+
+/// Persistent roles in the two-DOF pantograph example.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MotionPantographIds {
+    pub anchor: DesignPointId,
+    pub input: DesignPointId,
+    pub guide: DesignPointId,
+    pub output: DesignPointId,
+    pub center: DesignPointId,
+    pub bars: [CurveId; 4],
+}
+
+/// Persistent roles in the three-DOF articulated drawing-arm example.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MotionDrawingArmIds {
+    pub anchor: DesignPointId,
+    pub joints: [DesignPointId; 3],
+    pub links: [CurveId; 3],
+}
+
 /// Persistent roles in the structural-versus-numerical rank diagnostic example.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DiagnosticRankDropIds {
@@ -630,6 +664,9 @@ pub enum AlphaScenarioIds {
     MotionScissor(MotionScissorIds),
     MotionScissorTower(MotionScissorTowerIds),
     MotionPeaucellier(MotionPeaucellierIds),
+    MotionFourBarCoupler(MotionFourBarCouplerIds),
+    MotionPantograph(MotionPantographIds),
+    MotionDrawingArm(MotionDrawingArmIds),
     DiagnosticRankDrop(DiagnosticRankDropIds),
     DiagnosticEndpointBound(DiagnosticEndpointBoundIds),
     DiagnosticRedundancy(DiagnosticRedundancyIds),
@@ -702,6 +739,9 @@ pub fn alpha_scenario(
         AlphaScenarioKind::MotionScissor => 0xc8_0000,
         AlphaScenarioKind::MotionScissorTower => 0xc9_0000,
         AlphaScenarioKind::MotionPeaucellier => 0xca_0000,
+        AlphaScenarioKind::MotionFourBarCoupler => 0xcb_0000,
+        AlphaScenarioKind::MotionPantograph => 0xcc_0000,
+        AlphaScenarioKind::MotionDrawingArm => 0xcd_0000,
         AlphaScenarioKind::DiagnosticRankDrop => 0xd1_0000,
         AlphaScenarioKind::DiagnosticEndpointBound => 0xd2_0000,
         AlphaScenarioKind::DiagnosticRedundancy => 0xd3_0000,
@@ -806,6 +846,21 @@ pub fn alpha_scenario(
         ),
         AlphaScenarioKind::MotionPeaucellier => (
             AlphaScenarioIds::MotionPeaucellier(add_motion_peaucellier(&mut document, scale)?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::MotionFourBarCoupler => (
+            AlphaScenarioIds::MotionFourBarCoupler(add_motion_four_bar_coupler(
+                &mut document,
+                scale,
+            )?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::MotionPantograph => (
+            AlphaScenarioIds::MotionPantograph(add_motion_pantograph(&mut document, scale)?),
+            DocumentSolveRequest::default().without_previous_state_preferences(),
+        ),
+        AlphaScenarioKind::MotionDrawingArm => (
+            AlphaScenarioIds::MotionDrawingArm(add_motion_drawing_arm(&mut document, scale)?),
             DocumentSolveRequest::default().without_previous_state_preferences(),
         ),
         AlphaScenarioKind::DiagnosticRankDrop => (
@@ -4303,6 +4358,254 @@ fn add_motion_peaucellier(
         shoulders,
         bars,
     })
+}
+
+fn add_motion_four_bar_coupler(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<MotionFourBarCouplerIds, DocumentError> {
+    let grounds = [
+        document.add_point("Four-bar ground O2", [0.0, 0.0])?,
+        document.add_point("Four-bar ground O4", [8.0 * scale, 0.0])?,
+    ];
+    let joints = [
+        document.add_point("Four-bar input joint A", [3.0 * scale, 4.0 * scale])?,
+        document.add_point("Four-bar output joint B", [7.0 * scale, 4.0 * scale])?,
+    ];
+    let tracer = document.add_point("Four-bar coupler tracer C", [5.0 * scale, 4.0 * scale])?;
+    let inverse_sqrt_17 = 1.0 / 17.0_f64.sqrt();
+    let bars = [
+        add_line_with_direction(
+            document,
+            "Four-bar input crank O2-A",
+            grounds[0],
+            joints[0],
+            [0.6, 0.8],
+        )?,
+        add_line_with_direction(
+            document,
+            "Four-bar coupler A-B",
+            joints[0],
+            joints[1],
+            [1.0, 0.0],
+        )?,
+        add_line_with_direction(
+            document,
+            "Four-bar output rocker B-O4",
+            joints[1],
+            grounds[1],
+            [inverse_sqrt_17, -4.0 * inverse_sqrt_17],
+        )?,
+    ];
+    fix_point(document, "Four-bar ground O2 fixed", grounds[0])?;
+    fix_point(document, "Four-bar ground O4 fixed", grounds[1])?;
+    add_length_dimension(
+        document,
+        "Four-bar input crank length 5",
+        CurveSpan::line(bars[0]),
+        5.0 * scale,
+        DocumentDimensionMode::Driving,
+    )?;
+    add_length_dimension(
+        document,
+        "Four-bar coupler length 4",
+        CurveSpan::line(bars[1]),
+        4.0 * scale,
+        DocumentDimensionMode::Driving,
+    )?;
+    add_length_dimension(
+        document,
+        "Four-bar output rocker length sqrt 17",
+        CurveSpan::line(bars[2]),
+        17.0_f64.sqrt() * scale,
+        DocumentDimensionMode::Driving,
+    )?;
+    document.add_constraint(
+        "Four-bar tracer bisects coupler",
+        DocumentConstraintDefinition::Midpoint {
+            point: tracer,
+            line: CurveSpan::line(bars[1]),
+        },
+    )?;
+    Ok(MotionFourBarCouplerIds {
+        grounds,
+        joints,
+        tracer,
+        bars,
+    })
+}
+
+fn add_motion_pantograph(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<MotionPantographIds, DocumentError> {
+    let anchor = document.add_point("Pantograph fixed anchor O", [0.0, 0.0])?;
+    let input = document.add_point("Pantograph input A", [4.0 * scale, 1.0 * scale])?;
+    let guide = document.add_point("Pantograph guide B", [1.0 * scale, 3.0 * scale])?;
+    let output = document.add_point("Pantograph output C", [5.0 * scale, 4.0 * scale])?;
+    let center = document.add_point("Pantograph center M", [2.5 * scale, 2.0 * scale])?;
+    let inverse_sqrt_17 = 1.0 / 17.0_f64.sqrt();
+    let inverse_sqrt_10 = 1.0 / 10.0_f64.sqrt();
+    let bars = [
+        add_line_with_direction(
+            document,
+            "Pantograph input arm O-A",
+            anchor,
+            input,
+            [4.0 * inverse_sqrt_17, inverse_sqrt_17],
+        )?,
+        add_line_with_direction(
+            document,
+            "Pantograph guide arm O-B",
+            anchor,
+            guide,
+            [inverse_sqrt_10, 3.0 * inverse_sqrt_10],
+        )?,
+        add_line_with_direction(
+            document,
+            "Pantograph translated guide A-C",
+            input,
+            output,
+            [inverse_sqrt_10, 3.0 * inverse_sqrt_10],
+        )?,
+        add_line_with_direction(
+            document,
+            "Pantograph translated input B-C",
+            guide,
+            output,
+            [4.0 * inverse_sqrt_17, inverse_sqrt_17],
+        )?,
+    ];
+    let inverse_sqrt_41 = 1.0 / 41.0_f64.sqrt();
+    let diagonal = add_line_with_direction(
+        document,
+        "Pantograph diagonal O-C",
+        anchor,
+        output,
+        [5.0 * inverse_sqrt_41, 4.0 * inverse_sqrt_41],
+    )?;
+    fix_point(document, "Pantograph anchor fixed", anchor)?;
+    document.add_constraint(
+        "Pantograph input sides parallel",
+        DocumentConstraintDefinition::Parallel {
+            first: CurveSpan::line(bars[0]),
+            second: CurveSpan::line(bars[3]),
+        },
+    )?;
+    document.add_constraint(
+        "Pantograph guide sides parallel",
+        DocumentConstraintDefinition::Parallel {
+            first: CurveSpan::line(bars[1]),
+            second: CurveSpan::line(bars[2]),
+        },
+    )?;
+    add_length_dimension(
+        document,
+        "Pantograph input arm length sqrt 17",
+        CurveSpan::line(bars[0]),
+        17.0_f64.sqrt() * scale,
+        DocumentDimensionMode::Driving,
+    )?;
+    add_length_dimension(
+        document,
+        "Pantograph guide arm length sqrt 10",
+        CurveSpan::line(bars[1]),
+        10.0_f64.sqrt() * scale,
+        DocumentDimensionMode::Driving,
+    )?;
+    document.add_constraint(
+        "Pantograph center bisects diagonal",
+        DocumentConstraintDefinition::Midpoint {
+            point: center,
+            line: CurveSpan::line(diagonal),
+        },
+    )?;
+    Ok(MotionPantographIds {
+        anchor,
+        input,
+        guide,
+        output,
+        center,
+        bars,
+    })
+}
+
+fn add_motion_drawing_arm(
+    document: &mut SketchDocument,
+    scale: f64,
+) -> Result<MotionDrawingArmIds, DocumentError> {
+    let anchor = document.add_point("Drawing arm fixed anchor O", [0.0, 0.0])?;
+    let joints = [
+        document.add_point("Drawing arm shoulder A", [3.0 * scale, 0.0])?,
+        document.add_point("Drawing arm elbow B", [5.0 * scale, 2.0 * scale])?,
+        document.add_point("Drawing arm pen C", [7.0 * scale, 1.0 * scale])?,
+    ];
+    let inverse_sqrt_5 = 1.0 / 5.0_f64.sqrt();
+    let links = [
+        add_line_with_direction(
+            document,
+            "Drawing arm link O-A",
+            anchor,
+            joints[0],
+            [1.0, 0.0],
+        )?,
+        add_line_with_direction(
+            document,
+            "Drawing arm link A-B",
+            joints[0],
+            joints[1],
+            [
+                std::f64::consts::FRAC_1_SQRT_2,
+                std::f64::consts::FRAC_1_SQRT_2,
+            ],
+        )?,
+        add_line_with_direction(
+            document,
+            "Drawing arm link B-C",
+            joints[1],
+            joints[2],
+            [2.0 * inverse_sqrt_5, -inverse_sqrt_5],
+        )?,
+    ];
+    fix_point(document, "Drawing arm anchor fixed", anchor)?;
+    for (index, (link, target)) in [
+        (links[0], 3.0),
+        (links[1], 8.0_f64.sqrt()),
+        (links[2], 5.0_f64.sqrt()),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        add_length_dimension(
+            document,
+            &format!("Drawing arm link {} length", index + 1),
+            CurveSpan::line(link),
+            target * scale,
+            DocumentDimensionMode::Driving,
+        )?;
+    }
+    Ok(MotionDrawingArmIds {
+        anchor,
+        joints,
+        links,
+    })
+}
+
+fn add_line_with_direction(
+    document: &mut SketchDocument,
+    label: &str,
+    start: DesignPointId,
+    end: DesignPointId,
+    branch_direction: [f64; 2],
+) -> Result<CurveId, DocumentError> {
+    document.add_curve(
+        label,
+        CurveDefinition::Line {
+            start,
+            end,
+            branch_direction,
+        },
+    )
 }
 
 #[allow(clippy::too_many_lines)]

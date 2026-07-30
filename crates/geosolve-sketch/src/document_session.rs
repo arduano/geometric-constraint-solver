@@ -916,6 +916,13 @@ impl DocumentSolveRequest {
         self
     }
 
+    /// Retains all non-targeted accepted points as the lowest-priority interaction objective.
+    #[must_use]
+    pub const fn with_previous_state_preferences(mut self) -> Self {
+        self.previous_state_preferences = true;
+        self
+    }
+
     /// Removes interaction-scoped drag and stability targets before a retained restore.
     #[must_use]
     pub const fn without_temporary_targets(mut self) -> Self {

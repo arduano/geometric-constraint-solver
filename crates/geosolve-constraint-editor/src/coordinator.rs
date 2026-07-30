@@ -533,94 +533,75 @@ impl RetainedEditorCoordinator {
         point: DesignPointId,
         model_position: [f64; 2],
     ) -> Vec<EditorEffect> {
-        self.resolve_projected_point_move_with_optional_stability(
-            pointer_id,
-            request_id,
-            point,
-            model_position,
-            None,
-        )
-    }
-
-    /// Executes one projected point-move preview while retaining another accepted point at its
-    /// current position through a temporary stability target.
-    ///
-    /// This is intended for interactions with multiple independent freedoms. The presentation
-    /// adapter supplies only persistent point identities; this coordinator reads the authoritative
-    /// accepted stability position and owns construction of the transient solve request.
-    pub fn resolve_projected_point_move_stabilizing(
-        &mut self,
-        pointer_id: u64,
-        request_id: u64,
-        point: DesignPointId,
-        model_position: [f64; 2],
-        stability_point: DesignPointId,
-    ) -> Vec<EditorEffect> {
-        self.resolve_projected_point_move_with_optional_stability(
-            pointer_id,
-            request_id,
-            point,
-            model_position,
-            Some(stability_point),
-        )
-    }
-
-    fn resolve_projected_point_move_with_optional_stability(
-        &mut self,
-        pointer_id: u64,
-        request_id: u64,
-        point: DesignPointId,
-        model_position: [f64; 2],
-        stability_point: Option<DesignPointId>,
-    ) -> Vec<EditorEffect> {
-        let stability_target = match stability_point {
-            None => None,
-            Some(stability_point) if stability_point == point => {
-                return self
-                    .editor
-                    .projected_drag_result(pointer_id, request_id, point, None);
-            }
-            Some(stability_point) => {
-                let Some(position) = self
-                    .session
-                    .accepted_state()
-                    .and_then(|state| state.document().point(stability_point))
-                    .map(|value| value.position)
-                    .filter(|position| position.iter().all(|value| value.is_finite()))
-                else {
-                    return self
-                        .editor
-                        .projected_drag_result(pointer_id, request_id, point, None);
-                };
-                Some((stability_point, position))
-            }
-        };
-        let mut candidate = self.session.clone();
-        let mut request = candidate
+        let request = self
+            .session
             .last_attempt()
             .input()
             .candidate_request()
-            .without_previous_state_preferences()
+            .with_previous_state_preferences()
             .with_drag(point, model_position);
-        if let Some((stability_point, position)) = stability_target {
-            request = request.with_stability_target(stability_point, position);
+        let mut solved = None;
+        for stability in std::iter::once(None).chain(
+            self.passive_stability_candidates(point)
+                .into_iter()
+                .map(Some),
+        ) {
+            let mut candidate = self.session.clone();
+            let candidate_request = stability.map_or(request, |(passive, target)| {
+                request.with_stability_target(passive, target)
+            });
+            let accepted_position = candidate
+                .reattempt(candidate.design_identity(), candidate_request)
+                .ok()
+                .and_then(geosolve_sketch::SketchDocumentAttempt::accepted_state_identity)
+                .and_then(|_| candidate.accepted_state())
+                .and_then(|state| state.document().point(point))
+                .map(|value| value.position)
+                .filter(|position| position.iter().all(|value| value.is_finite()));
+            if let Some(accepted_position) = accepted_position {
+                solved = Some((candidate, accepted_position));
+                break;
+            }
         }
-        let accepted_position = candidate
-            .reattempt(candidate.design_identity(), request)
-            .ok()
-            .and_then(geosolve_sketch::SketchDocumentAttempt::accepted_state_identity)
-            .and_then(|_| candidate.accepted_state())
-            .and_then(|state| state.document().point(point))
-            .map(|value| value.position)
-            .filter(|position| position.iter().all(|value| value.is_finite()));
-        let accepted_position =
-            if accepted_position.is_some() && self.mark_solved_preview(&candidate).is_ok() {
-                accepted_position
-            } else {
-                None
-            };
+        let accepted_position = match solved {
+            Some((candidate, accepted_position))
+                if self.mark_solved_preview(&candidate).is_ok() =>
+            {
+                Some(accepted_position)
+            }
+            _ => None,
+        };
         self.editor
             .projected_drag_result(pointer_id, request_id, point, accepted_position)
+    }
+
+    fn passive_stability_candidates(
+        &self,
+        dragged: DesignPointId,
+    ) -> Vec<(DesignPointId, [f64; 2])> {
+        let Some(accepted) = self.session.accepted_state() else {
+            return Vec::new();
+        };
+        let fixed = accepted
+            .document()
+            .constraints()
+            .iter()
+            .filter_map(|constraint| match constraint.definition {
+                DocumentConstraintDefinition::FixedPoint { point, .. } => Some(point),
+                _ => None,
+            })
+            .collect::<HashSet<_>>();
+        accepted
+            .document()
+            .points()
+            .iter()
+            .filter_map(|point| {
+                (point.id != dragged
+                    && !fixed.contains(&point.id)
+                    && point.position.iter().all(|value| value.is_finite()))
+                .then_some((point.id, point.position))
+            })
+            .collect()
     }
 
     /// Explicitly marks an outstanding solve. It does not mutate lifecycle history.
@@ -3974,11 +3955,12 @@ mod tests {
         Viewport,
     };
     use geosolve_sketch::{
-        DocumentConstraintDefinition, DocumentExternalPointRef, DocumentM38DimensionDefinition,
-        DocumentMeasurementDefinition, DocumentParameterKind, DocumentPointRef,
-        ExternalLineOrientationV1, ExternalSnapshotDigest, ExternalSnapshotEntry,
-        ExternalSnapshotFeatureV1, ExternalSnapshotInputError, ExternalSnapshotResourcesV1,
-        ExternalSnapshotSet, ParameterBatch, ParameterBatchEntry, ParameterValue,
+        AlphaScenarioIds, AlphaScenarioKind, DocumentConstraintDefinition,
+        DocumentExternalPointRef, DocumentM38DimensionDefinition, DocumentMeasurementDefinition,
+        DocumentParameterKind, DocumentPointRef, ExternalLineOrientationV1, ExternalSnapshotDigest,
+        ExternalSnapshotEntry, ExternalSnapshotFeatureV1, ExternalSnapshotInputError,
+        ExternalSnapshotResourcesV1, ExternalSnapshotSet, ParameterBatch, ParameterBatchEntry,
+        ParameterValue, SolverConfig, alpha_scenario,
     };
 
     fn fixed_line_session() -> (
@@ -6030,6 +6012,128 @@ mod tests {
         assert_eq!(
             coordinator.lifecycle().status,
             LifecycleStatus::SolvedPreview
+        );
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn projected_drag_stabilizes_passive_freedoms_without_sample_metadata() {
+        let fixture = alpha_scenario(AlphaScenarioKind::MotionCam, 1.0).expect("cam sample");
+        let AlphaScenarioIds::MotionCam(ids) = fixture.ids else {
+            panic!("cam persistent roles");
+        };
+        let session = RetainedSketchDocumentSession::new(
+            fixture.document,
+            fixture.request,
+            SolverConfig::default(),
+        )
+        .expect("cam session");
+        let accepted = session.accepted_state().expect("accepted cam").document();
+        let right_before = accepted
+            .point(ids.right_center)
+            .expect("right roller")
+            .position;
+        let parameter = 0.26;
+        let tangent: [f64; 2] = [8.0, 8.0 - 16.0 * parameter];
+        let tangent_norm = tangent[0].hypot(tangent[1]);
+        let left_target = [
+            -4.0 + 8.0 * parameter - tangent[1] / tangent_norm,
+            8.0 * parameter * (1.0 - parameter) + tangent[0] / tangent_norm,
+        ];
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        assert_eq!(
+            coordinator.passive_stability_candidates(ids.left_center),
+            vec![(ids.right_center, right_before)]
+        );
+
+        let _ = coordinator.resolve_projected_point_move(41, 1, ids.left_center, left_target);
+        let preview = coordinator
+            .solved_preview_session()
+            .expect("accepted projected preview");
+        let preview_document = preview
+            .accepted_state()
+            .expect("preview accepted")
+            .document();
+        let left_preview = preview_document
+            .point(ids.left_center)
+            .expect("left roller")
+            .position;
+        let right_preview = preview_document
+            .point(ids.right_center)
+            .expect("right roller")
+            .position;
+        assert!(
+            (right_preview[0] - right_before[0]).hypot(right_preview[1] - right_before[1])
+                <= 1.0e-8,
+            "passive roller moved from {right_before:?} to {right_preview:?}"
+        );
+        assert_eq!(
+            preview
+                .accepted_state()
+                .expect("accepted preview")
+                .solve_result()
+                .unstable_core_report()
+                .right_nullity,
+            2
+        );
+
+        coordinator
+            .apply_editor_effect(&EditorEffect::CommitPointMove {
+                expected: coordinator.session().design_identity(),
+                point: ids.left_center,
+                model_position: left_preview,
+            })
+            .expect("commit projected drag")
+            .expect("retained mutation");
+        let retained_request = coordinator
+            .session()
+            .last_attempt()
+            .input()
+            .publication_request();
+        assert_eq!(retained_request.drag, None);
+        assert_eq!(retained_request.stability_target, None);
+        assert_eq!(
+            coordinator
+                .session()
+                .accepted_state()
+                .expect("accepted retained state")
+                .solve_result()
+                .unstable_core_report()
+                .right_nullity,
+            2
+        );
+
+        let left_before_second_drag = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted commit")
+            .document()
+            .point(ids.left_center)
+            .expect("left roller")
+            .position;
+        let parameter = 0.74;
+        let tangent: [f64; 2] = [8.0, 8.0 - 16.0 * parameter];
+        let tangent_norm = tangent[0].hypot(tangent[1]);
+        let right_target = [
+            -4.0 + 8.0 * parameter - tangent[1] / tangent_norm,
+            8.0 * parameter * (1.0 - parameter) + tangent[0] / tangent_norm,
+        ];
+        let _ = coordinator.resolve_projected_point_move(42, 2, ids.right_center, right_target);
+        let second_preview = coordinator
+            .solved_preview_session()
+            .expect("second accepted preview")
+            .accepted_state()
+            .expect("second preview accepted")
+            .document();
+        let left_after = second_preview
+            .point(ids.left_center)
+            .expect("left roller")
+            .position;
+        assert!(
+            (left_after[0] - left_before_second_drag[0])
+                .hypot(left_after[1] - left_before_second_drag[1])
+                <= 1.0e-8,
+            "first control moved while independently dragging the second"
         );
     }
 

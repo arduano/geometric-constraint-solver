@@ -51,10 +51,11 @@ pub use alpha_scenarios::{
     AlphaScenarioKind, AlphaScenarioUat, ConicCircleLimitIds, ConicGalleryIds, ConicTangencyIds,
     DiagnosticEndpointBoundIds, DiagnosticRankDropIds, DiagnosticRedundancyIds, DirectedAngleIds,
     EntityMirrorIds, ExactTranslatedOffsetIds, GenericFilletLabIds, M27ReferenceFilletIds,
-    M28TrimmedFilletIds, MotionCamIds, MotionOrbitIds, MotionPeaucellierIds,
-    MotionRotatingSquareIds, MotionScissorIds, MotionScissorTowerIds, MotionScotchYokeIds,
-    MotionTrammelIds, NurbsDifferentialIds, NurbsLabIds, ProfileScenarioIds, StressBridgeIds,
-    StressCompassIds, SupportingOffsetIds, alpha_performance_document, alpha_scenario,
+    M28TrimmedFilletIds, MotionCamIds, MotionDrawingArmIds, MotionFourBarCouplerIds,
+    MotionOrbitIds, MotionPantographIds, MotionPeaucellierIds, MotionRotatingSquareIds,
+    MotionScissorIds, MotionScissorTowerIds, MotionScotchYokeIds, MotionTrammelIds,
+    NurbsDifferentialIds, NurbsLabIds, ProfileScenarioIds, StressBridgeIds, StressCompassIds,
+    SupportingOffsetIds, alpha_performance_document, alpha_scenario,
 };
 pub use attributes::{SketchAttributeError, SketchAttributes};
 pub use beziers::{BezierCurve, BezierEvaluationError, BezierKind};

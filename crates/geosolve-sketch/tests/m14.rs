@@ -58,6 +58,9 @@ fn alpha_fixtures_solve_with_scale_invariant_ids_and_explicit_branches() {
         AlphaScenarioKind::MotionScissor,
         AlphaScenarioKind::MotionScissorTower,
         AlphaScenarioKind::MotionPeaucellier,
+        AlphaScenarioKind::MotionFourBarCoupler,
+        AlphaScenarioKind::MotionPantograph,
+        AlphaScenarioKind::MotionDrawingArm,
         AlphaScenarioKind::DiagnosticRankDrop,
         AlphaScenarioKind::DiagnosticEndpointBound,
         AlphaScenarioKind::DiagnosticRedundancy,
@@ -184,6 +187,59 @@ fn alpha_fixtures_solve_with_scale_invariant_ids_and_explicit_branches() {
                     .unwrap();
                 let check = compiled.problem().check_jacobians(1.0e-6).unwrap();
                 assert!(check.all_within(1.0e-6), "scale={scale:e}: {check:#?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn m64_editable_mechanisms_expose_one_two_and_three_freedoms_at_all_scales() {
+    for (kind, expected_dof) in [
+        (AlphaScenarioKind::MotionFourBarCoupler, 1),
+        (AlphaScenarioKind::MotionPantograph, 2),
+        (AlphaScenarioKind::MotionDrawingArm, 3),
+    ] {
+        for scale in SCALES {
+            let (session, ids) = session(kind, scale);
+            let result = session.accepted_result();
+            let report = result.accepted_view().unstable_core_report();
+            assert_eq!(
+                report.right_nullity, expected_dof,
+                "kind={kind:?}, scale={scale:e}: {report:#?}"
+            );
+            assert_eq!(
+                report.bidirectional_degrees_of_freedom, expected_dof,
+                "kind={kind:?}, scale={scale:e}: {report:#?}"
+            );
+            match (kind, ids) {
+                (
+                    AlphaScenarioKind::MotionFourBarCoupler,
+                    AlphaScenarioIds::MotionFourBarCoupler(ids),
+                ) => {
+                    assert!(session.document().point(ids.tracer).is_some());
+                    assert!(
+                        ids.bars
+                            .iter()
+                            .all(|curve| session.document().curve(*curve).is_some())
+                    );
+                }
+                (AlphaScenarioKind::MotionPantograph, AlphaScenarioIds::MotionPantograph(ids)) => {
+                    assert!(session.document().point(ids.center).is_some());
+                    assert!(
+                        ids.bars
+                            .iter()
+                            .all(|curve| session.document().curve(*curve).is_some())
+                    );
+                }
+                (AlphaScenarioKind::MotionDrawingArm, AlphaScenarioIds::MotionDrawingArm(ids)) => {
+                    assert!(session.document().point(ids.anchor).is_some());
+                    assert!(
+                        ids.links
+                            .iter()
+                            .all(|curve| session.document().curve(*curve).is_some())
+                    );
+                }
+                _ => panic!("fixture returned incompatible persistent roles"),
             }
         }
     }
