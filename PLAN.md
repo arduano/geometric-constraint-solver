@@ -2997,6 +2997,16 @@ proposals. The complete format/diff, warnings-denied Clippy, locked all-feature 
 and release Trunk gates pass on the final source state. See `docs/M65_IMPLEMENTATION.md` and
 `docs/M65_UAT.md`. Only explicit supervising-human approval remains open.
 
+UAT follow-up (2026-07-30): `M65-F001` removes recursive positive-Temporary reoptimization from
+lower Preference trials. Natural off-manifold pantograph input samples now all accept in one
+attempt at total `(2155,2121)` factorization/nonlinear work instead of reproduced
+`(120210,118679)`. `M65-F002` makes circle circumferences headless semantic drag handles for their
+centers, preserves the pointer offset and gives every projected sample a deterministic
+2,048-factorization/iteration ceiling. Difficult twin-roller rejection retains the last valid
+preview and a later valid sample recovers on the same continuation chain. Focused core/editor
+regressions pass; the complete final requalification and human retest remain part of the open M65
+gate.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

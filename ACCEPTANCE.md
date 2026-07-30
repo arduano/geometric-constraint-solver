@@ -955,6 +955,13 @@ Status: implementation and mechanical qualification complete; focused human UAT 
 - [x] Feasible zero-cost Temporary objectives are independently validated before their complete
   row space protects Preferences; tiny nonzero objectives, sparse backend evidence, hard residual
   validation, finiteness and explicit branch state retain their frozen behavior.
+- [x] Positive-cost Temporary levels are preserved directly during lower Preference trials without
+  recursive reoptimization. Natural off-manifold pantograph cursor samples accept with bounded
+  work while constant-cost manifolds retain legitimate lower-priority motion.
+- [x] Circle circumferences expose their semantic center as a headless drag handle with preserved
+  pointer offset. Every projected pointer sample has a deterministic 2,048
+  factorization/nonlinear-iteration ceiling; exhaustion or difficult projection retains the last
+  valid preview.
 - [x] The Scotch-yoke, scissor-jack, scissor-tower and pantograph corpus accepts all samples at
   one attempt each. Recorded `(factorizations, nonlinear iterations)` are `(17,17)`, `(18,18)`,
   `(24,24)` and `(33,21)` respectively: pantograph is below twice tower and over 99.9% below the

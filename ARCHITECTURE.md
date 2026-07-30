@@ -318,6 +318,14 @@ still optimized, sparse-backend evidence retains the established hard reprojecti
 non-feasible levels fall back to the general priority optimizer. This is neither weighted least
 squares nor relaxed hard convergence.
 
+For a positive attained Temporary level, lower Preference trials retract directly onto the
+nonlinear scalar Temporary-cost level together with Hard rows. They never recursively invoke the
+Temporary optimizer. Failure to preserve that level retains the independently validated attained
+state and yields only an `Acceptable` lower-priority result. Constant-cost manifolds remain
+available because the scalar level, not the residual vector, is protected. The headless
+coordinator additionally caps synchronous projected work and maps a circle circumference gesture
+to its document-owned center point while preserving the initial pointer offset.
+
 Assembly-mode exploration is a separate explicit action. The coordinator inspects at most 24
 canonical point seeds against exact design/accepted stamps, offers only finite independently
 accepted alternatives representable by persistent line branch directions, and keeps the selected

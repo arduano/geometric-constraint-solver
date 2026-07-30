@@ -14,7 +14,11 @@ Status: implementation and mechanical qualification complete; focused human UAT 
 - `AlternateBranchSearchResult`, status/evidence/proposal DTOs and the public
   `ALTERNATE_BRANCH_MAX_SEEDS = 24`;
 - `visible_preview_session`, which gives presentation adapters the independently accepted
-  branch ghost before an ordinary drag preview.
+  branch ghost before an ordinary drag preview;
+- a deterministic interactive ceiling of 2,048 nonlinear iterations and factorizations per
+  pointer sample, with exhaustion exposed as a controlled-operation rejection;
+- semantic circle-to-center drag handles and pointer-offset-preserving gestures, so dragging a
+  circumference moves its center without a cursor jump.
 
 `geosolve-sketch` adds:
 
@@ -49,10 +53,14 @@ established sparse hard-reprojection evidence. This is not weighted least square
 relax hard success.
 
 The previous pantograph explosion came from a positive-cost stationary Temporary pass followed by
-recursive Preference trial reprojections. The exact-feasibility candidate reaches the attainable
-cursor target directly. Zero-like Preference trials retract hard and Temporary rows together,
-and changes below the established rank/roundoff resolution terminate truthfully as
-`SecondaryStatus::Acceptable`.
+recursive Preference trial reprojections. The exact-feasibility candidate reaches an attainable
+cursor target directly. For an ordinary off-manifold target, a lower Preference trial now retracts
+Hard rows together with the attained scalar Temporary cost level instead of recursively optimizing
+Temporary again. A trial that cannot preserve that level returns to the independently validated
+attained state and terminates the lower level truthfully as `SecondaryStatus::Acceptable`.
+Constant-positive-cost manifolds remain free for Preference motion because the protected equation
+is the scalar objective level, not a frozen residual vector. Zero-like Preference trials continue
+to retract Hard and complete Temporary rows together.
 
 Alternate branch search is explicit and bounded. It checks eight canonical directions at radii
 `0.5`, `1` and `2`, for at most 24 seeds. A proposal requires:
@@ -89,14 +97,25 @@ Every sample accepts with exactly one retained attempt. Pantograph is below twic
 in both counters and improves by more than 99.9% from the starting commit. Wall-clock time is not
 an acceptance metric.
 
+UAT follow-up uses natural cursor targets away from the pantograph input's fixed-radius manifold.
+The three samples accept at `(392,382)`, `(1407,1391)` and `(356,348)`, totaling `(2155,2121)`
+instead of the reproduced `(120210,118679)`. Every pointer sample is also independently capped at
+2,048 factorizations and nonlinear iterations. A difficult twin-roller target rejects at bounded
+work while retaining its last valid preview, and a subsequent valid target resumes the same
+continuation chain.
+
 ## Direct acceptance coverage
 
 - accepted preview continuation, base provenance and exact final commit;
 - stale, foreign, provenance-mismatched, nonaccepted and point-mismatched preview rejection;
 - atomic no-mutation failure behavior;
 - twin-roller independence plus rejection/recovery continuation;
+- both circle circumferences resolving to their own semantic center gesture without pointer jump;
+- difficult roller projection bounded before valid continuation recovery;
 - Scotch-yoke two-DOF, scissor, tower and pantograph work corpus;
+- natural off-manifold pantograph input motion with accepted bounded work;
 - zero-like Temporary row-space protection and bounded nonlinear rank-deficient work;
+- positive Temporary scalar-level preservation without recursive reoptimization;
 - tiny nonzero secondary objectives and sparse/dense backend parity;
 - bounded branch ghost, exact stamps, persistent branch publication, stale rejection,
   Undo/Redo and replay;
@@ -111,6 +130,9 @@ nix-shell shell.nix --run 'cargo test -p geosolve-sketch --test m12'
 nix-shell shell.nix --run 'cargo test -p geosolve-sketch --test m30'
 nix-shell shell.nix --run 'cargo test -p geosolve-core --test m5_priority'
 nix-shell shell.nix --run 'cargo test -p geosolve-core --test m16'
+nix-shell shell.nix --run 'cargo test -p geosolve-constraint-editor off_manifold_pantograph_cursor_path_is_accepted_with_bounded_work'
+nix-shell shell.nix --run 'cargo test -p geosolve-constraint-editor difficult_twin_roller_projection_is_bounded_and_recovery_retains_continuation'
+nix-shell shell.nix --run 'cargo test -p geosolve-constraint-editor circle_circumferences_drag_their_semantic_centers_without_pointer_jump'
 nix-shell shell.nix --run 'cargo test -p geosolve-constraint-editor deterministic_mechanism_drag_corpus_has_one_attempt_per_sample'
 nix-shell shell.nix --run 'cargo fmt --all -- --check'
 nix-shell shell.nix --run 'cargo clippy --locked --workspace --all-targets --all-features -- -D warnings'
@@ -125,6 +147,8 @@ Hard+Temporary machine-roundoff envelope at `1e-6`, `1` and `1e6`. The complete 
 suite proves that Temporary-only offset, mirror and fillet drags retain their established
 associated-motion behavior. The frozen mechanism corpus retains `(17,17)`, `(18,18)`, `(24,24)`
 and `(33,21)` work evidence.
+The same complete format, warnings-denied Clippy, locked all-feature workspace, WASM and release
+Trunk gates pass after `M65-F001`/`M65-F002` at code source `eee2134`.
 
 ## Known limitations and next blocker
 

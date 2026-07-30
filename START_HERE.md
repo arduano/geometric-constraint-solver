@@ -96,6 +96,10 @@ M65 replaces that first generic stabilization cut with accepted-preview continua
 retained attempt per pointer sample, deterministic work/rejection evidence and an explicit bounded
 ghost/accept assembly-branch workflow. Implementation and mechanical qualification are complete;
 focused human UAT remains open.
+UAT follow-ups `M65-F001` and `M65-F002` remove recursive positive-Temporary Preference
+reoptimization, bound every projected pointer sample and make circle circumferences semantic
+center drag handles. Focused regressions pass; complete requalification and human retest remain
+open.
 M62 follow-up `M62-F001` corrects accepted-state line-angle seeding and exposes acute-degree
 presentation while retaining the explicit directed-radian solver branch.
 Follow-up `M62-F002` gives canvas pointer-down exclusive ownership of canvas authoring picks,

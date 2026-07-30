@@ -2,7 +2,7 @@
 
 Status: mechanically qualified candidate available; supervising-human approval pending.
 
-Candidate code source: `81ba31c` (with numerical and sketch prerequisites in its ancestry).
+Candidate code source: `eee2134` (with positive-Temporary prerequisite `fc88264`).
 
 Tailscale endpoint: `http://100.94.63.83:8080/`
 
@@ -27,7 +27,8 @@ Result: Pending.
 ### M65-U2 — pantograph interaction work
 
 1. Open **Mechanisms → Pantograph linkage · 2 DOF**.
-2. Drag **Pantograph input A** through several short arcs.
+2. Drag **Pantograph input A** through several short arcs, including natural cursor motion away
+   from its exact fixed-radius path.
 3. Drag the independent guide arm and then alternate between both controls.
 
 Expected: the preview remains responsive and locally continuous. The prior multi-second/tab-lock
@@ -38,7 +39,7 @@ Result: Pending.
 ### M65-U3 — independent twin rollers and rejection recovery
 
 1. Open **Mechanisms → Twin-roller cam · 2 DOF**.
-2. Move one roller while watching the other.
+2. Drag either roller by its visible circumference while watching the other.
 3. Push toward an invalid or difficult position, then return to a nearby valid position.
 
 Expected: moving one roller does not reposition the other. Failure retains the last valid preview,
@@ -84,8 +85,31 @@ Result: Pending.
 
 ## Finding ledger
 
-No human findings recorded yet. New findings use IDs `M65-F001`, `M65-F002`, and so on, with the
-reproduction, owner, disposition, direct regression and human retest recorded here.
+### M65-F001 — natural pantograph input motion could still lock the tab
+
+- Reproduction: drag the input/corner point away from its exact fixed-radius manifold.
+- Root cause: positive-cost Temporary projection was followed by recursively rerunning the full
+  Temporary optimizer for every lower Preference line-search and curvature trial.
+- Disposition: fixed in the core hierarchy by direct scalar Temporary-level retraction, with the
+  independently attained state retained when no strict lower-priority move exists.
+- Direct regression: three natural off-manifold samples accept in one attempt at total
+  `(2155,2121)` factorization/nonlinear work versus reproduced `(120210,118679)`, and every
+  pointer sample has an independent 2,048/2,048 ceiling.
+- Human retest: Pending under M65-U2.
+
+### M65-F002 — twin rollers appeared immovable and a difficult drag could freeze
+
+- Reproduction: press a roller circumference rather than its small center point, then drag toward
+  a difficult cam location.
+- Root cause: curve selection did not own a point gesture, so the circumference was selectable but
+  inert; projected pointer work was also unlimited.
+- Disposition: circles publish their semantic center as a headless drag handle, gestures preserve
+  the initial pointer-to-center offset, and ordinary projected samples use deterministic work
+  limits. A rejected difficult sample retains its last valid preview and the next valid sample
+  resumes continuation.
+- Direct regression: both circle circumferences request movement of their own center without a
+  pointer jump; difficult twin-roller rejection and valid recovery are bounded and transactional.
+- Human retest: Pending under M65-U3.
 
 ## Approval
 

@@ -1874,6 +1874,14 @@ Starting commit `927efb7` required pantograph `(244824,240953)`. The twin-roller
 proves that dragging one roller does not move the other, that a rejected sample retains the last
 valid preview, and that a later valid sample continues from it.
 
+`M65-F001` adds three natural cursor samples away from the pantograph input's exact fixed-radius
+path. They accept at total `(2155,2121)` factorization/nonlinear work instead of the reproduced
+`(120210,118679)`. `M65-F002` makes each twin-roller circumference a semantic handle for its own
+center, preserves the initial pointer offset, caps each projected sample at 2,048 factorizations
+and nonlinear iterations, and directly checks bounded difficult-target rejection followed by
+valid continuation recovery. These are generic headless editor/solver contracts, not sample-key
+special cases.
+
 Two additional ordinary editable leaves exercise explicit assembly branches:
 
 - `locked-elbow-branches`: two fixed endpoints and two fixed link lengths leave a discrete
