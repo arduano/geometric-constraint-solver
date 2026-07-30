@@ -1,10 +1,13 @@
 # M65 focused UAT
 
-Status: candidate preparation in progress; supervising-human approval pending.
+Status: mechanically qualified candidate available; supervising-human approval pending.
 
-Use the ordinary workbench at the Tailscale endpoint recorded by the agent. This is a focused
-human usability/behavior check after direct native, WASM and release qualification. It is not a
-replacement for those tests.
+Candidate code source: `81ba31c` (with numerical and sketch prerequisites in its ancestry).
+
+Tailscale endpoint: `http://100.94.63.83:8080/`
+
+Use the ordinary workbench at that endpoint. This is a focused human usability/behavior check
+after direct native, WASM and release qualification. It is not a replacement for those tests.
 
 ## UAT scorecard
 
