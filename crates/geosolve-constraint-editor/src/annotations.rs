@@ -673,7 +673,7 @@ fn curve_relation<const N: usize>(
         spans.iter().copied().map(SelectionItem::Curve).collect(),
         spans
             .iter()
-            .filter_map(|span| curve_anchor(curves, *span))
+            .filter_map(|span| line_relation_anchor(curves, *span))
             .collect(),
     )
 }
@@ -791,6 +791,11 @@ fn curve_anchor(curves: &[SceneCurve], span: CurveSpan) -> Option<ScreenPoint> {
         .screen_polyline
         .get(curve.screen_polyline.len().saturating_sub(1) / 2)
         .copied()
+}
+
+fn line_relation_anchor(curves: &[SceneCurve], span: CurveSpan) -> Option<ScreenPoint> {
+    let [start, end] = curve_endpoints(curves, span)?;
+    Some(midpoint(start, end))
 }
 
 fn curve_endpoints(curves: &[SceneCurve], span: CurveSpan) -> Option<[ScreenPoint; 2]> {

@@ -3356,6 +3356,25 @@ mod tests {
             panic!("parallel relation must render glyph markers");
         };
         assert_eq!(markers.len(), 2);
+        for (line, marker) in lines.iter().zip(markers) {
+            let curve = scene
+                .curves
+                .iter()
+                .find(|curve| curve.span == *line)
+                .expect("parallel line geometry");
+            let start = *curve.screen_polyline.first().expect("line start");
+            let end = *curve.screen_polyline.last().expect("line end");
+            assert_eq!(
+                marker.anchor,
+                ScreenPoint {
+                    x: (start.x + end.x) * 0.5,
+                    y: (start.y + end.y) * 0.5,
+                }
+            );
+            assert_ne!(marker.anchor, start);
+            assert_ne!(marker.anchor, end);
+            assert_eq!(marker.leader_from, None);
+        }
 
         let mut editor = ConstraintEditor::default();
         editor.set_selection([SelectionItem::Curve(lines[0])]);
