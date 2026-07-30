@@ -166,6 +166,11 @@ pub struct SceneCurve {
     pub screen_polyline: Vec<ScreenPoint>,
     /// Curve parameters paired one-to-one with [`Self::screen_polyline`].
     pub screen_parameters: Vec<f64>,
+    /// Optional semantic point moved when this visible curve is dragged.
+    ///
+    /// Selection remains curve-based. The handle only defines gesture ownership,
+    /// so presentation adapters do not need to infer a circle's center.
+    pub drag_handle_point: Option<DesignPointId>,
 }
 
 /// Deterministic presentation-neutral scene derived from one accepted revision.
@@ -286,6 +291,10 @@ impl EditorScene {
                         span,
                         screen_polyline,
                         screen_parameters,
+                        drag_handle_point: match &curve.definition {
+                            CurveDefinition::Circle { center, .. } => Some(*center),
+                            _ => None,
+                        },
                     });
                 }
             }
@@ -347,6 +356,18 @@ impl EditorScene {
                 })
             })
             .min_by(compare_hits)
+    }
+
+    fn drag_handle_point(&self, item: SelectionItem) -> Option<DesignPointId> {
+        match item {
+            SelectionItem::Point(point) => Some(point),
+            SelectionItem::Curve(span) => self
+                .curves
+                .iter()
+                .find(|curve| curve.span == span)
+                .and_then(|curve| curve.drag_handle_point),
+            SelectionItem::Constraint(_) | SelectionItem::Dimension(_) => None,
+        }
     }
 
     /// Returns the nearest visible annotation hit, preserving persistent identity.
@@ -1230,6 +1251,7 @@ struct PointGesture {
     pointer_id: u64,
     point: DesignPointId,
     origin: ScreenPoint,
+    model_offset: [f64; 2],
     moved: bool,
     latest_request: Option<u64>,
 }
@@ -1547,13 +1569,23 @@ impl ConstraintEditor {
                     self.curve_pick_parameters.push((span, parameter));
                 }
             }
-            if let SelectionItem::Point(point) = hit.item
+            if let Some(point) = scene.drag_handle_point(hit.item)
                 && self.selection.contains(&hit.item)
+                && let Some(point_position) = scene
+                    .points
+                    .iter()
+                    .find(|candidate| candidate.id == point)
+                    .map(|candidate| candidate.model_position)
             {
+                let pointer_position = scene.viewport.screen_to_model(input.position);
                 self.point_gesture = Some(PointGesture {
                     pointer_id: input.pointer_id,
                     point,
                     origin: input.position,
+                    model_offset: [
+                        point_position[0] - pointer_position[0],
+                        point_position[1] - pointer_position[1],
+                    ],
                     moved: false,
                     latest_request: None,
                 });
@@ -1634,11 +1666,15 @@ impl ConstraintEditor {
         self.next_projection_request = next_request;
         gesture.latest_request = Some(request_id);
         self.point_gesture = Some(gesture);
+        let pointer_position = scene.viewport.screen_to_model(input.position);
         vec![EditorEffect::RequestProjectedPointMove {
             pointer_id: input.pointer_id,
             request_id,
             point: gesture.point,
-            model_position: scene.viewport.screen_to_model(input.position),
+            model_position: [
+                pointer_position[0] + gesture.model_offset[0],
+                pointer_position[1] + gesture.model_offset[1],
+            ],
         }]
     }
 
@@ -3968,6 +4004,101 @@ mod tests {
             ),
             Vec::new()
         );
+    }
+
+    #[test]
+    fn circle_circumferences_drag_their_semantic_centers_without_pointer_jump() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let centers = [
+            document.add_point("left", [-3.0, 0.0]).expect("left"),
+            document.add_point("right", [3.0, 0.0]).expect("right"),
+        ];
+        let radii = [
+            document
+                .add_scalar(
+                    "left radius",
+                    1.0,
+                    ScalarUnit::Length,
+                    ScalarDomain::Positive,
+                )
+                .expect("radius"),
+            document
+                .add_scalar(
+                    "right radius",
+                    1.0,
+                    ScalarUnit::Length,
+                    ScalarDomain::Positive,
+                )
+                .expect("radius"),
+        ];
+        let circles = [
+            document
+                .add_curve(
+                    "left roller",
+                    CurveDefinition::Circle {
+                        center: centers[0],
+                        radius: radii[0],
+                    },
+                )
+                .expect("circle"),
+            document
+                .add_curve(
+                    "right roller",
+                    CurveDefinition::Circle {
+                        center: centers[1],
+                        radius: radii[1],
+                    },
+                )
+                .expect("circle"),
+        ];
+        let scene = scene(&document);
+
+        for (index, ((center, circle), center_position)) in centers
+            .into_iter()
+            .zip(circles)
+            .zip([[-3.0, 0.0], [3.0, 0.0]])
+            .enumerate()
+        {
+            let circumference = scene
+                .viewport
+                .model_to_screen([center_position[0] + 1.0, center_position[1]]);
+            let moved = ScreenPoint {
+                x: circumference.x + 10.0,
+                y: circumference.y - 5.0,
+            };
+            let pointer_id = u64::try_from(index + 1).expect("pointer");
+            let mut editor = ConstraintEditor::default();
+            let down = editor.pointer_down(
+                &scene,
+                pointer(
+                    pointer_id,
+                    circumference.x,
+                    circumference.y,
+                    Modifiers::default(),
+                ),
+            );
+            assert_eq!(
+                down,
+                vec![EditorEffect::SelectionChanged(vec![SelectionItem::Curve(
+                    CurveSpan {
+                        curve: circle,
+                        segment: 0,
+                    }
+                )])]
+            );
+            assert_eq!(
+                editor.pointer_move(
+                    &scene,
+                    pointer(pointer_id, moved.x, moved.y, Modifiers::default())
+                ),
+                vec![EditorEffect::RequestProjectedPointMove {
+                    pointer_id,
+                    request_id: 0,
+                    point: center,
+                    model_position: [center_position[0] + 0.2, center_position[1] + 0.1],
+                }]
+            );
+        }
     }
 
     #[test]

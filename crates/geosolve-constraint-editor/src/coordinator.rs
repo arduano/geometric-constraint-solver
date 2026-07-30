@@ -30,6 +30,20 @@ use crate::{
     SelectionItem,
 };
 
+const PROJECTED_DRAG_MAX_NONLINEAR_ITERATIONS: usize = 2_048;
+const PROJECTED_DRAG_MAX_FACTORIZATIONS: usize = 2_048;
+const PROJECTED_DRAG_MAX_REJECTED_TRIALS: usize = 4_096;
+const PROJECTED_DRAG_MAX_COMPONENT_LINEARIZATIONS: usize = 8_192;
+
+fn projected_drag_control() -> OperationControl {
+    let mut control = OperationControl::unlimited();
+    control.limits.nonlinear_iterations = PROJECTED_DRAG_MAX_NONLINEAR_ITERATIONS;
+    control.limits.factorizations = PROJECTED_DRAG_MAX_FACTORIZATIONS;
+    control.limits.rejected_trials = PROJECTED_DRAG_MAX_REJECTED_TRIALS;
+    control.limits.component_linearizations = PROJECTED_DRAG_MAX_COMPONENT_LINEARIZATIONS;
+    control
+}
+
 /// Opaque, application-persistable restore material for one history position.
 #[derive(Clone, Debug)]
 pub struct RestoreCheckpoint {
@@ -921,13 +935,13 @@ impl RetainedEditorCoordinator {
                 candidate.design_identity(),
                 request,
                 preview,
-                OperationControl::unlimited(),
+                projected_drag_control(),
             )
         } else {
             candidate.reattempt_controlled(
                 candidate.design_identity(),
                 request,
-                OperationControl::unlimited(),
+                projected_drag_control(),
             )
         };
         let mut rejection_stage = None;
@@ -7100,6 +7114,108 @@ mod tests {
             "pantograph work {pantograph_work:?} did not improve by at least 90% from the \
              starting-commit baseline (244824 factorizations, 240953 iterations)"
         );
+    }
+
+    #[test]
+    fn off_manifold_pantograph_cursor_path_is_accepted_with_bounded_work() {
+        let fixture = alpha_scenario(AlphaScenarioKind::MotionPantograph, 1.0).unwrap();
+        let AlphaScenarioIds::MotionPantograph(ids) = fixture.ids else {
+            unreachable!()
+        };
+        let mut coordinator = RetainedEditorCoordinator::new(
+            RetainedSketchDocumentSession::new(
+                fixture.document,
+                fixture.request,
+                SolverConfig::default(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let mut total_factorizations = 0;
+        let mut total_iterations = 0;
+        for (index, target) in [[4.0, 2.0], [3.8, 2.2], [3.6, 2.4]].into_iter().enumerate() {
+            let _ = coordinator.resolve_projected_point_move(
+                92,
+                u64::try_from(index + 1).unwrap(),
+                ids.input,
+                target,
+            );
+            let work = coordinator.projected_drag_work_evidence().unwrap();
+            assert_eq!(work.attempts, 1);
+            assert!(work.accepted, "{work:#?}");
+            assert!(
+                work.operation.consumed.factorizations <= PROJECTED_DRAG_MAX_FACTORIZATIONS
+                    && work.operation.consumed.nonlinear_iterations
+                        <= PROJECTED_DRAG_MAX_NONLINEAR_ITERATIONS,
+                "{work:#?}"
+            );
+            total_factorizations += work.operation.consumed.factorizations;
+            total_iterations += work.operation.consumed.nonlinear_iterations;
+        }
+        assert!(total_factorizations <= 3_000, "{total_factorizations}");
+        assert!(total_iterations <= 3_000, "{total_iterations}");
+    }
+
+    #[test]
+    fn difficult_twin_roller_projection_is_bounded_and_recovery_retains_continuation() {
+        fn roller_target(parameter: f64) -> [f64; 2] {
+            let tangent: [f64; 2] = [8.0, 8.0 - 16.0 * parameter];
+            let tangent_norm = tangent[0].hypot(tangent[1]);
+            [
+                -4.0 + 8.0 * parameter - tangent[1] / tangent_norm,
+                8.0 * parameter * (1.0 - parameter) + tangent[0] / tangent_norm,
+            ]
+        }
+
+        let fixture = alpha_scenario(AlphaScenarioKind::MotionCam, 1.0).unwrap();
+        let AlphaScenarioIds::MotionCam(ids) = fixture.ids else {
+            unreachable!()
+        };
+        let mut coordinator = RetainedEditorCoordinator::new(
+            RetainedSketchDocumentSession::new(
+                fixture.document,
+                fixture.request,
+                SolverConfig::default(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        let _ =
+            coordinator.resolve_projected_point_move(93, 1, ids.left_center, roller_target(0.26));
+        let first = *coordinator.projected_drag_work_evidence().unwrap();
+        assert!(first.accepted, "{first:#?}");
+        let retained_preview = coordinator
+            .solved_preview_session()
+            .unwrap()
+            .accepted_state()
+            .unwrap()
+            .identity();
+
+        let _ = coordinator.resolve_projected_point_move(93, 2, ids.left_center, [-2.4, 2.8]);
+        let difficult = *coordinator.projected_drag_work_evidence().unwrap();
+        assert!(!difficult.accepted, "{difficult:#?}");
+        assert!(
+            difficult.operation.consumed.factorizations <= PROJECTED_DRAG_MAX_FACTORIZATIONS
+                && difficult.operation.consumed.nonlinear_iterations
+                    <= PROJECTED_DRAG_MAX_NONLINEAR_ITERATIONS,
+            "{difficult:#?}"
+        );
+        assert_eq!(
+            coordinator
+                .solved_preview_session()
+                .unwrap()
+                .accepted_state()
+                .unwrap()
+                .identity(),
+            retained_preview
+        );
+
+        let _ =
+            coordinator.resolve_projected_point_move(93, 3, ids.left_center, roller_target(0.28));
+        let recovered = *coordinator.projected_drag_work_evidence().unwrap();
+        assert!(recovered.accepted, "{recovered:#?}");
+        assert!(recovered.continued);
     }
 
     #[test]
