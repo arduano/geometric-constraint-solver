@@ -12,6 +12,8 @@ use geosolve_sketch::{
 };
 use geosolve_sketch_topology::{TopologyCompleteness, TopologyRequest, TopologySnapshot};
 
+use super::icons::TreeIconKind;
+
 pub(crate) fn production_topology_markup(session: &RetainedSketchDocumentSession) -> String {
     let snapshot = match TopologySnapshot::capture(session) {
         Ok(snapshot) => snapshot,
@@ -197,6 +199,7 @@ pub(crate) fn tree_markup_with_pending(
             &point.id.to_string(),
             None,
             &point.label,
+            TreeIconKind::Point,
             selection.contains(&SelectionItem::Point(point.id)),
             pending.contains(&SelectionItem::Point(point.id)),
             "",
@@ -211,6 +214,7 @@ pub(crate) fn tree_markup_with_pending(
                     &span.curve.to_string(),
                     Some(span.segment),
                     &curve.label,
+                    TreeIconKind::Curve,
                     selection.contains(&SelectionItem::Curve(span)),
                     pending.contains(&SelectionItem::Curve(span)),
                     match document.geometry_role(curve.id) {
@@ -228,6 +232,7 @@ pub(crate) fn tree_markup_with_pending(
             &constraint.id.to_string(),
             None,
             &constraint.label,
+            TreeIconKind::Constraint,
             selection.contains(&SelectionItem::Constraint(constraint.id)),
             pending.contains(&SelectionItem::Constraint(constraint.id)),
             "",
@@ -240,6 +245,7 @@ pub(crate) fn tree_markup_with_pending(
             &dimension.id.to_string(),
             None,
             &dimension.label,
+            TreeIconKind::Dimension,
             selection.contains(&SelectionItem::Dimension(dimension.id)),
             pending.contains(&SelectionItem::Dimension(dimension.id)),
             match dimension.mode {
@@ -258,10 +264,11 @@ pub(crate) fn tree_markup_with_pending(
             .map_or_else(|| "none".to_owned(), |value| short_digest(value.bytes()));
         let _ = write!(
             output,
-            "<div class=\"wb-tree-row wb-tree-external\" role=\"treeitem\" data-external-binding=\"{}\" data-external-kind=\"{:?}\" data-external-topology=\"{}\"><span class=\"wb-tree-icon\"></span>{}</div>",
+            "<div class=\"wb-tree-row wb-tree-external\" role=\"treeitem\" data-external-binding=\"{}\" data-external-kind=\"{:?}\" data-external-topology=\"{}\"><span class=\"wb-tree-icon\">{}</span>{}</div>",
             binding.id,
             binding.expected_kind,
             topology,
+            super::icons::tree_icon_markup(TreeIconKind::External),
             escape(&binding.label),
         );
     }
@@ -281,6 +288,7 @@ fn row(
     id: &str,
     segment: Option<u32>,
     label: &str,
+    icon_kind: TreeIconKind,
     selected: bool,
     pending: bool,
     extra: &str,
@@ -291,10 +299,11 @@ fn row(
     });
     let _ = write!(
         output,
-        "<button class=\"wb-tree-row{}{}\" role=\"treeitem\" aria-selected=\"{}\" data-editor-item=\"{kind}\" data-persistent-id=\"{id}\"{segment}{extra}><span class=\"wb-tree-icon\"></span>{label}</button>",
+        "<button class=\"wb-tree-row{}{}\" role=\"treeitem\" aria-selected=\"{}\" data-editor-item=\"{kind}\" data-persistent-id=\"{id}\"{segment}{extra}><span class=\"wb-tree-icon\">{}</span>{label}</button>",
         if selected { " selected" } else { "" },
         if pending { " authoring-pending" } else { "" },
         if selected { "true" } else { "false" },
+        super::icons::tree_icon_markup(icon_kind),
     );
 }
 
@@ -925,6 +934,9 @@ mod tests {
         assert!(markup.contains("aria-selected=\"true\""));
         assert!(markup.contains(&format!("data-persistent-id=\"{point}\"")));
         assert!(markup.contains("A &lt; origin"));
+        assert!(markup.contains("class=\"wb-tree-symbol\""));
+        assert!(markup.contains("data-tree-icon=\"point\""));
+        assert!(!markup.contains("<span class=\"wb-tree-icon\"></span>"));
         let pending = tree_markup_with_pending(&document, &[], &[SelectionItem::Point(point)]);
         assert!(pending.contains("wb-tree-row authoring-pending"));
         assert!(pending.contains("aria-selected=\"false\""));

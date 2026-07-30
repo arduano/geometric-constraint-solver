@@ -841,7 +841,7 @@ fn problem_marker(
         concat!(
             "<g class=\"wb-error-marker{}\" transform=\"translate({:.3} {:.3})\" ",
             "tabindex=\"0\" role=\"img\" aria-label=\"{}\" data-problem-marker=\"{}\">",
-            "<circle r=\"10\"/><text class=\"wb-error-marker-icon\" x=\"0\" y=\"4\">!</text>",
+            "<circle r=\"10\"/>{}",
             "<foreignObject class=\"wb-error-tooltip\" x=\"{}\" y=\"{}\" width=\"360\" height=\"72\">",
             "<div xmlns=\"http://www.w3.org/1999/xhtml\">{}</div></foreignObject></g>"
         ),
@@ -850,6 +850,7 @@ fn problem_marker(
         anchor.y,
         message,
         target_key,
+        super::icons::PROBLEM_ICON,
         tooltip_x,
         tooltip_y,
         message,
@@ -1756,6 +1757,8 @@ mod tests {
         assert!(markup.contains(&format!("data-problem-marker=\"point:{first}\"")));
         assert!(markup.contains(&format!("data-problem-marker=\"point:{second}\"")));
         assert!(markup.contains("tabindex=\"0\" role=\"img\" aria-label="));
+        assert!(markup.contains("<path class=\"wb-error-marker-icon\""));
+        assert!(!markup.contains("<text class=\"wb-error-marker-icon\""));
         assert!(markup.contains("class=\"wb-error-tooltip\""));
         assert!(!markup.contains("data-problem-marker=\"global\""));
     }

@@ -3,8 +3,53 @@
 //! Shared vector language for constraint and dimension concepts.
 
 use geosolve_constraint_editor::{
-    AuthoringTool, ConstraintIntent, DimensionKind, SceneConstraintGlyph,
+    AuthoringTool, ConstraintIntent, DimensionKind, EditorTool, SceneConstraintGlyph,
 };
+
+const SELECT: &str = "<path d=\"M-7-8L6 1 0 3 3 9-1 10-4 4-8 8Z\"/><path d=\"M0 3l-4 1\"/>";
+const POINT: &str = "<circle r=\"2\"/><path d=\"M-8 0h4M4 0h4M0-8v4M0 4v4\"/>";
+const LINE: &str = "<path d=\"M-7 6L7-6\"/><circle cx=\"-7\" cy=\"6\" r=\"1.5\"/><circle cx=\"7\" cy=\"-6\" r=\"1.5\"/>";
+const POLYLINE: &str = concat!(
+    "<path d=\"M-8 5L-2-4 3 3 8-6\"/>",
+    "<circle cx=\"-8\" cy=\"5\" r=\"1.3\"/><circle cx=\"-2\" cy=\"-4\" r=\"1.3\"/>",
+    "<circle cx=\"3\" cy=\"3\" r=\"1.3\"/><circle cx=\"8\" cy=\"-6\" r=\"1.3\"/>",
+);
+const RECTANGLE: &str = "<rect x=\"-7\" y=\"-5\" width=\"14\" height=\"10\"/><circle cx=\"-7\" cy=\"5\" r=\"1.2\"/><circle cx=\"7\" cy=\"-5\" r=\"1.2\"/>";
+const CIRCLE: &str = "<circle r=\"7\"/><circle r=\"1.3\"/><path d=\"M0 0L5-5\"/>";
+const ARC: &str = "<path d=\"M-7 5A9 9 0 0 1 7-5\"/><circle cx=\"-7\" cy=\"5\" r=\"1.4\"/><circle cx=\"7\" cy=\"-5\" r=\"1.4\"/>";
+const QUADRATIC_BEZIER: &str = concat!(
+    "<path d=\"M-8 5L0-7 8 5\" stroke-dasharray=\"2 2\"/>",
+    "<path d=\"M-8 5Q0-7 8 5\"/>",
+    "<circle cx=\"-8\" cy=\"5\" r=\"1.2\"/><circle cy=\"-7\" r=\"1.2\"/><circle cx=\"8\" cy=\"5\" r=\"1.2\"/>",
+);
+const CUBIC_BEZIER: &str = concat!(
+    "<path d=\"M-8 5L-3-7M3 7L8-5\" stroke-dasharray=\"2 2\"/>",
+    "<path d=\"M-8 5C-3-7 3 7 8-5\"/>",
+    "<circle cx=\"-8\" cy=\"5\" r=\"1.1\"/><circle cx=\"-3\" cy=\"-7\" r=\"1.1\"/>",
+    "<circle cx=\"3\" cy=\"7\" r=\"1.1\"/><circle cx=\"8\" cy=\"-5\" r=\"1.1\"/>",
+);
+const ELLIPSE: &str = "<ellipse rx=\"8\" ry=\"5\"/><path d=\"M-8 0H8M0-5V5\" stroke-dasharray=\"2 2\"/><circle r=\"1.2\"/>";
+const ELLIPTICAL_ARC: &str = concat!(
+    "<path d=\"M-8 2A8 5 0 0 1 6-4\"/>",
+    "<path d=\"M-8 2H0V-5\" stroke-dasharray=\"2 2\"/>",
+    "<circle cx=\"-8\" cy=\"2\" r=\"1.3\"/><circle cx=\"6\" cy=\"-4\" r=\"1.3\"/>",
+);
+const RATIONAL_CONIC: &str = concat!(
+    "<path d=\"M-8 5L0-7 8 5\" stroke-dasharray=\"2 2\"/>",
+    "<path d=\"M-8 5Q0-4 8 5\"/>",
+    "<path d=\"M0-9L2-7 0-5-2-7Z\"/>",
+);
+const PARABOLA: &str = "<path d=\"M-8-5Q0 9 8-5\"/><path d=\"M0-8V5\" stroke-dasharray=\"2 2\"/><circle cy=\"1\" r=\"1.3\"/>";
+const HYPERBOLA: &str = concat!(
+    "<path d=\"M-8-7Q-2 0-4 7M8-7Q2 0 4 7\"/>",
+    "<path d=\"M-8 8L8-8M-8-8L8 8\" stroke-dasharray=\"2 2\"/>",
+);
+const NURBS: &str = concat!(
+    "<path d=\"M-9 5L-5-6 0-2 5 6 9-5\" stroke-dasharray=\"2 2\"/>",
+    "<path d=\"M-9 5C-6-7-1-5 0-2S6 7 9-5\"/>",
+    "<circle cx=\"-9\" cy=\"5\" r=\"1\"/><circle cx=\"-5\" cy=\"-6\" r=\"1\"/>",
+    "<circle cy=\"-2\" r=\"1\"/><circle cx=\"5\" cy=\"6\" r=\"1\"/><circle cx=\"9\" cy=\"-5\" r=\"1\"/>",
+);
 
 const FIXED: &str = concat!(
     "<rect x=\"-5.5\" y=\"-1\" width=\"11\" height=\"8\" rx=\"1.5\"/>",
@@ -77,6 +122,105 @@ const ANGLE: &str = concat!(
     "<path d=\"M-8 6H7M-8 6L3-6M-3 6A5 5 0 0 1 0-1\"/>",
     "<path d=\"M-1-1H3v4\"/>",
 );
+
+pub(crate) const GEOMETRY_TOOLS: [(&str, EditorTool); 15] = [
+    ("select", EditorTool::Select),
+    ("point", EditorTool::Point),
+    ("line", EditorTool::Line),
+    ("polyline", EditorTool::Polyline),
+    ("rectangle", EditorTool::Rectangle),
+    ("circle", EditorTool::Circle),
+    ("arc", EditorTool::CounterClockwiseArc),
+    ("quadratic-bezier", EditorTool::QuadraticBezier),
+    ("cubic-bezier", EditorTool::CubicBezier),
+    ("ellipse", EditorTool::Ellipse),
+    ("elliptical-arc", EditorTool::EllipticalArc),
+    ("rational-conic", EditorTool::RationalQuadraticConic),
+    ("parabola", EditorTool::Parabola),
+    ("hyperbola", EditorTool::Hyperbola),
+    ("nurbs", EditorTool::Nurbs),
+];
+
+pub(crate) const fn geometry_tool_key(tool: EditorTool) -> &'static str {
+    match tool {
+        EditorTool::Select => "select",
+        EditorTool::Point => "point",
+        EditorTool::Line => "line",
+        EditorTool::Polyline => "polyline",
+        EditorTool::Rectangle => "rectangle",
+        EditorTool::Circle => "circle",
+        EditorTool::CounterClockwiseArc => "arc",
+        EditorTool::QuadraticBezier => "quadratic-bezier",
+        EditorTool::CubicBezier => "cubic-bezier",
+        EditorTool::Ellipse => "ellipse",
+        EditorTool::EllipticalArc => "elliptical-arc",
+        EditorTool::RationalQuadraticConic => "rational-conic",
+        EditorTool::Parabola => "parabola",
+        EditorTool::Hyperbola => "hyperbola",
+        EditorTool::Nurbs => "nurbs",
+    }
+}
+
+const fn geometry_tool_fragment(tool: EditorTool) -> &'static str {
+    match tool {
+        EditorTool::Select => SELECT,
+        EditorTool::Point => POINT,
+        EditorTool::Line => LINE,
+        EditorTool::Polyline => POLYLINE,
+        EditorTool::Rectangle => RECTANGLE,
+        EditorTool::Circle => CIRCLE,
+        EditorTool::CounterClockwiseArc => ARC,
+        EditorTool::QuadraticBezier => QUADRATIC_BEZIER,
+        EditorTool::CubicBezier => CUBIC_BEZIER,
+        EditorTool::Ellipse => ELLIPSE,
+        EditorTool::EllipticalArc => ELLIPTICAL_ARC,
+        EditorTool::RationalQuadraticConic => RATIONAL_CONIC,
+        EditorTool::Parabola => PARABOLA,
+        EditorTool::Hyperbola => HYPERBOLA,
+        EditorTool::Nurbs => NURBS,
+    }
+}
+
+pub(crate) fn geometry_tool_icon_markup(tool: EditorTool) -> String {
+    let key = geometry_tool_key(tool);
+    let fragment = geometry_tool_fragment(tool);
+    format!(
+        "<svg class=\"wb-palette-icon\" viewBox=\"-10 -10 20 20\" aria-hidden=\"true\" focusable=\"false\" data-icon-key=\"geometry-{key}\">{fragment}</svg>"
+    )
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum TreeIconKind {
+    Point,
+    Curve,
+    Constraint,
+    Dimension,
+    External,
+}
+
+pub(crate) fn tree_icon_markup(kind: TreeIconKind) -> String {
+    let (key, fragment) = match kind {
+        TreeIconKind::Point => ("point", POINT),
+        TreeIconKind::Curve => (
+            "curve",
+            "<path d=\"M-8 4Q0-6 8 2\"/><circle cx=\"-8\" cy=\"4\" r=\"1.2\"/><circle cx=\"8\" cy=\"2\" r=\"1.2\"/>",
+        ),
+        TreeIconKind::Constraint => (
+            "constraint",
+            "<circle cx=\"-5\" r=\"2.3\"/><circle cx=\"5\" r=\"2.3\"/><path d=\"M-2.7 0H2.7\"/>",
+        ),
+        TreeIconKind::Dimension => ("dimension", POINT_DISTANCE),
+        TreeIconKind::External => (
+            "external",
+            "<rect x=\"-7\" y=\"-6\" width=\"11\" height=\"12\" stroke-dasharray=\"2 2\"/><path d=\"M-1 0H8M5-3L8 0 5 3\"/>",
+        ),
+    };
+    format!(
+        "<svg class=\"wb-tree-symbol\" viewBox=\"-10 -10 20 20\" aria-hidden=\"true\" focusable=\"false\" data-tree-icon=\"{key}\">{fragment}</svg>"
+    )
+}
+
+pub(crate) const PROBLEM_ICON: &str = "<path class=\"wb-error-marker-icon\" d=\"M0-6V1M0 5v.2\"/>";
 
 pub(crate) const fn constraint_icon_key(glyph: SceneConstraintGlyph) -> &'static str {
     match glyph {
@@ -167,10 +311,61 @@ mod tests {
     use std::collections::HashSet;
 
     use geosolve_constraint_editor::{
-        AuthoringTool, ConstraintIntent, DimensionKind, SceneConstraintGlyph,
+        AuthoringTool, ConstraintIntent, DimensionKind, EditorTool, SceneConstraintGlyph,
     };
 
-    use super::{authoring_icon_markup, constraint_icon_fragment, constraint_icon_key};
+    use super::{
+        GEOMETRY_TOOLS, TreeIconKind, authoring_icon_markup, constraint_icon_fragment,
+        constraint_icon_key, geometry_tool_icon_markup, geometry_tool_key, tree_icon_markup,
+    };
+
+    #[test]
+    fn every_geometry_tool_has_a_distinct_text_free_vector_symbol() {
+        assert_eq!(GEOMETRY_TOOLS.len(), 15);
+        assert_eq!(
+            GEOMETRY_TOOLS
+                .iter()
+                .map(|(key, _)| *key)
+                .collect::<HashSet<_>>()
+                .len(),
+            GEOMETRY_TOOLS.len()
+        );
+        let markup = GEOMETRY_TOOLS
+            .iter()
+            .map(|(key, tool)| {
+                assert_eq!(*key, geometry_tool_key(*tool));
+                geometry_tool_icon_markup(*tool)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(markup.iter().collect::<HashSet<_>>().len(), markup.len());
+        for icon in markup {
+            assert!(icon.starts_with("<svg class=\"wb-palette-icon\""));
+            assert!(icon.contains("data-icon-key=\"geometry-"));
+            assert!(icon.contains("viewBox=\"-10 -10 20 20\""));
+            assert!(icon.contains("aria-hidden=\"true\""));
+            assert!(!icon.contains("<text"));
+        }
+        assert_eq!(geometry_tool_key(EditorTool::Nurbs), "nurbs");
+    }
+
+    #[test]
+    fn tree_object_categories_have_distinct_text_free_vector_symbols() {
+        let markup = [
+            TreeIconKind::Point,
+            TreeIconKind::Curve,
+            TreeIconKind::Constraint,
+            TreeIconKind::Dimension,
+            TreeIconKind::External,
+        ]
+        .map(tree_icon_markup);
+        assert_eq!(markup.iter().collect::<HashSet<_>>().len(), markup.len());
+        for icon in markup {
+            assert!(icon.starts_with("<svg class=\"wb-tree-symbol\""));
+            assert!(icon.contains("data-tree-icon=\""));
+            assert!(icon.contains("aria-hidden=\"true\""));
+            assert!(!icon.contains("<text"));
+        }
+    }
 
     #[test]
     fn every_canvas_constraint_has_a_distinct_text_free_vector_symbol() {

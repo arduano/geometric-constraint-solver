@@ -186,7 +186,7 @@ pub(crate) mod wasm {
             notice,
             problems_open: false,
         }));
-        install_authoring_icons(document)?;
+        install_palette_icons(document)?;
         render(document, &workbench)?;
         install_clicks(document, &workbench)?;
         install_scenario_flyout_state(document)?;
@@ -195,7 +195,17 @@ pub(crate) mod wasm {
         Ok(())
     }
 
-    fn install_authoring_icons(document: &Document) -> Result<(), JsValue> {
+    fn install_palette_icons(document: &Document) -> Result<(), JsValue> {
+        for (key, tool) in super::icons::GEOMETRY_TOOLS {
+            let Some(button) = document.query_selector(&format!("[data-wb-tool=\"{key}\"]"))?
+            else {
+                continue;
+            };
+            let Some(icon) = button.query_selector(".wb-geometry-icon")? else {
+                continue;
+            };
+            icon.set_inner_html(&super::icons::geometry_tool_icon_markup(tool));
+        }
         for (key, _, intent) in super::action_surface::CONSTRAINT_ACTIONS {
             install_authoring_icon(document, key, AuthoringTool::Constraint(intent))?;
         }
@@ -360,7 +370,7 @@ pub(crate) mod wasm {
                 wb.authoring.deactivate();
                 let effects = wb.coordinator.editor_mut().activate_tool(tool);
                 dispatch_effects(&mut wb, effects);
-                wb.notice = format!("{} tool active", tool_key(tool));
+                wb.notice = format!("{} tool active", super::icons::geometry_tool_key(tool));
             } else if let Some(tool) = target
                 .get_attribute("data-wb-authoring")
                 .and_then(|key| super::action_surface::authoring_tool_from_key(&key))
@@ -1639,26 +1649,8 @@ pub(crate) mod wasm {
         } else {
             required(document, "wb-guide-finish")?.remove_attribute("hidden")?;
         }
-        for tool in [
-            EditorTool::Select,
-            EditorTool::Point,
-            EditorTool::Line,
-            EditorTool::Polyline,
-            EditorTool::Rectangle,
-            EditorTool::Circle,
-            EditorTool::CounterClockwiseArc,
-            EditorTool::QuadraticBezier,
-            EditorTool::CubicBezier,
-            EditorTool::Ellipse,
-            EditorTool::EllipticalArc,
-            EditorTool::RationalQuadraticConic,
-            EditorTool::Parabola,
-            EditorTool::Hyperbola,
-            EditorTool::Nurbs,
-        ] {
-            if let Some(button) =
-                document.query_selector(&format!("[data-wb-tool=\"{}\"]", tool_key(tool)))?
-            {
+        for (key, tool) in super::icons::GEOMETRY_TOOLS {
+            if let Some(button) = document.query_selector(&format!("[data-wb-tool=\"{key}\"]"))? {
                 set_disabled(&button, wb.scenarios.is_active())?;
                 button.set_attribute(
                     "aria-pressed",
@@ -2154,26 +2146,6 @@ pub(crate) mod wasm {
             _ => "Click to add the next control",
         }
     }
-    const fn tool_key(tool: EditorTool) -> &'static str {
-        match tool {
-            EditorTool::Select => "select",
-            EditorTool::Point => "point",
-            EditorTool::Line => "line",
-            EditorTool::Polyline => "polyline",
-            EditorTool::Rectangle => "rectangle",
-            EditorTool::Circle => "circle",
-            EditorTool::CounterClockwiseArc => "arc",
-            EditorTool::QuadraticBezier => "quadratic-bezier",
-            EditorTool::CubicBezier => "cubic-bezier",
-            EditorTool::Ellipse => "ellipse",
-            EditorTool::EllipticalArc => "elliptical-arc",
-            EditorTool::RationalQuadraticConic => "rational-conic",
-            EditorTool::Parabola => "parabola",
-            EditorTool::Hyperbola => "hyperbola",
-            EditorTool::Nurbs => "nurbs",
-        }
-    }
-
     fn update_construction_options(
         document: &Document,
         editor: &mut geosolve_constraint_editor::ConstraintEditor,

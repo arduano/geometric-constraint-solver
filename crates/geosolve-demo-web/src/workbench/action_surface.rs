@@ -77,6 +77,7 @@ mod tests {
         CONSTRAINT_ACTIONS, DIMENSION_ACTIONS, authoring_tool_from_key, constraint_from_key,
         dimension_from_key, dimension_key,
     };
+    use crate::workbench::icons::GEOMETRY_TOOLS;
 
     #[test]
     fn wasm_action_identity_catalog_is_complete_unique_and_round_trips() {
@@ -184,6 +185,32 @@ mod tests {
             html.matches("class=\"wb-authoring-icon\"").count(),
             CONSTRAINT_ACTIONS.len() + DIMENSION_ACTIONS.len(),
             "every authoring action needs exactly one shared vector-icon host"
+        );
+        assert_eq!(
+            html.matches("<span class=\"wb-authoring-icon\"").count(),
+            CONSTRAINT_ACTIONS.len() + DIMENSION_ACTIONS.len(),
+            "authoring vectors are icons, not keyboard hints"
+        );
+        assert!(!html.contains("<kbd class=\"wb-authoring-icon\""));
+        assert_eq!(
+            html.matches("class=\"wb-geometry-icon\"").count(),
+            GEOMETRY_TOOLS.len(),
+            "every geometry tool needs exactly one shared vector-icon host"
+        );
+        for (key, _) in GEOMETRY_TOOLS {
+            assert!(
+                html.contains(&format!("data-wb-tool=\"{key}\"")),
+                "missing geometry palette action {key}"
+            );
+        }
+        let geometry_markup = html
+            .split("<strong>Geometry</strong>")
+            .nth(1)
+            .and_then(|markup| markup.split("<strong>Constraints</strong>").next())
+            .expect("geometry palette section");
+        assert!(
+            !geometry_markup.contains("<kbd>"),
+            "geometry icon slots must not regress to placeholder letters"
         );
         assert!(html.contains("title=\"Perpendicular / normal\""));
         assert!(html.contains("id=\"wb-dimension-target-editor\""));
