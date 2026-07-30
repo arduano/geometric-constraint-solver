@@ -1132,7 +1132,7 @@ const CANVAS_GLYPH_STEPS: [ScenarioStep; 5] = [
     ScenarioStep {
         instruction: "Hover several points and curves without selecting them.",
         action: None,
-        expected: "Only directly incident constraint symbols appear; unrelated constraint clusters remain hidden.",
+        expected: "Only directly incident constraint symbols appear; unrelated clusters remain hidden, and shared concepts match the left-palette icon language while specialized contact, direction, normal, and curvature symbols remain visually distinct.",
     },
     ScenarioStep {
         instruction: "Drag the tangent line through several accepted positions while watching the circle radius annotation.",

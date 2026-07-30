@@ -10,7 +10,7 @@ Status: candidate awaiting supervising-human review.
 - Implementation commits: `9727b60`, with `M63-F001` remediation in `8fcf270` and `M63-F002`
   remediation in `e020477`. The insufficient `M63-F003` remediation is preserved in `e160116`;
   the insufficient `M63-F004` remediation is preserved in `ea5dabd`, and `M63-F005` supersedes it
-  in `88295f5`.
+  in `88295f5`. The icon-language refinement `M63-F006` is implemented in `1978e33`.
 - Temporary Tailscale endpoint: `http://100.94.63.83:8080/`.
 - Scenario group: **Scenarios → M63 Canvas constraints**
 - Mechanical gate: format, warnings-denied workspace Clippy, all-feature workspace tests,
@@ -25,6 +25,7 @@ Status: candidate awaiting supervising-human review.
 | Dimensions | Canvas angle & dimension presentation | Angle arcs/values are always visible; driving dimensions remain visible; other reference dimensions are contextual and editing keeps accepted branch behavior. | Pending |
 | Discovery | Contextual constraint symbols | Geometry hover/selection reveals direct relations only; symbols are selectable and emphasize all direct operands. | Pending |
 | Density | Crowded relation fan-out | Shared anchors fan out predictably with leaders and remain selectable through zoom/pan/reset. | Pending |
+| Icon language | Palette and all three leaves | Constraint/dimension icons are geometry-representative, shared concepts match between palette and canvas, and specialized relations remain distinguishable. | Pending |
 | Input ownership | Contextual constraint symbols | Constraint authoring continues to collect geometry once per physical click and visible symbols do not obstruct it. | Pending |
 | Accessibility/errors | All three | Keyboard focus/activation works and targeted problems keep their relevant annotation visible. | Pending |
 
@@ -72,6 +73,13 @@ Status: candidate awaiting supervising-human review.
   first icon → inter-icon transit → second icon → blank sequence and renderer child-level hover.
   Confirm the on-screen instruction begins **“Move from related geometry through the revealed
   set…”** before retesting.
+- `M63-F006` — implemented; human review pending. The palette previously used Unicode characters
+  and letters unrelated to the separately hand-drawn canvas glyphs, while contact, direction,
+  normal, curvature and continuity were especially ambiguous. One text-free CAD vector catalog
+  now owns all eleven constraint intents, five dimension actions and nineteen accepted canvas
+  glyphs. Shared concepts reuse exactly the same fragment; specialized persistent relations keep
+  distinct geometric symbols. The contextual button now says **Perp / normal**. Review the whole
+  left palette, then compare the contextual and crowded M63 leaves.
 
 ## Approval
 

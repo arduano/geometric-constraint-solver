@@ -2864,6 +2864,15 @@ index, treats leaders and inter-icon links as transit only, and maps occurrence 
 the persistent constraint. The renderer applies hover only to the matching glyph child. Direct
 headless and workbench regressions pass; focused human retest remains pending.
 
+UAT refinement `M63-F006` (2026-07-30) replaces the unrelated Unicode/letter authoring
+placeholders and inconsistent canvas drawings with one text-free CAD vector catalog. Ten shared
+constraint concepts use the same symbol in the palette and accepted canvas; the canvas retains
+distinct symbols for point-on-curve, collinear, equal-length, equal-radius, generic contact,
+curve direction, curve normal, equal curvature and fillet. All five dimension authoring actions
+also receive geometry-representative vector icons, and the contextual operation label is now
+explicitly **Perp / normal**. Direct catalog, shared-language, palette-host and scene regressions
+pass; focused human review remains pending.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

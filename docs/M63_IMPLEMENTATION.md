@@ -13,6 +13,9 @@ Status: implementation and mechanical qualification complete; human UAT pending.
   Select-mode pointer input with diagnostic context.
 - The sole workbench consumes those DTOs as accessible SVG symbols, leaders, dimension geometry,
   values and related-operand highlighting.
+- One workbench-owned text-free vector catalog supplies all nineteen accepted constraint glyphs,
+  all eleven authoring intents and all five dimension actions; shared concepts reuse the same
+  fragment rather than maintaining palette and canvas dialects.
 - Three stable M63 scenario definitions and this milestone/UAT record are added. No persistence
   schema or solver API changes.
 
@@ -74,6 +77,16 @@ to the persistent constraint. SVG applies hover only to the matching glyph child
 whole persistent annotation group. Direct regressions cover sibling visibility, transit without
 hover, first-to-second icon traversal, blank exit, occurrence-specific multi-marker hover,
 persistent selection and rendered child-level hover. Human retest remains pending.
+
+Follow-up `M63-F006` audits and replaces the relevant icon surface. A dedicated `icons` module
+owns distinct text-free SVG fragments for every `SceneConstraintGlyph`, maps the coarser
+authoring intents onto matching shared concepts, and adds representative distance, length,
+radius, diameter and angle symbols. The palette installs those vectors into accessible,
+non-semantic icon hosts while retaining visible button labels. Specialized accepted-state
+symbols distinguish generic contact, tangent direction, curve normal, equal curvature,
+continuity and fillet. Selection/error states remain outline-based so circular icons do not turn
+into filled blobs. Direct tests require complete unique catalogs, text-free markup and exact
+palette/canvas reuse for shared concepts. Human visual review remains pending.
 
 ## 5. Known limitations
 

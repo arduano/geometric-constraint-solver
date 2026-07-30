@@ -1822,6 +1822,13 @@ within icon proximity publishes its deterministic marker index, and clicking any
 selects its one persistent constraint. The focused UAT steps now require passing one icon on the
 way to another without hiding siblings or highlighting multiple occurrences.
 
+`M63-F006` audits the complete relevant icon surface. The eleven authoring intents, five
+dimension actions and nineteen accepted canvas constraint glyphs now come from one text-free
+vector catalog. Shared concepts deliberately reuse the same shape across palette and canvas;
+specialized persistent relations retain distinct geometry-representative symbols. The
+`canvas-relation-glyphs` instructions explicitly ask the reviewer to compare that shared language
+and distinguish contact, direction, normal and curvature variants.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:

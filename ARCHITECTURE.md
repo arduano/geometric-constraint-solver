@@ -639,4 +639,4 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   editing and ordinary-workspace UAT.
 - M63: typed geometry-anchored constraint/dimension annotations, separate headless geometry
   reveal context and exact-occurrence proximity/picking, contextual density policy, accessible
-  SVG presentation and a dedicated human UAT.
+  shared CAD SVG icon presentation and a dedicated human UAT.
