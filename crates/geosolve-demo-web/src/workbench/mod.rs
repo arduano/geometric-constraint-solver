@@ -5,8 +5,6 @@ mod action_surface;
 #[cfg(any(target_arch = "wasm32", test))]
 mod effect_adapter;
 #[cfg(any(target_arch = "wasm32", test))]
-mod evidence;
-#[cfg(any(target_arch = "wasm32", test))]
 mod icons;
 #[cfg(any(target_arch = "wasm32", test))]
 mod panels;
@@ -15,9 +13,7 @@ mod persistence;
 #[cfg(target_arch = "wasm32")]
 mod platform;
 #[cfg(any(target_arch = "wasm32", test))]
-mod scenario_fixtures;
-#[cfg(any(target_arch = "wasm32", test))]
-mod scenarios;
+mod samples;
 #[cfg(any(target_arch = "wasm32", test))]
 mod scene;
 
@@ -115,7 +111,7 @@ pub(crate) mod wasm {
     struct Workbench {
         coordinator: RetainedEditorCoordinator,
         authoring: AuthoringState,
-        scenarios: super::scenarios::ScenarioWorkbenchState,
+        samples: super::samples::SampleCatalogState,
         camera: super::scene::CanvasCamera,
         pan_gesture: Option<PanGesture>,
         construction_preview: Option<ConstructionPreview>,
@@ -125,11 +121,6 @@ pub(crate) mod wasm {
     }
 
     impl Workbench {
-        fn interaction_coordinator_mut(&mut self) -> &mut RetainedEditorCoordinator {
-            self.scenarios
-                .coordinator_for_interaction_mut(&mut self.coordinator)
-        }
-
         fn resolve_projected_point_move(
             &mut self,
             pointer_id: u64,
@@ -137,8 +128,7 @@ pub(crate) mod wasm {
             point: geosolve_sketch::DesignPointId,
             model_position: [f64; 2],
         ) -> Vec<EditorEffect> {
-            self.scenarios.resolve_projected_point_move(
-                &mut self.coordinator,
+            self.coordinator.resolve_projected_point_move(
                 pointer_id,
                 request_id,
                 point,
@@ -178,7 +168,7 @@ pub(crate) mod wasm {
         let workbench = Rc::new(RefCell::new(Workbench {
             coordinator,
             authoring: AuthoringState::default(),
-            scenarios: super::scenarios::ScenarioWorkbenchState::new(),
+            samples: super::samples::SampleCatalogState::default(),
             camera: super::scene::CanvasCamera::default(),
             pan_gesture: None,
             construction_preview: None,
@@ -189,7 +179,7 @@ pub(crate) mod wasm {
         install_palette_icons(document)?;
         render(document, &workbench)?;
         install_clicks(document, &workbench)?;
-        install_scenario_flyout_state(document)?;
+        install_sample_flyout_state(document)?;
         install_canvas(document, &workbench)?;
         install_keyboard(document, &workbench)?;
         Ok(())
@@ -231,11 +221,11 @@ pub(crate) mod wasm {
         Ok(())
     }
 
-    fn install_scenario_flyout_state(document: &Document) -> Result<(), JsValue> {
-        let menu = required(document, "wb-scenario-menu")?;
+    fn install_sample_flyout_state(document: &Document) -> Result<(), JsValue> {
+        let menu = required(document, "wb-sample-menu")?;
         for name in ["pointerover", "focusin"] {
             let callback = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-                let Some(branch) = scenario_branch(&event) else {
+                let Some(branch) = sample_branch(&event) else {
                     return;
                 };
                 set_branch_expanded(&branch, true);
@@ -245,7 +235,7 @@ pub(crate) mod wasm {
         }
         for name in ["pointerout", "focusout"] {
             let callback = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
-                let Some(branch) = scenario_branch(&event) else {
+                let Some(branch) = sample_branch(&event) else {
                     return;
                 };
                 let still_open = branch.matches(":hover").unwrap_or(false)
@@ -260,18 +250,18 @@ pub(crate) mod wasm {
         Ok(())
     }
 
-    fn scenario_branch(event: &Event) -> Option<Element> {
+    fn sample_branch(event: &Event) -> Option<Element> {
         event
             .target()?
             .dyn_into::<Element>()
             .ok()?
-            .closest(".wb-scenario-branch")
+            .closest(".wb-sample-branch")
             .ok()
             .flatten()
     }
 
     fn set_branch_expanded(branch: &Element, expanded: bool) {
-        if let Ok(Some(trigger)) = branch.query_selector("[data-scenario-group-trigger]") {
+        if let Ok(Some(trigger)) = branch.query_selector("[data-sample-group-trigger]") {
             let _ = trigger.set_attribute("aria-expanded", if expanded { "true" } else { "false" });
         }
     }
@@ -338,27 +328,19 @@ pub(crate) mod wasm {
             let target = origin
                 .closest(concat!(
                     "[data-wb-tool], [data-wb-authoring], [data-editor-item], [data-wb-action], ",
-                    "[data-scenario-id], [data-scenario-action], [data-scenario-control], ",
-                    "[data-scenario-group-trigger]"
+                    "[data-sample-id], [data-sample-group-trigger]"
                 ))
                 .ok()
                 .flatten()
                 .unwrap_or(origin);
-            let mut selected_scenario = false;
-            let mut exited_scenarios = false;
-            if target.has_attribute("data-scenario-group-trigger") {
+            let mut selected_sample = false;
+            if target.has_attribute("data-sample-group-trigger") {
                 return;
             } else if let Some(tool) = target
                 .get_attribute("data-wb-tool")
                 .and_then(|key| tool_from_key(&key))
             {
                 let mut wb = callback_workbench.borrow_mut();
-                if wb.scenarios.is_active() {
-                    wb.notice = "Exit the active review scenario before ordinary editing".into();
-                    drop(wb);
-                    let _ = render(&callback_document, &callback_workbench);
-                    return;
-                }
                 if let Err(error) =
                     update_construction_options(&callback_document, wb.coordinator.editor_mut())
                 {
@@ -394,7 +376,7 @@ pub(crate) mod wasm {
                         })
                         .unwrap_or_default();
                     let mut wb = callback_workbench.borrow_mut();
-                    if wb.authoring.active_tool().is_some() && !wb.scenarios.is_active() {
+                    if wb.authoring.active_tool().is_some() {
                         let input = if is_canvas_item {
                             super::AuthoringItemInput::CanvasClick
                         } else {
@@ -408,18 +390,12 @@ pub(crate) mod wasm {
                             handle_authoring_outcome(&mut wb, outcome);
                         }
                     } else if !is_canvas_item || !is_pointer_click {
-                        let coordinator = wb.interaction_coordinator_mut();
-                        coordinator.editor_mut().select_item(item, modifiers);
+                        wb.coordinator.editor_mut().select_item(item, modifiers);
                     }
                 }
-            } else if let Some(key) = target.get_attribute("data-scenario-id") {
+            } else if let Some(key) = target.get_attribute("data-sample-id") {
                 let mut wb = callback_workbench.borrow_mut();
-                selected_scenario = select_scenario(&mut wb, &key);
-            } else if let Some(action) = target.get_attribute("data-scenario-action") {
-                perform_scenario_action(&mut callback_workbench.borrow_mut(), &action);
-            } else if let Some(control) = target.get_attribute("data-scenario-control") {
-                exited_scenarios =
-                    perform_scenario_control(&mut callback_workbench.borrow_mut(), &control);
+                selected_sample = open_sample(&mut wb, &key);
             } else if let Some(action) = target.get_attribute("data-wb-action") {
                 perform_action(
                     &callback_document,
@@ -429,11 +405,9 @@ pub(crate) mod wasm {
             }
             save(&callback_workbench.borrow());
             let _ = render(&callback_document, &callback_workbench);
-            if selected_scenario {
-                close_scenario_selector(&callback_document);
-                focus_scenario_guide(&callback_document);
-            } else if exited_scenarios {
-                focus_by_id(&callback_document, "wb-scenario-trigger");
+            if selected_sample {
+                close_sample_selector(&callback_document);
+                focus_by_id(&callback_document, "wb-sample-trigger");
             }
         });
         required(document, "workbench-root")?
@@ -517,7 +491,7 @@ pub(crate) mod wasm {
         let cancel = Closure::<dyn FnMut(PointerEvent)>::new(move |_event| {
             cancel_pointer_moves.borrow_mut().drain_before_terminal();
             let mut wb = cancel_workbench.borrow_mut();
-            let effects = wb.interaction_coordinator_mut().editor_mut().cancel();
+            let effects = wb.coordinator.editor_mut().cancel();
             dispatch_effects(&mut wb, effects);
             wb.notice = "Interaction canceled".into();
             drop(wb);
@@ -531,10 +505,7 @@ pub(crate) mod wasm {
         let leave_workbench = Rc::clone(workbench);
         let leave = Closure::<dyn FnMut(PointerEvent)>::new(move |_event| {
             let mut wb = leave_workbench.borrow_mut();
-            let effects = wb
-                .interaction_coordinator_mut()
-                .editor_mut()
-                .pointer_leave();
+            let effects = wb.coordinator.editor_mut().pointer_leave();
             if effects.is_empty() {
                 return;
             }
@@ -559,9 +530,6 @@ pub(crate) mod wasm {
             }
             event.prevent_default();
             let mut wb = double_workbench.borrow_mut();
-            if wb.scenarios.is_active() {
-                return;
-            }
             let expected = wb.coordinator.session().design_identity();
             let effects = wb.coordinator.editor_mut().complete_draft(expected);
             dispatch_effects(&mut wb, effects);
@@ -620,10 +588,7 @@ pub(crate) mod wasm {
                 let Some(scene) = editor_scene(&wb) else {
                     return;
                 };
-                let effects = wb
-                    .interaction_coordinator_mut()
-                    .editor_mut()
-                    .pointer_move(&scene, input);
+                let effects = wb.coordinator.editor_mut().pointer_move(&scene, input);
                 dispatch_effects(&mut wb, effects);
                 save(&wb);
                 drop(wb);
@@ -669,13 +634,10 @@ pub(crate) mod wasm {
                 return;
             }
             if let Some(pending) = callback_pointer_moves.borrow_mut().drain_before_terminal() {
-                let effects = wb
-                    .interaction_coordinator_mut()
-                    .editor_mut()
-                    .pointer_move(&scene, pending);
+                let effects = wb.coordinator.editor_mut().pointer_move(&scene, pending);
                 dispatch_effects(&mut wb, effects);
             }
-            let coordinator = wb.interaction_coordinator_mut();
+            let coordinator = &mut wb.coordinator;
             let expected = coordinator.session().design_identity();
             let effects = coordinator.editor_mut().pointer_up(&scene, expected, input);
             dispatch_effects(&mut wb, effects);
@@ -851,7 +813,7 @@ pub(crate) mod wasm {
                 return;
             }
             let problem_items = wb
-                .interaction_coordinator_mut()
+                .coordinator
                 .current_problem_metadata()
                 .map(|problem| {
                     problem
@@ -863,10 +825,7 @@ pub(crate) mod wasm {
                         .collect::<Vec<_>>()
                 })
                 .unwrap_or_default();
-            let effects = {
-                let coordinator = wb.interaction_coordinator_mut();
-                transition(coordinator, &scene, input, &problem_items)
-            };
+            let effects = { transition(&mut wb.coordinator, &scene, input, &problem_items) };
             dispatch_effects(&mut wb, effects);
             save(&wb);
             drop(wb);
@@ -885,12 +844,12 @@ pub(crate) mod wasm {
         let callback_workbench = Rc::clone(workbench);
         let callback = Closure::<dyn FnMut(KeyboardEvent)>::new(move |event: KeyboardEvent| {
             if event.key() == "Escape"
-                && required(&callback_document, "wb-scenario-selector")
+                && required(&callback_document, "wb-sample-selector")
                     .is_ok_and(|selector| selector.has_attribute("open"))
             {
                 event.prevent_default();
-                close_scenario_selector(&callback_document);
-                focus_by_id(&callback_document, "wb-scenario-trigger");
+                close_sample_selector(&callback_document);
+                focus_by_id(&callback_document, "wb-sample-trigger");
                 return;
             }
             if let Some(target) = event
@@ -919,9 +878,7 @@ pub(crate) mod wasm {
                     command: event.meta_key(),
                 };
                 let mut wb = callback_workbench.borrow_mut();
-                wb.interaction_coordinator_mut()
-                    .editor_mut()
-                    .select_item(item, modifiers);
+                wb.coordinator.editor_mut().select_item(item, modifiers);
                 save(&wb);
                 drop(wb);
                 let _ = render(&callback_document, &callback_workbench);
@@ -945,9 +902,6 @@ pub(crate) mod wasm {
                 return;
             }
             let mut wb = callback_workbench.borrow_mut();
-            if wb.scenarios.is_active() {
-                return;
-            }
             if matches!(event.key().as_str(), "Delete" | "Backspace") {
                 event.prevent_default();
                 perform_action(&callback_document, &mut wb, "delete");
@@ -1000,9 +954,7 @@ pub(crate) mod wasm {
                 &mut failed_construction_commit,
             ) {
                 ConstructionDispatch::ApplyCommit => {
-                    let result = wb
-                        .interaction_coordinator_mut()
-                        .apply_editor_effect(&effect);
+                    let result = wb.coordinator.apply_editor_effect(&effect);
                     dispatch_construction_effect(
                         &mut wb.construction_preview,
                         &effect,
@@ -1021,10 +973,7 @@ pub(crate) mod wasm {
             }
             match dispatch_inference_effect(&mut wb.inference_preview, &effect) {
                 InferenceDispatch::ApplyCommit => {
-                    match wb
-                        .interaction_coordinator_mut()
-                        .apply_editor_effect(&effect)
-                    {
+                    match wb.coordinator.apply_editor_effect(&effect) {
                         Ok(Some(_)) => wb.notice = "Inference retained".into(),
                         Ok(None) => {}
                         Err(error) => wb.notice = error.to_string(),
@@ -1058,14 +1007,11 @@ pub(crate) mod wasm {
                     wb.notice = "Projected drag preview".into();
                 }
                 EditorEffect::ClearPointPreview => {
-                    wb.interaction_coordinator_mut().clear_transient();
+                    wb.coordinator.clear_transient();
                 }
                 EditorEffect::SelectionChanged(_) | EditorEffect::HoverChanged(_) => {}
                 EditorEffect::CommitPointMove { .. } => {
-                    match wb
-                        .interaction_coordinator_mut()
-                        .apply_editor_effect(&effect)
-                    {
+                    match wb.coordinator.apply_editor_effect(&effect) {
                         Ok(Some(_)) => wb.notice = "Edit retained".into(),
                         Ok(None) => {}
                         Err(error) => wb.notice = error.to_string(),
@@ -1086,10 +1032,6 @@ pub(crate) mod wasm {
     }
 
     fn perform_action(document: &Document, wb: &mut Workbench, action: &str) {
-        if !wb.scenarios.ordinary_action_allowed(action) {
-            wb.notice = "Exit the active review scenario before ordinary editing".into();
-            return;
-        }
         let result = match action {
             "new" => empty_coordinator().map(|coordinator| {
                 wb.coordinator = coordinator;
@@ -1194,14 +1136,17 @@ pub(crate) mod wasm {
         Ok(())
     }
 
-    fn select_scenario(wb: &mut Workbench, key: &str) -> bool {
-        match wb.scenarios.select_key(key) {
-            Ok(()) => {
+    fn open_sample(wb: &mut Workbench, key: &str) -> bool {
+        match wb.samples.open_key(key) {
+            Ok(coordinator) => {
+                wb.coordinator = coordinator;
                 wb.authoring.deactivate();
+                wb.construction_preview = None;
+                wb.inference_preview = None;
                 fit_camera(wb);
                 wb.notice = format!(
-                    "{} loaded; this review state is ephemeral and ordinary save is disabled",
-                    wb.scenarios.selected_title().unwrap_or("Scenario")
+                    "{} opened as an editable workspace",
+                    wb.samples.selected_title().unwrap_or("Sample")
                 );
                 true
             }
@@ -1212,41 +1157,7 @@ pub(crate) mod wasm {
         }
     }
 
-    fn perform_scenario_action(wb: &mut Workbench, action: &str) {
-        wb.notice = wb
-            .scenarios
-            .perform_key(action)
-            .map_or_else(|error| error, |observation| observation.summary());
-    }
-
-    fn perform_scenario_control(wb: &mut Workbench, control: &str) -> bool {
-        match control {
-            "reset" => {
-                wb.notice = wb.scenarios.reset().map_or_else(
-                    |error| error,
-                    |()| {
-                        fit_camera(wb);
-                        "Selected scenario reset to its deterministic starting state".into()
-                    },
-                );
-                false
-            }
-            "exit" => {
-                wb.scenarios.exit();
-                wb.notice =
-                    "Exited review scenarios; the ordinary pre-existing workspace is restored"
-                        .into();
-                true
-            }
-            _ => false,
-        }
-    }
-
     fn activate_authoring(document: &Document, wb: &mut Workbench, tool: AuthoringTool) {
-        if wb.scenarios.is_active() {
-            wb.notice = "Exit the active review scenario before ordinary editing".into();
-            return;
-        }
         let options = match authoring_options(document) {
             Ok(options) => options,
             Err(error) => {
@@ -1529,7 +1440,7 @@ pub(crate) mod wasm {
     }
 
     fn editor_scene(wb: &Workbench) -> Option<EditorScene> {
-        let coordinator = wb.scenarios.coordinator_for_render(&wb.coordinator);
+        let coordinator = &wb.coordinator;
         let source = coordinator
             .solved_preview_session()
             .unwrap_or(coordinator.session());
@@ -1553,7 +1464,7 @@ pub(crate) mod wasm {
 
     fn render(document: &Document, workbench: &Rc<RefCell<Workbench>>) -> Result<(), JsValue> {
         let wb = workbench.borrow();
-        let coordinator = wb.scenarios.coordinator_for_render(&wb.coordinator);
+        let coordinator = &wb.coordinator;
         required(document, "workbench-root")?.set_attribute(
             "data-history-length",
             &coordinator.history_len().to_string(),
@@ -1570,11 +1481,7 @@ pub(crate) mod wasm {
             .iter()
             .map(|operand| operand.item)
             .collect::<Vec<_>>();
-        let construction_preview = if wb.scenarios.is_active() {
-            None
-        } else {
-            wb.construction_preview.as_ref()
-        };
+        let construction_preview = wb.construction_preview.as_ref();
         required(document, "wb-viewport")?.set_inner_html(&super::scene::svg_markup_with_context(
             scene.as_ref(),
             accepted,
@@ -1617,7 +1524,7 @@ pub(crate) mod wasm {
         required(document, "wb-production-topology")?.set_inner_html(
             &super::panels::production_topology_markup(coordinator.session()),
         );
-        render_scenario_ui(document, &wb.scenarios)?;
+        render_sample_ui(document, &wb.samples)?;
         let problems = required(document, "wb-problems")?;
         if wb.problems_open || problem != "No current solver problem" {
             problems.remove_attribute("hidden")?;
@@ -1627,7 +1534,7 @@ pub(crate) mod wasm {
         let guide = required(document, "wb-draft-guide")?;
         if wb.authoring.active_tool().is_some()
             || coordinator.editor().can_complete_draft()
-            || (!wb.scenarios.is_active() && wb.construction_preview.is_some())
+            || wb.construction_preview.is_some()
         {
             guide.remove_attribute("hidden")?;
         } else {
@@ -1651,7 +1558,6 @@ pub(crate) mod wasm {
         }
         for (key, tool) in super::icons::GEOMETRY_TOOLS {
             if let Some(button) = document.query_selector(&format!("[data-wb-tool=\"{key}\"]"))? {
-                set_disabled(&button, wb.scenarios.is_active())?;
                 button.set_attribute(
                     "aria-pressed",
                     if tool == coordinator.editor().tool() {
@@ -1662,14 +1568,9 @@ pub(crate) mod wasm {
                 )?;
             }
         }
-        render_action_availability(
-            document,
-            coordinator,
-            &wb.authoring,
-            wb.scenarios.is_active(),
-        )?;
-        render_dimension_target_editor(document, coordinator, wb.scenarios.is_active())?;
-        render_branch_editor(document, coordinator, wb.scenarios.is_active())?;
+        render_action_availability(document, coordinator, &wb.authoring)?;
+        render_dimension_target_editor(document, coordinator)?;
+        render_branch_editor(document, coordinator)?;
         required(document, "workbench-root")?
             .set_attribute("data-editor-adapter", "retained-coordinator")?;
         Ok(())
@@ -1679,13 +1580,12 @@ pub(crate) mod wasm {
         document: &Document,
         coordinator: &RetainedEditorCoordinator,
         authoring: &AuthoringState,
-        scenario_active: bool,
     ) -> Result<(), JsValue> {
         for key in ["new", "finish", "cancel", "clear-selection"] {
             if let Some(button) = document.query_selector(&format!("[data-wb-action=\"{key}\"]"))? {
                 set_disabled(
                     &button,
-                    scenario_active || (key == "finish" && authoring.active_tool().is_some()),
+                    key == "finish" && authoring.active_tool().is_some(),
                 )?;
             }
         }
@@ -1703,14 +1603,13 @@ pub(crate) mod wasm {
             ("delete", CoordinatorActionKind::Delete),
         ] {
             if let Some(button) = document.query_selector(&format!("[data-wb-action=\"{key}\"]"))? {
-                set_action_state(&button, state(action), scenario_active)?;
+                set_action_state(&button, state(action))?;
             }
         }
         for (key, _, intent) in super::action_surface::CONSTRAINT_ACTIONS {
             if let Some(button) =
                 document.query_selector(&format!("[data-wb-authoring=\"{key}\"]"))?
             {
-                set_disabled(&button, scenario_active)?;
                 button.set_attribute(
                     "aria-pressed",
                     if authoring.active_tool() == Some(AuthoringTool::Constraint(intent)) {
@@ -1725,7 +1624,6 @@ pub(crate) mod wasm {
             if let Some(button) =
                 document.query_selector(&format!("[data-wb-authoring=\"{key}\"]"))?
             {
-                set_disabled(&button, scenario_active)?;
                 button.set_attribute(
                     "aria-pressed",
                     if authoring.active_tool() == Some(AuthoringTool::Dimension(kind)) {
@@ -1745,7 +1643,7 @@ pub(crate) mod wasm {
             "wb-authoring-dimension-mode",
             "wb-authoring-angle-orientation",
         ] {
-            set_disabled(&required(document, id)?, scenario_active)?;
+            set_disabled(&required(document, id)?, false)?;
         }
         Ok(())
     }
@@ -1753,7 +1651,6 @@ pub(crate) mod wasm {
     fn render_dimension_target_editor(
         document: &Document,
         coordinator: &RetainedEditorCoordinator,
-        scenario_active: bool,
     ) -> Result<(), JsValue> {
         let section = required(document, "wb-dimension-target-editor")?;
         let Some(metadata) = coordinator.selected_dimension_target_metadata() else {
@@ -1791,11 +1688,11 @@ pub(crate) mod wasm {
             if !editing && input.value_as_number().to_bits() != metadata.display_value.to_bits() {
                 input.set_value_as_number(metadata.display_value);
             }
-            input.set_disabled(scenario_active);
+            input.set_disabled(false);
         }
         required(document, "wb-dimension-target-meta")?.set_text_content(Some(&meta));
         if let Some(button) = document.query_selector("[data-wb-action=\"dimension-target\"]")? {
-            set_disabled(&button, scenario_active)?;
+            set_disabled(&button, false)?;
         }
         Ok(())
     }
@@ -1803,7 +1700,6 @@ pub(crate) mod wasm {
     fn render_branch_editor(
         document: &Document,
         coordinator: &RetainedEditorCoordinator,
-        scenario_active: bool,
     ) -> Result<(), JsValue> {
         let actions = coordinator.branch_actions();
         let editor = required(document, "wb-branch-editor")?;
@@ -1952,47 +1848,26 @@ pub(crate) mod wasm {
             .any(|action| matches!(action, BranchAction::AngleOrientation { .. }));
         set_hidden(&contact_button, !has_contacts)?;
         set_hidden(&angle_button, !has_angle)?;
-        set_disabled(&contact_button, scenario_active)?;
-        set_disabled(&angle_button, scenario_active)?;
+        set_disabled(&contact_button, false)?;
+        set_disabled(&angle_button, false)?;
         Ok(())
     }
 
-    fn render_scenario_ui(
+    fn render_sample_ui(
         document: &Document,
-        scenarios: &super::scenarios::ScenarioWorkbenchState,
+        samples: &super::samples::SampleCatalogState,
     ) -> Result<(), JsValue> {
-        let selected_key = scenarios.selected_key().unwrap_or("");
-        let menu = required(document, "wb-scenario-menu")?;
-        if menu.get_attribute("data-selected-scenario").as_deref() != Some(selected_key) {
-            menu.set_inner_html(&scenarios.menu_markup());
-            menu.set_attribute("data-selected-scenario", selected_key)?;
+        let selected_key = samples.selected_key().unwrap_or("");
+        let menu = required(document, "wb-sample-menu")?;
+        if menu.get_attribute("data-selected-sample").as_deref() != Some(selected_key) {
+            menu.set_inner_html(&samples.menu_markup());
+            menu.set_attribute("data-selected-sample", selected_key)?;
         }
-        required(document, "wb-scenario-current")?.set_text_content(Some(
-            scenarios
+        required(document, "wb-sample-current")?.set_text_content(Some(
+            samples
                 .selected_title()
-                .unwrap_or("Choose a review scenario"),
+                .unwrap_or("Choose an editable sample"),
         ));
-
-        let guide = required(document, "wb-scenario-guide")?;
-        if let Some(markup) = scenarios.guide_markup() {
-            if guide.get_attribute("data-selected-scenario").as_deref() != Some(selected_key) {
-                guide.set_inner_html(&format!(
-                    "{markup}<div id=\"wb-scenario-transcript\"></div><div id=\"wb-scenario-evidence\"></div>"
-                ));
-                guide.set_attribute("data-selected-scenario", selected_key)?;
-            }
-            guide.remove_attribute("hidden")?;
-            required(document, "wb-scenario-transcript")?
-                .set_inner_html(&scenarios.transcript_markup());
-            required(document, "wb-scenario-evidence")?
-                .set_inner_html(&scenarios.evidence_markup());
-        } else {
-            if guide.has_attribute("data-selected-scenario") {
-                guide.set_inner_html("");
-                guide.remove_attribute("data-selected-scenario")?;
-            }
-            guide.set_attribute("hidden", "")?;
-        }
         Ok(())
     }
 
@@ -2012,16 +1887,10 @@ pub(crate) mod wasm {
         }
     }
 
-    fn set_action_state(
-        element: &Element,
-        state: ActionState,
-        scenario_active: bool,
-    ) -> Result<(), JsValue> {
-        let disabled = scenario_active || state != ActionState::Enabled;
+    fn set_action_state(element: &Element, state: ActionState) -> Result<(), JsValue> {
+        let disabled = state != ActionState::Enabled;
         set_disabled(element, disabled)?;
-        if scenario_active {
-            element.set_attribute("data-disabled-reason", "scenario-active")
-        } else if let ActionState::Disabled(reason) = state {
+        if let ActionState::Disabled(reason) = state {
             element.set_attribute("data-disabled-reason", disabled_reason_key(reason))
         } else {
             element.remove_attribute("data-disabled-reason")
@@ -2049,9 +1918,7 @@ pub(crate) mod wasm {
     }
 
     fn save(wb: &Workbench) {
-        let Some(snapshot) = wb.scenarios.persistence_snapshot(&wb.coordinator) else {
-            return;
-        };
+        let snapshot = WorkspaceSnapshot::from_checkpoint(wb.coordinator.checkpoint());
         let Ok(json) = snapshot.encode() else {
             return;
         };
@@ -2279,15 +2146,9 @@ pub(crate) mod wasm {
         )
     }
 
-    fn close_scenario_selector(document: &Document) {
-        if let Ok(selector) = required(document, "wb-scenario-selector") {
+    fn close_sample_selector(document: &Document) {
+        if let Ok(selector) = required(document, "wb-sample-selector") {
             let _ = selector.remove_attribute("open");
-        }
-    }
-
-    fn focus_scenario_guide(document: &Document) {
-        if let Ok(heading) = required(document, "wb-scenario-title") {
-            focus(heading);
         }
     }
 

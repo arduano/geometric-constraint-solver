@@ -20,9 +20,9 @@
           <button type="button" data-wb-action="undo">Undo</button>
           <button type="button" data-wb-action="redo">Redo</button>
         </div>
-        <details id="wb-scenario-selector" class="wb-scenario-selector">
-          <summary id="wb-scenario-trigger"><span>Scenarios</span><strong id="wb-scenario-current">Choose a review scenario</strong></summary>
-          <div id="wb-scenario-menu" class="wb-scenario-menu"></div>
+        <details id="wb-sample-selector" class="wb-sample-selector">
+          <summary id="wb-sample-trigger"><span>Samples</span><strong id="wb-sample-current">Choose an editable sample</strong></summary>
+          <ul id="wb-sample-menu" class="wb-sample-menu"></ul>
         </details>
         <div class="wb-command-context">
           <span id="wb-lifecycle" data-state="accepted">Accepted</span>
@@ -121,7 +121,6 @@
 
       <aside class="wb-inspector" aria-label="Property inspector">
         <div class="wb-panel-title"><span>Inspector</span><button type="button" data-wb-action="clear-selection">Clear</button></div>
-        <section id="wb-scenario-guide" class="wb-inspector-section wb-scenario-guide" aria-labelledby="wb-scenario-title" hidden></section>
         <section class="wb-inspector-section">
           <span class="wb-field-label">Selection</span>
           <strong id="wb-selection">0 selected</strong>
