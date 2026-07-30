@@ -159,8 +159,9 @@ fn a5_cubic_tangent_edit_solves_and_zero_speed_rolls_back() {
         );
         assert_eq!(session.document().point(a).unwrap().position, [0.0, 0.0]);
         let solved_p0 = session.document().point(p0).unwrap().position;
-        assert!(solved_p0[0].abs() <= 1.0e-12, "{solved_p0:?}");
-        assert!(solved_p0[1].abs() <= 1.0e-12, "{solved_p0:?}");
+        let origin_roundoff = 4.0 * f64::EPSILON * scale.max(1.0);
+        assert!(solved_p0[0].abs() <= origin_roundoff, "{solved_p0:?}");
+        assert!(solved_p0[1].abs() <= origin_roundoff, "{solved_p0:?}");
         let solved_p1 = session.document().point(p1).unwrap().position;
         assert!((solved_p1[0] - scale).abs() <= tolerance, "{solved_p1:?}");
         assert!(

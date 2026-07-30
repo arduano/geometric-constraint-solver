@@ -4,9 +4,10 @@ use std::sync::{
 };
 
 use geosolve_core::{
-    AuditBinding, EvaluationError, LocalJacobian, PrioritySolveBackend, PrioritySolveScope,
-    Problem, ResidualBlock, ResidualCategory, ResidualEvaluator, ResidualRowAudit,
-    SolveTermination, SolverConfig, SourceConstraint, VariableBlock, VariableId, VariableValue,
+    AuditBinding, EvaluationError, LocalJacobian, OperationControl, OperationOutcome,
+    PrioritySolveBackend, PrioritySolveScope, Problem, ResidualBlock, ResidualCategory,
+    ResidualEvaluator, ResidualRowAudit, SolveTermination, SolverConfig, SourceConstraint,
+    VariableBlock, VariableId, VariableValue,
 };
 
 #[derive(Clone, Debug)]
@@ -526,6 +527,111 @@ fn zero_cost_temporary_circle_manifold_allows_opposite_preference_at_all_scales(
             audited_category_cost(&report, ResidualCategory::Temporary),
         );
     }
+}
+
+#[test]
+fn zero_cost_temporary_row_space_blocks_a_conflicting_rank_deficient_preference() {
+    let mut problem = Problem::new();
+    let variable = problem.add_variable(VariableBlock::vec2([1.0, 0.0], [1.0, 1.0]).unwrap());
+    add_circle(
+        &mut problem,
+        variable,
+        1.0,
+        CircleDistance::unrestricted(1.0),
+    );
+    add_point_target(
+        &mut problem,
+        variable,
+        ResidualCategory::Temporary,
+        [1.0, 0.0],
+        1.0,
+    );
+    add_point_target(
+        &mut problem,
+        variable,
+        ResidualCategory::Preference,
+        [-1.0, 0.0],
+        1.0,
+    );
+
+    let report = problem.solve(SolverConfig::default()).unwrap();
+    assert_eq!(
+        report.termination,
+        SolveTermination::Converged,
+        "{report:#?}"
+    );
+    assert_normalized_point(point(&problem, variable), [1.0, 0.0], 1.0);
+    let temporary = report
+        .priority_solves
+        .iter()
+        .find(|item| item.category == ResidualCategory::Temporary)
+        .unwrap();
+    let preference = report
+        .priority_solves
+        .iter()
+        .find(|item| item.category == ResidualCategory::Preference)
+        .unwrap();
+    assert_eq!(temporary.final_cost, Some(0.0));
+    assert_eq!(preference.attained_temporary_cost, Some(0.0));
+    assert!(
+        preference
+            .protected_temporary
+            .iter()
+            .all(|protected| protected.preserved),
+        "{preference:#?}"
+    );
+}
+
+#[test]
+fn near_zero_temporary_on_a_nonlinear_rank_deficient_manifold_has_bounded_work() {
+    let mut problem = Problem::new();
+    let initial_angle = 0.2_f64;
+    let target_angle = 0.27_f64;
+    let initial = [initial_angle.cos(), initial_angle.sin()];
+    let target = [target_angle.cos(), target_angle.sin()];
+    let variable = problem.add_variable(VariableBlock::vec2(initial, [1.0, 1.0]).unwrap());
+    add_circle(
+        &mut problem,
+        variable,
+        1.0,
+        CircleDistance::unrestricted(1.0),
+    );
+    add_point_target(
+        &mut problem,
+        variable,
+        ResidualCategory::Temporary,
+        target,
+        1.0,
+    );
+    add_point_target(
+        &mut problem,
+        variable,
+        ResidualCategory::Preference,
+        initial,
+        1.0,
+    );
+
+    let OperationOutcome::Completed { value, report } = problem
+        .solve_controlled(SolverConfig::default(), OperationControl::unlimited())
+        .unwrap()
+    else {
+        panic!("unlimited priority solve was interrupted")
+    };
+    assert_eq!(value.termination, SolveTermination::Converged, "{value:#?}");
+    assert!(value.hard_residual_max <= 1.0e-9);
+    assert_normalized_point(point(&problem, variable), target, 1.0);
+    assert!(
+        value
+            .priority_solves
+            .iter()
+            .flat_map(|priority| &priority.protected_temporary)
+            .all(|protected| protected.preserved),
+        "{value:#?}"
+    );
+    assert!(
+        report.consumed.factorizations <= 20 && report.consumed.nonlinear_iterations <= 20,
+        "{report:#?}"
+    );
 }
 
 #[test]
