@@ -156,7 +156,7 @@ M8 is ready for review only when every item below is objectively present. These 
 The checked wording below is the preserved M8 completion record. Its then-current M8-M22
 allocations are historical; `PLAN.md` now governs completed work through the approved M61 gate,
 approved M62 authoring milestone, approved M63 canvas-constraint presentation and approved M64
-editable-sample cleanup, with M65 awaiting scope.
+editable-sample cleanup, with M65 implemented and awaiting focused human UAT.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -940,8 +940,37 @@ finding dispositions and approval record are retained in `docs/M53_UAT.md`.
 
 M54-M62 are the completed post-M53 sequence. M62 received explicit supervising-human approval on
 2026-07-29, and M63 and M64 received explicit supervising-human approval on 2026-07-30. No old
-browser E2E qualification may return. M65 is an empty core-hardening/performance placeholder;
-acceptance criteria will be added only after its scope is supplied.
+browser E2E qualification may return. M65 is the active milestone below.
+
+## M65 acceptance: continuation, bounded work and explicit assembly branches
+
+Status: implementation and mechanical qualification complete; focused human UAT pending.
+
+- [x] Consecutive pointer samples continue from the last independently accepted preview, while a
+  failed or ambiguous sample retains that preview instead of selecting another valid root.
+- [x] Ordinary pointer samples execute exactly one retained attempt with the cursor Temporary
+  target above accepted previous-state Preferences and no passive-anchor retry corpus.
+- [x] Stable headless evidence exposes attempt count, continuation, acceptance/rejection stage,
+  hard/Temporary/Preference iterations and deterministic operation work.
+- [x] Feasible zero-cost Temporary objectives are independently validated before their complete
+  row space protects Preferences; tiny nonzero objectives, sparse backend evidence, hard residual
+  validation, finiteness and explicit branch state retain their frozen behavior.
+- [x] The Scotch-yoke, scissor-jack, scissor-tower and pantograph corpus accepts all samples at
+  one attempt each. Recorded `(factorizations, nonlinear iterations)` are `(17,17)`, `(18,18)`,
+  `(24,24)` and `(33,21)` respectively: pantograph is below twice tower and over 99.9% below the
+  starting-commit `(244824,240953)` evidence.
+- [x] Alternate-branch search uses no more than 24 deterministic seeds and offers only finite,
+  independently accepted, exact-stamped alternatives representable by persistent branch state.
+  Ghost preview, accept, cancel, stale rejection, atomic publication, Undo/Redo and replay are
+  directly qualified.
+- [x] Editable locked-elbow and fixed-input four-bar branch examples use ordinary public
+  document/session/coordinator APIs and contain no guide state or browser equation.
+- [x] Formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature WASM,
+  release Trunk build and `git diff --check` pass on the final candidate.
+- [ ] The supervising human completes and explicitly approves `docs/M65_UAT.md`.
+
+M65 does not add a residual family, relaxed tolerance, sample-ID policy, worker architecture or
+global root enumeration. It cannot close until the remaining human-UAT box is checked.
 
 ### M54: stable diagnostics
 

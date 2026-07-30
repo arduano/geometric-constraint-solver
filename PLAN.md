@@ -37,7 +37,7 @@ host-integration and interaction-consumer cut; M46-M53 perform the cleanup rebas
 host-semantics UAT; M54-M62 complete the subsequent functional work, approved advanced UAT and
 approved CAD-style authoring, and M63 completes approved geometry-anchored canvas constraint and
 dimension presentation. M64 completes the approved editable-sample cleanup and focused UAT cut;
-M65 is an empty core-hardening/performance placeholder awaiting scope. This deliverable does not
+M65 is the active continuation, bounded-work and explicit assembly-branch UAT cut. This deliverable does not
 include a solid B-rep kernel, meshing or 3D sketch curves.
 
 ### Deliverable 2: 2D and 3D rigid-body kinematics
@@ -2947,10 +2947,55 @@ scorecard areas are recorded Pass in `docs/M64_UAT.md`; no M64 finding remains o
 
 ### M65: core hardening and performance
 
-Status: empty placeholder awaiting supervising-user scope.
+Status: implementation complete; focused human UAT pending.
 
-Theme: core hardening and performance. Goals, boundaries, acceptance criteria, workloads and the
-required milestone-ending UAT will be defined before implementation begins.
+Goal: make projected mechanism dragging continuation-stable and bounded in deterministic solver
+work, then prototype an explicit preview/accept workflow for representable assembly-branch
+changes.
+
+- [x] Continue each pointer sample from the last independently accepted preview, not the last
+  committed document; retain the last valid preview at ambiguity instead of jumping roots.
+- [x] Execute exactly one retained solve attempt per ordinary pointer sample. Keep the cursor
+  target above previous-state preferences and remove persistent-ID-ordered same-priority passive
+  anchor retries.
+- [x] Publish deterministic headless drag work evidence covering attempts, hard/priority
+  iterations, factorization work, retained reuse and rejection stage.
+- [x] Correct the rank-deficient preference path and reuse compatible retained linearization
+  state without weakening hard residual, finiteness, branch or priority validation.
+- [x] Add an exact-stamped bounded alternate-branch proposal with at most 24 deterministic seeds,
+  a non-authoritative ghost preview and explicit accept/cancel. Only finite independently valid
+  alternatives representable by persistent branch state may be offered.
+- [x] Add editable locked-elbow and open/crossed four-bar branch examples without guide state or
+  browser-owned equations.
+- [x] Directly regress Scotch-yoke two-DOF dragging after guide deletion, scissor-jack continuity,
+  independent twin rollers, pantograph multi-DOF motion, stale/failed branch proposals,
+  transactionality, Undo/Redo and persistence.
+- [x] Freeze starting-commit `927efb7` work evidence and reduce the pantograph drag corpus by at
+  least 90%, with one solve per sample and no more than twice the corresponding scissor-tower
+  deterministic work. Wall-clock timing is characterization only.
+- [x] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature
+  WASM check, release Trunk build and `git diff --check`.
+- [ ] Complete and explicitly approve the focused M65 Tailscale UAT.
+
+Gate: ordinary drag never changes assembly branch implicitly; failed or ambiguous continuation
+retains the last valid preview; branch switching is explicit, bounded, exact-stamped and atomic;
+hard success still requires independent residual validation; no sample IDs, relaxed tolerances,
+new residual family, worker architecture or global root enumeration is introduced. M65 closes
+only after focused supervising-human UAT approval.
+
+Implementation note (2026-07-30): ordinary drag now carries one retained attempt per sample and
+continues from the last independently accepted preview. Rejection retains that preview. The
+headless work corpus records `(factorizations, nonlinear iterations)` as Scotch yoke `(17,17)`,
+scissor jack `(18,18)`, scissor tower `(24,24)` and pantograph `(33,21)`, reducing the
+starting-commit pantograph evidence `(244824,240953)` by more than 99.9%. A feasible-zero
+Temporary pass is independently revalidated before its full row space protects lower Preference
+work; it is used only when that component also owns movable Preference stabilizers, so established
+Temporary-only construction drags retain their general lexicographic path. Tiny nonzero secondary
+objectives remain optimized. Alternate branch search inspects at most 24 deterministic seeds and
+publishes only exact-stamped, finite, independently accepted, persistently representable ghost
+proposals. The complete format/diff, warnings-denied Clippy, locked all-feature workspace, WASM
+and release Trunk gates pass on the final source state. See `docs/M65_IMPLEMENTATION.md` and
+`docs/M65_UAT.md`. Only explicit supervising-human approval remains open.
 
 ## Explicit non-goals
 

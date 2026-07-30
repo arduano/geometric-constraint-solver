@@ -1268,7 +1268,8 @@ prepared concurrency, incremental scale and the separate operations/production-t
 companions; M60 completes the advanced workbench and M61 completes its approved advanced UAT.
 M62 completes approved CAD-style constraint/dimension authoring, and M63 completes approved
 geometry-anchored canvas constraint/dimension presentation, and M64 completes the approved editable
-purpose-based sample library. M65 is an empty core-hardening/performance placeholder; no later
+purpose-based sample library. M65 is the active continuation, bounded-work and explicit
+assembly-branch UAT cut; no later
 release sequence is currently scheduled. Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -1840,7 +1841,7 @@ The top **Samples** selector has exactly one group level:
 
 | Purpose group | Editable samples |
 | --- | --- |
-| Mechanisms | Drafting compass · 1 DOF; Bezier continuity bridge · 1 DOF; Twin-roller cam · 2 DOF; Tangent orbit · 1 DOF; Elliptic trammel · 1 DOF; Scotch yoke · 1 DOF; Rotating constraint square · 1 DOF; Scissor jack · 1 DOF; Five-stage scissor tower · 1 DOF; Peaucellier inversor · 1 DOF; Four-bar coupler · 1 DOF; Pantograph linkage · 2 DOF; Three-link drawing arm · 3 DOF |
+| Mechanisms | Drafting compass · 1 DOF; Bezier continuity bridge · 1 DOF; Twin-roller cam · 2 DOF; Tangent orbit · 1 DOF; Elliptic trammel · 1 DOF; Scotch yoke · 1 DOF; Rotating constraint square · 1 DOF; Scissor jack · 1 DOF; Five-stage scissor tower · 1 DOF; Peaucellier inversor · 1 DOF; Four-bar coupler · 1 DOF; Pantograph linkage · 2 DOF; Three-link drawing arm · 3 DOF; Locked elbow · open/crossed branches; Locked four-bar · open/crossed branches |
 | Constraints & dimensions | Constraint and dimension sampler; Tangent and radial-normal construction; Contact branch specimen; Angle and dimension annotations; Contextual constraint annotations; Dense constraint junction |
 | Curves & constructions | Construction and reference geometry; Curve family gallery; Periodic NURBS specimen |
 
@@ -1858,11 +1859,35 @@ translated sides and a diagonal midpoint, leaving two freedoms. Three-link drawi
 fixed origin and link lengths `3`, `sqrt(8)` and `sqrt(5)`, leaving three freedoms. Each has
 scale-invariant persistent roles and is directly checked at `1e-6`, `1` and `1e6`.
 
-Projected drag is sample-agnostic. The retained coordinator first applies previous-state
-preferences; if that priority pass cannot publish an independently valid preview, it tries finite
-non-fixed accepted points as a passive temporary stability anchor. This replaces the deleted
-twin-roller browser mapping. Temporary targets remain attempt evidence and do not enter the
-publication request or serialized workspace.
+Projected drag is sample-agnostic. M65 executes exactly one retained attempt per pointer sample,
+places the cursor Temporary target above previous-state Preferences and continues from the last
+independently accepted preview. Rejection leaves the last valid preview in place and exposes a
+typed rejection stage plus deterministic work; there is no passive-anchor retry or sample mapping.
+Temporary targets remain attempt evidence and do not enter the publication request or serialized
+workspace.
+
+The M65 deterministic path corpus deletes the Scotch-yoke horizontal guide before three
+two-freedom samples, then runs three samples each through scissor jack, five-stage scissor tower
+and pantograph. All samples accept in one attempt. Frozen `(factorizations, nonlinear iterations)`
+are Scotch yoke `(17,17)`, scissor jack `(18,18)`, tower `(24,24)` and pantograph `(33,21)`.
+Starting commit `927efb7` required pantograph `(244824,240953)`. The twin-roller fixture separately
+proves that dragging one roller does not move the other, that a rejected sample retains the last
+valid preview, and that a later valid sample continues from it.
+
+Two additional ordinary editable leaves exercise explicit assembly branches:
+
+- `locked-elbow-branches`: two fixed endpoints and two fixed link lengths leave a discrete
+  open/crossed elbow choice but no ordinary motion. Selecting the elbow permits a bounded ghost
+  proposal and atomic accept/cancel.
+- `locked-four-bar-branches`: the existing open four-bar receives a fixed input crank, leaving
+  open/crossed output assembly modes for explicit preview. The original one-DOF four-bar remains
+  unchanged.
+
+The search uses eight canonical directions at radii `0.5`, `1` and `2` for at most 24 seeds.
+Only finite independently accepted candidates with unchanged DOF, normalized hard residual at
+most `1e-9`, exact design/accepted stamps and persistent line-branch directions may be offered.
+No alternative, ambiguity, unrepresentable state and exhausted work are explicit outcomes.
+Ghosts are non-authoritative until Accept; Cancel and stale acceptance are atomic no-ops.
 
 `docs/M64_UAT.md` records the approved focused human scorecard.
 
