@@ -48,14 +48,15 @@ mod session;
 pub use alpha_scenarios::{
     A1ScenarioIds, A2ScenarioIds, A3ScenarioIds, A4ScenarioIds, A5ScenarioIds, A8ScenarioIds,
     AlphaPerformanceSize, AlphaProfileScenarioUat, AlphaScenarioFixture, AlphaScenarioIds,
-    AlphaScenarioKind, AlphaScenarioUat, ConicCircleLimitIds, ConicGalleryIds, ConicTangencyIds,
-    DiagnosticEndpointBoundIds, DiagnosticRankDropIds, DiagnosticRedundancyIds, DirectedAngleIds,
-    EntityMirrorIds, ExactTranslatedOffsetIds, GenericFilletLabIds, M27ReferenceFilletIds,
-    M28TrimmedFilletIds, MotionCamIds, MotionDrawingArmIds, MotionFourBarCouplerIds,
-    MotionOrbitIds, MotionPantographIds, MotionPeaucellierIds, MotionRotatingSquareIds,
-    MotionScissorIds, MotionScissorTowerIds, MotionScotchYokeIds, MotionTrammelIds,
-    NurbsDifferentialIds, NurbsLabIds, ProfileScenarioIds, StressBridgeIds, StressCompassIds,
-    SupportingOffsetIds, alpha_performance_document, alpha_scenario,
+    AlphaScenarioKind, AlphaScenarioUat, BranchLockedElbowIds, ConicCircleLimitIds,
+    ConicGalleryIds, ConicTangencyIds, DiagnosticEndpointBoundIds, DiagnosticRankDropIds,
+    DiagnosticRedundancyIds, DirectedAngleIds, EntityMirrorIds, ExactTranslatedOffsetIds,
+    GenericFilletLabIds, M27ReferenceFilletIds, M28TrimmedFilletIds, MotionCamIds,
+    MotionDrawingArmIds, MotionFourBarCouplerIds, MotionOrbitIds, MotionPantographIds,
+    MotionPeaucellierIds, MotionRotatingSquareIds, MotionScissorIds, MotionScissorTowerIds,
+    MotionScotchYokeIds, MotionTrammelIds, NurbsDifferentialIds, NurbsLabIds, ProfileScenarioIds,
+    StressBridgeIds, StressCompassIds, SupportingOffsetIds, alpha_performance_document,
+    alpha_scenario,
 };
 pub use attributes::{SketchAttributeError, SketchAttributes};
 pub use beziers::{BezierCurve, BezierEvaluationError, BezierKind};
@@ -70,8 +71,8 @@ pub use compiler::{
     MIN_REPRESENTABLE_RADIUS, NurbsWeightVariableMapping, PointVariableMapping,
     ReferenceDimensionValue, SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE, SketchAcceptedRedundancy,
     SketchBound, SketchBoundMapping, SketchGeometry, SketchSolveRequest, SketchSolveResult,
-    SketchSource, SketchSourceMapping, SolveRejection, SolvedArc, SolvedCircle, SolvedConic,
-    SolvedConicKind, SolvedNurbs, SolvedPoint,
+    SketchSolveWorkSummary, SketchSource, SketchSourceMapping, SolveRejection, SolvedArc,
+    SolvedCircle, SolvedConic, SolvedConicKind, SolvedNurbs, SolvedPoint,
 };
 pub use conics::{ConicCurve, ConicGeometry, ConicKind};
 pub use curves::{
@@ -129,21 +130,21 @@ pub use document_lowering::{
     LoweredDocument, PointRuntimeMapping, RuntimeCurve, RuntimeSource,
 };
 pub use document_session::{
-    DocumentCommand, DocumentCommandEffect, DocumentCommandOutcome, DocumentDragTarget,
-    DocumentEdit, DocumentParameterOutputProposal, DocumentSessionError, DocumentSolveRequest,
-    DocumentSolveResult, DocumentTransactionOutcome, EXTERNAL_SNAPSHOT_SET_VERSION_V1,
-    ExternalLineOrientationV1, ExternalSnapshotDigest, ExternalSnapshotEntry,
-    ExternalSnapshotFeatureV1, ExternalSnapshotInputError, ExternalSnapshotResourcesV1,
-    ExternalSnapshotSet, ExternalSnapshotSetDigest, ExternalSnapshotSetV1,
-    MAX_EXTERNAL_SNAPSHOT_CONTROLS, MAX_EXTERNAL_SNAPSHOT_ENTRIES, MAX_EXTERNAL_SNAPSHOT_POINTS,
-    MAX_EXTERNAL_SNAPSHOT_SPANS, MAX_PARAMETER_BATCH_ENTRIES, ParameterBatch, ParameterBatchEntry,
-    ParameterDigest, ParameterValue, PreparedSketchCommit, PreparedSketchInput, PreparedSketchJob,
-    PreparedSketchOperation, PreparedSketchOperationKind, PreparedSketchPatch,
-    PreparedSketchSnapshot, RetainedDocumentTransactionOutcome, RetainedSketchDocumentSession,
-    SketchAcceptedDocumentRedundancy, SketchAcceptedDocumentState, SketchAcceptedRevision,
-    SketchAcceptedStateIdentity, SketchAttemptFailure, SketchAttemptFailureKind,
-    SketchAttemptIdentity, SketchAttemptInput, SketchAttemptRevision, SketchDesignIdentity,
-    SketchDesignRevision, SketchDocumentAttempt, SketchDocumentSession,
+    DocumentCommand, DocumentCommandEffect, DocumentCommandOutcome, DocumentCurveBranchEdit,
+    DocumentDragTarget, DocumentEdit, DocumentParameterOutputProposal, DocumentSessionError,
+    DocumentSolveRequest, DocumentSolveResult, DocumentTransactionOutcome,
+    EXTERNAL_SNAPSHOT_SET_VERSION_V1, ExternalLineOrientationV1, ExternalSnapshotDigest,
+    ExternalSnapshotEntry, ExternalSnapshotFeatureV1, ExternalSnapshotInputError,
+    ExternalSnapshotResourcesV1, ExternalSnapshotSet, ExternalSnapshotSetDigest,
+    ExternalSnapshotSetV1, MAX_EXTERNAL_SNAPSHOT_CONTROLS, MAX_EXTERNAL_SNAPSHOT_ENTRIES,
+    MAX_EXTERNAL_SNAPSHOT_POINTS, MAX_EXTERNAL_SNAPSHOT_SPANS, MAX_PARAMETER_BATCH_ENTRIES,
+    ParameterBatch, ParameterBatchEntry, ParameterDigest, ParameterValue, PreparedSketchCommit,
+    PreparedSketchInput, PreparedSketchJob, PreparedSketchOperation, PreparedSketchOperationKind,
+    PreparedSketchPatch, PreparedSketchSnapshot, RetainedDocumentTransactionOutcome,
+    RetainedSketchDocumentSession, SketchAcceptedDocumentRedundancy, SketchAcceptedDocumentState,
+    SketchAcceptedRevision, SketchAcceptedStateIdentity, SketchAttemptFailure,
+    SketchAttemptFailureKind, SketchAttemptIdentity, SketchAttemptInput, SketchAttemptRevision,
+    SketchDesignIdentity, SketchDesignRevision, SketchDocumentAttempt, SketchDocumentSession,
     SketchLifecycleRevisionHighWater,
 };
 pub use geosolve_core::{

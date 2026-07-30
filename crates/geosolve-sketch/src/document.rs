@@ -6427,6 +6427,21 @@ impl SketchDocument {
         Ok(())
     }
 
+    /// Returns one line/polyline span's persistent branch direction.
+    #[must_use]
+    pub fn curve_branch_direction(&self, span: CurveSpan) -> Option<[f64; 2]> {
+        let curve = self.curve(span.curve)?;
+        match &curve.definition {
+            CurveDefinition::Line {
+                branch_direction, ..
+            } if span.segment == 0 => Some(*branch_direction),
+            CurveDefinition::Polyline {
+                branch_directions, ..
+            } => branch_directions.get(span.segment as usize).copied(),
+            _ => None,
+        }
+    }
+
     /// Replaces one line/polyline segment branch without changing curve identity.
     ///
     /// # Errors

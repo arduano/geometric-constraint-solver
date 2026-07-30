@@ -1319,6 +1319,25 @@ pub struct SketchSolveResult {
     pub acceptance_hard_residual_max: Option<f64>,
 }
 
+/// Stable deterministic work summary for one sketch solve result.
+///
+/// This deliberately aggregates the numerical kernel's evolving component report
+/// into the small set of counters needed by retained interaction hosts. It is not
+/// persistence state and wall-clock duration is intentionally absent.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct SketchSolveWorkSummary {
+    /// Hard nonlinear iterations summed across every component.
+    pub hard_iterations: usize,
+    /// Temporary-priority outer iterations summed across every group.
+    pub temporary_iterations: usize,
+    /// Previous-state preference outer iterations summed across every group.
+    pub preference_iterations: usize,
+    /// Hard components whose retained result was reused without a hard solve.
+    pub reused_components: usize,
+    /// Total hard components in the returned report.
+    pub components: usize,
+}
+
 /// Accepted-only redundancy classification in stable sketch runtime identities.
 ///
 /// A fully redundant source has every active row classified as redundant. The
@@ -1355,6 +1374,35 @@ impl SketchSolveResult {
     #[must_use]
     pub const fn unstable_core_report(&self) -> &geosolve_core::SolveReport {
         &self.core_report
+    }
+
+    /// Returns deterministic solve-work evidence without exposing the raw core report.
+    #[must_use]
+    pub fn work_summary(&self) -> SketchSolveWorkSummary {
+        let mut summary = SketchSolveWorkSummary {
+            components: self.core_report.component_solves.len(),
+            ..SketchSolveWorkSummary::default()
+        };
+        for component in &self.core_report.component_solves {
+            summary.hard_iterations = summary.hard_iterations.saturating_add(component.iterations);
+            summary.reused_components += usize::from(component.reused);
+        }
+        for priority in &self.core_report.priority_solves {
+            match priority.category {
+                geosolve_core::ResidualCategory::Temporary => {
+                    summary.temporary_iterations = summary
+                        .temporary_iterations
+                        .saturating_add(priority.iterations);
+                }
+                geosolve_core::ResidualCategory::Preference => {
+                    summary.preference_iterations = summary
+                        .preference_iterations
+                        .saturating_add(priority.iterations);
+                }
+                geosolve_core::ResidualCategory::Hard => {}
+            }
+        }
+        summary
     }
 
     /// Returns authoritative redundancy only for an independently accepted result.
@@ -1907,7 +1955,16 @@ impl Sketch {
         config: SolverConfig,
         mut control: Option<&mut geosolve_core::OperationController>,
     ) -> Result<Option<SketchSolveResult>, SketchError> {
-        let config = acceptance_solver_config(config);
+        let mut config = acceptance_solver_config(config);
+        if request.drag.is_some() {
+            // Pointer previews are non-authoritative geometry projections. Running
+            // bounded source-removal diagnostics for every sample repeats complete
+            // nonlinear solves and dominated multi-DOF mechanism work. The exact
+            // release publication has no drag target and recomputes the ordinary
+            // accepted diagnostic sections.
+            config.redundancy_diagnostic_budget.enabled = false;
+            config.conflict_diagnostic_budget.enabled = false;
+        }
         let Some(mut compiled) = self.compile_inner(request, control.as_deref_mut())? else {
             return Ok(None);
         };

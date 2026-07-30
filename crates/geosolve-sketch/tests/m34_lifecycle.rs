@@ -1,4 +1,4 @@
-use geosolve_core::{HardValidity, SolverConfig};
+use geosolve_core::{HardValidity, OperationControl, SolverConfig};
 use geosolve_sketch::{
     CurveDefinition, CurveSpan, DesignPointId, DocumentCommandEffect, DocumentConstraintDefinition,
     DocumentDimensionDefinition, DocumentDimensionMode, DocumentEdit, DocumentSessionError,
@@ -642,6 +642,150 @@ fn preview_seeded_point_apply_preserves_the_accepted_mechanism_configuration() {
             branch(&preview_document).map(f64::to_bits)
         );
     }
+}
+
+#[test]
+fn accepted_preview_continuation_retains_base_provenance_and_commits_exactly() {
+    let (mut session, points, _) = two_link_session();
+    let base_accepted = session.accepted_state().unwrap().identity();
+    let first = accepted_two_link_preview(&session, points[2]);
+    let mut second = session.clone();
+    let request = DocumentSolveRequest::default()
+        .with_previous_state_preferences()
+        .with_drag(points[2], [0.5, 0.25]);
+    second
+        .reattempt_from_accepted_preview_controlled(
+            second.design_identity(),
+            request,
+            &first,
+            OperationControl::unlimited(),
+        )
+        .unwrap();
+
+    let second_accepted = second.accepted_state().expect("continued preview accepted");
+    assert_eq!(
+        second.last_attempt().parent_accepted_identity(),
+        Some(base_accepted)
+    );
+    assert_eq!(
+        second.last_attempt().accepted_state_identity(),
+        Some(second_accepted.identity())
+    );
+    let position = second_accepted
+        .document()
+        .point(points[2])
+        .unwrap()
+        .position;
+    let outcome = session
+        .apply_point_position_from_preview(session.design_identity(), points[2], position, &second)
+        .unwrap();
+    assert!(outcome.published_accepted_identity().is_some());
+    assert_eq!(
+        session
+            .accepted_state()
+            .unwrap()
+            .document()
+            .point(points[2])
+            .unwrap()
+            .position
+            .map(f64::to_bits),
+        position.map(f64::to_bits)
+    );
+}
+
+#[test]
+fn accepted_preview_continuation_rejects_stale_foreign_and_unpublished_inputs_atomically() {
+    let (mut session, points, _) = two_link_session();
+    let preview = accepted_two_link_preview(&session, points[2]);
+    let before = (
+        session.design_identity(),
+        session.last_attempt().identity(),
+        session.accepted_state().unwrap().identity(),
+        session.export_design_json().unwrap(),
+        session.export_accepted_json().unwrap(),
+    );
+    let request = DocumentSolveRequest::default()
+        .with_previous_state_preferences()
+        .with_drag(points[2], [0.5, 0.25]);
+
+    let (foreign_base, foreign_points, _) = two_link_session();
+    let foreign = accepted_two_link_preview(&foreign_base, foreign_points[2]);
+    assert!(matches!(
+        session.reattempt_from_accepted_preview_controlled(
+            session.design_identity(),
+            request,
+            &foreign,
+            OperationControl::unlimited(),
+        ),
+        Err(DocumentSessionError::PreviewForeignDocument)
+    ));
+    assert_eq!(session.design_identity(), before.0);
+    assert_eq!(session.last_attempt().identity(), before.1);
+    assert_eq!(session.accepted_state().unwrap().identity(), before.2);
+    assert_eq!(session.export_design_json().unwrap(), before.3);
+    assert_eq!(session.export_accepted_json().unwrap(), before.4);
+
+    session
+        .reattempt(session.design_identity(), DocumentSolveRequest::default())
+        .unwrap();
+    assert!(matches!(
+        session.reattempt_from_accepted_preview_controlled(
+            session.design_identity(),
+            request,
+            &preview,
+            OperationControl::unlimited(),
+        ),
+        Err(DocumentSessionError::PreviewAcceptedProvenance)
+    ));
+
+    let (mut rejected_base, rejected_points, _) = two_link_session();
+    let conflict = DocumentEdit::CreateConstraint {
+        label: "impossible fixed end".into(),
+        definition: DocumentConstraintDefinition::FixedPoint {
+            point: rejected_points[2],
+            target: [5.0, 5.0],
+        },
+    };
+    rejected_base
+        .apply(rejected_base.design_identity(), conflict)
+        .unwrap();
+    assert!(
+        rejected_base
+            .last_attempt()
+            .accepted_state_identity()
+            .is_none()
+    );
+    let rejected = rejected_base.clone();
+    assert!(matches!(
+        rejected_base.reattempt_from_accepted_preview_controlled(
+            rejected_base.design_identity(),
+            request,
+            &rejected,
+            OperationControl::unlimited(),
+        ),
+        Err(DocumentSessionError::PreviewNotAccepted)
+    ));
+
+    let (mut unchanged, unchanged_points, _) = two_link_session();
+    let stale = accepted_two_link_preview(&unchanged, unchanged_points[2]);
+    unchanged
+        .apply(
+            unchanged.design_identity(),
+            DocumentEdit::CreatePoint {
+                label: "advance".into(),
+                position: [3.0, 3.0],
+            },
+        )
+        .unwrap();
+    assert!(matches!(
+        unchanged.reattempt_from_accepted_preview_controlled(
+            unchanged.design_identity(),
+            request,
+            &stale,
+            OperationControl::unlimited(),
+        ),
+        Err(DocumentSessionError::PreviewStaleDesign)
+    ));
 }
 
 #[test]
