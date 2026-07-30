@@ -56,10 +56,12 @@ placement. Every final glyph center maintains at least 22 px separation from eve
 including glyphs whose semantic origins are merely nearby. The rotating-square headless regression
 checks all final pairs and confirms displaced glyphs retain leaders. Human retest remains pending.
 
-Follow-up `M63-F003` makes visible fan-out leaders contextual hover corridors. Pointer movement
-from related geometry along a leader transfers hover to the persistent constraint; unrelated blank
-canvas still clears hover immediately. Headless transition coverage owns both outcomes. Human
-retest remains pending.
+Follow-up `M63-F003` made visible fan-out leaders contextual hover corridors, but human retest
+showed that was insufficient when the pointer departed from another location on the geometry.
+`M63-F004` supersedes it: the headless editor retains the last direct geometry-hover position,
+builds bounded corridors from there to directly related annotations, chooses the nearest
+overlapping corridor and clears immediately outside all corridors. The regression is explicitly
+outside both geometry and leader hit tolerances. Human retest remains pending.
 
 ## 5. Known limitations
 

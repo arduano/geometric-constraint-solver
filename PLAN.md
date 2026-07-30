@@ -2847,10 +2847,12 @@ fan-out now collision-checks deterministic concentric candidates and requires 22
 between every final glyph center while retaining semantic leaders. The actual rotating-square
 fixture directly verifies all marker pairs; focused human retest remains pending.
 
-UAT finding `M63-F003` (2026-07-30) made visible leaders contextual hover corridors. Hover now
-transfers from related geometry to a persistent constraint while crossing its leader, but still
-clears on unrelated blank canvas. Direct headless transition coverage passes; focused human retest
-remains pending.
+UAT finding `M63-F003` (2026-07-30) made visible leaders contextual hover corridors, but human
+retest showed that correction was insufficient for paths beginning elsewhere on related geometry.
+`M63-F004` supersedes it by retaining the actual last geometry-hover position and constructing
+bounded corridors from there to directly related annotations, selecting the nearest overlapping
+corridor and clearing outside all corridors. The regression begins outside both geometry and
+leader hit tolerances; focused human retest remains pending.
 
 ## Explicit non-goals
 

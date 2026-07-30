@@ -1140,9 +1140,9 @@ const CANVAS_GLYPH_STEPS: [ScenarioStep; 5] = [
         expected: "The radius stays on its canonical circle branch without jumping to unrelated points around the circumference.",
     },
     ScenarioStep {
-        instruction: "Move from related geometry along a revealed leader onto its symbol, then click it.",
+        instruction: "Move directly from any hovered location on related geometry toward a revealed symbol, then click it.",
         action: None,
-        expected: "Hover remains contextual through the leader corridor, transfers to the symbol, and the persistent constraint becomes selected; moving into unrelated blank canvas clears it.",
+        expected: "A bounded contextual corridor starts at the actual geometry-hover position, transfers hover to the nearest related symbol, and permits selection; moving into unrelated blank canvas clears it.",
     },
     ScenarioStep {
         instruction: "Use Tab and Enter to focus and activate a visible annotation.",
