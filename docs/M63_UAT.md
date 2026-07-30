@@ -11,7 +11,8 @@ Status: candidate awaiting supervising-human review.
   remediation in `e020477`. The insufficient `M63-F003` remediation is preserved in `e160116`;
   the insufficient `M63-F004` remediation is preserved in `ea5dabd`, and `M63-F005` supersedes it
   in `88295f5`. The icon-language refinement `M63-F006` is implemented in `1978e33`;
-  `M63-F007` moves line-relation markers to line interiors in `e75bb1b`.
+  `M63-F007` moves line-relation markers to line interiors in `e75bb1b`; `M63-F008`
+  specializes visible line-line perpendicularity as right-angle geometry in `22f52b3`.
 - Temporary Tailscale endpoint: `http://100.94.63.83:8080/`.
 - Scenario group: **Scenarios → M63 Canvas constraints**
 - Mechanical gate: format, warnings-denied workspace Clippy, all-feature workspace tests,
@@ -86,6 +87,14 @@ Status: candidate awaiting supervising-human review.
   parallel, perpendicular, collinear and equal-length occurrences now use the geometric midpoint
   of each related line. The direct parallel-relation regression requires both symbols to remain
   inside their respective lines. Recheck the line relations in the contextual and crowded leaves.
+- `M63-F008` — implemented; human review pending. Line-line perpendicularity is an angular
+  relationship, but it still appeared as two detached compact symbols after `M63-F007`. A
+  perpendicular constraint now exposes one selectable square corner at the finite visible
+  supporting-line intersection. Endpoint-adjacent spans place the square between their interiors,
+  dense fan-out reserves its corner, and an off-screen intersection falls back to the compact
+  midpoint symbols rather than inventing false geometry. Curve-contact Normal remains a distinct
+  contact-local symbol. Recheck every corner in `canvas-crowded-annotations`, including hover,
+  click, zoom and pan.
 
 ## Approval
 

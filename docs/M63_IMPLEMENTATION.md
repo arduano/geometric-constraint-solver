@@ -95,6 +95,18 @@ equal-length relations now use the geometric midpoint of each line's accepted en
 Curve/contact/radial anchors are unchanged. The parallel-relation regression requires one
 undisplaced marker at each related line midpoint. Human visual review remains pending.
 
+Follow-up `M63-F008` specializes line-line perpendicular presentation. Public
+`SceneAnnotationGeometry::RightAngle` carries the finite supporting-line vertex and three square
+corner points needed for rendering, exact hit testing, contextual corridors and targeted problem
+placement. The 12 px square chooses rays into a line span when the intersection is at one of its
+endpoints; otherwise the persistent directed spans deterministically choose the quadrant. Its
+corner is reserved before ordinary glyph fan-out so dense junction symbols do not cover it. If
+the supporting-line intersection lies outside the viewport margin, presentation falls back to the
+compact perpendicular midpoint glyphs instead of drawing a geometrically false corner. A
+curve-contact Normal remains a separate contact-local glyph. Direct headless and workbench tests
+cover exact geometry, selection, SVG output and the rotating-square density fixture. Human visual
+review remains pending.
+
 ## 5. Known limitations
 
 - Annotation layout is intentionally compact and deterministic, not a general-purpose CAD

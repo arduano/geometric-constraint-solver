@@ -114,6 +114,8 @@ endpoint fixture also corrects ordinary bounded contacts to default Start/End ne
 their picked endpoint parameter.
 M63 follow-up `M63-F007` places line-relation glyphs at the geometric midpoint of each related
 line instead of the first endpoint selected by two-sample polyline indexing.
+M63 follow-up `M63-F008` presents line-line perpendicularity as a selectable square corner at the
+supporting-line intersection while retaining the distinct contact-local curve Normal symbol.
 Old Chromium/CDP, HTTP serving, DOM-scraping, screenshot, wall-clock browser-timing and
 source-substring-scan gates remain retired.
 

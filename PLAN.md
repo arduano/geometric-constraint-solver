@@ -2880,6 +2880,14 @@ contact- and curve-specific annotations retain their existing semantic anchors. 
 multi-line regression requires both parallel markers to occupy their respective line midpoints;
 focused human review remains pending.
 
+UAT refinement `M63-F008` (2026-07-30) gives line-line perpendicularity angle-like geometric
+presentation instead of two generic midpoint glyphs. The headless scene now publishes a typed
+selectable `RightAngle` square at the finite on-screen supporting-line intersection, choosing the
+quadrant that enters endpoint-adjacent spans and reserving its corner during dense glyph fan-out.
+An off-screen intersection retains the compact midpoint fallback rather than inventing a false
+corner, and curve-contact Normal keeps its distinct contact-local symbol. Direct headless,
+renderer and rotating-square density regressions pass; focused human review remains pending.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:
