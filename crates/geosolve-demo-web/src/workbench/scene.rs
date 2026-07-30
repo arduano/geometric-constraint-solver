@@ -5,9 +5,10 @@ use std::{collections::BTreeSet, fmt::Write as _};
 
 use geosolve_constraint_editor::{
     AdvancedConstructionKind, ConstructionPreview, ConstructionPreviewGeometry,
-    DimensionTargetDisplayUnit, EditorProblemCategory, EditorProblemMetadata, EditorProblemScope,
-    EditorProblemTarget, EditorScene, SceneAnnotationGeometry, SceneAnnotationKind,
-    SceneConstraintGlyph, ScreenPoint, SelectionItem, Viewport, display_dimension_target,
+    DimensionTargetDisplayUnit, EditorHoverState, EditorHoverTarget, EditorProblemCategory,
+    EditorProblemMetadata, EditorProblemScope, EditorProblemTarget, EditorScene,
+    SceneAnnotationGeometry, SceneAnnotationKind, SceneConstraintGlyph, ScreenPoint, SelectionItem,
+    Viewport, display_dimension_target,
 };
 #[cfg(test)]
 use geosolve_sketch::DocumentConstraintDefinition;
@@ -167,7 +168,7 @@ pub(crate) fn svg_markup_with_pending(
         accepted,
         selection,
         pending,
-        None,
+        EditorHoverState::default(),
         construction_preview,
         problem,
         viewport,
@@ -180,7 +181,7 @@ pub(crate) fn svg_markup_with_context(
     accepted: Option<&SketchAcceptedDocumentState>,
     selection: &[SelectionItem],
     pending: &[SelectionItem],
-    hovered: Option<SelectionItem>,
+    hover: EditorHoverState,
     construction_preview: Option<&ConstructionPreview>,
     problem: Option<&EditorProblemMetadata>,
     viewport: Viewport,
@@ -203,7 +204,12 @@ pub(crate) fn svg_markup_with_context(
                 .annotations
                 .iter()
                 .filter(|annotation| {
-                    selection.contains(&annotation.item) || hovered == Some(annotation.item)
+                    selection.contains(&annotation.item)
+                        || matches!(
+                            hover.target,
+                            Some(EditorHoverTarget::Annotation(occurrence))
+                                if occurrence.item == annotation.item
+                        )
                 })
                 .flat_map(|annotation| annotation.operands.iter().copied())
                 .collect::<BTreeSet<_>>()
@@ -328,7 +334,7 @@ pub(crate) fn svg_markup_with_context(
             scene,
             accepted,
             selection,
-            hovered,
+            hover,
             &problem_items,
             problem,
         );
@@ -371,7 +377,7 @@ fn digest(bytes: [u8; 32]) -> String {
     output
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 fn render_annotations(
     output: &mut String,
     problem_markers: &mut String,
@@ -379,17 +385,29 @@ fn render_annotations(
     scene: &EditorScene,
     accepted: &SketchAcceptedDocumentState,
     selection: &[SelectionItem],
-    hovered: Option<SelectionItem>,
+    hover: EditorHoverState,
     problem_items: &[SelectionItem],
     problem: Option<&EditorProblemMetadata>,
 ) {
     let document = accepted.document();
+    let visibility_context = hover
+        .context_owner
+        .or_else(|| hover.target.map(EditorHoverTarget::item));
     for annotation in &scene.annotations {
-        if !annotation.is_visible(selection, hovered, problem_items) {
+        if !annotation.is_visible(selection, visibility_context, problem_items) {
             continue;
         }
         let selected = selection.contains(&annotation.item);
-        let is_hovered = hovered == Some(annotation.item);
+        let hovered_occurrence = match hover.target {
+            Some(EditorHoverTarget::Annotation(occurrence))
+                if occurrence.item == annotation.item =>
+            {
+                Some(occurrence)
+            }
+            Some(EditorHoverTarget::Geometry(_) | EditorHoverTarget::Annotation(_)) | None => None,
+        };
+        let is_hovered =
+            hovered_occurrence.is_some_and(|occurrence| occurrence.marker_index.is_none());
         let has_problem = problem_items.contains(&annotation.item);
         let class = format!(
             "{}{}{}{}",
@@ -455,6 +473,7 @@ fn render_annotations(
             annotation.kind,
             &annotation.geometry,
             &escaped_label,
+            hovered_occurrence.and_then(|occurrence| occurrence.marker_index),
         );
         output.push_str("</g>");
 
@@ -518,13 +537,14 @@ fn annotation_geometry(
     kind: SceneAnnotationKind,
     geometry: &SceneAnnotationGeometry,
     label: &str,
+    hovered_marker: Option<usize>,
 ) {
     match geometry {
         SceneAnnotationGeometry::Glyph { markers } => {
             let SceneAnnotationKind::Constraint(glyph) = kind else {
                 return;
             };
-            for marker in markers {
+            for (index, marker) in markers.iter().enumerate() {
                 if let Some(origin) = marker.leader_from {
                     let _ = write!(
                         output,
@@ -534,7 +554,12 @@ fn annotation_geometry(
                 }
                 let _ = write!(
                     output,
-                    "<g class=\"wb-constraint-symbol\" transform=\"translate({:.3} {:.3})\"><circle class=\"wb-annotation-hit\" r=\"12\"/>{}</g>",
+                    "<g class=\"wb-constraint-symbol{}\" transform=\"translate({:.3} {:.3})\" data-annotation-marker=\"{index}\"><circle class=\"wb-annotation-hit\" r=\"12\"/>{}</g>",
+                    if hovered_marker == Some(index) {
+                        " hovered"
+                    } else {
+                        ""
+                    },
                     marker.anchor.x,
                     marker.anchor.y,
                     constraint_symbol(glyph),
@@ -1082,7 +1107,8 @@ fn escape(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use geosolve_constraint_editor::{
-        ConstructionPreviewGeometry, EditorScene, RetainedEditorCoordinator, ScreenPoint,
+        ConstructionPreviewGeometry, EditorHoverState, EditorHoverTarget, EditorScene,
+        RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationOccurrence, ScreenPoint,
         SelectionItem,
     };
     use geosolve_core::SolverConfig;
@@ -1097,7 +1123,7 @@ mod tests {
 
     use super::{
         CanvasCamera, constraint_glyph, construction_geometry_markup, dimension_kind, svg_markup,
-        viewport,
+        svg_markup_with_context, viewport,
     };
     use crate::workbench::panels::{
         accepted_redundancy_markup, host_state_markup, lifecycle_presentation, problem_markup,
@@ -1408,6 +1434,95 @@ mod tests {
             "data-persistent-id=\"{}\" data-dimension-kind=\"segment-length\" data-dimension-mode=\"reference\" data-dimension-value=\"3\"",
             rectangle.dimensions[1]
         )));
+    }
+
+    #[test]
+    fn multi_marker_constraint_hover_marks_only_the_proximate_symbol() {
+        let mut document = SketchDocument::new(8.0).unwrap();
+        let a = document.add_point("a", [-3.0, 1.0]).unwrap();
+        let b = document.add_point("b", [3.0, 1.0]).unwrap();
+        let c = document.add_point("c", [-3.0, -1.0]).unwrap();
+        let d = document.add_point("d", [3.0, -1.0]).unwrap();
+        let first = CurveSpan::line(
+            document
+                .add_curve(
+                    "first",
+                    CurveDefinition::Line {
+                        start: a,
+                        end: b,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .unwrap(),
+        );
+        let second = CurveSpan::line(
+            document
+                .add_curve(
+                    "second",
+                    CurveDefinition::Line {
+                        start: c,
+                        end: d,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .unwrap(),
+        );
+        let parallel = document
+            .add_constraint(
+                "parallel pair",
+                DocumentConstraintDefinition::Parallel { first, second },
+            )
+            .unwrap();
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .unwrap();
+        let accepted = session.accepted_state().unwrap();
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            viewport(),
+            0.8,
+        )
+        .unwrap();
+        let annotation = scene
+            .annotations
+            .iter()
+            .find(|annotation| annotation.item == SelectionItem::Constraint(parallel))
+            .unwrap();
+        assert!(matches!(
+            &annotation.geometry,
+            SceneAnnotationGeometry::Glyph { markers } if markers.len() == 2
+        ));
+        let markup = svg_markup_with_context(
+            Some(&scene),
+            Some(accepted),
+            &[],
+            &[],
+            EditorHoverState {
+                target: Some(EditorHoverTarget::Annotation(SceneAnnotationOccurrence {
+                    item: annotation.item,
+                    marker_index: Some(1),
+                })),
+                context_owner: Some(SelectionItem::Curve(first)),
+            },
+            None,
+            None,
+            viewport(),
+        );
+        assert_eq!(
+            markup
+                .matches("class=\"wb-constraint-symbol hovered\"")
+                .count(),
+            1
+        );
+        assert!(markup.contains("class=\"wb-constraint-symbol hovered\" transform=\"translate("));
+        assert!(markup.contains("data-annotation-marker=\"1\""));
+        assert!(!markup.contains("class=\"wb-annotation wb-constraint hovered\""));
     }
 
     #[test]

@@ -126,34 +126,48 @@ impl SceneAnnotation {
     /// Reports whether the screen position hits this annotation.
     #[must_use]
     pub fn hit_test(&self, position: ScreenPoint, tolerance_pixels: f64) -> bool {
+        self.proximity_hit(position, tolerance_pixels).is_some()
+    }
+
+    /// Returns the exact presentation occurrence under the pointer and its distance.
+    ///
+    /// Glyph leaders are deliberately excluded: they provide contextual navigation,
+    /// but hovering a leader is not the same as hovering its icon.
+    pub(crate) fn proximity_hit(
+        &self,
+        position: ScreenPoint,
+        tolerance_pixels: f64,
+    ) -> Option<(Option<usize>, f64)> {
         if !position.is_finite() || !tolerance_pixels.is_finite() || tolerance_pixels < 0.0 {
-            return false;
+            return None;
         }
-        match &self.geometry {
-            SceneAnnotationGeometry::Glyph { markers } => markers.iter().any(|marker| {
-                position.distance(marker.anchor) <= tolerance_pixels
-                    || marker.leader_from.is_some_and(|leader_from| {
-                        point_segment_distance(position, leader_from, marker.anchor)
-                            <= tolerance_pixels
-                    })
-            }),
+        let (occurrence, distance) = match &self.geometry {
+            SceneAnnotationGeometry::Glyph { markers } => markers
+                .iter()
+                .enumerate()
+                .map(|(index, marker)| (Some(index), position.distance(marker.anchor)))
+                .min_by(|first, second| first.1.total_cmp(&second.1))?,
             SceneAnnotationGeometry::LinearDimension {
                 label_anchor,
                 first,
                 second,
-            } => {
-                position.distance(*label_anchor) <= tolerance_pixels
-                    || point_segment_distance(position, *first, *second) <= tolerance_pixels
-            }
+            } => (
+                None,
+                position
+                    .distance(*label_anchor)
+                    .min(point_segment_distance(position, *first, *second)),
+            ),
             SceneAnnotationGeometry::RadialDimension {
                 center,
                 edge,
                 label_anchor,
                 ..
-            } => {
-                position.distance(*label_anchor) <= tolerance_pixels
-                    || point_segment_distance(position, *center, *edge) <= tolerance_pixels
-            }
+            } => (
+                None,
+                position
+                    .distance(*label_anchor)
+                    .min(point_segment_distance(position, *center, *edge)),
+            ),
             SceneAnnotationGeometry::AngularDimension {
                 vertex,
                 first_ray,
@@ -163,15 +177,18 @@ impl SceneAnnotation {
                 ..
             } => {
                 let radial_distance = position.distance(*vertex);
-                position.distance(*label_anchor) <= tolerance_pixels
-                    || (radial_distance - radius).abs() <= tolerance_pixels
-                    || point_segment_distance(position, *vertex, *first_ray) <= tolerance_pixels
-                    || point_segment_distance(position, *vertex, *second_ray) <= tolerance_pixels
+                (
+                    None,
+                    position
+                        .distance(*label_anchor)
+                        .min((radial_distance - radius).abs())
+                        .min(point_segment_distance(position, *vertex, *first_ray))
+                        .min(point_segment_distance(position, *vertex, *second_ray)),
+                )
             }
-            SceneAnnotationGeometry::Label { anchor } => {
-                position.distance(*anchor) <= tolerance_pixels
-            }
-        }
+            SceneAnnotationGeometry::Label { anchor } => (None, position.distance(*anchor)),
+        };
+        (distance <= tolerance_pixels).then_some((occurrence, distance))
     }
 
     /// Reports whether the pointer remains inside a bounded corridor from
@@ -214,6 +231,20 @@ impl SceneAnnotation {
                 point_segment_distance(position, context_origin, *anchor)
             }
         })
+    }
+
+    pub(crate) fn context_anchors(&self) -> Vec<ScreenPoint> {
+        match &self.geometry {
+            SceneAnnotationGeometry::Glyph { markers } => {
+                markers.iter().map(|marker| marker.anchor).collect()
+            }
+            SceneAnnotationGeometry::LinearDimension { label_anchor, .. }
+            | SceneAnnotationGeometry::RadialDimension { label_anchor, .. }
+            | SceneAnnotationGeometry::AngularDimension { label_anchor, .. } => {
+                vec![*label_anchor]
+            }
+            SceneAnnotationGeometry::Label { anchor } => vec![*anchor],
+        }
     }
 }
 

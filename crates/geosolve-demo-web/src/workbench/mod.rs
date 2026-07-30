@@ -1541,7 +1541,7 @@ pub(crate) mod wasm {
             accepted,
             selection,
             &pending,
-            coordinator.editor().hovered(),
+            coordinator.editor().hover_state(),
             construction_preview,
             coordinator.current_problem_metadata().as_ref(),
             wb.camera.viewport(),

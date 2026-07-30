@@ -353,52 +353,90 @@ impl EditorScene {
         position: ScreenPoint,
         tolerance: PickTolerance,
         selection: &[SelectionItem],
-        hovered: Option<SelectionItem>,
+        visibility_context: Option<SelectionItem>,
         problem_items: &[SelectionItem],
     ) -> Option<Hit> {
+        self.annotation_occurrence_hit_test(
+            position,
+            tolerance,
+            selection,
+            visibility_context,
+            problem_items,
+        )
+        .map(|(occurrence, distance_pixels)| Hit {
+            item: occurrence.item,
+            distance_pixels,
+            curve_parameter: None,
+        })
+    }
+
+    fn annotation_occurrence_hit_test(
+        &self,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        selection: &[SelectionItem],
+        visibility_context: Option<SelectionItem>,
+        problem_items: &[SelectionItem],
+    ) -> Option<(SceneAnnotationOccurrence, f64)> {
         if !position.is_finite() || !tolerance.is_valid() {
             return None;
         }
         self.annotations
             .iter()
-            .filter(|annotation| annotation.is_visible(selection, hovered, problem_items))
-            .filter(|annotation| annotation.hit_test(position, tolerance.annotation_pixels))
-            .map(|annotation| Hit {
-                item: annotation.item,
-                distance_pixels: 0.0,
-                curve_parameter: None,
+            .filter(|annotation| {
+                annotation.is_visible(selection, visibility_context, problem_items)
             })
-            .next()
+            .filter_map(|annotation| {
+                let (marker_index, distance) =
+                    annotation.proximity_hit(position, tolerance.annotation_pixels)?;
+                Some((
+                    SceneAnnotationOccurrence {
+                        item: annotation.item,
+                        marker_index,
+                    },
+                    distance,
+                ))
+            })
+            .min_by(|first, second| first.1.total_cmp(&second.1))
     }
 
-    fn contextual_annotation_hit_test(
+    fn contextual_annotation_transit(
         &self,
         position: ScreenPoint,
         tolerance: PickTolerance,
         selection: &[SelectionItem],
-        hovered: SelectionItem,
+        context_owner: SelectionItem,
         context_origin: ScreenPoint,
         problem_items: &[SelectionItem],
-    ) -> Option<Hit> {
+    ) -> bool {
         if !position.is_finite() || !context_origin.is_finite() || !tolerance.is_valid() {
-            return None;
+            return false;
         }
         let corridor_tolerance = tolerance.annotation_pixels.max(14.0);
-        self.annotations
+        let related = self
+            .annotations
             .iter()
             .filter(|annotation| {
-                annotation.item == hovered || annotation.operands.contains(&hovered)
+                annotation.item == context_owner || annotation.operands.contains(&context_owner)
             })
-            .filter(|annotation| annotation.is_visible(selection, Some(hovered), problem_items))
-            .filter_map(|annotation| {
-                let distance = annotation.context_distance(position, context_origin)?;
-                (distance <= corridor_tolerance).then_some(Hit {
-                    item: annotation.item,
-                    distance_pixels: distance,
-                    curve_parameter: None,
-                })
+            .filter(|annotation| {
+                annotation.is_visible(selection, Some(context_owner), problem_items)
             })
-            .min_by(compare_hits)
+            .collect::<Vec<_>>();
+        if related.iter().any(|annotation| {
+            annotation.context_hit_test(position, context_origin, corridor_tolerance)
+        }) {
+            return true;
+        }
+        let anchors = related
+            .iter()
+            .flat_map(|annotation| annotation.context_anchors())
+            .collect::<Vec<_>>();
+        anchors.iter().enumerate().any(|(first_index, first)| {
+            anchors.iter().skip(first_index + 1).any(|second| {
+                point_segment_projection(position, *first, *second).0 <= corridor_tolerance
+            })
+        })
     }
 }
 
@@ -440,6 +478,48 @@ pub struct Hit {
     pub curve_parameter: Option<f64>,
 }
 
+/// One concrete presentation occurrence of a persistent scene annotation.
+///
+/// Multi-operand constraints can render more than one glyph while still mapping
+/// every occurrence back to the same persistent constraint.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SceneAnnotationOccurrence {
+    pub item: SelectionItem,
+    /// The deterministic marker position for glyph annotations. Dimensions have
+    /// one presentation occurrence and therefore use `None`.
+    pub marker_index: Option<usize>,
+}
+
+/// Exact pointer-proximity target owned by the headless editor.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EditorHoverTarget {
+    Geometry(SelectionItem),
+    Annotation(SceneAnnotationOccurrence),
+}
+
+impl EditorHoverTarget {
+    /// Returns the persistent item represented by this proximity target.
+    #[must_use]
+    pub const fn item(self) -> SelectionItem {
+        match self {
+            Self::Geometry(item) => item,
+            Self::Annotation(occurrence) => occurrence.item,
+        }
+    }
+}
+
+/// Presentation-neutral hover state separating proximity from revealed context.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct EditorHoverState {
+    /// Exact geometry or annotation occurrence currently under the pointer.
+    pub target: Option<EditorHoverTarget>,
+    /// Geometry whose directly related contextual annotations remain revealed.
+    ///
+    /// This remains stable while the pointer crosses a bounded navigation
+    /// corridor or a related annotation occurrence.
+    pub context_owner: Option<SelectionItem>,
+}
+
 /// Platform-independent modifier state.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Modifiers {
@@ -467,8 +547,8 @@ pub struct PointerInput {
 #[derive(Clone, Debug, PartialEq)]
 pub enum EditorEffect {
     SelectionChanged(Vec<SelectionItem>),
-    /// The persistent item currently under a presentation pointer changed.
-    HoverChanged(Option<SelectionItem>),
+    /// Exact pointer proximity or its retained geometry context changed.
+    HoverChanged(EditorHoverState),
     PreviewPointMove {
         point: DesignPointId,
         model_position: [f64; 2],
@@ -1200,12 +1280,18 @@ struct Draft {
     nurbs_options: NurbsConstructionOptions,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct AnnotationHoverContext {
+    owner: SelectionItem,
+    origin: ScreenPoint,
+}
+
 /// Headless deterministic selection and point-gesture state machine.
 #[derive(Clone, Debug)]
 pub struct ConstraintEditor {
     selection: Vec<SelectionItem>,
-    hovered: Option<SelectionItem>,
-    hover_origin: Option<ScreenPoint>,
+    hover_target: Option<EditorHoverTarget>,
+    hover_context: Option<AnnotationHoverContext>,
     curve_pick_parameters: Vec<(CurveSpan, f64)>,
     pick_tolerance: PickTolerance,
     drag_threshold_pixels: f64,
@@ -1224,8 +1310,8 @@ impl Default for ConstraintEditor {
     fn default() -> Self {
         Self {
             selection: Vec::new(),
-            hovered: None,
-            hover_origin: None,
+            hover_target: None,
+            hover_context: None,
             curve_pick_parameters: Vec::new(),
             pick_tolerance: PickTolerance::default(),
             drag_threshold_pixels: 3.0,
@@ -1358,7 +1444,22 @@ impl ConstraintEditor {
     /// Returns the persistent item currently under the pointer.
     #[must_use]
     pub const fn hovered(&self) -> Option<SelectionItem> {
-        self.hovered
+        match self.hover_target {
+            Some(target) => Some(target.item()),
+            None => None,
+        }
+    }
+
+    /// Returns exact pointer proximity separately from retained reveal context.
+    #[must_use]
+    pub const fn hover_state(&self) -> EditorHoverState {
+        EditorHoverState {
+            target: self.hover_target,
+            context_owner: match self.hover_context {
+                Some(context) => Some(context.owner),
+                None => None,
+            },
+        }
     }
 
     /// Returns the explicit user-picked parameter for one selected curve span.
@@ -1429,7 +1530,7 @@ impl ConstraintEditor {
                 input.position,
                 self.pick_tolerance,
                 &self.selection,
-                self.hovered,
+                self.visibility_context(),
                 problem_items,
             )
             .or_else(|| scene.hit_test(input.position, self.pick_tolerance));
@@ -1476,36 +1577,44 @@ impl ConstraintEditor {
             if !input.position.is_finite() {
                 return Vec::new();
             }
-            let annotation_hit = scene.annotation_hit_test(
+            let annotation_hit = scene.annotation_occurrence_hit_test(
                 input.position,
                 self.pick_tolerance,
                 &self.selection,
-                self.hovered,
+                self.visibility_context(),
                 &[],
             );
             let geometry_hit = scene.hit_test(input.position, self.pick_tolerance);
-            let hovered = if let Some(hit) = annotation_hit {
-                self.hover_origin.get_or_insert(input.position);
-                Some(hit.item)
-            } else if let Some(hit) = geometry_hit {
-                self.hover_origin = Some(input.position);
-                Some(hit.item)
-            } else {
-                self.hovered
-                    .zip(self.hover_origin)
-                    .and_then(|(hovered, context_origin)| {
-                        scene.contextual_annotation_hit_test(
-                            input.position,
-                            self.pick_tolerance,
-                            &self.selection,
-                            hovered,
-                            context_origin,
-                            &[],
-                        )
+            let (target, context) = if let Some((occurrence, _)) = annotation_hit {
+                let context = self.hover_context.filter(|context| {
+                    scene.annotations.iter().any(|annotation| {
+                        annotation.item == occurrence.item
+                            && annotation.operands.contains(&context.owner)
                     })
-                    .map(|hit| hit.item)
+                });
+                (Some(EditorHoverTarget::Annotation(occurrence)), context)
+            } else if let Some(hit) = geometry_hit {
+                (
+                    Some(EditorHoverTarget::Geometry(hit.item)),
+                    Some(AnnotationHoverContext {
+                        owner: hit.item,
+                        origin: input.position,
+                    }),
+                )
+            } else {
+                let context = self.hover_context.filter(|context| {
+                    scene.contextual_annotation_transit(
+                        input.position,
+                        self.pick_tolerance,
+                        &self.selection,
+                        context.owner,
+                        context.origin,
+                        &[],
+                    )
+                });
+                (None, context)
             };
-            return self.set_hovered(hovered);
+            return self.set_hover_state(target, context);
         };
         if gesture.pointer_id != input.pointer_id || !input.position.is_finite() {
             return Vec::new();
@@ -1532,18 +1641,32 @@ impl ConstraintEditor {
 
     /// Clears pointer hover when a presentation surface is left.
     pub fn pointer_leave(&mut self) -> Vec<EditorEffect> {
-        self.set_hovered(None)
+        self.set_hover_state(None, None)
     }
 
-    fn set_hovered(&mut self, hovered: Option<SelectionItem>) -> Vec<EditorEffect> {
-        if hovered.is_none() {
-            self.hover_origin = None;
+    const fn visibility_context(&self) -> Option<SelectionItem> {
+        match self.hover_context {
+            Some(context) => Some(context.owner),
+            None => match self.hover_target {
+                Some(target) => Some(target.item()),
+                None => None,
+            },
         }
-        if self.hovered == hovered {
+    }
+
+    fn set_hover_state(
+        &mut self,
+        target: Option<EditorHoverTarget>,
+        context: Option<AnnotationHoverContext>,
+    ) -> Vec<EditorEffect> {
+        let before = self.hover_state();
+        self.hover_target = target;
+        self.hover_context = context;
+        let after = self.hover_state();
+        if before == after {
             return Vec::new();
         }
-        self.hovered = hovered;
-        vec![EditorEffect::HoverChanged(hovered)]
+        vec![EditorEffect::HoverChanged(after)]
     }
 
     /// Completes an active point gesture. A click emits no geometry edit.
@@ -1590,7 +1713,7 @@ impl ConstraintEditor {
     pub fn cancel(&mut self) -> Vec<EditorEffect> {
         let mut effects = self.cancel_draft();
         effects.extend(self.cancel_point_gesture());
-        effects.extend(self.set_hovered(None));
+        effects.extend(self.set_hover_state(None, None));
         effects
     }
 
@@ -2962,7 +3085,17 @@ mod tests {
         editor.set_selection([SelectionItem::Curve(related_curve)]);
         let effects =
             editor.pointer_move(&scene, pointer(9, marker.x, marker.y, Modifiers::default()));
-        assert_eq!(effects, vec![EditorEffect::HoverChanged(Some(horizontal))]);
+        let occurrence = SceneAnnotationOccurrence {
+            item: horizontal,
+            marker_index: Some(0),
+        };
+        assert_eq!(
+            effects,
+            vec![EditorEffect::HoverChanged(EditorHoverState {
+                target: Some(EditorHoverTarget::Annotation(occurrence)),
+                context_owner: None,
+            })]
+        );
         let effects =
             editor.pointer_down(&scene, pointer(9, marker.x, marker.y, Modifiers::default()));
         assert_eq!(editor.selection(), &[horizontal]);
@@ -2972,12 +3105,16 @@ mod tests {
         );
         assert_eq!(
             editor.pointer_leave(),
-            vec![EditorEffect::HoverChanged(None)]
+            vec![EditorEffect::HoverChanged(EditorHoverState::default())]
         );
     }
 
     #[test]
-    fn m63_hover_crosses_a_visible_leader_and_clears_off_context() {
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one end-to-end pointer path makes context retention and occurrence transitions explicit"
+    )]
+    fn m63_hover_keeps_geometry_context_while_targeting_exact_icon_occurrences() {
         let mut document = SketchDocument::new(8.0).expect("document");
         let start = document.add_point("start", [-2.0, 0.0]).expect("start");
         let end = document.add_point("end", [2.0, 0.0]).expect("end");
@@ -2991,7 +3128,14 @@ mod tests {
                 },
             )
             .expect("line");
-        for label in ["horizontal", "first duplicate"] {
+        for label in [
+            "horizontal",
+            "first duplicate",
+            "second duplicate",
+            "third duplicate",
+            "fourth duplicate",
+            "fifth duplicate",
+        ] {
             document
                 .add_constraint(
                     label,
@@ -3001,57 +3145,110 @@ mod tests {
                 )
                 .expect("horizontal constraint");
         }
-        let duplicate = document
-            .add_constraint(
-                "second duplicate",
-                DocumentConstraintDefinition::Horizontal {
-                    line: CurveSpan::line(line),
-                },
-            )
-            .expect("duplicate constraint");
         let scene = scene(&document);
-        let duplicate_annotation = scene
+        let related_curve = CurveSpan::line(line);
+        let related_annotations = scene
             .annotations
             .iter()
-            .find(|annotation| annotation.item == SelectionItem::Constraint(duplicate))
-            .expect("duplicate annotation");
-        let related_curve = duplicate_annotation
-            .operands
+            .filter(|annotation| {
+                annotation
+                    .operands
+                    .contains(&SelectionItem::Curve(related_curve))
+                    && matches!(annotation.geometry, SceneAnnotationGeometry::Glyph { .. })
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(related_annotations.len(), 6);
+        let mut displaced = related_annotations
             .iter()
-            .find_map(|item| match item {
-                SelectionItem::Curve(span) => Some(*span),
+            .filter_map(|annotation| match &annotation.geometry {
+                SceneAnnotationGeometry::Glyph { markers } => markers
+                    .first()
+                    .filter(|marker| marker.leader_from.is_some())
+                    .map(|marker| (*annotation, *marker)),
                 _ => None,
             })
-            .expect("related curve");
-        let displaced_marker = match &duplicate_annotation.geometry {
-            SceneAnnotationGeometry::Glyph { markers } => markers
-                .iter()
-                .find(|marker| marker.leader_from.is_some())
-                .expect("duplicate marker must fan out"),
-            _ => panic!("duplicate horizontal must be a glyph"),
-        };
-        let leader_from = displaced_marker.leader_from.expect("leader origin");
+            .collect::<Vec<_>>();
+        displaced.sort_by(|first, second| {
+            let first_origin = first.1.leader_from.expect("displaced marker");
+            let second_origin = second.1.leader_from.expect("displaced marker");
+            (second.1.anchor.y - second_origin.y)
+                .abs()
+                .total_cmp(&(first.1.anchor.y - first_origin.y).abs())
+        });
+        assert!(displaced.len() >= 2);
+        let (first_annotation, first_marker) = displaced[0];
+        let (second_annotation, second_marker) = displaced[1];
+        let curve_geometry = scene
+            .curves
+            .iter()
+            .find(|curve| curve.span == related_curve)
+            .expect("related curve geometry");
+        let [curve_start, curve_end] = [
+            curve_geometry.screen_polyline[0],
+            *curve_geometry.screen_polyline.last().expect("curve end"),
+        ];
         let context_origin = ScreenPoint {
-            x: leader_from.x - 40.0,
-            y: leader_from.y,
+            x: curve_start.x * 0.75 + curve_end.x * 0.25,
+            y: curve_start.y * 0.75 + curve_end.y * 0.25,
         };
-        let bridge = ScreenPoint {
-            x: (context_origin.x + displaced_marker.anchor.x) * 0.5,
-            y: (context_origin.y + displaced_marker.anchor.y) * 0.5,
+        let bridge = (1..20)
+            .map(|step| {
+                let ratio = f64::from(step) / 20.0;
+                ScreenPoint {
+                    x: (first_marker.anchor.x - context_origin.x).mul_add(ratio, context_origin.x),
+                    y: (first_marker.anchor.y - context_origin.y).mul_add(ratio, context_origin.y),
+                }
+            })
+            .find(|position| {
+                scene
+                    .hit_test(*position, PickTolerance::default())
+                    .is_none()
+                    && scene
+                        .annotation_occurrence_hit_test(
+                            *position,
+                            PickTolerance::default(),
+                            &[],
+                            Some(SelectionItem::Curve(related_curve)),
+                            &[],
+                        )
+                        .is_none()
+                    && scene.contextual_annotation_transit(
+                        *position,
+                        PickTolerance::default(),
+                        &[],
+                        SelectionItem::Curve(related_curve),
+                        context_origin,
+                        &[],
+                    )
+            })
+            .expect("bounded corridor must contain non-geometry transit");
+        let context_state = |target| EditorHoverState {
+            target,
+            context_owner: Some(SelectionItem::Curve(related_curve)),
         };
-        let mut hover_editor = ConstraintEditor {
-            hover_origin: Some(context_origin),
-            ..ConstraintEditor::default()
-        };
+        let mut hover_editor = ConstraintEditor::default();
         assert_eq!(
-            hover_editor.set_hovered(Some(SelectionItem::Curve(related_curve))),
-            vec![EditorEffect::HoverChanged(Some(SelectionItem::Curve(
-                related_curve
+            hover_editor.pointer_move(
+                &scene,
+                pointer(10, context_origin.x, context_origin.y, Modifiers::default()),
+            ),
+            vec![EditorEffect::HoverChanged(context_state(Some(
+                EditorHoverTarget::Geometry(SelectionItem::Curve(related_curve))
             )))]
         );
         assert!(
-            !duplicate_annotation.hit_test(bridge, PickTolerance::default().annotation_pixels),
-            "off-leader bridge point must exercise contextual stickiness"
+            related_annotations
+                .iter()
+                .all(|annotation| annotation.is_visible(
+                    &[],
+                    Some(SelectionItem::Curve(related_curve)),
+                    &[]
+                )),
+            "geometry context must reveal every directly related sibling"
+        );
+        assert!(
+            !first_annotation.hit_test(bridge, PickTolerance::default().annotation_pixels),
+            "corridor transit must not count as icon proximity"
         );
         assert!(
             scene.hit_test(bridge, PickTolerance::default()).is_none(),
@@ -3062,14 +3259,123 @@ mod tests {
                 &scene,
                 pointer(10, bridge.x, bridge.y, Modifiers::default()),
             ),
-            vec![EditorEffect::HoverChanged(Some(SelectionItem::Constraint(
-                duplicate
+            vec![EditorEffect::HoverChanged(context_state(None))]
+        );
+
+        let first_occurrence = SceneAnnotationOccurrence {
+            item: first_annotation.item,
+            marker_index: Some(0),
+        };
+        assert_eq!(
+            hover_editor.pointer_move(
+                &scene,
+                pointer(
+                    10,
+                    first_marker.anchor.x,
+                    first_marker.anchor.y,
+                    Modifiers::default(),
+                ),
+            ),
+            vec![EditorEffect::HoverChanged(context_state(Some(
+                EditorHoverTarget::Annotation(first_occurrence)
+            )))]
+        );
+        assert_eq!(
+            hover_editor.hover_state(),
+            context_state(Some(EditorHoverTarget::Annotation(first_occurrence)))
+        );
+        let effects = hover_editor.pointer_down(
+            &scene,
+            pointer(
+                10,
+                first_marker.anchor.x,
+                first_marker.anchor.y,
+                Modifiers::default(),
+            ),
+        );
+        assert_eq!(hover_editor.selection(), &[first_annotation.item]);
+        assert_eq!(
+            effects,
+            vec![EditorEffect::SelectionChanged(vec![first_annotation.item])]
+        );
+
+        let between_icons = ScreenPoint {
+            x: (first_marker.anchor.x + second_marker.anchor.x) * 0.5,
+            y: (first_marker.anchor.y + second_marker.anchor.y) * 0.5,
+        };
+        assert_eq!(
+            hover_editor.pointer_move(
+                &scene,
+                pointer(10, between_icons.x, between_icons.y, Modifiers::default(),),
+            ),
+            vec![EditorEffect::HoverChanged(context_state(None))]
+        );
+        let second_occurrence = SceneAnnotationOccurrence {
+            item: second_annotation.item,
+            marker_index: Some(0),
+        };
+        assert_eq!(
+            hover_editor.pointer_move(
+                &scene,
+                pointer(
+                    10,
+                    second_marker.anchor.x,
+                    second_marker.anchor.y,
+                    Modifiers::default(),
+                ),
+            ),
+            vec![EditorEffect::HoverChanged(context_state(Some(
+                EditorHoverTarget::Annotation(second_occurrence)
             )))]
         );
         assert_eq!(
             hover_editor.pointer_move(&scene, pointer(10, 10.0, 10.0, Modifiers::default())),
-            vec![EditorEffect::HoverChanged(None)]
+            vec![EditorEffect::HoverChanged(EditorHoverState::default())]
         );
+    }
+
+    #[test]
+    fn m63_multi_marker_constraint_hover_is_occurrence_specific() {
+        let (mut document, lines, _) = line_document();
+        let parallel = document
+            .add_constraint(
+                "parallel pair",
+                DocumentConstraintDefinition::Parallel {
+                    first: lines[0],
+                    second: lines[1],
+                },
+            )
+            .expect("parallel constraint");
+        let scene = scene(&document);
+        let annotation = scene
+            .annotations
+            .iter()
+            .find(|annotation| annotation.item == SelectionItem::Constraint(parallel))
+            .expect("parallel annotation");
+        let SceneAnnotationGeometry::Glyph { markers } = &annotation.geometry else {
+            panic!("parallel relation must render glyph markers");
+        };
+        assert_eq!(markers.len(), 2);
+
+        let mut editor = ConstraintEditor::default();
+        editor.set_selection([SelectionItem::Curve(lines[0])]);
+        for (marker_index, marker) in markers.iter().enumerate() {
+            let expected = EditorHoverState {
+                target: Some(EditorHoverTarget::Annotation(SceneAnnotationOccurrence {
+                    item: annotation.item,
+                    marker_index: Some(marker_index),
+                })),
+                context_owner: None,
+            };
+            assert_eq!(
+                editor.pointer_move(
+                    &scene,
+                    pointer(11, marker.anchor.x, marker.anchor.y, Modifiers::default(),),
+                ),
+                vec![EditorEffect::HoverChanged(expected)]
+            );
+            assert_eq!(editor.hover_state(), expected);
+        }
     }
 
     #[test]

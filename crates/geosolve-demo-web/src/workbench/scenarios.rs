@@ -1140,9 +1140,9 @@ const CANVAS_GLYPH_STEPS: [ScenarioStep; 5] = [
         expected: "The radius stays on its canonical circle branch without jumping to unrelated points around the circumference.",
     },
     ScenarioStep {
-        instruction: "Move directly from any hovered location on related geometry toward a revealed symbol, then click it.",
+        instruction: "Move from related geometry through the revealed set, deliberately passing one symbol on the way to another, then click the destination.",
         action: None,
-        expected: "A bounded contextual corridor starts at the actual geometry-hover position, transfers hover to the nearest related symbol, and permits selection; moving into unrelated blank canvas clears it.",
+        expected: "The complete related set stays visible through bounded transit, only the icon occurrence directly under the pointer highlights, and passing one icon never hides its siblings; unrelated blank canvas clears the context.",
     },
     ScenarioStep {
         instruction: "Use Tab and Enter to focus and activate a visible annotation.",
@@ -1163,9 +1163,9 @@ const CANVAS_CROWDING_STEPS: [ScenarioStep; 3] = [
         expected: "Coincident, parallel, perpendicular, equal-length, and fixed relations appear near their geometry rather than in a detached strip.",
     },
     ScenarioStep {
-        instruction: "Inspect locations shared by multiple revealed relations.",
+        instruction: "Inspect locations shared by multiple revealed relations, then move between their fanned-out icons.",
         action: None,
-        expected: "Symbols fan out in stable compact positions and displaced symbols retain a short leader to their semantic anchor.",
+        expected: "Symbols fan out in stable compact positions, displaced symbols retain a short leader, and the set remains navigable while exactly one proximate icon highlights.",
     },
     ScenarioStep {
         instruction: "Zoom, pan, select symbols, then reset the scenario.",
