@@ -1814,6 +1814,14 @@ last direct geometry-hover position and constructs bounded corridors from there 
 related annotation, choosing the nearest overlapping corridor deterministically and clearing on
 unrelated blank canvas. The regression begins outside geometry and leader hit tolerances.
 
+Human retest then found `M63-F004` insufficient because it still transferred the persistent
+constraint into the same state slot as the geometry reveal owner. `M63-F005` separates the
+geometry context owner, bounded transit and exact annotation occurrence. Corridors and inter-icon
+links keep the complete directly related set visible without claiming icon hover; only a marker
+within icon proximity publishes its deterministic marker index, and clicking any occurrence still
+selects its one persistent constraint. The focused UAT steps now require passing one icon on the
+way to another without hiding siblings or highlighting multiple occurrences.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:

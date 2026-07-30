@@ -2821,8 +2821,9 @@ geometry without turning the canvas into a permanent icon cloud.
 - [x] Keep every angle and every driving dimension visible at its accepted geometry; keep
   non-angle reference dimensions and ordinary constraint glyphs contextual.
 - [x] Give headless hover, selection and pointer hit testing ownership of annotation interaction.
-  Visible annotation hits precede geometry in Select mode, while constraint authoring remains
-  geometry-only.
+  Exact icon-occurrence proximity is separate from the geometry context that keeps a related set
+  revealed; visible annotation hits precede geometry in Select mode, while constraint authoring
+  remains geometry-only.
 - [x] Render accessible CAD-like SVG symbols, angle arcs, witness lines, leaders, values,
   selected/problem states and related-operand emphasis in the sole workbench.
 - [x] Cover the complete persistent constraint/dimension catalog through direct headless tests,
@@ -2853,6 +2854,15 @@ retest showed that correction was insufficient for paths beginning elsewhere on 
 bounded corridors from there to directly related annotations, selecting the nearest overlapping
 corridor and clearing outside all corridors. The regression begins outside both geometry and
 leader hit tolerances; focused human retest remains pending.
+
+UAT finding `M63-F005` (2026-07-30) showed that `M63-F004` still conflated geometry reveal
+context, corridor transit and persistent-annotation hover. Crossing one icon could replace the
+context owner and hide its siblings, leaders counted as icon hits, and one multi-marker
+constraint highlighted every occurrence at once. The headless editor now publishes separate
+typed proximity and context-owner state, identifies glyph occurrences by deterministic marker
+index, treats leaders and inter-icon links as transit only, and maps occurrence clicks back to
+the persistent constraint. The renderer applies hover only to the matching glyph child. Direct
+headless and workbench regressions pass; focused human retest remains pending.
 
 ## Explicit non-goals
 

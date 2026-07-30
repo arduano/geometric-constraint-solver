@@ -637,5 +637,6 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   metadata, parameter-consistent bounded-contact neighborhoods, accepted-geometry dimension
   seeding, branch-explicit acute-degree line-angle presentation, retained dimension target
   editing and ordinary-workspace UAT.
-- M63: typed geometry-anchored constraint/dimension annotations, headless hover and picking,
-  contextual density policy, accessible SVG presentation and a dedicated human UAT.
+- M63: typed geometry-anchored constraint/dimension annotations, separate headless geometry
+  reveal context and exact-occurrence proximity/picking, contextual density policy, accessible
+  SVG presentation and a dedicated human UAT.

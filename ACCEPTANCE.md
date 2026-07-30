@@ -1191,13 +1191,16 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
 
 - Accepted editor scenes expose typed constraint/dimension annotations with persistent identity,
   direct operands, finite geometry anchors, semantic kind, visibility policy and hit geometry.
-- The headless editor owns hover identity and annotation-first Select-mode picking. Constraint
-  authoring continues to pick geometry only and one physical canvas click has one owner.
+- The headless editor owns separate geometry reveal context and exact pointer-proximity identity,
+  including deterministic marker occurrence for multi-glyph constraints, plus annotation-first
+  Select-mode picking. Constraint authoring continues to pick geometry only and one physical
+  canvas click has one owner.
 - Every angle dimension is always visible. Other driving dimensions are always visible;
   non-angle reference dimensions and constraint symbols appear through direct geometry context,
   their own selection/hover or targeted problem state.
 - Selecting or hovering an annotation reveals and emphasizes all direct operands without adding
-  them to the editable selection. Unrelated relation clusters remain hidden.
+  them to the editable selection. Transit through a related icon set keeps siblings visible but
+  highlights only the proximate occurrence; unrelated relation clusters remain hidden.
 - Every persistent constraint and dimension family receives geometry-appropriate accepted-state
   placement. Shared glyph anchors use deterministic compact fan-out and leaders.
 - The sole workbench renders accessible vector symbols, angle arcs, dimension/witness lines,

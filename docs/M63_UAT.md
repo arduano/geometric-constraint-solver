@@ -9,7 +9,8 @@ Status: candidate awaiting supervising-human review.
 - Branch: `main`
 - Implementation commits: `9727b60`, with `M63-F001` remediation in `8fcf270` and `M63-F002`
   remediation in `e020477`. The insufficient `M63-F003` remediation is preserved in `e160116`;
-  `M63-F004` supersedes it in `ea5dabd`.
+  the insufficient `M63-F004` remediation is preserved in `ea5dabd`, and `M63-F005` supersedes it
+  in `88295f5`.
 - Temporary Tailscale endpoint: `http://100.94.63.83:8080/`.
 - Scenario group: **Scenarios → M63 Canvas constraints**
 - Mechanical gate: format, warnings-denied workspace Clippy, all-feature workspace tests,
@@ -57,13 +58,20 @@ Status: candidate awaiting supervising-human review.
 - `M63-F003` — remediation insufficient and superseded by `M63-F004`. The first correction made
   only the rendered leader a hover corridor. It still failed whenever the user left a different
   location on the related geometry and took a natural direct path toward the revealed symbol.
-- `M63-F004` — resolved; human retest pending. The headless editor now retains the last direct
+- `M63-F004` — remediation insufficient and superseded by `M63-F005`. The headless editor retained the last direct
   geometry-hover position and builds bounded corridors from that actual position to every directly
   related revealed annotation. When corridors overlap, the nearest path wins deterministically.
-  Hover transfers to the persistent constraint inside a corridor and clears immediately outside
-  all contextual corridors. The regression point is deliberately outside both geometry and
-  rendered-leader hit tolerances, then verifies transfer and unrelated-canvas clearing. Confirm the
-  on-screen instruction begins **“Move directly from any hovered location…”** before retesting.
+  However, it transferred the persistent constraint into the geometry-hover state, so crossing one
+  icon could hide siblings; leaders also counted as icon hits and all occurrences of one
+  multi-marker constraint highlighted together.
+- `M63-F005` — resolved; human retest pending. Headless `EditorHoverState` now keeps the geometry
+  context owner separate from exact `EditorHoverTarget` proximity. Glyph targets carry a stable
+  marker index. Leaders and bounded links between related icons preserve the complete revealed set
+  as transit without hovering any icon; only the proximate occurrence highlights, and clicking it
+  selects the persistent constraint once. Direct regressions cover the full geometry → transit →
+  first icon → inter-icon transit → second icon → blank sequence and renderer child-level hover.
+  Confirm the on-screen instruction begins **“Move from related geometry through the revealed
+  set…”** before retesting.
 
 ## Approval
 

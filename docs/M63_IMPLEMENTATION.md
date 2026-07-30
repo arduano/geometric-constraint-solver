@@ -8,8 +8,9 @@ Status: implementation and mechanical qualification complete; human UAT pending.
 
 - `geosolve-constraint-editor` adds public typed scene annotations for constraint glyphs,
   linear/radial/angular dimensions, visibility, direct operands and hit geometry.
-- `ConstraintEditor` retains typed hover identity, emits `HoverChanged`, clears hover on surface
-  leave/cancel and supports annotation-first Select-mode pointer input with diagnostic context.
+- `ConstraintEditor` retains typed exact-occurrence hover and separate geometry reveal context,
+  emits `HoverChanged`, clears both on surface leave/cancel and supports annotation-first
+  Select-mode pointer input with diagnostic context.
 - The sole workbench consumes those DTOs as accessible SVG symbols, leaders, dimension geometry,
   values and related-operand highlighting.
 - Three stable M63 scenario definitions and this milestone/UAT record are added. No persistence
@@ -61,7 +62,18 @@ showed that was insufficient when the pointer departed from another location on 
 `M63-F004` supersedes it: the headless editor retains the last direct geometry-hover position,
 builds bounded corridors from there to directly related annotations, chooses the nearest
 overlapping corridor and clears immediately outside all corridors. The regression is explicitly
-outside both geometry and leader hit tolerances. Human retest remains pending.
+outside both geometry and leader hit tolerances. Human retest subsequently found this state model
+insufficient.
+
+Follow-up `M63-F005` separates three concepts that `M63-F004` conflated: geometry-owned reveal
+context, bounded transit, and exact annotation proximity. `EditorHoverState` now publishes an
+optional geometry context owner independently of `EditorHoverTarget`; glyph targets carry a
+deterministic marker index. Leader and inter-icon corridors retain context but never claim icon
+hover, directly related occurrences preserve the original context owner, and clicks still resolve
+to the persistent constraint. SVG applies hover only to the matching glyph child rather than the
+whole persistent annotation group. Direct regressions cover sibling visibility, transit without
+hover, first-to-second icon traversal, blank exit, occurrence-specific multi-marker hover,
+persistent selection and rendered child-level hover. Human retest remains pending.
 
 ## 5. Known limitations
 
