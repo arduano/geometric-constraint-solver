@@ -370,6 +370,36 @@ impl EditorScene {
             })
             .next()
     }
+
+    fn contextual_annotation_hit_test(
+        &self,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        selection: &[SelectionItem],
+        hovered: SelectionItem,
+        context_origin: ScreenPoint,
+        problem_items: &[SelectionItem],
+    ) -> Option<Hit> {
+        if !position.is_finite() || !context_origin.is_finite() || !tolerance.is_valid() {
+            return None;
+        }
+        let corridor_tolerance = tolerance.annotation_pixels.max(14.0);
+        self.annotations
+            .iter()
+            .filter(|annotation| {
+                annotation.item == hovered || annotation.operands.contains(&hovered)
+            })
+            .filter(|annotation| annotation.is_visible(selection, Some(hovered), problem_items))
+            .filter_map(|annotation| {
+                let distance = annotation.context_distance(position, context_origin)?;
+                (distance <= corridor_tolerance).then_some(Hit {
+                    item: annotation.item,
+                    distance_pixels: distance,
+                    curve_parameter: None,
+                })
+            })
+            .min_by(compare_hits)
+    }
 }
 
 /// Screen-space picking tolerances. These are interaction policy, not geometry tolerance.
@@ -1175,6 +1205,7 @@ struct Draft {
 pub struct ConstraintEditor {
     selection: Vec<SelectionItem>,
     hovered: Option<SelectionItem>,
+    hover_origin: Option<ScreenPoint>,
     curve_pick_parameters: Vec<(CurveSpan, f64)>,
     pick_tolerance: PickTolerance,
     drag_threshold_pixels: f64,
@@ -1194,6 +1225,7 @@ impl Default for ConstraintEditor {
         Self {
             selection: Vec::new(),
             hovered: None,
+            hover_origin: None,
             curve_pick_parameters: Vec::new(),
             pick_tolerance: PickTolerance::default(),
             drag_threshold_pixels: 3.0,
@@ -1444,16 +1476,35 @@ impl ConstraintEditor {
             if !input.position.is_finite() {
                 return Vec::new();
             }
-            let hovered = scene
-                .annotation_hit_test(
-                    input.position,
-                    self.pick_tolerance,
-                    &self.selection,
-                    self.hovered,
-                    &[],
-                )
-                .or_else(|| scene.hit_test(input.position, self.pick_tolerance))
-                .map(|hit| hit.item);
+            let annotation_hit = scene.annotation_hit_test(
+                input.position,
+                self.pick_tolerance,
+                &self.selection,
+                self.hovered,
+                &[],
+            );
+            let geometry_hit = scene.hit_test(input.position, self.pick_tolerance);
+            let hovered = if let Some(hit) = annotation_hit {
+                self.hover_origin.get_or_insert(input.position);
+                Some(hit.item)
+            } else if let Some(hit) = geometry_hit {
+                self.hover_origin = Some(input.position);
+                Some(hit.item)
+            } else {
+                self.hovered
+                    .zip(self.hover_origin)
+                    .and_then(|(hovered, context_origin)| {
+                        scene.contextual_annotation_hit_test(
+                            input.position,
+                            self.pick_tolerance,
+                            &self.selection,
+                            hovered,
+                            context_origin,
+                            &[],
+                        )
+                    })
+                    .map(|hit| hit.item)
+            };
             return self.set_hovered(hovered);
         };
         if gesture.pointer_id != input.pointer_id || !input.position.is_finite() {
@@ -1485,6 +1536,9 @@ impl ConstraintEditor {
     }
 
     fn set_hovered(&mut self, hovered: Option<SelectionItem>) -> Vec<EditorEffect> {
+        if hovered.is_none() {
+            self.hover_origin = None;
+        }
         if self.hovered == hovered {
             return Vec::new();
         }
@@ -2925,14 +2979,33 @@ mod tests {
     #[test]
     fn m63_hover_crosses_a_visible_leader_and_clears_off_context() {
         let mut document = SketchDocument::new(8.0).expect("document");
-        let rectangle = document
-            .add_rectangle("hover bridge", [0.0, 0.0], 4.0, 3.0)
-            .expect("rectangle");
+        let start = document.add_point("start", [-2.0, 0.0]).expect("start");
+        let end = document.add_point("end", [2.0, 0.0]).expect("end");
+        let line = document
+            .add_curve(
+                "hover bridge",
+                CurveDefinition::Line {
+                    start,
+                    end,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .expect("line");
+        for label in ["horizontal", "first duplicate"] {
+            document
+                .add_constraint(
+                    label,
+                    DocumentConstraintDefinition::Horizontal {
+                        line: CurveSpan::line(line),
+                    },
+                )
+                .expect("horizontal constraint");
+        }
         let duplicate = document
             .add_constraint(
-                "duplicate horizontal",
+                "second duplicate",
                 DocumentConstraintDefinition::Horizontal {
-                    line: CurveSpan::line(rectangle.curves[0]),
+                    line: CurveSpan::line(line),
                 },
             )
             .expect("duplicate constraint");
@@ -2958,16 +3031,31 @@ mod tests {
             _ => panic!("duplicate horizontal must be a glyph"),
         };
         let leader_from = displaced_marker.leader_from.expect("leader origin");
-        let bridge = ScreenPoint {
-            x: (leader_from.x + displaced_marker.anchor.x) * 0.5,
-            y: (leader_from.y + displaced_marker.anchor.y) * 0.5,
+        let context_origin = ScreenPoint {
+            x: leader_from.x - 40.0,
+            y: leader_from.y,
         };
-        let mut hover_editor = ConstraintEditor::default();
+        let bridge = ScreenPoint {
+            x: (context_origin.x + displaced_marker.anchor.x) * 0.5,
+            y: (context_origin.y + displaced_marker.anchor.y) * 0.5,
+        };
+        let mut hover_editor = ConstraintEditor {
+            hover_origin: Some(context_origin),
+            ..ConstraintEditor::default()
+        };
         assert_eq!(
             hover_editor.set_hovered(Some(SelectionItem::Curve(related_curve))),
             vec![EditorEffect::HoverChanged(Some(SelectionItem::Curve(
                 related_curve
             )))]
+        );
+        assert!(
+            !duplicate_annotation.hit_test(bridge, PickTolerance::default().annotation_pixels),
+            "off-leader bridge point must exercise contextual stickiness"
+        );
+        assert!(
+            scene.hit_test(bridge, PickTolerance::default()).is_none(),
+            "off-leader bridge point must be outside geometry"
         );
         assert_eq!(
             hover_editor.pointer_move(

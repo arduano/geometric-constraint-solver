@@ -173,6 +173,48 @@ impl SceneAnnotation {
             }
         }
     }
+
+    /// Reports whether the pointer remains inside a bounded corridor from
+    /// previously hovered related geometry to this annotation.
+    #[must_use]
+    pub fn context_hit_test(
+        &self,
+        position: ScreenPoint,
+        context_origin: ScreenPoint,
+        tolerance_pixels: f64,
+    ) -> bool {
+        tolerance_pixels.is_finite()
+            && tolerance_pixels >= 0.0
+            && self
+                .context_distance(position, context_origin)
+                .is_some_and(|distance| distance <= tolerance_pixels)
+    }
+
+    /// Returns the nearest distance to a contextual corridor from related geometry.
+    #[must_use]
+    pub fn context_distance(
+        &self,
+        position: ScreenPoint,
+        context_origin: ScreenPoint,
+    ) -> Option<f64> {
+        if !position.is_finite() || !context_origin.is_finite() {
+            return None;
+        }
+        Some(match &self.geometry {
+            SceneAnnotationGeometry::Glyph { markers } => markers
+                .iter()
+                .map(|marker| point_segment_distance(position, context_origin, marker.anchor))
+                .min_by(f64::total_cmp)?,
+            SceneAnnotationGeometry::LinearDimension { label_anchor, .. }
+            | SceneAnnotationGeometry::RadialDimension { label_anchor, .. }
+            | SceneAnnotationGeometry::AngularDimension { label_anchor, .. } => {
+                point_segment_distance(position, context_origin, *label_anchor)
+            }
+            SceneAnnotationGeometry::Label { anchor } => {
+                point_segment_distance(position, context_origin, *anchor)
+            }
+        })
+    }
 }
 
 pub(crate) fn build_annotations(
