@@ -2,7 +2,7 @@
 
 # M63 UAT — canvas constraints
 
-Status: candidate awaiting supervising-human review.
+Status: approved by the supervising human on 2026-07-30.
 
 ## Candidate
 
@@ -25,12 +25,12 @@ Status: candidate awaiting supervising-human review.
 
 | Area | Scenario | What to verify | Result |
 | --- | --- | --- | --- |
-| Dimensions | Canvas angle & dimension presentation | Angle arcs/values are always visible; driving dimensions remain visible; other reference dimensions are contextual and editing keeps accepted branch behavior. | Pending |
-| Discovery | Contextual constraint symbols | Geometry hover/selection reveals direct relations only; symbols are selectable and emphasize all direct operands. | Pending |
-| Density | Crowded relation fan-out | Shared anchors fan out predictably with leaders and remain selectable through zoom/pan/reset. | Pending |
-| Icon language | Palette, sketch tree and all three leaves | Geometry/constraint/dimension icons are representative, shared concepts match between palette and canvas, advanced curves remain distinguishable, and tree/problem symbols communicate their category without placeholder text. | Pending |
-| Input ownership | Contextual constraint symbols | Constraint authoring continues to collect geometry once per physical click and visible symbols do not obstruct it. | Pending |
-| Accessibility/errors | All three | Keyboard focus/activation works and targeted problems keep their relevant annotation visible. | Pending |
+| Dimensions | Canvas angle & dimension presentation | Angle arcs/values are always visible; driving dimensions remain visible; other reference dimensions are contextual and editing keeps accepted branch behavior. | Pass |
+| Discovery | Contextual constraint symbols | Geometry hover/selection reveals direct relations only; symbols are selectable and emphasize all direct operands. | Pass |
+| Density | Crowded relation fan-out | Shared anchors fan out predictably with leaders and remain selectable through zoom/pan/reset. | Pass |
+| Icon language | Palette, sketch tree and all three leaves | Geometry/constraint/dimension icons are representative, shared concepts match between palette and canvas, advanced curves remain distinguishable, and tree/problem symbols communicate their category without placeholder text. | Pass |
+| Input ownership | Contextual constraint symbols | Constraint authoring continues to collect geometry once per physical click and visible symbols do not obstruct it. | Pass |
+| Accessibility/errors | All three | Keyboard focus/activation works and targeted problems keep their relevant annotation visible. | Pass |
 
 ## Review sequence
 
@@ -43,7 +43,7 @@ Status: candidate awaiting supervising-human review.
 
 ## Finding ledger
 
-- `M63-F001` — resolved; human retest pending. In `canvas-relation-glyphs`, moving the tangent
+- `M63-F001` — resolved and accepted. In `canvas-relation-glyphs`, moving the tangent
   line left the circle radius numerically correct but made its leader jump unpredictably around
   the circumference. The presentation layer was choosing the farthest adaptively tessellated
   sample from an inferred center; all samples on a circle are mathematically tied, so tiny
@@ -52,7 +52,7 @@ Status: candidate awaiting supervising-human review.
   circular arcs use their semantic midpoint. A headless regression perturbs the accepted radius
   and requires the anchor to remain on that branch. Recheck the new stability step in
   `canvas-relation-glyphs`.
-- `M63-F002` — resolved; human retest pending. In `canvas-crowded-annotations`, the nominal
+- `M63-F002` — resolved and accepted. In `canvas-crowded-annotations`, the nominal
   eight-direction fan-out still placed adjacent symbol centers closer than the rendered glyph and
   hit-target footprints, and offsets around nearby but non-identical origins could collide again.
   The headless layout now searches deterministic concentric candidates and accepts one only when
@@ -68,7 +68,7 @@ Status: candidate awaiting supervising-human review.
   However, it transferred the persistent constraint into the geometry-hover state, so crossing one
   icon could hide siblings; leaders also counted as icon hits and all occurrences of one
   multi-marker constraint highlighted together.
-- `M63-F005` — resolved; human retest pending. Headless `EditorHoverState` now keeps the geometry
+- `M63-F005` — resolved and accepted. Headless `EditorHoverState` now keeps the geometry
   context owner separate from exact `EditorHoverTarget` proximity. Glyph targets carry a stable
   marker index. Leaders and bounded links between related icons preserve the complete revealed set
   as transit without hovering any icon; only the proximate occurrence highlights, and clicking it
@@ -76,19 +76,19 @@ Status: candidate awaiting supervising-human review.
   first icon → inter-icon transit → second icon → blank sequence and renderer child-level hover.
   Confirm the on-screen instruction begins **“Move from related geometry through the revealed
   set…”** before retesting.
-- `M63-F006` — implemented; human review pending. The palette previously used Unicode characters
+- `M63-F006` — implemented and accepted. The palette previously used Unicode characters
   and letters unrelated to the separately hand-drawn canvas glyphs, while contact, direction,
   normal, curvature and continuity were especially ambiguous. One text-free CAD vector catalog
   now owns all eleven constraint intents, five dimension actions and nineteen accepted canvas
   glyphs. Shared concepts reuse exactly the same fragment; specialized persistent relations keep
   distinct geometric symbols. The contextual button now says **Perp / normal**. Review the whole
   left palette, then compare the contextual and crowded M63 leaves.
-- `M63-F007` — implemented; human review pending. Line relations used the nominal middle display
+- `M63-F007` — implemented and accepted. Line relations used the nominal middle display
   sample, but a two-sample line made that integer index its first endpoint. Horizontal, vertical,
   parallel, perpendicular, collinear and equal-length occurrences now use the geometric midpoint
   of each related line. The direct parallel-relation regression requires both symbols to remain
   inside their respective lines. Recheck the line relations in the contextual and crowded leaves.
-- `M63-F008` — implemented; human review pending. Line-line perpendicularity is an angular
+- `M63-F008` — implemented and accepted. Line-line perpendicularity is an angular
   relationship, but it still appeared as two detached compact symbols after `M63-F007`. A
   perpendicular constraint now exposes one selectable square corner at the finite visible
   supporting-line intersection. Endpoint-adjacent spans place the square between their interiors,
@@ -96,7 +96,7 @@ Status: candidate awaiting supervising-human review.
   midpoint symbols rather than inventing false geometry. Curve-contact Normal remains a distinct
   contact-local symbol. Recheck every corner in `canvas-crowded-annotations`, including hover,
   click, zoom and pan.
-- `M63-F009` — implemented; human review pending. The remaining geometry palette still used
+- `M63-F009` — implemented and accepted. The remaining geometry palette still used
   letters and punctuation, sketch-tree rows used the same generic diamond for every object, and
   canvas problem markers drew an exclamation as SVG text. Fifteen distinct geometry vectors now
   cover Select through NURBS, five tree vectors identify point/curve/constraint/dimension/external
@@ -107,4 +107,6 @@ Status: candidate awaiting supervising-human review.
 
 ## Approval
 
-Pending supervising-human UAT.
+- Human rating: Pass for the recorded M63 scope.
+- Approval: explicitly approved by the supervising human on 2026-07-30.
+- M64 remains an empty placeholder and inherits no scope from these findings.

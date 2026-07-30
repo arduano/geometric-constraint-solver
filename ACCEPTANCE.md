@@ -155,8 +155,8 @@ M8 is ready for review only when every item below is objectively present. These 
 
 The checked wording below is the preserved M8 completion record. Its then-current M8-M22
 allocations are historical; `PLAN.md` now governs completed work through the approved M61 gate
-and approved M62 authoring milestone, with M63 now owning the active canvas-constraint
-presentation candidate.
+and approved M62 authoring milestone plus approved M63 canvas-constraint presentation, with M64
+retained only as an empty placeholder.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -936,11 +936,11 @@ finding dispositions and approval record are retained in `docs/M53_UAT.md`.
   regression/requalification plus human retest; deferred future scope retains an explicit roadmap
   owner.
 
-## M54-M63 acceptance
+## M54-M64 acceptance
 
 M54-M62 are the completed post-M53 sequence. M62 received explicit supervising-human approval on
-2026-07-29. M63 is the active canvas-constraint visualization milestone. No old browser E2E
-qualification may return.
+2026-07-29, and M63 received explicit supervising-human approval on 2026-07-30. M64 is an empty
+placeholder with no acceptance criteria. No old browser E2E qualification may return.
 
 ### M54: stable diagnostics
 
@@ -1214,7 +1214,11 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
   contextual relation symbols and crowded fan-out. Scenario state remains ephemeral.
 - Direct native editor and workbench presentation tests, locked all-feature workspace tests,
   warnings-denied Clippy, WASM check and release Trunk build pass.
-- `docs/M63_UAT.md` receives explicit supervising-human approval before M63 closes.
+- The supervising human explicitly approved `docs/M63_UAT.md` on 2026-07-30.
+
+### M64: unscoped placeholder
+
+No acceptance criteria exist until the supervising user assigns M64 a goal and scope.
 
 ## Regression and oracle policy
 

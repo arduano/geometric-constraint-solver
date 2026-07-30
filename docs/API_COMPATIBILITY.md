@@ -17,7 +17,8 @@ target APIs. M34 adds the retained-design lifecycle and M35 adds cooperative
 operation-control APIs; M36-M44 complete the current implementation transition. Cleanup
 M46-M53 preserves released v1-v4 wire compatibility and the accepted-state safety contract
 while evolving the new pre-1.0 editor/workbench surface. M61 closes the currently approved
-advanced-workbench scope. No API/schema hardening milestone is presently scheduled; M62 is an
+advanced-workbench scope, M62 closes approved CAD-style authoring and M63 closes approved canvas
+constraint presentation. No API/schema hardening milestone is presently scheduled; M64 is an
 unscoped placeholder. Any draft-v5 representation remains explicitly unsupported until a future
 schema-freeze milestone is deliberately scoped, qualified and approved, and must not be treated
 as a released wire language.

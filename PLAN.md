@@ -35,8 +35,8 @@ M22 completed the built-in curve and generic differential-constraint surface, no
 the complete production embedding contract. M33-M45 close the first ordinary-CAD,
 host-integration and interaction-consumer cut; M46-M53 perform the cleanup rebase and approved
 host-semantics UAT; M54-M62 complete the subsequent functional work, approved advanced UAT and
-approved CAD-style authoring. M63 adds geometry-anchored canvas constraint and dimension
-presentation and is awaiting its human UAT. This deliverable
+approved CAD-style authoring, and M63 completes approved geometry-anchored canvas constraint and
+dimension presentation. M64 is intentionally unscoped pending supervising-user goals. This deliverable
 does not include a solid B-rep kernel, meshing or 3D sketch curves.
 
 ### Deliverable 2: 2D and 3D rigid-body kinematics
@@ -136,8 +136,8 @@ engine that a real CAD host can use. The accepted personality is:
   geometry enter one attempt as immutable revisioned values.
 - Keep cross-system expressions, B-rep projection, topological naming, feature
   history and application undo outside the sketch solver contract.
-- Keep human acceptance records explicit: M40.7, M53, M61 and M62 are complete and approved, and every
-  newly scoped milestone from M63 onward ends in its own supervising-human UAT. Every objective correctness, persistence,
+- Keep human acceptance records explicit: M40.7, M53, M61, M62 and M63 are complete and approved, and every
+  newly scoped milestone from M64 onward ends in its own supervising-human UAT. Every objective correctness, persistence,
   compatibility and presentation-adapter assertion must pass through direct unit or
   integration tests at its owning layer before a human checkpoint begins; old CDP E2E
   suites are not a qualification path.
@@ -2024,10 +2024,10 @@ M45; the M46 follow-up cleared it without changing behavior.
 
 M46-M53 are the completed cleanup and host-semantics UAT sequence. M54-M60 subsequently completed
 the functional sequence, M61 completed the advanced human UAT gate and M62 completed approved
-CAD-style authoring. On 2026-07-29 the
+CAD-style authoring; M63 completed approved canvas-constraint presentation. On 2026-07-29 the
 supervising user withdrew the previously forecast M62-M64 hardening sequence so that additional
-UI, cleanup and product milestones can be scoped one at a time. M63 is the active
-canvas-constraint presentation milestone and owns no inherited hardening scope.
+UI, cleanup and product milestones can be scoped one at a time. M64 is now only the next empty
+placeholder and owns no inherited hardening scope.
 
 ## Pre-cleanup phase
 
@@ -2810,7 +2810,7 @@ milestone for the scope recorded above without assigning any scope to M63.
 
 ### M63: canvas constraint visualization and interaction
 
-Status: implementation candidate complete; supervising-human UAT pending.
+Status: complete and explicitly approved by the supervising human on 2026-07-30.
 
 Goal: make constraints and dimensions understandable and directly selectable at their accepted
 geometry without turning the canvas into a permanent icon cloud.
@@ -2833,7 +2833,7 @@ geometry without turning the canvas into a permanent icon cloud.
   dimension presentation, contextual relation discovery and crowded annotation fan-out.
 - [x] Pass the common clean format, warnings-denied Clippy, workspace-test, WASM and release Trunk
   gates from the final candidate.
-- [ ] Complete and explicitly approve `docs/M63_UAT.md`.
+- [x] Complete and explicitly approve `docs/M63_UAT.md`.
 
 No solver equation, residual, persistent document schema, branch rule, mobile claim, legacy E2E
 harness or `/#/dev/lab` route is added.
@@ -2841,19 +2841,19 @@ harness or `/#/dev/lab` route is added.
 UAT finding `M63-F001` (2026-07-30) corrected radial annotation jitter caused by choosing among
 mathematically tied adaptive-tessellation samples. Full circles now use canonical parameter zero
 and circular arcs use their semantic midpoint through public accepted-curve evaluation. Direct
-regression and mechanical requalification pass; focused human retest remains pending.
+regression and mechanical requalification pass; the focused human retest is accepted.
 
 UAT finding `M63-F002` (2026-07-30) corrected overlapping crowded constraint symbols. Headless
 fan-out now collision-checks deterministic concentric candidates and requires 22 px separation
 between every final glyph center while retaining semantic leaders. The actual rotating-square
-fixture directly verifies all marker pairs; focused human retest remains pending.
+fixture directly verifies all marker pairs; the focused human retest is accepted.
 
 UAT finding `M63-F003` (2026-07-30) made visible leaders contextual hover corridors, but human
 retest showed that correction was insufficient for paths beginning elsewhere on related geometry.
 `M63-F004` supersedes it by retaining the actual last geometry-hover position and constructing
 bounded corridors from there to directly related annotations, selecting the nearest overlapping
 corridor and clearing outside all corridors. The regression begins outside both geometry and
-leader hit tolerances; focused human retest remains pending.
+leader hit tolerances; the superseding focused interaction review is accepted.
 
 UAT finding `M63-F005` (2026-07-30) showed that `M63-F004` still conflated geometry reveal
 context, corridor transit and persistent-annotation hover. Crossing one icon could replace the
@@ -2862,7 +2862,7 @@ constraint highlighted every occurrence at once. The headless editor now publish
 typed proximity and context-owner state, identifies glyph occurrences by deterministic marker
 index, treats leaders and inter-icon links as transit only, and maps occurrence clicks back to
 the persistent constraint. The renderer applies hover only to the matching glyph child. Direct
-headless and workbench regressions pass; focused human retest remains pending.
+headless and workbench regressions pass; the focused human retest is accepted.
 
 UAT refinement `M63-F006` (2026-07-30) replaces the unrelated Unicode/letter authoring
 placeholders and inconsistent canvas drawings with one text-free CAD vector catalog. Ten shared
@@ -2871,14 +2871,14 @@ distinct symbols for point-on-curve, collinear, equal-length, equal-radius, gene
 curve direction, curve normal, equal curvature and fillet. All five dimension authoring actions
 also receive geometry-representative vector icons, and the contextual operation label is now
 explicitly **Perp / normal**. Direct catalog, shared-language, palette-host and scene regressions
-pass; focused human review remains pending.
+pass; the focused human review is accepted.
 
 UAT refinement `M63-F007` (2026-07-30) moves line-relation glyphs from an accidental endpoint
 sample to the geometric midpoint of each related line. Horizontal, vertical, parallel,
 perpendicular, collinear and equal-length presentation now share this stable interior rule, while
 contact- and curve-specific annotations retain their existing semantic anchors. A direct
 multi-line regression requires both parallel markers to occupy their respective line midpoints;
-focused human review remains pending.
+the focused human review is accepted.
 
 UAT refinement `M63-F008` (2026-07-30) gives line-line perpendicularity angle-like geometric
 presentation instead of two generic midpoint glyphs. The headless scene now publishes a typed
@@ -2886,7 +2886,7 @@ selectable `RightAngle` square at the finite on-screen supporting-line intersect
 quadrant that enters endpoint-adjacent spans and reserving its corner during dense glyph fan-out.
 An off-screen intersection retains the compact midpoint fallback rather than inventing a false
 corner, and curve-contact Normal keeps its distinct contact-local symbol. Direct headless,
-renderer and rotating-square density regressions pass; focused human review remains pending.
+renderer and rotating-square density regressions pass; the focused human review is accepted.
 
 UAT refinement `M63-F009` (2026-07-30) completes the workbench icon audit beyond constraint
 annotations. All fifteen geometry tools now use distinct text-free CAD vector symbols instead of
@@ -2895,7 +2895,18 @@ distinguish points, curves, constraints, dimensions and external bindings, and c
 markers use a vector alert mark rather than SVG text. Constraint/dimension SVG containers are
 non-semantic icon hosts; only genuine Enter/Esc key hints and camera controls retain textual
 symbols. Direct catalog, palette-host, tree and problem-marker regressions pass, the release
-palette is visually legible at its actual desktop size, and focused human review remains pending.
+palette is visually legible at its actual desktop size, and the focused human review is accepted.
+
+Approval record (2026-07-30): after findings `M63-F001` through `M63-F009` were remediated,
+mechanically requalified and reviewed through the focused canvas-constraint UAT, the supervising
+human explicitly approved M63. This closes the milestone for the scope recorded above without
+assigning any scope to M64.
+
+### M64: unscoped placeholder
+
+Status: intentionally empty pending supervising-user goals.
+
+No goal, requirements, acceptance criteria or implementation work are assigned yet.
 
 ## Explicit non-goals
 

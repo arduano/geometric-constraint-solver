@@ -2,7 +2,8 @@
 
 # M63 implementation — canvas constraint visualization
 
-Status: implementation and mechanical qualification complete; human UAT pending.
+Status: complete as of 2026-07-30. Mechanical evidence is recorded here and supervising-human
+approval is recorded in `docs/M63_UAT.md`.
 
 ## 1. Files and APIs
 
@@ -51,17 +52,18 @@ unchanged and non-failing.
 Direct coverage owns complete active constraint/dimension projection across representative public
 ordinary and advanced scenarios, contextual visibility, always-visible reference angles,
 deterministic fan-out, hover transitions, annotation selection and presentation metadata.
-Human acceptance remains pending in `docs/M63_UAT.md`.
+Human acceptance is recorded in `docs/M63_UAT.md`.
 
 Follow-up `M63-F001` removes tessellation-dependent radial placement. Full-circle radius and
 diameter annotations use canonical parameter zero, while circular arcs use their bounded semantic
 midpoint. Both are evaluated through the public accepted curve API. The focused headless
-regression and editor/web qualification slice pass; human retest remains pending.
+regression and editor/web qualification slice pass; the focused human retest is accepted.
 
 Follow-up `M63-F002` replaces nominal ring-slot fan-out with deterministic collision-checked
 placement. Every final glyph center maintains at least 22 px separation from every earlier glyph,
 including glyphs whose semantic origins are merely nearby. The rotating-square headless regression
-checks all final pairs and confirms displaced glyphs retain leaders. Human retest remains pending.
+checks all final pairs and confirms displaced glyphs retain leaders. The focused human retest is
+accepted.
 
 Follow-up `M63-F003` made visible fan-out leaders contextual hover corridors, but human retest
 showed that was insufficient when the pointer departed from another location on the geometry.
@@ -79,7 +81,7 @@ hover, directly related occurrences preserve the original context owner, and cli
 to the persistent constraint. SVG applies hover only to the matching glyph child rather than the
 whole persistent annotation group. Direct regressions cover sibling visibility, transit without
 hover, first-to-second icon traversal, blank exit, occurrence-specific multi-marker hover,
-persistent selection and rendered child-level hover. Human retest remains pending.
+persistent selection and rendered child-level hover. The focused human retest is accepted.
 
 Follow-up `M63-F006` audits and replaces the relevant icon surface. A dedicated `icons` module
 owns distinct text-free SVG fragments for every `SceneConstraintGlyph`, maps the coarser
@@ -89,14 +91,14 @@ non-semantic icon hosts while retaining visible button labels. Specialized accep
 symbols distinguish generic contact, tangent direction, curve normal, equal curvature,
 continuity and fillet. Selection/error states remain outline-based so circular icons do not turn
 into filled blobs. Direct tests require complete unique catalogs, text-free markup and exact
-palette/canvas reuse for shared concepts. Human visual review remains pending.
+palette/canvas reuse for shared concepts. The focused human visual review is accepted.
 
 Follow-up `M63-F007` gives every line-relation occurrence an interior anchor. The presentation
 previously selected the middle polyline array index; a line has two display samples, so integer
 indexing selected its first endpoint. Horizontal, vertical, parallel, perpendicular, collinear and
 equal-length relations now use the geometric midpoint of each line's accepted endpoints.
 Curve/contact/radial anchors are unchanged. The parallel-relation regression requires one
-undisplaced marker at each related line midpoint. Human visual review remains pending.
+undisplaced marker at each related line midpoint. The focused human visual review is accepted.
 
 Follow-up `M63-F008` specializes line-line perpendicular presentation. Public
 `SceneAnnotationGeometry::RightAngle` carries the finite supporting-line vertex and three square
@@ -107,8 +109,8 @@ corner is reserved before ordinary glyph fan-out so dense junction symbols do no
 the supporting-line intersection lies outside the viewport margin, presentation falls back to the
 compact perpendicular midpoint glyphs instead of drawing a geometrically false corner. A
 curve-contact Normal remains a separate contact-local glyph. Direct headless and workbench tests
-cover exact geometry, selection, SVG output and the rotating-square density fixture. Human visual
-review remains pending.
+cover exact geometry, selection, SVG output and the rotating-square density fixture. The focused
+human visual review is accepted.
 
 Follow-up `M63-F009` completes the remaining icon-adjacent workbench audit. Fifteen distinct
 text-free vectors replace the geometry palette's letters and punctuation for Select, ordinary
@@ -119,7 +121,7 @@ a path-based alert mark rather than SVG text. Constraint/dimension icon hosts ar
 non-semantic spans; actual Enter/Esc key hints, scenario disclosures and camera `−`/`Fit`/`+`
 controls remain textual. Direct catalog, palette-host, tree integration and problem-marker
 tests pass, and a 1600-by-1100 release screenshot confirms palette legibility at actual desktop
-size. Human visual review remains pending.
+size. The focused human visual review is accepted.
 
 ## 5. Known limitations
 
@@ -127,3 +129,5 @@ size. Human visual review remains pending.
   drafting-layout optimizer.
 - M63 does not add manual dimension-label dragging or persisted annotation placement.
 - Desktop-only workbench and existing solver/branch scope remain unchanged.
+- The supervising human explicitly approved the recorded M63 scope on 2026-07-30. M64 remains an
+  empty placeholder and inherits none of these limitations as planned work.

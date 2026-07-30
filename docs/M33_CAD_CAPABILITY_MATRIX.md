@@ -17,7 +17,7 @@ persistent semantic source.
 
 Roadmap note (2026-07-29): the machine-read `unsupported_through_m64` status and `M64` target cells
 below are frozen historical M33 tokens retained for characterization compatibility. They do not
-refer to an active M64 milestone; the current roadmap ends at an unscoped M62 placeholder.
+assign scope to the current M64 milestone; the roadmap now ends at that unscoped placeholder.
 
 ## Status vocabulary
 
