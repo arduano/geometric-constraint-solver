@@ -2888,6 +2888,15 @@ An off-screen intersection retains the compact midpoint fallback rather than inv
 corner, and curve-contact Normal keeps its distinct contact-local symbol. Direct headless,
 renderer and rotating-square density regressions pass; focused human review remains pending.
 
+UAT refinement `M63-F009` (2026-07-30) completes the workbench icon audit beyond constraint
+annotations. All fifteen geometry tools now use distinct text-free CAD vector symbols instead of
+letters or punctuation, their tool keys and runtime catalog have one owner, sketch-tree rows
+distinguish points, curves, constraints, dimensions and external bindings, and canvas problem
+markers use a vector alert mark rather than SVG text. Constraint/dimension SVG containers are
+non-semantic icon hosts; only genuine Enter/Esc key hints and camera controls retain textual
+symbols. Direct catalog, palette-host, tree and problem-marker regressions pass, the release
+palette is visually legible at its actual desktop size, and focused human review remains pending.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:

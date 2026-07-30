@@ -1829,6 +1829,12 @@ specialized persistent relations retain distinct geometry-representative symbols
 `canvas-relation-glyphs` instructions explicitly ask the reviewer to compare that shared language
 and distinguish contact, direction, normal and curvature variants.
 
+`M63-F009` completes the adjacent non-scenario icon audit without changing any fixture. The
+fifteen geometry authoring tools receive distinct text-free CAD vector symbols, sketch-tree rows
+distinguish their object category, and targeted/global problem markers use vector alert geometry.
+Ordinary labelled actions, Enter/Esc hints, scenario disclosures and camera controls retain their
+existing text because they are not placeholder concept icons.
+
 ## Frozen near-singular fixtures
 
 The regression corpus includes:

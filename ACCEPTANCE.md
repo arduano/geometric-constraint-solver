@@ -1206,6 +1206,10 @@ the complete workspace gate pass. No equation, branch heuristic, B-rep state, br
 - The sole workbench renders one shared text-free CAD vector language across authoring and
   accepted canvas symbols, plus angle arcs, dimension/witness lines, values, focus, selection and
   problem states without reconstructing constraint semantics.
+- Every geometry authoring tool has a distinct text-free vector symbol; sketch-tree object
+  categories and canvas problem markers use representative vector symbols rather than placeholder
+  letters, generic diamonds or SVG text. Genuine keyboard hints and camera controls remain
+  textual.
 - Three stable **M63 Canvas constraints** leaves directly exercise angle/dimension presentation,
   contextual relation symbols and crowded fan-out. Scenario state remains ephemeral.
 - Direct native editor and workbench presentation tests, locked all-feature workspace tests,

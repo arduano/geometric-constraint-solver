@@ -116,6 +116,9 @@ M63 follow-up `M63-F007` places line-relation glyphs at the geometric midpoint o
 line instead of the first endpoint selected by two-sample polyline indexing.
 M63 follow-up `M63-F008` presents line-line perpendicularity as a selectable square corner at the
 supporting-line intersection while retaining the distinct contact-local curve Normal symbol.
+M63 follow-up `M63-F009` replaces the remaining geometry-tool letter placeholders, generic
+sketch-tree diamonds and text-backed canvas problem mark with one consistent text-free vector
+language while retaining genuine keyboard and camera controls.
 Old Chromium/CDP, HTTP serving, DOM-scraping, screenshot, wall-clock browser-timing and
 source-substring-scan gates remain retired.
 

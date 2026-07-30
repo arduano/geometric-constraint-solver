@@ -12,7 +12,8 @@ Status: candidate awaiting supervising-human review.
   the insufficient `M63-F004` remediation is preserved in `ea5dabd`, and `M63-F005` supersedes it
   in `88295f5`. The icon-language refinement `M63-F006` is implemented in `1978e33`;
   `M63-F007` moves line-relation markers to line interiors in `e75bb1b`; `M63-F008`
-  specializes visible line-line perpendicularity as right-angle geometry in `22f52b3`.
+  specializes visible line-line perpendicularity as right-angle geometry in `22f52b3`; and
+  `M63-F009` completes the adjacent workbench icon audit in `38f79f3`.
 - Temporary Tailscale endpoint: `http://100.94.63.83:8080/`.
 - Scenario group: **Scenarios → M63 Canvas constraints**
 - Mechanical gate: format, warnings-denied workspace Clippy, all-feature workspace tests,
@@ -27,7 +28,7 @@ Status: candidate awaiting supervising-human review.
 | Dimensions | Canvas angle & dimension presentation | Angle arcs/values are always visible; driving dimensions remain visible; other reference dimensions are contextual and editing keeps accepted branch behavior. | Pending |
 | Discovery | Contextual constraint symbols | Geometry hover/selection reveals direct relations only; symbols are selectable and emphasize all direct operands. | Pending |
 | Density | Crowded relation fan-out | Shared anchors fan out predictably with leaders and remain selectable through zoom/pan/reset. | Pending |
-| Icon language | Palette and all three leaves | Constraint/dimension icons are geometry-representative, shared concepts match between palette and canvas, and specialized relations remain distinguishable. | Pending |
+| Icon language | Palette, sketch tree and all three leaves | Geometry/constraint/dimension icons are representative, shared concepts match between palette and canvas, advanced curves remain distinguishable, and tree/problem symbols communicate their category without placeholder text. | Pending |
 | Input ownership | Contextual constraint symbols | Constraint authoring continues to collect geometry once per physical click and visible symbols do not obstruct it. | Pending |
 | Accessibility/errors | All three | Keyboard focus/activation works and targeted problems keep their relevant annotation visible. | Pending |
 
@@ -95,6 +96,14 @@ Status: candidate awaiting supervising-human review.
   midpoint symbols rather than inventing false geometry. Curve-contact Normal remains a distinct
   contact-local symbol. Recheck every corner in `canvas-crowded-annotations`, including hover,
   click, zoom and pan.
+- `M63-F009` — implemented; human review pending. The remaining geometry palette still used
+  letters and punctuation, sketch-tree rows used the same generic diamond for every object, and
+  canvas problem markers drew an exclamation as SVG text. Fifteen distinct geometry vectors now
+  cover Select through NURBS, five tree vectors identify point/curve/constraint/dimension/external
+  categories, and the alert mark is path-based. Constraint/dimension vectors also use true icon
+  hosts instead of keyboard elements. Review the complete left palette at normal size, then open a
+  populated scenario to compare tree categories and use an error scenario to inspect targeted and
+  global problem marks. Enter/Esc hints and camera controls intentionally remain textual.
 
 ## Approval
 

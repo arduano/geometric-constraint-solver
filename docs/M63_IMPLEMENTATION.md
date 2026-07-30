@@ -16,6 +16,9 @@ Status: implementation and mechanical qualification complete; human UAT pending.
 - One workbench-owned text-free vector catalog supplies all nineteen accepted constraint glyphs,
   all eleven authoring intents and all five dimension actions; shared concepts reuse the same
   fragment rather than maintaining palette and canvas dialects.
+- The same module supplies all fifteen geometry-tool symbols, five sketch-tree category symbols
+  and the canvas problem mark. Tool identity/catalog iteration has one owner, and SVG hosts are
+  non-semantic spans rather than keyboard elements.
 - Three stable M63 scenario definitions and this milestone/UAT record are added. No persistence
   schema or solver API changes.
 
@@ -106,6 +109,17 @@ compact perpendicular midpoint glyphs instead of drawing a geometrically false c
 curve-contact Normal remains a separate contact-local glyph. Direct headless and workbench tests
 cover exact geometry, selection, SVG output and the rotating-square density fixture. Human visual
 review remains pending.
+
+Follow-up `M63-F009` completes the remaining icon-adjacent workbench audit. Fifteen distinct
+text-free vectors replace the geometry palette's letters and punctuation for Select, ordinary
+geometry and every advanced curve authoring tool. The shared geometry catalog now owns both DOM
+tool keys and runtime iteration. Point, curve, constraint, dimension and external-binding tree
+rows receive distinct vector categories in place of the generic diamond, and canvas problems use
+a path-based alert mark rather than SVG text. Constraint/dimension icon hosts are now ordinary
+non-semantic spans; actual Enter/Esc key hints, scenario disclosures and camera `−`/`Fit`/`+`
+controls remain textual. Direct catalog, palette-host, tree integration and problem-marker
+tests pass, and a 1600-by-1100 release screenshot confirms palette legibility at actual desktop
+size. Human visual review remains pending.
 
 ## 5. Known limitations
 
