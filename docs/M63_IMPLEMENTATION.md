@@ -88,6 +88,13 @@ continuity and fillet. Selection/error states remain outline-based so circular i
 into filled blobs. Direct tests require complete unique catalogs, text-free markup and exact
 palette/canvas reuse for shared concepts. Human visual review remains pending.
 
+Follow-up `M63-F007` gives every line-relation occurrence an interior anchor. The presentation
+previously selected the middle polyline array index; a line has two display samples, so integer
+indexing selected its first endpoint. Horizontal, vertical, parallel, perpendicular, collinear and
+equal-length relations now use the geometric midpoint of each line's accepted endpoints.
+Curve/contact/radial anchors are unchanged. The parallel-relation regression requires one
+undisplaced marker at each related line midpoint. Human visual review remains pending.
+
 ## 5. Known limitations
 
 - Annotation layout is intentionally compact and deterministic, not a general-purpose CAD

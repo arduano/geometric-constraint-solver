@@ -112,6 +112,8 @@ representative line/circle/Bezier/NURBS point-on-curve picks, both continuity en
 retained-rejection recovery, dimension Undo/Redo and process-local option memory. The added
 endpoint fixture also corrects ordinary bounded contacts to default Start/End neighborhoods from
 their picked endpoint parameter.
+M63 follow-up `M63-F007` places line-relation glyphs at the geometric midpoint of each related
+line instead of the first endpoint selected by two-sample polyline indexing.
 Old Chromium/CDP, HTTP serving, DOM-scraping, screenshot, wall-clock browser-timing and
 source-substring-scan gates remain retired.
 

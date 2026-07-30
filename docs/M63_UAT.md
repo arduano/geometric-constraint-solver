@@ -10,7 +10,8 @@ Status: candidate awaiting supervising-human review.
 - Implementation commits: `9727b60`, with `M63-F001` remediation in `8fcf270` and `M63-F002`
   remediation in `e020477`. The insufficient `M63-F003` remediation is preserved in `e160116`;
   the insufficient `M63-F004` remediation is preserved in `ea5dabd`, and `M63-F005` supersedes it
-  in `88295f5`. The icon-language refinement `M63-F006` is implemented in `1978e33`.
+  in `88295f5`. The icon-language refinement `M63-F006` is implemented in `1978e33`;
+  `M63-F007` moves line-relation markers to line interiors in `e75bb1b`.
 - Temporary Tailscale endpoint: `http://100.94.63.83:8080/`.
 - Scenario group: **Scenarios → M63 Canvas constraints**
 - Mechanical gate: format, warnings-denied workspace Clippy, all-feature workspace tests,
@@ -80,6 +81,11 @@ Status: candidate awaiting supervising-human review.
   glyphs. Shared concepts reuse exactly the same fragment; specialized persistent relations keep
   distinct geometric symbols. The contextual button now says **Perp / normal**. Review the whole
   left palette, then compare the contextual and crowded M63 leaves.
+- `M63-F007` — implemented; human review pending. Line relations used the nominal middle display
+  sample, but a two-sample line made that integer index its first endpoint. Horizontal, vertical,
+  parallel, perpendicular, collinear and equal-length occurrences now use the geometric midpoint
+  of each related line. The direct parallel-relation regression requires both symbols to remain
+  inside their respective lines. Recheck the line relations in the contextual and crowded leaves.
 
 ## Approval
 

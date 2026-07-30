@@ -2873,6 +2873,13 @@ also receive geometry-representative vector icons, and the contextual operation 
 explicitly **Perp / normal**. Direct catalog, shared-language, palette-host and scene regressions
 pass; focused human review remains pending.
 
+UAT refinement `M63-F007` (2026-07-30) moves line-relation glyphs from an accidental endpoint
+sample to the geometric midpoint of each related line. Horizontal, vertical, parallel,
+perpendicular, collinear and equal-length presentation now share this stable interior rule, while
+contact- and curve-specific annotations retain their existing semantic anchors. A direct
+multi-line regression requires both parallel markers to occupy their respective line midpoints;
+focused human review remains pending.
+
 ## Explicit non-goals
 
 The following are not part of the currently approved roadmap:
