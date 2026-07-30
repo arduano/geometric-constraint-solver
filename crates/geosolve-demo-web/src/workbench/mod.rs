@@ -7,6 +7,8 @@ mod effect_adapter;
 #[cfg(any(target_arch = "wasm32", test))]
 mod evidence;
 #[cfg(any(target_arch = "wasm32", test))]
+mod icons;
+#[cfg(any(target_arch = "wasm32", test))]
 mod panels;
 #[cfg(any(target_arch = "wasm32", test))]
 mod persistence;
@@ -184,11 +186,38 @@ pub(crate) mod wasm {
             notice,
             problems_open: false,
         }));
+        install_authoring_icons(document)?;
         render(document, &workbench)?;
         install_clicks(document, &workbench)?;
         install_scenario_flyout_state(document)?;
         install_canvas(document, &workbench)?;
         install_keyboard(document, &workbench)?;
+        Ok(())
+    }
+
+    fn install_authoring_icons(document: &Document) -> Result<(), JsValue> {
+        for (key, _, intent) in super::action_surface::CONSTRAINT_ACTIONS {
+            install_authoring_icon(document, key, AuthoringTool::Constraint(intent))?;
+        }
+        for (key, _, kind) in super::action_surface::DIMENSION_ACTIONS {
+            install_authoring_icon(document, key, AuthoringTool::Dimension(kind))?;
+        }
+        Ok(())
+    }
+
+    fn install_authoring_icon(
+        document: &Document,
+        key: &str,
+        tool: AuthoringTool,
+    ) -> Result<(), JsValue> {
+        let Some(button) = document.query_selector(&format!("[data-wb-authoring=\"{key}\"]"))?
+        else {
+            return Ok(());
+        };
+        let Some(icon) = button.query_selector(".wb-authoring-icon")? else {
+            return Ok(());
+        };
+        icon.set_inner_html(&super::icons::authoring_icon_markup(tool));
         Ok(())
     }
 

@@ -7,8 +7,8 @@ use geosolve_constraint_editor::{
     AdvancedConstructionKind, ConstructionPreview, ConstructionPreviewGeometry,
     DimensionTargetDisplayUnit, EditorHoverState, EditorHoverTarget, EditorProblemCategory,
     EditorProblemMetadata, EditorProblemScope, EditorProblemTarget, EditorScene,
-    SceneAnnotationGeometry, SceneAnnotationKind, SceneConstraintGlyph, ScreenPoint, SelectionItem,
-    Viewport, display_dimension_target,
+    SceneAnnotationGeometry, SceneAnnotationKind, ScreenPoint, SelectionItem, Viewport,
+    display_dimension_target,
 };
 #[cfg(test)]
 use geosolve_sketch::DocumentConstraintDefinition;
@@ -562,7 +562,7 @@ fn annotation_geometry(
                     },
                     marker.anchor.x,
                     marker.anchor.y,
-                    constraint_symbol(glyph),
+                    super::icons::constraint_icon_fragment(glyph),
                 );
             }
         }
@@ -688,7 +688,7 @@ fn annotation_geometry(
 
 const fn annotation_kind(kind: SceneAnnotationKind) -> &'static str {
     match kind {
-        SceneAnnotationKind::Constraint(glyph) => constraint_glyph_key(glyph),
+        SceneAnnotationKind::Constraint(glyph) => super::icons::constraint_icon_key(glyph),
         SceneAnnotationKind::PointDistance => "point-distance",
         SceneAnnotationKind::CurveLength => "segment-length",
         SceneAnnotationKind::Radius => "radius",
@@ -696,62 +696,6 @@ const fn annotation_kind(kind: SceneAnnotationKind) -> &'static str {
         SceneAnnotationKind::OrientedAngle => "oriented-angle",
         SceneAnnotationKind::SupportingLineOffset => "supporting-line-offset",
         SceneAnnotationKind::ExactTranslatedSegmentOffset => "translated-segment-offset",
-    }
-}
-
-const fn constraint_glyph_key(glyph: SceneConstraintGlyph) -> &'static str {
-    match glyph {
-        SceneConstraintGlyph::Fixed => "fixed",
-        SceneConstraintGlyph::Coincident => "coincident",
-        SceneConstraintGlyph::Horizontal => "horizontal",
-        SceneConstraintGlyph::Vertical => "vertical",
-        SceneConstraintGlyph::PointOnCurve => "point-on-curve",
-        SceneConstraintGlyph::Parallel => "parallel",
-        SceneConstraintGlyph::Perpendicular => "perpendicular",
-        SceneConstraintGlyph::Collinear => "collinear",
-        SceneConstraintGlyph::EqualLength => "equal-length",
-        SceneConstraintGlyph::EqualRadius => "equal-radius",
-        SceneConstraintGlyph::Midpoint => "midpoint",
-        SceneConstraintGlyph::Symmetry => "symmetry",
-        SceneConstraintGlyph::Contact => "generic-contact",
-        SceneConstraintGlyph::Tangency => "tangency",
-        SceneConstraintGlyph::Direction => "curve-direction",
-        SceneConstraintGlyph::Normal => "normal",
-        SceneConstraintGlyph::EqualCurvature => "equal-curvature",
-        SceneConstraintGlyph::Continuity => "continuity",
-        SceneConstraintGlyph::Fillet => "fillet",
-    }
-}
-
-const fn constraint_symbol(glyph: SceneConstraintGlyph) -> &'static str {
-    match glyph {
-        SceneConstraintGlyph::Fixed => "<path d=\"M-5 5V-3A5 5 0 0 1 5-3V5M-8 5H8\"/>",
-        SceneConstraintGlyph::Coincident => "<circle cx=\"-3\" r=\"4\"/><circle cx=\"3\" r=\"4\"/>",
-        SceneConstraintGlyph::Horizontal => "<path d=\"M-7 0H7M-5-3V3M5-3V3\"/>",
-        SceneConstraintGlyph::Vertical => "<path d=\"M0-7V7M-3-5H3M-3 5H3\"/>",
-        SceneConstraintGlyph::PointOnCurve => {
-            "<path d=\"M-8 4Q0-6 8 4\"/><circle cy=\"-1\" r=\"2\"/>"
-        }
-        SceneConstraintGlyph::Parallel => "<path d=\"M-7 4L4-7M-3 7L8-4\"/>",
-        SceneConstraintGlyph::Perpendicular => "<path d=\"M-7-6V6H7\"/>",
-        SceneConstraintGlyph::Collinear => "<path d=\"M-8 4L8-4M-5 1L-2 4M2-4L5-1\"/>",
-        SceneConstraintGlyph::EqualLength => "<path d=\"M-8-3H8M-8 3H8M-2-6V0M2 0V6\"/>",
-        SceneConstraintGlyph::EqualRadius => {
-            "<circle r=\"7\"/><path d=\"M0 0L6-4M-4-1H4M-4 3H4\"/>"
-        }
-        SceneConstraintGlyph::Midpoint => "<path d=\"M-8 5L0-6L8 5ZM-5 5H5\"/><circle r=\"1.5\"/>",
-        SceneConstraintGlyph::Symmetry => "<path d=\"M0-8V8M-7-5L-3 0L-7 5M7-5L3 0L7 5\"/>",
-        SceneConstraintGlyph::Contact => {
-            "<path d=\"M-8 3Q-4-4 0 3Q4 10 8 3\"/><circle cy=\"3\" r=\"2\"/>"
-        }
-        SceneConstraintGlyph::Tangency => "<circle cy=\"-2\" r=\"5\"/><path d=\"M-8 3H8\"/>",
-        SceneConstraintGlyph::Direction => "<path d=\"M-8 4H6M2 0L6 4L2 8\"/>",
-        SceneConstraintGlyph::Normal => "<path d=\"M-7 5H5V-7M1-3H5V1\"/>",
-        SceneConstraintGlyph::EqualCurvature => {
-            "<path d=\"M-8 5Q-4-7 0 1Q4 9 8-3M-4-7H4M-4-3H4\"/>"
-        }
-        SceneConstraintGlyph::Continuity => "<path d=\"M-8 4Q-3-7 0 0Q3 7 8-4M-2-6L2-6\"/>",
-        SceneConstraintGlyph::Fillet => "<path d=\"M-8 6H-3A9 9 0 0 1 6-3V-8\"/>",
     }
 }
 

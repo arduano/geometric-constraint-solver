@@ -180,6 +180,12 @@ mod tests {
                 "missing dimension palette action {key}"
             );
         }
+        assert_eq!(
+            html.matches("class=\"wb-authoring-icon\"").count(),
+            CONSTRAINT_ACTIONS.len() + DIMENSION_ACTIONS.len(),
+            "every authoring action needs exactly one shared vector-icon host"
+        );
+        assert!(html.contains("title=\"Perpendicular / normal\""));
         assert!(html.contains("id=\"wb-dimension-target-editor\""));
         assert!(html.contains("class=\"wb-palette-flyout\""));
         for retired in [

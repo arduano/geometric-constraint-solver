@@ -257,6 +257,22 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-tool-palette button > *,
 .wb-tree-row > * { pointer-events: none; }
 .wb-tool-palette kbd { color: #d6b16f; background: transparent; font: 1rem ui-monospace, monospace; }
+.wb-authoring-icon {
+  display: grid;
+  width: 1.35rem;
+  height: 1.35rem;
+  place-items: center;
+}
+.wb-palette-icon {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.65;
+  vector-effect: non-scaling-stroke;
+}
 .wb-palette-option-tool { position: relative; min-width: 0; }
 .wb-palette-option-tool > button { width: 100%; }
 .wb-palette-option-tool > details {
@@ -470,7 +486,11 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 #wb-dimension-arrow path { fill: #79bfc4; stroke: none; }
 .wb-constraint-symbol.hovered,
 .wb-annotation:focus .wb-constraint-symbol,
-.wb-annotation.selected .wb-constraint-symbol,
+.wb-annotation.selected .wb-constraint-symbol {
+  fill: none;
+  stroke: #fff2c8;
+  filter: drop-shadow(0 0 3px rgb(239 184 86 / 50%));
+}
 .wb-dimension:hover,
 .wb-dimension.hovered,
 .wb-dimension:focus,
@@ -479,7 +499,11 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   stroke: #fff2c8;
   filter: drop-shadow(0 0 3px rgb(239 184 86 / 50%));
 }
-.wb-annotation.has-problem .wb-constraint-symbol,
+.wb-annotation.has-problem .wb-constraint-symbol {
+  fill: none;
+  stroke: #ff8b7d;
+  filter: drop-shadow(0 0 4px rgb(255 82 69 / 60%));
+}
 .wb-dimension.has-problem {
   fill: #ff8b7d;
   stroke: #ff8b7d;
