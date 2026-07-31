@@ -145,11 +145,15 @@ fn decode_document(payload: &WorkspaceDocumentPayload) -> Result<SketchDocument,
 
 #[cfg(test)]
 mod tests {
-    use geosolve_constraint_editor::RetainedEditorCoordinator;
+    use geosolve_constraint_editor::{
+        AuthoringMutation, AuthoringOperand, AuthoringOutcome, AuthoringState, AuthoringTool,
+        ConstraintIntent, RetainedEditorCoordinator, SelectionItem,
+    };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
-        AlphaScenarioIds, AlphaScenarioKind, ContactStateEdit, DocumentSolveRequest,
-        RetainedSketchDocumentSession, SketchDocument, alpha_scenario,
+        AlphaScenarioIds, AlphaScenarioKind, ContactStateEdit, CurveDefinition, CurveSpan,
+        DocumentConstraintDefinition, DocumentSolveRequest, RetainedSketchDocumentSession,
+        SketchDocument, alpha_scenario,
     };
 
     use super::WorkspaceSnapshot;
@@ -175,6 +179,110 @@ mod tests {
         assert_eq!(
             decoded.revisions().accepted(),
             snapshot.revisions().accepted()
+        );
+    }
+
+    #[test]
+    fn authored_constraint_round_trips_workspace_and_remains_editable() {
+        let mut document = SketchDocument::new(4.0).expect("document");
+        let first = document.add_point("first", [0.0, 0.0]).expect("point");
+        let second = document.add_point("free", [2.0, 1.0]).expect("point");
+        let line = CurveSpan::line(
+            document
+                .add_curve(
+                    "line",
+                    CurveDefinition::Line {
+                        start: first,
+                        end: second,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .expect("line"),
+        );
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+
+        let mut authoring = AuthoringState::default();
+        let application = match authoring.activate(
+            coordinator.session().design_document(),
+            AuthoringTool::Constraint(ConstraintIntent::Horizontal),
+            &[AuthoringOperand::selected(SelectionItem::Curve(line))],
+        ) {
+            AuthoringOutcome::Apply(application) => application,
+            outcome => panic!("expected horizontal application, got {outcome:?}"),
+        };
+        let created = match coordinator
+            .apply_authoring(coordinator.session().design_identity(), &application)
+            .expect("author horizontal constraint")
+        {
+            AuthoringMutation::Constraint(outcome) => outcome,
+            AuthoringMutation::Dimension(_) => panic!("expected constraint mutation"),
+        };
+        assert!(created.published_accepted.is_some());
+        assert!(matches!(
+            coordinator
+                .session()
+                .design_document()
+                .constraint(created.value)
+                .expect("authored constraint")
+                .definition,
+            DocumentConstraintDefinition::Horizontal { line: actual } if actual == line
+        ));
+
+        let authored_json = coordinator.checkpoint().design_json().to_owned();
+        let snapshot = WorkspaceSnapshot::from_checkpoint(coordinator.checkpoint());
+        let decoded =
+            WorkspaceSnapshot::decode(&snapshot.encode().expect("encode")).expect("decode");
+        let restored_session = RetainedSketchDocumentSession::restore_design_with_accepted(
+            decoded.design_document().expect("design document"),
+            decoded
+                .accepted_document()
+                .expect("accepted payload")
+                .expect("accepted document"),
+            decoded.revisions(),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("restore session");
+        let mut restored =
+            RetainedEditorCoordinator::new(restored_session).expect("restored coordinator");
+        assert_eq!(restored.checkpoint().design_json(), authored_json);
+
+        let source = restored
+            .session()
+            .design_document()
+            .constraint(created.value)
+            .expect("restored authored constraint")
+            .source_id;
+        restored
+            .editor_mut()
+            .set_selection([SelectionItem::Constraint(created.value)]);
+        let edited = restored
+            .set_selected_suppressed(restored.session().design_identity(), true)
+            .expect("suppress restored constraint");
+        assert!(edited.published_accepted.is_some());
+        assert!(
+            restored
+                .session()
+                .design_document()
+                .source(source)
+                .expect("restored authored source")
+                .suppressed
+        );
+
+        restored.undo().expect("undo suppression");
+        assert!(
+            !restored
+                .session()
+                .design_document()
+                .source(source)
+                .expect("restored authored source after undo")
+                .suppressed
         );
     }
 

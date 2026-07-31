@@ -7,18 +7,19 @@ use std::collections::{BTreeSet, HashSet};
 use geosolve_sketch::{
     ContactBranchEdit, ContactDomain, ContactId, ContactNeighborhood, CurveDefinition, CurveId,
     CurveSpan, DesignPointId, DocumentAngleOrientation, DocumentCommandEffect,
-    DocumentConstraintDefinition, DocumentCurveBranchEdit, DocumentCurveContinuity,
-    DocumentCurveCurvatureRelation, DocumentDimensionDefinition, DocumentDimensionId,
-    DocumentDimensionMode, DocumentEdit, DocumentElementId, DocumentExternalBindingId,
+    DocumentConstraintDefinition, DocumentCurveContinuity, DocumentCurveCurvatureRelation,
+    DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode,
+    DocumentDragLocalityPlan, DocumentEdit, DocumentElementId, DocumentExternalBindingId,
     DocumentMeasurementCatalog, DocumentMeasurementProvenance, DocumentMeasurementValue,
     DocumentObjectId, DocumentRuntimeMap, DocumentSessionError, DocumentSolveRequest,
     DocumentSourceId, DocumentSourceOwner, ExternalFeatureKindV1, ExternalSnapshotSet,
-    ExternalTopologyDigest, GeometryRole, OperationControl, OperationOutcome, OperationReport,
-    ParameterBatch, RetainedSketchDocumentSession, RuntimeCurve, ScalarDomain, ScalarUnit,
+    ExternalTopologyDigest, GeometryRole, OperationControl, OperationController, OperationLimits,
+    OperationOutcome, OperationReport, OperationWork, ParameterBatch,
+    RetainedSketchDocumentSession, RuntimeCurve, ScalarDomain, ScalarUnit,
     SketchAcceptedDocumentRedundancy, SketchAcceptedStateIdentity, SketchAttemptFailure,
     SketchAttemptFailureKind, SketchAttemptIdentity, SketchBound, SketchDesignIdentity,
-    SketchDocument, SketchLifecycleRevisionHighWater, SketchSolveResult, SketchSolveWorkSummary,
-    SketchSource, SolveRejection, TangentOrientation,
+    SketchDocument, SketchLifecycleRevisionHighWater, SketchSolveResult, SketchSource,
+    SolveRejection, TangentOrientation,
 };
 use thiserror::Error;
 
@@ -26,22 +27,159 @@ use crate::{
     ActionChoice, AuthoringApplication, AuthoringOperand, AuthoringOptions, AuthoringTool,
     ConstraintActionRequest, ConstraintEditor, ConstraintIntent, ConstraintKind,
     ConstraintRelationChoice, ConstructionProposal, ConstructionResult, DimensionActionRequest,
-    DimensionKind, EditorEffect, ProvisionalInferenceCandidate, ResolvedConstraintKind,
+    DimensionKind, EditorEffect, EditorScene, PointGestureSnapshot, PointerInput,
+    ProjectedDragRequestDisposition, ProvisionalInferenceCandidate, ResolvedConstraintKind,
     SelectionItem,
 };
 
-const PROJECTED_DRAG_MAX_NONLINEAR_ITERATIONS: usize = 2_048;
-const PROJECTED_DRAG_MAX_FACTORIZATIONS: usize = 2_048;
-const PROJECTED_DRAG_MAX_REJECTED_TRIALS: usize = 4_096;
-const PROJECTED_DRAG_MAX_COMPONENT_LINEARIZATIONS: usize = 8_192;
+const PROJECTED_DRAG_MAX_DOCUMENT_ITEMS: usize = 16_384;
+const PROJECTED_DRAG_MAX_NONLINEAR_ITERATIONS: usize = 256;
+const PROJECTED_DRAG_MAX_FACTORIZATIONS: usize = 256;
+const PROJECTED_DRAG_MAX_RANK_KERNELS: usize = 256;
+const PROJECTED_DRAG_MAX_REJECTED_TRIALS: usize = 512;
+const PROJECTED_DRAG_MAX_COMPONENT_LINEARIZATIONS: usize = 1_024;
+const PROJECTED_DRAG_MAX_DENSE_DIMENSION: usize = 256;
+const PROJECTED_DRAG_MAX_DIAGNOSTIC_CANDIDATES: usize = 512;
+const PROJECTED_DRAG_MAX_DIAGNOSTIC_TRIALS: usize = 1_024;
 
 fn projected_drag_control() -> OperationControl {
     let mut control = OperationControl::unlimited();
+    control.limits.document_validation_items = PROJECTED_DRAG_MAX_DOCUMENT_ITEMS;
+    control.limits.document_dependency_items = PROJECTED_DRAG_MAX_DOCUMENT_ITEMS;
+    control.limits.document_lowering_items = PROJECTED_DRAG_MAX_DOCUMENT_ITEMS;
     control.limits.nonlinear_iterations = PROJECTED_DRAG_MAX_NONLINEAR_ITERATIONS;
     control.limits.factorizations = PROJECTED_DRAG_MAX_FACTORIZATIONS;
+    control.limits.rank_kernels = PROJECTED_DRAG_MAX_RANK_KERNELS;
     control.limits.rejected_trials = PROJECTED_DRAG_MAX_REJECTED_TRIALS;
     control.limits.component_linearizations = PROJECTED_DRAG_MAX_COMPONENT_LINEARIZATIONS;
+    control.limits.dense_kernel_rows = PROJECTED_DRAG_MAX_DENSE_DIMENSION;
+    control.limits.dense_kernel_columns = PROJECTED_DRAG_MAX_DENSE_DIMENSION;
+    control.limits.diagnostic_candidates = PROJECTED_DRAG_MAX_DIAGNOSTIC_CANDIDATES;
+    control.limits.diagnostic_trials = PROJECTED_DRAG_MAX_DIAGNOSTIC_TRIALS;
     control
+}
+
+fn complete_projected_drag_release<T>(
+    outcome: OperationOutcome<T>,
+) -> Result<T, DocumentSessionError> {
+    match outcome {
+        OperationOutcome::Completed { value, .. } => Ok(value),
+        stopped => {
+            let Some(stopping_reason) = stopped.report().stopping_reason else {
+                return Err(DocumentSessionError::PreviewReleaseMismatch);
+            };
+            Err(DocumentSessionError::PreviewReleaseInterrupted { stopping_reason })
+        }
+    }
+}
+
+fn remaining_operation_limits(
+    configured: OperationLimits,
+    consumed: OperationWork,
+) -> OperationLimits {
+    OperationLimits {
+        document_validation_items: configured
+            .document_validation_items
+            .saturating_sub(consumed.document_validation_items),
+        document_dependency_items: configured
+            .document_dependency_items
+            .saturating_sub(consumed.document_dependency_items),
+        document_lowering_items: configured
+            .document_lowering_items
+            .saturating_sub(consumed.document_lowering_items),
+        nonlinear_iterations: configured
+            .nonlinear_iterations
+            .saturating_sub(consumed.nonlinear_iterations),
+        rejected_trials: configured
+            .rejected_trials
+            .saturating_sub(consumed.rejected_trials),
+        component_linearizations: configured
+            .component_linearizations
+            .saturating_sub(consumed.component_linearizations),
+        // Dense dimensions are maxima, not additive work.
+        dense_kernel_rows: configured.dense_kernel_rows,
+        dense_kernel_columns: configured.dense_kernel_columns,
+        factorizations: configured
+            .factorizations
+            .saturating_sub(consumed.factorizations),
+        rank_kernels: configured
+            .rank_kernels
+            .saturating_sub(consumed.rank_kernels),
+        diagnostic_candidates: configured
+            .diagnostic_candidates
+            .saturating_sub(consumed.diagnostic_candidates),
+        diagnostic_trials: configured
+            .diagnostic_trials
+            .saturating_sub(consumed.diagnostic_trials),
+        profile_candidate_pairs: configured
+            .profile_candidate_pairs
+            .saturating_sub(consumed.profile_candidate_pairs),
+        profile_subdivisions: configured
+            .profile_subdivisions
+            .saturating_sub(consumed.profile_subdivisions),
+        profile_roots: configured
+            .profile_roots
+            .saturating_sub(consumed.profile_roots),
+        profile_fragments: configured
+            .profile_fragments
+            .saturating_sub(consumed.profile_fragments),
+        profile_integrations: configured
+            .profile_integrations
+            .saturating_sub(consumed.profile_integrations),
+        profile_containment_tests: configured
+            .profile_containment_tests
+            .saturating_sub(consumed.profile_containment_tests),
+        profile_faces: configured
+            .profile_faces
+            .saturating_sub(consumed.profile_faces),
+        measurement_integrations: configured
+            .measurement_integrations
+            .saturating_sub(consumed.measurement_integrations),
+        measurement_derivative_evaluations: configured
+            .measurement_derivative_evaluations
+            .saturating_sub(consumed.measurement_derivative_evaluations),
+    }
+}
+
+fn accumulate_operation_report(aggregate: &mut OperationReport, next: &OperationReport) {
+    macro_rules! add {
+        ($field:ident) => {
+            aggregate.consumed.$field = aggregate
+                .consumed
+                .$field
+                .saturating_add(next.consumed.$field);
+        };
+    }
+    add!(document_validation_items);
+    add!(document_dependency_items);
+    add!(document_lowering_items);
+    add!(nonlinear_iterations);
+    add!(rejected_trials);
+    add!(component_linearizations);
+    aggregate.consumed.dense_kernel_rows = aggregate
+        .consumed
+        .dense_kernel_rows
+        .max(next.consumed.dense_kernel_rows);
+    aggregate.consumed.dense_kernel_columns = aggregate
+        .consumed
+        .dense_kernel_columns
+        .max(next.consumed.dense_kernel_columns);
+    add!(factorizations);
+    add!(rank_kernels);
+    add!(diagnostic_candidates);
+    add!(diagnostic_trials);
+    add!(profile_candidate_pairs);
+    add!(profile_subdivisions);
+    add!(profile_roots);
+    add!(profile_fragments);
+    add!(profile_integrations);
+    add!(profile_containment_tests);
+    add!(profile_faces);
+    add!(measurement_integrations);
+    add!(measurement_derivative_evaluations);
+    if next.stopping_reason.is_some() {
+        aggregate.stopping_reason = next.stopping_reason;
+    }
 }
 
 /// Opaque, application-persistable restore material for one history position.
@@ -131,6 +269,7 @@ pub struct ProblemsDto<'a> {
 /// Typed stage at which one projected drag sample stopped before preview publication.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProjectedDragRejectionStage {
+    LocalityPlanning,
     ControlledOperation,
     Session,
     AttemptInput,
@@ -150,50 +289,16 @@ pub struct ProjectedDragWorkEvidence {
     /// Ordinary projected dragging always performs exactly one retained solve attempt.
     pub attempts: u8,
     pub accepted: bool,
+    pub passive_degrees_of_freedom: usize,
+    pub anchor_count: usize,
     pub rejection_stage: Option<ProjectedDragRejectionStage>,
+    /// Whether [`Self::operation`] contains every unit consumed by this sample.
+    ///
+    /// Controlled outcomes always carry their complete report. A typed lower-layer
+    /// error currently does not, so the coordinator retains the report prefix it
+    /// owns and marks that evidence incomplete instead of silently under-reporting.
+    pub operation_report_complete: bool,
     pub operation: OperationReport,
-    pub solve: Option<SketchSolveWorkSummary>,
-}
-
-pub const ALTERNATE_BRANCH_MAX_SEEDS: u8 = 24;
-
-/// Deterministic bounded-search evidence for one explicit assembly-mode request.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct AlternateBranchSearchEvidence {
-    pub maximum_seeds: u8,
-    pub attempted_seeds: u8,
-    pub independently_valid_candidates: u8,
-    pub representable_modes: u8,
-}
-
-/// Closed result vocabulary for a bounded alternate-branch search.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AlternateBranchSearchStatus {
-    Proposed,
-    NoAlternative,
-    Ambiguous,
-    Unrepresentable,
-    Exhausted,
-}
-
-/// Exact-stamped non-authoritative assembly-mode proposal.
-#[derive(Clone, Debug, PartialEq)]
-pub struct AlternateBranchProposal {
-    pub proposal_id: u64,
-    pub design: SketchDesignIdentity,
-    pub accepted: SketchAcceptedStateIdentity,
-    pub point: DesignPointId,
-    pub position: [f64; 2],
-    pub branches: Vec<DocumentCurveBranchEdit>,
-    pub evidence: AlternateBranchSearchEvidence,
-}
-
-/// Result of requesting a bounded alternate assembly mode.
-#[derive(Clone, Debug, PartialEq)]
-pub struct AlternateBranchSearchResult {
-    pub status: AlternateBranchSearchStatus,
-    pub proposal: Option<AlternateBranchProposal>,
-    pub evidence: AlternateBranchSearchEvidence,
 }
 
 /// Stable high-level classification for one current editor problem.
@@ -474,12 +579,6 @@ pub enum ReplayAction {
     Reattempt {
         expected: SketchDesignIdentity,
     },
-    AlternateBranch {
-        expected: SketchDesignIdentity,
-        point: DesignPointId,
-        position: [f64; 2],
-        branches: Vec<DocumentCurveBranchEdit>,
-    },
     Undo,
     Redo,
 }
@@ -513,10 +612,6 @@ pub enum CoordinatorError {
     MissingSolvedPreview,
     #[error("point-move commit does not match the retained solved preview")]
     SolvedPreviewMismatch,
-    #[error("there is no current alternate-branch proposal")]
-    MissingAlternateBranchProposal,
-    #[error("alternate-branch proposal is stale")]
-    StaleAlternateBranchProposal,
     #[error("history has no earlier checkpoint")]
     NothingToUndo,
     #[error("history has no later checkpoint")]
@@ -535,22 +630,26 @@ pub struct RetainedEditorCoordinator {
     solved_preview: Option<RetainedSketchDocumentSession>,
     drag_continuation: Option<ProjectedDragContinuation>,
     projected_drag_work: Option<ProjectedDragWorkEvidence>,
-    alternate_branch: Option<AlternateBranchCandidate>,
-    next_alternate_branch_proposal_id: u64,
 }
 
 #[derive(Clone, Debug)]
-struct AlternateBranchCandidate {
-    proposal: AlternateBranchProposal,
-    preview: RetainedSketchDocumentSession,
-}
-
-#[derive(Clone, Copy, Debug)]
 struct ProjectedDragContinuation {
+    gesture_epoch: Option<u64>,
     pointer_id: u64,
     point: DesignPointId,
     design: SketchDesignIdentity,
-    last_request_id: u64,
+    accepted: Option<SketchAcceptedStateIdentity>,
+    last_request_id: Option<u64>,
+    locality: Option<DocumentDragLocalityPlan>,
+    planning_operation: Option<OperationReport>,
+    planning_failure: Option<ProjectedDragPlanningFailure>,
+    last_accepted_preview: Option<RetainedSketchDocumentSession>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ProjectedDragPlanningFailure {
+    rejection_stage: ProjectedDragRejectionStage,
+    operation_report_complete: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -580,8 +679,6 @@ impl RetainedEditorCoordinator {
             solved_preview: None,
             drag_continuation: None,
             projected_drag_work: None,
-            alternate_branch: None,
-            next_alternate_branch_proposal_id: 1,
         })
     }
 
@@ -633,7 +730,10 @@ impl RetainedEditorCoordinator {
     /// The independently validated solved-preview session currently published for rendering.
     #[must_use]
     pub fn solved_preview_session(&self) -> Option<&RetainedSketchDocumentSession> {
-        self.solved_preview.as_ref()
+        self.drag_continuation
+            .as_ref()
+            .and_then(|gesture| gesture.last_accepted_preview.as_ref())
+            .or(self.solved_preview.as_ref())
     }
 
     /// Work evidence for the latest projected pointer sample, if one is active.
@@ -642,265 +742,111 @@ impl RetainedEditorCoordinator {
         self.projected_drag_work.as_ref()
     }
 
-    /// Returns the current exact-stamped alternate assembly-mode proposal.
-    #[must_use]
-    pub fn alternate_branch_proposal(&self) -> Option<&AlternateBranchProposal> {
-        self.alternate_branch
-            .as_ref()
-            .map(|candidate| &candidate.proposal)
-    }
-
-    /// Returns the non-authoritative independently accepted ghost preview.
-    #[must_use]
-    pub fn alternate_branch_preview_session(&self) -> Option<&RetainedSketchDocumentSession> {
-        self.alternate_branch
-            .as_ref()
-            .map(|candidate| &candidate.preview)
-    }
-
-    /// Returns the highest-priority visible preview for a presentation adapter.
+    /// Returns the independently accepted drag preview visible to a presentation adapter.
     #[must_use]
     pub fn visible_preview_session(&self) -> Option<&RetainedSketchDocumentSession> {
-        self.alternate_branch_preview_session()
-            .or_else(|| self.solved_preview_session())
+        self.solved_preview_session()
     }
 
-    /// Performs a deterministic bounded search for a representable alternate line branch.
-    ///
-    /// At most eight canonical directions at three component-relative radii are tried.
-    /// Every candidate is solved and independently validated on a cloned lifecycle. Nothing
-    /// becomes authoritative until [`Self::accept_alternate_branch`] is called.
-    #[must_use]
-    #[allow(
-        clippy::too_many_lines,
-        reason = "bounded search keeps seed accounting, candidate validation, deduplication, and exact proposal stamps together"
-    )]
-    pub fn propose_alternate_branch(
+    /// Resolves a pointer press and captures any point gesture's locality plan from
+    /// the exact accepted state visible at press time.
+    pub fn pointer_down(&mut self, scene: &EditorScene, input: PointerInput) -> Vec<EditorEffect> {
+        self.pointer_down_with_problem_items(scene, input, &[])
+    }
+
+    /// Resolves a pointer press with diagnostically forced annotations and captures
+    /// any point gesture's locality plan from the exact accepted state visible at
+    /// press time.
+    pub fn pointer_down_with_problem_items(
         &mut self,
-        point: DesignPointId,
-    ) -> AlternateBranchSearchResult {
-        self.alternate_branch = None;
-        let Some(base_accepted) = self.session.accepted_state() else {
-            return alternate_branch_search_result(
-                AlternateBranchSearchStatus::Unrepresentable,
-                AlternateBranchSearchEvidence {
-                    maximum_seeds: ALTERNATE_BRANCH_MAX_SEEDS,
-                    ..AlternateBranchSearchEvidence::default()
-                },
-                None,
-            );
-        };
-        let base_document = base_accepted.document();
-        let Some(base_position) = base_document.point(point).map(|value| value.position) else {
-            return alternate_branch_search_result(
-                AlternateBranchSearchStatus::Unrepresentable,
-                AlternateBranchSearchEvidence {
-                    maximum_seeds: ALTERNATE_BRANCH_MAX_SEEDS,
-                    ..AlternateBranchSearchEvidence::default()
-                },
-                None,
-            );
-        };
-        let Some(scale) = incident_line_scale(base_document, point) else {
-            return alternate_branch_search_result(
-                AlternateBranchSearchStatus::Unrepresentable,
-                AlternateBranchSearchEvidence {
-                    maximum_seeds: ALTERNATE_BRANCH_MAX_SEEDS,
-                    ..AlternateBranchSearchEvidence::default()
-                },
-                None,
-            );
-        };
-        let base_dof = self
-            .session
-            .accepted_diagnostics()
-            .and_then(|diagnostics| diagnostics.mobility)
-            .and_then(|mobility| mobility.equality_degrees_of_freedom);
-        let directions = canonical_branch_search_directions();
-        let radii = [0.5, 1.0, 2.0];
-        let mut evidence = AlternateBranchSearchEvidence {
-            maximum_seeds: ALTERNATE_BRANCH_MAX_SEEDS,
-            ..AlternateBranchSearchEvidence::default()
-        };
-        let mut selected: Option<(Vec<CurveSpan>, [f64; 2], AlternateBranchCandidate)> = None;
-        let mut ambiguous = false;
-        for radius in radii {
-            for direction in directions {
-                evidence.attempted_seeds = evidence.attempted_seeds.saturating_add(1);
-                let seed = [
-                    base_position[0] + direction[0] * radius * scale,
-                    base_position[1] + direction[1] * radius * scale,
-                ];
-                let Some((branches, signature)) = incident_branch_edits(
-                    self.session.design_document(),
-                    base_document,
-                    point,
-                    seed,
-                ) else {
-                    continue;
-                };
-                let mut preview = self.session.clone();
-                let Ok(outcome) = preview.attempt_point_and_curve_branches(
-                    preview.design_identity(),
-                    point,
-                    seed,
-                    &branches,
-                ) else {
-                    continue;
-                };
-                if outcome.published_accepted_identity().is_none() {
-                    continue;
-                }
-                let Some(accepted) = preview.accepted_state() else {
-                    continue;
-                };
-                let solve = accepted.solve_result();
-                if solve.rejection.is_some()
-                    || solve
-                        .acceptance_hard_residual_max
-                        .is_none_or(|residual| residual > 1.0e-9)
-                    || preview
-                        .accepted_diagnostics()
-                        .and_then(|diagnostics| diagnostics.mobility)
-                        .and_then(|mobility| mobility.equality_degrees_of_freedom)
-                        != base_dof
-                {
-                    continue;
-                }
-                evidence.independently_valid_candidates =
-                    evidence.independently_valid_candidates.saturating_add(1);
-                let Some(position) = accepted.document().point(point).map(|value| value.position)
-                else {
-                    continue;
-                };
-                if !position.iter().all(|value| value.is_finite()) {
-                    continue;
-                }
-                if (position[0] - base_position[0]).hypot(position[1] - base_position[1])
-                    <= 1.0e-7 * scale
-                {
-                    continue;
-                }
-                if selected
-                    .as_ref()
-                    .is_some_and(|(selected_signature, selected_position, _)| {
-                        *selected_signature != signature
-                            && (selected_position[0] - position[0])
-                                .hypot(selected_position[1] - position[1])
-                                > 1.0e-7 * scale
-                    })
-                {
-                    ambiguous = true;
-                    evidence.representable_modes = 2;
-                    break;
-                }
-                if selected.is_none() {
-                    evidence.representable_modes = 1;
-                    let Some(branches) = alternate_separator_branches(
-                        self.session.design_document(),
-                        accepted.document(),
-                        point,
-                        position,
-                        &signature,
-                    ) else {
-                        continue;
-                    };
-                    let proposal = AlternateBranchProposal {
-                        proposal_id: self.next_alternate_branch_proposal_id,
-                        design: self.session.design_identity(),
-                        accepted: base_accepted.identity(),
-                        point,
-                        position,
-                        branches,
-                        evidence,
-                    };
-                    selected = Some((
-                        signature,
-                        position,
-                        AlternateBranchCandidate { proposal, preview },
-                    ));
-                }
-            }
-            if ambiguous {
-                break;
-            }
-        }
-        if ambiguous {
-            return alternate_branch_search_result(
-                AlternateBranchSearchStatus::Ambiguous,
-                evidence,
-                None,
-            );
-        }
-        let Some((_, _, mut candidate)) = selected else {
-            let status = if evidence.attempted_seeds >= evidence.maximum_seeds {
-                AlternateBranchSearchStatus::NoAlternative
-            } else {
-                AlternateBranchSearchStatus::Exhausted
-            };
-            return alternate_branch_search_result(status, evidence, None);
-        };
-        candidate.proposal.evidence = evidence;
-        self.next_alternate_branch_proposal_id =
-            self.next_alternate_branch_proposal_id.saturating_add(1);
-        let proposal = candidate.proposal.clone();
-        self.alternate_branch = Some(candidate);
-        alternate_branch_search_result(
-            AlternateBranchSearchStatus::Proposed,
-            evidence,
-            Some(proposal),
+        scene: &EditorScene,
+        input: PointerInput,
+        problem_items: &[SelectionItem],
+    ) -> Vec<EditorEffect> {
+        self.pointer_down_with_problem_items_controlled(
+            scene,
+            input,
+            problem_items,
+            projected_drag_control(),
         )
     }
 
-    /// Cancels the current ghost proposal without mutating retained state.
-    pub fn cancel_alternate_branch(&mut self) {
-        self.alternate_branch = None;
+    fn pointer_down_with_problem_items_controlled(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        problem_items: &[SelectionItem],
+        control: OperationControl,
+    ) -> Vec<EditorEffect> {
+        let before = self.editor.point_gesture_snapshot();
+        let effects = self
+            .editor
+            .pointer_down_with_problem_items(scene, input, problem_items);
+        let after = self.editor.point_gesture_snapshot();
+        if after != before {
+            self.clear_transient();
+            if let Some(gesture) = after {
+                self.drag_continuation = Some(self.plan_projected_drag_start(gesture, control));
+            }
+        }
+        effects
     }
 
-    /// Accepts the current exact-stamped proposal as one atomic point-and-branch edit.
-    ///
-    /// # Errors
-    ///
-    /// Rejects a missing or stale proposal and preserves the authoritative session.
-    pub fn accept_alternate_branch(
-        &mut self,
-        proposal_id: u64,
-    ) -> Result<MutationOutcome<()>, CoordinatorError> {
-        let candidate = self
-            .alternate_branch
-            .clone()
-            .ok_or(CoordinatorError::MissingAlternateBranchProposal)?;
-        let proposal = &candidate.proposal;
-        if proposal.proposal_id != proposal_id
-            || proposal.design != self.session.design_identity()
-            || self
-                .session
-                .accepted_state()
-                .map(geosolve_sketch::SketchAcceptedDocumentState::identity)
-                != Some(proposal.accepted)
+    fn plan_projected_drag_start(
+        &self,
+        gesture: PointGestureSnapshot,
+        control: OperationControl,
+    ) -> ProjectedDragContinuation {
+        let design = self.session.design_identity();
+        let accepted = self
+            .session
+            .accepted_state()
+            .map(geosolve_sketch::SketchAcceptedDocumentState::identity);
+        let empty_operation = OperationController::new(control.clone()).report();
+        let (locality, planning_operation, planning_failure) = match self
+            .session
+            .drag_locality_plan_controlled(gesture.point, control)
         {
-            return Err(CoordinatorError::StaleAlternateBranchProposal);
-        }
-        let retained = self.session.apply_point_and_curve_branches_from_preview(
-            proposal.design,
-            proposal.point,
-            proposal.position,
-            &proposal.branches,
-            &candidate.preview,
-        )?;
-        let outcome = MutationOutcome {
-            value: (),
-            design: retained.design_identity(),
-            attempt: retained.attempt_identity(),
-            published_accepted: retained.published_accepted_identity(),
+            Ok(OperationOutcome::Completed { value, report }) if accepted.is_some() => {
+                (Some(value), report, None)
+            }
+            Ok(OperationOutcome::Completed { report, .. }) => (
+                None,
+                report,
+                Some(ProjectedDragPlanningFailure {
+                    rejection_stage: ProjectedDragRejectionStage::AcceptedState,
+                    operation_report_complete: true,
+                }),
+            ),
+            Ok(stopped) => (
+                None,
+                *stopped.report(),
+                Some(ProjectedDragPlanningFailure {
+                    rejection_stage: ProjectedDragRejectionStage::LocalityPlanning,
+                    operation_report_complete: true,
+                }),
+            ),
+            Err(_) => (
+                None,
+                empty_operation,
+                Some(ProjectedDragPlanningFailure {
+                    rejection_stage: ProjectedDragRejectionStage::LocalityPlanning,
+                    operation_report_complete: false,
+                }),
+            ),
         };
-        self.record_mutation(ReplayAction::AlternateBranch {
-            expected: proposal.design,
-            point: proposal.point,
-            position: proposal.position,
-            branches: proposal.branches.clone(),
-        })?;
-        Ok(outcome)
+        ProjectedDragContinuation {
+            gesture_epoch: Some(gesture.epoch),
+            pointer_id: gesture.pointer_id,
+            point: gesture.point,
+            design,
+            accepted,
+            last_request_id: None,
+            locality,
+            planning_operation: Some(planning_operation),
+            planning_failure,
+            last_accepted_preview: None,
+        }
     }
 
     /// Executes and publishes one editor-requested projected point-move preview.
@@ -908,6 +854,10 @@ impl RetainedEditorCoordinator {
     /// A failed or rejected projection is reported back to the editor without replacing the
     /// last valid solved preview. Request construction and acceptance validation remain here,
     /// outside presentation adapters.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "gesture validation, controlled planning, solving, and typed evidence form one atomic preview transition"
+    )]
     pub fn resolve_projected_point_move(
         &mut self,
         pointer_id: u64,
@@ -915,6 +865,136 @@ impl RetainedEditorCoordinator {
         point: DesignPointId,
         model_position: [f64; 2],
     ) -> Vec<EditorEffect> {
+        let disposition = self
+            .editor
+            .projected_drag_request_disposition(pointer_id, request_id, point);
+        let gesture_epoch = match disposition {
+            ProjectedDragRequestDisposition::Current { gesture_epoch } => Some(gesture_epoch),
+            ProjectedDragRequestDisposition::Stale => return Vec::new(),
+            ProjectedDragRequestDisposition::Untracked => None,
+        };
+        let design = self.session.design_identity();
+        let accepted = self
+            .session
+            .accepted_state()
+            .map(geosolve_sketch::SketchAcceptedDocumentState::identity);
+        let same_gesture = self.drag_continuation.as_ref().is_some_and(|gesture| {
+            gesture.gesture_epoch == gesture_epoch
+                && gesture.pointer_id == pointer_id
+                && gesture.point == point
+                && gesture.design == design
+                && gesture.accepted == accepted
+        });
+        // A state-machine-issued request belongs only to the press-time stamp.
+        // Losing or changing that stamp makes the request stale; it must never
+        // fall back to first-sample planning against a different accepted state.
+        if gesture_epoch.is_some() && !same_gesture {
+            return Vec::new();
+        }
+        if same_gesture
+            && self
+                .drag_continuation
+                .as_ref()
+                .and_then(|gesture| gesture.last_request_id)
+                .is_some_and(|last_request_id| request_id <= last_request_id)
+        {
+            return Vec::new();
+        }
+        if !same_gesture {
+            self.transient = None;
+            self.solved_preview = None;
+            self.drag_continuation = None;
+            let mut gesture = self.plan_projected_drag_start(
+                PointGestureSnapshot {
+                    epoch: 0,
+                    pointer_id,
+                    point,
+                },
+                projected_drag_control(),
+            );
+            gesture.gesture_epoch = None;
+            self.drag_continuation = Some(gesture);
+        }
+
+        let Some(mut gesture) = self.drag_continuation.take() else {
+            return Vec::new();
+        };
+        gesture.last_request_id = Some(request_id);
+        let planning_operation = gesture
+            .planning_operation
+            .take()
+            .unwrap_or_else(|| OperationController::new(projected_drag_control()).report());
+        let continued = gesture.last_accepted_preview.is_some();
+        let passive_degrees_of_freedom = gesture
+            .locality
+            .as_ref()
+            .map_or(0, DocumentDragLocalityPlan::passive_degrees_of_freedom);
+        let anchor_count = gesture
+            .locality
+            .as_ref()
+            .map_or(0, DocumentDragLocalityPlan::anchor_count);
+
+        if let Some(failure) = gesture.planning_failure {
+            self.projected_drag_work = Some(ProjectedDragWorkEvidence {
+                pointer_id,
+                request_id,
+                point,
+                continued,
+                attempts: 0,
+                accepted: false,
+                passive_degrees_of_freedom,
+                anchor_count,
+                rejection_stage: Some(failure.rejection_stage),
+                operation_report_complete: failure.operation_report_complete,
+                operation: planning_operation,
+            });
+            self.drag_continuation = Some(gesture);
+            return self
+                .editor
+                .projected_drag_result(pointer_id, request_id, point, None);
+        }
+
+        if !model_position.iter().all(|value| value.is_finite()) {
+            self.projected_drag_work = Some(ProjectedDragWorkEvidence {
+                pointer_id,
+                request_id,
+                point,
+                continued,
+                attempts: 0,
+                accepted: false,
+                passive_degrees_of_freedom,
+                anchor_count,
+                rejection_stage: Some(ProjectedDragRejectionStage::AttemptInput),
+                operation_report_complete: true,
+                operation: planning_operation,
+            });
+            self.drag_continuation = Some(gesture);
+            return self
+                .editor
+                .projected_drag_result(pointer_id, request_id, point, None);
+        }
+
+        let Some(locality) = gesture.locality.clone() else {
+            self.projected_drag_work = Some(ProjectedDragWorkEvidence {
+                pointer_id,
+                request_id,
+                point,
+                continued,
+                attempts: 0,
+                accepted: false,
+                passive_degrees_of_freedom,
+                anchor_count,
+                rejection_stage: Some(ProjectedDragRejectionStage::LocalityPlanning),
+                operation_report_complete: false,
+                operation: planning_operation,
+            });
+            self.drag_continuation = Some(gesture);
+            return self
+                .editor
+                .projected_drag_result(pointer_id, request_id, point, None);
+        };
+
+        let preview = gesture.last_accepted_preview.clone();
         let request = self
             .session
             .last_attempt()
@@ -922,39 +1002,37 @@ impl RetainedEditorCoordinator {
             .candidate_request()
             .with_previous_state_preferences()
             .with_drag(point, model_position);
-        let continued = self.drag_continuation.is_some_and(|continuation| {
-            continuation.pointer_id == pointer_id
-                && continuation.point == point
-                && continuation.design == self.session.design_identity()
-                && request_id > continuation.last_request_id
-                && self.solved_preview.is_some()
-        });
+        let mut attempt_control = projected_drag_control();
+        attempt_control.limits =
+            remaining_operation_limits(planning_operation.configured, planning_operation.consumed);
         let mut candidate = self.session.clone();
-        let outcome = if let (true, Some(preview)) = (continued, self.solved_preview.as_ref()) {
-            candidate.reattempt_from_accepted_preview_controlled(
+        let outcome = if let Some(preview) = preview.as_ref() {
+            candidate.reattempt_from_accepted_preview_with_drag_locality_controlled(
                 candidate.design_identity(),
                 request,
                 preview,
-                projected_drag_control(),
+                &locality,
+                attempt_control,
             )
         } else {
-            candidate.reattempt_controlled(
+            candidate.reattempt_with_drag_locality_controlled(
                 candidate.design_identity(),
                 request,
-                projected_drag_control(),
+                &locality,
+                attempt_control,
             )
         };
         let mut rejection_stage = None;
-        let mut solve_work = None;
-        let mut operation = None;
+        let mut operation = planning_operation;
+        let mut operation_report_complete = true;
+        let mut attempts = 1;
         let mut accepted_position = None;
         match outcome {
             Ok(OperationOutcome::Completed {
                 value: attempt,
                 report,
             }) => {
-                operation = Some(report);
-                solve_work = attempt.solve_result().map(SketchSolveResult::work_summary);
+                accumulate_operation_report(&mut operation, &report);
                 if attempt.failure().is_some() {
                     rejection_stage = Some(ProjectedDragRejectionStage::AttemptInput);
                 } else if attempt
@@ -975,40 +1053,35 @@ impl RetainedEditorCoordinator {
                     } else if self.mark_solved_preview(&candidate).is_err() {
                         accepted_position = None;
                         rejection_stage = Some(ProjectedDragRejectionStage::PreviewPublication);
+                    } else {
+                        gesture.last_accepted_preview = self.solved_preview.take();
                     }
                 }
             }
             Ok(stopped) => {
-                operation = Some(*stopped.report());
+                accumulate_operation_report(&mut operation, stopped.report());
                 rejection_stage = Some(ProjectedDragRejectionStage::ControlledOperation);
             }
             Err(_) => {
+                attempts = 0;
                 rejection_stage = Some(ProjectedDragRejectionStage::Session);
+                operation_report_complete = false;
             }
         }
-        if accepted_position.is_some() {
-            self.drag_continuation = Some(ProjectedDragContinuation {
-                pointer_id,
-                point,
-                design: self.session.design_identity(),
-                last_request_id: request_id,
-            });
-        }
-        if let Some(operation) = operation {
-            self.projected_drag_work = Some(ProjectedDragWorkEvidence {
-                pointer_id,
-                request_id,
-                point,
-                continued,
-                attempts: 1,
-                accepted: accepted_position.is_some(),
-                rejection_stage,
-                operation,
-                solve: solve_work,
-            });
-        } else {
-            self.projected_drag_work = None;
-        }
+        self.drag_continuation = Some(gesture);
+        self.projected_drag_work = Some(ProjectedDragWorkEvidence {
+            pointer_id,
+            request_id,
+            point,
+            continued,
+            attempts,
+            accepted: accepted_position.is_some(),
+            passive_degrees_of_freedom,
+            anchor_count,
+            rejection_stage,
+            operation_report_complete,
+            operation,
+        });
         self.editor
             .projected_drag_result(pointer_id, request_id, point, accepted_position)
     }
@@ -1326,9 +1399,7 @@ impl RetainedEditorCoordinator {
         self.history.push(checkpoint(&self.session)?);
         self.history_cursor = 0;
         self.transcript.clear();
-        self.transient = None;
-        self.solved_preview = None;
-        self.alternate_branch = None;
+        self.clear_transient();
         self.reconcile_selection();
         Ok(())
     }
@@ -2604,7 +2675,7 @@ impl RetainedEditorCoordinator {
         let request = self.session.last_attempt().input().candidate_request();
         let attempt = self.session.reattempt(expected, request)?.identity();
         self.transcript.push(ReplayAction::Reattempt { expected });
-        self.transient = None;
+        self.clear_transient();
         Ok(attempt)
     }
 
@@ -2618,60 +2689,97 @@ impl RetainedEditorCoordinator {
         &mut self,
         effect: &EditorEffect,
     ) -> Result<Option<MutationOutcome<EditorMutation>>, CoordinatorError> {
+        self.apply_editor_effect_with_projected_release_control(effect, projected_drag_control())
+    }
+
+    fn commit_solved_point_move(
+        &mut self,
+        expected: SketchDesignIdentity,
+        point: DesignPointId,
+        model_position: [f64; 2],
+        release_control: OperationControl,
+    ) -> Result<MutationOutcome<EditorMutation>, CoordinatorError> {
+        self.ensure_expected(expected)?;
+        let preview = self
+            .solved_preview_session()
+            .cloned()
+            .ok_or(CoordinatorError::MissingSolvedPreview)?;
+        let locality = self
+            .drag_continuation
+            .as_ref()
+            .filter(|gesture| gesture.last_accepted_preview.is_some())
+            .and_then(|gesture| gesture.locality.clone());
+        let preview_attempt = preview.last_attempt();
+        let preview_position = preview
+            .accepted_state()
+            .and_then(|state| state.document().point(point))
+            .map(|value| value.position);
+        if preview_attempt
+            .input()
+            .candidate_request()
+            .drag
+            .map(|drag| drag.point)
+            != Some(point)
+            || preview_position.map(|value| value.map(f64::to_bits))
+                != Some(model_position.map(f64::to_bits))
+        {
+            return Err(CoordinatorError::SolvedPreviewMismatch);
+        }
+        let replay = ReplayAction::Edit {
+            expected,
+            edit: DocumentEdit::SetPointPosition {
+                point,
+                position: model_position,
+            },
+        };
+        let retained = if let Some(locality) = locality.as_ref() {
+            complete_projected_drag_release(
+                self.session
+                    .apply_point_position_from_preview_with_drag_locality_controlled(
+                        expected,
+                        point,
+                        model_position,
+                        &preview,
+                        locality,
+                        release_control,
+                    )?,
+            )?
+        } else {
+            self.session.apply_point_position_from_preview(
+                expected,
+                point,
+                model_position,
+                &preview,
+            )?
+        };
+        let outcome = MutationOutcome {
+            value: retained.value().clone(),
+            design: retained.design_identity(),
+            attempt: retained.attempt_identity(),
+            published_accepted: retained.published_accepted_identity(),
+        };
+        self.record_mutation(replay)?;
+        Ok(MutationOutcome {
+            value: EditorMutation::PointMove(outcome.value),
+            design: outcome.design,
+            attempt: outcome.attempt,
+            published_accepted: outcome.published_accepted,
+        })
+    }
+
+    fn apply_editor_effect_with_projected_release_control(
+        &mut self,
+        effect: &EditorEffect,
+        release_control: OperationControl,
+    ) -> Result<Option<MutationOutcome<EditorMutation>>, CoordinatorError> {
         match effect {
             EditorEffect::CommitPointMove {
                 expected,
                 point,
                 model_position,
-            } => {
-                self.ensure_expected(*expected)?;
-                let preview = self
-                    .solved_preview
-                    .as_ref()
-                    .ok_or(CoordinatorError::MissingSolvedPreview)?;
-                let preview_attempt = preview.last_attempt();
-                let preview_position = preview
-                    .accepted_state()
-                    .and_then(|state| state.document().point(*point))
-                    .map(|value| value.position);
-                if preview_attempt
-                    .input()
-                    .candidate_request()
-                    .drag
-                    .map(|drag| drag.point)
-                    != Some(*point)
-                    || preview_position.map(|value| value.map(f64::to_bits))
-                        != Some(model_position.map(f64::to_bits))
-                {
-                    return Err(CoordinatorError::SolvedPreviewMismatch);
-                }
-                let replay = ReplayAction::Edit {
-                    expected: *expected,
-                    edit: DocumentEdit::SetPointPosition {
-                        point: *point,
-                        position: *model_position,
-                    },
-                };
-                let retained = self.session.apply_point_position_from_preview(
-                    *expected,
-                    *point,
-                    *model_position,
-                    preview,
-                )?;
-                let outcome = MutationOutcome {
-                    value: retained.value().clone(),
-                    design: retained.design_identity(),
-                    attempt: retained.attempt_identity(),
-                    published_accepted: retained.published_accepted_identity(),
-                };
-                self.record_mutation(replay)?;
-                Ok(Some(MutationOutcome {
-                    value: EditorMutation::PointMove(outcome.value),
-                    design: outcome.design,
-                    attempt: outcome.attempt,
-                    published_accepted: outcome.published_accepted,
-                }))
-            }
+            } => self
+                .commit_solved_point_move(*expected, *point, *model_position, release_control)
+                .map(Some),
             EditorEffect::CommitConstruction { expected, proposal } => {
                 self.ensure_expected(*expected)?;
                 let outcome = self.apply_construction(*expected, proposal)?;
@@ -2784,16 +2892,6 @@ impl RetainedEditorCoordinator {
             ReplayAction::Reattempt { expected } => {
                 self.reattempt(*expected)?;
             }
-            ReplayAction::AlternateBranch {
-                expected,
-                point,
-                position,
-                branches,
-            } => {
-                self.session
-                    .attempt_point_and_curve_branches(*expected, *point, *position, branches)?;
-                self.record_mutation(action.clone())?;
-            }
             ReplayAction::Undo => self.undo()?,
             ReplayAction::Redo => self.redo()?,
             ReplayAction::ConstraintAction { .. }
@@ -2905,9 +3003,7 @@ impl RetainedEditorCoordinator {
         };
         self.session = restored;
         self.history_cursor = target;
-        self.transient = None;
-        self.solved_preview = None;
-        self.alternate_branch = None;
+        self.clear_transient();
         self.reconcile_selection();
         Ok(())
     }
@@ -2918,9 +3014,7 @@ impl RetainedEditorCoordinator {
         self.history.push(next);
         self.history_cursor += 1;
         self.transcript.push(replay);
-        self.transient = None;
-        self.solved_preview = None;
-        self.alternate_branch = None;
+        self.clear_transient();
         self.reconcile_selection();
         Ok(())
     }
@@ -3246,8 +3340,7 @@ impl ReplayAction {
             | Self::RebindExternalBinding { expected, .. }
             | Self::Delete { expected, .. }
             | Self::SetSuppressed { expected, .. }
-            | Self::Reattempt { expected }
-            | Self::AlternateBranch { expected, .. } => Some(*expected),
+            | Self::Reattempt { expected } => Some(*expected),
             Self::Undo | Self::Redo => None,
         }
     }
@@ -3262,190 +3355,6 @@ fn mutation_from<T: Clone>(
         attempt: outcome.attempt_identity(),
         published_accepted: outcome.published_accepted_identity(),
     }
-}
-
-fn alternate_branch_search_result(
-    status: AlternateBranchSearchStatus,
-    evidence: AlternateBranchSearchEvidence,
-    proposal: Option<AlternateBranchProposal>,
-) -> AlternateBranchSearchResult {
-    AlternateBranchSearchResult {
-        status,
-        proposal,
-        evidence,
-    }
-}
-
-fn canonical_branch_search_directions() -> [[f64; 2]; 8] {
-    let diagonal = 0.5_f64.sqrt();
-    [
-        [1.0, 0.0],
-        [diagonal, diagonal],
-        [0.0, 1.0],
-        [-diagonal, diagonal],
-        [-1.0, 0.0],
-        [-diagonal, -diagonal],
-        [0.0, -1.0],
-        [diagonal, -diagonal],
-    ]
-}
-
-fn line_segments(document: &SketchDocument) -> Vec<(CurveSpan, DesignPointId, DesignPointId)> {
-    let mut spans = Vec::new();
-    for curve in document.curves() {
-        match &curve.definition {
-            CurveDefinition::Line { start, end, .. } => {
-                spans.push((CurveSpan::line(curve.id), *start, *end));
-            }
-            CurveDefinition::Polyline { points, closed, .. } => {
-                for (segment, pair) in points.windows(2).enumerate() {
-                    spans.push((
-                        CurveSpan {
-                            curve: curve.id,
-                            segment: u32::try_from(segment).unwrap_or(u32::MAX),
-                        },
-                        pair[0],
-                        pair[1],
-                    ));
-                }
-                if *closed
-                    && points.len() > 2
-                    && let (Some(&start), Some(&end)) = (points.last(), points.first())
-                {
-                    spans.push((
-                        CurveSpan {
-                            curve: curve.id,
-                            segment: u32::try_from(points.len() - 1).unwrap_or(u32::MAX),
-                        },
-                        start,
-                        end,
-                    ));
-                }
-            }
-            _ => {}
-        }
-    }
-    spans
-}
-
-fn incident_line_scale(document: &SketchDocument, point: DesignPointId) -> Option<f64> {
-    let lengths = line_segments(document)
-        .into_iter()
-        .filter_map(|(_, start, end)| {
-            (start == point || end == point).then(|| {
-                let first = document.point(start)?.position;
-                let second = document.point(end)?.position;
-                let length = (second[0] - first[0]).hypot(second[1] - first[1]);
-                (length.is_finite() && length > 0.0).then_some(length)
-            })?
-        })
-        .collect::<Vec<_>>();
-    (!lengths.is_empty())
-        .then(|| {
-            let count = f64::from(u32::try_from(lengths.len()).unwrap_or(u32::MAX));
-            lengths.iter().sum::<f64>() / count
-        })
-        .filter(|scale| scale.is_finite() && *scale > 0.0)
-}
-
-fn incident_branch_edits(
-    design: &SketchDocument,
-    accepted: &SketchDocument,
-    point: DesignPointId,
-    target: [f64; 2],
-) -> Option<(Vec<DocumentCurveBranchEdit>, Vec<CurveSpan>)> {
-    if !target.iter().all(|value| value.is_finite()) {
-        return None;
-    }
-    let mut branches = Vec::new();
-    let mut signature = Vec::new();
-    for (span, start, end) in line_segments(design) {
-        if start != point && end != point {
-            continue;
-        }
-        let start_position = if start == point {
-            target
-        } else {
-            accepted.point(start)?.position
-        };
-        let end_position = if end == point {
-            target
-        } else {
-            accepted.point(end)?.position
-        };
-        let delta = [
-            end_position[0] - start_position[0],
-            end_position[1] - start_position[1],
-        ];
-        let norm = delta[0].hypot(delta[1]);
-        if !norm.is_finite() || norm <= f64::EPSILON {
-            return None;
-        }
-        let direction = [delta[0] / norm, delta[1] / norm];
-        let old = design.curve_branch_direction(span)?;
-        if old[0] * direction[0] + old[1] * direction[1] < 0.0 {
-            signature.push(span);
-        }
-        branches.push(DocumentCurveBranchEdit {
-            curve: span,
-            direction,
-        });
-    }
-    (!branches.is_empty() && !signature.is_empty()).then_some((branches, signature))
-}
-
-fn alternate_separator_branches(
-    design: &SketchDocument,
-    accepted: &SketchDocument,
-    point: DesignPointId,
-    position: [f64; 2],
-    signature: &[CurveSpan],
-) -> Option<Vec<DocumentCurveBranchEdit>> {
-    let mut branches = Vec::new();
-    for (span, start, end) in line_segments(design) {
-        if !signature.contains(&span) || (start != point && end != point) {
-            continue;
-        }
-        let start_position = if start == point {
-            position
-        } else {
-            accepted.point(start)?.position
-        };
-        let end_position = if end == point {
-            position
-        } else {
-            accepted.point(end)?.position
-        };
-        let actual_delta = [
-            end_position[0] - start_position[0],
-            end_position[1] - start_position[1],
-        ];
-        let actual_norm = actual_delta[0].hypot(actual_delta[1]);
-        if !actual_norm.is_finite() || actual_norm <= f64::EPSILON {
-            return None;
-        }
-        let actual = [actual_delta[0] / actual_norm, actual_delta[1] / actual_norm];
-        let old = design.curve_branch_direction(span)?;
-        let separator_delta = [actual[0] - old[0], actual[1] - old[1]];
-        let separator_norm = separator_delta[0].hypot(separator_delta[1]);
-        if !separator_norm.is_finite() || separator_norm <= f64::EPSILON {
-            return None;
-        }
-        let separator = [
-            separator_delta[0] / separator_norm,
-            separator_delta[1] / separator_norm,
-        ];
-        if actual[0] * separator[0] + actual[1] * separator[1] <= 0.0
-            || old[0] * separator[0] + old[1] * separator[1] >= 0.0
-        {
-            return None;
-        }
-        branches.push(DocumentCurveBranchEdit {
-            curve: span,
-            direction: separator,
-        });
-    }
-    (!branches.is_empty()).then_some(branches)
 }
 
 fn checkpoint(
@@ -4563,16 +4472,135 @@ mod tests {
     use super::*;
     use crate::{
         AuthoringOutcome, AuthoringState, EditorScene, EditorTool, Modifiers, PointerInput,
-        Viewport,
+        ScreenPoint, Viewport,
     };
     use geosolve_sketch::{
         AlphaScenarioIds, AlphaScenarioKind, DocumentConstraintDefinition,
         DocumentExternalPointRef, DocumentM38DimensionDefinition, DocumentMeasurementDefinition,
         DocumentParameterKind, DocumentPointRef, ExternalLineOrientationV1, ExternalSnapshotDigest,
         ExternalSnapshotEntry, ExternalSnapshotFeatureV1, ExternalSnapshotInputError,
-        ExternalSnapshotResourcesV1, ExternalSnapshotSet, ParameterBatch, ParameterBatchEntry,
-        ParameterValue, SolverConfig, alpha_scenario,
+        ExternalSnapshotResourcesV1, ExternalSnapshotSet, OperationStopReason,
+        OperationWorkCounter, ParameterBatch, ParameterBatchEntry, ParameterValue, SolverConfig,
+        alpha_scenario, cancellation_pair,
     };
+
+    #[test]
+    fn projected_drag_envelope_pins_every_m65_limit() {
+        let limits = projected_drag_control().limits;
+        assert_eq!(limits.document_validation_items, 16_384);
+        assert_eq!(limits.document_dependency_items, 16_384);
+        assert_eq!(limits.document_lowering_items, 16_384);
+        assert_eq!(limits.nonlinear_iterations, 256);
+        assert_eq!(limits.factorizations, 256);
+        assert_eq!(limits.rank_kernels, 256);
+        assert_eq!(limits.rejected_trials, 512);
+        assert_eq!(limits.component_linearizations, 1_024);
+        assert_eq!(limits.dense_kernel_rows, 256);
+        assert_eq!(limits.dense_kernel_columns, 256);
+        assert_eq!(limits.diagnostic_candidates, 512);
+        assert_eq!(limits.diagnostic_trials, 1_024);
+    }
+
+    fn assert_projected_drag_work_bounded(work: &ProjectedDragWorkEvidence) {
+        assert!(
+            work.operation_report_complete,
+            "ordinary controlled outcomes must publish complete work evidence"
+        );
+        let consumed = work.operation.consumed;
+        assert!(consumed.document_validation_items <= PROJECTED_DRAG_MAX_DOCUMENT_ITEMS);
+        assert!(consumed.document_dependency_items <= PROJECTED_DRAG_MAX_DOCUMENT_ITEMS);
+        assert!(consumed.document_lowering_items <= PROJECTED_DRAG_MAX_DOCUMENT_ITEMS);
+        assert!(consumed.nonlinear_iterations <= PROJECTED_DRAG_MAX_NONLINEAR_ITERATIONS);
+        assert!(consumed.factorizations <= PROJECTED_DRAG_MAX_FACTORIZATIONS);
+        assert!(consumed.rank_kernels <= PROJECTED_DRAG_MAX_RANK_KERNELS);
+        assert!(consumed.rejected_trials <= PROJECTED_DRAG_MAX_REJECTED_TRIALS);
+        assert!(consumed.component_linearizations <= PROJECTED_DRAG_MAX_COMPONENT_LINEARIZATIONS);
+        assert!(consumed.dense_kernel_rows <= PROJECTED_DRAG_MAX_DENSE_DIMENSION);
+        assert!(consumed.dense_kernel_columns <= PROJECTED_DRAG_MAX_DENSE_DIMENSION);
+        assert!(consumed.diagnostic_candidates <= PROJECTED_DRAG_MAX_DIAGNOSTIC_CANDIDATES);
+        assert!(consumed.diagnostic_trials <= PROJECTED_DRAG_MAX_DIAGNOSTIC_TRIALS);
+    }
+
+    fn circle_drag_fixture() -> (
+        RetainedEditorCoordinator,
+        EditorScene,
+        DesignPointId,
+        CurveId,
+        [f64; 2],
+    ) {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let center = document.add_point("center", [1.0, 2.0]).expect("center");
+        let radius = document
+            .add_scalar(
+                "circle radius",
+                2.0,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .expect("radius");
+        let circle = document
+            .add_curve("circle", CurveDefinition::Circle { center, radius })
+            .expect("circle");
+        let radius_target = document
+            .add_scalar(
+                "radius target",
+                2.0,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .expect("radius target");
+        document
+            .add_dimension(
+                "fixed radius",
+                DocumentDimensionDefinition::Radius {
+                    curve: circle,
+                    target: radius_target,
+                },
+                DocumentDimensionMode::Driving,
+            )
+            .expect("radius dimension");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("circle session");
+        let viewport = Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport");
+        let accepted = session.accepted_state().expect("accepted circle");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            viewport,
+            0.5,
+        )
+        .expect("scene");
+        (
+            RetainedEditorCoordinator::new(session).expect("coordinator"),
+            scene,
+            center,
+            circle,
+            [1.0, 2.0],
+        )
+    }
+
+    fn unannotated_circle_press(scene: &EditorScene, circle: CurveId) -> ScreenPoint {
+        scene
+            .curves
+            .iter()
+            .find(|curve| curve.span.curve == circle)
+            .expect("scene circle")
+            .screen_polyline
+            .iter()
+            .copied()
+            .find(|position| {
+                scene
+                    .annotation_hit_test(*position, crate::PickTolerance::default(), &[], None, &[])
+                    .is_none()
+            })
+            .expect("circle sample away from its dimension annotation")
+    }
 
     fn fixed_line_session() -> (
         RetainedSketchDocumentSession,
@@ -6587,9 +6615,7 @@ mod tests {
             position,
             modifiers: Modifiers::default(),
         };
-        coordinator
-            .editor_mut()
-            .pointer_down(&scene, pointer(start));
+        coordinator.pointer_down(&scene, pointer(start));
         let request = coordinator
             .editor_mut()
             .pointer_move(&scene, pointer(target));
@@ -6624,6 +6650,728 @@ mod tests {
             coordinator.lifecycle().status,
             LifecycleStatus::SolvedPreview
         );
+    }
+
+    #[test]
+    fn typed_projected_drag_errors_mark_unrecoverable_work_reports_incomplete() {
+        let cam = alpha_scenario(AlphaScenarioKind::MotionCam, 1.0).expect("cam");
+        let pantograph =
+            alpha_scenario(AlphaScenarioKind::MotionPantograph, 1.0).expect("pantograph");
+        let AlphaScenarioIds::MotionPantograph(pantograph_ids) = pantograph.ids else {
+            unreachable!()
+        };
+        let mut planning_error = RetainedEditorCoordinator::new(
+            RetainedSketchDocumentSession::new(cam.document, cam.request, SolverConfig::default())
+                .expect("cam session"),
+        )
+        .expect("coordinator");
+        assert!(
+            planning_error
+                .resolve_projected_point_move(190, 1, pantograph_ids.input, [1.0, 1.0])
+                .is_empty()
+        );
+        let planning_work = planning_error
+            .projected_drag_work_evidence()
+            .expect("planning error work");
+        assert_eq!(planning_work.attempts, 0);
+        assert!(!planning_work.accepted);
+        assert_eq!(
+            planning_work.rejection_stage,
+            Some(ProjectedDragRejectionStage::LocalityPlanning)
+        );
+        assert!(!planning_work.operation_report_complete);
+        assert_eq!(
+            planning_work.operation.configured,
+            projected_drag_control().limits
+        );
+
+        let (mut session_error, _, center, _, _) = circle_drag_fixture();
+        let _ = session_error.resolve_projected_point_move(191, 1, center, [1.1, 2.1]);
+        assert!(
+            session_error
+                .projected_drag_work_evidence()
+                .is_some_and(|work| work.accepted && work.operation_report_complete)
+        );
+        let (foreign_preview, _, _, _) = fixed_line_session();
+        session_error
+            .drag_continuation
+            .as_mut()
+            .expect("active continuation")
+            .last_accepted_preview = Some(foreign_preview);
+        assert!(
+            session_error
+                .resolve_projected_point_move(191, 2, center, [1.2, 2.2])
+                .is_empty()
+        );
+        let session_work = session_error
+            .projected_drag_work_evidence()
+            .expect("session error work");
+        assert!(session_work.continued);
+        assert_eq!(session_work.attempts, 0);
+        assert!(!session_work.accepted);
+        assert_eq!(
+            session_work.rejection_stage,
+            Some(ProjectedDragRejectionStage::Session)
+        );
+        assert!(!session_work.operation_report_complete);
+        assert_eq!(
+            session_work.operation.configured,
+            projected_drag_control().limits
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one end-to-end pointer gesture owns offset, release, history, and cancellation"
+    )]
+    fn circle_offset_drag_release_cancel_and_history_use_the_ordinary_lifecycle() {
+        let (mut coordinator, scene, center, circle, initial_center) = circle_drag_fixture();
+        coordinator.editor_mut().activate_tool(EditorTool::Select);
+        let press = unannotated_circle_press(&scene, circle);
+        let moved_pointer = ScreenPoint {
+            x: press.x + 10.0,
+            y: press.y - 5.0,
+        };
+        let pointer = |pointer_id, position| PointerInput {
+            pointer_id,
+            position,
+            modifiers: Modifiers::default(),
+        };
+        assert_eq!(
+            coordinator.pointer_down(&scene, pointer(101, press)),
+            vec![EditorEffect::SelectionChanged(vec![SelectionItem::Curve(
+                CurveSpan::line(circle)
+            )])]
+        );
+        let press_plan = coordinator
+            .drag_continuation
+            .as_ref()
+            .expect("press-time drag continuation");
+        assert!(press_plan.locality.is_some());
+        assert!(press_plan.planning_failure.is_none());
+        assert!(press_plan.planning_operation.is_some());
+        assert_eq!(press_plan.last_request_id, None);
+        assert!(coordinator.projected_drag_work_evidence().is_none());
+        let request = coordinator
+            .editor_mut()
+            .pointer_move(&scene, pointer(101, moved_pointer));
+        let [
+            EditorEffect::RequestProjectedPointMove {
+                pointer_id,
+                request_id,
+                point,
+                model_position,
+            },
+        ] = request.as_slice()
+        else {
+            panic!("circle projected request")
+        };
+        assert_eq!(*point, center);
+        assert!(
+            (model_position[0] - 1.2).abs() <= 1.0e-12
+                && (model_position[1] - 2.1).abs() <= 1.0e-12,
+            "circumference offset was not preserved: {model_position:?}"
+        );
+        let effects = coordinator.resolve_projected_point_move(
+            *pointer_id,
+            *request_id,
+            *point,
+            *model_position,
+        );
+        assert!(matches!(
+            effects.as_slice(),
+            [EditorEffect::PreviewPointMove {
+                point: preview_point,
+                model_position: preview_position,
+            }] if *preview_point == center
+                && (preview_position[0] - 1.2).abs() <= 1.0e-8
+                && (preview_position[1] - 2.1).abs() <= 1.0e-8
+        ));
+        assert_projected_drag_work_bounded(
+            coordinator
+                .projected_drag_work_evidence()
+                .expect("circle drag work"),
+        );
+        assert!(
+            coordinator
+                .drag_continuation
+                .as_ref()
+                .is_some_and(|gesture| gesture.planning_operation.is_none()),
+            "press-time planning work must be charged exactly once"
+        );
+
+        let expected = coordinator.session().design_identity();
+        let release =
+            coordinator
+                .editor_mut()
+                .pointer_up(&scene, expected, pointer(101, moved_pointer));
+        assert!(matches!(
+            release.as_slice(),
+            [
+                EditorEffect::CommitPointMove {
+                    expected: effect_expected,
+                    point: effect_point,
+                    ..
+                },
+                EditorEffect::ClearPointPreview,
+            ] if *effect_expected == expected && *effect_point == center
+        ));
+        coordinator
+            .apply_editor_effect(&release[0])
+            .expect("release dispatch")
+            .expect("release mutation");
+        assert_eq!(coordinator.history_len(), 2);
+        let moved_center = coordinator
+            .session()
+            .accepted_state()
+            .unwrap()
+            .document()
+            .point(center)
+            .unwrap()
+            .position;
+        assert!((moved_center[0] - 1.2).abs() <= 1.0e-8);
+        assert!((moved_center[1] - 2.1).abs() <= 1.0e-8);
+
+        coordinator.undo().expect("undo released drag");
+        assert_eq!(
+            coordinator
+                .session()
+                .accepted_state()
+                .unwrap()
+                .document()
+                .point(center)
+                .unwrap()
+                .position
+                .map(f64::to_bits),
+            initial_center.map(f64::to_bits)
+        );
+        coordinator.redo().expect("redo released drag");
+        let redone_center = coordinator
+            .session()
+            .accepted_state()
+            .unwrap()
+            .document()
+            .point(center)
+            .unwrap()
+            .position;
+        assert!((redone_center[0] - moved_center[0]).abs() <= 1.0e-10);
+        assert!((redone_center[1] - moved_center[1]).abs() <= 1.0e-10);
+
+        let viewport = scene.viewport;
+        let accepted = coordinator.session().accepted_state().unwrap();
+        let cancel_scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            coordinator.session().design_identity(),
+            accepted.document(),
+            coordinator.session().design_document(),
+            viewport,
+            0.5,
+        )
+        .expect("cancel scene");
+        let cancel_press = unannotated_circle_press(&cancel_scene, circle);
+        let cancel_move = ScreenPoint {
+            x: cancel_press.x + 5.0,
+            y: cancel_press.y - 5.0,
+        };
+        coordinator.pointer_down(&cancel_scene, pointer(102, cancel_press));
+        let cancel_request = coordinator
+            .editor_mut()
+            .pointer_move(&cancel_scene, pointer(102, cancel_move));
+        let [
+            EditorEffect::RequestProjectedPointMove {
+                pointer_id,
+                request_id,
+                point,
+                model_position,
+            },
+        ] = cancel_request.as_slice()
+        else {
+            panic!("cancel projected request")
+        };
+        let _ = coordinator.resolve_projected_point_move(
+            *pointer_id,
+            *request_id,
+            *point,
+            *model_position,
+        );
+        assert!(
+            coordinator
+                .projected_drag_work_evidence()
+                .is_some_and(|work| work.accepted)
+        );
+        let history_before_cancel = coordinator.history_len();
+        let accepted_before_cancel = coordinator.session().accepted_state().unwrap().identity();
+        assert_eq!(
+            coordinator.editor_mut().cancel(),
+            vec![EditorEffect::ClearPointPreview]
+        );
+        assert!(
+            coordinator
+                .resolve_projected_point_move(*pointer_id, *request_id, *point, *model_position)
+                .is_empty()
+        );
+        coordinator.clear_transient();
+        assert_eq!(coordinator.history_len(), history_before_cancel);
+        assert_eq!(
+            coordinator.session().accepted_state().unwrap().identity(),
+            accepted_before_cancel
+        );
+        assert!(coordinator.solved_preview_session().is_none());
+    }
+
+    #[test]
+    fn exhausted_pointer_sample_retains_complete_preview_and_recovers_in_gesture() {
+        let (mut coordinator, _, center, _, _) = circle_drag_fixture();
+        let _ = coordinator.resolve_projected_point_move(108, 1, center, [1.2, 2.1]);
+        let first_work = *coordinator
+            .projected_drag_work_evidence()
+            .expect("first sample work");
+        assert!(first_work.accepted, "{first_work:#?}");
+        let preview_before = coordinator
+            .solved_preview_session()
+            .expect("accepted preview")
+            .accepted_state()
+            .expect("accepted preview state");
+        let preview_identity = preview_before.identity();
+        let preview_document = preview_before.document().clone();
+
+        let mut exhausted_control = projected_drag_control();
+        exhausted_control.limits.document_validation_items = 0;
+        coordinator
+            .drag_continuation
+            .as_mut()
+            .expect("active continuation")
+            .planning_operation = Some(OperationController::new(exhausted_control).report());
+
+        assert!(
+            coordinator
+                .resolve_projected_point_move(108, 2, center, [1.3, 2.2])
+                .is_empty()
+        );
+        let exhausted = *coordinator
+            .projected_drag_work_evidence()
+            .expect("exhausted sample work");
+        assert_eq!(exhausted.attempts, 1);
+        assert!(exhausted.continued);
+        assert!(!exhausted.accepted);
+        assert_eq!(
+            exhausted.rejection_stage,
+            Some(ProjectedDragRejectionStage::ControlledOperation)
+        );
+        assert!(matches!(
+            exhausted.operation.stopping_reason,
+            Some(OperationStopReason::WorkExhausted {
+                counter: OperationWorkCounter::DocumentValidationItems,
+                ..
+            })
+        ));
+        let retained = coordinator
+            .solved_preview_session()
+            .expect("retained accepted preview")
+            .accepted_state()
+            .expect("retained preview state");
+        assert_eq!(retained.identity(), preview_identity);
+        assert_eq!(retained.document(), &preview_document);
+
+        let _ = coordinator.resolve_projected_point_move(108, 3, center, [1.4, 2.3]);
+        let recovered = *coordinator
+            .projected_drag_work_evidence()
+            .expect("recovered sample work");
+        assert!(recovered.accepted, "{recovered:#?}");
+        assert!(recovered.continued);
+        assert_projected_drag_work_bounded(&recovered);
+        let recovered_position = coordinator
+            .solved_preview_session()
+            .expect("recovered preview")
+            .accepted_state()
+            .expect("recovered state")
+            .document()
+            .point(center)
+            .expect("recovered center")
+            .position;
+        assert!((recovered_position[0] - 1.4).abs() <= 1.0e-10);
+        assert!((recovered_position[1] - 2.3).abs() <= 1.0e-10);
+        assert_ne!(
+            recovered_position.map(f64::to_bits),
+            preview_document
+                .point(center)
+                .expect("retained center")
+                .position
+                .map(f64::to_bits)
+        );
+    }
+
+    #[test]
+    fn exhausted_exact_release_retains_preview_and_history_for_retry() {
+        let (mut coordinator, _, center, _, _) = circle_drag_fixture();
+        let _ = coordinator.resolve_projected_point_move(110, 1, center, [1.2, 2.1]);
+        assert!(
+            coordinator
+                .projected_drag_work_evidence()
+                .is_some_and(|work| work.accepted)
+        );
+        let preview = coordinator
+            .solved_preview_session()
+            .expect("accepted preview")
+            .accepted_state()
+            .expect("preview accepted state");
+        let release_position = preview
+            .document()
+            .point(center)
+            .expect("preview center")
+            .position;
+        let release = EditorEffect::CommitPointMove {
+            expected: coordinator.session().design_identity(),
+            point: center,
+            model_position: release_position,
+        };
+        let design_before = coordinator.session().design_identity();
+        let attempt_before = coordinator.session().last_attempt().identity();
+        let accepted_before = coordinator
+            .session()
+            .accepted_state()
+            .expect("persisted accepted state")
+            .identity();
+        let history_before = coordinator.history_len();
+        let transcript_before = coordinator.transcript().len();
+        let preview_identity = preview.identity();
+        let preview_document = preview.document().clone();
+
+        let mut exhausted_control = projected_drag_control();
+        exhausted_control.limits.document_validation_items = 0;
+        assert!(matches!(
+            coordinator
+                .apply_editor_effect_with_projected_release_control(&release, exhausted_control,),
+            Err(CoordinatorError::Session(
+                DocumentSessionError::PreviewReleaseInterrupted {
+                    stopping_reason: OperationStopReason::WorkExhausted {
+                        counter: OperationWorkCounter::DocumentValidationItems,
+                        ..
+                    },
+                }
+            ))
+        ));
+        assert_eq!(coordinator.session().design_identity(), design_before);
+        assert_eq!(
+            coordinator.session().last_attempt().identity(),
+            attempt_before
+        );
+        assert_eq!(
+            coordinator
+                .session()
+                .accepted_state()
+                .expect("persisted accepted state")
+                .identity(),
+            accepted_before
+        );
+        assert_eq!(coordinator.history_len(), history_before);
+        assert_eq!(coordinator.transcript().len(), transcript_before);
+        let retained_preview = coordinator
+            .solved_preview_session()
+            .expect("release failure retains preview")
+            .accepted_state()
+            .expect("retained preview state");
+        assert_eq!(retained_preview.identity(), preview_identity);
+        assert_eq!(retained_preview.document(), &preview_document);
+
+        let committed = coordinator
+            .apply_editor_effect(&release)
+            .expect("bounded release retry")
+            .expect("point mutation");
+        assert!(committed.published_accepted.is_some());
+        assert_eq!(coordinator.history_len(), history_before + 1);
+        assert_eq!(coordinator.transcript().len(), transcript_before + 1);
+    }
+
+    #[test]
+    fn stopped_press_time_planning_is_charged_once_and_never_replanned() {
+        let (mut coordinator, scene, _, circle, _) = circle_drag_fixture();
+        let press = unannotated_circle_press(&scene, circle);
+        let pointer = |position| PointerInput {
+            pointer_id: 109,
+            position,
+            modifiers: Modifiers::default(),
+        };
+        let (cancellation, token) = cancellation_pair();
+        cancellation.cancel();
+        let mut control = projected_drag_control();
+        control.token = token;
+        coordinator.pointer_down_with_problem_items_controlled(
+            &scene,
+            pointer(press),
+            &[],
+            control,
+        );
+        let planned = coordinator
+            .drag_continuation
+            .as_ref()
+            .expect("tracked stopped plan");
+        assert!(planned.locality.is_none());
+        assert!(planned.planning_operation.is_some());
+        assert!(planned.planning_failure.is_some_and(|failure| {
+            failure.rejection_stage == ProjectedDragRejectionStage::LocalityPlanning
+                && failure.operation_report_complete
+        }));
+
+        let moved = ScreenPoint {
+            x: press.x + 10.0,
+            y: press.y,
+        };
+        let request = coordinator
+            .editor_mut()
+            .pointer_move(&scene, pointer(moved));
+        let [
+            EditorEffect::RequestProjectedPointMove {
+                pointer_id,
+                request_id,
+                point,
+                model_position,
+            },
+        ] = request.as_slice()
+        else {
+            panic!("first stopped-plan request")
+        };
+        assert!(
+            coordinator
+                .resolve_projected_point_move(*pointer_id, *request_id, *point, *model_position,)
+                .is_empty()
+        );
+        let first = *coordinator
+            .projected_drag_work_evidence()
+            .expect("first stopped-plan evidence");
+        assert_eq!(first.attempts, 0);
+        assert_eq!(
+            first.rejection_stage,
+            Some(ProjectedDragRejectionStage::LocalityPlanning)
+        );
+        assert!(first.operation.stopping_reason.is_some());
+        assert!(
+            coordinator
+                .drag_continuation
+                .as_ref()
+                .is_some_and(|gesture| gesture.planning_operation.is_none())
+        );
+
+        let request = coordinator.editor_mut().pointer_move(
+            &scene,
+            pointer(ScreenPoint {
+                x: moved.x + 5.0,
+                y: moved.y,
+            }),
+        );
+        let [
+            EditorEffect::RequestProjectedPointMove {
+                pointer_id,
+                request_id,
+                point,
+                model_position,
+            },
+        ] = request.as_slice()
+        else {
+            panic!("second stopped-plan request")
+        };
+        let _ = coordinator.resolve_projected_point_move(
+            *pointer_id,
+            *request_id,
+            *point,
+            *model_position,
+        );
+        let second = coordinator
+            .projected_drag_work_evidence()
+            .expect("second stopped-plan evidence");
+        assert_eq!(second.attempts, 0);
+        assert_eq!(
+            second.rejection_stage,
+            Some(ProjectedDragRejectionStage::LocalityPlanning)
+        );
+        assert_eq!(second.operation.stopping_reason, None);
+        assert_eq!(second.operation.consumed, OperationWork::default());
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one issued-result sequence covers out-of-order, duplicate, late, and final release behavior"
+    )]
+    fn issued_projection_results_ignore_out_of_order_duplicate_and_late_delivery() {
+        fn request_tuple(effects: &[EditorEffect]) -> (u64, u64, DesignPointId, [f64; 2]) {
+            let [
+                EditorEffect::RequestProjectedPointMove {
+                    pointer_id,
+                    request_id,
+                    point,
+                    model_position,
+                },
+            ] = effects
+            else {
+                panic!("projected request")
+            };
+            (*pointer_id, *request_id, *point, *model_position)
+        }
+
+        let (mut coordinator, scene, center, circle, _) = circle_drag_fixture();
+        let pointer = |position| PointerInput {
+            pointer_id: 111,
+            position,
+            modifiers: Modifiers::default(),
+        };
+        let press = unannotated_circle_press(&scene, circle);
+        let moved = |x: f64, y: f64| ScreenPoint {
+            x: press.x + x,
+            y: press.y + y,
+        };
+        coordinator.pointer_down(&scene, pointer(press));
+        let first = coordinator
+            .editor_mut()
+            .pointer_move(&scene, pointer(moved(5.0, 0.0)));
+        let second = coordinator
+            .editor_mut()
+            .pointer_move(&scene, pointer(moved(10.0, -5.0)));
+        let first = request_tuple(&first);
+        let second = request_tuple(&second);
+
+        assert!(
+            coordinator
+                .resolve_projected_point_move(first.0, first.1, first.2, first.3)
+                .is_empty()
+        );
+        assert!(coordinator.projected_drag_work_evidence().is_none());
+        let _ = coordinator.resolve_projected_point_move(second.0, second.1, second.2, second.3);
+        let second_work = *coordinator
+            .projected_drag_work_evidence()
+            .expect("current result work");
+        assert!(second_work.accepted, "{second_work:#?}");
+        let second_preview = coordinator
+            .solved_preview_session()
+            .unwrap()
+            .accepted_state()
+            .unwrap()
+            .identity();
+
+        assert!(
+            coordinator
+                .resolve_projected_point_move(second.0, second.1, second.2, second.3)
+                .is_empty()
+        );
+        assert_eq!(
+            coordinator.projected_drag_work_evidence(),
+            Some(&second_work)
+        );
+        assert_eq!(
+            coordinator
+                .solved_preview_session()
+                .unwrap()
+                .accepted_state()
+                .unwrap()
+                .identity(),
+            second_preview
+        );
+
+        let third = coordinator
+            .editor_mut()
+            .pointer_move(&scene, pointer(moved(15.0, -5.0)));
+        let fourth = coordinator
+            .editor_mut()
+            .pointer_move(&scene, pointer(moved(17.5, -2.5)));
+        let third = request_tuple(&third);
+        let fourth = request_tuple(&fourth);
+        assert!(
+            coordinator
+                .resolve_projected_point_move(third.0, third.1, third.2, third.3)
+                .is_empty()
+        );
+        assert_eq!(
+            coordinator.projected_drag_work_evidence(),
+            Some(&second_work)
+        );
+        let _ = coordinator.resolve_projected_point_move(fourth.0, fourth.1, fourth.2, fourth.3);
+        let fourth_work = *coordinator
+            .projected_drag_work_evidence()
+            .expect("latest result work");
+        assert!(fourth_work.accepted, "{fourth_work:#?}");
+        assert!(fourth_work.continued);
+        assert_projected_drag_work_bounded(&fourth_work);
+
+        let expected = coordinator.session().design_identity();
+        let release =
+            coordinator
+                .editor_mut()
+                .pointer_up(&scene, expected, pointer(moved(17.5, -2.5)));
+        assert!(
+            coordinator
+                .resolve_projected_point_move(fourth.0, fourth.1, fourth.2, fourth.3)
+                .is_empty()
+        );
+        assert_eq!(
+            coordinator.projected_drag_work_evidence(),
+            Some(&fourth_work)
+        );
+        assert!(matches!(
+            release.as_slice(),
+            [
+                EditorEffect::CommitPointMove { point, .. },
+                EditorEffect::ClearPointPreview,
+            ] if *point == center
+        ));
+        coordinator
+            .apply_editor_effect(&release[0])
+            .expect("release")
+            .expect("mutation");
+    }
+
+    #[test]
+    fn tracked_request_is_stale_when_accepted_state_changes_before_first_move() {
+        let (mut coordinator, scene, _, circle, _) = circle_drag_fixture();
+        let press = unannotated_circle_press(&scene, circle);
+        let pointer = |position| PointerInput {
+            pointer_id: 112,
+            position,
+            modifiers: Modifiers::default(),
+        };
+        coordinator.pointer_down(&scene, pointer(press));
+        let press_accepted = coordinator
+            .drag_continuation
+            .as_ref()
+            .and_then(|gesture| gesture.accepted)
+            .expect("press accepted stamp");
+        coordinator
+            .reattempt(coordinator.session().design_identity())
+            .expect("fresh accepted attempt");
+        assert_ne!(
+            coordinator
+                .session()
+                .accepted_state()
+                .expect("reattempt accepted")
+                .identity(),
+            press_accepted
+        );
+
+        let request = coordinator.editor_mut().pointer_move(
+            &scene,
+            pointer(ScreenPoint {
+                x: press.x + 10.0,
+                y: press.y,
+            }),
+        );
+        let [
+            EditorEffect::RequestProjectedPointMove {
+                pointer_id,
+                request_id,
+                point,
+                model_position,
+            },
+        ] = request.as_slice()
+        else {
+            panic!("tracked request")
+        };
+        assert!(
+            coordinator
+                .resolve_projected_point_move(*pointer_id, *request_id, *point, *model_position,)
+                .is_empty()
+        );
+        assert!(coordinator.projected_drag_work_evidence().is_none());
+        assert!(coordinator.solved_preview_session().is_none());
     }
 
     #[test]
@@ -6712,7 +7460,7 @@ mod tests {
         let failed_work = coordinator
             .projected_drag_work_evidence()
             .expect("failed drag work");
-        assert_eq!(failed_work.attempts, 1);
+        assert_eq!(failed_work.attempts, 0);
         assert!(failed_work.continued);
         assert!(!failed_work.accepted);
         assert!(failed_work.rejection_stage.is_some());
@@ -6765,7 +7513,6 @@ mod tests {
             .input()
             .publication_request();
         assert_eq!(retained_request.drag, None);
-        assert_eq!(retained_request.stability_target, None);
         assert_eq!(
             coordinator
                 .session()
@@ -6812,175 +7559,115 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::too_many_lines)]
-    fn alternate_branch_is_bounded_ghosted_exact_stamped_and_atomic() {
-        let mut document = SketchDocument::new(1.0).expect("document");
-        let base = document.add_point("base", [-2.0, 0.0]).expect("point");
-        let elbow = document.add_point("elbow", [0.0, 1.5]).expect("point");
-        let end = document.add_point("end", [2.0, 0.0]).expect("point");
-        let first = document
-            .add_curve(
-                "first link",
-                CurveDefinition::Line {
-                    start: base,
-                    end: elbow,
-                    branch_direction: [0.8, 0.6],
-                },
-            )
-            .expect("line");
-        let second = document
-            .add_curve(
-                "second link",
-                CurveDefinition::Line {
-                    start: elbow,
-                    end,
-                    branch_direction: [0.8, -0.6],
-                },
-            )
-            .expect("line");
-        for (label, point, target) in [
-            ("fixed base", base, [-2.0, 0.0]),
-            ("fixed end", end, [2.0, 0.0]),
-        ] {
-            document
-                .add_constraint(
-                    label,
-                    DocumentConstraintDefinition::FixedPoint { point, target },
-                )
-                .expect("fixed point");
-        }
-        for (label, first_point, second_point) in
-            [("first length", base, elbow), ("second length", elbow, end)]
-        {
-            let target = document
-                .add_scalar(label, 2.5, ScalarUnit::Length, ScalarDomain::Positive)
-                .expect("length target");
-            document
-                .add_dimension(
-                    label,
-                    DocumentDimensionDefinition::PointDistance {
-                        first: first_point,
-                        second: second_point,
-                        target,
-                    },
-                    DocumentDimensionMode::Driving,
-                )
-                .expect("length");
-        }
-        let session = RetainedSketchDocumentSession::new(
-            document,
-            DocumentSolveRequest::default(),
-            SolverConfig::default(),
-        )
-        .expect("locked elbow");
-        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
-        let base_identity = coordinator.session().design_identity();
-        let base_accepted = coordinator.session().accepted_state().unwrap().identity();
-        let base_json = coordinator.session().export_design_json().unwrap();
-
-        let result = coordinator.propose_alternate_branch(elbow);
-        assert_eq!(result.status, AlternateBranchSearchStatus::Proposed);
-        assert_eq!(result.evidence.maximum_seeds, ALTERNATE_BRANCH_MAX_SEEDS);
-        assert!(result.evidence.attempted_seeds <= ALTERNATE_BRANCH_MAX_SEEDS);
-        assert!(result.evidence.independently_valid_candidates > 0);
-        let proposal = result.proposal.expect("proposal");
-        assert_eq!(proposal.design, base_identity);
-        assert_eq!(proposal.accepted, base_accepted);
-        assert!(proposal.position[1] < 0.0, "{proposal:#?}");
-        assert!(!proposal.branches.is_empty());
-        assert_eq!(
-            coordinator.session().export_design_json().unwrap(),
-            base_json,
-            "ghost search must not mutate authoritative design"
-        );
-        assert!(coordinator.alternate_branch_preview_session().is_some());
-
-        coordinator.cancel_alternate_branch();
-        assert!(coordinator.alternate_branch_proposal().is_none());
-        assert_eq!(coordinator.session().design_identity(), base_identity);
-
-        let proposal = coordinator
-            .propose_alternate_branch(elbow)
-            .proposal
-            .expect("replacement proposal");
-        let accepted = coordinator
-            .accept_alternate_branch(proposal.proposal_id)
-            .expect("accept branch");
-        assert!(accepted.published_accepted.is_some());
-        let crossed = coordinator
-            .session()
-            .accepted_state()
-            .unwrap()
-            .document()
-            .point(elbow)
-            .unwrap()
-            .position;
-        assert!(crossed[1] < 0.0);
-        for branch in &proposal.branches {
-            let old = if branch.curve == CurveSpan::line(first) {
-                [0.8, 0.6]
-            } else {
-                assert_eq!(branch.curve, CurveSpan::line(second));
-                [0.8, -0.6]
+    fn both_twin_rollers_keep_the_passive_center_fixed_across_pointer_path_shapes() {
+        for active_side in 0..2 {
+            let fixture = alpha_scenario(AlphaScenarioKind::MotionCam, 1.0).expect("cam sample");
+            let AlphaScenarioIds::MotionCam(ids) = fixture.ids else {
+                unreachable!()
             };
-            let direction = coordinator
-                .session()
-                .design_document()
-                .curve_branch_direction(branch.curve)
-                .unwrap();
-            assert!(old[0] * direction[0] + old[1] * direction[1] < 0.0);
-        }
-        coordinator.undo().expect("undo branch");
-        assert!(
-            coordinator
-                .session()
-                .accepted_state()
-                .unwrap()
-                .document()
-                .point(elbow)
-                .unwrap()
-                .position[1]
-                > 0.0
-        );
-        coordinator.redo().expect("redo branch");
-        assert!(
-            coordinator
-                .session()
-                .accepted_state()
-                .unwrap()
-                .document()
-                .point(elbow)
-                .unwrap()
-                .position[1]
-                < 0.0
-        );
+            let centers = [ids.left_center, ids.right_center];
+            let active = centers[active_side];
+            let passive = centers[1 - active_side];
+            let session = RetainedSketchDocumentSession::new(
+                fixture.document,
+                fixture.request,
+                SolverConfig::default(),
+            )
+            .expect("cam session");
+            let accepted = session.accepted_state().expect("accepted cam").document();
+            let active_start = accepted.point(active).expect("active center").position;
+            let passive_start = accepted.point(passive).expect("passive center").position;
+            let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+            let path = [
+                (
+                    "horizontal positive",
+                    [active_start[0] + 0.01, active_start[1]],
+                ),
+                (
+                    "horizontal reversal",
+                    [active_start[0] - 0.01, active_start[1]],
+                ),
+                (
+                    "vertical positive",
+                    [active_start[0], active_start[1] + 0.01],
+                ),
+                (
+                    "vertical reversal",
+                    [active_start[0], active_start[1] - 0.01],
+                ),
+                (
+                    "diagonal positive",
+                    [active_start[0] + 0.01, active_start[1] + 0.01],
+                ),
+                (
+                    "diagonal reversal",
+                    [active_start[0] - 0.01, active_start[1] - 0.01],
+                ),
+            ];
+            let mut active_previous = active_start;
 
-        let stale = coordinator
-            .propose_alternate_branch(elbow)
-            .proposal
-            .expect("stale proposal");
-        coordinator
-            .reattempt(coordinator.session().design_identity())
-            .expect("advance accepted stamp");
-        assert!(matches!(
-            coordinator.accept_alternate_branch(stale.proposal_id),
-            Err(CoordinatorError::StaleAlternateBranchProposal)
-        ));
+            for (index, (path_name, target)) in path.into_iter().enumerate() {
+                let _ = coordinator.resolve_projected_point_move(
+                    70 + u64::try_from(active_side).unwrap(),
+                    u64::try_from(index + 1).unwrap(),
+                    active,
+                    target,
+                );
+                let work = coordinator
+                    .projected_drag_work_evidence()
+                    .expect("roller drag work");
+                assert_eq!(work.attempts, 1);
+                assert!(
+                    work.accepted,
+                    "roller {active_side}, {path_name} sample {index}: {work:#?}"
+                );
+                assert_projected_drag_work_bounded(work);
+                let preview = coordinator
+                    .solved_preview_session()
+                    .expect("accepted roller preview")
+                    .accepted_state()
+                    .expect("accepted state")
+                    .document();
+                let active_position = preview.point(active).expect("active center").position;
+                let passive_position = preview.point(passive).expect("passive center").position;
+                let requested_delta = [
+                    target[0] - active_previous[0],
+                    target[1] - active_previous[1],
+                ];
+                let projected_delta = [
+                    active_position[0] - active_previous[0],
+                    active_position[1] - active_previous[1],
+                ];
+                assert!(
+                    requested_delta[0] * projected_delta[0]
+                        + requested_delta[1] * projected_delta[1]
+                        > 1.0e-10,
+                    "roller {active_side}, {path_name} sample {index}: projected motion \
+                     {projected_delta:?} did not follow pointer motion {requested_delta:?}"
+                );
+                assert!(
+                    (passive_position[0] - passive_start[0])
+                        .hypot(passive_position[1] - passive_start[1])
+                        <= 1.0e-8,
+                    "roller {active_side}, {path_name} sample {index}: passive center moved from \
+                     {passive_start:?} to {passive_position:?}"
+                );
+                active_previous = active_position;
+            }
+        }
     }
 
     #[test]
     #[allow(
         clippy::too_many_lines,
-        reason = "the deterministic work gate keeps the four comparable mechanism paths and frozen ratios in one corpus"
+        reason = "the bounded-work gate keeps the four representative mechanism paths in one corpus"
     )]
-    fn deterministic_mechanism_drag_corpus_has_one_attempt_per_sample() {
+    fn representative_mechanism_drag_corpus_is_bounded_to_one_attempt_per_sample() {
         fn run_path(
             mut coordinator: RetainedEditorCoordinator,
             point: DesignPointId,
             targets: &[[f64; 2]],
-        ) -> (usize, usize) {
-            let mut factorizations = 0usize;
-            let mut nonlinear_iterations = 0usize;
+        ) {
             for (index, target) in targets.iter().copied().enumerate() {
                 let _ = coordinator.resolve_projected_point_move(
                     91,
@@ -6994,12 +7681,21 @@ mod tests {
                 assert_eq!(work.attempts, 1);
                 assert_eq!(work.continued, index > 0);
                 assert!(work.accepted, "{work:#?}");
-                factorizations =
-                    factorizations.saturating_add(work.operation.consumed.factorizations);
-                nonlinear_iterations = nonlinear_iterations
-                    .saturating_add(work.operation.consumed.nonlinear_iterations);
+                assert_projected_drag_work_bounded(work);
+                let projected = coordinator
+                    .solved_preview_session()
+                    .expect("accepted mechanism preview")
+                    .accepted_state()
+                    .expect("accepted state")
+                    .document()
+                    .point(point)
+                    .expect("driven point")
+                    .position;
+                assert!(
+                    (projected[0] - target[0]).hypot(projected[1] - target[1]) <= 1.0e-8,
+                    "driven point projected to {projected:?}, target was {target:?}"
+                );
             }
-            (factorizations, nonlinear_iterations)
         }
 
         let mut scotch = RetainedEditorCoordinator::new(
@@ -7034,17 +7730,17 @@ mod tests {
         scotch
             .delete_selected(scotch.session().design_identity())
             .expect("delete yoke guide");
-        let scotch_work = run_path(
+        run_path(
             scotch,
             scotch_ids.slider,
-            &[[3.1, -5.9], [3.2, -5.8], [3.3, -5.7]],
+            &[[3.2, -6.0], [3.2, -5.8], [3.4, -5.6], [3.2, -5.8]],
         );
 
         let scissor_fixture = alpha_scenario(AlphaScenarioKind::MotionScissor, 1.0).unwrap();
         let AlphaScenarioIds::MotionScissor(scissor_ids) = scissor_fixture.ids else {
             unreachable!()
         };
-        let scissor_work = run_path(
+        run_path(
             RetainedEditorCoordinator::new(
                 RetainedSketchDocumentSession::new(
                     scissor_fixture.document,
@@ -7055,14 +7751,14 @@ mod tests {
             )
             .unwrap(),
             scissor_ids.slider,
-            &[[3.9, 0.0], [3.7, 0.0], [3.5, 0.0]],
+            &[[3.9, 0.0], [3.7, 0.0], [3.85, 0.0]],
         );
 
         let tower_fixture = alpha_scenario(AlphaScenarioKind::MotionScissorTower, 1.0).unwrap();
         let AlphaScenarioIds::MotionScissorTower(tower_ids) = tower_fixture.ids else {
             unreachable!()
         };
-        let tower_work = run_path(
+        run_path(
             RetainedEditorCoordinator::new(
                 RetainedSketchDocumentSession::new(
                     tower_fixture.document,
@@ -7073,7 +7769,7 @@ mod tests {
             )
             .unwrap(),
             tower_ids.right_levels[0],
-            &[[3.9, 0.0], [3.7, 0.0], [3.5, 0.0]],
+            &[[3.9, 0.0], [3.7, 0.0], [3.85, 0.0]],
         );
 
         let pantograph_fixture = alpha_scenario(AlphaScenarioKind::MotionPantograph, 1.0).unwrap();
@@ -7083,7 +7779,7 @@ mod tests {
         let radius = 17.0_f64.sqrt();
         let pantograph_targets =
             [0.27_f64, 0.30, 0.33].map(|angle| [radius * angle.cos(), radius * angle.sin()]);
-        let pantograph_work = run_path(
+        run_path(
             RetainedEditorCoordinator::new(
                 RetainedSketchDocumentSession::new(
                     pantograph_fixture.document,
@@ -7095,24 +7791,6 @@ mod tests {
             .unwrap(),
             pantograph_ids.input,
             &pantograph_targets,
-        );
-
-        for work in [scotch_work, scissor_work, tower_work, pantograph_work] {
-            assert!(work.0 > 0);
-            assert!(work.1 > 0);
-        }
-        assert!(
-            pantograph_work.0 <= 2 * tower_work.0,
-            "pantograph factorizations {pantograph_work:?} exceeded twice tower {tower_work:?}"
-        );
-        assert!(
-            pantograph_work.1 <= 2 * tower_work.1,
-            "pantograph iterations {pantograph_work:?} exceeded twice tower {tower_work:?}"
-        );
-        assert!(
-            pantograph_work.0 <= 24_482 && pantograph_work.1 <= 24_095,
-            "pantograph work {pantograph_work:?} did not improve by at least 90% from the \
-             starting-commit baseline (244824 factorizations, 240953 iterations)"
         );
     }
 
@@ -7131,8 +7809,6 @@ mod tests {
             .unwrap(),
         )
         .unwrap();
-        let mut total_factorizations = 0;
-        let mut total_iterations = 0;
         for (index, target) in [[4.0, 2.0], [3.8, 2.2], [3.6, 2.4]].into_iter().enumerate() {
             let _ = coordinator.resolve_projected_point_move(
                 92,
@@ -7143,17 +7819,65 @@ mod tests {
             let work = coordinator.projected_drag_work_evidence().unwrap();
             assert_eq!(work.attempts, 1);
             assert!(work.accepted, "{work:#?}");
-            assert!(
-                work.operation.consumed.factorizations <= PROJECTED_DRAG_MAX_FACTORIZATIONS
-                    && work.operation.consumed.nonlinear_iterations
-                        <= PROJECTED_DRAG_MAX_NONLINEAR_ITERATIONS,
-                "{work:#?}"
-            );
-            total_factorizations += work.operation.consumed.factorizations;
-            total_iterations += work.operation.consumed.nonlinear_iterations;
+            assert_projected_drag_work_bounded(work);
         }
-        assert!(total_factorizations <= 3_000, "{total_factorizations}");
-        assert!(total_iterations <= 3_000, "{total_iterations}");
+    }
+
+    #[test]
+    fn every_pantograph_control_projects_on_its_local_configuration() {
+        let input_angle = 1.0_f64.atan2(4.0);
+        let guide_angle = 3.0_f64.atan2(1.0);
+        let input_radius = 17.0_f64.sqrt();
+        let guide_radius = 10.0_f64.sqrt();
+        let configuration = |input_delta: f64, guide_delta: f64| {
+            let input = [
+                input_radius * (input_angle + input_delta).cos(),
+                input_radius * (input_angle + input_delta).sin(),
+            ];
+            let guide = [
+                guide_radius * (guide_angle + guide_delta).cos(),
+                guide_radius * (guide_angle + guide_delta).sin(),
+            ];
+            let output = [input[0] + guide[0], input[1] + guide[1]];
+            (input, guide, output, [0.5 * output[0], 0.5 * output[1]])
+        };
+        let moved = configuration(0.015, -0.012);
+
+        for (case, target_of) in [(0_u8, moved.0), (1, moved.1), (2, moved.2), (3, moved.3)] {
+            let fixture = alpha_scenario(AlphaScenarioKind::MotionPantograph, 1.0).unwrap();
+            let AlphaScenarioIds::MotionPantograph(ids) = fixture.ids else {
+                unreachable!()
+            };
+            let point = [ids.input, ids.guide, ids.output, ids.center][usize::from(case)];
+            let mut coordinator = RetainedEditorCoordinator::new(
+                RetainedSketchDocumentSession::new(
+                    fixture.document,
+                    fixture.request,
+                    SolverConfig::default(),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            let _ =
+                coordinator.resolve_projected_point_move(92 + u64::from(case), 1, point, target_of);
+            let work = coordinator.projected_drag_work_evidence().unwrap();
+            assert_eq!(work.attempts, 1);
+            assert!(work.accepted, "pantograph case {case}: {work:#?}");
+            assert_projected_drag_work_bounded(work);
+            let projected = coordinator
+                .solved_preview_session()
+                .unwrap()
+                .accepted_state()
+                .unwrap()
+                .document()
+                .point(point)
+                .unwrap()
+                .position;
+            assert!(
+                (projected[0] - target_of[0]).hypot(projected[1] - target_of[1]) <= 1.0e-8,
+                "pantograph case {case} projected {projected:?}, target {target_of:?}"
+            );
+        }
     }
 
     #[test]
@@ -7192,15 +7916,10 @@ mod tests {
             .unwrap()
             .identity();
 
-        let _ = coordinator.resolve_projected_point_move(93, 2, ids.left_center, [-2.4, 2.8]);
+        let _ = coordinator.resolve_projected_point_move(93, 2, ids.left_center, [5.0, -5.0]);
         let difficult = *coordinator.projected_drag_work_evidence().unwrap();
         assert!(!difficult.accepted, "{difficult:#?}");
-        assert!(
-            difficult.operation.consumed.factorizations <= PROJECTED_DRAG_MAX_FACTORIZATIONS
-                && difficult.operation.consumed.nonlinear_iterations
-                    <= PROJECTED_DRAG_MAX_NONLINEAR_ITERATIONS,
-            "{difficult:#?}"
-        );
+        assert_projected_drag_work_bounded(&difficult);
         assert_eq!(
             coordinator
                 .solved_preview_session()

@@ -641,27 +641,6 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   font-size: 0.67rem;
 }
 .wb-branch-choices span { color: #788583; font: 0.62rem ui-monospace, monospace; }
-.wb-assembly-branch-editor p { margin: 0; color: #8d9896; font-size: 0.67rem; line-height: 1.45; }
-#wb-assembly-branch-decisions { display: flex; gap: 0.45rem; flex-wrap: wrap; }
-[data-alternate-branch-ghost="true"] #wb-viewport {
-  outline: 2px dashed #d7a84d;
-  outline-offset: -2px;
-}
-[data-alternate-branch-ghost="true"] #wb-viewport::after {
-  content: "Alternate branch preview · not yet applied";
-  position: absolute;
-  top: 0.65rem;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 4;
-  padding: 0.3rem 0.55rem;
-  border: 1px solid #d7a84d;
-  border-radius: 4px;
-  background: #201d16e8;
-  color: #f0c86e;
-  font-size: 0.68rem;
-  pointer-events: none;
-}
 .wb-danger { color: #e7a69a !important; }
 .wb-inspector-note { margin: 0; padding: 0.8rem; color: #7f8987; font-size: 0.7rem; line-height: 1.5; }
 .wb-redundancy-publication { display: grid; gap: 0.55rem; font-size: 0.68rem; line-height: 1.4; }

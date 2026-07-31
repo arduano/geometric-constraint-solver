@@ -24,8 +24,6 @@ pub(crate) enum SampleId {
     ScissorJack,
     ScissorTower,
     PeaucellierInversor,
-    LockedElbow,
-    BranchFourBar,
     FourBarCoupler,
     Pantograph,
     DrawingArm,
@@ -41,7 +39,7 @@ pub(crate) enum SampleId {
 }
 
 impl SampleId {
-    pub(crate) const ALL: [Self; 24] = [
+    pub(crate) const ALL: [Self; 22] = [
         Self::DraftingCompass,
         Self::BezierContinuityBridge,
         Self::TwinRollerCam,
@@ -52,8 +50,6 @@ impl SampleId {
         Self::ScissorJack,
         Self::ScissorTower,
         Self::PeaucellierInversor,
-        Self::LockedElbow,
-        Self::BranchFourBar,
         Self::FourBarCoupler,
         Self::Pantograph,
         Self::DrawingArm,
@@ -80,8 +76,6 @@ impl SampleId {
             Self::ScissorJack => "scissor-jack",
             Self::ScissorTower => "five-stage-scissor-tower",
             Self::PeaucellierInversor => "peaucellier-inversor",
-            Self::LockedElbow => "locked-elbow-branches",
-            Self::BranchFourBar => "locked-four-bar-branches",
             Self::FourBarCoupler => "four-bar-coupler",
             Self::Pantograph => "pantograph-linkage",
             Self::DrawingArm => "three-link-drawing-arm",
@@ -122,7 +116,7 @@ pub(crate) struct SampleGroup {
     pub(crate) samples: &'static [SampleDefinition],
 }
 
-const MECHANISMS: [SampleDefinition; 15] = [
+const MECHANISMS: [SampleDefinition; 13] = [
     sample(
         SampleId::DraftingCompass,
         "Drafting compass · 1 DOF",
@@ -172,16 +166,6 @@ const MECHANISMS: [SampleDefinition; 15] = [
         SampleId::PeaucellierInversor,
         "Peaucellier inversor · 1 DOF",
         AlphaScenarioKind::MotionPeaucellier,
-    ),
-    sample(
-        SampleId::LockedElbow,
-        "Locked elbow · open/crossed branches",
-        AlphaScenarioKind::BranchLockedElbow,
-    ),
-    sample(
-        SampleId::BranchFourBar,
-        "Locked four-bar · open/crossed branches",
-        AlphaScenarioKind::BranchFourBar,
     ),
     sample(
         SampleId::FourBarCoupler,
@@ -518,9 +502,7 @@ fn add_line(
 mod tests {
     use std::collections::HashSet;
 
-    use geosolve_constraint_editor::{
-        AlternateBranchSearchStatus, RetainedEditorCoordinator, SelectionItem,
-    };
+    use geosolve_constraint_editor::{RetainedEditorCoordinator, SelectionItem};
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{DocumentConstraintDefinition, RetainedSketchDocumentSession};
 
@@ -596,35 +578,6 @@ mod tests {
                 "{}",
                 id.key()
             );
-        }
-    }
-
-    #[test]
-    fn branch_examples_offer_bounded_non_authoritative_alternates() {
-        for (id, point_label) in [
-            (SampleId::LockedElbow, "Locked elbow joint B"),
-            (SampleId::BranchFourBar, "Four-bar output joint B"),
-        ] {
-            let mut catalog = SampleCatalogState::default();
-            let mut coordinator = catalog.open_key(id.key()).expect("branch sample");
-            let point = coordinator
-                .session()
-                .design_document()
-                .points()
-                .iter()
-                .find(|point| point.label == point_label)
-                .expect("branch point")
-                .id;
-            let design = coordinator.session().design_identity();
-            let result = coordinator.propose_alternate_branch(point);
-            assert_eq!(
-                result.status,
-                AlternateBranchSearchStatus::Proposed,
-                "{}: {result:#?}",
-                id.key()
-            );
-            assert_eq!(coordinator.session().design_identity(), design);
-            assert!(coordinator.alternate_branch_preview_session().is_some());
         }
     }
 

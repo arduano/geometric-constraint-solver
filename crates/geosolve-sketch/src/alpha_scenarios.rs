@@ -37,8 +37,6 @@ pub enum AlphaScenarioKind {
     MotionFourBarCoupler,
     MotionPantograph,
     MotionDrawingArm,
-    BranchLockedElbow,
-    BranchFourBar,
     DiagnosticRankDrop,
     DiagnosticEndpointBound,
     DiagnosticRedundancy,
@@ -107,8 +105,6 @@ impl AlphaScenarioKind {
             Self::MotionFourBarCoupler => "motion-four-bar-coupler",
             Self::MotionPantograph => "motion-pantograph",
             Self::MotionDrawingArm => "motion-drawing-arm",
-            Self::BranchLockedElbow => "branch-locked-elbow",
-            Self::BranchFourBar => "branch-four-bar",
             Self::DiagnosticRankDrop => "diagnostic-rank-drop",
             Self::DiagnosticEndpointBound => "diagnostic-endpoint-bound",
             Self::DiagnosticRedundancy => "diagnostic-redundancy",
@@ -508,15 +504,6 @@ pub struct MotionDrawingArmIds {
     pub links: [CurveId; 3],
 }
 
-/// Persistent roles in the explicit two-root locked-elbow branch example.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct BranchLockedElbowIds {
-    pub base: DesignPointId,
-    pub elbow: DesignPointId,
-    pub end: DesignPointId,
-    pub links: [CurveId; 2],
-}
-
 /// Persistent roles in the structural-versus-numerical rank diagnostic example.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DiagnosticRankDropIds {
@@ -680,8 +667,6 @@ pub enum AlphaScenarioIds {
     MotionFourBarCoupler(MotionFourBarCouplerIds),
     MotionPantograph(MotionPantographIds),
     MotionDrawingArm(MotionDrawingArmIds),
-    BranchLockedElbow(BranchLockedElbowIds),
-    BranchFourBar(MotionFourBarCouplerIds),
     DiagnosticRankDrop(DiagnosticRankDropIds),
     DiagnosticEndpointBound(DiagnosticEndpointBoundIds),
     DiagnosticRedundancy(DiagnosticRedundancyIds),
@@ -757,8 +742,6 @@ pub fn alpha_scenario(
         AlphaScenarioKind::MotionFourBarCoupler => 0xcb_0000,
         AlphaScenarioKind::MotionPantograph => 0xcc_0000,
         AlphaScenarioKind::MotionDrawingArm => 0xcd_0000,
-        AlphaScenarioKind::BranchLockedElbow => 0xce_0000,
-        AlphaScenarioKind::BranchFourBar => 0xcf_0000,
         AlphaScenarioKind::DiagnosticRankDrop => 0xd1_0000,
         AlphaScenarioKind::DiagnosticEndpointBound => 0xd2_0000,
         AlphaScenarioKind::DiagnosticRedundancy => 0xd3_0000,
@@ -879,14 +862,6 @@ pub fn alpha_scenario(
         AlphaScenarioKind::MotionDrawingArm => (
             AlphaScenarioIds::MotionDrawingArm(add_motion_drawing_arm(&mut document, scale)?),
             DocumentSolveRequest::default().without_previous_state_preferences(),
-        ),
-        AlphaScenarioKind::BranchLockedElbow => (
-            AlphaScenarioIds::BranchLockedElbow(add_branch_locked_elbow(&mut document, scale)?),
-            DocumentSolveRequest::default(),
-        ),
-        AlphaScenarioKind::BranchFourBar => (
-            AlphaScenarioIds::BranchFourBar(add_branch_four_bar(&mut document, scale)?),
-            DocumentSolveRequest::default(),
         ),
         AlphaScenarioKind::DiagnosticRankDrop => (
             AlphaScenarioIds::DiagnosticRankDrop(add_diagnostic_rank_drop(&mut document, scale)?),
@@ -4460,19 +4435,6 @@ fn add_motion_four_bar_coupler(
     })
 }
 
-fn add_branch_four_bar(
-    document: &mut SketchDocument,
-    scale: f64,
-) -> Result<MotionFourBarCouplerIds, DocumentError> {
-    let ids = add_motion_four_bar_coupler(document, scale)?;
-    fix_point(
-        document,
-        "Four-bar input crank locked for branch comparison",
-        ids.joints[0],
-    )?;
-    Ok(ids)
-}
-
 fn add_motion_pantograph(
     document: &mut SketchDocument,
     scale: f64,
@@ -4625,36 +4587,6 @@ fn add_motion_drawing_arm(
     Ok(MotionDrawingArmIds {
         anchor,
         joints,
-        links,
-    })
-}
-
-fn add_branch_locked_elbow(
-    document: &mut SketchDocument,
-    scale: f64,
-) -> Result<BranchLockedElbowIds, DocumentError> {
-    let base = document.add_point("Locked elbow base A", [-2.0 * scale, 0.0])?;
-    let elbow = document.add_point("Locked elbow joint B", [0.0, 1.5 * scale])?;
-    let end = document.add_point("Locked elbow base C", [2.0 * scale, 0.0])?;
-    let links = [
-        add_line_with_direction(document, "Locked elbow link AB", base, elbow, [0.8, 0.6])?,
-        add_line_with_direction(document, "Locked elbow link BC", elbow, end, [0.8, -0.6])?,
-    ];
-    fix_point(document, "Locked elbow base A fixed", base)?;
-    fix_point(document, "Locked elbow base C fixed", end)?;
-    for (index, link) in links.into_iter().enumerate() {
-        add_length_dimension(
-            document,
-            &format!("Locked elbow link {} length 2.5", index + 1),
-            CurveSpan::line(link),
-            2.5 * scale,
-            DocumentDimensionMode::Driving,
-        )?;
-    }
-    Ok(BranchLockedElbowIds {
-        base,
-        elbow,
-        end,
         links,
     })
 }

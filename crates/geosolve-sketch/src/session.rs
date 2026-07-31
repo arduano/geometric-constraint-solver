@@ -7,8 +7,9 @@ use geosolve_geometry::{Point2, Vector2};
 use thiserror::Error;
 
 use crate::compiler::{
-    CompiledSketch, ConicVectorRole, ReferenceDimensionValue, SketchGeometry, SketchSource,
-    SketchSourceMapping, SolvedLatent, acceptance_solver_config, rejection_hard_validity,
+    CompiledSketch, ConicVectorRole, PreviousStateReference, ReferenceDimensionValue,
+    SketchGeometry, SketchSource, SketchSourceMapping, SolvedLatent, acceptance_solver_config,
+    rejection_hard_validity,
 };
 use crate::{
     ArcId, CircleId, CircleTangencyMode, ConicId, ContactState, PointId, Sketch,
@@ -92,6 +93,28 @@ pub enum SketchSessionError {
     MappingChanged,
     #[error("committed core transaction did not produce a complete sketch candidate")]
     MissingCandidate,
+    #[error("drag locality planning is unavailable: {context}")]
+    DragLocalityUnavailable { context: &'static str },
+    #[error(
+        "drag locality planning requires {active_tangent_dimensions} active tangent dimensions, \
+         exceeding the interactive limit of {limit}"
+    )]
+    DragLocalityEnvelopeExceeded {
+        active_tangent_dimensions: usize,
+        limit: usize,
+    },
+    #[error(
+        "drag locality planning requires {active_hard_rows} accepted hard rows, exceeding the \
+         interactive limit of {limit}"
+    )]
+    DragLocalityRowEnvelopeExceeded {
+        active_hard_rows: usize,
+        limit: usize,
+    },
+    #[error(
+        "drag locality planning found only {spanned} of {required} required mobility directions"
+    )]
+    DragLocalityIncomplete { required: usize, spanned: usize },
 }
 
 /// Domain-level revision counters for one accepted sketch session.
@@ -142,6 +165,21 @@ pub struct SketchProductionScaleAssessment {
     pub maximum_active_tangent_dimensions: usize,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct SketchDragLocalityAnchor {
+    pub(crate) point: PointId,
+    pub(crate) mobility_rank: usize,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct SketchDragLocalityPlan {
+    pub(crate) point: PointId,
+    pub(crate) hard_degrees_of_freedom: usize,
+    pub(crate) active_rank: usize,
+    pub(crate) passive_degrees_of_freedom: usize,
+    pub(crate) anchors: Vec<SketchDragLocalityAnchor>,
+}
+
 /// Persistent accepted sketch plus retained core compilation/session state.
 #[derive(Clone, Debug)]
 pub struct SketchSession {
@@ -153,7 +191,7 @@ pub struct SketchSession {
     revision: u64,
     revisions: SketchSessionRevisions,
     topology_compilations: u64,
-    preference_targets: Vec<(PointId, Point2<f64>)>,
+    previous_state_reference: PreviousStateReference,
     last_execution: SketchSessionExecutionKind,
 }
 
@@ -164,6 +202,19 @@ struct CompleteSketchCandidate {
     reference_values: Vec<ReferenceDimensionValue>,
     normalized_latents: Vec<SolvedLatent>,
     independent_hard_residual_max: f64,
+}
+
+struct DragLocalityCandidate {
+    point: PointId,
+    rows: Vec<Vec<f64>>,
+    mobility_rank: usize,
+    order: usize,
+}
+
+#[derive(Clone, Copy)]
+enum CandidateCompletion {
+    ProjectedSolve,
+    ExactCertification,
 }
 
 enum LatentSynchronization {
@@ -179,13 +230,23 @@ impl SketchSession {
     ///
     /// Returns a typed compile/core failure or the initial domain rejection.
     pub fn new(
-        mut sketch: Sketch,
+        sketch: Sketch,
         request: SketchSolveRequest,
         config: SolverConfig,
     ) -> Result<Self, SketchSessionError> {
+        let previous_state = PreviousStateReference::capture(&sketch);
+        Self::new_with_previous_state_reference(sketch, request, config, &previous_state)
+    }
+
+    pub(crate) fn new_with_previous_state_reference(
+        mut sketch: Sketch,
+        request: SketchSolveRequest,
+        config: SolverConfig,
+        previous_state: &PreviousStateReference,
+    ) -> Result<Self, SketchSessionError> {
         let config = acceptance_solver_config(config);
         let validation_sketch = sketch.clone();
-        let mut compiled = sketch.compile(request)?;
+        let mut compiled = sketch.compile_with_previous_state_reference(request, previous_state)?;
         let mut core = SolveSession::new(compiled.problem().clone(), config)?;
         let complete = finalize_solved_candidate(&mut core, &compiled, &sketch, request)?
             .map_err(|(_, rejection)| SketchSessionError::InitialRejected(rejection))?;
@@ -199,6 +260,7 @@ impl SketchSession {
             &validation_sketch,
             &sketch,
             request,
+            previous_state,
             &mut audit_refresh,
         )?;
         core.refresh_accepted_audit(audit_refresh)?;
@@ -221,7 +283,6 @@ impl SketchSession {
                     .max(independent_hard_residual_max),
             ),
         };
-        let preference_targets = preference_targets(&validation_sketch, &compiled);
         Ok(Self {
             sketch,
             request,
@@ -231,9 +292,104 @@ impl SketchSession {
             revision: 0,
             revisions: SketchSessionRevisions::default(),
             topology_compilations: 1,
-            preference_targets,
+            previous_state_reference: previous_state.clone(),
             last_execution: SketchSessionExecutionKind::InitialSolve,
         })
+    }
+
+    /// Builds an accepted runtime by certifying the exact materialized sketch state.
+    ///
+    /// This path is reserved for publishing an independently accepted visible
+    /// preview. It recompiles the publication request and rebuilds residual, rank,
+    /// bound, diagnostic, and audit evidence, but never projects or optimizes the
+    /// candidate. Any latent normalization or domain correction rejects instead of
+    /// moving the scene.
+    pub(crate) fn certify_current_state_with_previous_state_reference_and_controller(
+        mut sketch: Sketch,
+        request: SketchSolveRequest,
+        config: SolverConfig,
+        previous_state: &PreviousStateReference,
+        controller: &mut OperationController,
+    ) -> Result<Option<Self>, SketchSessionError> {
+        let config = acceptance_solver_config(config);
+        let validation_sketch = sketch.clone();
+        let Some(mut compiled) = sketch.compile_with_previous_state_reference_and_controller(
+            request,
+            previous_state,
+            controller,
+        )?
+        else {
+            return Ok(None);
+        };
+        let Some(report) = compiled
+            .problem()
+            .certify_current_state_with_controller(config, controller)?
+        else {
+            return Ok(None);
+        };
+        let complete = complete_current_candidate_for_problem(
+            compiled.problem(),
+            &report,
+            &compiled,
+            &sketch,
+            request,
+            config.normalized_residual_tolerance,
+        )
+        .map_err(|rejection| SketchSessionError::InitialRejected(rejection.reason))?;
+        let independent_hard_residual_max = complete.independent_hard_residual_max;
+        sketch = complete.sketch;
+
+        let mut core =
+            SolveSession::from_accepted_report(compiled.problem().clone(), config, report)?;
+        compiled.replace_problem(core.problem().clone());
+        let mut audit_refresh = AcceptedAuditPatch::new(core.revisions());
+        copy_changed_constraint_audits(
+            &core,
+            &compiled,
+            &validation_sketch,
+            &sketch,
+            request,
+            previous_state,
+            &mut audit_refresh,
+        )?;
+        core.refresh_accepted_audit(audit_refresh)?;
+        compiled.replace_problem(core.problem().clone());
+        let report = core.report().clone();
+        let geometry = sketch.geometry();
+        let accepted_result = SketchSolveResult {
+            attempted_geometry: Some(geometry.clone()),
+            geometry,
+            display_audit: report.audit.clone(),
+            reference_values: complete.reference_values,
+            source_mappings: compiled.source_mappings().to_vec(),
+            bound_mappings: compiled.bound_mappings().to_vec(),
+            diagnostic_variable_owners: compiled.diagnostic_variable_owners(),
+            core_report: report,
+            rejection: None,
+            acceptance_hard_residual_max: Some(
+                core.report()
+                    .hard_residual_max
+                    .max(independent_hard_residual_max),
+            ),
+        };
+        if controller
+            .checkpoint(OperationCheckpoint::BeforeCommit)
+            .is_err()
+        {
+            return Ok(None);
+        }
+        Ok(Some(Self {
+            sketch,
+            request,
+            compiled,
+            core,
+            accepted_result,
+            revision: 0,
+            revisions: SketchSessionRevisions::default(),
+            topology_compilations: 1,
+            previous_state_reference: previous_state.clone(),
+            last_execution: SketchSessionExecutionKind::InitialSolve,
+        }))
     }
 
     /// Builds the first accepted sketch/session revision under operation control.
@@ -265,7 +421,14 @@ impl SketchSession {
         controller: &mut geosolve_core::OperationController,
     ) -> Result<Option<Self>, SketchSessionError> {
         let validation_sketch = sketch.clone();
-        let Some(solve) = sketch.solve_with_controller(request, config, controller)? else {
+        let previous_state = PreviousStateReference::capture(&validation_sketch);
+        let Some(solve) = sketch.solve_with_previous_state_reference_and_controller(
+            request,
+            config,
+            &previous_state,
+            controller,
+        )?
+        else {
             return Ok(None);
         };
         let Some(session) = Self::from_accepted_solve_inner(
@@ -274,6 +437,7 @@ impl SketchSession {
             request,
             config,
             solve,
+            &previous_state,
             Some(controller),
         )?
         else {
@@ -294,6 +458,7 @@ impl SketchSession {
         request: SketchSolveRequest,
         config: SolverConfig,
         solve: SketchSolveResult,
+        previous_state: &PreviousStateReference,
         controller: &mut geosolve_core::OperationController,
     ) -> Result<Option<Self>, SketchSessionError> {
         Self::from_accepted_solve_inner(
@@ -302,6 +467,7 @@ impl SketchSession {
             request,
             config,
             solve,
+            previous_state,
             Some(controller),
         )
     }
@@ -312,6 +478,7 @@ impl SketchSession {
         request: SketchSolveRequest,
         config: SolverConfig,
         solve: SketchSolveResult,
+        previous_state: &PreviousStateReference,
         controller: Option<&mut geosolve_core::OperationController>,
     ) -> Result<Option<Self>, SketchSessionError> {
         if let Some(rejection) = solve.rejection {
@@ -319,9 +486,13 @@ impl SketchSession {
         }
         let config = acceptance_solver_config(config);
         let Some(mut compiled) = (if let Some(controller) = controller {
-            sketch.compile_with_controller(request, controller)?
+            sketch.compile_with_previous_state_reference_and_controller(
+                request,
+                previous_state,
+                controller,
+            )?
         } else {
-            Some(sketch.compile(request)?)
+            Some(sketch.compile_with_previous_state_reference(request, previous_state)?)
         }) else {
             return Ok(None);
         };
@@ -338,6 +509,7 @@ impl SketchSession {
             validation_sketch,
             &sketch,
             request,
+            previous_state,
             &mut audit_refresh,
         )?;
         core.refresh_accepted_audit(audit_refresh)?;
@@ -356,7 +528,6 @@ impl SketchSession {
             rejection: None,
             acceptance_hard_residual_max: solve.acceptance_hard_residual_max,
         };
-        let preference_targets = preference_targets(validation_sketch, &compiled);
         Ok(Some(Self {
             sketch,
             request,
@@ -366,7 +537,7 @@ impl SketchSession {
             revision: 0,
             revisions: SketchSessionRevisions::default(),
             topology_compilations: 1,
-            preference_targets,
+            previous_state_reference: previous_state.clone(),
             last_execution: SketchSessionExecutionKind::InitialSolve,
         }))
     }
@@ -458,6 +629,245 @@ impl SketchSession {
         }
     }
 
+    /// Derives deterministic passive-freedom anchors from the accepted hard nullspace.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "rank-aware point traversal and greedy anchor selection form one bounded planner"
+    )]
+    pub(crate) fn drag_locality_plan_with_controller(
+        &self,
+        point: PointId,
+        controller: &mut OperationController,
+    ) -> Result<Option<SketchDragLocalityPlan>, SketchSessionError> {
+        let point_variable = self
+            .compiled
+            .variable_for_point(point)
+            .ok_or(SketchError::UnknownPoint(point))?;
+        let Some((active_hard_rows, active_tangent_dimensions)) =
+            self.core.accepted_hard_component_dimensions(point_variable)
+        else {
+            return Ok(Some(SketchDragLocalityPlan {
+                point,
+                hard_degrees_of_freedom: 0,
+                active_rank: 0,
+                passive_degrees_of_freedom: 0,
+                anchors: Vec::new(),
+            }));
+        };
+        validate_drag_locality_component_envelope(active_hard_rows, active_tangent_dimensions)?;
+        let Some((component, nullspace)) = self
+            .core
+            .accepted_hard_component_nullspace_with_controller(point_variable, controller)?
+        else {
+            return Ok(None);
+        };
+        let Some(active_block) = component.tangent_blocks().iter().find(|block| {
+            block.root == point_variable || block.alias_members.contains(&point_variable)
+        }) else {
+            return Ok(Some(SketchDragLocalityPlan {
+                point,
+                hard_degrees_of_freedom: 0,
+                active_rank: 0,
+                passive_degrees_of_freedom: 0,
+                anchors: Vec::new(),
+            }));
+        };
+        if active_block.kind != geosolve_core::VariableKind::Vec2
+            || active_block.tangent_range.len() != 2
+        {
+            return Err(SketchSessionError::DragLocalityUnavailable {
+                context: "the active point does not have a two-coordinate tangent block",
+            });
+        }
+
+        let tangent_dimensions = component
+            .tangent_blocks()
+            .last()
+            .map_or(0, |block| block.tangent_range.end);
+        validate_drag_locality_component_envelope(0, tangent_dimensions)?;
+        let hard_degrees_of_freedom = nullspace.right_nullity;
+        if nullspace.vectors.len() != hard_degrees_of_freedom
+            || nullspace
+                .vectors
+                .iter()
+                .any(|vector| vector.normalized_tangent.len() != tangent_dimensions)
+        {
+            return Err(SketchSessionError::DragLocalityUnavailable {
+                context: "the accepted hard nullspace has inconsistent dimensions",
+            });
+        }
+
+        let rank_tolerance = locality_rank_tolerance(
+            self.core.config().rank_relative_tolerance,
+            hard_degrees_of_freedom,
+        )?;
+        let active_rows = point_nullspace_response(&nullspace, active_block.tangent_range.clone())?;
+        let Some(mut covered) = controlled_extend_locality_row_basis(
+            controller,
+            &[],
+            &active_rows,
+            hard_degrees_of_freedom,
+            rank_tolerance,
+        )?
+        else {
+            return Ok(None);
+        };
+        let active_rank = covered.len();
+        let passive_degrees_of_freedom = hard_degrees_of_freedom.saturating_sub(active_rank);
+        if passive_degrees_of_freedom == 0 {
+            return Ok(Some(SketchDragLocalityPlan {
+                point,
+                hard_degrees_of_freedom,
+                active_rank,
+                passive_degrees_of_freedom,
+                anchors: Vec::new(),
+            }));
+        }
+
+        let mut component_points = Vec::new();
+        for block in component.tangent_blocks() {
+            for variable in std::iter::once(block.root).chain(block.alias_members.iter().copied()) {
+                if controller
+                    .charge(
+                        geosolve_core::OperationWorkCounter::DocumentDependencyItems,
+                        1,
+                        OperationCheckpoint::DocumentDependency,
+                    )
+                    .is_err()
+                {
+                    return Ok(None);
+                }
+                let Some((order, mapping)) = self.compiled.point_mapping_for_variable(variable)
+                else {
+                    continue;
+                };
+                component_points.push((
+                    order,
+                    mapping.point_id,
+                    block.kind,
+                    block.tangent_range.clone(),
+                ));
+            }
+        }
+        component_points.sort_by_key(|(order, _, _, _)| *order);
+
+        let mut candidates = Vec::new();
+        for (order, candidate_point, kind, tangent_range) in component_points {
+            if controller
+                .charge(
+                    geosolve_core::OperationWorkCounter::DocumentDependencyItems,
+                    1,
+                    OperationCheckpoint::DocumentDependency,
+                )
+                .is_err()
+            {
+                return Ok(None);
+            }
+            if candidate_point == point {
+                continue;
+            }
+            if kind != geosolve_core::VariableKind::Vec2 || tangent_range.len() != 2 {
+                return Err(SketchSessionError::DragLocalityUnavailable {
+                    context: "a candidate point has an invalid accepted tangent block",
+                });
+            }
+            let rows = point_nullspace_response(&nullspace, tangent_range)?;
+            let Some(mobility_basis) = controlled_extend_locality_row_basis(
+                controller,
+                &[],
+                &rows,
+                hard_degrees_of_freedom,
+                rank_tolerance,
+            )?
+            else {
+                return Ok(None);
+            };
+            let mobility_rank = mobility_basis.len();
+            if mobility_rank > 0 {
+                candidates.push(DragLocalityCandidate {
+                    point: candidate_point,
+                    rows,
+                    mobility_rank,
+                    order,
+                });
+            }
+        }
+
+        let mut anchors = Vec::new();
+        while covered.len() < hard_degrees_of_freedom {
+            let mut best: Option<(usize, usize, usize, Vec<Vec<f64>>)> = None;
+            for candidate in &candidates {
+                if anchors
+                    .iter()
+                    .any(|anchor: &SketchDragLocalityAnchor| anchor.point == candidate.point)
+                {
+                    continue;
+                }
+                if controller
+                    .charge(
+                        geosolve_core::OperationWorkCounter::DocumentDependencyItems,
+                        1,
+                        OperationCheckpoint::DocumentDependency,
+                    )
+                    .is_err()
+                {
+                    return Ok(None);
+                }
+                let Some(expanded) = controlled_extend_locality_row_basis(
+                    controller,
+                    &covered,
+                    &candidate.rows,
+                    hard_degrees_of_freedom,
+                    rank_tolerance,
+                )?
+                else {
+                    return Ok(None);
+                };
+                let gain = expanded.len().saturating_sub(covered.len());
+                if gain == 0 {
+                    continue;
+                }
+                let replace =
+                    best.as_ref()
+                        .is_none_or(|(best_gain, best_mobility_rank, best_order, _)| {
+                            gain > *best_gain
+                                || (gain == *best_gain
+                                    && (candidate.mobility_rank < *best_mobility_rank
+                                        || (candidate.mobility_rank == *best_mobility_rank
+                                            && candidate.order < *best_order)))
+                        });
+                if replace {
+                    best = Some((gain, candidate.mobility_rank, candidate.order, expanded));
+                }
+            }
+            let Some((_, _, best_order, expanded)) = best else {
+                return Err(SketchSessionError::DragLocalityIncomplete {
+                    required: hard_degrees_of_freedom,
+                    spanned: covered.len(),
+                });
+            };
+            let candidate = candidates
+                .iter()
+                .find(|candidate| candidate.order == best_order)
+                .ok_or(SketchSessionError::DragLocalityUnavailable {
+                    context: "the selected anchor lost its compile-order identity",
+                })?;
+            anchors.push(SketchDragLocalityAnchor {
+                point: candidate.point,
+                mobility_rank: candidate.mobility_rank,
+            });
+            covered = expanded;
+        }
+
+        Ok(Some(SketchDragLocalityPlan {
+            point,
+            hard_degrees_of_freedom,
+            active_rank,
+            passive_degrees_of_freedom,
+            anchors,
+        }))
+    }
+
     pub(crate) fn mark_full_rebuild(&mut self) {
         self.last_execution = SketchSessionExecutionKind::FullRebuild;
     }
@@ -547,7 +957,11 @@ impl SketchSession {
         let mut candidate_request = self.request;
         apply_domain_edit(&mut candidate_sketch, &mut candidate_request, patch.edit)?;
         candidate_sketch.preflight_segments()?;
-        let candidate_preference_targets = preference_targets(&candidate_sketch, &self.compiled);
+        let candidate_previous_state = if same_drag_gesture(self.request, candidate_request) {
+            self.previous_state_reference.clone()
+        } else {
+            PreviousStateReference::capture(&candidate_sketch)
+        };
 
         let mut core_patch = SessionPatch::new(self.core.revisions());
         let mut replacement_sources = Vec::new();
@@ -596,17 +1010,8 @@ impl SketchSession {
             let SketchSource::PreviousState(point) = mapping.source else {
                 continue;
             };
-            let Some(position) = candidate_sketch
-                .point(point)
-                .map(crate::SketchPoint::position)
-            else {
-                continue;
-            };
-            if self
-                .preference_targets
-                .iter()
-                .find_map(|(id, target)| (*id == point).then_some(*target))
-                .is_some_and(|target| point_bits(target) != point_bits(position))
+            if point_bits(self.previous_state_reference.point_position(point)?)
+                != point_bits(candidate_previous_state.point_position(point)?)
             {
                 push_unique(&mut replacement_sources, mapping.source);
             }
@@ -618,10 +1023,12 @@ impl SketchSession {
                 .any(|mapping| mapping.source == *source && mapping.core_source_id.is_some())
         });
         for source in &replacement_sources {
-            if let Some(source_patch) =
-                self.compiled
-                    .source_patch(&candidate_sketch, candidate_request, *source)?
-            {
+            if let Some(source_patch) = self.compiled.source_patch(
+                &candidate_sketch,
+                candidate_request,
+                *source,
+                &candidate_previous_state,
+            )? {
                 replacement_source_labels.push((*source, source_patch.source.label().to_owned()));
                 bound_changed |= !source_patch.bounds.is_empty();
                 for (variable, value) in source_patch.variable_values {
@@ -642,7 +1049,7 @@ impl SketchSession {
         self.finish_incremental_candidate(
             candidate_sketch,
             candidate_request,
-            candidate_preference_targets,
+            candidate_previous_state,
             core_patch,
             replacement_source_labels,
             bound_changed,
@@ -663,14 +1070,21 @@ impl SketchSession {
         candidate_sketch: Sketch,
         candidate_request: SketchSolveRequest,
         replacement_sources: &[SketchSource],
+        previous_state: &PreviousStateReference,
         mut controller: Option<&mut OperationController>,
     ) -> Result<Option<SketchSolveResult>, SketchSessionError> {
         candidate_sketch.preflight_segments()?;
         let candidate_compiled = match controller.as_deref_mut() {
-            Some(controller) => {
-                candidate_sketch.compile_with_controller(candidate_request, controller)?
-            }
-            None => Some(candidate_sketch.compile(candidate_request)?),
+            Some(controller) => candidate_sketch
+                .compile_with_previous_state_reference_and_controller(
+                    candidate_request,
+                    previous_state,
+                    controller,
+                )?,
+            None => Some(
+                candidate_sketch
+                    .compile_with_previous_state_reference(candidate_request, previous_state)?,
+            ),
         };
         let Some(candidate_compiled) = candidate_compiled else {
             return Ok(None);
@@ -682,7 +1096,6 @@ impl SketchSession {
             return Err(SketchSessionError::RebuildRequired);
         }
 
-        let candidate_preference_targets = preference_targets(&candidate_sketch, &self.compiled);
         let mut core_patch = SessionPatch::new(self.core.revisions());
         for variable in self.compiled.shape_variable_ids() {
             let retained = self
@@ -702,21 +1115,22 @@ impl SketchSession {
         }
 
         let mut replacement_sources = replacement_sources.to_vec();
+        if let (Some(retained_drag), Some(candidate_drag)) =
+            (self.request.drag, candidate_request.drag)
+            && retained_drag.point == candidate_drag.point
+            && point_bits(retained_drag.target) != point_bits(candidate_drag.target)
+        {
+            push_unique(
+                &mut replacement_sources,
+                SketchSource::DragTarget(candidate_drag.point),
+            );
+        }
         for mapping in self.compiled.source_mappings() {
             let SketchSource::PreviousState(point) = mapping.source else {
                 continue;
             };
-            let Some(position) = candidate_sketch
-                .point(point)
-                .map(crate::SketchPoint::position)
-            else {
-                continue;
-            };
-            if self
-                .preference_targets
-                .iter()
-                .find_map(|(id, target)| (*id == point).then_some(*target))
-                .is_some_and(|target| point_bits(target) != point_bits(position))
+            if point_bits(self.previous_state_reference.point_position(point)?)
+                != point_bits(previous_state.point_position(point)?)
             {
                 push_unique(&mut replacement_sources, mapping.source);
             }
@@ -731,10 +1145,12 @@ impl SketchSession {
         let mut replacement_source_labels = Vec::new();
         let mut bound_changed = false;
         for source in &replacement_sources {
-            if let Some(source_patch) =
-                self.compiled
-                    .source_patch(&candidate_sketch, candidate_request, *source)?
-            {
+            if let Some(source_patch) = self.compiled.source_patch(
+                &candidate_sketch,
+                candidate_request,
+                *source,
+                previous_state,
+            )? {
                 replacement_source_labels.push((*source, source_patch.source.label().to_owned()));
                 bound_changed |= !source_patch.bounds.is_empty();
                 for (variable, value) in source_patch.variable_values {
@@ -752,7 +1168,7 @@ impl SketchSession {
         self.finish_incremental_candidate(
             candidate_sketch,
             candidate_request,
-            candidate_preference_targets,
+            previous_state.clone(),
             core_patch,
             replacement_source_labels,
             bound_changed,
@@ -770,7 +1186,7 @@ impl SketchSession {
         &mut self,
         candidate_sketch: Sketch,
         candidate_request: SketchSolveRequest,
-        candidate_preference_targets: Vec<(PointId, Point2<f64>)>,
+        candidate_previous_state: PreviousStateReference,
         core_patch: SessionPatch,
         replacement_source_labels: Vec<(SketchSource, String)>,
         bound_changed: bool,
@@ -881,6 +1297,7 @@ impl SketchSession {
             &validation_template,
             &complete.sketch,
             candidate_request,
+            &candidate_previous_state,
             &mut audit_refresh,
         )?;
         candidate_core.refresh_accepted_audit(audit_refresh)?;
@@ -922,7 +1339,7 @@ impl SketchSession {
         if bound_changed {
             self.revisions.bound = self.revisions.bound.saturating_add(1);
         }
-        self.preference_targets = candidate_preference_targets;
+        self.previous_state_reference = candidate_previous_state;
         self.accepted_result = result.clone();
         self.last_execution = SketchSessionExecutionKind::IncrementalUpdate;
         Ok(Some(result))
@@ -1014,10 +1431,12 @@ impl SketchSession {
                 actual: self.revision,
             });
         }
-        let mut compiled = sketch.compile(request)?;
+        let validation_sketch = sketch.clone();
+        let previous_state = PreviousStateReference::capture(&validation_sketch);
+        let mut compiled =
+            sketch.compile_with_previous_state_reference(request, &previous_state)?;
         let mut candidate_core = self.core.clone();
         candidate_core.rebuild(self.core.revisions(), compiled.problem().clone())?;
-        let validation_sketch = sketch.clone();
         let complete = finalize_solved_candidate(&mut candidate_core, &compiled, &sketch, request)?
             .map_err(|(_, rejection)| SketchSessionError::InitialRejected(rejection))?;
         let independent_hard_residual_max = complete.independent_hard_residual_max;
@@ -1031,6 +1450,7 @@ impl SketchSession {
             &validation_sketch,
             &accepted_sketch,
             request,
+            &previous_state,
             &mut audit_refresh,
         )?;
         candidate_core.refresh_accepted_audit(audit_refresh)?;
@@ -1054,7 +1474,6 @@ impl SketchSession {
                     .max(independent_hard_residual_max),
             ),
         };
-        let preference_targets = preference_targets(&validation_sketch, &compiled);
         let rebuilt = Self {
             sketch: accepted_sketch,
             request,
@@ -1069,7 +1488,7 @@ impl SketchSession {
                 bound: self.revisions.bound.saturating_add(1),
             },
             topology_compilations: self.topology_compilations.saturating_add(1),
-            preference_targets,
+            previous_state_reference: previous_state,
             last_execution: SketchSessionExecutionKind::FullRebuild,
         };
         *self = rebuilt;
@@ -1111,7 +1530,13 @@ impl SketchSession {
             return Ok(controller.outcome_unchecked());
         }
         let validation_sketch = sketch.clone();
-        let Some(solve) = sketch.solve_with_controller(request, self.core.config(), controller)?
+        let previous_state = PreviousStateReference::capture(&validation_sketch);
+        let Some(solve) = sketch.solve_with_previous_state_reference_and_controller(
+            request,
+            self.core.config(),
+            &previous_state,
+            controller,
+        )?
         else {
             return Ok(controller.outcome_unchecked());
         };
@@ -1124,6 +1549,7 @@ impl SketchSession {
             request,
             self.core.config(),
             solve,
+            &previous_state,
             controller,
         )?
         else {
@@ -1150,19 +1576,6 @@ impl SketchSession {
     }
 }
 
-fn preference_targets(sketch: &Sketch, compiled: &CompiledSketch) -> Vec<(PointId, Point2<f64>)> {
-    compiled
-        .source_mappings()
-        .iter()
-        .filter_map(|mapping| match mapping.source {
-            SketchSource::PreviousState(point) => {
-                sketch.point(point).map(|value| (point, value.position()))
-            }
-            _ => None,
-        })
-        .collect()
-}
-
 fn complete_candidate_for_problem(
     problem: &geosolve_core::Problem,
     report: &geosolve_core::SolveReport,
@@ -1179,6 +1592,56 @@ fn complete_candidate_for_problem(
             ))
         })?;
     template.normalize_candidate_latents(&mut candidate);
+    complete_materialized_candidate_for_problem(
+        candidate,
+        report,
+        template,
+        request,
+        tolerance,
+        CandidateCompletion::ProjectedSolve,
+    )
+}
+
+fn complete_current_candidate_for_problem(
+    problem: &geosolve_core::Problem,
+    report: &geosolve_core::SolveReport,
+    compiled: &CompiledSketch,
+    template: &Sketch,
+    request: SketchSolveRequest,
+    tolerance: f64,
+) -> Result<CompleteSketchCandidate, SessionDomainRejection<SolveRejection>> {
+    let mut candidate = compiled
+        .solved_state_for_problem(problem, template)
+        .map_err(|error| {
+            session_domain_rejection(SolveRejection::IndependentValidationFailed(
+                error.to_string(),
+            ))
+        })?;
+    if template.normalize_candidate_latents(&mut candidate) {
+        return Err(session_domain_rejection(
+            SolveRejection::IndependentValidationFailed(
+                "exact-state certification would normalize a latent coordinate".into(),
+            ),
+        ));
+    }
+    complete_materialized_candidate_for_problem(
+        candidate,
+        report,
+        template,
+        request,
+        tolerance,
+        CandidateCompletion::ExactCertification,
+    )
+}
+
+fn complete_materialized_candidate_for_problem(
+    mut candidate: crate::compiler::SolvedSketchState,
+    report: &geosolve_core::SolveReport,
+    template: &Sketch,
+    request: SketchSolveRequest,
+    tolerance: f64,
+    completion: CandidateCompletion,
+) -> Result<CompleteSketchCandidate, SessionDomainRejection<SolveRejection>> {
     template
         .derive_curve_fillet_arcs(&mut candidate, tolerance)
         .map_err(session_domain_rejection)?;
@@ -1204,7 +1667,16 @@ fn complete_candidate_for_problem(
             error.to_string(),
         ))
     })?;
-    if report.termination != SolveTermination::Converged {
+    let termination_is_compatible = match completion {
+        CandidateCompletion::ProjectedSolve => report.termination == SolveTermination::Converged,
+        CandidateCompletion::ExactCertification => matches!(
+            report.termination,
+            SolveTermination::Converged
+                | SolveTermination::Stalled
+                | SolveTermination::IterationLimit
+        ),
+    };
+    if !termination_is_compatible {
         return Err(SessionDomainRejection::compatibility(
             SolveRejection::CoreTermination(report.termination),
         ));
@@ -1488,6 +1960,7 @@ fn copy_changed_constraint_audits(
     before: &Sketch,
     after: &Sketch,
     request: SketchSolveRequest,
+    previous_state: &PreviousStateReference,
     patch: &mut AcceptedAuditPatch,
 ) -> Result<bool, SketchSessionError> {
     let mut changed = false;
@@ -1498,7 +1971,9 @@ fn copy_changed_constraint_audits(
         if before.contact_state(constraint).ok() == after.contact_state(constraint).ok() {
             continue;
         }
-        let Some(refreshed) = accepted.source_patch(after, request, mapping.source)? else {
+        let Some(refreshed) =
+            accepted.source_patch(after, request, mapping.source, previous_state)?
+        else {
             continue;
         };
         let current_source = core
@@ -1529,6 +2004,13 @@ const fn edit_changes_source(edit: SketchPatch) -> bool {
             | SketchPatch::ContactState { .. }
             | SketchPatch::CircleTangencyMode { .. }
             | SketchPatch::DragTarget { .. }
+    )
+}
+
+fn same_drag_gesture(retained: SketchSolveRequest, candidate: SketchSolveRequest) -> bool {
+    matches!(
+        (retained.drag, candidate.drag),
+        (Some(retained), Some(candidate)) if retained.point == candidate.point
     )
 }
 
@@ -1566,8 +2048,279 @@ fn point_bits(point: Point2<f64>) -> [u64; 2] {
     [point.x.to_bits(), point.y.to_bits()]
 }
 
+fn locality_rank_tolerance(
+    relative_tolerance: f64,
+    dimensions: usize,
+) -> Result<f64, SketchSessionError> {
+    if !relative_tolerance.is_finite() || relative_tolerance <= 0.0 {
+        return Err(SketchSessionError::DragLocalityUnavailable {
+            context: "the accepted rank tolerance is invalid",
+        });
+    }
+    Ok(relative_tolerance.max(
+        64.0 * f64::EPSILON
+            * f64::from(u32::try_from(dimensions.max(1)).map_err(|_| {
+                SketchSessionError::DragLocalityUnavailable {
+                    context: "the accepted hard nullity exceeds the supported locality envelope",
+                }
+            })?),
+    ))
+}
+
+fn point_nullspace_response(
+    nullspace: &geosolve_core::AcceptedNullspaceBasis,
+    tangent_range: std::ops::Range<usize>,
+) -> Result<Vec<Vec<f64>>, SketchSessionError> {
+    let mut rows = Vec::with_capacity(tangent_range.len());
+    for coordinate in tangent_range {
+        let row = nullspace
+            .vectors
+            .iter()
+            .map(|vector| vector.normalized_tangent.get(coordinate).copied())
+            .collect::<Option<Vec<_>>>()
+            .ok_or(SketchSessionError::DragLocalityUnavailable {
+                context: "a point response lies outside the accepted tangent layout",
+            })?;
+        if row.iter().any(|value| !value.is_finite()) {
+            return Err(SketchSessionError::DragLocalityUnavailable {
+                context: "a point response contains non-finite mobility evidence",
+            });
+        }
+        rows.push(row);
+    }
+    Ok(rows)
+}
+
+fn controlled_extend_locality_row_basis(
+    controller: &mut OperationController,
+    basis: &[Vec<f64>],
+    rows: &[Vec<f64>],
+    dimensions: usize,
+    tolerance: f64,
+) -> Result<Option<Vec<Vec<f64>>>, SketchSessionError> {
+    if controller
+        .charge(
+            geosolve_core::OperationWorkCounter::RankKernels,
+            1,
+            OperationCheckpoint::BeforeRankKernel,
+        )
+        .is_err()
+    {
+        return Ok(None);
+    }
+    let result = extend_locality_row_basis(basis, rows, dimensions, tolerance);
+    if controller
+        .checkpoint(OperationCheckpoint::AfterRankKernel)
+        .is_err()
+    {
+        return Ok(None);
+    }
+    result.map(Some)
+}
+
+fn extend_locality_row_basis(
+    basis: &[Vec<f64>],
+    rows: &[Vec<f64>],
+    dimensions: usize,
+    tolerance: f64,
+) -> Result<Vec<Vec<f64>>, SketchSessionError> {
+    let mut result = basis.to_vec();
+    for row in rows {
+        if row.len() != dimensions
+            || row.iter().any(|value| !value.is_finite())
+            || result.iter().any(|retained| retained.len() != dimensions)
+        {
+            return Err(SketchSessionError::DragLocalityUnavailable {
+                context: "mobility rank evidence has invalid dimensions or finiteness",
+            });
+        }
+        let original_norm = finite_vector_norm(row)?;
+        if original_norm <= tolerance {
+            continue;
+        }
+        let mut candidate = row.clone();
+        for _ in 0..2 {
+            for retained in &result {
+                let projection = dot_product(&candidate, retained)?;
+                for (value, direction) in candidate.iter_mut().zip(retained) {
+                    *value -= projection * direction;
+                }
+            }
+        }
+        let norm = finite_vector_norm(&candidate)?;
+        let threshold = tolerance * original_norm.max(1.0);
+        if norm <= threshold {
+            continue;
+        }
+        if norm <= 100.0 * threshold {
+            return Err(SketchSessionError::DragLocalityUnavailable {
+                context: "point mobility rank is numerically ambiguous",
+            });
+        }
+        for value in &mut candidate {
+            *value /= norm;
+        }
+        result.push(candidate);
+    }
+    Ok(result)
+}
+
+fn finite_vector_norm(values: &[f64]) -> Result<f64, SketchSessionError> {
+    let norm = values
+        .iter()
+        .fold(0.0_f64, |accumulator, value| accumulator.hypot(*value));
+    if !norm.is_finite() {
+        return Err(SketchSessionError::DragLocalityUnavailable {
+            context: "mobility rank norm is non-finite",
+        });
+    }
+    Ok(norm)
+}
+
+fn dot_product(first: &[f64], second: &[f64]) -> Result<f64, SketchSessionError> {
+    if first.len() != second.len() {
+        return Err(SketchSessionError::DragLocalityUnavailable {
+            context: "mobility rank vectors have inconsistent dimensions",
+        });
+    }
+    let value = first
+        .iter()
+        .zip(second)
+        .map(|(left, right)| left * right)
+        .sum::<f64>();
+    if !value.is_finite() {
+        return Err(SketchSessionError::DragLocalityUnavailable {
+            context: "mobility rank projection is non-finite",
+        });
+    }
+    Ok(value)
+}
+
+fn validate_drag_locality_component_envelope(
+    active_hard_rows: usize,
+    active_tangent_dimensions: usize,
+) -> Result<(), SketchSessionError> {
+    let limit = geosolve_core::CONTROLLED_DENSE_KERNEL_MAX_DIMENSION;
+    if active_hard_rows > limit {
+        return Err(SketchSessionError::DragLocalityRowEnvelopeExceeded {
+            active_hard_rows,
+            limit,
+        });
+    }
+    if active_tangent_dimensions > limit {
+        return Err(SketchSessionError::DragLocalityEnvelopeExceeded {
+            active_tangent_dimensions,
+            limit,
+        });
+    }
+    Ok(())
+}
+
 fn push_unique<T: Copy + PartialEq>(values: &mut Vec<T>, value: T) {
     if !values.contains(&value) {
         values.push(value);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn locality_basis_extensions_consume_one_controlled_rank_kernel_each() {
+        let mut control = OperationControl::unlimited();
+        control.limits.rank_kernels = 1;
+        let mut controller = OperationController::new(control);
+        let rows = vec![vec![1.0, 0.0], vec![0.0, 1.0]];
+
+        let basis = controlled_extend_locality_row_basis(
+            &mut controller,
+            &[],
+            &rows,
+            2,
+            64.0 * f64::EPSILON,
+        )
+        .expect("finite basis")
+        .expect("first rank kernel is authorized");
+        assert_eq!(basis.len(), 2);
+        assert_eq!(controller.report().consumed.rank_kernels, 1);
+
+        assert!(
+            controlled_extend_locality_row_basis(
+                &mut controller,
+                &basis,
+                &rows,
+                2,
+                64.0 * f64::EPSILON,
+            )
+            .expect("controlled exhaustion is not a numerical error")
+            .is_none()
+        );
+        assert!(matches!(
+            controller.report().stopping_reason,
+            Some(geosolve_core::OperationStopReason::WorkExhausted {
+                counter: geosolve_core::OperationWorkCounter::RankKernels,
+                checkpoint: OperationCheckpoint::BeforeRankKernel,
+            })
+        ));
+    }
+
+    #[test]
+    fn document_locality_planning_exhausts_at_a_custom_rank_kernel_without_mutation() {
+        let fixture =
+            crate::alpha_scenario(crate::AlphaScenarioKind::MotionCam, 1.0).expect("cam fixture");
+        let crate::AlphaScenarioIds::MotionCam(ids) = fixture.ids else {
+            panic!("cam IDs");
+        };
+        let session = crate::RetainedSketchDocumentSession::new(
+            fixture.document,
+            fixture.request,
+            SolverConfig::default(),
+        )
+        .expect("accepted cam");
+        let before = (
+            session.design_identity(),
+            session.last_attempt().identity(),
+            session.accepted_state().expect("accepted state").identity(),
+            session.export_design_json().expect("design JSON"),
+            session.export_accepted_json().expect("accepted JSON"),
+        );
+
+        let complete = session
+            .drag_locality_plan_controlled(ids.left_center, OperationControl::unlimited())
+            .expect("complete planning");
+        assert!(
+            complete.report().consumed.rank_kernels > 2,
+            "locality planning must account for work after the accepted rank and nullspace kernels"
+        );
+
+        let mut control = OperationControl::unlimited();
+        control.limits.rank_kernels = 2;
+        let exhausted = session
+            .drag_locality_plan_controlled(ids.left_center, control)
+            .expect("controlled planning");
+        assert!(matches!(
+            exhausted,
+            OperationOutcome::WorkExhausted { report }
+                if report.consumed.rank_kernels == 2
+                    && matches!(
+                        report.stopping_reason,
+                        Some(geosolve_core::OperationStopReason::WorkExhausted {
+                            counter: geosolve_core::OperationWorkCounter::RankKernels,
+                            checkpoint: OperationCheckpoint::BeforeRankKernel,
+                        })
+                    )
+        ));
+        assert_eq!(session.design_identity(), before.0);
+        assert_eq!(session.last_attempt().identity(), before.1);
+        assert_eq!(
+            session.accepted_state().expect("accepted state").identity(),
+            before.2
+        );
+        assert_eq!(session.export_design_json().expect("design JSON"), before.3);
+        assert_eq!(
+            session.export_accepted_json().expect("accepted JSON"),
+            before.4
+        );
     }
 }

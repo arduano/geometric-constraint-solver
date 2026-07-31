@@ -5,6 +5,7 @@ use geosolve_core::{
     SourceConstraint, SourceConstraintId, VariableBlock, VariableId, VariableValue,
 };
 use geosolve_geometry::{Point2, Vector2};
+use slotmap::SecondaryMap;
 
 use crate::curves::{
     CENTER_DIRECTION_COSINE_MARGIN, CIRCLE_ARC_TANGENCY_DIRECTION_TOLERANCE,
@@ -45,7 +46,6 @@ pub struct DragTarget {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SketchSolveRequest {
     pub drag: Option<DragTarget>,
-    pub stability_target: Option<DragTarget>,
     pub previous_state_preferences: bool,
 }
 
@@ -54,7 +54,6 @@ impl SketchSolveRequest {
     pub const fn new() -> Self {
         Self {
             drag: None,
-            stability_target: None,
             previous_state_preferences: true,
         }
     }
@@ -70,18 +69,76 @@ impl SketchSolveRequest {
         self.drag = Some(DragTarget { point, target });
         self
     }
-
-    /// Adds a second compatible temporary target that keeps an unrelated point stable.
-    #[must_use]
-    pub const fn with_stability_target(mut self, point: PointId, target: Point2<f64>) -> Self {
-        self.stability_target = Some(DragTarget { point, target });
-        self
-    }
 }
 
 impl Default for SketchSolveRequest {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Immutable point-position reference for one solve attempt's minimum-motion objectives.
+///
+/// Numerical seeds may advance during a drag, but the selected `PreviousState`
+/// targets remain the gesture-start values.
+#[derive(Clone, Debug)]
+pub(crate) struct PreviousStateReference {
+    targets: SecondaryMap<PointId, Point2<f64>>,
+    preference_points: Option<Vec<PointId>>,
+}
+
+impl PreviousStateReference {
+    pub(crate) fn capture(sketch: &Sketch) -> Self {
+        let mut targets = SecondaryMap::new();
+        for (point, value) in sketch.points.iter() {
+            targets.insert(point, value.position());
+        }
+        Self {
+            targets,
+            preference_points: None,
+        }
+    }
+
+    pub(crate) fn set_point_position(
+        &mut self,
+        point: PointId,
+        target: Point2<f64>,
+    ) -> Result<(), SketchError> {
+        let Some(value) = self.targets.get_mut(point) else {
+            return Err(SketchError::UnknownPoint(point));
+        };
+        *value = target;
+        Ok(())
+    }
+
+    pub(crate) fn restrict_preferences_to(
+        &mut self,
+        points: impl IntoIterator<Item = PointId>,
+    ) -> Result<(), SketchError> {
+        let mut selected = Vec::new();
+        for point in points {
+            if self.targets.get(point).is_none() {
+                return Err(SketchError::UnknownPoint(point));
+            }
+            if !selected.contains(&point) {
+                selected.push(point);
+            }
+        }
+        self.preference_points = Some(selected);
+        Ok(())
+    }
+
+    pub(crate) fn includes_preference(&self, point: PointId) -> bool {
+        self.preference_points
+            .as_ref()
+            .is_none_or(|points| points.contains(&point))
+    }
+
+    pub(crate) fn point_position(&self, point: PointId) -> Result<Point2<f64>, SketchError> {
+        self.targets
+            .get(point)
+            .copied()
+            .ok_or(SketchError::UnknownPoint(point))
     }
 }
 
@@ -257,6 +314,8 @@ pub(crate) fn acceptance_solver_config(mut config: SolverConfig) -> SolverConfig
 pub struct CompiledSketch {
     problem: Problem,
     point_variables: Vec<PointVariableMapping>,
+    point_variable_index: SecondaryMap<PointId, usize>,
+    variable_point_index: SecondaryMap<VariableId, usize>,
     circle_radius_variables: Vec<CircleRadiusVariableMapping>,
     arc_radius_variables: Vec<ArcRadiusVariableMapping>,
     arc_angle_variables: Vec<ArcAngleVariableMapping>,
@@ -392,9 +451,22 @@ impl CompiledSketch {
 
     #[must_use]
     pub fn variable_for_point(&self, point: PointId) -> Option<VariableId> {
-        self.point_variables
-            .iter()
-            .find_map(|mapping| (mapping.point_id == point).then_some(mapping.variable_id))
+        self.point_variable_index
+            .get(point)
+            .and_then(|index| self.point_variables.get(*index))
+            .map(|mapping| mapping.variable_id)
+    }
+
+    pub(crate) fn point_mapping_for_variable(
+        &self,
+        variable: VariableId,
+    ) -> Option<(usize, PointVariableMapping)> {
+        self.variable_point_index.get(variable).and_then(|index| {
+            self.point_variables
+                .get(*index)
+                .copied()
+                .map(|mapping| (*index, mapping))
+        })
     }
 
     #[must_use]
@@ -770,6 +842,7 @@ impl CompiledSketch {
         sketch: &Sketch,
         request: SketchSolveRequest,
         source: SketchSource,
+        previous_state: &PreviousStateReference,
     ) -> Result<Option<CompiledSourcePatch>, SketchError> {
         let retained = self
             .source_mappings
@@ -846,7 +919,7 @@ impl CompiledSketch {
                 )?
             }
             SketchSource::PreviousState(point) => {
-                let target = sketch.point_position(point)?;
+                let target = previous_state.point_position(point)?;
                 compile_point_target(
                     sketch,
                     &mut scratch,
@@ -1457,7 +1530,8 @@ impl Sketch {
     /// Panics only if the internal uncontrolled path reports an interruption.
     #[allow(clippy::too_many_lines)]
     pub fn compile(&self, request: SketchSolveRequest) -> Result<CompiledSketch, SketchError> {
-        self.compile_inner(request, None)
+        let previous_state = PreviousStateReference::capture(self);
+        self.compile_inner(request, &previous_state, None)
             .map(|compiled| compiled.expect("uncontrolled compilation cannot be interrupted"))
     }
 
@@ -1466,13 +1540,33 @@ impl Sketch {
         request: SketchSolveRequest,
         controller: &mut OperationController,
     ) -> Result<Option<CompiledSketch>, SketchError> {
-        self.compile_inner(request, Some(controller))
+        let previous_state = PreviousStateReference::capture(self);
+        self.compile_inner(request, &previous_state, Some(controller))
+    }
+
+    pub(crate) fn compile_with_previous_state_reference(
+        &self,
+        request: SketchSolveRequest,
+        previous_state: &PreviousStateReference,
+    ) -> Result<CompiledSketch, SketchError> {
+        self.compile_inner(request, previous_state, None)
+            .map(|compiled| compiled.expect("uncontrolled compilation cannot be interrupted"))
+    }
+
+    pub(crate) fn compile_with_previous_state_reference_and_controller(
+        &self,
+        request: SketchSolveRequest,
+        previous_state: &PreviousStateReference,
+        controller: &mut OperationController,
+    ) -> Result<Option<CompiledSketch>, SketchError> {
+        self.compile_inner(request, previous_state, Some(controller))
     }
 
     #[allow(clippy::too_many_lines)]
     fn compile_inner(
         &self,
         request: SketchSolveRequest,
+        previous_state: &PreviousStateReference,
         mut control: Option<&mut OperationController>,
     ) -> Result<Option<CompiledSketch>, SketchError> {
         if !compile_item(&mut control) {
@@ -1491,6 +1585,8 @@ impl Sketch {
 
         let mut problem = Problem::new();
         let mut point_variables = Vec::new();
+        let mut point_variable_index = SecondaryMap::new();
+        let mut variable_point_index = SecondaryMap::new();
         for (point_id, point) in self.points.iter() {
             if !compile_item(&mut control) {
                 return Ok(None);
@@ -1500,10 +1596,13 @@ impl Sketch {
                 [point.position().x, point.position().y],
                 [self.model_scale, self.model_scale],
             )?);
+            let index = point_variables.len();
             point_variables.push(PointVariableMapping {
                 point_id,
                 variable_id,
             });
+            point_variable_index.insert(point_id, index);
+            variable_point_index.insert(variable_id, index);
         }
 
         let mut circle_radius_variables = Vec::new();
@@ -1797,33 +1896,13 @@ impl Sketch {
                 format!("temporary drag target for {}", self.point_name(drag.point)?),
             )?);
         }
-        if let Some(stability) = request.stability_target {
-            if !compile_item(&mut control) {
-                return Ok(None);
-            }
-            source_mappings.push(compile_point_target(
-                self,
-                &mut problem,
-                &point_variables,
-                SketchSource::DragTarget(stability.point),
-                stability.point,
-                stability.target,
-                ResidualCategory::Temporary,
-                format!(
-                    "temporary stability target for {}",
-                    self.point_name(stability.point)?
-                ),
-            )?);
-        }
         if request.previous_state_preferences {
             for (point_id, point) in self.points.iter() {
                 if !compile_item(&mut control) {
                     return Ok(None);
                 }
-                if request.drag.is_some_and(|drag| drag.point == point_id)
-                    || request
-                        .stability_target
-                        .is_some_and(|stability| stability.point == point_id)
+                if !previous_state.includes_preference(point_id)
+                    || request.drag.is_some_and(|drag| drag.point == point_id)
                 {
                     continue;
                 }
@@ -1833,7 +1912,7 @@ impl Sketch {
                     &point_variables,
                     SketchSource::PreviousState(point_id),
                     point_id,
-                    point.position(),
+                    previous_state.point_position(point_id)?,
                     ResidualCategory::Preference,
                     format!("previous-state preference for {}", point.label()),
                 )?);
@@ -1857,6 +1936,8 @@ impl Sketch {
         Ok(Some(CompiledSketch {
             problem,
             point_variables,
+            point_variable_index,
+            variable_point_index,
             circle_radius_variables,
             arc_radius_variables,
             arc_angle_variables,
@@ -1886,7 +1967,8 @@ impl Sketch {
         request: SketchSolveRequest,
         config: SolverConfig,
     ) -> Result<SketchSolveResult, SketchError> {
-        self.solve_inner(request, config, None)
+        let previous_state = PreviousStateReference::capture(self);
+        self.solve_inner(request, config, &previous_state, None)
             .map(|result| result.expect("uncontrolled sketch solving cannot be interrupted"))
     }
 
@@ -1912,7 +1994,9 @@ impl Sketch {
             return Ok(controller.outcome_unchecked());
         }
         let mut candidate = self.clone();
-        let result = candidate.solve_inner(request, config, Some(&mut controller))?;
+        let previous_state = PreviousStateReference::capture(&candidate);
+        let result =
+            candidate.solve_inner(request, config, &previous_state, Some(&mut controller))?;
         let Some(result) = result else {
             return Ok(controller.outcome_unchecked());
         };
@@ -1941,7 +2025,39 @@ impl Sketch {
             return Ok(None);
         }
         let mut candidate = self.clone();
-        let result = candidate.solve_inner(request, config, Some(controller))?;
+        let previous_state = PreviousStateReference::capture(&candidate);
+        let result = candidate.solve_inner(request, config, &previous_state, Some(controller))?;
+        if result.as_ref().is_some_and(SketchSolveResult::accepted) {
+            *self = candidate;
+        }
+        Ok(result)
+    }
+
+    pub(crate) fn solve_with_previous_state_reference(
+        &mut self,
+        request: SketchSolveRequest,
+        config: SolverConfig,
+        previous_state: &PreviousStateReference,
+    ) -> Result<SketchSolveResult, SketchError> {
+        self.solve_inner(request, config, previous_state, None)
+            .map(|result| result.expect("uncontrolled sketch solving cannot be interrupted"))
+    }
+
+    pub(crate) fn solve_with_previous_state_reference_and_controller(
+        &mut self,
+        request: SketchSolveRequest,
+        config: SolverConfig,
+        previous_state: &PreviousStateReference,
+        controller: &mut geosolve_core::OperationController,
+    ) -> Result<Option<SketchSolveResult>, SketchError> {
+        if controller
+            .checkpoint(geosolve_core::OperationCheckpoint::DocumentLowering)
+            .is_err()
+        {
+            return Ok(None);
+        }
+        let mut candidate = self.clone();
+        let result = candidate.solve_inner(request, config, previous_state, Some(controller))?;
         if result.as_ref().is_some_and(SketchSolveResult::accepted) {
             *self = candidate;
         }
@@ -1953,6 +2069,7 @@ impl Sketch {
         &mut self,
         request: SketchSolveRequest,
         config: SolverConfig,
+        previous_state: &PreviousStateReference,
         mut control: Option<&mut geosolve_core::OperationController>,
     ) -> Result<Option<SketchSolveResult>, SketchError> {
         let mut config = acceptance_solver_config(config);
@@ -1965,7 +2082,9 @@ impl Sketch {
             config.redundancy_diagnostic_budget.enabled = false;
             config.conflict_diagnostic_budget.enabled = false;
         }
-        let Some(mut compiled) = self.compile_inner(request, control.as_deref_mut())? else {
+        let Some(mut compiled) =
+            self.compile_inner(request, previous_state, control.as_deref_mut())?
+        else {
             return Ok(None);
         };
         let mut retained_audit = compiled.problem.audit_snapshot_partial();
@@ -1996,12 +2115,26 @@ impl Sketch {
                 if candidate_preparation.is_err() {
                     break;
                 }
-                if !normalized && !analysis_sketch.candidate_latents_differ(&candidate.latents) {
+                // A bounded contact parameter moving away from its retained seed
+                // is ordinary solved output already represented exactly by a
+                // pointer-preview report. Solving it again can perturb the same
+                // latent indefinitely and multiply one sample's numerical work.
+                //
+                // Ordinary no-drag solves retain the frozen accepted-audit
+                // behavior: reanalyze a changed bounded latent from its accepted
+                // value so the published descriptor belongs to that state.
+                if !normalized
+                    && (request.drag.is_some()
+                        || !analysis_sketch.candidate_latents_differ(&candidate.latents))
+                {
                     break;
                 }
                 analysis_sketch.commit_solved_state(&candidate)?;
-                let Some(recompiled) =
-                    analysis_sketch.compile_inner(request, control.as_deref_mut())?
+                let Some(recompiled) = analysis_sketch.compile_inner(
+                    request,
+                    previous_state,
+                    control.as_deref_mut(),
+                )?
                 else {
                     return Ok(None);
                 };
@@ -8208,13 +8341,107 @@ fn latent_mut(
 
 #[cfg(test)]
 mod tests {
-    use std::f64::consts::TAU;
+    use std::f64::consts::{PI, TAU};
 
     use super::*;
     use crate::{
-        CurveContactNeighborhood, CurveContinuity, CurveCurvatureRelation, CurveDirectionRelation,
-        CurveNormalSide, LineParameterDomain, LineSide, SketchCurve, SketchCurveContact,
+        ContactState, CurveContactNeighborhood, CurveContinuity, CurveCurvatureRelation,
+        CurveDirectionRelation, CurveNormalSide, CurveTangentOrientation, DimensionMode,
+        LineParameterDomain, LineSide, SketchCurve, SketchCurveContact,
     };
+
+    fn roller_center(parameter: f64) -> Point2<f64> {
+        let tangent = Vector2::new(8.0, 8.0 - 16.0 * parameter);
+        let point = Point2::new(-4.0 + 8.0 * parameter, 8.0 * parameter * (1.0 - parameter));
+        point + Vector2::new(-tangent.y, tangent.x) / tangent.norm()
+    }
+
+    #[test]
+    fn accepted_bounded_contact_motion_does_not_restart_the_solve() {
+        let mut sketch = Sketch::new(8.0).unwrap();
+        let controls = [
+            Point2::new(-4.0, 0.0),
+            Point2::new(0.0, 4.0),
+            Point2::new(4.0, 0.0),
+        ]
+        .map(|position| sketch.add_point(position).unwrap());
+        for point in controls {
+            sketch.add_fixed_point(point).unwrap();
+        }
+        let cam = sketch
+            .add_quadratic_bezier("cam", controls)
+            .expect("quadratic cam");
+        let center = sketch.add_point(roller_center(0.25)).unwrap();
+        let circle = sketch.add_circle(center, 1.0).unwrap();
+        sketch
+            .add_circle_radius(circle, 1.0, DimensionMode::Driving)
+            .unwrap();
+        let tangency = sketch
+            .add_curve_curve_tangency(
+                SketchCurveContact {
+                    curve: SketchCurve::Bezier(cam),
+                    parameter: 0.25,
+                    neighborhood: CurveContactNeighborhood::Interior,
+                },
+                SketchCurveContact {
+                    curve: SketchCurve::Circle(circle),
+                    parameter: 2.0 * PI - 2.0_f64.atan(),
+                    neighborhood: CurveContactNeighborhood::Interior,
+                },
+                CurveTangentOrientation::Aligned,
+            )
+            .unwrap();
+
+        let requested_parameter = 0.26;
+        let request = SketchSolveRequest::new()
+            .without_previous_state_preferences()
+            .with_drag(center, roller_center(requested_parameter));
+        let solve_once = |sketch: &mut Sketch| {
+            let outcome = sketch
+                .solve_controlled(
+                    request,
+                    SolverConfig::default(),
+                    geosolve_core::OperationControl::unlimited(),
+                )
+                .unwrap();
+            let work = outcome.report().consumed;
+            let geosolve_core::OperationOutcome::Completed { value, .. } = outcome else {
+                panic!("bounded contact drag exhausted: {work:#?}");
+            };
+            assert!(value.accepted(), "{value:#?}");
+            assert_eq!(value.core_report.hard_validity, HardValidity::Valid);
+            assert!(
+                value
+                    .acceptance_hard_residual_max
+                    .is_some_and(|maximum| maximum <= SKETCH_ACCEPTANCE_RESIDUAL_TOLERANCE)
+            );
+            assert_eq!(
+                work.document_lowering_items, 23,
+                "one accepted bounded-latent materialization must not recompile and solve again"
+            );
+        };
+
+        solve_once(&mut sketch);
+        let ContactState::CurveCurveTangency {
+            first_parameter, ..
+        } = sketch.contact_state(tangency).unwrap()
+        else {
+            unreachable!()
+        };
+        assert!((first_parameter - requested_parameter).abs() <= 1.0e-8);
+        assert!((0.0..=1.0).contains(&first_parameter));
+
+        solve_once(&mut sketch);
+        let ContactState::CurveCurveTangency {
+            first_parameter: repeated_parameter,
+            ..
+        } = sketch.contact_state(tangency).unwrap()
+        else {
+            unreachable!()
+        };
+        assert!((0.0..=1.0).contains(&repeated_parameter));
+        assert!((repeated_parameter - first_parameter).abs() <= 1.0e-12);
+    }
 
     #[test]
     fn equivalent_periodic_candidates_are_unwrapped_to_the_retained_local_branch() {

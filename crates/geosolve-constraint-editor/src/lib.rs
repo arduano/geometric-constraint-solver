@@ -21,15 +21,13 @@ pub use authoring::{
     AuthoringOutcome, AuthoringState, AuthoringTool, AuthoringWarning,
 };
 pub use coordinator::{
-    ALTERNATE_BRANCH_MAX_SEEDS, ActionAvailability, ActionState, AlternateBranchProposal,
-    AlternateBranchSearchEvidence, AlternateBranchSearchResult, AlternateBranchSearchStatus,
-    AuditDto, AuditProvenance, AuthoringMutation, BranchAction, ContactBranchAction,
-    CoordinatorActionKind, CoordinatorError, DimensionTargetDisplayUnit, DimensionTargetMetadata,
-    DisabledReason, DisplayDimensionTarget, EditorMutation, EditorProblemCategory,
-    EditorProblemMetadata, EditorProblemScope, EditorProblemTarget, LifecycleDto, LifecycleStatus,
-    MeasurementPublication, MutationOutcome, ProblemsDto, ProjectedDragRejectionStage,
-    ProjectedDragWorkEvidence, ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator,
-    display_dimension_target,
+    ActionAvailability, ActionState, AuditDto, AuditProvenance, AuthoringMutation, BranchAction,
+    ContactBranchAction, CoordinatorActionKind, CoordinatorError, DimensionTargetDisplayUnit,
+    DimensionTargetMetadata, DisabledReason, DisplayDimensionTarget, EditorMutation,
+    EditorProblemCategory, EditorProblemMetadata, EditorProblemScope, EditorProblemTarget,
+    LifecycleDto, LifecycleStatus, MeasurementPublication, MutationOutcome, ProblemsDto,
+    ProjectedDragRejectionStage, ProjectedDragWorkEvidence, ReplayAction, RestoreCheckpoint,
+    RetainedEditorCoordinator, display_dimension_target,
 };
 pub use geosolve_sketch::SketchAcceptedDocumentRedundancy;
 #[doc(hidden)]
@@ -1248,12 +1246,27 @@ fn construction_branch_direction(
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct PointGesture {
+    epoch: u64,
     pointer_id: u64,
     point: DesignPointId,
     origin: ScreenPoint,
     model_offset: [f64; 2],
     moved: bool,
     latest_request: Option<u64>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ProjectedDragRequestDisposition {
+    Current { gesture_epoch: u64 },
+    Stale,
+    Untracked,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct PointGestureSnapshot {
+    pub(crate) epoch: u64,
+    pub(crate) pointer_id: u64,
+    pub(crate) point: DesignPointId,
 }
 
 /// Active drafting tool. `Select` preserves the M40.2 selection behavior.
@@ -1326,7 +1339,8 @@ pub struct ConstraintEditor {
     conic_options: ConicConstructionOptions,
     nurbs_options: NurbsConstructionOptions,
     draft: Option<Draft>,
-    last_valid_drag_preview: Option<(u64, u64, DesignPointId, [f64; 2])>,
+    last_valid_drag_preview: Option<(u64, u64, u64, DesignPointId, [f64; 2])>,
+    next_point_gesture_epoch: u64,
     next_projection_request: u64,
     staged_inference: Option<ProvisionalInferenceCandidate>,
 }
@@ -1347,6 +1361,7 @@ impl Default for ConstraintEditor {
             nurbs_options: NurbsConstructionOptions::default(),
             draft: None,
             last_valid_drag_preview: None,
+            next_point_gesture_epoch: 0,
             next_projection_request: 0,
             staged_inference: None,
         }
@@ -1378,8 +1393,8 @@ impl ConstraintEditor {
 
     /// Selects a drafting tool, cancelling incomplete drafts and point gestures without edits.
     ///
-    /// A [`EditorEffect::ClearPointPreview`] is emitted only when this editor has
-    /// previously emitted a point-preview effect that the host may still display.
+    /// A moved gesture emits [`EditorEffect::ClearPointPreview`] even when every
+    /// projection was rejected, so hosts also close retained continuation state.
     pub fn activate_tool(&mut self, tool: EditorTool) -> Vec<EditorEffect> {
         self.tool = tool;
         let mut effects = self.cancel_draft();
@@ -1578,18 +1593,22 @@ impl ConstraintEditor {
                     .map(|candidate| candidate.model_position)
             {
                 let pointer_position = scene.viewport.screen_to_model(input.position);
-                self.point_gesture = Some(PointGesture {
-                    pointer_id: input.pointer_id,
-                    point,
-                    origin: input.position,
-                    model_offset: [
-                        point_position[0] - pointer_position[0],
-                        point_position[1] - pointer_position[1],
-                    ],
-                    moved: false,
-                    latest_request: None,
-                });
-                self.last_valid_drag_preview = None;
+                if let Some(epoch) = self.next_point_gesture_epoch.checked_add(1) {
+                    self.next_point_gesture_epoch = epoch;
+                    self.point_gesture = Some(PointGesture {
+                        epoch,
+                        pointer_id: input.pointer_id,
+                        point,
+                        origin: input.position,
+                        model_offset: [
+                            point_position[0] - pointer_position[0],
+                            point_position[1] - pointer_position[1],
+                        ],
+                        moved: false,
+                        latest_request: None,
+                    });
+                    self.last_valid_drag_preview = None;
+                }
             }
         } else if !input.modifiers.extends_selection() {
             self.selection.clear();
@@ -1726,23 +1745,27 @@ impl ConstraintEditor {
         }
         self.point_gesture = None;
         if gesture.moved {
-            let preview = self
-                .last_valid_drag_preview
-                .take()
-                .filter(|(_, pointer, point, _)| {
-                    *pointer == input.pointer_id && *point == gesture.point
-                });
-            let Some((_, _, _, position)) = preview else {
-                return Vec::new();
-            };
-            vec![
-                EditorEffect::CommitPointMove {
-                    expected,
-                    point: gesture.point,
-                    model_position: position,
+            let preview =
+                self.last_valid_drag_preview
+                    .take()
+                    .filter(|(_, epoch, pointer, point, _)| {
+                        *epoch == gesture.epoch
+                            && *pointer == input.pointer_id
+                            && *point == gesture.point
+                    });
+            preview.map_or_else(
+                || vec![EditorEffect::ClearPointPreview],
+                |(_, _, _, _, position)| {
+                    vec![
+                        EditorEffect::CommitPointMove {
+                            expected,
+                            point: gesture.point,
+                            model_position: position,
+                        },
+                        EditorEffect::ClearPointPreview,
+                    ]
                 },
-                EditorEffect::ClearPointPreview,
-            ]
+            )
         } else {
             Vec::new()
         }
@@ -1780,11 +1803,45 @@ impl ConstraintEditor {
         else {
             return Vec::new();
         };
-        self.last_valid_drag_preview = Some((request_id, pointer_id, point, position));
+        self.last_valid_drag_preview =
+            Some((request_id, gesture.epoch, pointer_id, point, position));
         vec![EditorEffect::PreviewPointMove {
             point,
             model_position: position,
         }]
+    }
+
+    pub(crate) fn projected_drag_request_disposition(
+        &self,
+        pointer_id: u64,
+        request_id: u64,
+        point: DesignPointId,
+    ) -> ProjectedDragRequestDisposition {
+        if let Some(gesture) = self.point_gesture
+            && gesture.pointer_id == pointer_id
+            && gesture.point == point
+            && gesture.latest_request == Some(request_id)
+            && gesture.moved
+        {
+            return ProjectedDragRequestDisposition::Current {
+                gesture_epoch: gesture.epoch,
+            };
+        }
+        if request_id < self.next_projection_request {
+            ProjectedDragRequestDisposition::Stale
+        } else {
+            // Preserve the coordinator's direct synchronous API for native hosts
+            // that do not route pointer input through this state machine.
+            ProjectedDragRequestDisposition::Untracked
+        }
+    }
+
+    pub(crate) fn point_gesture_snapshot(&self) -> Option<PointGestureSnapshot> {
+        self.point_gesture.map(|gesture| PointGestureSnapshot {
+            epoch: gesture.epoch,
+            pointer_id: gesture.pointer_id,
+            point: gesture.point,
+        })
     }
 
     /// Completes a variable-length polyline or NURBS draft.
@@ -1820,10 +1877,13 @@ impl ConstraintEditor {
     }
 
     fn cancel_point_gesture(&mut self) -> Vec<EditorEffect> {
-        self.point_gesture = None;
-        self.last_valid_drag_preview
+        let moved = self
+            .point_gesture
             .take()
-            .map(|_| EditorEffect::ClearPointPreview)
+            .is_some_and(|gesture| gesture.moved);
+        let had_preview = self.last_valid_drag_preview.take().is_some();
+        (moved || had_preview)
+            .then_some(EditorEffect::ClearPointPreview)
             .into_iter()
             .collect()
     }
@@ -4002,7 +4062,7 @@ mod tests {
                 scene.design_identity,
                 pointer(10, endpoint.x + 4.0, endpoint.y, Modifiers::default())
             ),
-            Vec::new()
+            vec![EditorEffect::ClearPointPreview]
         );
     }
 
@@ -4938,7 +4998,7 @@ mod tests {
                 scene.design_identity,
                 pointer(8, endpoint.x + 4.0, endpoint.y, Modifiers::default())
             ),
-            Vec::new()
+            vec![EditorEffect::ClearPointPreview]
         );
 
         editor.pointer_down(
@@ -4977,7 +5037,7 @@ mod tests {
     }
 
     #[test]
-    fn tool_switch_interrupts_drag_and_clears_only_an_existing_preview() {
+    fn tool_switch_interrupts_drag_and_closes_continuation_state() {
         let (document, _, points) = line_document();
         let scene = scene(&document);
         let endpoint = scene.viewport.model_to_screen([-4.0, 1.0]);
@@ -5020,7 +5080,10 @@ mod tests {
             &scene,
             pointer(2, endpoint.x + 3.0, endpoint.y, Modifiers::default()),
         );
-        assert!(editor.activate_tool(EditorTool::Circle).is_empty());
+        assert_eq!(
+            editor.activate_tool(EditorTool::Circle),
+            vec![EditorEffect::ClearPointPreview]
+        );
     }
 
     #[test]

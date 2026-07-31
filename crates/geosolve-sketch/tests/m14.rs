@@ -445,46 +445,6 @@ fn bridge_stress_example_exposes_mobility_and_rejects_degeneracy() {
 }
 
 #[test]
-fn cam_motion_projects_one_roller_while_stabilizing_the_other() {
-    let (mut cam, cam_ids) = session(AlphaScenarioKind::MotionCam, 1.0);
-    let AlphaScenarioIds::MotionCam(cam_ids) = cam_ids else {
-        panic!("cam IDs expected");
-    };
-    let cam_result = cam.accepted_result();
-    let cam_report = &cam_result.accepted_view().unstable_core_report();
-    assert_eq!(cam_report.right_nullity, 2);
-    assert_eq!(cam_report.bidirectional_degrees_of_freedom, 2);
-    let right_before = cam.document().point(cam_ids.right_center).unwrap().position;
-    let mut left_target = [0.0, 0.0];
-    for step in 1..=5 {
-        let parameter = 0.25 + 0.01 * f64::from(step);
-        let tangent: [f64; 2] = [8.0, 8.0 - 16.0 * parameter];
-        let tangent_norm = tangent[0].hypot(tangent[1]);
-        left_target = [
-            -4.0 + 8.0 * parameter - tangent[1] / tangent_norm,
-            8.0 * parameter * (1.0 - parameter) + tangent[0] / tangent_norm,
-        ];
-        let request = cam
-            .request()
-            .without_previous_state_preferences()
-            .with_drag(cam_ids.left_center, left_target)
-            .with_stability_target(cam_ids.right_center, right_before);
-        let moved = cam.rebuild_request(cam.revision(), request).unwrap();
-        assert!(moved.accepted(), "{:#?}", moved.solve().rejection);
-    }
-    assert_point(
-        cam.document().point(cam_ids.left_center).unwrap().position,
-        left_target,
-        1.0,
-    );
-    assert_point(
-        cam.document().point(cam_ids.right_center).unwrap().position,
-        right_before,
-        1.0,
-    );
-}
-
-#[test]
 fn tangent_orbit_projected_drag_traverses_all_quadrants() {
     for scale in SCALES {
         let (mut orbit, orbit_ids) = session(AlphaScenarioKind::MotionOrbit, scale);

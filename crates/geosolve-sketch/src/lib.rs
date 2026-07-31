@@ -48,15 +48,14 @@ mod session;
 pub use alpha_scenarios::{
     A1ScenarioIds, A2ScenarioIds, A3ScenarioIds, A4ScenarioIds, A5ScenarioIds, A8ScenarioIds,
     AlphaPerformanceSize, AlphaProfileScenarioUat, AlphaScenarioFixture, AlphaScenarioIds,
-    AlphaScenarioKind, AlphaScenarioUat, BranchLockedElbowIds, ConicCircleLimitIds,
-    ConicGalleryIds, ConicTangencyIds, DiagnosticEndpointBoundIds, DiagnosticRankDropIds,
-    DiagnosticRedundancyIds, DirectedAngleIds, EntityMirrorIds, ExactTranslatedOffsetIds,
-    GenericFilletLabIds, M27ReferenceFilletIds, M28TrimmedFilletIds, MotionCamIds,
-    MotionDrawingArmIds, MotionFourBarCouplerIds, MotionOrbitIds, MotionPantographIds,
-    MotionPeaucellierIds, MotionRotatingSquareIds, MotionScissorIds, MotionScissorTowerIds,
-    MotionScotchYokeIds, MotionTrammelIds, NurbsDifferentialIds, NurbsLabIds, ProfileScenarioIds,
-    StressBridgeIds, StressCompassIds, SupportingOffsetIds, alpha_performance_document,
-    alpha_scenario,
+    AlphaScenarioKind, AlphaScenarioUat, ConicCircleLimitIds, ConicGalleryIds, ConicTangencyIds,
+    DiagnosticEndpointBoundIds, DiagnosticRankDropIds, DiagnosticRedundancyIds, DirectedAngleIds,
+    EntityMirrorIds, ExactTranslatedOffsetIds, GenericFilletLabIds, M27ReferenceFilletIds,
+    M28TrimmedFilletIds, MotionCamIds, MotionDrawingArmIds, MotionFourBarCouplerIds,
+    MotionOrbitIds, MotionPantographIds, MotionPeaucellierIds, MotionRotatingSquareIds,
+    MotionScissorIds, MotionScissorTowerIds, MotionScotchYokeIds, MotionTrammelIds,
+    NurbsDifferentialIds, NurbsLabIds, ProfileScenarioIds, StressBridgeIds, StressCompassIds,
+    SupportingOffsetIds, alpha_performance_document, alpha_scenario,
 };
 pub use attributes::{SketchAttributeError, SketchAttributes};
 pub use beziers::{BezierCurve, BezierEvaluationError, BezierKind};
@@ -130,7 +129,7 @@ pub use document_lowering::{
     LoweredDocument, PointRuntimeMapping, RuntimeCurve, RuntimeSource,
 };
 pub use document_session::{
-    DocumentCommand, DocumentCommandEffect, DocumentCommandOutcome, DocumentCurveBranchEdit,
+    DocumentCommand, DocumentCommandEffect, DocumentCommandOutcome, DocumentDragLocalityPlan,
     DocumentDragTarget, DocumentEdit, DocumentParameterOutputProposal, DocumentSessionError,
     DocumentSolveRequest, DocumentSolveResult, DocumentTransactionOutcome,
     EXTERNAL_SNAPSHOT_SET_VERSION_V1, ExternalLineOrientationV1, ExternalSnapshotDigest,

@@ -1,8 +1,14 @@
-use geosolve_core::{HardValidity, OperationControl, SolverConfig};
+use geosolve_core::{
+    CancellationToken, HardValidity, OperationCheckpoint, OperationControl, OperationLimits,
+    OperationOutcome, OperationStopReason, OperationWorkCounter, SecondaryStatus, SolveTermination,
+    SolverConfig,
+};
 use geosolve_sketch::{
-    CurveDefinition, CurveSpan, DesignPointId, DocumentCommandEffect, DocumentConstraintDefinition,
+    AlphaScenarioIds, AlphaScenarioKind, ContactNeighborhood, ContactStateEdit, CurveDefinition,
+    CurveSpan, DesignPointId, DocumentCommandEffect, DocumentConstraintDefinition,
     DocumentDimensionDefinition, DocumentDimensionMode, DocumentEdit, DocumentSessionError,
     DocumentSolveRequest, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
+    alpha_scenario,
 };
 
 fn rectangle_design() -> (SketchDocument, geosolve_sketch::RectangleIds) {
@@ -1105,4 +1111,581 @@ fn same_design_restore_evaluates_the_supplied_request() {
             .map(f64::to_bits),
         [5.0, 6.0].map(f64::to_bits)
     );
+}
+
+fn retained_position(session: &RetainedSketchDocumentSession, point: DesignPointId) -> [f64; 2] {
+    session
+        .accepted_state()
+        .expect("accepted state")
+        .document()
+        .point(point)
+        .expect("accepted point")
+        .position
+}
+
+fn assert_position_near(actual: [f64; 2], expected: [f64; 2], tolerance: f64) {
+    let distance = (actual[0] - expected[0]).hypot(actual[1] - expected[1]);
+    assert!(
+        distance <= tolerance,
+        "position {actual:?} is {distance} from expected {expected:?}, tolerance {tolerance}"
+    );
+}
+
+fn rotate_about(point: [f64; 2], center: [f64; 2], angle: f64) -> [f64; 2] {
+    let offset = [point[0] - center[0], point[1] - center[1]];
+    let (sin, cos) = angle.sin_cos();
+    [
+        center[0] + cos * offset[0] - sin * offset[1],
+        center[1] + sin * offset[0] + cos * offset[1],
+    ]
+}
+
+fn roller_center_target(parameter: f64) -> [f64; 2] {
+    let tangent: [f64; 2] = [8.0, 8.0 - 16.0 * parameter];
+    let tangent_norm = tangent[0].hypot(tangent[1]);
+    [
+        -4.0 + 8.0 * parameter - tangent[1] / tangent_norm,
+        8.0 * parameter * (1.0 - parameter) + tangent[0] / tangent_norm,
+    ]
+}
+
+#[test]
+fn pantograph_locality_keeps_the_opposite_independent_arm_stationary() {
+    let fixture = alpha_scenario(AlphaScenarioKind::MotionPantograph, 1.0).unwrap();
+    let AlphaScenarioIds::MotionPantograph(ids) = fixture.ids else {
+        panic!("pantograph IDs expected");
+    };
+    let request = fixture.request;
+    let session =
+        RetainedSketchDocumentSession::new(fixture.document, request, SolverConfig::default())
+            .unwrap();
+    let anchor = retained_position(&session, ids.anchor);
+    let input = retained_position(&session, ids.input);
+    let guide = retained_position(&session, ids.guide);
+
+    for (active, passive, target) in [
+        (ids.input, ids.guide, rotate_about(input, anchor, 0.08)),
+        (ids.guide, ids.input, rotate_about(guide, anchor, -0.08)),
+    ] {
+        let plan = session.drag_locality_plan(active).expect("locality plan");
+        assert_eq!(plan.passive_degrees_of_freedom(), 1);
+        assert_eq!(plan.anchor_count(), 1);
+
+        let mut preview = session.clone();
+        let _ = preview
+            .reattempt_with_drag_locality_controlled(
+                preview.design_identity(),
+                request
+                    .with_previous_state_preferences()
+                    .with_drag(active, target),
+                &plan,
+                OperationControl::unlimited(),
+            )
+            .unwrap();
+        assert!(
+            preview.last_attempt().accepted_state_identity().is_some(),
+            "{:#?}",
+            preview.last_attempt().solve_result()
+        );
+        assert_position_near(retained_position(&preview, active), target, 1.0e-8);
+        assert_position_near(
+            retained_position(&preview, passive),
+            retained_position(&session, passive),
+            1.0e-8,
+        );
+    }
+}
+
+#[test]
+fn twin_roller_locality_is_symmetric_and_frozen_through_continuation() {
+    let fixture = alpha_scenario(AlphaScenarioKind::MotionCam, 1.0).unwrap();
+    let AlphaScenarioIds::MotionCam(ids) = fixture.ids else {
+        panic!("cam IDs expected");
+    };
+    let request = fixture.request;
+    let session =
+        RetainedSketchDocumentSession::new(fixture.document, request, SolverConfig::default())
+            .unwrap();
+
+    for (active, passive, first_parameter, second_parameter) in [
+        (ids.left_center, ids.right_center, 0.26, 0.28),
+        (ids.right_center, ids.left_center, 0.74, 0.72),
+    ] {
+        let passive_start = retained_position(&session, passive);
+        let active_start = retained_position(&session, active);
+        let plan = session.drag_locality_plan(active).expect("locality plan");
+        assert_eq!(plan.passive_degrees_of_freedom(), 1);
+        assert_eq!(plan.anchor_count(), 1);
+
+        let first_target = roller_center_target(first_parameter);
+        let mut first = session.clone();
+        let _ = first
+            .reattempt_with_drag_locality_controlled(
+                first.design_identity(),
+                request
+                    .with_previous_state_preferences()
+                    .with_drag(active, first_target),
+                &plan,
+                OperationControl::unlimited(),
+            )
+            .unwrap();
+        assert!(first.last_attempt().accepted_state_identity().is_some());
+        assert_position_near(retained_position(&first, active), first_target, 5.0e-8);
+        assert_position_near(retained_position(&first, passive), passive_start, 1.0e-8);
+
+        let second_target = roller_center_target(second_parameter);
+        let mut continued = session.clone();
+        let _ = continued
+            .reattempt_from_accepted_preview_with_drag_locality_controlled(
+                continued.design_identity(),
+                request
+                    .with_previous_state_preferences()
+                    .with_drag(active, second_target),
+                &first,
+                &plan,
+                OperationControl::unlimited(),
+            )
+            .unwrap();
+        assert!(continued.last_attempt().accepted_state_identity().is_some());
+        assert_position_near(retained_position(&continued, active), second_target, 5.0e-8);
+        assert_position_near(
+            retained_position(&continued, passive),
+            passive_start,
+            1.0e-8,
+        );
+        assert!(
+            (retained_position(&continued, active)[0] - active_start[0])
+                .hypot(retained_position(&continued, active)[1] - active_start[1])
+                > 0.05,
+            "active roller did not exercise real continuation motion"
+        );
+    }
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one lifecycle regression keeps planning, continuation, exhaustion, release, and rollback evidence together"
+)]
+fn drag_locality_targets_use_accepted_geometry_and_remain_frozen() {
+    let mut document = SketchDocument::new(5.0).unwrap();
+    let active = document.add_point("active", [0.0, 0.0]).unwrap();
+    let passive = document.add_point("passive", [3.0, 0.0]).unwrap();
+    let midpoint = document.add_point("midpoint", [1.5, 0.0]).unwrap();
+    let span = document
+        .add_curve(
+            "span",
+            CurveDefinition::Line {
+                start: active,
+                end: passive,
+                branch_direction: [1.0, 0.0],
+            },
+        )
+        .unwrap();
+    document
+        .add_constraint(
+            "midpoint",
+            DocumentConstraintDefinition::Midpoint {
+                point: midpoint,
+                line: CurveSpan::line(span),
+            },
+        )
+        .unwrap();
+    let distance = document
+        .add_scalar("distance", 5.0, ScalarUnit::Length, ScalarDomain::Positive)
+        .unwrap();
+    document
+        .add_dimension(
+            "distance",
+            DocumentDimensionDefinition::PointDistance {
+                first: active,
+                second: passive,
+                target: distance,
+            },
+            DocumentDimensionMode::Driving,
+        )
+        .unwrap();
+
+    let request = DocumentSolveRequest::default().without_previous_state_preferences();
+    let session =
+        RetainedSketchDocumentSession::new(document, request, SolverConfig::default()).unwrap();
+    let accepted_passive = retained_position(&session, passive);
+    assert!(
+        (accepted_passive[0] - 3.0).hypot(accepted_passive[1]) > 0.5,
+        "fixture must distinguish accepted visible geometry from its unsolved seed"
+    );
+    let plan = session.drag_locality_plan(active).expect("locality plan");
+    assert_eq!(plan.passive_degrees_of_freedom(), 1);
+    assert_eq!(plan.anchor_count(), 1);
+
+    let target = |angle: f64| {
+        [
+            accepted_passive[0] - 5.0 * angle.cos(),
+            accepted_passive[1] - 5.0 * angle.sin(),
+        ]
+    };
+    let mut first = session.clone();
+    let _ = first
+        .reattempt_with_drag_locality_controlled(
+            first.design_identity(),
+            request
+                .with_previous_state_preferences()
+                .with_drag(active, target(0.08)),
+            &plan,
+            OperationControl::unlimited(),
+        )
+        .unwrap();
+    assert!(first.last_attempt().accepted_state_identity().is_some());
+    assert_position_near(retained_position(&first, passive), accepted_passive, 1.0e-8);
+
+    let continued_target = target(0.16);
+    let mut continued = session.clone();
+    let _ = continued
+        .reattempt_from_accepted_preview_with_drag_locality_controlled(
+            continued.design_identity(),
+            request
+                .with_previous_state_preferences()
+                .with_drag(active, continued_target),
+            &first,
+            &plan,
+            OperationControl::unlimited(),
+        )
+        .unwrap();
+    assert!(continued.last_attempt().accepted_state_identity().is_some());
+    assert_position_near(
+        retained_position(&continued, active),
+        continued_target,
+        1.0e-8,
+    );
+    assert_position_near(
+        retained_position(&continued, passive),
+        accepted_passive,
+        1.0e-8,
+    );
+
+    let continued_position = retained_position(&continued, active);
+    let continued_json = continued.export_accepted_json().unwrap();
+    let mut interrupted = session.clone();
+    let interrupted_before = (
+        interrupted.design_identity(),
+        interrupted.last_attempt().identity(),
+        interrupted.accepted_state().unwrap().identity(),
+        interrupted.export_design_json().unwrap(),
+        interrupted.export_accepted_json().unwrap(),
+    );
+    let mut limits = OperationLimits::unlimited();
+    limits.document_dependency_items = 0;
+    let stopped = interrupted
+        .apply_point_position_from_preview_with_drag_locality_controlled(
+            interrupted.design_identity(),
+            active,
+            continued_position,
+            &continued,
+            &plan,
+            OperationControl::new(CancellationToken::default(), limits),
+        )
+        .unwrap();
+    let OperationOutcome::WorkExhausted { report } = stopped else {
+        panic!("frozen-anchor validation must respect the document dependency budget");
+    };
+    assert_eq!(report.consumed.document_dependency_items, 0);
+    assert_eq!(
+        report.stopping_reason,
+        Some(OperationStopReason::WorkExhausted {
+            counter: OperationWorkCounter::DocumentDependencyItems,
+            checkpoint: OperationCheckpoint::DocumentDependency,
+        })
+    );
+    assert_eq!(interrupted.design_identity(), interrupted_before.0);
+    assert_eq!(interrupted.last_attempt().identity(), interrupted_before.1);
+    assert_eq!(
+        interrupted.accepted_state().unwrap().identity(),
+        interrupted_before.2
+    );
+    assert_eq!(
+        interrupted.export_design_json().unwrap(),
+        interrupted_before.3
+    );
+    assert_eq!(
+        interrupted.export_accepted_json().unwrap(),
+        interrupted_before.4
+    );
+
+    let mut released = session.clone();
+    let outcome = released
+        .apply_point_position_from_preview_with_drag_locality(
+            released.design_identity(),
+            active,
+            continued_position,
+            &continued,
+            &plan,
+        )
+        .unwrap();
+    assert!(outcome.published_accepted_identity().is_some());
+    assert_eq!(
+        released.export_accepted_json().unwrap(),
+        continued_json,
+        "release must reproduce the complete visible preview"
+    );
+    assert_position_near(
+        retained_position(&released, passive),
+        accepted_passive,
+        1.0e-8,
+    );
+    let release_report = released
+        .accepted_state()
+        .unwrap()
+        .solve_result()
+        .unstable_core_report();
+    assert_eq!(release_report.hard_termination, SolveTermination::Converged);
+    assert_eq!(release_report.termination, SolveTermination::Stalled);
+    assert_eq!(release_report.preference_status, SecondaryStatus::Stalled);
+
+    let mut mismatch = session.clone();
+    let before = (
+        mismatch.design_identity(),
+        mismatch.last_attempt().identity(),
+        mismatch.accepted_state().unwrap().identity(),
+        mismatch.export_design_json().unwrap(),
+    );
+    let mismatched_position = [
+        f64::from_bits(continued_position[0].to_bits() + 1),
+        continued_position[1],
+    ];
+    assert!(matches!(
+        mismatch.apply_point_position_from_preview_with_drag_locality(
+            mismatch.design_identity(),
+            active,
+            mismatched_position,
+            &continued,
+            &plan,
+        ),
+        Err(DocumentSessionError::PreviewPointMismatch)
+    ));
+    assert_eq!(mismatch.design_identity(), before.0);
+    assert_eq!(mismatch.last_attempt().identity(), before.1);
+    assert_eq!(mismatch.accepted_state().unwrap().identity(), before.2);
+    assert_eq!(mismatch.export_design_json().unwrap(), before.3);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one scale-loop regression keeps winding continuation, release, and explicit-edit ownership together"
+)]
+fn periodic_contact_winding_seeds_drag_continuation_and_preserves_explicit_edits() {
+    for scale in [1.0e-6, 1.0, 1.0e6] {
+        let mut document = SketchDocument::new(scale).unwrap();
+        let angle = 0.1_f64;
+        let (sin, cos) = angle.sin_cos();
+        let center = document.add_point("circle center", [0.0, 0.0]).unwrap();
+        let contact_point = document
+            .add_point("fixed contact point", [scale * cos, scale * sin])
+            .unwrap();
+        let active = document
+            .add_point("independent drag point", [3.0 * scale, 2.0 * scale])
+            .unwrap();
+        let radius = document
+            .add_scalar(
+                "circle radius",
+                scale,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .unwrap();
+        let circle = document
+            .add_curve(
+                "periodic circle",
+                CurveDefinition::Circle { center, radius },
+            )
+            .unwrap();
+        for (label, point, target) in [
+            ("fix circle center", center, [0.0, 0.0]),
+            (
+                "fix contact point",
+                contact_point,
+                [scale * cos, scale * sin],
+            ),
+        ] {
+            document
+                .add_constraint(
+                    label,
+                    DocumentConstraintDefinition::FixedPoint { point, target },
+                )
+                .unwrap();
+        }
+        let contact = document
+            .add_curve_contact(
+                "periodic contact",
+                CurveSpan::line(circle),
+                std::f64::consts::TAU - angle,
+                0,
+                ContactNeighborhood::Interior,
+                None,
+            )
+            .unwrap();
+        document
+            .add_constraint(
+                "fixed point on circle",
+                DocumentConstraintDefinition::PointOnCurve {
+                    point: contact_point,
+                    contact,
+                },
+            )
+            .unwrap();
+
+        let request = DocumentSolveRequest::default().without_previous_state_preferences();
+        let session =
+            RetainedSketchDocumentSession::new(document, request, SolverConfig::default()).unwrap();
+        let design_contact = session.design_document().contact(contact).unwrap();
+        let accepted_document = session.accepted_state().unwrap().document();
+        let accepted_contact = accepted_document.contact(contact).unwrap();
+        let accepted_parameter = accepted_document
+            .scalar(accepted_contact.parameter)
+            .unwrap()
+            .value;
+        assert_eq!(design_contact.winding, 0);
+        assert_eq!(
+            accepted_contact.winding, 1,
+            "scale={scale:e}: initial solve must cross the periodic seam"
+        );
+        assert!(
+            (accepted_parameter - angle).abs() <= 1.0e-8,
+            "scale={scale:e}: accepted principal parameter={accepted_parameter:e}"
+        );
+
+        let locality = session.drag_locality_plan(active).unwrap();
+        assert_eq!(locality.passive_degrees_of_freedom(), 0);
+        assert_eq!(locality.anchor_count(), 0);
+
+        let first_target = [4.0 * scale, 2.5 * scale];
+        let mut first = session.clone();
+        let _ = first
+            .reattempt_with_drag_locality_controlled(
+                first.design_identity(),
+                request
+                    .with_previous_state_preferences()
+                    .with_drag(active, first_target),
+                &locality,
+                OperationControl::unlimited(),
+            )
+            .unwrap();
+        assert!(first.last_attempt().accepted_state_identity().is_some());
+        assert_eq!(
+            first
+                .accepted_state()
+                .unwrap()
+                .document()
+                .contact(contact)
+                .unwrap()
+                .winding,
+            1,
+            "scale={scale:e}: first drag sample lost accepted periodic winding"
+        );
+
+        let continued_target = [4.5 * scale, 3.0 * scale];
+        let mut continued = session.clone();
+        let _ = continued
+            .reattempt_from_accepted_preview_with_drag_locality_controlled(
+                continued.design_identity(),
+                request
+                    .with_previous_state_preferences()
+                    .with_drag(active, continued_target),
+                &first,
+                &locality,
+                OperationControl::unlimited(),
+            )
+            .unwrap();
+        assert!(continued.last_attempt().accepted_state_identity().is_some());
+        assert_eq!(
+            continued
+                .accepted_state()
+                .unwrap()
+                .document()
+                .contact(contact)
+                .unwrap()
+                .winding,
+            1,
+            "scale={scale:e}: continued drag sample lost accepted periodic winding"
+        );
+
+        let continued_position = retained_position(&continued, active);
+        let continued_json = continued.export_accepted_json().unwrap();
+        let mut released = session.clone();
+        let release = released
+            .apply_point_position_from_preview_with_drag_locality(
+                released.design_identity(),
+                active,
+                continued_position,
+                &continued,
+                &locality,
+            )
+            .unwrap();
+        assert!(release.published_accepted_identity().is_some());
+        assert_eq!(released.export_accepted_json().unwrap(), continued_json);
+        assert_eq!(
+            released
+                .accepted_state()
+                .unwrap()
+                .document()
+                .contact(contact)
+                .unwrap()
+                .winding,
+            1,
+            "scale={scale:e}: exact release lost accepted periodic winding"
+        );
+
+        let accepted_slot = session
+            .accepted_state()
+            .unwrap()
+            .document()
+            .contact(contact)
+            .unwrap()
+            .clone();
+        let explicit_edit = |winding| ContactStateEdit {
+            contact,
+            value: accepted_parameter,
+            winding,
+            neighborhood: accepted_slot.neighborhood,
+            tangent_orientation: accepted_slot.tangent_orientation,
+        };
+
+        let mut parameter_edit = session.clone();
+        let parameter_outcome = parameter_edit
+            .transact(parameter_edit.design_identity(), |document| {
+                document.set_contact_states(&[explicit_edit(0)])
+            })
+            .unwrap();
+        assert!(parameter_outcome.published_accepted_identity().is_some());
+        assert_eq!(
+            parameter_edit
+                .accepted_state()
+                .unwrap()
+                .document()
+                .contact(contact)
+                .unwrap()
+                .winding,
+            0,
+            "scale={scale:e}: explicit parameter edit inherited stale accepted winding"
+        );
+
+        let mut branch_edit = session.clone();
+        let branch_outcome = branch_edit
+            .transact(branch_edit.design_identity(), |document| {
+                document.set_contact_states(&[explicit_edit(2)])
+            })
+            .unwrap();
+        assert!(branch_outcome.published_accepted_identity().is_some());
+        assert_eq!(
+            branch_edit
+                .accepted_state()
+                .unwrap()
+                .document()
+                .contact(contact)
+                .unwrap()
+                .winding,
+            2,
+            "scale={scale:e}: explicit winding edit was overwritten"
+        );
+    }
 }

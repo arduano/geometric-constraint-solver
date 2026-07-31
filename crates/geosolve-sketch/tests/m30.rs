@@ -102,7 +102,7 @@ fn offsets_and_mirror_accept_projected_drags_move_associated_geometry_and_keep_h
         .evaluate_curve_jet(CurveSpan::line(ids.source), 1.0)
         .unwrap()
         .position;
-    let target_start_before = point(supporting.document(), ids.target_points[0]);
+    let target_end_before = point(supporting.document(), ids.target_points[1]);
     let moved = supporting
         .apply(DocumentCommand::new(
             supporting.revision(),
@@ -116,8 +116,8 @@ fn offsets_and_mirror_accept_projected_drags_move_associated_geometry_and_keep_h
     assert_eq!(supporting.history_len(), 1);
     assert!(
         distance(
-            point(supporting.document(), ids.target_points[0]),
-            target_start_before
+            point(supporting.document(), ids.target_points[1]),
+            target_end_before
         ) > 0.1
     );
     assert_eq!(

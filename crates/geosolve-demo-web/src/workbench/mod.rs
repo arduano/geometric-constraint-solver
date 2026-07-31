@@ -84,11 +84,10 @@ pub(crate) mod wasm {
     use std::str::FromStr as _;
 
     use geosolve_constraint_editor::{
-        ActionState, AlternateBranchSearchStatus, AuthoringApplication, AuthoringOperand,
-        AuthoringOptions, AuthoringOutcome, AuthoringState, AuthoringTool, BranchAction,
-        ConicConstructionOptions, ConstructionPreview, CoordinatorActionKind,
-        DimensionTargetDisplayUnit, DisabledReason, EditorEffect, EditorScene, EditorTool,
-        Modifiers, NurbsConstructionOptions, PickTolerance, PointerInput,
+        ActionState, AuthoringApplication, AuthoringOperand, AuthoringOptions, AuthoringOutcome,
+        AuthoringState, AuthoringTool, BranchAction, ConicConstructionOptions, ConstructionPreview,
+        CoordinatorActionKind, DimensionTargetDisplayUnit, DisabledReason, EditorEffect,
+        EditorScene, EditorTool, Modifiers, NurbsConstructionOptions, PickTolerance, PointerInput,
         ProvisionalInferenceCandidate, RetainedEditorCoordinator, SelectionItem,
     };
     use geosolve_core::SolverConfig;
@@ -476,11 +475,7 @@ pub(crate) mod wasm {
             &viewport,
             "pointerdown",
             |coordinator, scene, input, problem_items| {
-                coordinator.editor_mut().pointer_down_with_problem_items(
-                    scene,
-                    input,
-                    problem_items,
-                )
+                coordinator.pointer_down_with_problem_items(scene, input, problem_items)
             },
         )?;
         install_pointer_move_listener(document, workbench, &viewport, &pointer_moves)?;
@@ -1074,55 +1069,6 @@ pub(crate) mod wasm {
             "dimension-target" => apply_dimension_target(document, wb),
             "contact-branches" => apply_contact_branches(document, wb),
             "angle-orientation" => apply_angle_orientation(document, wb),
-            "propose-assembly-branch" => {
-                let point = match wb.coordinator.editor().selection() {
-                    [SelectionItem::Point(point)] => Some(*point),
-                    _ => None,
-                };
-                if let Some(point) = point {
-                    let search = wb.coordinator.propose_alternate_branch(point);
-                    wb.notice = match search.status {
-                        AlternateBranchSearchStatus::Proposed => format!(
-                            "Alternate branch previewed from {} of {} bounded seeds",
-                            search.evidence.attempted_seeds, search.evidence.maximum_seeds
-                        ),
-                        AlternateBranchSearchStatus::NoAlternative => {
-                            "No representable alternate branch was found".into()
-                        }
-                        AlternateBranchSearchStatus::Ambiguous => {
-                            "Multiple distinct alternate branches were found; refine the selected point".into()
-                        }
-                        AlternateBranchSearchStatus::Unrepresentable => {
-                            "The selected point has no representable persistent line branch".into()
-                        }
-                        AlternateBranchSearchStatus::Exhausted => {
-                            "Alternate branch search exhausted its bounded work".into()
-                        }
-                    };
-                    Ok(())
-                } else {
-                    Err("Select exactly one linkage point".into())
-                }
-            }
-            "accept-assembly-branch" => {
-                if let Some(proposal) = wb
-                    .coordinator
-                    .alternate_branch_proposal()
-                    .map(|proposal| proposal.proposal_id)
-                {
-                    wb.coordinator
-                        .accept_alternate_branch(proposal)
-                        .map(|_| ())
-                        .map_err(|error| error.to_string())
-                } else {
-                    Err("There is no alternate branch preview".into())
-                }
-            }
-            "cancel-assembly-branch" => {
-                wb.coordinator.cancel_alternate_branch();
-                wb.notice = "Alternate branch preview cancelled".into();
-                Ok(())
-            }
             "problems" => {
                 wb.problems_open = !wb.problems_open;
                 Ok(())
@@ -1154,11 +1100,7 @@ pub(crate) mod wasm {
         wb.notice = result.map_or_else(
             |error| error,
             |()| match action {
-                "problems"
-                | "cancel"
-                | "dimension-target"
-                | "propose-assembly-branch"
-                | "cancel-assembly-branch" => wb.notice.clone(),
+                "problems" | "cancel" | "dimension-target" => wb.notice.clone(),
                 _ => "Action retained".into(),
             },
         );
@@ -1625,17 +1567,8 @@ pub(crate) mod wasm {
         render_action_availability(document, coordinator, &wb.authoring)?;
         render_dimension_target_editor(document, coordinator)?;
         render_branch_editor(document, coordinator)?;
-        render_assembly_branch_editor(document, coordinator)?;
         required(document, "workbench-root")?
             .set_attribute("data-editor-adapter", "retained-coordinator")?;
-        required(document, "workbench-root")?.set_attribute(
-            "data-alternate-branch-ghost",
-            if coordinator.alternate_branch_proposal().is_some() {
-                "true"
-            } else {
-                "false"
-            },
-        )?;
         Ok(())
     }
 
@@ -1913,46 +1846,6 @@ pub(crate) mod wasm {
         set_hidden(&angle_button, !has_angle)?;
         set_disabled(&contact_button, false)?;
         set_disabled(&angle_button, false)?;
-        Ok(())
-    }
-
-    fn render_assembly_branch_editor(
-        document: &Document,
-        coordinator: &RetainedEditorCoordinator,
-    ) -> Result<(), JsValue> {
-        let editor = required(document, "wb-assembly-branch-editor")?;
-        let selected_point = matches!(coordinator.editor().selection(), [SelectionItem::Point(_)]);
-        let proposal = coordinator.alternate_branch_proposal();
-        if !selected_point && proposal.is_none() {
-            editor.set_attribute("hidden", "")?;
-            return Ok(());
-        }
-        editor.remove_attribute("hidden")?;
-        let meta = required(document, "wb-assembly-branch-meta")?;
-        let propose = required(document, "wb-propose-assembly-branch")?;
-        let decisions = required(document, "wb-assembly-branch-decisions")?;
-        if let Some(proposal) = proposal {
-            meta.set_text_content(Some(&format!(
-                "Ghost preview · {} branch span{} · {} / {} deterministic seeds inspected.",
-                proposal.branches.len(),
-                if proposal.branches.len() == 1 {
-                    ""
-                } else {
-                    "s"
-                },
-                proposal.evidence.attempted_seeds,
-                proposal.evidence.maximum_seeds,
-            )));
-            propose.set_attribute("hidden", "")?;
-            decisions.remove_attribute("hidden")?;
-        } else {
-            meta.set_text_content(Some(
-                "Searches only representable persistent line branches. The result is a non-authoritative ghost until accepted.",
-            ));
-            propose.remove_attribute("hidden")?;
-            set_disabled(&propose, !selected_point)?;
-            decisions.set_attribute("hidden", "")?;
-        }
         Ok(())
     }
 
