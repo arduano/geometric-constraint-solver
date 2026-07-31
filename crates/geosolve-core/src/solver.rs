@@ -18,6 +18,9 @@ use crate::{
 };
 
 const MAX_PRIORITY_LINE_SEARCH_STEPS: usize = 20;
+// Reproducing an already attained positive Temporary residual vector after lower-priority work
+// cannot demand resolution below a few representable floating-point steps. This floor applies
+// only to row-by-row reproduction; it does not relax Hard validation or Temporary attainment.
 const PRIORITY_REPROJECTION_TOLERANCE: f64 = 8.0 * f64::EPSILON;
 const PRIORITY_COST_RESOLUTION_FACTOR: f64 = 8.0;
 const PRIORITY_HESSIAN_NORMALIZED_STEP: f64 = 1.0e-3;
@@ -660,6 +663,114 @@ impl Problem {
         Ok(Some(report))
     }
 
+    /// Freshly certifies the exact materialized state without optimization.
+    ///
+    /// This rebuilds hard, rank, bound, secondary, diagnostic, and audit
+    /// evidence but never projects, iterates, or changes a coordinate. A
+    /// movable secondary objective is success-like only when its exact
+    /// evaluated cost is zero.
+    ///
+    /// `Ok(None)` means operation control stopped before a complete report was
+    /// available. This problem is unchanged in every outcome.
+    #[doc(hidden)]
+    pub fn certify_current_state_with_controller(
+        &self,
+        config: SolverConfig,
+        controller: &mut OperationController,
+    ) -> Result<Option<SolveReport>, CoreError> {
+        config.validate()?;
+        if controller
+            .checkpoint(OperationCheckpoint::ComponentBoundary)
+            .is_err()
+        {
+            return Ok(None);
+        }
+
+        let structural_items = self
+            .variables
+            .iter()
+            .count()
+            .saturating_add(self.residuals.iter().count())
+            .saturating_add(self.sources.iter().count())
+            .saturating_add(self.bounds.iter().count())
+            .saturating_add(self.fixed_eliminations.len())
+            .saturating_add(self.alias_eliminations.len());
+        if controller
+            .charge(
+                OperationWorkCounter::DocumentDependencyItems,
+                structural_items,
+                OperationCheckpoint::DocumentDependency,
+            )
+            .is_err()
+        {
+            return Ok(None);
+        }
+
+        let plan = EliminationPlan::new(self)?;
+        let state = self.variable_state();
+        let mut canonical = state.clone();
+        plan.synchronize_state(self, &mut canonical)?;
+        enforce_state_bounds(self, &plan, &mut canonical)?;
+        if !variable_states_have_exact_values(&state, &canonical) {
+            return Err(CoreError::InvalidAcceptedLinearization {
+                context: "materialized state requires fixed, alias, or bound canonicalization",
+            });
+        }
+
+        let executions = plan
+            .components
+            .iter()
+            .map(|component| ComponentExecution {
+                component_index: component.index,
+                reused: false,
+                termination: SolveTermination::Converged,
+                trace: SolveTrace::default(),
+            })
+            .collect::<Vec<_>>();
+        let Some(PriorityPassOutcome {
+            reports,
+            component_participated,
+            component_state_changed,
+            ..
+        }) = certify_current_priorities(self, &plan, &state, config, controller)
+        else {
+            return Ok(None);
+        };
+        let priority_reports = reports
+            .into_iter()
+            .map(|record| record.report)
+            .collect::<Vec<_>>();
+        let backend_evidence =
+            vec![BackendEvidence::new(config.linear_solve_backend); plan.components.len()];
+
+        if controller
+            .checkpoint(OperationCheckpoint::BeforeFinalValidation)
+            .is_err()
+        {
+            return Ok(None);
+        }
+        let Some(report) = self.build_report(
+            config,
+            &plan,
+            &executions,
+            &priority_reports,
+            &component_participated,
+            &component_state_changed,
+            &backend_evidence,
+            Some(controller),
+        )?
+        else {
+            return Ok(None);
+        };
+        if controller
+            .checkpoint(OperationCheckpoint::AfterFinalValidation)
+            .is_err()
+        {
+            return Ok(None);
+        }
+        Ok(Some(report))
+    }
+
     /// Solves edited/cache-invalid components and reuses independently validated cache entries.
     ///
     /// # Errors
@@ -862,6 +973,7 @@ impl Problem {
         {
             return Ok(None);
         }
+        let backend_evidence = self.solve_backend_evidence.borrow().clone();
         let Some(report) = self.build_report(
             config,
             &plan,
@@ -869,6 +981,7 @@ impl Problem {
             &priority_reports,
             &component_participated,
             &component_state_changed,
+            &backend_evidence,
             control.as_deref_mut(),
         )?
         else {
@@ -894,6 +1007,7 @@ impl Problem {
         priority_solves: &[PrioritySolveReport],
         component_secondary_participated: &[bool],
         component_state_changed_by_secondary: &[bool],
+        backend_evidence: &[BackendEvidence],
         mut control: Option<&mut OperationController>,
     ) -> Result<Option<SolveReport>, CoreError> {
         let state = self.variable_state();
@@ -925,16 +1039,13 @@ impl Problem {
                     expected: plan.components.len(),
                     actual: executions.len(),
                 })?;
-            let backend = self
-                .solve_backend_evidence
-                .borrow()
-                .get(component.index)
-                .copied()
-                .ok_or(CoreError::DimensionMismatch {
+            let backend = backend_evidence.get(component.index).copied().ok_or(
+                CoreError::DimensionMismatch {
                     context: "component backend evidence",
                     expected: plan.components.len(),
                     actual: component.index,
-                })?;
+                },
+            )?;
             // Reuse skips nonlinear iteration only. Acceptance values,
             // Jacobians/rank, mobility, and bounded diagnostics are rebuilt at
             // every returned state so a cache can never stand in for fresh
@@ -1519,10 +1630,10 @@ enum ComponentIterationObjective<'a> {
         category: ResidualCategory,
         residual_ids: &'a [ResidualId],
     },
-    HardAndPriorityCostLevel {
+    HardAndPriorityResidualTarget {
         category: ResidualCategory,
         residual_ids: &'a [ResidualId],
-        attained_cost: f64,
+        target: &'a DVector<f64>,
     },
 }
 
@@ -2078,6 +2189,227 @@ fn optimize_priorities(
     })
 }
 
+#[allow(clippy::too_many_lines)]
+fn certify_current_priorities(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    state: &VariableState,
+    config: SolverConfig,
+    controller: &mut OperationController,
+) -> Option<PriorityPassOutcome> {
+    let priority_plan = build_priority_plan(problem, plan);
+    let mut reports = Vec::new();
+    let mut component_participated = vec![false; plan.components.len()];
+    let mut temporary_levels = vec![None; priority_plan.temporary.movable.len()];
+
+    for group in &priority_plan.temporary.movable {
+        if !charge_priority_certification(controller, &group.residual_ids) {
+            return None;
+        }
+        for &component_index in &group.component_indices {
+            component_participated[component_index] = true;
+        }
+        let record = certify_movable_priority(
+            problem,
+            state,
+            group,
+            ResidualCategory::Temporary,
+            &[],
+            config,
+        );
+        if record.report.termination == SolveTermination::Converged
+            && record.report.status == SecondaryStatus::Optimal
+            && let Some(attained_cost) = record.report.final_cost
+        {
+            temporary_levels[group.group_index] = Some(TemporaryLevel {
+                group_index: group.group_index,
+                component_indices: group.component_indices.clone(),
+                residual_ids: group.residual_ids.clone(),
+                attained_cost,
+            });
+        }
+        reports.push(record);
+    }
+
+    let mut next_temporary_group = priority_plan.temporary.movable.len();
+    if !priority_plan.temporary.fixed.is_empty() {
+        if !charge_priority_certification(controller, &priority_plan.temporary.fixed) {
+            return None;
+        }
+        reports.push(evaluate_nonmoving_priority(
+            problem,
+            state,
+            next_temporary_group,
+            ResidualCategory::Temporary,
+            &priority_plan.temporary.fixed,
+            PrioritySolveScope::Fixed,
+            SolveTermination::Converged,
+        ));
+        next_temporary_group += 1;
+    }
+    if !priority_plan.temporary.invalid.is_empty() {
+        reports.push(evaluate_nonmoving_priority(
+            problem,
+            state,
+            next_temporary_group,
+            ResidualCategory::Temporary,
+            &priority_plan.temporary.invalid,
+            PrioritySolveScope::InvalidIncidence,
+            SolveTermination::NumericalFailure,
+        ));
+    }
+
+    for group in &priority_plan.preference.movable {
+        if !charge_priority_certification(controller, &group.residual_ids) {
+            return None;
+        }
+        for &component_index in &group.component_indices {
+            component_participated[component_index] = true;
+        }
+        let protected = group
+            .protected_temporary_groups
+            .iter()
+            .map(|&index| temporary_levels.get(index)?.clone())
+            .collect::<Option<Vec<_>>>();
+        reports.push(if let Some(protected) = protected {
+            certify_movable_priority(
+                problem,
+                state,
+                group,
+                ResidualCategory::Preference,
+                &protected,
+                config,
+            )
+        } else {
+            PriorityReportRecord {
+                report: priority_group_failure_report(
+                    group,
+                    state.clone(),
+                    ResidualCategory::Preference,
+                    &[],
+                    SolveTermination::NumericalFailure,
+                )
+                .report,
+                residual_ids: group.residual_ids.clone(),
+            }
+        });
+    }
+
+    let mut next_preference_group = priority_plan.preference.movable.len();
+    if !priority_plan.preference.fixed.is_empty() {
+        if !charge_priority_certification(controller, &priority_plan.preference.fixed) {
+            return None;
+        }
+        reports.push(evaluate_nonmoving_priority(
+            problem,
+            state,
+            next_preference_group,
+            ResidualCategory::Preference,
+            &priority_plan.preference.fixed,
+            PrioritySolveScope::Fixed,
+            SolveTermination::Converged,
+        ));
+        next_preference_group += 1;
+    }
+    if !priority_plan.preference.invalid.is_empty() {
+        reports.push(evaluate_nonmoving_priority(
+            problem,
+            state,
+            next_preference_group,
+            ResidualCategory::Preference,
+            &priority_plan.preference.invalid,
+            PrioritySolveScope::InvalidIncidence,
+            SolveTermination::NumericalFailure,
+        ));
+    }
+
+    Some(PriorityPassOutcome {
+        state: state.clone(),
+        reports,
+        component_participated,
+        component_state_changed: vec![false; plan.components.len()],
+    })
+}
+
+fn charge_priority_certification(
+    controller: &mut OperationController,
+    residual_ids: &[ResidualId],
+) -> bool {
+    controller
+        .charge(
+            OperationWorkCounter::ComponentLinearizations,
+            residual_ids.len(),
+            OperationCheckpoint::ComponentBoundary,
+        )
+        .is_ok()
+}
+
+fn certify_movable_priority(
+    problem: &Problem,
+    state: &VariableState,
+    group: &PriorityGroup,
+    category: ResidualCategory,
+    protected: &[TemporaryLevel],
+    config: SolverConfig,
+) -> PriorityReportRecord {
+    let (cost, termination, status) =
+        match priority_cost_for_residuals(problem, state, &group.residual_ids) {
+            Ok(cost) if cost == 0.0 => (
+                Some(cost),
+                SolveTermination::Converged,
+                SecondaryStatus::Optimal,
+            ),
+            Ok(cost) => (
+                Some(cost),
+                SolveTermination::Stalled,
+                SecondaryStatus::Stalled,
+            ),
+            Err(error) => (
+                None,
+                error_termination(&error),
+                SecondaryStatus::EvaluationFailure,
+            ),
+        };
+    let protected_temporary = protected
+        .iter()
+        .map(|level| ProtectedTemporaryReport {
+            group_index: level.group_index,
+            attained_cost: level.attained_cost,
+            final_cost: Some(level.attained_cost),
+            preservation_tolerance: priority_preservation_tolerance(
+                level.attained_cost,
+                priority_residual_rows(problem, &level.residual_ids),
+                config,
+            ),
+            preserved: true,
+        })
+        .collect();
+    PriorityReportRecord {
+        report: PrioritySolveReport {
+            group_index: group.group_index,
+            component_index: (group.component_indices.len() == 1)
+                .then_some(group.component_indices[0]),
+            component_indices: group.component_indices.clone(),
+            scope: PrioritySolveScope::Movable,
+            backend: None,
+            largest_explicit_nullspace_block_rows: 0,
+            protected_temporary,
+            category,
+            iterations: 0,
+            initial_cost: cost,
+            final_cost: cost,
+            attained_temporary_cost: match category {
+                ResidualCategory::Temporary => cost,
+                ResidualCategory::Preference => protected.first().map(|level| level.attained_cost),
+                ResidualCategory::Hard => None,
+            },
+            termination,
+            status,
+        },
+        residual_ids: group.residual_ids.clone(),
+    }
+}
+
 fn cached_priority_report(
     prior_report: Option<&SolveReport>,
     group: &PriorityGroup,
@@ -2268,6 +2600,22 @@ fn component_state_changed(
         .variable_ids
         .iter()
         .any(|&variable_id| state_value(before, variable_id) != state_value(after, variable_id))
+}
+
+fn variable_states_have_exact_values(first: &VariableState, second: &VariableState) -> bool {
+    first.values.len() == second.values.len()
+        && first.values.iter().zip(&second.values).all(
+            |((first_id, first_value), (second_id, second_value))| {
+                first_id == second_id
+                    && first_value.kind() == second_value.kind()
+                    && first_value.ambient_values().len() == second_value.ambient_values().len()
+                    && first_value
+                        .ambient_values()
+                        .iter()
+                        .zip(second_value.ambient_values())
+                        .all(|(first, second)| first.to_bits() == second.to_bits())
+            },
+        )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2659,7 +3007,6 @@ fn optimize_coupled_priority_inner(
     reprojection_config.normalized_step_tolerance = config
         .normalized_step_tolerance
         .min(PRIORITY_REPROJECTION_TOLERANCE);
-
     let mut operation = control;
     for iteration in 1..=config.max_iterations {
         let mut control = match operation.as_deref_mut() {
@@ -4203,78 +4550,44 @@ fn optimize_component_priority(
     config: SolverConfig,
     mut control: Option<&mut OperationController>,
 ) -> Option<PriorityComponentOutcome> {
-    if category == ResidualCategory::Temporary
-        && config.linear_solve_backend != LinearSolveBackendPolicy::SparsePreferred
-        && component_has_movable_priority_incidence(
-            problem,
-            plan,
-            component.index,
-            ResidualCategory::Preference,
-        )
-    {
-        let mut exact_config = config;
-        exact_config.normalized_residual_tolerance = config
-            .normalized_residual_tolerance
-            .min(config.normalized_step_tolerance)
-            .min(PRIORITY_REPROJECTION_TOLERANCE);
-        exact_config.normalized_step_tolerance = config
-            .normalized_step_tolerance
-            .min(PRIORITY_REPROJECTION_TOLERANCE);
-        let initial_cost = linearized_category_system(
-            problem,
-            plan,
-            component.index,
-            &state,
-            category,
-            residual_ids,
-        )
-        .ok()
-        .and_then(|system| residual_cost(&system.residuals));
-        let exact = iterate_component_objective(
+    let positive_protected_temporary = category == ResidualCategory::Preference
+        && attained_temporary_cost.is_some_and(|attained| {
+            !priority_cost_is_numerically_zero(
+                attained,
+                priority_residual_rows(problem, protected_priority_ids),
+                config,
+            )
+        });
+    let original_state = state.clone();
+    let protected_target = positive_protected_temporary.then(|| {
+        attained_temporary_residual_target(
             problem,
             plan,
             component,
-            state.clone(),
-            exact_config,
-            ComponentIterationObjective::HardAndPriority {
-                category,
-                residual_ids,
-            },
-            control.as_deref_mut(),
-        );
-        if control
-            .as_ref()
-            .is_some_and(|controller| controller.is_stopped())
-        {
-            return None;
-        }
-        if let Some(exact) = exact
-            && exact.termination == SolveTermination::Converged
-            && validate_component(problem, component, &exact.state, config).valid
-            && let Ok(system) = linearized_category_system(
-                problem,
-                plan,
-                component.index,
-                &exact.state,
-                category,
-                residual_ids,
-            )
-            && residual_max(&system.residuals) <= config.normalized_residual_tolerance
-            && let Some(final_cost) = residual_cost(&system.residuals)
-        {
+            &state,
+            protected_priority_ids,
+            attained_temporary_cost?,
+            config,
+        )
+    });
+    let protected_target = match protected_target {
+        Some(Some(target)) => Some(target),
+        Some(None) => {
             return Some(priority_component_report(
-                exact.state,
+                state,
                 component.index,
                 category,
-                exact.trace.records.len(),
-                initial_cost,
-                Some(final_cost),
+                0,
+                None,
+                None,
                 attained_temporary_cost,
-                SolveTermination::Converged,
+                SolveTermination::NumericalFailure,
             ));
         }
-    }
-    let outcome = optimize_component_priority_inner(
+        None => None,
+    };
+
+    let mut outcome = optimize_component_priority_inner(
         problem,
         plan,
         component,
@@ -4283,6 +4596,7 @@ fn optimize_component_priority(
         residual_ids,
         protected_priority_ids,
         attained_temporary_cost,
+        protected_target.as_ref(),
         config,
         control.as_deref_mut(),
     );
@@ -4290,10 +4604,172 @@ fn optimize_component_priority(
         .as_ref()
         .is_some_and(|controller| controller.is_stopped())
     {
-        None
-    } else {
-        Some(outcome)
+        return None;
     }
+    if let Some(target) = protected_target {
+        let certified_cost = priority_component_cost(
+            problem,
+            plan,
+            component,
+            &outcome.state,
+            category,
+            residual_ids,
+        );
+        let certified =
+            outcome.report.termination == SolveTermination::Converged
+                && attained_temporary_cost.is_some_and(|_| {
+                    positive_temporary_candidate_is_valid(
+                        problem,
+                        plan,
+                        component,
+                        &outcome.state,
+                        protected_priority_ids,
+                        &target,
+                        config,
+                    )
+                })
+                && outcome.report.final_cost.zip(certified_cost).is_some_and(
+                    |(reported, fresh)| {
+                        priority_cost_within_limit(
+                            fresh,
+                            reported,
+                            priority_residual_rows(problem, residual_ids),
+                            config,
+                        )
+                    },
+                );
+        if let Some(cost) = certified.then_some(certified_cost).flatten() {
+            outcome.report.final_cost = Some(cost);
+        } else {
+            let initial_cost = priority_component_cost(
+                problem,
+                plan,
+                component,
+                &original_state,
+                category,
+                residual_ids,
+            );
+            return Some(priority_component_report(
+                original_state,
+                component.index,
+                category,
+                outcome.report.iterations,
+                initial_cost,
+                initial_cost,
+                attained_temporary_cost,
+                SolveTermination::NumericalFailure,
+            ));
+        }
+    }
+    Some(outcome)
+}
+
+fn attained_temporary_residual_target(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    component: &SolveComponent,
+    state: &VariableState,
+    residual_ids: &[ResidualId],
+    attained_cost: f64,
+    config: SolverConfig,
+) -> Option<DVector<f64>> {
+    let system = linearized_category_system(
+        problem,
+        plan,
+        component.index,
+        state,
+        ResidualCategory::Temporary,
+        residual_ids,
+    )
+    .ok()?;
+    if system.residuals.iter().any(|value| !value.is_finite()) {
+        return None;
+    }
+    let cost = residual_cost(&system.residuals)?;
+    priority_cost_within_limit(cost, attained_cost, system.residuals.len(), config)
+        .then_some(system.residuals)
+}
+
+fn residual_target_rows_are_preserved(
+    residuals: &DVector<f64>,
+    target: &DVector<f64>,
+    config: SolverConfig,
+) -> bool {
+    if residuals.len() != target.len() {
+        return false;
+    }
+    let tolerance = residual_target_row_tolerance(config);
+    residuals
+        .iter()
+        .zip(target)
+        .try_fold(0.0_f64, |largest, (value, target)| {
+            let error = (value - target).abs();
+            error.is_finite().then_some(largest.max(error))
+        })
+        .is_some_and(|error| error <= tolerance)
+}
+
+fn residual_target_row_tolerance(config: SolverConfig) -> f64 {
+    // Preserve at the tighter configured solve tolerance unless that value is below the
+    // documented machine reproducibility floor.
+    config
+        .normalized_residual_tolerance
+        .min(config.normalized_step_tolerance)
+        .max(PRIORITY_REPROJECTION_TOLERANCE)
+}
+
+fn priority_component_cost(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    component: &SolveComponent,
+    state: &VariableState,
+    category: ResidualCategory,
+    residual_ids: &[ResidualId],
+) -> Option<f64> {
+    linearized_category_system(
+        problem,
+        plan,
+        component.index,
+        state,
+        category,
+        residual_ids,
+    )
+    .ok()
+    .and_then(|system| residual_cost(&system.residuals))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn positive_temporary_candidate_is_valid(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    component: &SolveComponent,
+    state: &VariableState,
+    protected_priority_ids: &[ResidualId],
+    target: &DVector<f64>,
+    config: SolverConfig,
+) -> bool {
+    if state.values.iter().any(|(_, value)| {
+        value
+            .ambient_values()
+            .iter()
+            .any(|coordinate| !coordinate.is_finite())
+    }) {
+        return false;
+    }
+    let Ok(temporary) = linearized_category_system(
+        problem,
+        plan,
+        component.index,
+        state,
+        ResidualCategory::Temporary,
+        protected_priority_ids,
+    ) else {
+        return false;
+    };
+    validate_component(problem, component, state, config).valid
+        && linearized_hard_system(problem, plan, component, state).is_ok()
+        && residual_target_rows_are_preserved(&temporary.residuals, target, config)
+        && residual_cost(&temporary.residuals).is_some()
 }
 
 fn component_has_movable_priority_incidence(
@@ -4318,6 +4794,7 @@ fn optimize_component_priority_inner(
     residual_ids: &[ResidualId],
     protected_priority_ids: &[ResidualId],
     attained_temporary_cost: Option<f64>,
+    protected_target: Option<&DVector<f64>>,
     config: SolverConfig,
     control: Option<&mut OperationController>,
 ) -> PriorityComponentOutcome {
@@ -4437,6 +4914,20 @@ fn optimize_component_priority_inner(
                 SolveTermination::NumericalFailure,
             );
         }
+        if let Some(target) = protected_target
+            && !residual_target_rows_are_preserved(&current_temporary.residuals, target, config)
+        {
+            return priority_component_report(
+                state,
+                component.index,
+                category,
+                0,
+                Some(initial_cost),
+                Some(initial_cost),
+                attained_temporary_cost,
+                SolveTermination::NumericalFailure,
+            );
+        }
     }
 
     let mut cost = initial_cost;
@@ -4543,31 +5034,10 @@ fn optimize_component_priority_inner(
                 ResidualCategory::Temporary,
                 protected_priority_ids,
             ) {
-                Ok(system)
-                    if attained_temporary_cost.is_some_and(|attained| {
-                        priority_cost_is_numerically_zero(attained, system.residuals.len(), config)
-                    }) =>
-                {
-                    // A zero least-squares level has a zero scalar objective gradient.
-                    // Preserve its complete row space, as the coupled path does, so a
-                    // lower-priority preference cannot drift away from an exact target.
-                    system.jacobian
-                }
-                Ok(system) => match scalar_objective_gradient_row(&system) {
-                    Some(gradient) => gradient,
-                    None => {
-                        return priority_component_report(
-                            state,
-                            component.index,
-                            category,
-                            iteration,
-                            Some(initial_cost),
-                            Some(cost),
-                            attained_temporary_cost,
-                            SolveTermination::NumericalFailure,
-                        );
-                    }
-                },
+                // A protected Temporary owns its complete attained residual
+                // vector. A scalar-cost gradient would permit an unrelated
+                // equal-cost assembly mode to replace it.
+                Ok(system) => system.jacobian,
                 Err(error) => {
                     return priority_component_failure(
                         state,
@@ -4727,6 +5197,7 @@ fn optimize_component_priority_inner(
                         residual_ids,
                         protected_priority_ids,
                         attained_temporary_cost,
+                        protected_target,
                         config,
                         reprojection_config,
                         control.as_deref_mut(),
@@ -4759,10 +5230,21 @@ fn optimize_component_priority_inner(
                     accepted = Some((accepted_state, trial_cost));
                 }
                 if accepted.is_some()
+                    && ((category == ResidualCategory::Temporary
+                        && temporary_has_movable_preference)
+                        || protected_target.is_some())
+                {
+                    // Ordinary first-improvement backtracking avoids repeating
+                    // expensive hard/vector reprojection for every smaller
+                    // step. The outer iteration still performs every required
+                    // lexicographic descent and independent certification.
+                    break;
+                }
+                if accepted.is_some()
                     && attained_temporary_cost.is_some_and(|attained| {
                         priority_cost_is_numerically_zero(
                             attained,
-                            protected_priority_ids.len(),
+                            priority_residual_rows(problem, protected_priority_ids),
                             config,
                         )
                     })
@@ -4799,14 +5281,15 @@ fn optimize_component_priority_inner(
             let relative_resolution = config
                 .rank_relative_tolerance
                 .max((PRIORITY_COST_RESOLUTION_FACTOR * f64::EPSILON).sqrt());
-            let improvement_is_resolved = category == ResidualCategory::Preference
+            let improvement_is_resolved = ((category == ResidualCategory::Preference
                 && attained_temporary_cost.is_some_and(|attained| {
                     priority_cost_is_numerically_zero(
                         attained,
-                        protected_priority_ids.len(),
+                        priority_residual_rows(problem, protected_priority_ids),
                         config,
                     )
-                })
+                }))
+                || (category == ResidualCategory::Temporary && temporary_has_movable_preference))
                 && cost - accepted_cost
                     <= relative_resolution * cost.abs().max(accepted_cost.abs());
             if improvement_is_resolved {
@@ -4853,7 +5336,24 @@ fn optimize_component_priority_inner(
                 SolveTermination::Converged,
             );
         }
-
+        let resolved_descent = initial_cost - cost
+            > objective_roundoff_tolerance(initial_cost, cost).max(PRIORITY_ZERO_COST_ROUNDOFF);
+        if temporary_has_movable_preference && resolved_descent {
+            // Retain resolved local descent as Acceptable. A feasible target
+            // reaches zero through the ordinary rank-aware Temporary solve;
+            // an infeasible one must not launch a second nonlinear solve or
+            // claim secondary optimality.
+            return acceptable_secondary_outcome(priority_component_report(
+                state,
+                component.index,
+                category,
+                iteration,
+                Some(initial_cost),
+                Some(cost),
+                attained_temporary_cost,
+                SolveTermination::Converged,
+            ));
+        }
         let Some(critical_cone) = constrained_step.critical_cone else {
             return priority_component_report(
                 state,
@@ -4875,6 +5375,7 @@ fn optimize_component_priority_inner(
             residual_ids,
             protected_priority_ids,
             attained_temporary_cost,
+            protected_target,
             &nullspace,
             &critical_cone,
             &layout,
@@ -5041,6 +5542,8 @@ fn refresh_priority_final_costs(
                 record.report.status = SecondaryStatus::EvaluationFailure;
             }
         }
+        let dense_vector_backend =
+            record.report.backend == Some(PrioritySolveBackend::DenseNullspace);
         for protection in &mut record.report.protected_temporary {
             let result = temporary_groups
                 .get(protection.group_index)
@@ -5054,18 +5557,22 @@ fn refresh_priority_final_costs(
                 protection.final_cost = Some(cost);
                 let residual_rows = temporary_groups
                     .get(protection.group_index)
-                    .map_or(1, |group| group.residual_ids.len());
-                protection.preservation_tolerance = priority_preservation_tolerance(
-                    protection.attained_cost,
-                    residual_rows,
-                    config,
-                );
-                protection.preserved = priority_cost_within_limit(
-                    cost,
-                    protection.attained_cost,
-                    residual_rows,
-                    config,
-                );
+                    .map_or(1, |group| {
+                        priority_residual_rows(problem, &group.residual_ids)
+                    });
+                let vector_protected = dense_vector_backend
+                    && !priority_cost_is_numerically_zero(
+                        protection.attained_cost,
+                        residual_rows,
+                        config,
+                    );
+                protection.preservation_tolerance = if vector_protected {
+                    residual_vector_cost_tolerance(protection.attained_cost, residual_rows, config)
+                } else {
+                    priority_preservation_tolerance(protection.attained_cost, residual_rows, config)
+                };
+                protection.preserved = cost <= protection.attained_cost
+                    || cost - protection.attained_cost <= protection.preservation_tolerance;
                 if !protection.preserved {
                     record.report.termination = worse_termination(
                         record.report.termination,
@@ -5108,14 +5615,12 @@ fn priority_cost_for_residuals(
     })
 }
 
-fn scalar_objective_gradient_row(system: &HardSystem) -> Option<DMatrix<f64>> {
-    let gradient = system.jacobian.transpose() * &system.residuals;
-    if gradient.iter().any(|value| !value.is_finite()) {
-        return None;
-    }
-    Some(DMatrix::from_fn(1, gradient.len(), |_, column| {
-        gradient[column]
-    }))
+fn priority_residual_rows(problem: &Problem, residual_ids: &[ResidualId]) -> usize {
+    residual_ids
+        .iter()
+        .filter_map(|&residual| problem.residual(residual))
+        .map(crate::ResidualBlock::output_dimension)
+        .sum()
 }
 
 /// Roundoff allowance relative only to the compared objective magnitudes.
@@ -5154,10 +5659,6 @@ fn objective_within_limit(candidate: f64, limit: f64) -> bool {
             <= objective_roundoff_tolerance(candidate, limit).max(PRIORITY_ZERO_COST_ROUNDOFF)
 }
 
-fn objective_within_strict_level(candidate: f64, limit: f64) -> bool {
-    candidate <= limit || candidate - limit <= PRIORITY_ZERO_COST_ROUNDOFF
-}
-
 fn priority_zero_cost_limit(residual_rows: usize, config: SolverConfig) -> f64 {
     let rows = f64::from(u32::try_from(residual_rows.max(1)).unwrap_or(u32::MAX));
     let residual_resolution = (PRIORITY_COST_RESOLUTION_FACTOR
@@ -5178,6 +5679,20 @@ fn priority_preservation_tolerance(
     } else {
         roundoff
     }
+}
+
+fn residual_vector_cost_tolerance(
+    attained: f64,
+    residual_rows: usize,
+    config: SolverConfig,
+) -> f64 {
+    let rows = f64::from(u32::try_from(residual_rows.max(1)).unwrap_or(u32::MAX));
+    let error_norm = rows.sqrt() * residual_target_row_tolerance(config);
+    let attained_norm = (2.0 * attained.max(0.0)).sqrt();
+    attained_norm
+        .mul_add(error_norm, 0.5 * error_norm * error_norm)
+        .max(objective_roundoff_tolerance(attained, attained))
+        .max(PRIORITY_ZERO_COST_ROUNDOFF)
 }
 
 fn priority_cost_within_limit(
@@ -5219,6 +5734,7 @@ fn evaluate_priority_trial(
     residual_ids: &[ResidualId],
     protected_temporary_ids: &[ResidualId],
     attained_temporary_cost: Option<f64>,
+    protected_target: Option<&DVector<f64>>,
     config: SolverConfig,
     reprojection_config: SolverConfig,
     control: Option<&mut OperationController>,
@@ -5236,12 +5752,34 @@ fn evaluate_priority_trial(
         None => None,
     };
     let result = (|| {
+        let exact_positive_temporary = category == ResidualCategory::Preference
+            && protected_target.is_some()
+            && !protected_temporary_ids.is_empty();
         let zero_like_temporary = category == ResidualCategory::Preference
+            && protected_target.is_none()
             && !protected_temporary_ids.is_empty()
             && attained_temporary_cost.is_some_and(|attained| {
-                priority_cost_is_numerically_zero(attained, protected_temporary_ids.len(), config)
+                priority_cost_is_numerically_zero(
+                    attained,
+                    priority_residual_rows(problem, protected_temporary_ids),
+                    config,
+                )
             });
-        let reprojected = if zero_like_temporary {
+        let reprojected = if let Some(target) = protected_target {
+            iterate_component_objective(
+                problem,
+                plan,
+                component,
+                trial_state,
+                reprojection_config,
+                ComponentIterationObjective::HardAndPriorityResidualTarget {
+                    category: ResidualCategory::Temporary,
+                    residual_ids: protected_temporary_ids,
+                    target,
+                },
+                control.as_deref_mut(),
+            )?
+        } else if zero_like_temporary {
             iterate_component_objective(
                 problem,
                 plan,
@@ -5264,13 +5802,17 @@ fn evaluate_priority_trial(
                 control.as_deref_mut(),
             )?
         };
-        if !validate_component(problem, component, &reprojected.state, config).valid
-            || linearized_hard_system(problem, plan, component, &reprojected.state).is_err()
-        {
-            return None;
-        }
         let mut candidate_state = reprojected.state;
         let mut used_protected_fallback = false;
+        if !validate_component(problem, component, &candidate_state, config).valid
+            || linearized_hard_system(problem, plan, component, &candidate_state).is_err()
+        {
+            if !exact_positive_temporary {
+                return None;
+            }
+            candidate_state = protected_fallback_state.clone();
+            used_protected_fallback = true;
+        }
         if let Some(limit) = attained_temporary_cost {
             if category != ResidualCategory::Preference || protected_temporary_ids.is_empty() {
                 return None;
@@ -5284,60 +5826,20 @@ fn evaluate_priority_trial(
                 protected_temporary_ids,
             )
             .ok()?;
-            let mut temporary_cost = residual_cost(&temporary.residuals)?;
-            if !(priority_cost_is_numerically_zero(limit, temporary.residuals.len(), config)
-                && priority_cost_is_numerically_zero(
-                    temporary_cost,
-                    temporary.residuals.len(),
-                    config,
-                ))
-            {
-                // Retract directly onto the attained scalar Temporary level before
-                // measuring Preference. Recursively re-optimizing Temporary here
-                // multiplied every lower-priority line-search trial into another
-                // nonlinear solve. The scalar level equation preserves legitimate
-                // motion along a constant-cost manifold.
-                let mut level_config = reprojection_config;
-                let quadratic_step_resolution =
-                    0.5 * config.normalized_step_tolerance * config.normalized_step_tolerance;
-                if quadratic_step_resolution.is_finite() && quadratic_step_resolution > 0.0 {
-                    level_config.normalized_residual_tolerance = level_config
-                        .normalized_residual_tolerance
-                        .min(quadratic_step_resolution);
-                }
-                let corrected = iterate_component_objective(
-                    problem,
-                    plan,
-                    component,
-                    candidate_state,
-                    level_config,
-                    ComponentIterationObjective::HardAndPriorityCostLevel {
-                        category: ResidualCategory::Temporary,
-                        residual_ids: protected_temporary_ids,
-                        attained_cost: limit,
-                    },
-                    control.as_deref_mut(),
-                )?;
-                candidate_state = corrected.state;
-                if !validate_component(problem, component, &candidate_state, config).valid
-                    || linearized_hard_system(problem, plan, component, &candidate_state).is_err()
-                {
-                    return None;
-                }
-                let corrected = linearized_category_system(
-                    problem,
-                    plan,
-                    component.index,
-                    &candidate_state,
-                    ResidualCategory::Temporary,
-                    protected_temporary_ids,
-                )
-                .ok()?;
-                temporary_cost = residual_cost(&corrected.residuals)?;
-                if !objective_within_strict_level(temporary_cost, limit) {
-                    candidate_state = protected_fallback_state.clone();
-                    used_protected_fallback = true;
-                }
+            let temporary_cost = residual_cost(&temporary.residuals)?;
+            let preserved = if let Some(target) = protected_target {
+                residual_target_rows_are_preserved(&temporary.residuals, target, config)
+            } else {
+                priority_cost_is_numerically_zero(limit, temporary.residuals.len(), config)
+                    && priority_cost_is_numerically_zero(
+                        temporary_cost,
+                        temporary.residuals.len(),
+                        config,
+                    )
+            };
+            if !preserved {
+                candidate_state = protected_fallback_state.clone();
+                used_protected_fallback = true;
             }
         }
         let trial_system = linearized_category_system(
@@ -5524,6 +6026,7 @@ fn search_critical_cone_curvature(
     residual_ids: &[ResidualId],
     protected_temporary_ids: &[ResidualId],
     attained_temporary_cost: Option<f64>,
+    protected_target: Option<&DVector<f64>>,
     protected_nullspace: &DMatrix<f64>,
     critical_cone: &ReducedCriticalCone,
     layout: &ActiveLayout,
@@ -5546,6 +6049,7 @@ fn search_critical_cone_curvature(
             residual_ids,
             protected_temporary_ids,
             attained_temporary_cost,
+            protected_target,
             &full_span,
             layout,
             current_cost,
@@ -5571,6 +6075,7 @@ fn search_critical_cone_curvature(
         residual_ids,
         protected_temporary_ids,
         attained_temporary_cost,
+        protected_target,
         &full_span,
         &critical_cone.inequalities,
         layout,
@@ -5591,6 +6096,7 @@ fn search_one_sided_curvature(
     residual_ids: &[ResidualId],
     protected_temporary_ids: &[ResidualId],
     attained_temporary_cost: Option<f64>,
+    protected_target: Option<&DVector<f64>>,
     span: &DMatrix<f64>,
     inequalities: &DMatrix<f64>,
     layout: &ActiveLayout,
@@ -5636,6 +6142,7 @@ fn search_one_sided_curvature(
                 residual_ids,
                 protected_temporary_ids,
                 attained_temporary_cost,
+                protected_target,
                 span,
                 layout,
                 &first_delta,
@@ -5655,6 +6162,7 @@ fn search_one_sided_curvature(
                 residual_ids,
                 protected_temporary_ids,
                 attained_temporary_cost,
+                protected_target,
                 span,
                 layout,
                 &second_delta,
@@ -5729,6 +6237,7 @@ fn search_one_sided_curvature(
             residual_ids,
             protected_temporary_ids,
             attained_temporary_cost,
+            protected_target,
             config,
             reprojection_config,
             control.as_deref_mut(),
@@ -5769,6 +6278,7 @@ fn search_negative_curvature(
     residual_ids: &[ResidualId],
     protected_temporary_ids: &[ResidualId],
     attained_temporary_cost: Option<f64>,
+    protected_target: Option<&DVector<f64>>,
     nullspace: &DMatrix<f64>,
     layout: &ActiveLayout,
     current_cost: f64,
@@ -5798,6 +6308,7 @@ fn search_negative_curvature(
                 residual_ids,
                 protected_temporary_ids,
                 attained_temporary_cost,
+                protected_target,
                 nullspace,
                 layout,
                 delta,
@@ -5850,6 +6361,7 @@ fn search_negative_curvature(
                 residual_ids,
                 protected_temporary_ids,
                 attained_temporary_cost,
+                protected_target,
                 config,
                 reprojection_config,
                 control.as_deref_mut(),
@@ -5891,6 +6403,7 @@ fn sample_reduced_priority_cost(
     residual_ids: &[ResidualId],
     protected_temporary_ids: &[ResidualId],
     attained_temporary_cost: Option<f64>,
+    protected_target: Option<&DVector<f64>>,
     nullspace: &DMatrix<f64>,
     layout: &ActiveLayout,
     reduced_delta: &DVector<f64>,
@@ -5916,6 +6429,7 @@ fn sample_reduced_priority_cost(
         residual_ids,
         protected_temporary_ids,
         attained_temporary_cost,
+        protected_target,
         config,
         reprojection_config,
         control,
@@ -5969,12 +6483,12 @@ fn linearized_component_objective(
             category,
             residual_ids,
         )?,
-        ComponentIterationObjective::HardAndPriorityCostLevel {
+        ComponentIterationObjective::HardAndPriorityResidualTarget {
             category,
             residual_ids,
-            attained_cost,
+            target,
         } => {
-            let priority = linearized_category_system(
+            let mut priority = linearized_category_system(
                 problem,
                 plan,
                 component.index,
@@ -5982,26 +6496,15 @@ fn linearized_component_objective(
                 category,
                 residual_ids,
             )?;
-            let current_cost =
-                residual_cost(&priority.residuals).ok_or(CoreError::NonFiniteValue {
-                    context: "priority cost-level retraction",
-                    index: 0,
-                    value: f64::INFINITY,
-                })?;
-            let gradient = priority.jacobian.transpose() * &priority.residuals;
-            if !attained_cost.is_finite() || gradient.iter().any(|value| !value.is_finite()) {
-                return Err(CoreError::NonFiniteValue {
-                    context: "priority cost-level retraction",
-                    index: 0,
-                    value: attained_cost,
+            if priority.residuals.len() != target.len() {
+                return Err(CoreError::DimensionMismatch {
+                    context: "priority residual-target retraction rows",
+                    expected: target.len(),
+                    actual: priority.residuals.len(),
                 });
             }
-            HardSystem {
-                residuals: DVector::from_element(1, current_cost - attained_cost),
-                jacobian: DMatrix::from_fn(1, gradient.len(), |_, column| gradient[column]),
-                rows: Vec::new(),
-                indexed: None,
-            }
+            priority.residuals -= target;
+            priority
         }
     };
     stack_systems(hard, priority).ok_or(CoreError::DimensionMismatch {
@@ -8099,7 +8602,8 @@ fn solve_active_reduced_least_squares(
     }
     let reduced = jacobian * &tangent;
     let effective = residuals + jacobian * &particular;
-    let correction = solve_dense_least_squares(&reduced, &(-effective), control)?.0;
+    let correction =
+        solve_rank_aware_least_squares(&reduced, &(-effective), relative_tolerance, control)?;
     let candidate = particular + tangent * correction;
     candidate
         .iter()
@@ -8675,13 +9179,54 @@ fn solve_rank_aware_least_squares(
         controlled_dense_factorization(matrix.nrows(), matrix.ncols(), control, || {
             Some(matrix.clone().svd(true, true))
         })?;
-    let solution = decomposition
+    let mut solution = decomposition
         .solve(right_hand_side, diagnostics.threshold)
         .ok()?;
-    solution
-        .iter()
-        .all(|value| value.is_finite())
-        .then_some(solution)
+    if solution.iter().any(|value| !value.is_finite()) {
+        return None;
+    }
+    let mut residual = matrix * &solution - right_hand_side;
+    let mut residual_norm = stable_norm(residual.iter().copied())?;
+    let mut normal_residual = matrix.transpose() * &residual;
+    let mut normal_residual_norm = stable_norm(normal_residual.iter().copied())?;
+    let matrix_norm = stable_norm(matrix.iter().copied())?;
+    let right_hand_side_norm = stable_norm(right_hand_side.iter().copied())?;
+    for _ in 0..8 {
+        let solution_norm = stable_norm(solution.iter().copied())?;
+        let roundoff_floor = 64.0
+            * f64::EPSILON
+            * matrix_norm
+            * (matrix_norm * solution_norm + right_hand_side_norm);
+        if !roundoff_floor.is_finite() || normal_residual_norm <= roundoff_floor {
+            break;
+        }
+        let correction_right_hand_side = -&residual;
+        let Ok(correction) =
+            decomposition.solve(&correction_right_hand_side, diagnostics.threshold)
+        else {
+            break;
+        };
+        let candidate = &solution + correction;
+        if candidate.iter().any(|value| !value.is_finite()) {
+            break;
+        }
+        let candidate_residual = matrix * &candidate - right_hand_side;
+        let Some(candidate_residual_norm) = stable_norm(candidate_residual.iter().copied()) else {
+            break;
+        };
+        normal_residual = matrix.transpose() * &candidate_residual;
+        let Some(candidate_norm) = stable_norm(normal_residual.iter().copied()) else {
+            break;
+        };
+        if candidate_norm >= normal_residual_norm || candidate_residual_norm > residual_norm {
+            break;
+        }
+        solution = candidate;
+        residual = candidate_residual;
+        residual_norm = candidate_residual_norm;
+        normal_residual_norm = candidate_norm;
+    }
+    Some(solution)
 }
 
 fn limit_block_steps(step: &mut DVector<f64>, layout: &ActiveLayout, limit: f64) -> Option<f64> {
@@ -9391,6 +9936,49 @@ mod tests {
 
     #[test]
     #[allow(clippy::unreadable_literal)]
+    fn rank_aware_wide_reduced_solve_refines_to_kkt_stationarity() {
+        let matrix = DMatrix::from_row_slice(
+            2,
+            6,
+            &[
+                0.06399878875589683,
+                0.0,
+                0.0,
+                0.0027820941212632405,
+                -0.03072473036699153,
+                0.04005075120820309,
+                -0.6983875185918699,
+                0.0,
+                0.0,
+                -0.030359634105717875,
+                0.3352839736116159,
+                -0.43705428333532453,
+            ],
+        );
+        let right_hand_side =
+            DVector::from_vec(vec![-0.006487831513659573, -0.0005734453448315077]);
+        let relative_tolerance = 1.0e-10;
+        let solution =
+            solve_rank_aware_least_squares(&matrix, &right_hand_side, relative_tolerance, None)
+                .unwrap();
+        let residual = &matrix * &solution - &right_hand_side;
+        let gradient = matrix.transpose() * &residual;
+        let model_residuals = -&right_hand_side;
+        let tolerance =
+            kkt_gradient_tolerance(&matrix, &model_residuals, &solution, 0.0, 1.0e-10).unwrap();
+
+        assert!(solution.iter().all(|value| value.is_finite()));
+        assert!(residual_cost(&residual).unwrap() < residual_cost(&right_hand_side).unwrap());
+        assert!(
+            gradient.norm() <= tolerance,
+            "rank-aware reduced response did not satisfy first-order stationarity: \
+             gradient={:e}, tolerance={tolerance:e}",
+            gradient.norm()
+        );
+    }
+
+    #[test]
+    #[allow(clippy::unreadable_literal)]
     fn wide_rank_deficient_svd_refines_without_increasing_the_objective() {
         let matrix = DMatrix::from_row_slice(
             2,
@@ -9428,6 +10016,51 @@ mod tests {
             normal_residual.norm()
         );
         assert!(residual <= initial_residual);
+    }
+
+    #[test]
+    #[allow(clippy::unreadable_literal)]
+    fn rank_deficient_reduced_step_ignores_an_independent_passive_direction() {
+        let jacobian = DMatrix::from_column_slice(
+            2,
+            2,
+            &[
+                -0.19763447626779196,
+                0.06587815875593041,
+                -0.6324555320336762,
+                0.21081851067789206,
+            ],
+        );
+        let residuals = DVector::from_vec(vec![-0.02365457882101376, 0.008950957506131462]);
+        let constraints = Vec::new();
+        let working = Vec::new();
+        let relative_tolerance = 1.0e-10;
+        let normalized_step_tolerance = 1.0e-10;
+
+        let step = solve_active_reduced_least_squares(
+            &jacobian,
+            &residuals,
+            &constraints,
+            &working,
+            relative_tolerance,
+            None,
+        )
+        .unwrap();
+        let model_residuals = &jacobian * &step + &residuals;
+        let gradient = jacobian.transpose() * &model_residuals;
+        let tolerance =
+            kkt_gradient_tolerance(&jacobian, &residuals, &step, 0.0, normalized_step_tolerance)
+                .unwrap();
+
+        assert!(
+            step.norm() < 1.0,
+            "the passive rank-null direction received a material response: {step:?}"
+        );
+        assert!(residual_cost(&model_residuals).unwrap() < residual_cost(&residuals).unwrap());
+        assert!(
+            working_set_kkt(&gradient, &constraints, &working, tolerance, None).is_ok(),
+            "rank-aware reduced response did not satisfy first-order stationarity: {gradient:?}"
+        );
     }
 
     #[test]

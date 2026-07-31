@@ -123,6 +123,34 @@ impl ResidualEvaluator for ScalarTarget {
 }
 
 #[derive(Clone, Copy, Debug)]
+struct CoordinateTarget {
+    coordinate: usize,
+    target: f64,
+}
+
+impl ResidualEvaluator for CoordinateTarget {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        let [VariableValue::Vec2(point)] = variables else {
+            return Err(EvaluationError::invalid_geometry(
+                "coordinate target fixture expected one Vec2",
+            ));
+        };
+        Ok(vec![point[self.coordinate] - self.target])
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        let [VariableValue::Vec2(_)] = variables else {
+            return Err(EvaluationError::invalid_geometry(
+                "coordinate target fixture expected one Vec2",
+            ));
+        };
+        let mut values = vec![0.0; 2];
+        values[self.coordinate] = 1.0;
+        Ok(vec![LocalJacobian::new(1, 2, values)])
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 struct ScalarDifference;
 
 impl ResidualEvaluator for ScalarDifference {
@@ -299,6 +327,30 @@ fn add_scalar_target(
         .unwrap();
 }
 
+fn add_coordinate_target(
+    problem: &mut Problem,
+    variable: VariableId,
+    category: ResidualCategory,
+    coordinate: usize,
+    target: f64,
+) {
+    let source_id = source(problem, &format!("{category:?} coordinate target"));
+    problem
+        .add_residual(
+            ResidualBlock::new(
+                source_id,
+                category,
+                vec![variable],
+                1,
+                vec![1.0],
+                vec![row("point[coordinate] - target")],
+                CoordinateTarget { coordinate, target },
+            )
+            .unwrap(),
+        )
+        .unwrap();
+}
+
 fn point(problem: &Problem, variable: VariableId) -> [f64; 2] {
     let VariableValue::Vec2(point) = problem.variable(variable).unwrap().value() else {
         panic!("expected Vec2")
@@ -422,7 +474,7 @@ fn preference_alone_restores_a_nearby_point_on_an_underconstrained_circle() {
 }
 
 #[test]
-fn constant_temporary_circle_objective_leaves_the_tangent_for_preference() {
+fn positive_constant_temporary_preserves_its_attained_residual_vector() {
     let mut problem = Problem::new();
     let variable = problem.add_variable(VariableBlock::vec2([1.0, 0.0], [1.0, 1.0]).unwrap());
     add_circle(
@@ -452,7 +504,7 @@ fn constant_temporary_circle_objective_leaves_the_tangent_for_preference() {
         SolveTermination::Converged,
         "{report:#?}"
     );
-    assert_normalized_point(point(&problem, variable), [0.0, 1.0], 1.0);
+    assert_normalized_point(point(&problem, variable), [1.0, 0.0], 1.0);
     assert!(report.hard_residual_max <= 1.0e-9);
     let temporary = report
         .priority_solves
@@ -467,6 +519,17 @@ fn constant_temporary_circle_objective_leaves_the_tangent_for_preference() {
     assert_cost_matches(temporary.initial_cost.unwrap(), 0.5);
     assert_cost_matches(temporary.final_cost.unwrap(), 0.5);
     assert_cost_matches(preference.attained_temporary_cost.unwrap(), 0.5);
+    assert_cost_matches(
+        preference.initial_cost.unwrap(),
+        preference.final_cost.unwrap(),
+    );
+    assert!(
+        preference
+            .protected_temporary
+            .iter()
+            .all(|protection| protection.preserved),
+        "{preference:#?}"
+    );
     assert_cost_matches(
         temporary.final_cost.unwrap(),
         audited_category_cost(&report, ResidualCategory::Temporary),
@@ -485,6 +548,42 @@ fn constant_temporary_circle_objective_leaves_the_tangent_for_preference() {
                 .sum::<usize>()
     );
     assert!(report.iterations > report.trace.records.len());
+}
+
+#[test]
+fn positive_temporary_still_allows_separable_preference_motion() {
+    let mut problem = Problem::new();
+    let variable = problem.add_variable(VariableBlock::vec2([1.0, 0.0], [1.0, 1.0]).unwrap());
+    add_coordinate_target(&mut problem, variable, ResidualCategory::Hard, 0, 1.0);
+    add_coordinate_target(&mut problem, variable, ResidualCategory::Temporary, 0, 0.0);
+    add_coordinate_target(&mut problem, variable, ResidualCategory::Preference, 1, 2.0);
+
+    let report = problem.solve(SolverConfig::default()).unwrap();
+    assert_eq!(
+        report.termination,
+        SolveTermination::Converged,
+        "{report:#?}"
+    );
+    assert_normalized_point(point(&problem, variable), [1.0, 2.0], 1.0);
+    let temporary = report
+        .priority_solves
+        .iter()
+        .find(|item| item.category == ResidualCategory::Temporary)
+        .unwrap();
+    let preference = report
+        .priority_solves
+        .iter()
+        .find(|item| item.category == ResidualCategory::Preference)
+        .unwrap();
+    assert_cost_matches(temporary.final_cost.unwrap(), 0.5);
+    assert!(preference.final_cost.unwrap() <= 1.0e-24, "{preference:#?}");
+    assert!(
+        preference
+            .protected_temporary
+            .iter()
+            .all(|protection| protection.preserved),
+        "{preference:#?}"
+    );
 }
 
 #[test]
@@ -775,13 +874,24 @@ fn true_constrained_circle_minimum_reports_converged() {
         1.0,
     );
 
-    let report = problem.solve(SolverConfig::default()).unwrap();
+    let OperationOutcome::Completed {
+        value: report,
+        report: work,
+    } = problem
+        .solve_controlled(SolverConfig::default(), OperationControl::unlimited())
+        .unwrap()
+    else {
+        panic!("unlimited priority solve was interrupted")
+    };
     assert_eq!(
         report.termination,
         SolveTermination::Converged,
         "{report:#?}"
     );
-    assert_normalized_point(point(&problem, variable), [1.0, 0.0], 1.0);
+    let solved = point(&problem, variable);
+    assert!(solved.iter().all(|coordinate| coordinate.is_finite()));
+    assert_normalized_point(solved, [1.0, 0.0], 1.0);
+    assert!(report.hard_residual_max <= 1.0e-9);
     assert_eq!(report.priority_solves.len(), 1);
     assert_eq!(
         report.priority_solves[0].termination,
@@ -790,6 +900,10 @@ fn true_constrained_circle_minimum_reports_converged() {
     assert_eq!(
         report.priority_solves[0].status,
         geosolve_core::SecondaryStatus::Acceptable
+    );
+    assert!(
+        work.consumed.factorizations <= 256 && work.consumed.nonlinear_iterations <= 256,
+        "{work:#?}"
     );
 }
 

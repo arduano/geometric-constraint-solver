@@ -4,12 +4,13 @@ use std::sync::{
 };
 
 use geosolve_core::{
-    AcceptedAuditPatch, AuditBinding, BoundStatus, CoordinateBound, DiagnosticBudget,
-    DiagnosticIncompleteReason, DiagnosticStatus, EvaluationError, HardValidity, LocalJacobian,
-    OneSidedMobility, Problem, ResidualBlock, ResidualCategory, ResidualEvaluator,
-    ResidualRowAudit, SecondaryStatus, SessionDomainRejection, SessionError, SessionPatch,
-    SessionTransactionRejection, SolveSession, SolveTermination, SolverConfig, SourceConstraint,
-    VariableBlock, VariableId, VariableKind, VariableValue,
+    AcceptedAuditPatch, AuditBinding, AuditEvaluationStatus, BoundStatus, CoordinateBound,
+    CoreError, DiagnosticBudget, DiagnosticIncompleteReason, DiagnosticStatus, EvaluationError,
+    HardValidity, LocalJacobian, OneSidedMobility, OperationControl, OperationController, Problem,
+    ResidualBlock, ResidualCategory, ResidualEvaluator, ResidualRowAudit, SecondaryStatus,
+    SessionDomainRejection, SessionError, SessionPatch, SessionTransactionRejection, SolveSession,
+    SolveTermination, SolverConfig, SourceConstraint, VariableBlock, VariableId, VariableKind,
+    VariableValue,
 };
 
 fn row(label: &str) -> ResidualRowAudit {
@@ -830,6 +831,53 @@ fn session_derives_dirty_components_preserves_ids_and_rejects_stale_or_failed_pa
 }
 
 #[test]
+fn session_rejects_failure_termination_or_failed_audit_despite_success_evidence() {
+    let mut problem = Problem::new();
+    let variable = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());
+    add_scalar_target(
+        &mut problem,
+        variable,
+        ResidualCategory::Hard,
+        1.0,
+        "accepted target",
+    );
+    let config = SolverConfig::default();
+    let accepted = problem.solve(config).unwrap();
+    assert_eq!(accepted.termination, SolveTermination::Converged);
+    assert_eq!(accepted.hard_validity, HardValidity::Valid);
+    assert!(accepted.hard_residuals_validated);
+    assert!(accepted.rank_is_valid);
+    assert!(accepted.audit.sources.iter().all(|source| {
+        source
+            .rows
+            .iter()
+            .all(|row| row.evaluation_status == AuditEvaluationStatus::Evaluated)
+    }));
+
+    for termination in [
+        SolveTermination::InvalidGeometry,
+        SolveTermination::NumericalFailure,
+    ] {
+        let mut report = accepted.clone();
+        report.termination = termination;
+        let error =
+            SolveSession::from_accepted_report(problem.clone(), config, report).unwrap_err();
+        assert!(matches!(
+            error,
+            SessionError::InitialRejected(geosolve_core::SessionCoreRejection::EvaluationFailure)
+        ));
+    }
+
+    let mut report = accepted;
+    report.audit.sources[0].rows[0].evaluation_status = AuditEvaluationStatus::Failed;
+    let error = SolveSession::from_accepted_report(problem, config, report).unwrap_err();
+    assert!(matches!(
+        error,
+        SessionError::InitialRejected(geosolve_core::SessionCoreRejection::EvaluationFailure)
+    ));
+}
+
+#[test]
 fn source_parameter_and_fixed_connector_replacements_dirty_all_dependencies() {
     let mut problem = Problem::new();
     let left = problem.add_variable(VariableBlock::scalar(1.0, 1.0).unwrap());
@@ -1418,6 +1466,10 @@ fn incomplete_multidimensional_critical_cone_never_reports_optimal() {
     assert_eq!(report.termination, SolveTermination::Stalled, "{report:#?}");
     assert_eq!(report.temporary_status, SecondaryStatus::Stalled);
     assert_eq!(outside.load(Ordering::Relaxed), 0);
+
+    let session = SolveSession::new(problem, SolverConfig::default()).unwrap();
+    assert_eq!(session.report().termination, SolveTermination::Stalled);
+    assert_eq!(session.report().temporary_status, SecondaryStatus::Stalled);
 }
 
 #[test]
@@ -2096,6 +2148,88 @@ fn componentless_secondary_derivative_failure_cannot_enter_a_session_as_acceptab
         .unwrap();
 
     let error = SolveSession::new(problem, SolverConfig::default()).unwrap_err();
+    assert!(matches!(
+        error,
+        SessionError::InitialRejected(geosolve_core::SessionCoreRejection::EvaluationFailure)
+    ));
+}
+
+#[test]
+fn exact_state_certification_rejects_elimination_canonicalization_without_mutation() {
+    let mut problem = Problem::new();
+    let variable = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());
+    let source_id = source(&mut problem, "fixed exact state");
+    let residual_id = problem
+        .add_residual(
+            ResidualBlock::fixed_variable(
+                source_id,
+                variable,
+                VariableValue::Scalar(0.0),
+                vec![1.0],
+                vec![row("fixed exact state")],
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    problem
+        .declare_fixed_variable(variable, VariableValue::Scalar(0.0), residual_id)
+        .unwrap();
+    problem
+        .set_variable_value(variable, VariableValue::Scalar(2.0))
+        .unwrap();
+    let before = problem.packed_state().unwrap();
+    let mut controller = OperationController::new(OperationControl::unlimited());
+
+    let error = problem
+        .certify_current_state_with_controller(SolverConfig::default(), &mut controller)
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        CoreError::InvalidAcceptedLinearization {
+            context: "materialized state requires fixed, alias, or bound canonicalization"
+        }
+    ));
+    assert_eq!(problem.packed_state().unwrap(), before);
+    assert_eq!(scalar(&problem, variable).to_bits(), 2.0_f64.to_bits());
+}
+
+#[test]
+fn exact_state_certification_reports_invalid_geometry_without_mutation_or_publication() {
+    let mut problem = Problem::new();
+    let variable = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());
+    let source_id = source(&mut problem, "invalid exact state");
+    problem
+        .add_residual(
+            ResidualBlock::new(
+                source_id,
+                ResidualCategory::Hard,
+                vec![variable],
+                1,
+                vec![1.0],
+                vec![row("invalid exact state")],
+                InvalidEvaluation,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let before = problem.packed_state().unwrap();
+    let mut controller = OperationController::new(OperationControl::unlimited());
+
+    let report = problem
+        .certify_current_state_with_controller(SolverConfig::default(), &mut controller)
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(report.termination, SolveTermination::InvalidGeometry);
+    assert_eq!(report.hard_validity, HardValidity::Invalid);
+    assert_eq!(
+        report.audit.sources[0].rows[0].evaluation_status,
+        AuditEvaluationStatus::Failed
+    );
+    assert_eq!(problem.packed_state().unwrap(), before);
+    let error =
+        SolveSession::from_accepted_report(problem, SolverConfig::default(), report).unwrap_err();
     assert!(matches!(
         error,
         SessionError::InitialRejected(geosolve_core::SessionCoreRejection::EvaluationFailure)
