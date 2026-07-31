@@ -2,9 +2,11 @@ use std::f64::consts::PI;
 
 use geosolve_core::{
     AuditBinding, CoordinateBound, CoreError, EvaluationError, EvaluationErrorCategory,
-    HardValidity, LocalJacobian, Problem, ResidualBlock, ResidualCategory, ResidualEvaluator,
-    ResidualRowAudit, SensitivityError, SensitivityStatus, SessionPatch, SolveSession,
-    SolverConfig, SourceConstraint, VariableBlock, VariableKind, VariableValue,
+    HardValidity, LocalJacobian, OperationCheckpoint, OperationControl, OperationController,
+    OperationLimits, OperationStopReason, OperationWorkCounter, Problem, ResidualBlock,
+    ResidualCategory, ResidualEvaluator, ResidualRowAudit, SensitivityError, SensitivityStatus,
+    SessionPatch, SolveSession, SolverConfig, SourceConstraint, VariableBlock, VariableKind,
+    VariableValue,
 };
 use geosolve_geometry::{Pose2 as GeometryPose2, Pose3 as GeometryPose3};
 use nalgebra::DVector;
@@ -658,6 +660,55 @@ fn sensitivity_distinguishes_minimum_norm_and_inconsistent_rates_and_rejects_inp
         component.solve_sensitivity(&DVector::from_vec(vec![f64::NAN, 0.0])),
         Err(SensitivityError::NonFiniteRightHandSide { index: 0, value }) if value.is_nan()
     ));
+}
+
+#[test]
+fn controlled_nullspace_authorizes_the_actual_padded_svd_shape() {
+    let mut problem = Problem::new();
+    let vector = problem.add_variable(VariableBlock::vec2([0.0, 0.0], [1.0; 2]).unwrap());
+    let source = problem.add_source(SourceConstraint::new("one row in two columns").unwrap());
+    problem
+        .add_residual(
+            ResidualBlock::new(
+                source,
+                ResidualCategory::Hard,
+                vec![vector],
+                1,
+                vec![1.0],
+                rows(1, "padded nullspace"),
+                Vec2Rows {
+                    coefficients: vec![[1.0, 1.0]],
+                    targets: vec![0.0],
+                },
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let session = SolveSession::new(problem, SolverConfig::default()).unwrap();
+    let mut limits = OperationLimits::unlimited();
+    limits.dense_kernel_rows = 1;
+    limits.dense_kernel_columns = 2;
+    let mut controller = OperationController::new(OperationControl::new(
+        geosolve_core::CancellationToken::default(),
+        limits,
+    ));
+
+    assert_eq!(
+        session
+            .accepted_hard_component_nullspace_with_controller(vector, &mut controller)
+            .unwrap(),
+        None
+    );
+    let report = controller.report();
+    assert_eq!(
+        report.stopping_reason,
+        Some(OperationStopReason::WorkExhausted {
+            counter: OperationWorkCounter::DenseKernelRows,
+            checkpoint: OperationCheckpoint::BeforeRankKernel,
+        })
+    );
+    assert_eq!(report.consumed.dense_kernel_rows, 1);
+    assert_eq!(report.consumed.dense_kernel_columns, 2);
 }
 
 #[test]

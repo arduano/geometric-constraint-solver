@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use geosolve_core::SolverConfig;
+use geosolve_core::{OperationControl, OperationOutcome, SolverConfig};
 use geosolve_geometry::Point2;
 use geosolve_sketch::{
     CurveDefinition, DocumentConstraintDefinition, DocumentDirectionSense, DocumentError,
@@ -391,6 +391,16 @@ fn point_and_line_snapshots_constrain_only_native_geometry_with_exact_stamps_and
     let repeated_geometry = point_accepted.solve_result().geometry.clone();
     let repeated_audit = point_accepted.solve_result().display_audit.clone();
     let repeated_input = point_accepted.input();
+    let original_preference = repeated_audit
+        .sources
+        .iter()
+        .find(|source| source.source_label == "previous-state preference for native point")
+        .expect("native point PreviousState audit");
+    assert!(original_preference.rows.iter().all(|row| {
+        row.bindings
+            .iter()
+            .any(|binding| binding.name == "target" && binding.value == "(9, -2)")
+    }));
     point_session
         .reattempt(
             point_session.design_identity(),
@@ -401,6 +411,24 @@ fn point_and_line_snapshots_constrain_only_native_geometry_with_exact_stamps_and
     assert_eq!(repeated.input(), repeated_input);
     assert_eq!(repeated.solve_result().geometry, repeated_geometry);
     assert_eq!(repeated.solve_result().display_audit, repeated_audit);
+    let controlled = point_session
+        .reattempt_controlled(
+            point_session.design_identity(),
+            DocumentSolveRequest::default(),
+            OperationControl::unlimited(),
+        )
+        .unwrap();
+    assert!(matches!(controlled, OperationOutcome::Completed { .. }));
+    let controlled_repeated = point_session.accepted_state().unwrap();
+    assert_eq!(controlled_repeated.input(), repeated_input);
+    assert_eq!(
+        controlled_repeated.solve_result().geometry,
+        repeated_geometry
+    );
+    assert_eq!(
+        controlled_repeated.solve_result().display_audit,
+        repeated_audit
+    );
     assert_eq!(point_session.external_snapshot_set(), &point_set);
 
     let mut document = SketchDocument::new(10.0).unwrap();

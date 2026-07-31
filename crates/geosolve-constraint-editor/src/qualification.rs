@@ -1133,7 +1133,7 @@ fn drag_matrix(input: &Value) -> Result<String, String> {
         pointer(10, endpoint.x + 3.0, endpoint.y, Modifiers::default()),
     ))?;
     cancelled.projected_drag_result(10, request, points[0], Some([-2.0, 1.0]));
-    if cancelled.cancel() != [EditorEffect::ClearPointPreview]
+    if cancelled.cancel() != [EditorEffect::CancelPointPreview]
         || !cancelled
             .pointer_up(
                 &scene,
@@ -1144,6 +1144,10 @@ fn drag_matrix(input: &Value) -> Result<String, String> {
     {
         return Err("accepted-preview cancel allowed a later commit".into());
     }
+    // Preserve the frozen M40 semantic trace token: the qualified behavior is
+    // still "clear the preview by cancelling, then emit no release commit".
+    // M65 moved that decision to the headless `CancelPointPreview` effect above;
+    // the ownership change does not rewrite the archived M40 behavior digest.
     trace.push("cancel:ClearPointPreview:no-release-commit".into());
     Ok(trace.join("|"))
 }

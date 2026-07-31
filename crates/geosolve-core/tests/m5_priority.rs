@@ -4,9 +4,10 @@ use std::sync::{
 };
 
 use geosolve_core::{
-    AuditBinding, EvaluationError, LocalJacobian, OperationControl, OperationOutcome,
-    PrioritySolveBackend, PrioritySolveScope, Problem, ResidualBlock, ResidualCategory,
-    ResidualEvaluator, ResidualRowAudit, SolveTermination, SolverConfig, SourceConstraint,
+    AuditBinding, CancellationToken, CoreError, EvaluationError, LinearSolveBackendPolicy,
+    LocalJacobian, OperationControl, OperationController, OperationOutcome, PrioritySolveBackend,
+    PrioritySolveScope, Problem, ResidualBlock, ResidualCategory, ResidualEvaluator,
+    ResidualRowAudit, SecondaryStatus, SolveTermination, SolverConfig, SourceConstraint,
     VariableBlock, VariableId, VariableValue,
 };
 
@@ -119,6 +120,34 @@ impl ResidualEvaluator for ScalarTarget {
             ));
         };
         Ok(vec![LocalJacobian::new(1, 1, vec![1.0])])
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct CoordinateTarget {
+    coordinate: usize,
+    target: f64,
+}
+
+impl ResidualEvaluator for CoordinateTarget {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        let [VariableValue::Vec2(point)] = variables else {
+            return Err(EvaluationError::invalid_geometry(
+                "coordinate target fixture expected one Vec2",
+            ));
+        };
+        Ok(vec![point[self.coordinate] - self.target])
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        let [VariableValue::Vec2(_)] = variables else {
+            return Err(EvaluationError::invalid_geometry(
+                "coordinate target fixture expected one Vec2",
+            ));
+        };
+        let mut jacobian = vec![0.0; 2];
+        jacobian[self.coordinate] = 1.0;
+        Ok(vec![LocalJacobian::new(1, 2, jacobian)])
     }
 }
 
@@ -293,6 +322,33 @@ fn add_scalar_target(
                 vec![scale],
                 vec![row("scalar - target")],
                 ScalarTarget(target),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+}
+
+fn add_coordinate_target(
+    problem: &mut Problem,
+    point: VariableId,
+    category: ResidualCategory,
+    coordinate: usize,
+    target: f64,
+) {
+    let source_id = source(
+        problem,
+        &format!("{category:?} coordinate {coordinate} target"),
+    );
+    problem
+        .add_residual(
+            ResidualBlock::new(
+                source_id,
+                category,
+                vec![point],
+                1,
+                vec![1.0],
+                vec![row("point coordinate - target")],
+                CoordinateTarget { coordinate, target },
             )
             .unwrap(),
         )
@@ -488,6 +544,234 @@ fn constant_temporary_circle_objective_leaves_the_tangent_for_preference() {
 }
 
 #[test]
+fn positive_temporary_level_keeps_a_separable_preference_movable_and_bounded() {
+    let mut problem = Problem::new();
+    let variable = problem.add_variable(VariableBlock::vec2([0.0, -3.0], [1.0, 1.0]).unwrap());
+    add_coordinate_target(&mut problem, variable, ResidualCategory::Hard, 0, 0.0);
+    add_coordinate_target(&mut problem, variable, ResidualCategory::Temporary, 0, 1.0);
+    add_coordinate_target(&mut problem, variable, ResidualCategory::Preference, 1, 2.0);
+
+    let OperationOutcome::Completed {
+        value: report,
+        report: work,
+    } = problem
+        .solve_controlled(SolverConfig::default(), OperationControl::unlimited())
+        .unwrap()
+    else {
+        panic!("unlimited priority solve was interrupted")
+    };
+    assert_eq!(
+        report.termination,
+        SolveTermination::Converged,
+        "{report:#?}"
+    );
+    assert_normalized_point(point(&problem, variable), [0.0, 2.0], 1.0);
+    let temporary = report
+        .priority_solves
+        .iter()
+        .find(|priority| priority.category == ResidualCategory::Temporary)
+        .unwrap();
+    let preference = report
+        .priority_solves
+        .iter()
+        .find(|priority| priority.category == ResidualCategory::Preference)
+        .unwrap();
+    assert_cost_matches(temporary.final_cost.unwrap(), 0.5);
+    assert_cost_matches(preference.attained_temporary_cost.unwrap(), 0.5);
+    assert!(preference.final_cost.unwrap() <= 1.0e-24, "{preference:#?}");
+    assert!(
+        preference
+            .protected_temporary
+            .iter()
+            .all(|protected| protected.preserved),
+        "{preference:#?}"
+    );
+    assert!(
+        work.consumed.factorizations <= 64 && work.consumed.nonlinear_iterations <= 64,
+        "{work:#?}"
+    );
+}
+
+#[test]
+fn singleton_optional_refinement_exhaustion_retains_the_certified_baseline() {
+    let mut problem = Problem::new();
+    let variable = problem.add_variable(VariableBlock::vec2([0.0, -3.0], [1.0, 1.0]).unwrap());
+    add_coordinate_target(&mut problem, variable, ResidualCategory::Hard, 0, 0.0);
+    add_coordinate_target(&mut problem, variable, ResidualCategory::Temporary, 0, 1.0);
+    add_coordinate_target(&mut problem, variable, ResidualCategory::Preference, 1, 2.0);
+
+    let mut unlimited = problem.clone();
+    let OperationOutcome::Completed {
+        value: expected,
+        report: unlimited_work,
+    } = unlimited
+        .solve_controlled(SolverConfig::default(), OperationControl::unlimited())
+        .unwrap()
+    else {
+        panic!("unlimited singleton priority solve was interrupted")
+    };
+
+    let mut limits = geosolve_core::OperationLimits::unlimited();
+    limits.document_dependency_items = 2;
+    let OperationOutcome::Completed {
+        value: report,
+        report: bounded_work,
+    } = problem
+        .solve_controlled(
+            SolverConfig::default(),
+            OperationControl::new(CancellationToken::default(), limits),
+        )
+        .unwrap()
+    else {
+        panic!("optional singleton refinement exhaustion invalidated its certified baseline")
+    };
+
+    assert_eq!(
+        report.termination,
+        SolveTermination::Converged,
+        "{report:#?}"
+    );
+    assert_normalized_point(point(&problem, variable), [0.0, 2.0], 1.0);
+    assert_eq!(
+        report.accepted_state.ambient(),
+        expected.accepted_state.ambient()
+    );
+    let preference = report
+        .priority_solves
+        .iter()
+        .find(|priority| priority.category == ResidualCategory::Preference)
+        .unwrap();
+    assert_eq!(preference.status, SecondaryStatus::Acceptable);
+    assert!(
+        preference
+            .protected_temporary
+            .iter()
+            .all(|protected| protected.preserved),
+        "{preference:#?}"
+    );
+    assert_eq!(bounded_work.consumed.document_dependency_items, 1);
+    assert!(
+        unlimited_work.consumed.document_dependency_items
+            > bounded_work.consumed.document_dependency_items,
+        "{unlimited_work:#?}\n{bounded_work:#?}"
+    );
+}
+
+#[test]
+fn positive_temporary_exact_row_baseline_is_optimized_before_scalar_fallback() {
+    let mut problem = Problem::new();
+    let variable = problem.add_variable(VariableBlock::vec2([0.0, -3.0], [1.0, 1.0]).unwrap());
+    add_coordinate_target(&mut problem, variable, ResidualCategory::Hard, 0, 0.0);
+    add_coordinate_target(&mut problem, variable, ResidualCategory::Temporary, 0, 1.0);
+    add_coordinate_target(
+        &mut problem,
+        variable,
+        ResidualCategory::Preference,
+        1,
+        -1.0,
+    );
+    add_coordinate_target(&mut problem, variable, ResidualCategory::Preference, 1, 1.0);
+
+    let OperationOutcome::Completed {
+        value: report,
+        report: work,
+    } = problem
+        .solve_controlled(SolverConfig::default(), OperationControl::unlimited())
+        .unwrap()
+    else {
+        panic!("unlimited priority solve was interrupted")
+    };
+    assert_eq!(
+        report.termination,
+        SolveTermination::Converged,
+        "{report:#?}"
+    );
+    assert_normalized_point(point(&problem, variable), [0.0, 0.0], 1.0);
+    let preference = report
+        .priority_solves
+        .iter()
+        .find(|priority| priority.category == ResidualCategory::Preference)
+        .unwrap();
+    assert_eq!(preference.termination, SolveTermination::Converged);
+    assert_eq!(preference.status, SecondaryStatus::Acceptable);
+    assert_cost_matches(preference.attained_temporary_cost.unwrap(), 0.5);
+    assert_cost_matches(preference.final_cost.unwrap(), 1.0);
+    assert!(
+        preference
+            .protected_temporary
+            .iter()
+            .all(|protected| protected.preserved),
+        "{preference:#?}"
+    );
+    assert!(
+        work.consumed.factorizations <= 96 && work.consumed.nonlinear_iterations <= 64,
+        "{report:#?}\n{work:#?}"
+    );
+}
+
+#[test]
+fn positive_temporary_baseline_hard_polish_exhaustion_retains_the_certified_state() {
+    let mut problem = Problem::new();
+    let variable = problem.add_variable(VariableBlock::scalar(5.0e-7, 1.0).unwrap());
+    add_scalar_target(&mut problem, variable, ResidualCategory::Hard, 0.0, 1.0);
+    add_scalar_target(
+        &mut problem,
+        variable,
+        ResidualCategory::Temporary,
+        1.0,
+        1.0,
+    );
+    add_scalar_target(
+        &mut problem,
+        variable,
+        ResidualCategory::Preference,
+        0.0,
+        1.0,
+    );
+    let config = SolverConfig {
+        normalized_residual_tolerance: 1.0e-6,
+        normalized_step_tolerance: 1.0e-6,
+        ..SolverConfig::default()
+    };
+    let mut control = OperationControl::unlimited();
+    control.limits.nonlinear_iterations = 14;
+
+    let OperationOutcome::Completed {
+        value: report,
+        report: work,
+    } = problem.solve_controlled(config, control).unwrap()
+    else {
+        panic!("baseline hard-polish exhaustion invalidated a certified positive-Temporary state")
+    };
+
+    assert_eq!(
+        report.termination,
+        SolveTermination::Converged,
+        "{report:#?}"
+    );
+    assert!(report.hard_residuals_validated);
+    assert!(report.hard_residual_max <= config.normalized_residual_tolerance);
+    assert_eq!(scalar(&problem, variable).to_bits(), 5.0e-7_f64.to_bits());
+    let temporary = report
+        .priority_solves
+        .iter()
+        .find(|priority| priority.category == ResidualCategory::Temporary)
+        .unwrap();
+    let preference = report
+        .priority_solves
+        .iter()
+        .find(|priority| priority.category == ResidualCategory::Preference)
+        .unwrap();
+    assert!(temporary.final_cost.is_some_and(|cost| cost > 0.0));
+    assert!(matches!(
+        preference.status,
+        SecondaryStatus::Optimal | SecondaryStatus::Acceptable
+    ));
+    assert_eq!(work.consumed.nonlinear_iterations, 14);
+    assert!(work.stopping_reason.is_none(), "{work:#?}");
+}
+
+#[test]
 fn zero_cost_temporary_circle_manifold_allows_opposite_preference_at_all_scales() {
     for scale in [1.0e-6, 1.0, 1.0e6] {
         let mut problem = Problem::new();
@@ -580,6 +864,149 @@ fn zero_cost_temporary_row_space_blocks_a_conflicting_rank_deficient_preference(
             .all(|protected| protected.preserved),
         "{preference:#?}"
     );
+}
+
+#[test]
+fn zero_cost_temporary_jointly_polishes_hard_rows_without_losing_its_exact_target() {
+    let mut problem = Problem::new();
+    let selected = problem.add_variable(VariableBlock::scalar(1.0, 1.0).unwrap());
+    let dependent = problem.add_variable(VariableBlock::scalar(1.0 + 5.0e-10, 1.0).unwrap());
+    let hard_source = source(&mut problem, "marginal hard equality");
+    problem
+        .add_residual(
+            ResidualBlock::new(
+                hard_source,
+                ResidualCategory::Hard,
+                vec![selected, dependent],
+                1,
+                vec![1.0],
+                vec![row("selected - dependent")],
+                ScalarDifference,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    add_scalar_target(
+        &mut problem,
+        selected,
+        ResidualCategory::Temporary,
+        1.0,
+        1.0,
+    );
+
+    let OperationOutcome::Completed { value, report } = problem
+        .solve_controlled(SolverConfig::default(), OperationControl::unlimited())
+        .unwrap()
+    else {
+        panic!("zero-Temporary precision solve was interrupted")
+    };
+
+    assert_eq!(value.termination, SolveTermination::Converged, "{value:#?}");
+    assert!(
+        value.hard_residual_max <= 1.0e-12,
+        "hard precision was not recovered: {value:#?}"
+    );
+    assert!((scalar(&problem, selected) - 1.0).abs() <= 1.0e-12);
+    assert!((scalar(&problem, dependent) - 1.0).abs() <= 1.0e-12);
+    let temporary = value
+        .priority_solves
+        .iter()
+        .find(|priority| priority.category == ResidualCategory::Temporary)
+        .unwrap();
+    assert_eq!(temporary.termination, SolveTermination::Converged);
+    assert!(
+        temporary.final_cost.is_some_and(|cost| cost <= 1.0e-24),
+        "{temporary:#?}"
+    );
+    assert!(
+        report.consumed.nonlinear_iterations <= 8 && report.consumed.factorizations <= 16,
+        "{report:#?}"
+    );
+}
+
+#[test]
+fn zero_temporary_precision_polish_exhaustion_retains_the_certified_baseline() {
+    let fixture = || {
+        let mut problem = Problem::new();
+        let selected = problem.add_variable(VariableBlock::scalar(1.0, 1.0).unwrap());
+        let dependent = problem.add_variable(VariableBlock::scalar(1.0 + 5.0e-10, 1.0).unwrap());
+        let hard_source = source(&mut problem, "marginal hard equality");
+        problem
+            .add_residual(
+                ResidualBlock::new(
+                    hard_source,
+                    ResidualCategory::Hard,
+                    vec![selected, dependent],
+                    1,
+                    vec![1.0],
+                    vec![row("selected - dependent")],
+                    ScalarDifference,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        add_scalar_target(
+            &mut problem,
+            selected,
+            ResidualCategory::Temporary,
+            1.0,
+            1.0,
+        );
+        (problem, selected, dependent)
+    };
+
+    // SparsePreferred intentionally skips the dense-only optional precision
+    // target path and therefore exposes the independently certified baseline
+    // work needed before that path starts.
+    let (mut baseline, _, _) = fixture();
+    let sparse_config = SolverConfig {
+        linear_solve_backend: LinearSolveBackendPolicy::SparsePreferred,
+        ..SolverConfig::default()
+    };
+    let OperationOutcome::Completed {
+        value: baseline_report,
+        report: baseline_work,
+    } = baseline
+        .solve_controlled(sparse_config, OperationControl::unlimited())
+        .unwrap()
+    else {
+        panic!("baseline solve was interrupted")
+    };
+    assert_eq!(
+        baseline_report.termination,
+        SolveTermination::Converged,
+        "{baseline_report:#?}"
+    );
+
+    let (mut problem, selected, dependent) = fixture();
+    let mut control = OperationControl::unlimited();
+    control.limits.nonlinear_iterations = baseline_work.consumed.nonlinear_iterations;
+    let dense_config = SolverConfig {
+        linear_solve_backend: LinearSolveBackendPolicy::DenseOnly,
+        ..SolverConfig::default()
+    };
+    let OperationOutcome::Completed {
+        value: report,
+        report: work,
+    } = problem.solve_controlled(dense_config, control).unwrap()
+    else {
+        panic!("optional precision exhaustion invalidated its certified baseline")
+    };
+
+    assert_eq!(
+        report.termination,
+        SolveTermination::Converged,
+        "{report:#?}"
+    );
+    assert!(report.hard_residuals_validated);
+    assert!(report.hard_residual_max <= dense_config.normalized_residual_tolerance);
+    assert!((scalar(&problem, selected) - 1.0).abs() <= 1.0e-9);
+    assert!((scalar(&problem, dependent) - 1.0).abs() <= 1.0e-9);
+    assert_eq!(
+        work.consumed.nonlinear_iterations,
+        baseline_work.consumed.nonlinear_iterations
+    );
+    assert!(work.stopping_reason.is_none(), "{work:#?}");
 }
 
 #[test]
@@ -1032,4 +1459,257 @@ fn cross_component_secondary_incidence_is_optimized_as_one_group() {
     );
     assert_eq!(coupled.termination, SolveTermination::Converged);
     assert_eq!(coupled.final_cost, Some(0.0));
+}
+
+#[test]
+fn coupled_baseline_hard_polish_exhaustion_retains_the_certified_state() {
+    let mut problem = Problem::new();
+    let first = problem.add_variable(VariableBlock::scalar(5.0e-7, 1.0).unwrap());
+    let second = problem.add_variable(VariableBlock::scalar(1.0 + 5.0e-7, 1.0).unwrap());
+    add_scalar_target(&mut problem, first, ResidualCategory::Hard, 0.0, 1.0);
+    add_scalar_target(&mut problem, second, ResidualCategory::Hard, 1.0, 1.0);
+    let temporary_source = source(&mut problem, "positive coupled temporary");
+    problem
+        .add_residual(
+            ResidualBlock::new(
+                temporary_source,
+                ResidualCategory::Temporary,
+                vec![first, second],
+                1,
+                vec![1.0],
+                vec![row("first - second")],
+                ScalarDifference,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    add_scalar_target(&mut problem, first, ResidualCategory::Preference, 0.0, 1.0);
+    let config = SolverConfig {
+        normalized_residual_tolerance: 1.0e-6,
+        normalized_step_tolerance: 1.0e-6,
+        ..SolverConfig::default()
+    };
+    let mut control = OperationControl::unlimited();
+    control.limits.nonlinear_iterations = 8;
+
+    let OperationOutcome::Completed {
+        value: report,
+        report: work,
+    } = problem.solve_controlled(config, control).unwrap()
+    else {
+        panic!("coupled baseline hard-polish exhaustion invalidated its certified state")
+    };
+
+    assert_eq!(
+        report.termination,
+        SolveTermination::Converged,
+        "{report:#?}"
+    );
+    assert!(report.hard_residuals_validated);
+    assert!(report.hard_residual_max <= config.normalized_residual_tolerance);
+    assert_eq!(scalar(&problem, first).to_bits(), 5.0e-7_f64.to_bits());
+    assert_eq!(
+        scalar(&problem, second).to_bits(),
+        (1.0 + 5.0e-7_f64).to_bits()
+    );
+    let coupled = report
+        .priority_solves
+        .iter()
+        .find(|priority| {
+            priority.category == ResidualCategory::Preference
+                && priority.component_indices.len() == 2
+        })
+        .unwrap();
+    assert_eq!(coupled.termination, SolveTermination::Converged);
+    assert_eq!(coupled.status, SecondaryStatus::Acceptable);
+    assert_eq!(work.consumed.nonlinear_iterations, 6);
+    assert!(work.stopping_reason.is_none(), "{work:#?}");
+}
+
+#[test]
+fn current_state_certification_rebuilds_evidence_without_moving_exact_zero_priorities() {
+    let mut problem = Problem::new();
+    let variable = problem.add_variable(VariableBlock::scalar(2.0, 1.0).unwrap());
+    add_scalar_target(&mut problem, variable, ResidualCategory::Hard, 2.0, 1.0);
+    add_scalar_target(
+        &mut problem,
+        variable,
+        ResidualCategory::Temporary,
+        2.0,
+        1.0,
+    );
+    add_scalar_target(
+        &mut problem,
+        variable,
+        ResidualCategory::Preference,
+        2.0,
+        1.0,
+    );
+    let before = problem.packed_state().unwrap();
+    let mut controller = OperationController::new(OperationControl::unlimited());
+
+    let report = problem
+        .certify_current_state_with_controller(SolverConfig::default(), &mut controller)
+        .unwrap()
+        .expect("complete certification");
+
+    assert_eq!(problem.packed_state().unwrap(), before);
+    assert_eq!(report.accepted_state, before);
+    assert_eq!(report.termination, SolveTermination::Converged);
+    assert_eq!(report.iterations, 0);
+    assert!(report.hard_residuals_validated);
+    assert!(report.rank_is_valid);
+    assert!(
+        report
+            .component_solves
+            .iter()
+            .all(|component| component.iterations == 0 && component.actual_backend.is_none())
+    );
+    assert_eq!(report.priority_solves.len(), 2);
+    assert!(report.priority_solves.iter().all(|priority| {
+        priority.iterations == 0
+            && priority.final_cost == Some(0.0)
+            && priority.status == SecondaryStatus::Optimal
+    }));
+    let preference = report
+        .priority_solves
+        .iter()
+        .find(|priority| priority.category == ResidualCategory::Preference)
+        .unwrap();
+    assert_eq!(preference.protected_temporary.len(), 1);
+    assert!(preference.protected_temporary[0].preserved);
+}
+
+#[test]
+fn current_state_certification_rejects_unproved_movable_priority_without_motion() {
+    let mut problem = Problem::new();
+    let variable = problem.add_variable(VariableBlock::scalar(2.0, 1.0).unwrap());
+    add_scalar_target(&mut problem, variable, ResidualCategory::Hard, 2.0, 1.0);
+    add_scalar_target(
+        &mut problem,
+        variable,
+        ResidualCategory::Preference,
+        3.0,
+        1.0,
+    );
+    let before = problem.packed_state().unwrap();
+    let mut controller = OperationController::new(OperationControl::unlimited());
+
+    let report = problem
+        .certify_current_state_with_controller(SolverConfig::default(), &mut controller)
+        .unwrap()
+        .expect("complete rejection evidence");
+
+    assert_eq!(problem.packed_state().unwrap(), before);
+    assert_eq!(report.accepted_state, before);
+    assert_eq!(report.termination, SolveTermination::Stalled);
+    assert_eq!(report.preference_status, SecondaryStatus::Stalled);
+    assert_eq!(report.iterations, 0);
+}
+
+#[test]
+fn current_state_certification_rejects_required_canonicalization_bitwise() {
+    let mut problem = Problem::new();
+    let variable = problem.add_variable(VariableBlock::scalar(1.0, 1.0).unwrap());
+    let source_id = source(&mut problem, "fixed scalar");
+    let residual = problem
+        .add_residual(
+            ResidualBlock::fixed_variable(
+                source_id,
+                variable,
+                VariableValue::Scalar(0.0),
+                vec![1.0],
+                vec![row("scalar - fixed target")],
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    problem
+        .declare_fixed_variable(variable, VariableValue::Scalar(0.0), residual)
+        .unwrap();
+    problem
+        .set_variable_value(variable, VariableValue::Scalar(1.0))
+        .unwrap();
+    let before = problem.packed_state().unwrap();
+    let mut controller = OperationController::new(OperationControl::unlimited());
+
+    let error = problem
+        .certify_current_state_with_controller(SolverConfig::default(), &mut controller)
+        .unwrap_err();
+    assert!(
+        matches!(
+            error,
+            CoreError::InvalidAcceptedLinearization {
+                context: "materialized state requires fixed, alias, or bound canonicalization"
+            }
+        ),
+        "{error:?}"
+    );
+    assert_eq!(problem.packed_state().unwrap(), before);
+}
+
+#[test]
+fn current_state_certification_accepts_finite_fixed_only_priority_without_claiming_optimality() {
+    let mut problem = Problem::new();
+    let variable = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());
+    let source_id = source(&mut problem, "fixed scalar");
+    let residual = problem
+        .add_residual(
+            ResidualBlock::fixed_variable(
+                source_id,
+                variable,
+                VariableValue::Scalar(0.0),
+                vec![1.0],
+                vec![row("scalar - fixed target")],
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    problem
+        .declare_fixed_variable(variable, VariableValue::Scalar(0.0), residual)
+        .unwrap();
+    add_scalar_target(
+        &mut problem,
+        variable,
+        ResidualCategory::Preference,
+        10.0,
+        1.0,
+    );
+    let before = problem.packed_state().unwrap();
+    let mut controller = OperationController::new(OperationControl::unlimited());
+
+    let report = problem
+        .certify_current_state_with_controller(SolverConfig::default(), &mut controller)
+        .unwrap()
+        .expect("complete certification");
+
+    assert_eq!(problem.packed_state().unwrap(), before);
+    assert_eq!(report.termination, SolveTermination::Converged);
+    assert_eq!(report.preference_status, SecondaryStatus::Acceptable);
+    let [preference] = report.priority_solves.as_slice() else {
+        panic!("expected one fixed-only priority report")
+    };
+    assert_eq!(preference.scope, PrioritySolveScope::Fixed);
+    assert_eq!(preference.status, SecondaryStatus::Acceptable);
+    assert!(preference.final_cost.is_some_and(|cost| cost > 0.0));
+}
+
+#[test]
+fn current_state_certification_exhaustion_returns_no_partial_report_or_motion() {
+    let mut problem = Problem::new();
+    let variable = problem.add_variable(VariableBlock::scalar(2.0, 1.0).unwrap());
+    add_scalar_target(&mut problem, variable, ResidualCategory::Hard, 2.0, 1.0);
+    let before = problem.packed_state().unwrap();
+    let mut control = OperationControl::unlimited();
+    control.limits.document_dependency_items = 0;
+    let mut controller = OperationController::new(control);
+
+    assert!(
+        problem
+            .certify_current_state_with_controller(SolverConfig::default(), &mut controller)
+            .unwrap()
+            .is_none()
+    );
+    assert!(controller.is_stopped());
+    assert_eq!(problem.packed_state().unwrap(), before);
 }

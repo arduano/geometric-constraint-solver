@@ -139,6 +139,7 @@ pub struct DocumentRuntimeMap {
     contacts: Vec<ContactRuntimeMapping>,
     parameter_bindings: Vec<DocumentParameterRuntimeBinding>,
     point_index: BTreeMap<DesignPointId, usize>,
+    runtime_point_index: BTreeMap<PointId, usize>,
     curve_index: BTreeMap<CurveId, usize>,
     source_index: BTreeMap<DocumentSourceId, usize>,
     contact_index: BTreeMap<ContactId, usize>,
@@ -198,6 +199,15 @@ impl DocumentRuntimeMap {
             .find_map(|mapping| (mapping.persistent == id).then_some(mapping.runtime))
     }
 
+    pub(crate) fn persistent_point(&self, id: PointId) -> Option<DesignPointId> {
+        if let Some(index) = self.runtime_point_index.get(&id) {
+            return self.points.get(*index).map(|mapping| mapping.persistent);
+        }
+        self.points
+            .iter()
+            .find_map(|mapping| (mapping.runtime == id).then_some(mapping.persistent))
+    }
+
     #[must_use]
     pub fn runtime_curve(&self, id: CurveId) -> Option<&RuntimeCurve> {
         if let Some(index) = self.curve_index.get(&id) {
@@ -237,6 +247,12 @@ impl DocumentRuntimeMap {
             .iter()
             .enumerate()
             .map(|(index, mapping)| (mapping.persistent, index))
+            .collect();
+        self.runtime_point_index = self
+            .points
+            .iter()
+            .enumerate()
+            .map(|(index, mapping)| (mapping.runtime, index))
             .collect();
         self.curve_index = self
             .curves

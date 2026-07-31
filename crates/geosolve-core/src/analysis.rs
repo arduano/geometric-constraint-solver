@@ -2,10 +2,10 @@ use crate::linearization::{ComponentTangentLayout, component_tangent_layout};
 use crate::problem::VariableState;
 use crate::residual::ExactElimination;
 use crate::{
-    CoreError, Problem, ResidualCategory, ResidualId, ResidualRowRef, SourceConstraintId,
+    BoundId, CoreError, Problem, ResidualCategory, ResidualId, ResidualRowRef, SourceConstraintId,
     VariableId, VariableKind, VariableValue,
 };
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 
 /// One declared variable-to-residual edge in deterministic residual/incidence order.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -175,6 +175,8 @@ pub(crate) struct EliminationPlan {
     pub(crate) active_groups: Vec<ActiveGroup>,
     pub(crate) eliminated_residuals: Vec<ResidualId>,
     pub(crate) components: Vec<SolveComponent>,
+    variable_components: BTreeMap<VariableId, usize>,
+    component_bound_ids: Vec<Vec<BoundId>>,
     pub(crate) component_layouts: Vec<ComponentTangentLayout>,
     pub(crate) structural: StructuralSummary,
     suppressed_sources: Vec<SourceConstraintId>,
@@ -354,6 +356,21 @@ impl EliminationPlan {
             suppressed_sources,
         )?;
         sort_components(&incidence, &mut active_groups, &mut components);
+        let variable_components: BTreeMap<_, _> = components
+            .iter()
+            .flat_map(|component| {
+                component
+                    .variable_ids
+                    .iter()
+                    .map(move |&variable| (variable, component.index))
+            })
+            .collect();
+        let mut component_bound_ids = vec![Vec::new(); components.len()];
+        for (bound_id, bound) in problem.bounds.iter() {
+            if let Some(&component_index) = variable_components.get(&bound.variable_id()) {
+                component_bound_ids[component_index].push(bound_id);
+            }
+        }
         let structural = structural_summary(
             problem,
             &incidence,
@@ -366,6 +383,8 @@ impl EliminationPlan {
             active_groups,
             eliminated_residuals,
             components,
+            variable_components,
+            component_bound_ids,
             component_layouts: Vec::new(),
             structural,
             suppressed_sources: suppressed_sources.to_vec(),
@@ -383,10 +402,13 @@ impl EliminationPlan {
     }
 
     pub(crate) fn component_for_variable(&self, variable_id: VariableId) -> Option<usize> {
-        self.components
-            .iter()
-            .find(|component| component.variable_ids.contains(&variable_id))
-            .map(|component| component.index)
+        self.variable_components.get(&variable_id).copied()
+    }
+
+    pub(crate) fn component_bound_ids(&self, component_index: usize) -> Option<&[BoundId]> {
+        self.component_bound_ids
+            .get(component_index)
+            .map(Vec::as_slice)
     }
 
     pub(crate) fn is_eliminated(&self, residual_id: ResidualId) -> bool {
@@ -417,6 +439,33 @@ impl EliminationPlan {
                 .ok_or(CoreError::UnknownVariable(alias.alias))?;
             let value = state_value(state, root).ok_or(CoreError::UnknownVariable(root))?;
             set_state_value(state, alias.alias, value)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn synchronize_active_component_state(
+        &self,
+        component_indices: &[usize],
+        state: &mut VariableState,
+    ) -> Result<(), CoreError> {
+        for &component_index in component_indices {
+            let component = self.components.get(component_index).ok_or(
+                CoreError::InvalidAcceptedLinearization {
+                    context: "priority component index is absent",
+                },
+            )?;
+            for &group_index in &component.active_group_indices {
+                let group = self.active_groups.get(group_index).ok_or(
+                    CoreError::InvalidAcceptedLinearization {
+                        context: "priority active group index is absent",
+                    },
+                )?;
+                let root_value =
+                    state_value(state, group.root).ok_or(CoreError::UnknownVariable(group.root))?;
+                for &member in &group.members {
+                    set_state_value(state, member, root_value)?;
+                }
+            }
         }
         Ok(())
     }

@@ -94,12 +94,59 @@ direction-at-contact domain API. M61-M64 are complete and approved. M64 supersed
 routing and sample-specific passive-driver metadata with one ordinary workspace coordinator.
 M65 replaces that first generic stabilization cut with accepted-preview continuation, exactly one
 retained attempt per pointer sample, deterministic work/rejection evidence and an explicit bounded
-ghost/accept assembly-branch workflow. Implementation and mechanical qualification are complete;
-focused human UAT remains open.
+ghost/accept assembly-branch workflow. The earlier mechanically qualified candidate is withdrawn
+under `M65-F003`; corrective implementation is present, while complete requalification and focused
+human UAT remain open.
 UAT follow-ups `M65-F001` and `M65-F002` remove recursive positive-Temporary Preference
 reoptimization, bound every projected pointer sample and make circle circumferences semantic
 center drag handles. Focused regressions pass; complete requalification and human retest remain
 open.
+`M65-F003` records a dual lifecycle/solver defect exposed by natural off-manifold twin-roller
+drags. Retained-session reconstruction recompiled `PreviousState` Preferences from already-solved
+coordinates, allowing passive drift to become the next apparent zero-residual target, while the
+positive-Temporary fallback could publish the raw drifted state as an `Acceptable` Preference
+outcome when scalar-level retraction failed. The repair freezes one authoritative locality plan
+for the gesture. The accepted hard-nullspace rank selects only the passive point anchors needed to
+cover freedom not controlled by the active point; the document layer maps them to persistent IDs
+and freezes their targets from the accepted geometry visible at gesture start. The plan is stamped
+by design and accepted-state identity, exact process-local design-publication and accepted-state
+provenance, and the persistent active point, and carries the accepted hard-equality DOF,
+active/passive ranks and selected anchors. Ordinary clones share both tokens, while every
+retained-design or accepted-state publication respectively renews its token. Equal revision
+numbers from divergent lifecycle clones therefore cannot validate a foreign plan or preview. The
+coordinator reuses that exact plan through accepted-preview continuation.
+
+The cursor is the only Temporary target. Only the selected anchors compile as `PreviousState`
+Preferences; projected dragging no longer asks every non-targeted point to remain fixed. Core
+first seeks and certifies a Preference baseline while protecting every attained Temporary
+residual row exactly, then may perform bounded optional scalar-level refinement to recover genuine
+constant-cost-manifold motion. Failed or uncertified refinement retains the certified row baseline;
+if no finite hard-valid and priority-valid baseline exists, the sample rejects and retains the
+complete last accepted preview. The obsolete second `stability_target` request API and the
+persistent-ID-ordered passive retry are removed rather than retained as alternate paths.
+Preview continuation and branch publication compare exact design lineage as well as accepted
+lineage. Signed-zero-distinct same-revision designs and branch directions therefore reject
+atomically, while interaction-free checkpoint restore compares canonical bytes and preserves the
+exact design and accepted graphs. Undo/Redo/reload numerical seeding is always candidate-shaped:
+only compatible numerical coordinates are imported, every equation-bearing field remains
+candidate owned, and an import that invalidates candidate-only topology falls back to the
+untouched valid candidate.
+
+Rank-deficient pointer projection uses a stable rank-aware `2 x N` row-space reduction and a
+fixed-size SVD under the same authoritative unsquared singular-value threshold. A solve is
+success-like only after stationarity and minimum-norm/nullspace-orthogonality certification. The
+exact A5 drag/round-trip regression again covers all model scales, including `1e-6`.
+
+Ordinary synchronous pointer work uses a complete finite vector: 16,384 items each for document
+validation, dependency/locality and lowering; 256 nonlinear iterations; 512 rejected trials;
+1,024 component linearizations; `256 x 256` dense dimensions and 33,554,432 additive
+dense-kernel work units; 256 factorizations; 256 rank kernels; 512 diagnostic candidates; and
+1,024 diagnostic trials. Exact preview release also charges no-motion materialization, validation
+and audit reconstruction to that shared controller and remains atomic on late exhaustion. The
+current representative matrix peaks at 155 factorizations and 147 nonlinear iterations per
+sample. The original two-`Parallel` pantograph fixture remains unchanged and passes within that
+production vector; no affine replacement equation or draft-v5 exception is used. Final
+workspace-wide qualification, release build and focused human UAT are still pending.
 M62 follow-up `M62-F001` corrects accepted-state line-angle seeding and exposes acute-degree
 presentation while retaining the explicit directed-radian solver branch.
 Follow-up `M62-F002` gives canvas pointer-down exclusive ownership of canvas authoring picks,
@@ -154,8 +201,9 @@ production topology, the advanced workbench, approved advanced UAT and approved 
 authoring, plus approved canvas constraint visualization and interaction. The previously forecast
 M62-M64 hardening sequence was withdrawn on 2026-07-29; M62-M64 were subsequently scoped,
 completed and approved. M65 is the active continuation, deterministic-performance and explicit
-assembly-branch cut. Its implementation is complete and `docs/M65_UAT.md` is the remaining
-milestone gate; no later milestone is currently scheduled.
+assembly-branch cut. `M65-F003` corrective implementation is present and has reopened mechanical
+qualification; `docs/M65_UAT.md` remains the final milestone gate after the repaired candidate
+passes direct and workspace-wide qualification. No later milestone is currently scheduled.
 
 Durable cleanup records:
 
@@ -187,7 +235,7 @@ Durable cleanup records:
 - `docs/M64_IMPLEMENTATION.md`
 - `docs/M64_UAT.md` (approved M64 scorecard)
 - `docs/M65_IMPLEMENTATION.md`
-- `docs/M65_UAT.md` (focused UAT candidate; human approval pending)
+- `docs/M65_UAT.md` (previous candidate withdrawn; repaired focused-UAT retest pending)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

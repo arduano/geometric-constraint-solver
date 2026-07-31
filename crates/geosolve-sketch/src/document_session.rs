@@ -1,14 +1,17 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
+use std::sync::Arc;
 
 use geosolve_core::{
     HardValidity, OperationCheckpoint, OperationControl, OperationController, OperationOutcome,
-    SolveTermination, SolverConfig,
+    OperationReport, OperationWorkCounter, SolveTermination, SolverConfig,
 };
 use geosolve_geometry::Point2;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::compiler::PreviousStateReference;
 use crate::document::{
     ActivationDigest, ContactBranchEdit, ContactDefinition, ContactId, ContactStateEdit,
     CurveCurveFilletIds, CurveCurveFilletRequest, CurveDefinition, CurveId, CurveSpan,
@@ -892,11 +895,127 @@ pub struct DocumentDragTarget {
     pub target: [f64; 2],
 }
 
+/// One persistent point selected to preserve a passive mechanism freedom.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DocumentDragLocalityAnchor {
+    point: DesignPointId,
+    /// Immutable accepted position captured when the gesture began.
+    target: [f64; 2],
+    /// Rank of this point's two-coordinate response in the accepted hard nullspace.
+    mobility_rank: usize,
+}
+
+impl DocumentDragLocalityAnchor {
+    #[must_use]
+    pub const fn point(&self) -> DesignPointId {
+        self.point
+    }
+
+    #[must_use]
+    pub const fn target(&self) -> [f64; 2] {
+        self.target
+    }
+
+    #[must_use]
+    pub const fn mobility_rank(&self) -> usize {
+        self.mobility_rank
+    }
+}
+
+/// Persistent, exact-state-stamped locality ownership for one projected drag.
+///
+/// Runtime rank evidence chooses a deterministic complete greedy passive-anchor cover.
+/// Persistent identities and targets are then captured from the current accepted
+/// document. The complete value must be retained unchanged through continuation,
+/// rejection and recovery; it becomes stale after either stamped identity changes.
+///
+/// Its DOF and rank fields describe the accepted hard-*equality* nullspace. Active
+/// bounds and their one-sided feasible mobility remain separate core-owned evidence
+/// and are not encoded by this plan.
+#[derive(Clone, Debug)]
+pub struct DocumentDragLocalityPlan {
+    design: SketchDesignIdentity,
+    /// Exact process-local provenance for `design`.
+    ///
+    /// Design revisions can collide when lifecycle clones publish independently.
+    /// The shared token survives ordinary gesture clones and changes on every
+    /// retained-design publication.
+    design_provenance: Arc<()>,
+    accepted: SketchAcceptedStateIdentity,
+    /// Exact process-local provenance for `accepted`.
+    ///
+    /// Revisions can collide when lifecycle clones advance independently. The
+    /// shared token survives the ordinary clones used by one gesture and changes
+    /// on every accepted publication.
+    accepted_provenance: Arc<()>,
+    point: DesignPointId,
+    hard_degrees_of_freedom: usize,
+    active_rank: usize,
+    passive_degrees_of_freedom: usize,
+    anchors: Vec<DocumentDragLocalityAnchor>,
+}
+
+impl PartialEq for DocumentDragLocalityPlan {
+    fn eq(&self, other: &Self) -> bool {
+        self.design == other.design
+            && Arc::ptr_eq(&self.design_provenance, &other.design_provenance)
+            && self.accepted == other.accepted
+            && Arc::ptr_eq(&self.accepted_provenance, &other.accepted_provenance)
+            && self.point == other.point
+            && self.hard_degrees_of_freedom == other.hard_degrees_of_freedom
+            && self.active_rank == other.active_rank
+            && self.passive_degrees_of_freedom == other.passive_degrees_of_freedom
+            && self.anchors == other.anchors
+    }
+}
+
+impl DocumentDragLocalityPlan {
+    #[must_use]
+    pub const fn design_identity(&self) -> SketchDesignIdentity {
+        self.design
+    }
+
+    #[must_use]
+    pub const fn accepted_state_identity(&self) -> SketchAcceptedStateIdentity {
+        self.accepted
+    }
+
+    #[must_use]
+    pub const fn point(&self) -> DesignPointId {
+        self.point
+    }
+
+    #[must_use]
+    /// Returns the dimension of the accepted hard-equality nullspace.
+    ///
+    /// This is not bounded or one-sided feasible DOF; active-bound mobility remains
+    /// separate core evidence.
+    pub const fn hard_degrees_of_freedom(&self) -> usize {
+        self.hard_degrees_of_freedom
+    }
+
+    #[must_use]
+    /// Returns the active point's rank in the accepted hard-equality nullspace.
+    pub const fn active_rank(&self) -> usize {
+        self.active_rank
+    }
+
+    #[must_use]
+    /// Returns the hard-equality nullspace rank not controlled by the active point.
+    pub const fn passive_degrees_of_freedom(&self) -> usize {
+        self.passive_degrees_of_freedom
+    }
+
+    #[must_use]
+    pub fn anchors(&self) -> &[DocumentDragLocalityAnchor] {
+        &self.anchors
+    }
+}
+
 /// Per-solve interaction preferences expressed only in persistent IDs.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DocumentSolveRequest {
     pub drag: Option<DocumentDragTarget>,
-    pub stability_target: Option<DocumentDragTarget>,
     pub previous_state_preferences: bool,
 }
 
@@ -905,7 +1024,6 @@ impl DocumentSolveRequest {
     pub const fn new() -> Self {
         Self {
             drag: None,
-            stability_target: None,
             previous_state_preferences: true,
         }
     }
@@ -923,24 +1041,16 @@ impl DocumentSolveRequest {
         self
     }
 
-    /// Removes interaction-scoped drag and stability targets before a retained restore.
+    /// Removes the interaction-scoped drag target before a retained restore.
     #[must_use]
     pub const fn without_temporary_targets(mut self) -> Self {
         self.drag = None;
-        self.stability_target = None;
         self
     }
 
     #[must_use]
     pub const fn with_drag(mut self, point: DesignPointId, target: [f64; 2]) -> Self {
         self.drag = Some(DocumentDragTarget { point, target });
-        self
-    }
-
-    /// Adds a second compatible temporary target that keeps an unrelated point stable.
-    #[must_use]
-    pub const fn with_stability_target(mut self, point: DesignPointId, target: [f64; 2]) -> Self {
-        self.stability_target = Some(DocumentDragTarget { point, target });
         self
     }
 }
@@ -1301,7 +1411,21 @@ impl SketchAttemptFailure {
 pub struct SketchDocumentAttempt {
     identity: SketchAttemptIdentity,
     input: SketchAttemptInput,
+    /// Exact process-local provenance for the retained design evaluated here.
+    design_provenance: Arc<()>,
+    /// Provenance of the immediately preceding retained design publication.
+    ///
+    /// This remains stable across reattempts of the same design so a branch
+    /// preview can prove that its next-revision design descended from the
+    /// authoritative base rather than a divergent same-revision clone.
+    parent_design_provenance: Option<Arc<()>>,
     parent_accepted: Option<SketchAcceptedStateIdentity>,
+    /// Exact process-local provenance for `parent_accepted`.
+    ///
+    /// Accepted revision numbers can collide when two clones advance independently.
+    /// The shared token survives ordinary cloning and changes on every accepted
+    /// publication, so a preview cannot substitute a divergent same-revision parent.
+    parent_accepted_provenance: Option<Arc<()>>,
     accepted_state: Option<SketchAcceptedStateIdentity>,
     solve: Option<SketchSolveResult>,
     attempted_geometry: Option<crate::SketchGeometry>,
@@ -1402,6 +1526,10 @@ impl SketchDocumentAttempt {
 #[derive(Clone, Debug)]
 pub struct SketchAcceptedDocumentState {
     identity: SketchAcceptedStateIdentity,
+    /// Process-local content provenance shared by lifecycle clones.
+    provenance: Arc<()>,
+    /// Exact process-local provenance for `solved_design`.
+    design_provenance: Arc<()>,
     input: SketchAttemptInput,
     originating_attempt: SketchAttemptIdentity,
     solved_design: SketchDocument,
@@ -1958,6 +2086,33 @@ impl DocumentCommandOutcome {
     }
 }
 
+/// Captured and current lifecycle identities for a rejected drag-locality plan.
+///
+/// The payload remains structured for hosts while its boxed storage keeps
+/// [`DocumentSessionError`] small on unrelated failure paths.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct StaleDragLocalityPlanEvidence {
+    /// Retained-design identity stamped into the frozen plan.
+    pub expected_design: SketchDesignIdentity,
+    /// Accepted-state identity stamped into the frozen plan.
+    pub expected_accepted: SketchAcceptedStateIdentity,
+    /// Retained-design identity current at validation time.
+    pub actual_design: SketchDesignIdentity,
+    /// Accepted-state identity current at validation time, when one exists.
+    pub actual_accepted: Option<SketchAcceptedStateIdentity>,
+}
+
+impl fmt::Display for StaleDragLocalityPlanEvidence {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "captured design {:?} and accepted state {:?}, current design is {:?} and accepted \
+             state is {:?}",
+            self.expected_design, self.expected_accepted, self.actual_design, self.actual_accepted
+        )
+    }
+}
+
 /// Construction, command, history, or persistence failure.
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -2008,6 +2163,27 @@ pub enum DocumentSessionError {
     PreviewPointMismatch,
     #[error("branch preview does not exactly match the proposed point and persistent branches")]
     PreviewBranchMismatch,
+    #[error("drag-locality planning requires a current independently accepted state")]
+    DragLocalityUnavailable,
+    #[error("stale drag-locality plan: {evidence}")]
+    StaleDragLocalityPlan {
+        evidence: Box<StaleDragLocalityPlanEvidence>,
+    },
+    #[error(
+        "drag-locality plan for point {plan_point} does not match request point {request_point:?}"
+    )]
+    DragLocalityRequestMismatch {
+        plan_point: DesignPointId,
+        request_point: Option<DesignPointId>,
+    },
+    #[error("drag-locality plan is invalid: {context}")]
+    InvalidDragLocalityPlan { context: &'static str },
+    #[error("point-move publication did not produce an independently accepted state")]
+    DragPublicationNotAccepted,
+    #[error("point-move publication violated frozen drag continuity: {context}")]
+    DragPublicationContinuity { context: &'static str },
+    #[error("controlled preview publication stopped before commit: {report:?}")]
+    PreviewPublicationStopped { report: Box<OperationReport> },
     #[error("stale prepared sketch patch: captured {expected:?}, current {actual:?}")]
     StalePreparedPatch {
         expected: Box<PreparedSketchInput>,
@@ -2046,6 +2222,16 @@ pub struct SketchDocumentSession {
 pub struct RetainedSketchDocumentSession {
     design: SketchDocument,
     design_identity: SketchDesignIdentity,
+    /// Exact process-local identity of the retained design publication.
+    ///
+    /// Ordinary clones share the token. Every retained design mutation receives a
+    /// fresh token even when its numeric revision collides with a divergent clone.
+    design_provenance: Arc<()>,
+    /// Exact provenance of the design publication immediately preceding `design`.
+    ///
+    /// Reattempts preserve this link so next-revision branch previews remain
+    /// attributable to their authoritative base design.
+    parent_design_provenance: Option<Arc<()>>,
     last_attempt: SketchDocumentAttempt,
     accepted: Option<SketchAcceptedDocumentState>,
     accepted_revision_high_water: Option<SketchAcceptedRevision>,
@@ -3324,6 +3510,7 @@ impl RetainedSketchDocumentSession {
             document: document.id(),
             revision: SketchAttemptRevision(0),
         };
+        let design_provenance = Arc::new(());
         let parameter_batch = ParameterBatch::default();
         let external_snapshots = ExternalSnapshotSet::default();
         let input = SketchAttemptInput::for_document_with_parameters(
@@ -3354,11 +3541,15 @@ impl RetainedSketchDocumentSession {
             return Ok(controller.outcome_unchecked());
         }
         let (last_attempt, accepted) = publish_retained_attempt(
-            &document,
-            &input,
-            attempt_identity,
-            None,
-            Some(0),
+            RetainedAttemptPublication {
+                solved_design: &document,
+                design_provenance: &design_provenance,
+                parent_design_provenance: None,
+                input: &input,
+                attempt_identity,
+                parent_accepted: None,
+                next_accepted_revision: Some(0),
+            },
             execution,
         );
         let accepted_revision_high_water =
@@ -3366,6 +3557,8 @@ impl RetainedSketchDocumentSession {
         Ok(controller.outcome(Self {
             design: document,
             design_identity,
+            design_provenance,
+            parent_design_provenance: None,
             last_attempt,
             accepted,
             accepted_revision_high_water,
@@ -3431,6 +3624,7 @@ impl RetainedSketchDocumentSession {
             document: document.id(),
             revision: SketchAttemptRevision(attempt_revision),
         };
+        let design_provenance = Arc::new(());
         let input = SketchAttemptInput::for_document_with_parameters(
             &document,
             design_identity,
@@ -3450,11 +3644,15 @@ impl RetainedSketchDocumentSession {
             None,
         );
         let (last_attempt, accepted) = publish_retained_attempt(
-            &document,
-            &input,
-            attempt_identity,
-            None,
-            Some(accepted_revision),
+            RetainedAttemptPublication {
+                solved_design: &document,
+                design_provenance: &design_provenance,
+                parent_design_provenance: None,
+                input: &input,
+                attempt_identity,
+                parent_accepted: None,
+                next_accepted_revision: Some(accepted_revision),
+            },
             execution,
         );
         let accepted_revision_high_water = accepted
@@ -3464,6 +3662,8 @@ impl RetainedSketchDocumentSession {
         Ok(Self {
             design: document,
             design_identity,
+            design_provenance,
+            parent_design_provenance: None,
             last_attempt,
             accepted,
             accepted_revision_high_water,
@@ -3499,7 +3699,9 @@ impl RetainedSketchDocumentSession {
                 actual: design.id(),
             });
         }
-        let same_design = design == accepted;
+        let accepted_seed = accepted.clone();
+        let accepted_bytes = exact_document_bytes(&accepted)?;
+        let same_design = exact_document_bytes(&design)? == accepted_bytes;
         let accepted_design_revision = next_revision(revisions.design.0, "design")?;
         let accepted_attempt_revision = next_revision(revisions.attempt.0, "attempt")?;
         let accepted_revision = revisions
@@ -3522,9 +3724,25 @@ impl RetainedSketchDocumentSession {
         session.request = request;
         if same_design {
             let identity = session.design_identity;
-            session.reattempt(identity, request)?;
+            session.reattempt_with_explicit_seed(identity, request, &accepted_seed)?;
         } else {
-            session.retain_candidate(design, (), None)?;
+            session.retain_candidate_with_seed(design, (), None, &accepted_seed)?;
+        }
+        // Checkpoint replay deliberately strips both interaction-scoped inputs.
+        // In that case a newly selected underconstrained solution is not a
+        // caller-requested result: restoration must reproduce the validated
+        // accepted graph exactly or fail without returning a partial lifecycle.
+        let restored_accepted_matches = session
+            .accepted
+            .as_ref()
+            .map(|state| exact_document_bytes(&state.document))
+            .transpose()?
+            .is_some_and(|bytes| bytes == accepted_bytes);
+        if request.drag.is_none()
+            && !request.previous_state_preferences
+            && !restored_accepted_matches
+        {
+            return Err(DocumentSessionError::InvalidAcceptedSnapshot);
         }
         Ok(session)
     }
@@ -3562,6 +3780,122 @@ impl RetainedSketchDocumentSession {
     #[must_use]
     pub const fn accepted_state(&self) -> Option<&SketchAcceptedDocumentState> {
         self.accepted.as_ref()
+    }
+
+    /// Captures deterministic passive-freedom ownership for one projected drag.
+    ///
+    /// Rank and anchor identities come from the current accepted runtime. Anchor
+    /// positions deliberately come from the current accepted document rather than
+    /// the runtime's older solve-attempt reference. The returned targets therefore
+    /// describe exactly what the user sees when the gesture begins.
+    ///
+    /// # Errors
+    ///
+    /// Rejects when the retained design has no matching accepted state, the point
+    /// has no accepted runtime identity, or the accepted rank evidence cannot
+    /// produce a complete deterministic locality plan.
+    pub fn drag_locality_plan(
+        &self,
+        point: DesignPointId,
+    ) -> Result<DocumentDragLocalityPlan, DocumentSessionError> {
+        let mut controller = OperationController::new(OperationControl::unlimited());
+        self.drag_locality_plan_with_controller(point, &mut controller)?
+            .ok_or(DocumentSessionError::DragLocalityUnavailable)
+    }
+
+    /// Performs bounded retained-design validation before an interactive host
+    /// allocates a deep lifecycle clone.
+    ///
+    /// `Ok(false)` means operation control stopped the preflight. No lifecycle
+    /// identity or state is changed.
+    ///
+    /// # Errors
+    ///
+    /// Returns ordinary retained-document validation errors.
+    #[doc(hidden)]
+    pub fn preflight_design_with_controller(
+        &self,
+        controller: &mut OperationController,
+    ) -> Result<bool, DocumentSessionError> {
+        Ok(self.design.validate_with_controller(Some(controller))?)
+    }
+
+    #[doc(hidden)]
+    pub fn drag_locality_plan_with_controller(
+        &self,
+        point: DesignPointId,
+        controller: &mut OperationController,
+    ) -> Result<Option<DocumentDragLocalityPlan>, DocumentSessionError> {
+        let accepted = self
+            .accepted
+            .as_ref()
+            .filter(|accepted| accepted.design_identity() == self.design_identity)
+            .ok_or(DocumentSessionError::DragLocalityUnavailable)?;
+        if accepted.document.point(point).is_none() {
+            return Err(DocumentSessionError::InvalidDragLocalityPlan {
+                context: "the active point is absent from the accepted document",
+            });
+        }
+        let runtime_point = accepted.mappings.runtime_point(point).ok_or(
+            DocumentSessionError::InvalidDragLocalityPlan {
+                context: "the active point has no accepted runtime mapping",
+            },
+        )?;
+        let Some(runtime_plan) = accepted
+            .runtime
+            .drag_locality_plan_with_controller(runtime_point, controller)?
+        else {
+            return Ok(None);
+        };
+        let mut anchors = Vec::with_capacity(runtime_plan.anchors.len());
+        for runtime_anchor in &runtime_plan.anchors {
+            if controller
+                .charge(
+                    geosolve_core::OperationWorkCounter::DocumentDependencyItems,
+                    1,
+                    OperationCheckpoint::DocumentDependency,
+                )
+                .is_err()
+            {
+                return Ok(None);
+            }
+            let persistent = accepted
+                .mappings
+                .persistent_point(runtime_anchor.point)
+                .ok_or(DocumentSessionError::InvalidDragLocalityPlan {
+                    context: "a runtime anchor has no persistent point mapping",
+                })?;
+            let target = accepted
+                .document
+                .point(persistent)
+                .ok_or(DocumentSessionError::InvalidDragLocalityPlan {
+                    context: "a persistent anchor is absent from the accepted document",
+                })?
+                .position;
+            if !target.iter().all(|value| value.is_finite()) {
+                return Err(DocumentSessionError::InvalidDragLocalityPlan {
+                    context: "an accepted anchor target is non-finite",
+                });
+            }
+            anchors.push(DocumentDragLocalityAnchor {
+                point: persistent,
+                target,
+                mobility_rank: runtime_anchor.mobility_rank,
+            });
+        }
+        let plan = DocumentDragLocalityPlan {
+            design: self.design_identity,
+            design_provenance: Arc::clone(&self.design_provenance),
+            accepted: accepted.identity,
+            accepted_provenance: Arc::clone(&accepted.provenance),
+            point,
+            hard_degrees_of_freedom: runtime_plan.hard_degrees_of_freedom,
+            active_rank: runtime_plan.active_rank,
+            passive_degrees_of_freedom: runtime_plan.passive_degrees_of_freedom,
+            anchors,
+        };
+        self.validate_drag_locality_plan(&plan, point)?;
+        Ok(Some(plan))
     }
 
     /// Returns stable persistent-ID diagnostics for the latest attempt.
@@ -3710,8 +4044,8 @@ impl RetainedSketchDocumentSession {
         self.retain_candidate(candidate, effect, command_drag)
     }
 
-    /// Atomically retains a point seed and explicit line-branch edits, then attempts
-    /// that assembly mode under a temporary projected point target.
+    /// Atomically retains a point seed and the complete set of incident line-branch
+    /// edits, then attempts that assembly mode under a temporary projected point target.
     ///
     /// This is intended for bounded, non-authoritative branch searches performed on
     /// a cloned session. Publish a chosen result through
@@ -3719,8 +4053,8 @@ impl RetainedSketchDocumentSession {
     ///
     /// # Errors
     ///
-    /// Rejects stale input, malformed geometry, an empty branch edit set, or any
-    /// branch direction incompatible with the seeded document coordinates.
+    /// Rejects stale input, malformed geometry, a missing/duplicate/nonincident
+    /// branch edit, or any branch direction incompatible with the seeded coordinates.
     pub fn attempt_point_and_curve_branches(
         &mut self,
         expected: SketchDesignIdentity,
@@ -3729,7 +4063,7 @@ impl RetainedSketchDocumentSession {
         branches: &[DocumentCurveBranchEdit],
     ) -> Result<RetainedDocumentTransactionOutcome<()>, DocumentSessionError> {
         self.check_design_identity(expected)?;
-        if branches.is_empty() {
+        if !branch_edits_cover_incident_lines(&self.design, point, branches) {
             return Err(DocumentSessionError::PreviewBranchMismatch);
         }
         let mut candidate = self.design.clone();
@@ -3746,6 +4080,128 @@ impl RetainedSketchDocumentSession {
                 target: position,
             }),
         )
+    }
+
+    /// Controlled form of [`Self::attempt_point_and_curve_branches`].
+    ///
+    /// Cancellation or work exhaustion publishes no design, attempt, or accepted
+    /// identity. This lets a bounded multi-seed branch search allocate one
+    /// aggregate budget across isolated candidate lifecycles.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same stale-input, geometry, branch, and session errors as the
+    /// uncontrolled form.
+    pub fn attempt_point_and_curve_branches_controlled(
+        &mut self,
+        expected: SketchDesignIdentity,
+        point: DesignPointId,
+        position: [f64; 2],
+        branches: &[DocumentCurveBranchEdit],
+        control: OperationControl,
+    ) -> Result<OperationOutcome<RetainedDocumentTransactionOutcome<()>>, DocumentSessionError>
+    {
+        let mut controller = OperationController::new(control);
+        if controller
+            .checkpoint(OperationCheckpoint::DocumentValidation)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        self.check_design_identity(expected)?;
+        if !branch_edits_cover_incident_lines(&self.design, point, branches) {
+            return Err(DocumentSessionError::PreviewBranchMismatch);
+        }
+        let mut candidate = self.design.clone();
+        candidate.defer_mutation_validation();
+        candidate.set_point_position(point, position)?;
+        for branch in branches {
+            candidate.set_curve_branch(branch.curve, branch.direction)?;
+        }
+        candidate.resume_mutation_validation();
+        let Some(value) = self.retain_candidate_controlled(
+            candidate,
+            (),
+            Some(DocumentDragTarget {
+                point,
+                target: position,
+            }),
+            &mut controller,
+        )?
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        Ok(controller.outcome(value))
+    }
+
+    /// Attempts an exact branch candidate while using another accepted branch preview only as
+    /// its candidate-shaped numerical seed.
+    ///
+    /// This is the bounded canonicalization seam for a headless alternate-branch search. The
+    /// seed preview must be the independently accepted next design revision descended from this
+    /// exact in-memory design and accepted parent. Its design must contain only one point seed
+    /// and the complete incident line-branch payload. The supplied branch bytes must match that
+    /// payload exactly. The new candidate topology, point target, identities, and provenance are
+    /// always owned by this session.
+    ///
+    /// Cancellation or work exhaustion publishes no design, attempt, or accepted identity.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale/foreign/nonaccepted or structurally incoherent seed evidence, malformed
+    /// geometry, incomplete incident branch edits, and ordinary controlled-session failures.
+    #[doc(hidden)]
+    pub fn attempt_point_and_curve_branches_with_preview_seed_controlled(
+        &mut self,
+        expected: SketchDesignIdentity,
+        point: DesignPointId,
+        position: [f64; 2],
+        branches: &[DocumentCurveBranchEdit],
+        seed_preview: &Self,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<RetainedDocumentTransactionOutcome<()>>, DocumentSessionError>
+    {
+        let mut controller = OperationController::new(control);
+        if controller
+            .checkpoint(OperationCheckpoint::DocumentValidation)
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        self.check_design_identity(expected)?;
+        let seed_accepted = self.validated_branch_seed_preview(point, seed_preview)?;
+        if !branch_edits_cover_incident_lines(&self.design, point, branches)
+            || branches.iter().any(|branch| {
+                seed_preview
+                    .design
+                    .curve_branch_direction(branch.curve)
+                    .is_none_or(|direction| pair_bits(direction) != pair_bits(branch.direction))
+            })
+        {
+            return Err(DocumentSessionError::PreviewBranchMismatch);
+        }
+        let numerical_seed = seed_accepted.document.clone();
+        let mut candidate = self.design.clone();
+        candidate.defer_mutation_validation();
+        candidate.set_point_position(point, position)?;
+        for branch in branches {
+            candidate.set_curve_branch(branch.curve, branch.direction)?;
+        }
+        candidate.resume_mutation_validation();
+        let Some(value) = self.retain_candidate_with_seed_controlled(
+            candidate,
+            (),
+            Some(DocumentDragTarget {
+                point,
+                target: position,
+            }),
+            &numerical_seed,
+            &mut controller,
+        )?
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        Ok(controller.outcome(value))
     }
 
     /// Retains one point-position edit while seeding its final solve from an exact
@@ -3768,35 +4224,40 @@ impl RetainedSketchDocumentSession {
         preview: &Self,
     ) -> Result<RetainedDocumentTransactionOutcome<DocumentCommandEffect>, DocumentSessionError>
     {
+        completed_preview_publication(self.apply_point_position_from_preview_controlled(
+            expected,
+            point,
+            position,
+            preview,
+            OperationControl::unlimited(),
+        )?)
+    }
+
+    /// Controlled form of [`Self::apply_point_position_from_preview`].
+    ///
+    /// Cancellation or work exhaustion leaves the retained lifecycle unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns the ordinary preview, document, and solve-setup errors.
+    #[doc(hidden)]
+    pub fn apply_point_position_from_preview_controlled(
+        &mut self,
+        expected: SketchDesignIdentity,
+        point: DesignPointId,
+        position: [f64; 2],
+        preview: &Self,
+        control: OperationControl,
+    ) -> Result<
+        OperationOutcome<RetainedDocumentTransactionOutcome<DocumentCommandEffect>>,
+        DocumentSessionError,
+    > {
         self.check_design_identity(expected)?;
-        if preview.design_identity.document != self.design_identity.document {
-            return Err(DocumentSessionError::PreviewForeignDocument);
-        }
-        if preview.design_identity != self.design_identity
-            || preview.last_attempt.design_identity() != self.design_identity
-        {
-            return Err(DocumentSessionError::PreviewStaleDesign);
-        }
-        let parent = self
+        self.validate_preview_for_current_design(preview)?;
+        let preview_accepted = preview
             .accepted
             .as_ref()
-            .map(SketchAcceptedDocumentState::identity);
-        if preview.last_attempt.parent_accepted_identity() != parent {
-            return Err(DocumentSessionError::PreviewAcceptedProvenance);
-        }
-        let Some(preview_accepted) = preview.accepted.as_ref() else {
-            return Err(DocumentSessionError::PreviewNotAccepted);
-        };
-        if preview.last_attempt.failure().is_some()
-            || preview
-                .last_attempt
-                .solve_result()
-                .is_none_or(|solve| solve.rejection.is_some())
-            || preview.last_attempt.accepted_state_identity() != Some(preview_accepted.identity())
-            || preview_accepted.design_identity() != self.design_identity
-        {
-            return Err(DocumentSessionError::PreviewNotAccepted);
-        }
+            .ok_or(DocumentSessionError::PreviewNotAccepted)?;
         if preview
             .last_attempt
             .input()
@@ -3814,29 +4275,294 @@ impl RetainedSketchDocumentSession {
         }
 
         let mut candidate = self.design.clone();
+        candidate.defer_mutation_validation();
         candidate.set_point_position(point, position)?;
-        candidate.validate()?;
-        self.retain_candidate_with_seed(
-            candidate,
-            DocumentCommandEffect::UpdatedPoint(point),
-            Some(DocumentDragTarget {
+        candidate.resume_mutation_validation();
+        let mut controller = OperationController::new(control);
+        let Some(outcome) = self.publish_preview_candidate_controlled(
+            PreviewPublicationCandidate {
+                candidate,
+                value: DocumentCommandEffect::UpdatedPoint(point),
+                command_drag: Some(DocumentDragTarget {
+                    point,
+                    target: position,
+                }),
+                numerical_seed: &preview_accepted.document,
+                previous_state_intent: Some(RetainedPreviousStateIntent::PreviewPublication {
+                    preview: &preview_accepted.document,
+                    locality: None,
+                }),
+            },
+            &mut controller,
+            |publication, outcome, controller| {
+                let published_identity = outcome
+                    .published_accepted_identity()
+                    .ok_or(DocumentSessionError::DragPublicationNotAccepted)?;
+                let published = publication
+                    .accepted
+                    .as_ref()
+                    .filter(|accepted| accepted.identity() == published_identity)
+                    .ok_or(DocumentSessionError::DragPublicationNotAccepted)?;
+                let Some(exact) = documents_have_exact_bytes_controlled(
+                    &published.document,
+                    &preview_accepted.document,
+                    controller,
+                )?
+                else {
+                    return Ok(());
+                };
+                if exact {
+                    Ok(())
+                } else {
+                    Err(DocumentSessionError::DragPublicationContinuity {
+                        context: "published accepted state differs from the visible preview",
+                    })
+                }
+            },
+        )?
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        Ok(controller.outcome(outcome))
+    }
+
+    /// Atomically publishes a projected point move under its gesture-start locality contract.
+    ///
+    /// The ordinary preview checks remain mandatory. Publication additionally requires the
+    /// preview and independently republished accepted state to preserve every frozen passive
+    /// anchor, the active preview position, and all persistent contact branch/parameter state.
+    /// All work occurs on a lifecycle clone; any rejection leaves this session unchanged.
+    ///
+    /// This is a headless coordinator seam. Non-drag preview consumers should use
+    /// [`Self::apply_point_position_from_preview`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the ordinary preview/locality errors, rejects a publication that does not create
+    /// a fresh independently accepted state, or reports the continuity class that changed.
+    #[doc(hidden)]
+    pub fn apply_point_position_from_preview_with_drag_locality(
+        &mut self,
+        expected: SketchDesignIdentity,
+        point: DesignPointId,
+        position: [f64; 2],
+        preview: &Self,
+        locality: &DocumentDragLocalityPlan,
+    ) -> Result<RetainedDocumentTransactionOutcome<DocumentCommandEffect>, DocumentSessionError>
+    {
+        completed_preview_publication(
+            self.apply_point_position_from_preview_with_drag_locality_controlled(
+                expected,
                 point,
-                target: position,
-            }),
-            &preview_accepted.document,
+                position,
+                preview,
+                locality,
+                OperationControl::unlimited(),
+            )?,
         )
+    }
+
+    /// Controlled atomic publication of one projected point preview.
+    ///
+    /// The command-scoped cursor remains the sole Temporary target and the frozen
+    /// locality anchors are the complete Preference set even when the retained
+    /// session's ordinary request disables previous-state Preferences.
+    ///
+    /// Cancellation or work exhaustion leaves design, attempts, accepted state,
+    /// and provenance unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns the ordinary preview/locality and publication-continuity errors.
+    #[doc(hidden)]
+    pub fn apply_point_position_from_preview_with_drag_locality_controlled(
+        &mut self,
+        expected: SketchDesignIdentity,
+        point: DesignPointId,
+        position: [f64; 2],
+        preview: &Self,
+        locality: &DocumentDragLocalityPlan,
+        control: OperationControl,
+    ) -> Result<
+        OperationOutcome<RetainedDocumentTransactionOutcome<DocumentCommandEffect>>,
+        DocumentSessionError,
+    > {
+        self.check_design_identity(expected)?;
+        self.validate_drag_locality_plan(locality, point)?;
+        self.validate_preview_for_current_design(preview)?;
+        let preview_accepted = preview
+            .accepted
+            .as_ref()
+            .ok_or(DocumentSessionError::PreviewNotAccepted)?;
+        validate_drag_publication_continuity(
+            &preview_accepted.document,
+            &preview_accepted.document,
+            point,
+            position,
+            locality,
+        )?;
+
+        let mut candidate = self.design.clone();
+        candidate.defer_mutation_validation();
+        candidate.set_point_position(point, position)?;
+        candidate.resume_mutation_validation();
+        let mut controller = OperationController::new(control);
+        let Some(outcome) = self.publish_preview_candidate_controlled(
+            PreviewPublicationCandidate {
+                candidate,
+                value: DocumentCommandEffect::UpdatedPoint(point),
+                command_drag: Some(DocumentDragTarget {
+                    point,
+                    target: position,
+                }),
+                numerical_seed: &preview_accepted.document,
+                previous_state_intent: Some(RetainedPreviousStateIntent::PreviewPublication {
+                    preview: &preview_accepted.document,
+                    locality: Some(locality),
+                }),
+            },
+            &mut controller,
+            |publication, outcome, controller| {
+                let published_identity = outcome
+                    .published_accepted_identity()
+                    .ok_or(DocumentSessionError::DragPublicationNotAccepted)?;
+                let published = publication
+                    .accepted
+                    .as_ref()
+                    .filter(|accepted| accepted.identity() == published_identity)
+                    .ok_or(DocumentSessionError::DragPublicationNotAccepted)?;
+                validate_drag_publication_continuity(
+                    &preview_accepted.document,
+                    &published.document,
+                    point,
+                    position,
+                    locality,
+                )?;
+                let Some(exact) = documents_have_exact_bytes_controlled(
+                    &published.document,
+                    &preview_accepted.document,
+                    controller,
+                )?
+                else {
+                    return Ok(());
+                };
+                if exact {
+                    Ok(())
+                } else {
+                    Err(DocumentSessionError::DragPublicationContinuity {
+                        context: "published accepted state differs from the visible preview",
+                    })
+                }
+            },
+        )?
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        Ok(controller.outcome(outcome))
+    }
+
+    /// Validates one accepted transient preview against this exact in-memory
+    /// retained-design and accepted-parent lineage.
+    ///
+    /// This is a presentation/coordinator seam, not a persistence identity API.
+    /// In particular, equal document/revision numbers from divergent clones do not
+    /// establish provenance: design/input content must match and the preview must
+    /// carry the shared token of this exact accepted parent.
+    ///
+    /// # Errors
+    ///
+    /// Returns the ordinary foreign, stale-design, accepted-provenance, or
+    /// nonaccepted preview error without mutation.
+    #[doc(hidden)]
+    pub fn validate_preview_for_current_design(
+        &self,
+        preview: &Self,
+    ) -> Result<(), DocumentSessionError> {
+        if preview.design_identity.document != self.design_identity.document {
+            return Err(DocumentSessionError::PreviewForeignDocument);
+        }
+        if preview.design_identity != self.design_identity
+            || preview.last_attempt.design_identity() != self.design_identity
+            || !Arc::ptr_eq(&preview.design_provenance, &self.design_provenance)
+            || !Arc::ptr_eq(
+                &preview.last_attempt.design_provenance,
+                &self.design_provenance,
+            )
+            || !optional_provenance_matches(
+                preview.parent_design_provenance.as_ref(),
+                self.parent_design_provenance.as_ref(),
+            )
+            || !optional_provenance_matches(
+                preview.last_attempt.parent_design_provenance.as_ref(),
+                self.parent_design_provenance.as_ref(),
+            )
+            || preview.config != self.config
+            || preview.parameter_batch != self.parameter_batch
+            || preview.external_snapshots != self.external_snapshots
+        {
+            return Err(DocumentSessionError::PreviewStaleDesign);
+        }
+        self.validate_preview_parent_provenance(preview)?;
+        let Some(preview_accepted) = preview.accepted.as_ref() else {
+            return Err(DocumentSessionError::PreviewNotAccepted);
+        };
+        if preview.last_attempt.failure().is_some()
+            || preview
+                .last_attempt
+                .solve_result()
+                .is_none_or(|solve| solve.rejection.is_some())
+            || preview.last_attempt.accepted_state_identity() != Some(preview_accepted.identity())
+            || preview_accepted.design_identity() != self.design_identity
+            || preview_accepted.originating_attempt() != preview.last_attempt.identity()
+            || preview_accepted.input() != preview.last_attempt.input()
+            || !Arc::ptr_eq(
+                &preview_accepted.design_provenance,
+                &preview.design_provenance,
+            )
+        {
+            return Err(DocumentSessionError::PreviewNotAccepted);
+        }
+        Ok(())
+    }
+
+    fn validate_preview_parent_provenance(
+        &self,
+        preview: &Self,
+    ) -> Result<(), DocumentSessionError> {
+        let identity_matches = preview.last_attempt.parent_accepted_identity()
+            == self
+                .accepted
+                .as_ref()
+                .map(SketchAcceptedDocumentState::identity);
+        let provenance_matches = match (
+            self.accepted.as_ref(),
+            preview.last_attempt.parent_accepted_provenance.as_ref(),
+        ) {
+            (Some(authoritative), Some(preview_parent)) => {
+                Arc::ptr_eq(&authoritative.provenance, preview_parent)
+            }
+            (None, None) => true,
+            _ => false,
+        };
+        if !identity_matches || !provenance_matches {
+            return Err(DocumentSessionError::PreviewAcceptedProvenance);
+        }
+        Ok(())
     }
 
     /// Atomically accepts one exact independently validated branch-search preview.
     ///
-    /// Only the selected point position and explicit persistent line branches become
-    /// design intent. All continuous values from the preview seed the independent
-    /// publication solve, exactly as for an ordinary projected drag release.
+    /// Only the selected point position and the complete incident persistent line
+    /// branches become design intent. All continuous values from the preview seed
+    /// the independent publication solve, exactly as for an ordinary projected drag
+    /// release.
     ///
     /// # Errors
     ///
-    /// Rejects stale/foreign/nonaccepted preview evidence, mismatched point geometry,
-    /// or branch edits that do not exactly describe the preview design.
+    /// Rejects stale/foreign/nonaccepted preview evidence, including a candidate that
+    /// is not the next design revision descended from the current lifecycle,
+    /// mismatched point geometry, or branch edits that do not exactly describe the
+    /// preview design.
     pub fn apply_point_and_curve_branches_from_preview(
         &mut self,
         expected: SketchDesignIdentity,
@@ -3845,17 +4571,209 @@ impl RetainedSketchDocumentSession {
         branches: &[DocumentCurveBranchEdit],
         preview: &Self,
     ) -> Result<RetainedDocumentTransactionOutcome<()>, DocumentSessionError> {
+        completed_preview_publication(self.apply_point_and_curve_branches_from_preview_controlled(
+            expected,
+            point,
+            position,
+            branches,
+            preview,
+            OperationControl::unlimited(),
+        )?)
+    }
+
+    /// Controlled atomic publication of one exact alternate-branch preview.
+    ///
+    /// The candidate owns the selected point and persistent branch topology, while
+    /// the independently accepted preview contributes only its numerical seed.
+    /// Cancellation or work exhaustion leaves the complete retained lifecycle
+    /// unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns the ordinary exact-preview and branch-payload errors.
+    #[doc(hidden)]
+    pub fn apply_point_and_curve_branches_from_preview_controlled(
+        &mut self,
+        expected: SketchDesignIdentity,
+        point: DesignPointId,
+        position: [f64; 2],
+        branches: &[DocumentCurveBranchEdit],
+        preview: &Self,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<RetainedDocumentTransactionOutcome<()>>, DocumentSessionError>
+    {
         self.check_design_identity(expected)?;
+        let preview_accepted = self.validated_branch_preview(point, position, preview)?;
+        if !branch_edits_cover_incident_lines(&self.design, point, branches) {
+            return Err(DocumentSessionError::PreviewBranchMismatch);
+        }
+
+        let mut candidate = self.design.clone();
+        candidate.defer_mutation_validation();
+        candidate.set_point_position(point, position)?;
+        for branch in branches {
+            if candidate
+                .set_curve_branch(branch.curve, branch.direction)
+                .is_err()
+            {
+                return Err(DocumentSessionError::PreviewBranchMismatch);
+            }
+        }
+        candidate.resume_mutation_validation();
+        if !documents_have_exact_bytes(&candidate, &preview.design)? {
+            return Err(DocumentSessionError::PreviewBranchMismatch);
+        }
+        let mut controller = OperationController::new(control);
+        let Some(outcome) = self.publish_preview_candidate_controlled(
+            PreviewPublicationCandidate {
+                candidate,
+                value: (),
+                command_drag: Some(DocumentDragTarget {
+                    point,
+                    target: position,
+                }),
+                numerical_seed: &preview_accepted.document,
+                previous_state_intent: Some(RetainedPreviousStateIntent::PreviewPublication {
+                    preview: &preview_accepted.document,
+                    locality: None,
+                }),
+            },
+            &mut controller,
+            |publication, outcome, controller| {
+                let Some(published_identity) = outcome.published_accepted_identity() else {
+                    return Err(DocumentSessionError::PreviewNotAccepted);
+                };
+                let Some(published) = publication
+                    .accepted
+                    .as_ref()
+                    .filter(|accepted| accepted.identity() == published_identity)
+                else {
+                    return Err(DocumentSessionError::PreviewNotAccepted);
+                };
+                let Some(exact) = documents_have_exact_bytes_controlled(
+                    &published.document,
+                    &preview_accepted.document,
+                    controller,
+                )?
+                else {
+                    return Ok(());
+                };
+                if !exact {
+                    return Err(DocumentSessionError::PreviewBranchMismatch);
+                }
+                Ok(())
+            },
+        )?
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        Ok(controller.outcome(outcome))
+    }
+
+    fn validated_branch_preview<'a>(
+        &self,
+        point: DesignPointId,
+        position: [f64; 2],
+        preview: &'a Self,
+    ) -> Result<&'a SketchAcceptedDocumentState, DocumentSessionError> {
+        let preview_accepted = self.validated_next_design_branch_preview(preview)?;
+        let requested_drag = preview
+            .last_attempt
+            .input()
+            .candidate_request()
+            .drag
+            .map(|drag| (drag.point, pair_bits(drag.target)));
+        if requested_drag != Some((point, pair_bits(position)))
+            || preview_accepted
+                .document
+                .point(point)
+                .map(|accepted| pair_bits(accepted.position))
+                != Some(pair_bits(position))
+        {
+            return Err(DocumentSessionError::PreviewBranchMismatch);
+        }
+        Ok(preview_accepted)
+    }
+
+    fn validated_branch_seed_preview<'a>(
+        &self,
+        point: DesignPointId,
+        preview: &'a Self,
+    ) -> Result<&'a SketchAcceptedDocumentState, DocumentSessionError> {
+        let preview_accepted = self.validated_next_design_branch_preview(preview)?;
+        let Some(requested_drag) = preview
+            .last_attempt
+            .input()
+            .candidate_request()
+            .drag
+            .filter(|drag| {
+                drag.point == point && drag.target.iter().all(|value| value.is_finite())
+            })
+        else {
+            return Err(DocumentSessionError::PreviewBranchMismatch);
+        };
+        let mut expected_preview_design = self.design.clone();
+        expected_preview_design.defer_mutation_validation();
+        expected_preview_design
+            .set_point_position(point, requested_drag.target)
+            .map_err(|_| DocumentSessionError::PreviewBranchMismatch)?;
+        for span in incident_line_branch_spans(&self.design, point) {
+            let direction = preview
+                .design
+                .curve_branch_direction(span)
+                .ok_or(DocumentSessionError::PreviewBranchMismatch)?;
+            expected_preview_design
+                .set_curve_branch(span, direction)
+                .map_err(|_| DocumentSessionError::PreviewBranchMismatch)?;
+        }
+        expected_preview_design.resume_mutation_validation();
+        if !documents_have_exact_bytes(&expected_preview_design, &preview.design)?
+            || preview_accepted
+                .document
+                .point(point)
+                .is_none_or(|accepted| !accepted.position.iter().all(|value| value.is_finite()))
+        {
+            return Err(DocumentSessionError::PreviewBranchMismatch);
+        }
+        Ok(preview_accepted)
+    }
+
+    fn validated_next_design_branch_preview<'a>(
+        &self,
+        preview: &'a Self,
+    ) -> Result<&'a SketchAcceptedDocumentState, DocumentSessionError> {
         if preview.design_identity.document != self.design_identity.document {
             return Err(DocumentSessionError::PreviewForeignDocument);
         }
-        let parent = self
-            .accepted
-            .as_ref()
-            .map(SketchAcceptedDocumentState::identity);
-        if preview.last_attempt.parent_accepted_identity() != parent {
-            return Err(DocumentSessionError::PreviewAcceptedProvenance);
+        let expected_preview_revision = self
+            .design_identity
+            .revision
+            .0
+            .checked_add(1)
+            .ok_or(DocumentSessionError::RevisionExhausted { domain: "design" })?;
+        if preview.design_identity.revision.0 != expected_preview_revision
+            || preview.last_attempt.design_identity() != preview.design_identity
+            || Arc::ptr_eq(&preview.design_provenance, &self.design_provenance)
+            || !Arc::ptr_eq(
+                &preview.last_attempt.design_provenance,
+                &preview.design_provenance,
+            )
+            || !preview
+                .parent_design_provenance
+                .as_ref()
+                .is_some_and(|parent| Arc::ptr_eq(parent, &self.design_provenance))
+            || !preview
+                .last_attempt
+                .parent_design_provenance
+                .as_ref()
+                .is_some_and(|parent| Arc::ptr_eq(parent, &self.design_provenance))
+            || preview.config != self.config
+            || preview.parameter_batch != self.parameter_batch
+            || preview.external_snapshots != self.external_snapshots
+        {
+            return Err(DocumentSessionError::PreviewStaleDesign);
         }
+        self.validate_preview_parent_provenance(preview)?;
         let Some(preview_accepted) = preview.accepted.as_ref() else {
             return Err(DocumentSessionError::PreviewNotAccepted);
         };
@@ -3866,50 +4784,16 @@ impl RetainedSketchDocumentSession {
                 .is_none_or(|solve| solve.rejection.is_some())
             || preview.last_attempt.accepted_state_identity() != Some(preview_accepted.identity())
             || preview_accepted.design_identity() != preview.design_identity
+            || preview_accepted.originating_attempt() != preview.last_attempt.identity()
+            || preview_accepted.input() != preview.last_attempt.input()
+            || !Arc::ptr_eq(
+                &preview_accepted.design_provenance,
+                &preview.design_provenance,
+            )
         {
             return Err(DocumentSessionError::PreviewNotAccepted);
         }
-        if branches.is_empty()
-            || preview
-                .last_attempt
-                .input()
-                .candidate_request()
-                .drag
-                .map(|drag| drag.point)
-                != Some(point)
-            || preview_accepted
-                .document
-                .point(point)
-                .map(|accepted| pair_bits(accepted.position))
-                != Some(pair_bits(position))
-        {
-            return Err(DocumentSessionError::PreviewBranchMismatch);
-        }
-        let mut preview_branch_check = preview_accepted.document.clone();
-        for branch in branches {
-            if preview_branch_check
-                .set_curve_branch(branch.curve, branch.direction)
-                .is_err()
-            {
-                return Err(DocumentSessionError::PreviewBranchMismatch);
-            }
-        }
-
-        let mut candidate = self.design.clone();
-        candidate.set_point_position(point, position)?;
-        for branch in branches {
-            candidate.set_curve_branch(branch.curve, branch.direction)?;
-        }
-        candidate.validate()?;
-        self.retain_candidate_with_seed(
-            candidate,
-            (),
-            Some(DocumentDragTarget {
-                point,
-                target: position,
-            }),
-            &preview_accepted.document,
-        )
+        Ok(preview_accepted)
     }
 
     /// Retains and attempts one edit under cooperative operation control.
@@ -3974,6 +4858,43 @@ impl RetainedSketchDocumentSession {
         request: DocumentSolveRequest,
         control: OperationControl,
     ) -> Result<OperationOutcome<SketchDocumentAttempt>, DocumentSessionError> {
+        self.reattempt_with_optional_drag_locality_controlled(expected, request, None, control)
+    }
+
+    /// Reattempts one projected pointer sample with a frozen drag-locality plan.
+    ///
+    /// Exactly one retained solve attempt is published for the sample. Only the
+    /// plan's persistent anchors become `PreviousState` Preference rows, and their
+    /// gesture-start targets remain unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a stale plan, a request for another point, or any malformed plan
+    /// before advancing attempt identity.
+    pub fn reattempt_with_drag_locality_controlled(
+        &mut self,
+        expected: SketchDesignIdentity,
+        request: DocumentSolveRequest,
+        locality: &DocumentDragLocalityPlan,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<SketchDocumentAttempt>, DocumentSessionError> {
+        self.check_design_identity(expected)?;
+        self.validate_drag_locality_request(locality, request)?;
+        self.reattempt_with_optional_drag_locality_controlled(
+            expected,
+            request,
+            Some(locality),
+            control,
+        )
+    }
+
+    fn reattempt_with_optional_drag_locality_controlled(
+        &mut self,
+        expected: SketchDesignIdentity,
+        request: DocumentSolveRequest,
+        locality: Option<&DocumentDragLocalityPlan>,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<SketchDocumentAttempt>, DocumentSessionError> {
         let mut controller = OperationController::new(control);
         if controller
             .checkpoint(OperationCheckpoint::DocumentValidation)
@@ -3983,10 +4904,7 @@ impl RetainedSketchDocumentSession {
         }
         self.check_design_identity(expected)?;
         let attempt_identity = self.next_attempt_identity()?;
-        let parent = self
-            .accepted
-            .as_ref()
-            .map(SketchAcceptedDocumentState::identity);
+        let parent = self.accepted.as_ref();
         let input = SketchAttemptInput::for_document_with_parameters(
             &self.design,
             self.design_identity,
@@ -4009,11 +4927,7 @@ impl RetainedSketchDocumentSession {
                     error.to_string(),
                 );
                 let (attempt, accepted) = publish_retained_attempt(
-                    &self.design,
-                    &input,
-                    attempt_identity,
-                    parent,
-                    next_accepted_revision(self.accepted_revision_high_water),
+                    current_attempt_publication(self, &input, attempt_identity, parent),
                     execution,
                 );
                 if controller
@@ -4028,7 +4942,7 @@ impl RetainedSketchDocumentSession {
                 return Ok(controller.outcome(attempt));
             }
         };
-        let Some(execution) = run_retained_attempt_controlled(
+        let Some(execution) = run_retained_attempt_with_previous_state_reference_controlled(
             &seed,
             &self.parameter_batch,
             &self.external_snapshots,
@@ -4036,16 +4950,15 @@ impl RetainedSketchDocumentSession {
             None,
             self.config,
             self.accepted.as_ref(),
+            locality
+                .map(RetainedPreviousStateIntent::DragLocality)
+                .or_else(|| same_input_previous_state_intent(parent, &input)),
             &mut controller,
         ) else {
             return Ok(controller.outcome_unchecked());
         };
         let (attempt, accepted) = publish_retained_attempt(
-            &self.design,
-            &input,
-            attempt_identity,
-            parent,
-            next_accepted_revision(self.accepted_revision_high_water),
+            current_attempt_publication(self, &input, attempt_identity, parent),
             execution,
         );
         if controller
@@ -4074,15 +4987,57 @@ impl RetainedSketchDocumentSession {
     ///
     /// Rejects a stale design or a preview whose document, design, parent accepted state, latest
     /// attempt, and published accepted state do not coherently belong to this lifecycle.
-    #[allow(
-        clippy::too_many_lines,
-        reason = "preview provenance validation and atomic controlled publication remain one lifecycle boundary"
-    )]
     pub fn reattempt_from_accepted_preview_controlled(
         &mut self,
         expected: SketchDesignIdentity,
         request: DocumentSolveRequest,
         preview: &Self,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<SketchDocumentAttempt>, DocumentSessionError> {
+        self.reattempt_from_accepted_preview_with_optional_drag_locality_controlled(
+            expected, request, preview, None, control,
+        )
+    }
+
+    /// Continues one projected pointer sample from an accepted preview while
+    /// preserving the gesture-start drag-locality plan.
+    ///
+    /// The preview contributes only a numerical seed. The plan's persistent
+    /// anchors and frozen targets remain the sole `PreviousState` Preferences.
+    ///
+    /// # Errors
+    ///
+    /// Returns the ordinary preview-provenance errors, plus stale or mismatched
+    /// drag-locality errors, before advancing attempt identity.
+    pub fn reattempt_from_accepted_preview_with_drag_locality_controlled(
+        &mut self,
+        expected: SketchDesignIdentity,
+        request: DocumentSolveRequest,
+        preview: &Self,
+        locality: &DocumentDragLocalityPlan,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<SketchDocumentAttempt>, DocumentSessionError> {
+        self.check_design_identity(expected)?;
+        self.validate_drag_locality_request(locality, request)?;
+        self.reattempt_from_accepted_preview_with_optional_drag_locality_controlled(
+            expected,
+            request,
+            preview,
+            Some(locality),
+            control,
+        )
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "preview provenance validation and atomic controlled publication remain one lifecycle boundary"
+    )]
+    fn reattempt_from_accepted_preview_with_optional_drag_locality_controlled(
+        &mut self,
+        expected: SketchDesignIdentity,
+        request: DocumentSolveRequest,
+        preview: &Self,
+        locality: Option<&DocumentDragLocalityPlan>,
         control: OperationControl,
     ) -> Result<OperationOutcome<SketchDocumentAttempt>, DocumentSessionError> {
         let mut controller = OperationController::new(control);
@@ -4093,34 +5048,12 @@ impl RetainedSketchDocumentSession {
             return Ok(controller.outcome_unchecked());
         }
         self.check_design_identity(expected)?;
-        if preview.design_identity.document != self.design_identity.document {
-            return Err(DocumentSessionError::PreviewForeignDocument);
-        }
-        if preview.design_identity != self.design_identity
-            || preview.last_attempt.design_identity() != self.design_identity
-        {
-            return Err(DocumentSessionError::PreviewStaleDesign);
-        }
-        let parent = self
+        self.validate_preview_for_current_design(preview)?;
+        let preview_accepted = preview
             .accepted
             .as_ref()
-            .map(SketchAcceptedDocumentState::identity);
-        if preview.last_attempt.parent_accepted_identity() != parent {
-            return Err(DocumentSessionError::PreviewAcceptedProvenance);
-        }
-        let Some(preview_accepted) = preview.accepted.as_ref() else {
-            return Err(DocumentSessionError::PreviewNotAccepted);
-        };
-        if preview.last_attempt.failure().is_some()
-            || preview
-                .last_attempt
-                .solve_result()
-                .is_none_or(|solve| solve.rejection.is_some())
-            || preview.last_attempt.accepted_state_identity() != Some(preview_accepted.identity())
-            || preview_accepted.design_identity() != self.design_identity
-        {
-            return Err(DocumentSessionError::PreviewNotAccepted);
-        }
+            .ok_or(DocumentSessionError::PreviewNotAccepted)?;
+        let parent = self.accepted.as_ref();
 
         let attempt_identity = self.next_attempt_identity()?;
         let input = SketchAttemptInput::for_document_with_parameters(
@@ -4145,11 +5078,7 @@ impl RetainedSketchDocumentSession {
                     error.to_string(),
                 );
                 let (attempt, accepted) = publish_retained_attempt(
-                    &self.design,
-                    &input,
-                    attempt_identity,
-                    parent,
-                    next_accepted_revision(self.accepted_revision_high_water),
+                    current_attempt_publication(self, &input, attempt_identity, parent),
                     execution,
                 );
                 if controller
@@ -4164,7 +5093,7 @@ impl RetainedSketchDocumentSession {
                 return Ok(controller.outcome(attempt));
             }
         };
-        let Some(execution) = run_retained_attempt_controlled(
+        let Some(execution) = run_retained_attempt_with_previous_state_reference_controlled(
             &seed,
             &self.parameter_batch,
             &self.external_snapshots,
@@ -4172,16 +5101,20 @@ impl RetainedSketchDocumentSession {
             None,
             self.config,
             Some(preview_accepted),
+            locality.map_or_else(
+                || {
+                    self.accepted
+                        .as_ref()
+                        .map(RetainedPreviousStateIntent::AcceptedRuntimeReference)
+                },
+                |plan| Some(RetainedPreviousStateIntent::DragLocality(plan)),
+            ),
             &mut controller,
         ) else {
             return Ok(controller.outcome_unchecked());
         };
         let (attempt, accepted) = publish_retained_attempt(
-            &self.design,
-            &input,
-            attempt_identity,
-            parent,
-            next_accepted_revision(self.accepted_revision_high_water),
+            current_attempt_publication(self, &input, attempt_identity, parent),
             execution,
         );
         if controller
@@ -4266,10 +5199,7 @@ impl RetainedSketchDocumentSession {
     ) -> Result<&SketchDocumentAttempt, DocumentSessionError> {
         self.check_design_identity(expected)?;
         let attempt_identity = self.next_attempt_identity()?;
-        let parent = self
-            .accepted
-            .as_ref()
-            .map(SketchAcceptedDocumentState::identity);
+        let parent = self.accepted.as_ref();
         let input = SketchAttemptInput::for_document_with_parameters(
             &self.design,
             self.design_identity,
@@ -4279,8 +5209,9 @@ impl RetainedSketchDocumentSession {
             &self.parameter_batch,
             &self.external_snapshots,
         );
+        let previous_state_intent = same_input_previous_state_intent(parent, &input);
         let execution = match seed_from_accepted_parent(&self.design, self.accepted.as_ref()) {
-            Ok(seed) => run_retained_attempt(
+            Ok(seed) => run_retained_attempt_with_previous_state_reference(
                 &seed,
                 &self.parameter_batch,
                 &self.external_snapshots,
@@ -4288,6 +5219,7 @@ impl RetainedSketchDocumentSession {
                 None,
                 self.config,
                 self.accepted.as_ref(),
+                previous_state_intent,
             ),
             Err(error) => RetainedAttemptExecution::failure(
                 SketchAttemptFailureKind::AcceptedSession,
@@ -4295,11 +5227,70 @@ impl RetainedSketchDocumentSession {
             ),
         };
         let (attempt, accepted) = publish_retained_attempt(
+            RetainedAttemptPublication {
+                solved_design: &self.design,
+                design_provenance: &self.design_provenance,
+                parent_design_provenance: self.parent_design_provenance.as_ref(),
+                input: &input,
+                attempt_identity,
+                parent_accepted: parent,
+                next_accepted_revision: next_accepted_revision(self.accepted_revision_high_water),
+            },
+            execution,
+        );
+        self.request = request;
+        self.last_attempt = attempt;
+        if let Some(accepted) = accepted {
+            self.accepted_revision_high_water = Some(accepted.identity.revision);
+            self.accepted = Some(accepted);
+        }
+        Ok(&self.last_attempt)
+    }
+
+    fn reattempt_with_explicit_seed(
+        &mut self,
+        expected: SketchDesignIdentity,
+        request: DocumentSolveRequest,
+        seed: &SketchDocument,
+    ) -> Result<&SketchDocumentAttempt, DocumentSessionError> {
+        self.check_design_identity(expected)?;
+        if seed.id() != self.design_identity.document {
+            return Err(DocumentSessionError::ForeignDesign {
+                expected: self.design_identity.document,
+                actual: seed.id(),
+            });
+        }
+        seed.validate()?;
+        let attempt_identity = self.next_attempt_identity()?;
+        let parent = self.accepted.as_ref();
+        let input = SketchAttemptInput::for_document_with_parameters(
             &self.design,
-            &input,
-            attempt_identity,
-            parent,
-            next_accepted_revision(self.accepted_revision_high_water),
+            self.design_identity,
+            request,
+            request,
+            self.config,
+            &self.parameter_batch,
+            &self.external_snapshots,
+        );
+        let execution = run_retained_attempt(
+            seed,
+            &self.parameter_batch,
+            &self.external_snapshots,
+            request,
+            None,
+            self.config,
+            self.accepted.as_ref(),
+        );
+        let (attempt, accepted) = publish_retained_attempt(
+            RetainedAttemptPublication {
+                solved_design: &self.design,
+                design_provenance: &self.design_provenance,
+                parent_design_provenance: self.parent_design_provenance.as_ref(),
+                input: &input,
+                attempt_identity,
+                parent_accepted: parent,
+                next_accepted_revision: next_accepted_revision(self.accepted_revision_high_water),
+            },
             execution,
         );
         self.request = request;
@@ -4334,10 +5325,7 @@ impl RetainedSketchDocumentSession {
             });
         }
         let attempt_identity = self.next_attempt_identity()?;
-        let parent = self
-            .accepted
-            .as_ref()
-            .map(SketchAcceptedDocumentState::identity);
+        let parent = self.accepted.as_ref();
         let input = SketchAttemptInput::for_document_with_parameters(
             &self.design,
             self.design_identity,
@@ -4363,11 +5351,15 @@ impl RetainedSketchDocumentSession {
             ),
         };
         let (attempt, accepted) = publish_retained_attempt(
-            &self.design,
-            &input,
-            attempt_identity,
-            parent,
-            next_accepted_revision(self.accepted_revision_high_water),
+            RetainedAttemptPublication {
+                solved_design: &self.design,
+                design_provenance: &self.design_provenance,
+                parent_design_provenance: self.parent_design_provenance.as_ref(),
+                input: &input,
+                attempt_identity,
+                parent_accepted: parent,
+                next_accepted_revision: next_accepted_revision(self.accepted_revision_high_water),
+            },
             execution,
         );
         self.parameter_batch = batch;
@@ -4410,10 +5402,7 @@ impl RetainedSketchDocumentSession {
             });
         }
         let attempt_identity = self.next_attempt_identity()?;
-        let parent = self
-            .accepted
-            .as_ref()
-            .map(SketchAcceptedDocumentState::identity);
+        let parent = self.accepted.as_ref();
         let input = SketchAttemptInput::for_document_with_parameters(
             &self.design,
             self.design_identity,
@@ -4436,11 +5425,7 @@ impl RetainedSketchDocumentSession {
                     error.to_string(),
                 );
                 let (attempt, accepted) = publish_retained_attempt(
-                    &self.design,
-                    &input,
-                    attempt_identity,
-                    parent,
-                    next_accepted_revision(self.accepted_revision_high_water),
+                    current_attempt_publication(self, &input, attempt_identity, parent),
                     execution,
                 );
                 if controller
@@ -4469,11 +5454,7 @@ impl RetainedSketchDocumentSession {
             return Ok(controller.outcome_unchecked());
         };
         let (attempt, accepted) = publish_retained_attempt(
-            &self.design,
-            &input,
-            attempt_identity,
-            parent,
-            next_accepted_revision(self.accepted_revision_high_water),
+            current_attempt_publication(self, &input, attempt_identity, parent),
             execution,
         );
         if controller
@@ -4519,10 +5500,7 @@ impl RetainedSketchDocumentSession {
             });
         }
         let attempt_identity = self.next_attempt_identity()?;
-        let parent = self
-            .accepted
-            .as_ref()
-            .map(SketchAcceptedDocumentState::identity);
+        let parent = self.accepted.as_ref();
         let input = SketchAttemptInput::for_document_with_parameters(
             &self.design,
             self.design_identity,
@@ -4548,11 +5526,15 @@ impl RetainedSketchDocumentSession {
             ),
         };
         let (attempt, accepted) = publish_retained_attempt(
-            &self.design,
-            &input,
-            attempt_identity,
-            parent,
-            next_accepted_revision(self.accepted_revision_high_water),
+            RetainedAttemptPublication {
+                solved_design: &self.design,
+                design_provenance: &self.design_provenance,
+                parent_design_provenance: self.parent_design_provenance.as_ref(),
+                input: &input,
+                attempt_identity,
+                parent_accepted: parent,
+                next_accepted_revision: next_accepted_revision(self.accepted_revision_high_water),
+            },
             execution,
         );
         self.request = request;
@@ -4598,10 +5580,7 @@ impl RetainedSketchDocumentSession {
             });
         }
         let attempt_identity = self.next_attempt_identity()?;
-        let parent = self
-            .accepted
-            .as_ref()
-            .map(SketchAcceptedDocumentState::identity);
+        let parent = self.accepted.as_ref();
         let input = SketchAttemptInput::for_document_with_parameters(
             &self.design,
             self.design_identity,
@@ -4624,11 +5603,7 @@ impl RetainedSketchDocumentSession {
                     error.to_string(),
                 );
                 let (attempt, accepted) = publish_retained_attempt(
-                    &self.design,
-                    &input,
-                    attempt_identity,
-                    parent,
-                    next_accepted_revision(self.accepted_revision_high_water),
+                    current_attempt_publication(self, &input, attempt_identity, parent),
                     execution,
                 );
                 if controller
@@ -4656,11 +5631,7 @@ impl RetainedSketchDocumentSession {
             return Ok(controller.outcome_unchecked());
         };
         let (attempt, accepted) = publish_retained_attempt(
-            &self.design,
-            &input,
-            attempt_identity,
-            parent,
-            next_accepted_revision(self.accepted_revision_high_water),
+            current_attempt_publication(self, &input, attempt_identity, parent),
             execution,
         );
         if controller
@@ -4767,6 +5738,101 @@ impl RetainedSketchDocumentSession {
         }
     }
 
+    fn validate_drag_locality_request(
+        &self,
+        plan: &DocumentDragLocalityPlan,
+        request: DocumentSolveRequest,
+    ) -> Result<(), DocumentSessionError> {
+        self.validate_drag_locality_plan(plan, plan.point)?;
+        if request.drag.map(|drag| drag.point) != Some(plan.point) {
+            return Err(DocumentSessionError::DragLocalityRequestMismatch {
+                plan_point: plan.point,
+                request_point: request.drag.map(|drag| drag.point),
+            });
+        }
+        if !request.previous_state_preferences {
+            return Err(DocumentSessionError::InvalidDragLocalityPlan {
+                context: "the request disables the plan's PreviousState Preferences",
+            });
+        }
+        Ok(())
+    }
+
+    fn validate_drag_locality_plan(
+        &self,
+        plan: &DocumentDragLocalityPlan,
+        point: DesignPointId,
+    ) -> Result<(), DocumentSessionError> {
+        let actual_accepted = self
+            .accepted
+            .as_ref()
+            .map(SketchAcceptedDocumentState::identity);
+        let provenance_matches = self
+            .accepted
+            .as_ref()
+            .is_some_and(|accepted| Arc::ptr_eq(&accepted.provenance, &plan.accepted_provenance));
+        if plan.design != self.design_identity
+            || !Arc::ptr_eq(&plan.design_provenance, &self.design_provenance)
+            || actual_accepted != Some(plan.accepted)
+            || !provenance_matches
+        {
+            return Err(DocumentSessionError::StaleDragLocalityPlan {
+                evidence: Box::new(StaleDragLocalityPlanEvidence {
+                    expected_design: plan.design,
+                    expected_accepted: plan.accepted,
+                    actual_design: self.design_identity,
+                    actual_accepted,
+                }),
+            });
+        }
+        if plan.point != point {
+            return Err(DocumentSessionError::DragLocalityRequestMismatch {
+                plan_point: plan.point,
+                request_point: Some(point),
+            });
+        }
+        let accepted = self
+            .accepted
+            .as_ref()
+            .ok_or(DocumentSessionError::DragLocalityUnavailable)?;
+        if accepted.design_identity() != self.design_identity
+            || accepted.document.point(plan.point).is_none()
+        {
+            return Err(DocumentSessionError::DragLocalityUnavailable);
+        }
+        if plan.active_rank > plan.hard_degrees_of_freedom
+            || plan.passive_degrees_of_freedom
+                != plan
+                    .hard_degrees_of_freedom
+                    .saturating_sub(plan.active_rank)
+            || (plan.hard_degrees_of_freedom == 0 && !plan.anchors.is_empty())
+            || (plan.passive_degrees_of_freedom > 0 && plan.anchors.is_empty())
+        {
+            return Err(DocumentSessionError::InvalidDragLocalityPlan {
+                context: "the plan's rank and anchor evidence is inconsistent",
+            });
+        }
+        let mut seen = BTreeSet::new();
+        for anchor in &plan.anchors {
+            if anchor.point == plan.point
+                || !seen.insert(anchor.point)
+                || anchor.mobility_rank == 0
+                || anchor.mobility_rank > 2
+                || !anchor.target.iter().all(|value| value.is_finite())
+                || accepted
+                    .document
+                    .point(anchor.point)
+                    .is_none_or(|point| pair_bits(point.position) != pair_bits(anchor.target))
+                || accepted.mappings.runtime_point(anchor.point).is_none()
+            {
+                return Err(DocumentSessionError::InvalidDragLocalityPlan {
+                    context: "the plan contains an invalid or non-authoritative anchor",
+                });
+            }
+        }
+        Ok(())
+    }
+
     fn next_attempt_identity(&self) -> Result<SketchAttemptIdentity, DocumentSessionError> {
         let revision = self
             .last_attempt
@@ -4805,10 +5871,9 @@ impl RetainedSketchDocumentSession {
             document: self.design_identity.document,
             revision: SketchDesignRevision(design_revision),
         };
-        let parent = self
-            .accepted
-            .as_ref()
-            .map(SketchAcceptedDocumentState::identity);
+        let parent_design_provenance = Arc::clone(&self.design_provenance);
+        let design_provenance = Arc::new(());
+        let parent = self.accepted.as_ref();
         let input = SketchAttemptInput::for_document_with_parameters(
             &candidate,
             design_identity,
@@ -4834,16 +5899,22 @@ impl RetainedSketchDocumentSession {
             ),
         };
         let (attempt, accepted) = publish_retained_attempt(
-            &candidate,
-            &input,
-            attempt_identity,
-            parent,
-            next_accepted_revision(self.accepted_revision_high_water),
+            RetainedAttemptPublication {
+                solved_design: &candidate,
+                design_provenance: &design_provenance,
+                parent_design_provenance: Some(&parent_design_provenance),
+                input: &input,
+                attempt_identity,
+                parent_accepted: parent,
+                next_accepted_revision: next_accepted_revision(self.accepted_revision_high_water),
+            },
             execution,
         );
         let published_accepted = accepted.as_ref().map(SketchAcceptedDocumentState::identity);
         self.design = candidate;
         self.design_identity = design_identity;
+        self.design_provenance = design_provenance;
+        self.parent_design_provenance = Some(parent_design_provenance);
         self.last_attempt = attempt;
         if let Some(accepted) = accepted {
             self.accepted_revision_high_water = Some(accepted.identity.revision);
@@ -4862,26 +5933,27 @@ impl RetainedSketchDocumentSession {
         candidate: SketchDocument,
         value: T,
         command_drag: Option<DocumentDragTarget>,
-        seed: &SketchDocument,
+        numerical_seed: &SketchDocument,
     ) -> Result<RetainedDocumentTransactionOutcome<T>, DocumentSessionError> {
-        if candidate.id() != self.design_identity.document || seed.id() != candidate.id() {
+        if candidate.id() != self.design_identity.document || numerical_seed.id() != candidate.id()
+        {
             return Err(DocumentSessionError::ForeignDesign {
                 expected: self.design_identity.document,
                 actual: candidate.id(),
             });
         }
         candidate.validate()?;
-        seed.validate()?;
+        numerical_seed.validate()?;
+        let seed = candidate_shaped_numerical_seed(&candidate, numerical_seed);
         let design_revision = next_revision(self.design_identity.revision.0, "design")?;
         let attempt_identity = self.next_attempt_identity()?;
         let design_identity = SketchDesignIdentity {
             document: self.design_identity.document,
             revision: SketchDesignRevision(design_revision),
         };
-        let parent = self
-            .accepted
-            .as_ref()
-            .map(SketchAcceptedDocumentState::identity);
+        let parent_design_provenance = Arc::clone(&self.design_provenance);
+        let design_provenance = Arc::new(());
+        let parent = self.accepted.as_ref();
         let input = SketchAttemptInput::for_document_with_parameters(
             &candidate,
             design_identity,
@@ -4892,7 +5964,7 @@ impl RetainedSketchDocumentSession {
             &self.external_snapshots,
         );
         let execution = run_retained_attempt(
-            seed,
+            &seed,
             &self.parameter_batch,
             &self.external_snapshots,
             self.request,
@@ -4901,16 +5973,22 @@ impl RetainedSketchDocumentSession {
             self.accepted.as_ref(),
         );
         let (attempt, accepted) = publish_retained_attempt(
-            &candidate,
-            &input,
-            attempt_identity,
-            parent,
-            next_accepted_revision(self.accepted_revision_high_water),
+            RetainedAttemptPublication {
+                solved_design: &candidate,
+                design_provenance: &design_provenance,
+                parent_design_provenance: Some(&parent_design_provenance),
+                input: &input,
+                attempt_identity,
+                parent_accepted: parent,
+                next_accepted_revision: next_accepted_revision(self.accepted_revision_high_water),
+            },
             execution,
         );
         let published_accepted = accepted.as_ref().map(SketchAcceptedDocumentState::identity);
         self.design = candidate;
         self.design_identity = design_identity;
+        self.design_provenance = design_provenance;
+        self.parent_design_provenance = Some(parent_design_provenance);
         self.last_attempt = attempt;
         if let Some(accepted) = accepted {
             self.accepted_revision_high_water = Some(accepted.identity.revision);
@@ -4931,13 +6009,106 @@ impl RetainedSketchDocumentSession {
         command_drag: Option<DocumentDragTarget>,
         controller: &mut OperationController,
     ) -> Result<Option<RetainedDocumentTransactionOutcome<T>>, DocumentSessionError> {
-        if candidate.id() != self.design_identity.document {
+        self.retain_candidate_with_optional_seed_controlled(
+            candidate,
+            value,
+            command_drag,
+            None,
+            None,
+            controller,
+        )
+    }
+
+    fn retain_candidate_with_seed_controlled<T>(
+        &mut self,
+        candidate: SketchDocument,
+        value: T,
+        command_drag: Option<DocumentDragTarget>,
+        numerical_seed: &SketchDocument,
+        controller: &mut OperationController,
+    ) -> Result<Option<RetainedDocumentTransactionOutcome<T>>, DocumentSessionError> {
+        self.retain_candidate_with_optional_seed_controlled(
+            candidate,
+            value,
+            command_drag,
+            Some(numerical_seed),
+            None,
+            controller,
+        )
+    }
+
+    fn publish_preview_candidate_controlled<T, F>(
+        &mut self,
+        publication_candidate: PreviewPublicationCandidate<'_, T>,
+        controller: &mut OperationController,
+        validate_publication: F,
+    ) -> Result<Option<RetainedDocumentTransactionOutcome<T>>, DocumentSessionError>
+    where
+        F: FnOnce(
+            &RetainedSketchDocumentSession,
+            &RetainedDocumentTransactionOutcome<T>,
+            &mut OperationController,
+        ) -> Result<(), DocumentSessionError>,
+    {
+        if controller
+            .checkpoint(OperationCheckpoint::DocumentValidation)
+            .is_err()
+        {
+            return Ok(None);
+        }
+        let PreviewPublicationCandidate {
+            candidate,
+            value,
+            command_drag,
+            numerical_seed,
+            previous_state_intent,
+        } = publication_candidate;
+        let mut publication = self.clone();
+        let Some(outcome) = publication.retain_candidate_with_optional_seed_controlled(
+            candidate,
+            value,
+            command_drag,
+            Some(numerical_seed),
+            previous_state_intent,
+            controller,
+        )?
+        else {
+            return Ok(None);
+        };
+        validate_publication(&publication, &outcome, controller)?;
+        if controller
+            .checkpoint(OperationCheckpoint::BeforeCommit)
+            .is_err()
+        {
+            return Ok(None);
+        }
+        *self = publication;
+        Ok(Some(outcome))
+    }
+
+    fn retain_candidate_with_optional_seed_controlled<T>(
+        &mut self,
+        candidate: SketchDocument,
+        value: T,
+        command_drag: Option<DocumentDragTarget>,
+        numerical_seed: Option<&SketchDocument>,
+        previous_state_intent: Option<RetainedPreviousStateIntent<'_>>,
+        controller: &mut OperationController,
+    ) -> Result<Option<RetainedDocumentTransactionOutcome<T>>, DocumentSessionError> {
+        if candidate.id() != self.design_identity.document
+            || numerical_seed.is_some_and(|seed| seed.id() != candidate.id())
+        {
             return Err(DocumentSessionError::ForeignDesign {
                 expected: self.design_identity.document,
                 actual: candidate.id(),
             });
         }
         if !candidate.validate_with_controller(Some(controller))? {
+            return Ok(None);
+        }
+        if let Some(numerical_seed) = numerical_seed
+            && !numerical_seed.validate_with_controller(Some(controller))?
+        {
             return Ok(None);
         }
         let design_revision = self
@@ -4951,51 +6122,44 @@ impl RetainedSketchDocumentSession {
             document: self.design_identity.document,
             revision: SketchDesignRevision(design_revision),
         };
-        let parent = self
-            .accepted
-            .as_ref()
-            .map(SketchAcceptedDocumentState::identity);
+        let parent_design_provenance = Arc::clone(&self.design_provenance);
+        let design_provenance = Arc::new(());
+        let parent = self.accepted.as_ref();
+        let publication_request =
+            effective_publication_request(self.request, previous_state_intent);
         let input = SketchAttemptInput::for_document_with_parameters(
             &candidate,
             design_identity,
-            effective_attempt_request(self.request, command_drag),
-            self.request,
+            effective_attempt_request_with_previous_state_intent(
+                publication_request,
+                command_drag,
+                previous_state_intent,
+            ),
+            publication_request,
             self.config,
             &self.parameter_batch,
             &self.external_snapshots,
         );
-        let execution = match seed_from_accepted_parent_controlled(
+        let Some(execution) = self.run_candidate_with_optional_seed_controlled(
             &candidate,
-            self.accepted.as_ref(),
+            publication_request,
+            command_drag,
+            numerical_seed,
+            previous_state_intent,
             controller,
-        ) {
-            Ok(Some(seed)) => {
-                let Some(execution) = run_retained_attempt_controlled(
-                    &seed,
-                    &self.parameter_batch,
-                    &self.external_snapshots,
-                    self.request,
-                    command_drag,
-                    self.config,
-                    self.accepted.as_ref(),
-                    controller,
-                ) else {
-                    return Ok(None);
-                };
-                execution
-            }
-            Ok(None) => return Ok(None),
-            Err(error) => RetainedAttemptExecution::failure(
-                SketchAttemptFailureKind::AcceptedSession,
-                error.to_string(),
-            ),
+        ) else {
+            return Ok(None);
         };
         let (attempt, accepted) = publish_retained_attempt(
-            &candidate,
-            &input,
-            attempt_identity,
-            parent,
-            next_accepted_revision(self.accepted_revision_high_water),
+            RetainedAttemptPublication {
+                solved_design: &candidate,
+                design_provenance: &design_provenance,
+                parent_design_provenance: Some(&parent_design_provenance),
+                input: &input,
+                attempt_identity,
+                parent_accepted: parent,
+                next_accepted_revision: next_accepted_revision(self.accepted_revision_high_water),
+            },
             execution,
         );
         if controller
@@ -5007,6 +6171,8 @@ impl RetainedSketchDocumentSession {
         let published_accepted = accepted.as_ref().map(SketchAcceptedDocumentState::identity);
         self.design = candidate;
         self.design_identity = design_identity;
+        self.design_provenance = design_provenance;
+        self.parent_design_provenance = Some(parent_design_provenance);
         self.last_attempt = attempt;
         if let Some(accepted) = accepted {
             self.accepted_revision_high_water = Some(accepted.identity.revision);
@@ -5018,6 +6184,46 @@ impl RetainedSketchDocumentSession {
             attempt: attempt_identity,
             published_accepted,
         }))
+    }
+
+    fn run_candidate_with_optional_seed_controlled(
+        &self,
+        candidate: &SketchDocument,
+        publication_request: DocumentSolveRequest,
+        command_drag: Option<DocumentDragTarget>,
+        numerical_seed: Option<&SketchDocument>,
+        previous_state_intent: Option<RetainedPreviousStateIntent<'_>>,
+        controller: &mut OperationController,
+    ) -> Option<RetainedAttemptExecution> {
+        let seed = if let Some(numerical_seed) = numerical_seed {
+            candidate_shaped_numerical_seed_controlled(candidate, numerical_seed, controller)?
+        } else {
+            match seed_from_accepted_parent_controlled(
+                candidate,
+                self.accepted.as_ref(),
+                controller,
+            ) {
+                Ok(Some(seed)) => seed,
+                Ok(None) => return None,
+                Err(error) => {
+                    return Some(RetainedAttemptExecution::failure(
+                        SketchAttemptFailureKind::AcceptedSession,
+                        error.to_string(),
+                    ));
+                }
+            }
+        };
+        run_retained_attempt_with_previous_state_reference_controlled(
+            &seed,
+            &self.parameter_batch,
+            &self.external_snapshots,
+            publication_request,
+            command_drag,
+            self.config,
+            self.accepted.as_ref(),
+            previous_state_intent,
+            controller,
+        )
     }
 
     fn current_prepared_input(&self) -> PreparedSketchInput {
@@ -5041,6 +6247,350 @@ impl RetainedSketchDocumentSession {
     }
 }
 
+/// Builds a solve seed whose graph is always the candidate graph.
+///
+/// Persistent point identity and an unchanged curve/contact scalar role are the
+/// numerical-state compatibility boundary. Dimension target scalars are equation
+/// coefficients rather than solver coordinates and are deliberately never imported.
+/// The one curve-local numerical coordinate that is not stored in a point or scalar is
+/// copied only when its rational-conic carrier topology matches. Constraints, dimensions,
+/// contacts, branches, activation, ownership, and every other equation-bearing field
+/// always come from `candidate`.
+///
+/// Compatible IDs do not prove that their merged values satisfy candidate-only topology.
+/// If numerical import makes the otherwise valid candidate structurally invalid, the
+/// untouched candidate is the deterministic seed rather than turning history/restore into
+/// an error or substituting an older topology.
+fn candidate_shaped_numerical_seed(
+    candidate: &SketchDocument,
+    numerical_state: &SketchDocument,
+) -> SketchDocument {
+    debug_assert_eq!(candidate.id(), numerical_state.id());
+    let seed = merge_candidate_shaped_numerical_seed(candidate, numerical_state);
+    if seed.validate().is_ok() {
+        seed
+    } else {
+        candidate.clone()
+    }
+}
+
+fn candidate_shaped_numerical_seed_controlled(
+    candidate: &SketchDocument,
+    numerical_state: &SketchDocument,
+    controller: &mut OperationController,
+) -> Option<SketchDocument> {
+    debug_assert_eq!(candidate.id(), numerical_state.id());
+    let dependency_items = candidate
+        .points()
+        .len()
+        .saturating_add(candidate.scalars().len())
+        .saturating_add(candidate.curves().len());
+    if controller
+        .charge(
+            geosolve_core::OperationWorkCounter::DocumentDependencyItems,
+            dependency_items,
+            OperationCheckpoint::DocumentDependency,
+        )
+        .is_err()
+    {
+        return None;
+    }
+    let seed = merge_candidate_shaped_numerical_seed(candidate, numerical_state);
+    match seed.validate_with_controller(Some(controller)) {
+        Ok(true) => Some(seed),
+        Ok(false) => None,
+        Err(_) => Some(candidate.clone()),
+    }
+}
+
+fn merge_candidate_shaped_numerical_seed(
+    candidate: &SketchDocument,
+    numerical_state: &SketchDocument,
+) -> SketchDocument {
+    let mut seed = candidate.clone();
+
+    for point in candidate.points() {
+        let Some(numerical_point) = numerical_state.point(point.id) else {
+            continue;
+        };
+        seed.point_mut(point.id)
+            .expect("point came from the candidate document")
+            .position = numerical_point.position;
+    }
+
+    for scalar in candidate.scalars() {
+        let Some(numerical_scalar) = numerical_state.scalar(scalar.id) else {
+            continue;
+        };
+        if scalar.unit == numerical_scalar.unit
+            && scalar.domain == numerical_scalar.domain
+            && numerical_scalar_state_is_compatible(candidate, numerical_state, scalar.id)
+        {
+            seed.scalar_mut(scalar.id)
+                .expect("scalar came from the candidate document")
+                .value = numerical_scalar.value;
+        }
+    }
+
+    for curve in candidate.curves() {
+        let (
+            CurveDefinition::RationalQuadraticConic {
+                start,
+                middle_weight,
+                end,
+                ..
+            },
+            Some(crate::document::DesignCurve {
+                definition:
+                    CurveDefinition::RationalQuadraticConic {
+                        start: numerical_start,
+                        weighted_middle: numerical_middle,
+                        middle_weight: numerical_weight,
+                        end: numerical_end,
+                    },
+                ..
+            }),
+        ) = (&curve.definition, numerical_state.curve(curve.id))
+        else {
+            continue;
+        };
+        if start == numerical_start && middle_weight == numerical_weight && end == numerical_end {
+            let CurveDefinition::RationalQuadraticConic {
+                weighted_middle, ..
+            } = &mut seed
+                .curve_mut(curve.id)
+                .expect("curve came from the candidate document")
+                .definition
+            else {
+                unreachable!("curve family came from the candidate document");
+            };
+            *weighted_middle = *numerical_middle;
+        }
+    }
+    seed
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum NumericalScalarOwner {
+    Curve {
+        curve: CurveId,
+        role: CurveNumericalScalarRole,
+    },
+    Contact(ContactId),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CurveNumericalScalarRole {
+    CircleRadius,
+    CircularArcRadius,
+    CircularArcStart,
+    CircularArcEnd,
+    EllipseRatio,
+    EllipticalArcRatio,
+    EllipticalArcStart,
+    EllipticalArcEnd,
+    RationalMiddleWeight,
+    ParabolaTrimStart,
+    ParabolaTrimEnd,
+    HyperbolaSemiConjugate,
+    HyperbolaTrimStart,
+    HyperbolaTrimEnd,
+    NurbsWeight { index: usize, gauge: bool },
+}
+
+fn numerical_scalar_state_is_compatible(
+    candidate: &SketchDocument,
+    numerical_state: &SketchDocument,
+    scalar: DesignScalarId,
+) -> bool {
+    let owner = numerical_scalar_owner(candidate, scalar);
+    if owner.is_none() || owner != numerical_scalar_owner(numerical_state, scalar) {
+        return false;
+    }
+    match owner {
+        Some(NumericalScalarOwner::Contact(contact)) => {
+            candidate.contact(contact) == numerical_state.contact(contact)
+        }
+        Some(NumericalScalarOwner::Curve { .. }) => true,
+        None => false,
+    }
+}
+
+fn numerical_scalar_owner(
+    document: &SketchDocument,
+    scalar: DesignScalarId,
+) -> Option<NumericalScalarOwner> {
+    for curve in document.curves() {
+        if let Some(role) = curve_numerical_scalar_role(&curve.definition, scalar) {
+            return Some(NumericalScalarOwner::Curve {
+                curve: curve.id,
+                role,
+            });
+        }
+    }
+    document
+        .contacts()
+        .iter()
+        .find(|contact| contact.parameter == scalar)
+        .map(|contact| NumericalScalarOwner::Contact(contact.id))
+}
+
+#[allow(clippy::too_many_lines)]
+fn curve_numerical_scalar_role(
+    definition: &CurveDefinition,
+    scalar: DesignScalarId,
+) -> Option<CurveNumericalScalarRole> {
+    match definition {
+        CurveDefinition::Line { .. }
+        | CurveDefinition::Polyline { .. }
+        | CurveDefinition::QuadraticBezier { .. }
+        | CurveDefinition::CubicBezier { .. }
+        | CurveDefinition::BSpline { .. } => None,
+        CurveDefinition::Circle { radius, .. } => {
+            (*radius == scalar).then_some(CurveNumericalScalarRole::CircleRadius)
+        }
+        CurveDefinition::CircularArc {
+            radius,
+            start_angle,
+            end_angle,
+            ..
+        } => [
+            (*radius, CurveNumericalScalarRole::CircularArcRadius),
+            (*start_angle, CurveNumericalScalarRole::CircularArcStart),
+            (*end_angle, CurveNumericalScalarRole::CircularArcEnd),
+        ]
+        .into_iter()
+        .find_map(|(candidate, role)| (candidate == scalar).then_some(role)),
+        CurveDefinition::Ellipse {
+            minor_axis_ratio, ..
+        } => (*minor_axis_ratio == scalar).then_some(CurveNumericalScalarRole::EllipseRatio),
+        CurveDefinition::EllipticalArc {
+            minor_axis_ratio,
+            start_angle,
+            end_angle,
+            ..
+        } => [
+            (
+                *minor_axis_ratio,
+                CurveNumericalScalarRole::EllipticalArcRatio,
+            ),
+            (*start_angle, CurveNumericalScalarRole::EllipticalArcStart),
+            (*end_angle, CurveNumericalScalarRole::EllipticalArcEnd),
+        ]
+        .into_iter()
+        .find_map(|(candidate, role)| (candidate == scalar).then_some(role)),
+        CurveDefinition::RationalQuadraticConic { middle_weight, .. } => {
+            (*middle_weight == scalar).then_some(CurveNumericalScalarRole::RationalMiddleWeight)
+        }
+        CurveDefinition::ParabolaSegment {
+            trim_start,
+            trim_end,
+            ..
+        } => [
+            (*trim_start, CurveNumericalScalarRole::ParabolaTrimStart),
+            (*trim_end, CurveNumericalScalarRole::ParabolaTrimEnd),
+        ]
+        .into_iter()
+        .find_map(|(candidate, role)| (candidate == scalar).then_some(role)),
+        CurveDefinition::HyperbolaSegment {
+            semi_conjugate,
+            trim_start,
+            trim_end,
+            ..
+        } => [
+            (
+                *semi_conjugate,
+                CurveNumericalScalarRole::HyperbolaSemiConjugate,
+            ),
+            (*trim_start, CurveNumericalScalarRole::HyperbolaTrimStart),
+            (*trim_end, CurveNumericalScalarRole::HyperbolaTrimEnd),
+        ]
+        .into_iter()
+        .find_map(|(candidate, role)| (candidate == scalar).then_some(role)),
+        CurveDefinition::Nurbs {
+            weights,
+            gauge_weight,
+            ..
+        } => weights
+            .iter()
+            .position(|weight| *weight == scalar)
+            .map(|index| CurveNumericalScalarRole::NurbsWeight {
+                index,
+                gauge: *gauge_weight == scalar,
+            }),
+    }
+}
+
+/// Returns one deterministic, bit-preserving document encoding for exact lifecycle checks.
+///
+/// Frozen v1-v4-compatible documents use canonical v4 bytes. Documents that require
+/// explicitly unstable draft-v5 fields use the same deterministic fallback as editor
+/// checkpoints. This is intentionally stricter than `SketchDocument::PartialEq`, whose
+/// floating-point equality treats distinct encodings such as `+0.0` and `-0.0` as equal.
+fn exact_document_bytes(document: &SketchDocument) -> Result<Vec<u8>, DocumentError> {
+    match document.to_canonical_json() {
+        Ok(json) => Ok(json.into_bytes()),
+        Err(_) => document.to_draft_v5_json().map(String::into_bytes),
+    }
+}
+
+fn documents_have_exact_bytes(
+    first: &SketchDocument,
+    second: &SketchDocument,
+) -> Result<bool, DocumentError> {
+    Ok(first.exact_unserialized_state_matches(second)
+        && exact_document_bytes(first)? == exact_document_bytes(second)?)
+}
+
+fn documents_have_exact_bytes_controlled(
+    first: &SketchDocument,
+    second: &SketchDocument,
+    controller: &mut OperationController,
+) -> Result<Option<bool>, DocumentError> {
+    let comparison_items = exact_document_comparison_items(first)
+        .saturating_add(exact_document_comparison_items(second));
+    if controller
+        .charge(
+            OperationWorkCounter::DocumentValidationItems,
+            comparison_items,
+            OperationCheckpoint::DocumentValidation,
+        )
+        .is_err()
+    {
+        return Ok(None);
+    }
+    Ok(Some(documents_have_exact_bytes(first, second)?))
+}
+
+fn exact_document_comparison_items(document: &SketchDocument) -> usize {
+    [
+        1,
+        document.points().len(),
+        document.scalars().len(),
+        document.curves().len(),
+        document.contacts().len(),
+        document.trim_views().len(),
+        document.constraints().len(),
+        document.dimensions().len(),
+        document.parameters().len(),
+        document.parameter_bindings().len(),
+        document.parameter_outputs().len(),
+        document.external_bindings().len(),
+        document.source_order().len(),
+        document.exact_unserialized_state_items(),
+    ]
+    .into_iter()
+    .fold(0usize, usize::saturating_add)
+}
+
+fn optional_provenance_matches(first: Option<&Arc<()>>, second: Option<&Arc<()>>) -> bool {
+    match (first, second) {
+        (Some(first), Some(second)) => Arc::ptr_eq(first, second),
+        (None, None) => true,
+        _ => false,
+    }
+}
+
 fn next_revision(current: u64, domain: &'static str) -> Result<u64, DocumentSessionError> {
     current
         .checked_add(1)
@@ -5060,8 +6610,30 @@ fn effective_attempt_request(
 ) -> DocumentSolveRequest {
     DocumentSolveRequest {
         drag: command_drag.or(request.drag),
-        stability_target: request.stability_target,
         previous_state_preferences: command_drag.is_none() && request.previous_state_preferences,
+    }
+}
+
+fn effective_attempt_request_with_previous_state_intent(
+    request: DocumentSolveRequest,
+    command_drag: Option<DocumentDragTarget>,
+    previous_state_intent: Option<RetainedPreviousStateIntent<'_>>,
+) -> DocumentSolveRequest {
+    let mut effective = effective_attempt_request(request, command_drag);
+    if previous_state_intent.is_some_and(RetainedPreviousStateIntent::is_drag_locality) {
+        effective.previous_state_preferences = true;
+    }
+    effective
+}
+
+fn effective_publication_request(
+    request: DocumentSolveRequest,
+    previous_state_intent: Option<RetainedPreviousStateIntent<'_>>,
+) -> DocumentSolveRequest {
+    if previous_state_intent.is_some_and(RetainedPreviousStateIntent::is_drag_locality) {
+        request.with_previous_state_preferences()
+    } else {
+        request
     }
 }
 
@@ -5186,6 +6758,144 @@ struct RetainedAttemptInputStamps {
     external_digest: ExternalSnapshotSetDigest,
 }
 
+#[derive(Clone, Copy)]
+enum RetainedPreviousStateIntent<'a> {
+    /// Preserve the accepted runtime's immutable Preference targets while
+    /// remapping its runtime point IDs through persistent document identity.
+    AcceptedRuntimeReference(&'a SketchAcceptedDocumentState),
+    /// Use only the persistent frozen anchors selected when a drag began.
+    DragLocality(&'a DocumentDragLocalityPlan),
+    /// Republish an already accepted visible preview through fresh validation
+    /// without another numerical move.
+    ///
+    /// A projected drag retains its complete gesture-start locality plan and
+    /// restricts Preferences to those anchors, retargeted to the accepted preview.
+    /// Other exact-preview publications retain the ordinary request and, when it
+    /// enables previous-state Preferences, target the complete preview state.
+    PreviewPublication {
+        preview: &'a SketchDocument,
+        locality: Option<&'a DocumentDragLocalityPlan>,
+    },
+}
+
+impl RetainedPreviousStateIntent<'_> {
+    const fn is_drag_locality(self) -> bool {
+        matches!(
+            self,
+            Self::DragLocality(_)
+                | Self::PreviewPublication {
+                    locality: Some(_),
+                    ..
+                }
+        )
+    }
+
+    const fn is_no_motion_publication(self) -> bool {
+        matches!(self, Self::PreviewPublication { .. })
+    }
+}
+
+fn same_input_previous_state_intent<'a>(
+    parent: Option<&'a SketchAcceptedDocumentState>,
+    input: &SketchAttemptInput,
+) -> Option<RetainedPreviousStateIntent<'a>> {
+    parent
+        .filter(|accepted| accepted.input == *input)
+        .map(RetainedPreviousStateIntent::AcceptedRuntimeReference)
+}
+
+struct PreviewPublicationCandidate<'a, T> {
+    candidate: SketchDocument,
+    value: T,
+    command_drag: Option<DocumentDragTarget>,
+    numerical_seed: &'a SketchDocument,
+    previous_state_intent: Option<RetainedPreviousStateIntent<'a>>,
+}
+
+fn retained_previous_state_reference(
+    sketch: &crate::Sketch,
+    mappings: &DocumentRuntimeMap,
+    intent: Option<RetainedPreviousStateIntent<'_>>,
+) -> Result<PreviousStateReference, DocumentSessionError> {
+    let mut targets = sketch.clone();
+    let mut restricted = None;
+    match intent {
+        None => {}
+        Some(RetainedPreviousStateIntent::AcceptedRuntimeReference(accepted)) => {
+            let accepted_reference = accepted.runtime.previous_state_reference();
+            let mut selected = Vec::new();
+            for mapping in mappings.point_mappings() {
+                let accepted_runtime = accepted
+                    .mappings
+                    .runtime_point(mapping.persistent)
+                    .ok_or(SketchSessionError::RebuildRequired)?;
+                let target = accepted_reference.point_position(accepted_runtime)?;
+                targets.set_point_position(mapping.runtime, target)?;
+                if accepted_reference.includes_preference(accepted_runtime) {
+                    selected.push(mapping.runtime);
+                }
+            }
+            if accepted_reference.preferences_are_restricted() {
+                restricted = Some(selected);
+            }
+        }
+        Some(RetainedPreviousStateIntent::DragLocality(plan)) => {
+            let mut selected = Vec::with_capacity(plan.anchors.len());
+            for anchor in &plan.anchors {
+                let runtime = mappings.runtime_point(anchor.point).ok_or(
+                    DocumentSessionError::InvalidDragLocalityPlan {
+                        context: "a frozen anchor has no runtime mapping in this attempt",
+                    },
+                )?;
+                targets
+                    .set_point_position(runtime, Point2::new(anchor.target[0], anchor.target[1]))?;
+                selected.push(runtime);
+            }
+            restricted = Some(selected);
+        }
+        Some(RetainedPreviousStateIntent::PreviewPublication { preview, locality }) => {
+            if let Some(locality) = locality {
+                let mut selected = Vec::with_capacity(locality.anchors.len());
+                for anchor in &locality.anchors {
+                    let runtime = mappings.runtime_point(anchor.point).ok_or(
+                        DocumentSessionError::InvalidDragLocalityPlan {
+                            context: "a frozen anchor has no runtime mapping in this publication",
+                        },
+                    )?;
+                    let target = preview.point(anchor.point).ok_or(
+                        DocumentSessionError::DragPublicationContinuity {
+                            context: "a frozen anchor is absent from the publication preview",
+                        },
+                    )?;
+                    targets.set_point_position(
+                        runtime,
+                        Point2::new(target.position[0], target.position[1]),
+                    )?;
+                    selected.push(runtime);
+                }
+                restricted = Some(selected);
+            } else {
+                for mapping in mappings.point_mappings() {
+                    let target = preview.point(mapping.persistent).ok_or(
+                        DocumentSessionError::DragPublicationContinuity {
+                            context: "a publication point is absent from the accepted preview",
+                        },
+                    )?;
+                    targets.set_point_position(
+                        mapping.runtime,
+                        Point2::new(target.position[0], target.position[1]),
+                    )?;
+                }
+            }
+        }
+    }
+    let mut reference = PreviousStateReference::capture(&targets);
+    if let Some(selected) = restricted {
+        reference.restrict_preferences_to(selected)?;
+    }
+    Ok(reference)
+}
+
 impl RetainedAttemptExecution {
     fn failure(kind: SketchAttemptFailureKind, message: String) -> Self {
         Self {
@@ -5242,7 +6952,6 @@ impl RetainedAttemptExecution {
     }
 }
 
-#[allow(clippy::too_many_lines)]
 fn run_retained_attempt(
     candidate: &SketchDocument,
     parameters: &ParameterBatch,
@@ -5251,6 +6960,29 @@ fn run_retained_attempt(
     command_drag: Option<DocumentDragTarget>,
     config: SolverConfig,
     parent: Option<&SketchAcceptedDocumentState>,
+) -> RetainedAttemptExecution {
+    run_retained_attempt_with_previous_state_reference(
+        candidate,
+        parameters,
+        snapshots,
+        request,
+        command_drag,
+        config,
+        parent,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+fn run_retained_attempt_with_previous_state_reference(
+    candidate: &SketchDocument,
+    parameters: &ParameterBatch,
+    snapshots: &ExternalSnapshotSet,
+    request: DocumentSolveRequest,
+    command_drag: Option<DocumentDragTarget>,
+    config: SolverConfig,
+    parent: Option<&SketchAcceptedDocumentState>,
+    previous_state_intent: Option<RetainedPreviousStateIntent<'_>>,
 ) -> RetainedAttemptExecution {
     let resolved = match resolve_attempt_inputs(candidate, parameters, snapshots) {
         Ok(resolved) => resolved,
@@ -5283,6 +7015,20 @@ fn run_retained_attempt(
         }
     };
     let (mut sketch, mappings) = lowered.into_parts();
+    let previous_state =
+        match retained_previous_state_reference(&sketch, &mappings, previous_state_intent) {
+            Ok(previous_state) => previous_state,
+            Err(error) => {
+                return RetainedAttemptExecution {
+                    mappings: Some(mappings),
+                    effective_activity: Some(resolved.activity.clone()),
+                    ..RetainedAttemptExecution::failure(
+                        SketchAttemptFailureKind::Request,
+                        error.to_string(),
+                    )
+                };
+            }
+        };
     let runtime_request = match lower_request(request, &mappings) {
         Ok(request) => request,
         Err(error) => {
@@ -5296,20 +7042,26 @@ fn run_retained_attempt(
             };
         }
     };
-    let attempted_request =
-        match lower_request(effective_attempt_request(request, command_drag), &mappings) {
-            Ok(request) => request,
-            Err(error) => {
-                return RetainedAttemptExecution {
-                    mappings: Some(mappings),
-                    effective_activity: Some(resolved.activity.clone()),
-                    ..RetainedAttemptExecution::failure(
-                        SketchAttemptFailureKind::Request,
-                        error.to_string(),
-                    )
-                };
-            }
-        };
+    let attempted_request = match lower_request(
+        effective_attempt_request_with_previous_state_intent(
+            request,
+            command_drag,
+            previous_state_intent,
+        ),
+        &mappings,
+    ) {
+        Ok(request) => request,
+        Err(error) => {
+            return RetainedAttemptExecution {
+                mappings: Some(mappings),
+                effective_activity: Some(resolved.activity.clone()),
+                ..RetainedAttemptExecution::failure(
+                    SketchAttemptFailureKind::Request,
+                    error.to_string(),
+                )
+            };
+        }
+    };
     if attempted_request == runtime_request
         && let Some(parent) = parent.filter(|parent| {
             parent.mappings.has_compatible_runtime_topology(&mappings)
@@ -5318,7 +7070,13 @@ fn run_retained_attempt(
     {
         let sources = incremental_runtime_sources(candidate, &mappings, &input_stamps, parent);
         let mut runtime = parent.runtime.clone();
-        match runtime.apply_compatible_candidate(sketch.clone(), runtime_request, &sources, None) {
+        match runtime.apply_compatible_candidate(
+            sketch.clone(),
+            runtime_request,
+            &sources,
+            &previous_state,
+            None,
+        ) {
             Ok(Some(result)) if result.accepted() => {
                 let mut document = candidate.clone();
                 if let Err(error) = document.project_accepted_state(runtime.sketch(), &mappings) {
@@ -5378,7 +7136,11 @@ fn run_retained_attempt(
             }
         }
     }
-    let solve = match sketch.solve(attempted_request, config) {
+    let solve = match sketch.solve_with_previous_state_reference(
+        attempted_request,
+        config,
+        &previous_state,
+    ) {
         Ok(solve) => solve,
         Err(error) => {
             return RetainedAttemptExecution {
@@ -5402,6 +7164,18 @@ fn run_retained_attempt(
             failure: None,
         };
     }
+    let accepted_attempt_state;
+    let runtime_previous_state = if attempted_request == runtime_request
+        || previous_state_intent.is_some_and(RetainedPreviousStateIntent::is_drag_locality)
+    {
+        &previous_state
+    } else {
+        // A command-scoped drag is the authoring projection used to produce
+        // the new accepted geometry. Once it succeeds, that geometry—not the
+        // pre-command seed—is the baseline for the publication runtime.
+        accepted_attempt_state = PreviousStateReference::capture(&sketch);
+        &accepted_attempt_state
+    };
 
     let incremental_sources = parent
         .map(|parent| incremental_runtime_sources(candidate, &mappings, &input_stamps, parent));
@@ -5414,7 +7188,13 @@ fn run_retained_attempt(
         .map(|(parent, sources)| {
             let mut runtime = parent.runtime.clone();
             runtime
-                .apply_compatible_candidate(sketch.clone(), runtime_request, sources, None)
+                .apply_compatible_candidate(
+                    sketch.clone(),
+                    runtime_request,
+                    sources,
+                    runtime_previous_state,
+                    None,
+                )
                 .map(|result| result.map(|result| (runtime, result)))
         });
     let runtime = match incremental {
@@ -5431,7 +7211,12 @@ fn run_retained_attempt(
         }
         Some(Ok(None)) => unreachable!("uncontrolled incremental solve cannot be interrupted"),
         Some(Err(SketchSessionError::RebuildRequired)) | None => {
-            match SketchSession::new(sketch, runtime_request, config) {
+            match SketchSession::new_with_previous_state_reference(
+                sketch,
+                runtime_request,
+                config,
+                runtime_previous_state,
+            ) {
                 Ok(mut runtime) => {
                     if parent.is_some() {
                         runtime.mark_full_rebuild();
@@ -5502,7 +7287,7 @@ fn run_retained_attempt(
     }
 }
 
-#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+#[allow(clippy::too_many_arguments)]
 fn run_retained_attempt_controlled(
     candidate: &SketchDocument,
     parameters: &ParameterBatch,
@@ -5511,6 +7296,31 @@ fn run_retained_attempt_controlled(
     command_drag: Option<DocumentDragTarget>,
     config: SolverConfig,
     parent: Option<&SketchAcceptedDocumentState>,
+    controller: &mut OperationController,
+) -> Option<RetainedAttemptExecution> {
+    run_retained_attempt_with_previous_state_reference_controlled(
+        candidate,
+        parameters,
+        snapshots,
+        request,
+        command_drag,
+        config,
+        parent,
+        None,
+        controller,
+    )
+}
+
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+fn run_retained_attempt_with_previous_state_reference_controlled(
+    candidate: &SketchDocument,
+    parameters: &ParameterBatch,
+    snapshots: &ExternalSnapshotSet,
+    request: DocumentSolveRequest,
+    command_drag: Option<DocumentDragTarget>,
+    config: SolverConfig,
+    parent: Option<&SketchAcceptedDocumentState>,
+    previous_state_intent: Option<RetainedPreviousStateIntent<'_>>,
     controller: &mut OperationController,
 ) -> Option<RetainedAttemptExecution> {
     let resolved = match resolve_attempt_inputs(candidate, parameters, snapshots) {
@@ -5549,6 +7359,23 @@ fn run_retained_attempt_controlled(
         };
     let (mut sketch, mappings) = lowered.into_parts();
     let validation_sketch = sketch.clone();
+    let previous_state = match retained_previous_state_reference(
+        &validation_sketch,
+        &mappings,
+        previous_state_intent,
+    ) {
+        Ok(previous_state) => previous_state,
+        Err(error) => {
+            return Some(RetainedAttemptExecution {
+                mappings: Some(mappings),
+                effective_activity: Some(resolved.activity.clone()),
+                ..RetainedAttemptExecution::failure(
+                    SketchAttemptFailureKind::Request,
+                    error.to_string(),
+                )
+            });
+        }
+    };
     let runtime_request = match lower_request(request, &mappings) {
         Ok(request) => request,
         Err(error) => {
@@ -5562,20 +7389,102 @@ fn run_retained_attempt_controlled(
             });
         }
     };
-    let attempted_request =
-        match lower_request(effective_attempt_request(request, command_drag), &mappings) {
-            Ok(request) => request,
-            Err(error) => {
-                return Some(RetainedAttemptExecution {
-                    mappings: Some(mappings),
-                    effective_activity: Some(resolved.activity.clone()),
-                    ..RetainedAttemptExecution::failure(
-                        SketchAttemptFailureKind::Request,
-                        error.to_string(),
-                    )
-                });
-            }
-        };
+    let attempted_request = match lower_request(
+        effective_attempt_request_with_previous_state_intent(
+            request,
+            command_drag,
+            previous_state_intent,
+        ),
+        &mappings,
+    ) {
+        Ok(request) => request,
+        Err(error) => {
+            return Some(RetainedAttemptExecution {
+                mappings: Some(mappings),
+                effective_activity: Some(resolved.activity.clone()),
+                ..RetainedAttemptExecution::failure(
+                    SketchAttemptFailureKind::Request,
+                    error.to_string(),
+                )
+            });
+        }
+    };
+    if previous_state_intent.is_some_and(RetainedPreviousStateIntent::is_no_motion_publication) {
+        let runtime =
+            match SketchSession::certify_current_state_with_previous_state_reference_and_controller(
+                sketch,
+                runtime_request,
+                config,
+                &previous_state,
+                controller,
+            ) {
+                Ok(Some(runtime)) => runtime,
+                Ok(None) => return None,
+                Err(error) => {
+                    return Some(RetainedAttemptExecution {
+                        solve: None,
+                        attempted_geometry: None,
+                        mappings: Some(mappings),
+                        effective_activity: Some(resolved.activity.clone()),
+                        accepted: None,
+                        failure: Some(SketchAttemptFailure {
+                            kind: SketchAttemptFailureKind::AcceptedSession,
+                            message: error.to_string(),
+                            parameter_issue: None,
+                            external_error: None,
+                            effective_activity: None,
+                        }),
+                    });
+                }
+            };
+        if controller
+            .checkpoint(OperationCheckpoint::BeforeFinalValidation)
+            .is_err()
+        {
+            return None;
+        }
+        let mut document = candidate.clone();
+        let projected = document.project_accepted_state_with_controller(
+            runtime.sketch(),
+            &mappings,
+            controller,
+        );
+        if matches!(projected, Ok(false)) {
+            return None;
+        }
+        if controller
+            .checkpoint(OperationCheckpoint::AfterFinalValidation)
+            .is_err()
+        {
+            return None;
+        }
+        if let Err(error) = projected {
+            let mut rejected = runtime.accepted_result().clone();
+            rejected.rejection = Some(SolveRejection::IndependentValidationFailed(
+                error.to_string(),
+            ));
+            rejected.acceptance_hard_residual_max = None;
+            rejected.core_report.hard_validity = HardValidity::Invalid;
+            rejected.core_report.termination = SolveTermination::Stalled;
+            return Some(RetainedAttemptExecution {
+                attempted_geometry: rejected.attempted_geometry.clone(),
+                solve: Some(rejected),
+                mappings: Some(mappings),
+                effective_activity: Some(resolved.activity.clone()),
+                accepted: None,
+                failure: None,
+            });
+        }
+        let solve = runtime.accepted_result().clone();
+        return Some(RetainedAttemptExecution {
+            attempted_geometry: solve.attempted_geometry.clone(),
+            solve: Some(solve),
+            mappings: Some(mappings.clone()),
+            effective_activity: Some(resolved.activity),
+            accepted: Some((document, runtime, mappings, input_stamps)),
+            failure: None,
+        });
+    }
     if attempted_request == runtime_request
         && let Some(parent) = parent.filter(|parent| {
             parent.mappings.has_compatible_runtime_topology(&mappings)
@@ -5588,6 +7497,7 @@ fn run_retained_attempt_controlled(
             sketch.clone(),
             runtime_request,
             &sources,
+            &previous_state,
             Some(controller),
         ) {
             Ok(Some(result)) if result.accepted() => {
@@ -5669,7 +7579,12 @@ fn run_retained_attempt_controlled(
             }
         }
     }
-    let solve = match sketch.solve_with_controller(attempted_request, config, controller) {
+    let solve = match sketch.solve_with_previous_state_reference_and_controller(
+        attempted_request,
+        config,
+        &previous_state,
+        controller,
+    ) {
         Ok(Some(solve)) => solve,
         Ok(None) => return None,
         Err(error) => {
@@ -5694,6 +7609,15 @@ fn run_retained_attempt_controlled(
             failure: None,
         });
     }
+    let accepted_attempt_state;
+    let runtime_previous_state = if attempted_request == runtime_request
+        || previous_state_intent.is_some_and(RetainedPreviousStateIntent::is_drag_locality)
+    {
+        &previous_state
+    } else {
+        accepted_attempt_state = PreviousStateReference::capture(&sketch);
+        &accepted_attempt_state
+    };
     if controller
         .checkpoint(OperationCheckpoint::BeforeFinalValidation)
         .is_err()
@@ -5711,6 +7635,7 @@ fn run_retained_attempt_controlled(
             sketch.clone(),
             runtime_request,
             &sources,
+            runtime_previous_state,
             Some(controller),
         ) {
             Ok(Some(result)) if result.accepted() => incremental_runtime = Some(runtime),
@@ -5750,7 +7675,12 @@ fn run_retained_attempt_controlled(
         let runtime_solve = if attempted_request == runtime_request {
             solve.clone()
         } else {
-            match sketch.solve_with_controller(runtime_request, config, controller) {
+            match sketch.solve_with_previous_state_reference_and_controller(
+                runtime_request,
+                config,
+                runtime_previous_state,
+                controller,
+            ) {
                 Ok(Some(solve)) => solve,
                 Ok(None) => return None,
                 Err(error) => {
@@ -5777,6 +7707,7 @@ fn run_retained_attempt_controlled(
             runtime_request,
             config,
             runtime_solve,
+            runtime_previous_state,
             controller,
         ) {
             Ok(Some(runtime)) => runtime,
@@ -5843,95 +7774,54 @@ fn run_retained_attempt_controlled(
     })
 }
 
-fn publish_retained_attempt(
-    solved_design: &SketchDocument,
-    input: &SketchAttemptInput,
+#[derive(Clone, Copy)]
+struct RetainedAttemptPublication<'a> {
+    solved_design: &'a SketchDocument,
+    design_provenance: &'a Arc<()>,
+    parent_design_provenance: Option<&'a Arc<()>>,
+    input: &'a SketchAttemptInput,
     attempt_identity: SketchAttemptIdentity,
-    parent_accepted: Option<SketchAcceptedStateIdentity>,
+    parent_accepted: Option<&'a SketchAcceptedDocumentState>,
     next_accepted_revision: Option<u64>,
+}
+
+fn current_attempt_publication<'a>(
+    session: &'a RetainedSketchDocumentSession,
+    input: &'a SketchAttemptInput,
+    attempt_identity: SketchAttemptIdentity,
+    parent_accepted: Option<&'a SketchAcceptedDocumentState>,
+) -> RetainedAttemptPublication<'a> {
+    RetainedAttemptPublication {
+        solved_design: &session.design,
+        design_provenance: &session.design_provenance,
+        parent_design_provenance: session.parent_design_provenance.as_ref(),
+        input,
+        attempt_identity,
+        parent_accepted,
+        next_accepted_revision: next_accepted_revision(session.accepted_revision_high_water),
+    }
+}
+
+fn publish_retained_attempt(
+    publication: RetainedAttemptPublication<'_>,
     mut execution: RetainedAttemptExecution,
 ) -> (SketchDocumentAttempt, Option<SketchAcceptedDocumentState>) {
-    let input = *input;
-    let design_identity = input.design;
-    let mut published = None;
-    let mut accepted_state = None;
-    if let Some((document, runtime, mappings, stamps)) = execution.accepted.take() {
-        let stale_input = if input.effective_activation_revision() != stamps.activation_revision
-            || input.activation_digest() != stamps.activation_digest
-        {
-            Some("effective activation input changed before publication")
-        } else if input.parameter_revision() != stamps.parameter_revision
-            || input.parameter_digest() != stamps.parameter_digest
-        {
-            Some("parameter input changed before publication")
-        } else if input.external_snapshot_set_revision() != stamps.external_revision
-            || input.external_snapshot_set_digest() != stamps.external_digest
-        {
-            Some("external snapshot input changed before publication")
-        } else {
-            None
-        };
-        if let Some(message) = stale_input {
-            let effective_activity = execution.effective_activity.take();
-            execution = RetainedAttemptExecution::failure(
-                SketchAttemptFailureKind::Publication,
-                message.into(),
-            );
-            execution.effective_activity = effective_activity;
-        } else if let Some(revision) = next_accepted_revision {
-            let identity = SketchAcceptedStateIdentity {
-                document: design_identity.document,
-                revision: SketchAcceptedRevision(revision),
-            };
-            execution.solve = Some(runtime.accepted_result().clone());
-            execution.attempted_geometry = execution
-                .solve
-                .as_ref()
-                .and_then(|solve| solve.attempted_geometry.clone());
-            execution.mappings = Some(mappings.clone());
-            accepted_state = Some(identity);
-            let redundancy = accepted_document_redundancy(
-                identity,
-                design_identity,
-                runtime.accepted_result(),
-                &mappings,
-            );
-            let parameter_outputs = accepted_parameter_outputs(
-                solved_design,
-                &input,
-                attempt_identity,
-                identity,
-                runtime.accepted_result(),
-                &mappings,
-            );
-            published = Some(SketchAcceptedDocumentState {
-                identity,
-                input,
-                originating_attempt: attempt_identity,
-                solved_design: solved_design.clone(),
-                document,
-                runtime,
-                mappings,
-                effective_activity: stamps.activity,
-                redundancy,
-                parameter_outputs,
-                profile_cache: RefCell::new(Vec::new()),
-            });
-        } else {
-            execution.solve = None;
-            execution.failure = Some(SketchAttemptFailure {
-                kind: SketchAttemptFailureKind::Publication,
-                message: "accepted revision space is exhausted".into(),
-                parameter_issue: None,
-                external_error: None,
-                effective_activity: None,
-            });
-        }
-    }
+    let input = *publication.input;
+    let published = publish_accepted_state(&publication, &mut execution);
+    let accepted_state = published
+        .as_ref()
+        .map(SketchAcceptedDocumentState::identity);
     let attempt = SketchDocumentAttempt {
-        identity: attempt_identity,
+        identity: publication.attempt_identity,
         input,
-        parent_accepted,
+        design_provenance: Arc::clone(publication.design_provenance),
+        parent_design_provenance: publication.parent_design_provenance.map(Arc::clone),
+        parent_accepted: publication
+            .parent_accepted
+            .map(SketchAcceptedDocumentState::identity),
+        parent_accepted_provenance: publication
+            .parent_accepted
+            .map(|accepted| Arc::clone(&accepted.provenance)),
         accepted_state,
         solve: execution.solve,
         attempted_geometry: execution.attempted_geometry,
@@ -5944,6 +7834,93 @@ fn publish_retained_attempt(
             || attempt.solve.as_ref().is_none_or(|solve| !solve.accepted())
     );
     (attempt, published)
+}
+
+fn publish_accepted_state(
+    publication: &RetainedAttemptPublication<'_>,
+    execution: &mut RetainedAttemptExecution,
+) -> Option<SketchAcceptedDocumentState> {
+    let (document, runtime, mappings, stamps) = execution.accepted.take()?;
+    let input = *publication.input;
+    if let Some(message) = stale_publication_input(&input, &stamps) {
+        let effective_activity = execution.effective_activity.take();
+        *execution =
+            RetainedAttemptExecution::failure(SketchAttemptFailureKind::Publication, message);
+        execution.effective_activity = effective_activity;
+        return None;
+    }
+    let Some(revision) = publication.next_accepted_revision else {
+        execution.solve = None;
+        execution.failure = Some(SketchAttemptFailure {
+            kind: SketchAttemptFailureKind::Publication,
+            message: "accepted revision space is exhausted".into(),
+            parameter_issue: None,
+            external_error: None,
+            effective_activity: None,
+        });
+        return None;
+    };
+    let design_identity = input.design;
+    let identity = SketchAcceptedStateIdentity {
+        document: design_identity.document,
+        revision: SketchAcceptedRevision(revision),
+    };
+    execution.solve = Some(runtime.accepted_result().clone());
+    execution.attempted_geometry = execution
+        .solve
+        .as_ref()
+        .and_then(|solve| solve.attempted_geometry.clone());
+    execution.mappings = Some(mappings.clone());
+    let redundancy = accepted_document_redundancy(
+        identity,
+        design_identity,
+        runtime.accepted_result(),
+        &mappings,
+    );
+    let parameter_outputs = accepted_parameter_outputs(
+        publication.solved_design,
+        &input,
+        publication.attempt_identity,
+        identity,
+        runtime.accepted_result(),
+        &mappings,
+    );
+    Some(SketchAcceptedDocumentState {
+        identity,
+        provenance: Arc::new(()),
+        design_provenance: Arc::clone(publication.design_provenance),
+        input,
+        originating_attempt: publication.attempt_identity,
+        solved_design: publication.solved_design.clone(),
+        document,
+        runtime,
+        mappings,
+        effective_activity: stamps.activity,
+        redundancy,
+        parameter_outputs,
+        profile_cache: RefCell::new(Vec::new()),
+    })
+}
+
+fn stale_publication_input(
+    input: &SketchAttemptInput,
+    stamps: &RetainedAttemptInputStamps,
+) -> Option<String> {
+    if input.effective_activation_revision() != stamps.activation_revision
+        || input.activation_digest() != stamps.activation_digest
+    {
+        Some("effective activation input changed before publication".into())
+    } else if input.parameter_revision() != stamps.parameter_revision
+        || input.parameter_digest() != stamps.parameter_digest
+    {
+        Some("parameter input changed before publication".into())
+    } else if input.external_snapshot_set_revision() != stamps.external_revision
+        || input.external_snapshot_set_digest() != stamps.external_digest
+    {
+        Some("external snapshot input changed before publication".into())
+    } else {
+        None
+    }
 }
 
 fn accepted_parameter_outputs(
@@ -6194,6 +8171,222 @@ fn pair_bits(value: [f64; 2]) -> [u64; 2] {
     value.map(f64::to_bits)
 }
 
+fn completed_preview_publication<T>(
+    outcome: OperationOutcome<T>,
+) -> Result<T, DocumentSessionError> {
+    match outcome {
+        OperationOutcome::Completed { value, .. } => Ok(value),
+        OperationOutcome::Cancelled { report } | OperationOutcome::WorkExhausted { report } => {
+            Err(DocumentSessionError::PreviewPublicationStopped {
+                report: Box::new(report),
+            })
+        }
+        outcome => Err(DocumentSessionError::PreviewPublicationStopped {
+            report: Box::new(*outcome.report()),
+        }),
+    }
+}
+
+fn validate_drag_publication_continuity(
+    preview: &SketchDocument,
+    published: &SketchDocument,
+    point: DesignPointId,
+    position: [f64; 2],
+    locality: &DocumentDragLocalityPlan,
+) -> Result<(), DocumentSessionError> {
+    let geometry_tolerance = validate_drag_publication_active(preview, published, point, position)?;
+    validate_drag_publication_anchors(preview, published, locality, geometry_tolerance)?;
+    validate_drag_publication_contacts(preview, published)?;
+    Ok(())
+}
+
+fn validate_drag_publication_active(
+    preview: &SketchDocument,
+    published: &SketchDocument,
+    point: DesignPointId,
+    position: [f64; 2],
+) -> Result<f64, DocumentSessionError> {
+    if preview.model_scale().to_bits() != published.model_scale().to_bits()
+        || !preview.model_scale().is_finite()
+        || preview.model_scale() <= 0.0
+    {
+        return Err(DocumentSessionError::DragPublicationContinuity {
+            context: "the preview and publication model scales differ",
+        });
+    }
+    let geometry_tolerance = 1.0e-8 * preview.model_scale();
+    let preview_active = preview
+        .point(point)
+        .ok_or(DocumentSessionError::DragPublicationContinuity {
+            context: "the active point is absent from the preview",
+        })?
+        .position;
+    let published_active = published
+        .point(point)
+        .ok_or(DocumentSessionError::DragPublicationContinuity {
+            context: "the active point is absent from the publication",
+        })?
+        .position;
+    if !preview_active
+        .iter()
+        .chain(published_active.iter())
+        .all(|value| value.is_finite())
+        || pair_bits(preview_active) != pair_bits(position)
+        || point_distance(preview_active, published_active) > geometry_tolerance
+    {
+        return Err(DocumentSessionError::DragPublicationContinuity {
+            context: "the active point changed from the accepted preview",
+        });
+    }
+    Ok(geometry_tolerance)
+}
+
+fn validate_drag_publication_anchors(
+    preview: &SketchDocument,
+    published: &SketchDocument,
+    locality: &DocumentDragLocalityPlan,
+    geometry_tolerance: f64,
+) -> Result<(), DocumentSessionError> {
+    for anchor in locality.anchors() {
+        let anchor_target = anchor.target();
+        let preview_position = preview
+            .point(anchor.point())
+            .ok_or(DocumentSessionError::DragPublicationContinuity {
+                context: "a frozen anchor is absent from the preview",
+            })?
+            .position;
+        let published_position = published
+            .point(anchor.point())
+            .ok_or(DocumentSessionError::DragPublicationContinuity {
+                context: "a frozen anchor is absent from the publication",
+            })?
+            .position;
+        if !preview_position
+            .iter()
+            .chain(published_position.iter())
+            .chain(anchor_target.iter())
+            .all(|value| value.is_finite())
+        {
+            return Err(DocumentSessionError::DragPublicationContinuity {
+                context: "a frozen anchor position is non-finite",
+            });
+        }
+        if point_distance(preview_position, anchor_target) > geometry_tolerance {
+            return Err(DocumentSessionError::DragPublicationContinuity {
+                context: "a preview anchor moved from its gesture-start target",
+            });
+        }
+        if point_distance(published_position, anchor_target) > geometry_tolerance {
+            return Err(DocumentSessionError::DragPublicationContinuity {
+                context: "a published anchor moved from its gesture-start target",
+            });
+        }
+    }
+    Ok(())
+}
+
+fn validate_drag_publication_contacts(
+    preview: &SketchDocument,
+    published: &SketchDocument,
+) -> Result<(), DocumentSessionError> {
+    if preview.contacts().len() != published.contacts().len() {
+        return Err(DocumentSessionError::DragPublicationContinuity {
+            context: "the persistent contact set changed during publication",
+        });
+    }
+    for preview_contact in preview.contacts() {
+        let published_contact = published.contact(preview_contact.id).ok_or(
+            DocumentSessionError::DragPublicationContinuity {
+                context: "a persistent preview contact is absent from the publication",
+            },
+        )?;
+        if published_contact != preview_contact {
+            return Err(DocumentSessionError::DragPublicationContinuity {
+                context: "persistent contact branch metadata changed during publication",
+            });
+        }
+        let preview_parameter = preview
+            .scalar(preview_contact.parameter)
+            .ok_or(DocumentSessionError::DragPublicationContinuity {
+                context: "a preview contact parameter is absent",
+            })?
+            .value;
+        let published_parameter = published
+            .scalar(published_contact.parameter)
+            .ok_or(DocumentSessionError::DragPublicationContinuity {
+                context: "a published contact parameter is absent",
+            })?
+            .value;
+        let parameter_tolerance = 1.0e-9
+            * preview_parameter
+                .abs()
+                .max(published_parameter.abs())
+                .max(1.0);
+        if !preview_parameter.is_finite()
+            || !published_parameter.is_finite()
+            || (preview_parameter - published_parameter).abs() > parameter_tolerance
+        {
+            return Err(DocumentSessionError::DragPublicationContinuity {
+                context: "a contact parameter changed from the accepted preview",
+            });
+        }
+    }
+    Ok(())
+}
+
+fn point_distance(first: [f64; 2], second: [f64; 2]) -> f64 {
+    (first[0] - second[0]).hypot(first[1] - second[1])
+}
+
+fn incident_line_branch_spans(
+    document: &SketchDocument,
+    point: DesignPointId,
+) -> BTreeSet<CurveSpan> {
+    let mut spans = BTreeSet::new();
+    for curve in document.curves() {
+        match &curve.definition {
+            CurveDefinition::Line { start, end, .. } if *start == point || *end == point => {
+                spans.insert(CurveSpan::line(curve.id));
+            }
+            CurveDefinition::Polyline { points, closed, .. } => {
+                for (segment, pair) in points.windows(2).enumerate() {
+                    if pair.contains(&point) {
+                        spans.insert(CurveSpan {
+                            curve: curve.id,
+                            segment: u32::try_from(segment).unwrap_or(u32::MAX),
+                        });
+                    }
+                }
+                if *closed
+                    && points.len() > 2
+                    && let (Some(&start), Some(&end)) = (points.last(), points.first())
+                    && (start == point || end == point)
+                {
+                    spans.insert(CurveSpan {
+                        curve: curve.id,
+                        segment: u32::try_from(points.len() - 1).unwrap_or(u32::MAX),
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+    spans
+}
+
+fn branch_edits_cover_incident_lines(
+    document: &SketchDocument,
+    point: DesignPointId,
+    branches: &[DocumentCurveBranchEdit],
+) -> bool {
+    let expected = incident_line_branch_spans(document, point);
+    let supplied = branches
+        .iter()
+        .map(|branch| branch.curve)
+        .collect::<BTreeSet<_>>();
+    !expected.is_empty() && branches.len() == expected.len() && supplied == expected
+}
+
 struct AttemptedDocument {
     accepted: Option<(SketchDocument, SketchSession, DocumentRuntimeMap)>,
     result: DocumentSolveResult,
@@ -6211,7 +8404,6 @@ fn attempt_document(
     let attempted_request = lower_request(
         DocumentSolveRequest {
             drag: command_drag.or(request.drag),
-            stability_target: request.stability_target,
             previous_state_preferences: command_drag.is_none()
                 && request.previous_state_preferences,
         },
@@ -6258,17 +8450,23 @@ fn attempt_document_controlled(
     };
     let (mut sketch, mappings) = lowered.into_parts();
     let validation_sketch = sketch.clone();
+    let previous_state = PreviousStateReference::capture(&validation_sketch);
     let runtime_request = lower_request(request, &mappings)?;
     let attempted_request = lower_request(
         DocumentSolveRequest {
             drag: command_drag.or(request.drag),
-            stability_target: request.stability_target,
             previous_state_preferences: command_drag.is_none()
                 && request.previous_state_preferences,
         },
         &mappings,
     )?;
-    let Some(solve) = sketch.solve_with_controller(attempted_request, config, controller)? else {
+    let Some(solve) = sketch.solve_with_previous_state_reference_and_controller(
+        attempted_request,
+        config,
+        &previous_state,
+        controller,
+    )?
+    else {
         return Ok(None);
     };
     if solve.rejection.is_some() {
@@ -6283,7 +8481,19 @@ fn attempt_document_controlled(
     {
         return Ok(None);
     }
-    let Some(runtime_solve) = sketch.solve_with_controller(runtime_request, config, controller)?
+    let accepted_attempt_state;
+    let runtime_previous_state = if attempted_request == runtime_request {
+        &previous_state
+    } else {
+        accepted_attempt_state = PreviousStateReference::capture(&sketch);
+        &accepted_attempt_state
+    };
+    let Some(runtime_solve) = sketch.solve_with_previous_state_reference_and_controller(
+        runtime_request,
+        config,
+        runtime_previous_state,
+        controller,
+    )?
     else {
         return Ok(None);
     };
@@ -6293,6 +8503,7 @@ fn attempt_document_controlled(
         runtime_request,
         config,
         runtime_solve,
+        runtime_previous_state,
         controller,
     )?
     else {
@@ -6337,16 +8548,6 @@ fn lower_request(
     let mut runtime = SketchSolveRequest::new();
     if !request.previous_state_preferences {
         runtime = runtime.without_previous_state_preferences();
-    }
-    if let Some(stability) = request.stability_target {
-        let point = mappings
-            .runtime_point(stability.point)
-            .ok_or(DocumentError::UnknownId {
-                kind: "stability target",
-                id: stability.point.0,
-            })?;
-        runtime = runtime
-            .with_stability_target(point, Point2::new(stability.target[0], stability.target[1]));
     }
     if let Some(drag) = request.drag {
         let point = mappings

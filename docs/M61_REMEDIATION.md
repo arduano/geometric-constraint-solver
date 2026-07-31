@@ -9,6 +9,14 @@ by the supervising human on 2026-07-29
 
 Implementation source: `1f5fd59`; targeted interaction repair: `1c314e9`
 
+> Historical supersession notice (M65, 2026-07-30): this report preserves the behavior shipped
+> and approved for M61. References below to a transient stability target, active/passive scenario
+> metadata and the stabilized-projection seam are not current architecture. M64 removed
+> sample-owned drag policy; M65 removes the `stability_target` request API and passive retry in
+> favor of one frozen, accepted-rank-derived `DocumentDragLocalityPlan` whose selected anchor
+> targets come from accepted visible geometry at gesture start and whose private process-local
+> design-publication and accepted-state provenance rejects divergent equal-revision clones.
+
 ## 1. Files and APIs added
 
 - `geosolve-constraint-editor` adds advanced `EditorTool`, `ConstructionProposal`,
@@ -53,6 +61,13 @@ driving line-length dimensions. Replaying retained revision 42/attempt 44 agains
 41 reaches a finite numerical solution but remains correctly rejected as
 `AmbiguousContactNeighborhood`. The interaction repair changes only when browser samples are
 submitted; it does not alter this mathematical result.
+
+M65 supersedes only the later checkpoint-restore interpretation of this fixture. A direct solve
+from the retained candidate's numerical state still rejects
+`AmbiguousContactNeighborhood` with no success-like state. When the exact prior accepted graph is
+also supplied, candidate-shaped restore may seed compatible numerical coordinates from that graph,
+retain the candidate design bytes, and republish the accepted bytes exactly before the small
+projected retry. This does not broaden the contact validator.
 
 ## 3. Commands run and outcomes
 
@@ -114,6 +129,10 @@ demo-web passes 48 direct tests, including the pointer queue lifecycle regressio
 - Cursor-anchored zoom, screen-direction pan and fit-to-scene are directly tested.
 - No `unsafe`, FFI, equation duplication, weighted-priority substitution, `/#/dev/lab`, old
   playground, CDP or browser E2E was introduced.
+
+The retained-contact bullet records the M61 candidate-from-own-state flow. The M65
+checkpoint-restore supersession described above preserves its direct ambiguity coverage while
+allowing exact accepted-state numerical recovery.
 
 No new residual was added, so no new residual Jacobian implementation or finite-difference
 Jacobian test is required.

@@ -51,6 +51,7 @@ pub enum OperationWorkCounter {
     ComponentLinearizations,
     DenseKernelRows,
     DenseKernelColumns,
+    DenseKernelWorkUnits,
     Factorizations,
     RankKernels,
     DiagnosticCandidates,
@@ -79,6 +80,8 @@ pub struct OperationLimits {
     pub dense_kernel_rows: usize,
     /// Maximum dense-kernel column dimension. Values above 256 are clamped by the controller.
     pub dense_kernel_columns: usize,
+    /// Additive conservative dense-kernel work, charged as `max(rows, columns)^3` per kernel.
+    pub dense_kernel_work_units: usize,
     pub factorizations: usize,
     pub rank_kernels: usize,
     pub diagnostic_candidates: usize,
@@ -106,6 +109,7 @@ impl OperationLimits {
             component_linearizations: usize::MAX,
             dense_kernel_rows: CONTROLLED_DENSE_KERNEL_MAX_DIMENSION,
             dense_kernel_columns: CONTROLLED_DENSE_KERNEL_MAX_DIMENSION,
+            dense_kernel_work_units: usize::MAX,
             factorizations: usize::MAX,
             rank_kernels: usize::MAX,
             diagnostic_candidates: usize::MAX,
@@ -132,6 +136,7 @@ impl OperationLimits {
             OperationWorkCounter::ComponentLinearizations => self.component_linearizations,
             OperationWorkCounter::DenseKernelRows => self.dense_kernel_rows,
             OperationWorkCounter::DenseKernelColumns => self.dense_kernel_columns,
+            OperationWorkCounter::DenseKernelWorkUnits => self.dense_kernel_work_units,
             OperationWorkCounter::Factorizations => self.factorizations,
             OperationWorkCounter::RankKernels => self.rank_kernels,
             OperationWorkCounter::DiagnosticCandidates => self.diagnostic_candidates,
@@ -147,6 +152,77 @@ impl OperationLimits {
             OperationWorkCounter::MeasurementDerivativeEvaluations => {
                 self.measurement_derivative_evaluations
             }
+        }
+    }
+
+    fn optional_ceiling(self, consumed: OperationWork) -> Self {
+        fn half_remaining(limit: usize, current: usize) -> usize {
+            current.saturating_add(limit.saturating_sub(current) / 2)
+        }
+
+        Self {
+            document_validation_items: half_remaining(
+                self.document_validation_items,
+                consumed.document_validation_items,
+            ),
+            document_dependency_items: half_remaining(
+                self.document_dependency_items,
+                consumed.document_dependency_items,
+            ),
+            document_lowering_items: half_remaining(
+                self.document_lowering_items,
+                consumed.document_lowering_items,
+            ),
+            nonlinear_iterations: half_remaining(
+                self.nonlinear_iterations,
+                consumed.nonlinear_iterations,
+            ),
+            rejected_trials: half_remaining(self.rejected_trials, consumed.rejected_trials),
+            component_linearizations: half_remaining(
+                self.component_linearizations,
+                consumed.component_linearizations,
+            ),
+            // Dense dimensions are maximum authorizations, not additive work.
+            dense_kernel_rows: self.dense_kernel_rows,
+            dense_kernel_columns: self.dense_kernel_columns,
+            dense_kernel_work_units: half_remaining(
+                self.dense_kernel_work_units,
+                consumed.dense_kernel_work_units,
+            ),
+            factorizations: half_remaining(self.factorizations, consumed.factorizations),
+            rank_kernels: half_remaining(self.rank_kernels, consumed.rank_kernels),
+            diagnostic_candidates: half_remaining(
+                self.diagnostic_candidates,
+                consumed.diagnostic_candidates,
+            ),
+            diagnostic_trials: half_remaining(self.diagnostic_trials, consumed.diagnostic_trials),
+            profile_candidate_pairs: half_remaining(
+                self.profile_candidate_pairs,
+                consumed.profile_candidate_pairs,
+            ),
+            profile_subdivisions: half_remaining(
+                self.profile_subdivisions,
+                consumed.profile_subdivisions,
+            ),
+            profile_roots: half_remaining(self.profile_roots, consumed.profile_roots),
+            profile_fragments: half_remaining(self.profile_fragments, consumed.profile_fragments),
+            profile_integrations: half_remaining(
+                self.profile_integrations,
+                consumed.profile_integrations,
+            ),
+            profile_containment_tests: half_remaining(
+                self.profile_containment_tests,
+                consumed.profile_containment_tests,
+            ),
+            profile_faces: half_remaining(self.profile_faces, consumed.profile_faces),
+            measurement_integrations: half_remaining(
+                self.measurement_integrations,
+                consumed.measurement_integrations,
+            ),
+            measurement_derivative_evaluations: half_remaining(
+                self.measurement_derivative_evaluations,
+                consumed.measurement_derivative_evaluations,
+            ),
         }
     }
 }
@@ -170,6 +246,8 @@ pub struct OperationWork {
     pub dense_kernel_rows: usize,
     /// Largest authorized dense-kernel column dimension.
     pub dense_kernel_columns: usize,
+    /// Additive conservative dense-kernel work charged as `max(rows, columns)^3`.
+    pub dense_kernel_work_units: usize,
     pub factorizations: usize,
     pub rank_kernels: usize,
     pub diagnostic_candidates: usize,
@@ -196,6 +274,7 @@ impl OperationWork {
             OperationWorkCounter::ComponentLinearizations => self.component_linearizations,
             OperationWorkCounter::DenseKernelRows => self.dense_kernel_rows,
             OperationWorkCounter::DenseKernelColumns => self.dense_kernel_columns,
+            OperationWorkCounter::DenseKernelWorkUnits => self.dense_kernel_work_units,
             OperationWorkCounter::Factorizations => self.factorizations,
             OperationWorkCounter::RankKernels => self.rank_kernels,
             OperationWorkCounter::DiagnosticCandidates => self.diagnostic_candidates,
@@ -224,6 +303,9 @@ impl OperationWork {
             OperationWorkCounter::ComponentLinearizations => self.component_linearizations = value,
             OperationWorkCounter::DenseKernelRows => self.dense_kernel_rows = value,
             OperationWorkCounter::DenseKernelColumns => self.dense_kernel_columns = value,
+            OperationWorkCounter::DenseKernelWorkUnits => {
+                self.dense_kernel_work_units = value;
+            }
             OperationWorkCounter::Factorizations => self.factorizations = value,
             OperationWorkCounter::RankKernels => self.rank_kernels = value,
             OperationWorkCounter::DiagnosticCandidates => self.diagnostic_candidates = value,
@@ -374,6 +456,14 @@ pub struct OperationController {
     stopping_reason: Option<OperationStopReason>,
 }
 
+/// Result of work that may improve an already-valid candidate but is not
+/// required to publish it.
+pub(crate) enum OptionalWorkOutcome<T> {
+    Completed(T),
+    WorkExhausted(T),
+    Interrupted,
+}
+
 /// Scoped operation boundary that always checks its after checkpoint on exit.
 pub(crate) struct OperationBoundary<'a> {
     controller: &'a mut OperationController,
@@ -422,6 +512,7 @@ impl OperationController {
                 component_linearizations: 0,
                 dense_kernel_rows: 0,
                 dense_kernel_columns: 0,
+                dense_kernel_work_units: 0,
                 factorizations: 0,
                 rank_kernels: 0,
                 diagnostic_candidates: 0,
@@ -521,10 +612,50 @@ impl OperationController {
         })
     }
 
+    /// Runs optional work against an isolated copy of the remaining operation
+    /// budget.
+    ///
+    /// Each additive counter, including dense-kernel work, receives at most
+    /// half its remaining allowance, so mandatory validation after this stage
+    /// retains the other half. Dense dimensions remain maximum authorizations.
+    /// Consumed work is retained in the parent report. Exhausting the isolated
+    /// allowance does not poison an already-valid parent result, while
+    /// cancellation remains monotonic and is propagated to the parent.
+    pub(crate) fn run_optional<T>(
+        &mut self,
+        work: impl FnOnce(&mut Self) -> T,
+    ) -> OptionalWorkOutcome<T> {
+        if self.stopping_reason.is_some() {
+            return OptionalWorkOutcome::Interrupted;
+        }
+        let mut optional_control = self.control.clone();
+        optional_control.limits = self.control.limits.optional_ceiling(self.consumed);
+        let mut optional = Self {
+            control: optional_control,
+            consumed: self.consumed,
+            stopping_reason: None,
+        };
+        let value = work(&mut optional);
+        let _ = optional.checkpoint(OperationCheckpoint::ComponentBoundary);
+        self.consumed = optional.consumed;
+        match optional.stopping_reason {
+            None => OptionalWorkOutcome::Completed(value),
+            Some(reason @ OperationStopReason::Cancelled { .. }) => {
+                self.stopping_reason = Some(reason);
+                OptionalWorkOutcome::Interrupted
+            }
+            Some(OperationStopReason::WorkExhausted { .. }) => {
+                OptionalWorkOutcome::WorkExhausted(value)
+            }
+        }
+    }
+
     /// Authorizes one dense kernel against the effective per-axis M35 bound.
     ///
-    /// The consumed values retain the largest authorized dimensions rather than
-    /// summing dimensions across kernel calls.
+    /// The consumed dimensions retain the largest authorized dimensions rather
+    /// than summing dimensions across calls. Every authorization additionally
+    /// charges the conservative additive work `max(rows, columns)^3` exactly
+    /// once before the caller enters the kernel.
     pub(crate) fn authorize_dense_kernel(
         &mut self,
         rows: usize,
@@ -536,6 +667,23 @@ impl OperationController {
         self.authorize_maximum(
             OperationWorkCounter::DenseKernelColumns,
             columns,
+            checkpoint,
+        )?;
+        let dimension = rows.max(columns);
+        let work_units = dimension
+            .checked_mul(dimension)
+            .and_then(|square| square.checked_mul(dimension))
+            .ok_or_else(|| {
+                let reason = OperationStopReason::WorkExhausted {
+                    counter: OperationWorkCounter::DenseKernelWorkUnits,
+                    checkpoint,
+                };
+                self.stopping_reason = Some(reason);
+                reason
+            })?;
+        self.charge(
+            OperationWorkCounter::DenseKernelWorkUnits,
+            work_units,
             checkpoint,
         )
     }
@@ -709,6 +857,176 @@ mod tests {
     }
 
     #[test]
+    fn dense_kernel_work_is_additive_and_uses_the_largest_rectangular_dimension() {
+        let mut limits = OperationLimits::unlimited();
+        limits.dense_kernel_work_units = 5 * 5 * 5 + 4 * 4 * 4;
+        let mut controller =
+            OperationController::new(OperationControl::new(CancellationToken::default(), limits));
+
+        controller
+            .authorize_dense_kernel(2, 5, OperationCheckpoint::BeforeFactorization)
+            .unwrap();
+        controller
+            .authorize_dense_kernel(4, 3, OperationCheckpoint::BeforeRankKernel)
+            .unwrap();
+
+        let report = controller.report();
+        assert_eq!(report.consumed.dense_kernel_rows, 4);
+        assert_eq!(report.consumed.dense_kernel_columns, 5);
+        assert_eq!(report.consumed.dense_kernel_work_units, 125 + 64);
+        assert_eq!(report.consumed.factorizations, 0);
+        assert_eq!(report.consumed.rank_kernels, 0);
+
+        controller
+            .charge(
+                OperationWorkCounter::Factorizations,
+                1,
+                OperationCheckpoint::BeforeFactorization,
+            )
+            .unwrap();
+        controller
+            .charge(
+                OperationWorkCounter::RankKernels,
+                1,
+                OperationCheckpoint::BeforeRankKernel,
+            )
+            .unwrap();
+        let report = controller.report();
+        assert_eq!(report.consumed.dense_kernel_work_units, 125 + 64);
+        assert_eq!(report.consumed.factorizations, 1);
+        assert_eq!(report.consumed.rank_kernels, 1);
+    }
+
+    #[test]
+    fn dense_kernel_work_honors_exact_full_dimension_operation_boundaries() {
+        const FULL_DIMENSION_WORK: usize = 16_777_216;
+        assert_eq!(
+            FULL_DIMENSION_WORK,
+            CONTROLLED_DENSE_KERNEL_MAX_DIMENSION
+                * CONTROLLED_DENSE_KERNEL_MAX_DIMENSION
+                * CONTROLLED_DENSE_KERNEL_MAX_DIMENSION
+        );
+
+        for operation_limit in 1..=3 {
+            let mut limits = OperationLimits::unlimited();
+            limits.dense_kernel_work_units = FULL_DIMENSION_WORK * operation_limit;
+            let mut controller = OperationController::new(OperationControl::new(
+                CancellationToken::default(),
+                limits,
+            ));
+
+            for completed in 1..=operation_limit {
+                controller
+                    .authorize_dense_kernel(
+                        CONTROLLED_DENSE_KERNEL_MAX_DIMENSION,
+                        CONTROLLED_DENSE_KERNEL_MAX_DIMENSION,
+                        OperationCheckpoint::BeforeFactorization,
+                    )
+                    .unwrap();
+                assert_eq!(
+                    controller.report().consumed.dense_kernel_work_units,
+                    FULL_DIMENSION_WORK * completed
+                );
+            }
+
+            assert_eq!(
+                controller.authorize_dense_kernel(
+                    CONTROLLED_DENSE_KERNEL_MAX_DIMENSION,
+                    CONTROLLED_DENSE_KERNEL_MAX_DIMENSION,
+                    OperationCheckpoint::BeforeFactorization,
+                ),
+                Err(OperationStopReason::WorkExhausted {
+                    counter: OperationWorkCounter::DenseKernelWorkUnits,
+                    checkpoint: OperationCheckpoint::BeforeFactorization,
+                })
+            );
+            let report = controller.report();
+            assert_eq!(
+                report.consumed.dense_kernel_work_units,
+                FULL_DIMENSION_WORK * operation_limit
+            );
+            assert_eq!(report.consumed.factorizations, 0);
+            assert_eq!(report.consumed.rank_kernels, 0);
+        }
+    }
+
+    #[test]
+    fn dense_kernel_work_overflow_stops_before_kernel_counters_advance() {
+        let mut controller = OperationController::new(OperationControl::unlimited());
+        // Bypass the public controlled-axis clamp to exercise the checked cube
+        // defensively on dimensions no valid controller can ordinarily admit.
+        controller.control.limits.dense_kernel_rows = usize::MAX;
+        controller.control.limits.dense_kernel_columns = usize::MAX;
+
+        assert_eq!(
+            controller.authorize_dense_kernel(
+                usize::MAX,
+                1,
+                OperationCheckpoint::BeforeFactorization,
+            ),
+            Err(OperationStopReason::WorkExhausted {
+                counter: OperationWorkCounter::DenseKernelWorkUnits,
+                checkpoint: OperationCheckpoint::BeforeFactorization,
+            })
+        );
+        let report = controller.report();
+        assert_eq!(report.consumed.dense_kernel_rows, usize::MAX);
+        assert_eq!(report.consumed.dense_kernel_columns, 1);
+        assert_eq!(report.consumed.dense_kernel_work_units, 0);
+        assert_eq!(report.consumed.factorizations, 0);
+        assert_eq!(report.consumed.rank_kernels, 0);
+
+        let mut controller = OperationController::new(OperationControl::unlimited());
+        controller
+            .charge(
+                OperationWorkCounter::DenseKernelWorkUnits,
+                usize::MAX - 7,
+                OperationCheckpoint::BeforeFactorization,
+            )
+            .unwrap();
+        assert_eq!(
+            controller.authorize_dense_kernel(2, 2, OperationCheckpoint::BeforeFactorization),
+            Err(OperationStopReason::WorkExhausted {
+                counter: OperationWorkCounter::DenseKernelWorkUnits,
+                checkpoint: OperationCheckpoint::BeforeFactorization,
+            })
+        );
+        let report = controller.report();
+        assert_eq!(report.consumed.dense_kernel_work_units, usize::MAX - 7);
+        assert_eq!(report.consumed.factorizations, 0);
+        assert_eq!(report.consumed.rank_kernels, 0);
+    }
+
+    #[test]
+    fn optional_dense_kernel_work_uses_half_the_remaining_additive_allowance() {
+        let mut limits = OperationLimits::unlimited();
+        limits.dense_kernel_work_units = 24;
+        let mut controller =
+            OperationController::new(OperationControl::new(CancellationToken::default(), limits));
+        controller
+            .authorize_dense_kernel(2, 2, OperationCheckpoint::BeforeFactorization)
+            .unwrap();
+
+        let outcome = controller.run_optional(|optional| {
+            assert_eq!(optional.report().configured.dense_kernel_work_units, 16);
+            optional
+                .authorize_dense_kernel(2, 2, OperationCheckpoint::BeforeFactorization)
+                .unwrap();
+            optional
+                .authorize_dense_kernel(1, 1, OperationCheckpoint::BeforeFactorization)
+                .unwrap_err();
+        });
+
+        assert!(matches!(outcome, OptionalWorkOutcome::WorkExhausted(())));
+        assert!(!controller.is_stopped());
+        assert_eq!(controller.report().consumed.dense_kernel_work_units, 16);
+        controller
+            .authorize_dense_kernel(2, 2, OperationCheckpoint::BeforeFactorization)
+            .unwrap();
+        assert_eq!(controller.report().consumed.dense_kernel_work_units, 24);
+    }
+
+    #[test]
     fn scoped_boundaries_observe_cancellation_at_after_checkpoints() {
         for (before, after) in [
             (
@@ -734,5 +1052,70 @@ mod tests {
                 Some(OperationStopReason::Cancelled { checkpoint: after })
             );
         }
+    }
+
+    #[test]
+    fn optional_work_exhaustion_retains_accounting_without_stopping_the_parent() {
+        let mut limits = OperationLimits::unlimited();
+        limits.factorizations = 3;
+        let mut controller =
+            OperationController::new(OperationControl::new(CancellationToken::default(), limits));
+        controller
+            .charge(
+                OperationWorkCounter::Factorizations,
+                1,
+                OperationCheckpoint::BeforeFactorization,
+            )
+            .unwrap();
+
+        let outcome = controller.run_optional(|optional| {
+            optional
+                .charge(
+                    OperationWorkCounter::Factorizations,
+                    1,
+                    OperationCheckpoint::BeforeFactorization,
+                )
+                .unwrap();
+            optional
+                .charge(
+                    OperationWorkCounter::Factorizations,
+                    1,
+                    OperationCheckpoint::BeforeFactorization,
+                )
+                .unwrap_err();
+            7
+        });
+
+        assert!(matches!(outcome, OptionalWorkOutcome::WorkExhausted(7)));
+        assert!(!controller.is_stopped());
+        assert_eq!(controller.report().consumed.factorizations, 2);
+        assert_eq!(controller.report().stopping_reason, None);
+        controller
+            .charge(
+                OperationWorkCounter::Factorizations,
+                1,
+                OperationCheckpoint::BeforeFactorization,
+            )
+            .unwrap();
+        assert_eq!(controller.report().consumed.factorizations, 3);
+    }
+
+    #[test]
+    fn optional_work_propagates_cancellation_to_the_parent() {
+        let (handle, token) = cancellation_pair();
+        let mut controller =
+            OperationController::new(OperationControl::new(token, OperationLimits::unlimited()));
+
+        let outcome = controller.run_optional(|_| {
+            handle.cancel();
+        });
+
+        assert!(matches!(outcome, OptionalWorkOutcome::Interrupted));
+        assert_eq!(
+            controller.report().stopping_reason,
+            Some(OperationStopReason::Cancelled {
+                checkpoint: OperationCheckpoint::ComponentBoundary,
+            })
+        );
     }
 }

@@ -1418,6 +1418,9 @@ pub struct EffectiveActivity {
     elements: Vec<DocumentElementActivity>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ActivityTraversalInterrupted;
+
 impl EffectiveActivity {
     #[must_use]
     pub const fn activation_revision(&self) -> u64 {
@@ -2268,6 +2271,15 @@ struct DocumentHeader {
 }
 
 impl SketchDocument {
+    pub(crate) fn exact_unserialized_state_matches(&self, other: &Self) -> bool {
+        self.semantic_source_reservations == other.semantic_source_reservations
+            && self.mutation_validation_deferred == other.mutation_validation_deferred
+    }
+
+    pub(crate) fn exact_unserialized_state_items(&self) -> usize {
+        self.semantic_source_reservations.len().saturating_add(1)
+    }
+
     pub(crate) fn validate_parameter_scalar_value(
         &self,
         scalar: DesignScalarId,
@@ -7485,7 +7497,11 @@ impl SketchDocument {
             });
         }
         finite_positive(self.model_scale, "model_scale")?;
-        let activity = self.compute_effective_activity();
+        let Some(activity) =
+            self.compute_effective_activity_with_controller(controller.as_deref_mut())
+        else {
+            return Ok(false);
+        };
         let curve_point_references: usize = self
             .curves
             .iter()
@@ -8368,7 +8384,19 @@ impl SketchDocument {
     }
 
     fn compute_effective_activity(&self) -> EffectiveActivity {
-        self.compute_effective_activity_with_input_overlays(&BTreeSet::new(), &BTreeSet::new())
+        self.compute_effective_activity_with_controller(None)
+            .expect("uncontrolled effective-activity traversal cannot be interrupted")
+    }
+
+    fn compute_effective_activity_with_controller(
+        &self,
+        controller: Option<&mut OperationController>,
+    ) -> Option<EffectiveActivity> {
+        self.compute_effective_activity_with_input_overlays_and_controller(
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            controller,
+        )
     }
 
     fn compute_effective_activity_with_input_overlays(
@@ -8376,10 +8404,27 @@ impl SketchDocument {
         parameter_inactive: &BTreeSet<DocumentElementId>,
         unavailable_external: &BTreeSet<DocumentElementId>,
     ) -> EffectiveActivity {
-        let mut elements = self.canonical_elements();
+        self.compute_effective_activity_with_input_overlays_and_controller(
+            parameter_inactive,
+            unavailable_external,
+            None,
+        )
+        .expect("uncontrolled effective-activity traversal cannot be interrupted")
+    }
+
+    fn compute_effective_activity_with_input_overlays_and_controller(
+        &self,
+        parameter_inactive: &BTreeSet<DocumentElementId>,
+        unavailable_external: &BTreeSet<DocumentElementId>,
+        mut controller: Option<&mut OperationController>,
+    ) -> Option<EffectiveActivity> {
+        let mut elements = self.canonical_elements_with_controller(&mut controller)?;
         let mut reasons = BTreeMap::<DocumentElementId, InactivityReason>::new();
         for element in &elements {
-            if let Some(reason) = self.direct_inactivity_reason(*element) {
+            let direct_reason = self
+                .direct_inactivity_reason_with_controller(*element, &mut controller)
+                .ok()?;
+            if let Some(reason) = direct_reason {
                 reasons.insert(*element, reason);
             } else if parameter_inactive.contains(element) {
                 reasons.insert(*element, InactivityReason::HostConfigurationInactive);
@@ -8388,17 +8433,50 @@ impl SketchDocument {
             }
         }
         if !reasons.is_empty() {
+            let mut dependencies = BTreeMap::<DocumentElementId, Vec<DocumentElementId>>::new();
             loop {
+                if !charge_document_item(
+                    &mut controller,
+                    OperationWorkCounter::DocumentDependencyItems,
+                    OperationCheckpoint::DocumentDependency,
+                ) {
+                    return None;
+                }
                 let mut changed = false;
                 for element in &elements {
+                    if !charge_document_item(
+                        &mut controller,
+                        OperationWorkCounter::DocumentDependencyItems,
+                        OperationCheckpoint::DocumentDependency,
+                    ) {
+                        return None;
+                    }
                     if reasons.contains_key(element) {
                         continue;
                     }
-                    if let Some(dependency) = self
-                        .direct_dependencies(*element)
-                        .into_iter()
-                        .find(|dependency| reasons.contains_key(dependency))
+                    if !dependencies.contains_key(element) {
+                        let direct =
+                            self.direct_dependencies_with_controller(*element, &mut controller)?;
+                        dependencies.insert(*element, direct);
+                    }
+                    let mut unavailable_dependency = None;
+                    for dependency in dependencies
+                        .get(element)
+                        .expect("direct dependencies were cached before inspection")
                     {
+                        if !charge_document_item(
+                            &mut controller,
+                            OperationWorkCounter::DocumentDependencyItems,
+                            OperationCheckpoint::DocumentDependency,
+                        ) {
+                            return None;
+                        }
+                        if reasons.contains_key(dependency) {
+                            unavailable_dependency = Some(*dependency);
+                            break;
+                        }
+                    }
+                    if let Some(dependency) = unavailable_dependency {
                         reasons.insert(
                             *element,
                             InactivityReason::UnavailableDependency { dependency },
@@ -8417,21 +8495,36 @@ impl SketchDocument {
             .map_or((0, ActivationDigest::default()), |activation| {
                 (activation.revision(), activation.digest())
             });
-        let entries = elements
-            .drain(..)
-            .map(|element| DocumentElementActivity {
+        let mut entries = Vec::with_capacity(elements.len());
+        for element in elements.drain(..) {
+            if !charge_document_item(
+                &mut controller,
+                OperationWorkCounter::DocumentDependencyItems,
+                OperationCheckpoint::DocumentDependency,
+            ) {
+                return None;
+            }
+            entries.push(DocumentElementActivity {
                 element,
                 reason: reasons.get(&element).copied(),
-            })
-            .collect();
-        EffectiveActivity {
+            });
+        }
+        Some(EffectiveActivity {
             activation_revision,
             activation_digest,
             elements: entries,
-        }
+        })
     }
 
     fn canonical_elements(&self) -> Vec<DocumentElementId> {
+        self.canonical_elements_with_controller(&mut None)
+            .expect("uncontrolled canonical-element traversal cannot be interrupted")
+    }
+
+    fn canonical_elements_with_controller(
+        &self,
+        controller: &mut Option<&mut OperationController>,
+    ) -> Option<Vec<DocumentElementId>> {
         let mut elements = Vec::with_capacity(
             1 + self.points.len()
                 + self.scalars.len()
@@ -8442,104 +8535,385 @@ impl SketchDocument {
                 + self.parameters.len()
                 + self.external_bindings.len(),
         );
-        elements.push(DocumentElementId::Document(self.id));
-        elements.extend(
-            self.points
-                .iter()
-                .map(|value| DocumentElementId::Point(value.id)),
-        );
-        elements.extend(
-            self.scalars
-                .iter()
-                .map(|value| DocumentElementId::Scalar(value.id)),
-        );
-        elements.extend(
-            self.curves
-                .iter()
-                .map(|value| DocumentElementId::Curve(value.id)),
-        );
-        elements.extend(
-            self.contacts
-                .iter()
-                .map(|value| DocumentElementId::Contact(value.id)),
-        );
-        elements.extend(
-            self.constraints
-                .iter()
-                .map(|value| DocumentElementId::Constraint(value.id)),
-        );
-        elements.extend(
-            self.dimensions
-                .iter()
-                .map(|value| DocumentElementId::Dimension(value.id)),
-        );
-        elements.extend(
-            self.parameters
-                .iter()
-                .map(|value| DocumentElementId::Parameter(value.id)),
-        );
-        elements.extend(
-            self.external_bindings
-                .iter()
-                .map(|value| DocumentElementId::ExternalBinding(value.id)),
-        );
-        elements.extend(
-            self.source_order
-                .iter()
-                .copied()
-                .map(DocumentElementId::Source),
-        );
-        elements.sort_by_key(|element| canonical_element_key(*element));
-        elements
-    }
-
-    fn direct_inactivity_reason(&self, element: DocumentElementId) -> Option<InactivityReason> {
-        let owner_suppressed = match element {
-            DocumentElementId::Constraint(id) => self
-                .constraint(id)
-                .is_some_and(|constraint| constraint.suppressed),
-            DocumentElementId::Dimension(id) => self
-                .dimension(id)
-                .is_some_and(|dimension| dimension.suppressed),
-            DocumentElementId::Source(id) => {
-                self.source(id).is_some_and(|source| source.suppressed)
-            }
-            _ => false,
-        };
-        if owner_suppressed || self.user_inactive_elements.contains(&element) {
-            return Some(InactivityReason::UserSuppressed);
-        }
-        let activation = self.host_activation.as_ref()?;
-        let owner_source = match element {
-            DocumentElementId::Constraint(id) => self
-                .constraint(id)
-                .map(|constraint| DocumentElementId::Source(constraint.source_id)),
-            DocumentElementId::Dimension(id) => self
-                .dimension(id)
-                .map(|dimension| DocumentElementId::Source(dimension.source_id)),
-            _ => None,
-        };
-        activation.overrides().iter().find_map(|entry| {
-            if entry.element() != element && Some(entry.element()) != owner_source {
+        let all_elements = std::iter::once(DocumentElementId::Document(self.id))
+            .chain(
+                self.points
+                    .iter()
+                    .map(|value| DocumentElementId::Point(value.id)),
+            )
+            .chain(
+                self.scalars
+                    .iter()
+                    .map(|value| DocumentElementId::Scalar(value.id)),
+            )
+            .chain(
+                self.curves
+                    .iter()
+                    .map(|value| DocumentElementId::Curve(value.id)),
+            )
+            .chain(
+                self.contacts
+                    .iter()
+                    .map(|value| DocumentElementId::Contact(value.id)),
+            )
+            .chain(
+                self.constraints
+                    .iter()
+                    .map(|value| DocumentElementId::Constraint(value.id)),
+            )
+            .chain(
+                self.dimensions
+                    .iter()
+                    .map(|value| DocumentElementId::Dimension(value.id)),
+            )
+            .chain(
+                self.parameters
+                    .iter()
+                    .map(|value| DocumentElementId::Parameter(value.id)),
+            )
+            .chain(
+                self.external_bindings
+                    .iter()
+                    .map(|value| DocumentElementId::ExternalBinding(value.id)),
+            )
+            .chain(
+                self.source_order
+                    .iter()
+                    .copied()
+                    .map(DocumentElementId::Source),
+            );
+        for element in all_elements {
+            if !charge_document_item(
+                controller,
+                OperationWorkCounter::DocumentDependencyItems,
+                OperationCheckpoint::DocumentDependency,
+            ) {
                 return None;
             }
-            Some(match entry {
+            elements.push(element);
+        }
+        if !charge_document_item(
+            controller,
+            OperationWorkCounter::DocumentDependencyItems,
+            OperationCheckpoint::DocumentDependency,
+        ) {
+            return None;
+        }
+        elements.sort_by_key(|element| canonical_element_key(*element));
+        Some(elements)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn direct_inactivity_reason_with_controller(
+        &self,
+        element: DocumentElementId,
+        controller: &mut Option<&mut OperationController>,
+    ) -> Result<Option<InactivityReason>, ActivityTraversalInterrupted> {
+        if !charge_document_item(
+            controller,
+            OperationWorkCounter::DocumentDependencyItems,
+            OperationCheckpoint::DocumentDependency,
+        ) {
+            return Err(ActivityTraversalInterrupted);
+        }
+        let (owner_suppressed, owner_source) = match element {
+            DocumentElementId::Constraint(id) => {
+                let mut owner = None;
+                for constraint in &self.constraints {
+                    if !charge_document_item(
+                        controller,
+                        OperationWorkCounter::DocumentDependencyItems,
+                        OperationCheckpoint::DocumentDependency,
+                    ) {
+                        return Err(ActivityTraversalInterrupted);
+                    }
+                    if constraint.id == id {
+                        owner = Some((constraint.suppressed, constraint.source_id));
+                        break;
+                    }
+                }
+                owner.map_or((false, None), |(suppressed, source)| {
+                    (suppressed, Some(DocumentElementId::Source(source)))
+                })
+            }
+            DocumentElementId::Dimension(id) => {
+                let mut owner = None;
+                for dimension in &self.dimensions {
+                    if !charge_document_item(
+                        controller,
+                        OperationWorkCounter::DocumentDependencyItems,
+                        OperationCheckpoint::DocumentDependency,
+                    ) {
+                        return Err(ActivityTraversalInterrupted);
+                    }
+                    if dimension.id == id {
+                        owner = Some((dimension.suppressed, dimension.source_id));
+                        break;
+                    }
+                }
+                owner.map_or((false, None), |(suppressed, source)| {
+                    (suppressed, Some(DocumentElementId::Source(source)))
+                })
+            }
+            DocumentElementId::Source(id) => {
+                let mut suppressed = None;
+                for constraint in &self.constraints {
+                    if !charge_document_item(
+                        controller,
+                        OperationWorkCounter::DocumentDependencyItems,
+                        OperationCheckpoint::DocumentDependency,
+                    ) {
+                        return Err(ActivityTraversalInterrupted);
+                    }
+                    if constraint.source_id == id {
+                        suppressed = Some(constraint.suppressed);
+                        break;
+                    }
+                }
+                if suppressed.is_none() {
+                    for dimension in &self.dimensions {
+                        if !charge_document_item(
+                            controller,
+                            OperationWorkCounter::DocumentDependencyItems,
+                            OperationCheckpoint::DocumentDependency,
+                        ) {
+                            return Err(ActivityTraversalInterrupted);
+                        }
+                        if dimension.source_id == id {
+                            suppressed = Some(dimension.suppressed);
+                            break;
+                        }
+                    }
+                }
+                (suppressed.unwrap_or(false), None)
+            }
+            _ => (false, None),
+        };
+        if owner_suppressed || self.user_inactive_elements.contains(&element) {
+            return Ok(Some(InactivityReason::UserSuppressed));
+        }
+        let Some(activation) = self.host_activation.as_ref() else {
+            return Ok(None);
+        };
+        for entry in activation.overrides() {
+            if !charge_document_item(
+                controller,
+                OperationWorkCounter::DocumentDependencyItems,
+                OperationCheckpoint::DocumentDependency,
+            ) {
+                return Err(ActivityTraversalInterrupted);
+            }
+            if entry.element() != element && Some(entry.element()) != owner_source {
+                continue;
+            }
+            return Ok(Some(match entry {
                 HostActivationOverride::Inactive(_) => InactivityReason::HostConfigurationInactive,
                 HostActivationOverride::UnavailableExternalReference(_) => {
                     InactivityReason::UnavailableExternalReference
                 }
-            })
-        })
+            }));
+        }
+        Ok(None)
     }
 
     #[allow(clippy::too_many_lines)]
     fn direct_dependencies(&self, element: DocumentElementId) -> Vec<DocumentElementId> {
+        self.direct_dependencies_with_controller(element, &mut None)
+            .expect("uncontrolled direct-dependency traversal cannot be interrupted")
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn direct_dependencies_with_controller(
+        &self,
+        element: DocumentElementId,
+        controller: &mut Option<&mut OperationController>,
+    ) -> Option<Vec<DocumentElementId>> {
+        if !charge_document_item(
+            controller,
+            OperationWorkCounter::DocumentDependencyItems,
+            OperationCheckpoint::DocumentDependency,
+        ) {
+            return None;
+        }
         if element == DocumentElementId::Document(self.id) {
-            return Vec::new();
+            return Some(Vec::new());
         }
         let mut dependencies = vec![DocumentElementId::Document(self.id)];
-        let objects = self
-            .points
+        match element {
+            DocumentElementId::Curve(id) => {
+                let mut owner = None;
+                for curve in &self.curves {
+                    if !charge_document_item(
+                        controller,
+                        OperationWorkCounter::DocumentDependencyItems,
+                        OperationCheckpoint::DocumentDependency,
+                    ) {
+                        return None;
+                    }
+                    if curve.id == id {
+                        owner = Some(curve);
+                        break;
+                    }
+                }
+                if let Some(curve) = owner {
+                    for object in self.document_objects() {
+                        if !charge_document_item(
+                            controller,
+                            OperationWorkCounter::DocumentDependencyItems,
+                            OperationCheckpoint::DocumentDependency,
+                        ) {
+                            return None;
+                        }
+                        if curve_references_object(&curve.definition, object) {
+                            dependencies.push(document_object_element(object));
+                        }
+                    }
+                }
+            }
+            DocumentElementId::Contact(id) => {
+                let mut owner = None;
+                for contact in &self.contacts {
+                    if !charge_document_item(
+                        controller,
+                        OperationWorkCounter::DocumentDependencyItems,
+                        OperationCheckpoint::DocumentDependency,
+                    ) {
+                        return None;
+                    }
+                    if contact.id == id {
+                        owner = Some(contact);
+                        break;
+                    }
+                }
+                if let Some(contact) = owner {
+                    for object in self.document_objects() {
+                        if !charge_document_item(
+                            controller,
+                            OperationWorkCounter::DocumentDependencyItems,
+                            OperationCheckpoint::DocumentDependency,
+                        ) {
+                            return None;
+                        }
+                        if contact_references_object(contact, object) {
+                            dependencies.push(document_object_element(object));
+                        }
+                    }
+                }
+            }
+            DocumentElementId::Constraint(id) => {
+                let mut owner = None;
+                for constraint in &self.constraints {
+                    if !charge_document_item(
+                        controller,
+                        OperationWorkCounter::DocumentDependencyItems,
+                        OperationCheckpoint::DocumentDependency,
+                    ) {
+                        return None;
+                    }
+                    if constraint.id == id {
+                        owner = Some(constraint);
+                        break;
+                    }
+                }
+                if let Some(constraint) = owner {
+                    for object in self.document_objects() {
+                        if !charge_document_item(
+                            controller,
+                            OperationWorkCounter::DocumentDependencyItems,
+                            OperationCheckpoint::DocumentDependency,
+                        ) {
+                            return None;
+                        }
+                        if constraint_references_object(&constraint.definition, object) {
+                            dependencies.push(document_object_element(object));
+                        }
+                    }
+                }
+            }
+            DocumentElementId::Dimension(id) => {
+                let mut owner = None;
+                for dimension in &self.dimensions {
+                    if !charge_document_item(
+                        controller,
+                        OperationWorkCounter::DocumentDependencyItems,
+                        OperationCheckpoint::DocumentDependency,
+                    ) {
+                        return None;
+                    }
+                    if dimension.id == id {
+                        owner = Some(dimension);
+                        break;
+                    }
+                }
+                if let Some(dimension) = owner {
+                    for object in self.document_objects() {
+                        if !charge_document_item(
+                            controller,
+                            OperationWorkCounter::DocumentDependencyItems,
+                            OperationCheckpoint::DocumentDependency,
+                        ) {
+                            return None;
+                        }
+                        if dimension_references_object(&dimension.definition, object) {
+                            dependencies.push(document_object_element(object));
+                        }
+                    }
+                }
+            }
+            DocumentElementId::Source(id) => {
+                let mut owner = None;
+                for constraint in &self.constraints {
+                    if !charge_document_item(
+                        controller,
+                        OperationWorkCounter::DocumentDependencyItems,
+                        OperationCheckpoint::DocumentDependency,
+                    ) {
+                        return None;
+                    }
+                    if constraint.source_id == id {
+                        owner = Some(DocumentElementId::Constraint(constraint.id));
+                        break;
+                    }
+                }
+                if owner.is_none() {
+                    for dimension in &self.dimensions {
+                        if !charge_document_item(
+                            controller,
+                            OperationWorkCounter::DocumentDependencyItems,
+                            OperationCheckpoint::DocumentDependency,
+                        ) {
+                            return None;
+                        }
+                        if dimension.source_id == id {
+                            owner = Some(DocumentElementId::Dimension(dimension.id));
+                            break;
+                        }
+                    }
+                }
+                if let Some(owner) = owner {
+                    dependencies.push(owner);
+                }
+            }
+            DocumentElementId::Document(_)
+            | DocumentElementId::Point(_)
+            | DocumentElementId::Scalar(_)
+            | DocumentElementId::Parameter(_)
+            | DocumentElementId::ExternalBinding(_) => {}
+        }
+        if !charge_document_item(
+            controller,
+            OperationWorkCounter::DocumentDependencyItems,
+            OperationCheckpoint::DocumentDependency,
+        ) {
+            return None;
+        }
+        dependencies.sort_by_key(|dependency| canonical_element_key(*dependency));
+        dependencies.dedup();
+        Some(dependencies)
+    }
+
+    fn document_objects(&self) -> impl Iterator<Item = DocumentObjectId> + '_ {
+        self.points
             .iter()
             .map(|value| DocumentObjectId::Point(value.id))
             .chain(
@@ -8576,65 +8950,7 @@ impl SketchDocument {
                 self.external_bindings
                     .iter()
                     .map(|value| DocumentObjectId::ExternalBinding(value.id)),
-            );
-        match element {
-            DocumentElementId::Curve(id) => {
-                if let Some(curve) = self.curve(id) {
-                    dependencies.extend(
-                        objects
-                            .filter(|object| curve_references_object(&curve.definition, *object))
-                            .map(document_object_element),
-                    );
-                }
-            }
-            DocumentElementId::Contact(id) => {
-                if let Some(contact) = self.contact(id) {
-                    dependencies.extend(
-                        objects
-                            .filter(|object| contact_references_object(contact, *object))
-                            .map(document_object_element),
-                    );
-                }
-            }
-            DocumentElementId::Constraint(id) => {
-                if let Some(constraint) = self.constraint(id) {
-                    dependencies.extend(
-                        objects
-                            .filter(|object| {
-                                constraint_references_object(&constraint.definition, *object)
-                            })
-                            .map(document_object_element),
-                    );
-                }
-            }
-            DocumentElementId::Dimension(id) => {
-                if let Some(dimension) = self.dimension(id) {
-                    dependencies.extend(
-                        objects
-                            .filter(|object| {
-                                dimension_references_object(&dimension.definition, *object)
-                            })
-                            .map(document_object_element),
-                    );
-                }
-            }
-            DocumentElementId::Source(id) => {
-                if let Some(source) = self.source(id) {
-                    dependencies.push(match source.owner {
-                        DocumentSourceOwner::Constraint(id) => id.into(),
-                        DocumentSourceOwner::Dimension(id) => id.into(),
-                    });
-                }
-            }
-            DocumentElementId::Document(_)
-            | DocumentElementId::Point(_)
-            | DocumentElementId::Scalar(_)
-            | DocumentElementId::Parameter(_)
-            | DocumentElementId::ExternalBinding(_) => {}
-        }
-        dependencies.sort_by_key(|dependency| canonical_element_key(*dependency));
-        dependencies.dedup();
-        dependencies
+            )
     }
 
     fn line_span_endpoint_ids(
@@ -11537,5 +11853,117 @@ const fn object_persistent(object: DocumentObjectId) -> PersistentId {
         DocumentObjectId::Dimension(id) => id.0,
         DocumentObjectId::Parameter(id) => id.0,
         DocumentObjectId::ExternalBinding(id) => id.0,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use geosolve_core::{
+        CancellationToken, OperationControl, OperationLimits, OperationStopReason,
+    };
+
+    use super::*;
+
+    fn inactive_dependency_fanout() -> SketchDocument {
+        let mut document =
+            SketchDocument::with_id(16.0, DocumentId(PersistentId::from_u128(0x1000)))
+                .expect("document");
+        let root = document
+            .add_point("inactive root", [0.0, 0.0])
+            .expect("root point");
+        for index in 0..12 {
+            let endpoint = document
+                .add_point(format!("endpoint {index}"), [f64::from(index) + 1.0, 0.0])
+                .expect("fanout endpoint");
+            let line = document
+                .add_curve(
+                    format!("branch {index}"),
+                    CurveDefinition::Line {
+                        start: root,
+                        end: endpoint,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .expect("fanout line");
+            document
+                .add_constraint(
+                    format!("horizontal branch {index}"),
+                    DocumentConstraintDefinition::Horizontal {
+                        line: CurveSpan::line(line),
+                    },
+                )
+                .expect("fanout constraint");
+        }
+        document
+            .set_element_user_suppressed(root.into(), true)
+            .expect("suppress root");
+        document
+    }
+
+    fn controller_with_dependency_limit(limit: usize) -> OperationController {
+        let mut limits = OperationLimits::unlimited();
+        limits.document_dependency_items = limit;
+        OperationController::new(OperationControl::new(CancellationToken::default(), limits))
+    }
+
+    #[test]
+    fn controlled_activity_is_bounded_atomic_and_equivalent_to_uncontrolled_activity() {
+        let document = inactive_dependency_fanout();
+        let retained_document = document.clone();
+        let expected_activity = document.effective_activity();
+
+        let mut tiny_controller = controller_with_dependency_limit(3);
+        assert!(
+            document
+                .compute_effective_activity_with_controller(Some(&mut tiny_controller))
+                .is_none()
+        );
+        assert_eq!(document, retained_document);
+        assert_eq!(document.effective_activity(), expected_activity);
+        let tiny_report = tiny_controller.report();
+        assert_eq!(tiny_report.consumed.document_dependency_items, 3);
+        assert_eq!(
+            tiny_report.stopping_reason,
+            Some(OperationStopReason::WorkExhausted {
+                counter: OperationWorkCounter::DocumentDependencyItems,
+                checkpoint: OperationCheckpoint::DocumentDependency,
+            })
+        );
+
+        let mut validation_controller = controller_with_dependency_limit(3);
+        assert!(
+            !document
+                .validate_with_controller(Some(&mut validation_controller))
+                .expect("controlled validation result")
+        );
+        assert_eq!(document, retained_document);
+        assert_eq!(document.effective_activity(), expected_activity);
+        assert_eq!(
+            validation_controller.report().stopping_reason,
+            tiny_report.stopping_reason
+        );
+
+        let mut complete_controller = controller_with_dependency_limit(usize::MAX);
+        let controlled_activity = document
+            .compute_effective_activity_with_controller(Some(&mut complete_controller))
+            .expect("sufficient dependency budget");
+        assert_eq!(controlled_activity, expected_activity);
+        assert!(
+            complete_controller
+                .report()
+                .consumed
+                .document_dependency_items
+                > expected_activity.elements().len()
+        );
+
+        document.validate().expect("uncontrolled validation");
+        let mut complete_validation_controller = controller_with_dependency_limit(usize::MAX);
+        assert!(
+            document
+                .validate_with_controller(Some(&mut complete_validation_controller))
+                .expect("controlled validation")
+        );
+        assert_eq!(document, retained_document);
+        assert_eq!(document.effective_activity(), expected_activity);
     }
 }

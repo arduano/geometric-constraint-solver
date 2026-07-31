@@ -19,8 +19,15 @@ M46-M53 preserves released v1-v4 wire compatibility and the accepted-state safet
 while evolving the new pre-1.0 editor/workbench surface. M61 closes the currently approved
 advanced-workbench scope, M62 closes approved CAD-style authoring and M63 closes approved canvas
 constraint presentation. Approved M64 adds only public alpha fixtures and an explicit
-interaction-request preference helper; it does not freeze a new schema. M65 is an empty
-core-hardening/performance placeholder, so no API/schema hardening requirement is yet scheduled.
+interaction-request preference helper; it does not freeze a new schema. M65 is open under
+`M65-F003`. Its corrective source adds pre-1.0 headless/session work evidence, persistent
+read-only drag-locality DTOs and bounded alternate-branch actions, while its runtime
+`SketchDragLocality*` analysis types remain crate-private. The public operation-control reports
+gain additive `DenseKernelWorkUnits` accounting alongside the existing dense row/column maxima.
+M65 changes no persistence schema and its design/accepted provenance tokens remain private
+process-local evidence rather than wire identity. Cross-process restoration continues to use
+frozen canonical bytes and independent accepted validation. M65 remains pending final mechanical
+qualification and focused human UAT.
 Any draft-v5 representation remains explicitly unsupported until a future schema-freeze milestone
 is deliberately scoped, qualified and approved, and must not be treated as a released wire
 language.

@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::ops::Range;
 
 use nalgebra::{DMatrix, DVector};
@@ -73,6 +74,7 @@ pub struct BlockLayout {
 #[derive(Clone, Debug, PartialEq)]
 pub struct PackedLayout {
     blocks: Vec<BlockLayout>,
+    block_index: BTreeMap<VariableId, usize>,
     ambient_dimension: usize,
     tangent_dimension: usize,
 }
@@ -95,9 +97,9 @@ impl PackedLayout {
 
     #[must_use]
     pub fn block(&self, variable_id: VariableId) -> Option<&BlockLayout> {
-        self.blocks
-            .iter()
-            .find(|block| block.variable_id == variable_id)
+        self.block_index
+            .get(&variable_id)
+            .and_then(|index| self.blocks.get(*index))
     }
 }
 
@@ -633,6 +635,11 @@ impl Problem {
             tangent_dimension = tangent_end;
         }
         Ok(PackedLayout {
+            block_index: blocks
+                .iter()
+                .enumerate()
+                .map(|(index, block)| (block.variable_id, index))
+                .collect(),
             blocks,
             ambient_dimension,
             tangent_dimension,
@@ -1095,6 +1102,44 @@ impl Problem {
                 .map(|(id, variable)| (id, variable.value()))
                 .collect(),
         }
+    }
+
+    pub(crate) fn packed_state_matches_variables(
+        &self,
+        accepted: &PackedState,
+        variable_ids: &[VariableId],
+    ) -> Result<bool, CoreError> {
+        for &variable_id in variable_ids {
+            let variable = self
+                .variables
+                .get(variable_id)
+                .ok_or(CoreError::UnknownVariable(variable_id))?;
+            variable.validate()?;
+            let Some(layout) = accepted.layout.block(variable_id) else {
+                return Ok(false);
+            };
+            if layout.kind != variable.kind()
+                || layout.step_scales != variable.step_scales()
+                || layout.ambient_range.len() != variable.value().ambient_values().len()
+            {
+                return Ok(false);
+            }
+            let Some(accepted_values) = accepted
+                .ambient
+                .as_slice()
+                .get(layout.ambient_range.clone())
+            else {
+                return Ok(false);
+            };
+            if accepted_values
+                .iter()
+                .zip(variable.value().ambient_values())
+                .any(|(accepted, current)| accepted.to_bits() != current.to_bits())
+            {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 
     pub(crate) fn source_order(&self) -> Vec<SourceConstraintId> {

@@ -9,6 +9,14 @@ Candidate source: `5140f85` for the latest `M61-F005` interaction repair, with t
 replacement candidate and `M61-F001`-`M61-F004` repairs retained in its history, plus the
 documentation-only qualification commit.
 
+> Historical supersession notice (M65, 2026-07-30): this is the approved M61 UAT record, so its
+> findings intentionally describe the implementation tested at that time. The transient
+> stability target, scenario active/passive metadata and stabilized-projection seam mentioned
+> below no longer exist in current code. M65 uses one frozen, stamped, accepted-rank-derived
+> `DocumentDragLocalityPlan` with exact process-local design-publication and accepted-state
+> provenance; the cursor is the sole Temporary target and only selected plan anchors become
+> `PreviousState` Preferences.
+
 ## Candidate history
 
 The first M61 candidate was withdrawn on 2026-07-29 after the supervising human found five
@@ -271,6 +279,10 @@ clear, and interaction feels responsive enough for a desktop diagnostic workbenc
 - Solver impact: none. No residual, equation, branch rule, solver policy or persisted schema
   changed; ambiguity is not converted into success.
 - Status: mechanically requalified and closed under the final scoped M61 approval.
+- M65 supersession: direct candidate evaluation still produces the same typed ambiguity and no
+  accepted state. Exact design-plus-accepted checkpoint restore now uses candidate-shaped
+  numerical seeding, preserves both canonical graphs byte-for-byte and may republish the prior
+  accepted root before the bounded projected retry. No contact-validation match was broadened.
 
 ### M61-F004 — persisted workspace locked during initial and repeated render
 

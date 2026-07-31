@@ -57,6 +57,23 @@ pub(super) enum InferenceDispatch {
     Handled,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum PointPreviewDispatch {
+    NotPointPreview,
+    ApplyCommit,
+    ApplyDisposition,
+}
+
+pub(super) const fn dispatch_point_preview_effect(effect: &EditorEffect) -> PointPreviewDispatch {
+    match effect {
+        EditorEffect::CommitPointMove { .. } => PointPreviewDispatch::ApplyCommit,
+        EditorEffect::ClearPointPreview | EditorEffect::CancelPointPreview => {
+            PointPreviewDispatch::ApplyDisposition
+        }
+        _ => PointPreviewDispatch::NotPointPreview,
+    }
+}
+
 pub(super) fn dispatch_inference_effect(
     preview: &mut Option<ProvisionalInferenceCandidate>,
     effect: &EditorEffect,
@@ -119,8 +136,9 @@ mod tests {
     };
 
     use super::{
-        ClientRect, ConstructionDispatch, InferenceDispatch, dispatch_construction_effect,
-        dispatch_inference_effect, normalize_client_point,
+        ClientRect, ConstructionDispatch, InferenceDispatch, PointPreviewDispatch,
+        dispatch_construction_effect, dispatch_inference_effect, dispatch_point_preview_effect,
+        normalize_client_point,
     };
 
     fn input(pointer_id: u64, position: [f64; 2]) -> PointerInput {
@@ -248,6 +266,40 @@ mod tests {
         );
 
         assert!(preview.is_none());
+    }
+
+    #[test]
+    fn point_preview_commit_and_disposition_are_forwarded_to_headless_policy() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let point = document
+            .add_point("preview point", [0.0, 0.0])
+            .expect("point");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let commit = EditorEffect::CommitPointMove {
+            expected: session.design_identity(),
+            point,
+            model_position: [1.0, 0.0],
+        };
+        let clear = EditorEffect::ClearPointPreview;
+        let cancel = EditorEffect::CancelPointPreview;
+
+        assert_eq!(
+            dispatch_point_preview_effect(&commit),
+            PointPreviewDispatch::ApplyCommit
+        );
+        assert_eq!(
+            dispatch_point_preview_effect(&clear),
+            PointPreviewDispatch::ApplyDisposition
+        );
+        assert_eq!(
+            dispatch_point_preview_effect(&cancel),
+            PointPreviewDispatch::ApplyDisposition
+        );
     }
 
     #[test]

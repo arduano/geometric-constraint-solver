@@ -941,8 +941,8 @@ pub(crate) mod wasm {
 
     fn dispatch_effects(wb: &mut Workbench, effects: Vec<EditorEffect>) {
         use super::effect_adapter::{
-            ConstructionDispatch, InferenceDispatch, dispatch_construction_effect,
-            dispatch_inference_effect,
+            ConstructionDispatch, InferenceDispatch, PointPreviewDispatch,
+            dispatch_construction_effect, dispatch_inference_effect, dispatch_point_preview_effect,
         };
 
         let mut pending = VecDeque::from(effects);
@@ -989,6 +989,28 @@ pub(crate) mod wasm {
                 }
                 InferenceDispatch::NotInference => {}
             }
+            match dispatch_point_preview_effect(&effect) {
+                PointPreviewDispatch::ApplyCommit => {
+                    let result = wb.coordinator.apply_editor_effect(&effect);
+                    match result {
+                        Ok(Some(_)) => wb.notice = "Edit retained".into(),
+                        Ok(None) => {}
+                        Err(error) => {
+                            wb.notice = format!(
+                                "{error}; projected preview retained — drag again to retry or Esc to cancel"
+                            );
+                        }
+                    }
+                    continue;
+                }
+                PointPreviewDispatch::ApplyDisposition => {
+                    if let Err(error) = wb.coordinator.apply_editor_effect(&effect) {
+                        wb.notice = error.to_string();
+                    }
+                    continue;
+                }
+                PointPreviewDispatch::NotPointPreview => {}
+            }
             match &effect {
                 EditorEffect::RequestProjectedPointMove {
                     pointer_id,
@@ -1007,16 +1029,11 @@ pub(crate) mod wasm {
                 EditorEffect::PreviewPointMove { .. } => {
                     wb.notice = "Projected drag preview".into();
                 }
-                EditorEffect::ClearPointPreview => {
-                    wb.coordinator.clear_transient();
-                }
                 EditorEffect::SelectionChanged(_) | EditorEffect::HoverChanged(_) => {}
-                EditorEffect::CommitPointMove { .. } => {
-                    match wb.coordinator.apply_editor_effect(&effect) {
-                        Ok(Some(_)) => wb.notice = "Edit retained".into(),
-                        Ok(None) => {}
-                        Err(error) => wb.notice = error.to_string(),
-                    }
+                EditorEffect::ClearPointPreview
+                | EditorEffect::CancelPointPreview
+                | EditorEffect::CommitPointMove { .. } => {
+                    unreachable!("point-preview effects were dispatched above")
                 }
                 EditorEffect::PreviewConstruction(_)
                 | EditorEffect::ClearConstructionPreview

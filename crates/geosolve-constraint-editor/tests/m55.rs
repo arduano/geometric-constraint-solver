@@ -1436,7 +1436,7 @@ fn line_circle_tangent_and_normal_intents_enforce_true_incidence() {
 }
 
 #[test]
-fn retained_cursed_contact_payload_rejects_ambiguity_and_projected_retry_recovers() {
+fn cursed_contact_candidate_rejects_ambiguity_and_checkpoint_seed_recovers() {
     let mut accepted = SketchDocument::new(10.0).unwrap();
     let accepted_positions = [
         [-4.108_016_184_188_926, 1.061_352_761_640_428_4],
@@ -1683,21 +1683,42 @@ fn retained_cursed_contact_payload_rejects_ambiguity_and_projected_retry_recover
         ])
         .unwrap();
 
-    let session = RetainedSketchDocumentSession::restore_design_with_accepted(
-        design,
-        accepted,
-        SketchLifecycleRevisionHighWater::from_raw(42, 44, Some(41)),
+    let design_json = design.to_canonical_json().unwrap();
+    let accepted_json = accepted.to_canonical_json().unwrap();
+    let revisions = SketchLifecycleRevisionHighWater::from_raw(42, 44, Some(41));
+    let direct = RetainedSketchDocumentSession::restore_design(
+        design.clone(),
+        revisions,
         DocumentSolveRequest::default(),
         SolverConfig::default(),
     )
     .unwrap();
+    let direct_solve = direct.last_attempt().solve_result().unwrap();
+    assert!(!direct_solve.accepted());
+    assert!(direct.last_attempt().accepted_state_identity().is_none());
+    assert!(direct.accepted_state().is_none());
+    assert_eq!(direct.export_design_json().unwrap(), design_json);
     assert!(matches!(
-        session
-            .last_attempt()
-            .solve_result()
-            .and_then(|solve| solve.rejection.as_ref()),
+        direct_solve.rejection.as_ref(),
         Some(SolveRejection::AmbiguousContactNeighborhood(_))
     ));
+
+    let session = RetainedSketchDocumentSession::restore_design_with_accepted(
+        design,
+        accepted,
+        revisions,
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .unwrap();
+    assert_eq!(session.export_design_json().unwrap(), design_json);
+    assert_eq!(
+        session.export_accepted_json().unwrap().unwrap(),
+        accepted_json
+    );
+    assert!(session.last_attempt().solve_result().unwrap().accepted());
+    assert!(session.last_attempt().accepted_state_identity().is_some());
+
     let mut retry = session.clone();
     let mut target = retry.design_document().point(points[1]).unwrap().position;
     target[0] += 0.01;

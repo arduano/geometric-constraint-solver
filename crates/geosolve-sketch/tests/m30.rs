@@ -103,6 +103,7 @@ fn offsets_and_mirror_accept_projected_drags_move_associated_geometry_and_keep_h
         .unwrap()
         .position;
     let target_start_before = point(supporting.document(), ids.target_points[0]);
+    let target_end_before = point(supporting.document(), ids.target_points[1]);
     let moved = supporting
         .apply(DocumentCommand::new(
             supporting.revision(),
@@ -114,11 +115,21 @@ fn offsets_and_mirror_accept_projected_drags_move_associated_geometry_and_keep_h
         .unwrap();
     assert!(moved.accepted(), "{moved:#?}");
     assert_eq!(supporting.history_len(), 1);
+    let target_start_after = point(supporting.document(), ids.target_points[0]);
+    let target_end_after = point(supporting.document(), ids.target_points[1]);
     assert!(
-        distance(
-            point(supporting.document(), ids.target_points[0]),
-            target_start_before
-        ) > 0.1
+        distance(target_end_after, target_end_before) > 0.1,
+        "dragged supporting-offset endpoint did not move: before={target_end_before:?}, \
+         after={target_end_after:?}"
+    );
+    assert!(
+        distance(target_start_after, target_start_before) <= 1.0e-9,
+        "unselected supporting-offset endpoint moved despite an independent axial/length DOF: \
+         before={target_start_before:?}, after={target_start_after:?}"
+    );
+    assert!(
+        distance(target_end_after, Point2::new(3.5, 0.0)) <= 1.0e-9,
+        "dragged supporting-offset endpoint missed its feasible target: {target_end_after:?}"
     );
     assert_eq!(
         supporting

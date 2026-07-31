@@ -71,6 +71,40 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 
 ### Changed
 
+Historical note: the M61 and M64 entries below preserve the behavior shipped for those milestones.
+Their scenario-owned transient stability-target and later passive-retry descriptions are
+superseded by M65. Current code has no `stability_target` request path or passive retry; projected
+drag freezes one accepted-rank-derived locality plan per gesture, uses the cursor as the sole
+Temporary target and compiles only the selected anchors as `PreviousState` Preferences.
+
+- Reworked projected mechanism dragging around one frozen rank-derived locality contract.
+  Persistent plans carry exact process-local design-publication and accepted-state provenance as
+  well as design/accepted revisions. Ordinary clones share the tokens and each corresponding
+  publication renews them, so equal revisions from divergent lifecycle clones cannot exchange
+  drag or preview intent. Signed-zero-distinct design/branch regressions and exact-byte checkpoint
+  restore cover the process-local/cross-process boundary.
+  Positive-Temporary Preference work now certifies a complete-row baseline before optional
+  scalar-level refinement; failed refinement retains that baseline, while an uncertifiable sample
+  rejects and preserves the complete last accepted preview.
+- Made history/reload numerical warm starts candidate-shaped: equation-bearing topology remains
+  owned by the retained candidate, compatible numerical values are imported selectively, and an
+  invalid topology-dependent merge falls back to the untouched candidate.
+- Added a stable rank-aware `2 x N` row-space/fixed-SVD priority solve under the authoritative
+  unsquared threshold. Success now certifies stationarity and minimum-norm/nullspace
+  orthogonality, including the restored exact tiny-scale A5 regression.
+- Added public additive dense-kernel work accounting through
+  `OperationWorkCounter::DenseKernelWorkUnits` and matching limit/work fields. Dense dimensions
+  remain separate maxima; every kernel charges `max(rows, columns)^3` before execution.
+- Bounded ordinary pointer work with 16,384 items each for document validation,
+  dependency/locality and lowering; 256 nonlinear iterations; 512 rejected trials; 1,024
+  component linearizations; `256 x 256` dense dimensions and 33,554,432 additive dense-kernel
+  work units; 256 factorizations; 256 rank kernels; 512 diagnostic candidates; and 1,024
+  diagnostic trials. Exact-preview no-motion publication charges materialization, validation and
+  audit reconstruction to the same controller and remains atomic on late exhaustion. The current
+  mechanism matrix peaks at 155 factorizations and 147 iterations. The representative pantograph
+  retains its original two ordinary `Parallel` relations and canonical-v4 construction; no
+  affine equation rewrite or draft-v5 exception was introduced.
+
 - Rebased the post-M44 roadmap: M45 preserves cleanup evidence without human approval;
   M46-M53 replace and purge legacy browser E2E/playground infrastructure, consolidate one
   directly tested workbench and perform post-cleanup host-semantics UAT. M53 received explicit

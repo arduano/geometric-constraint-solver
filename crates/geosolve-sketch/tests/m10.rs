@@ -1,12 +1,12 @@
 use std::f64::consts::{FRAC_PI_2, PI};
 
-use geosolve_core::{BoundStatus, HardValidity, OneSidedMobility, SolverConfig};
+use geosolve_core::{BoundStatus, HardValidity, OneSidedMobility, ResidualCategory, SolverConfig};
 use geosolve_geometry::Point2;
 use geosolve_sketch::{
     ArcCircleTangencySide, ArcSweep, CircleContainment, CircleTangencyMode, ContactState,
-    DimensionMode, LineParameterDomain, MIN_REPRESENTABLE_RADIUS, Sketch, SketchBound, SketchPatch,
-    SketchSession, SketchSessionError, SketchSessionPatch, SketchSolveRequest, SketchSource,
-    SolveRejection, tangent_circles, underconstrained_triangle,
+    DimensionMode, LineParameterDomain, MIN_REPRESENTABLE_RADIUS, PointId, Sketch, SketchBound,
+    SketchPatch, SketchSession, SketchSessionError, SketchSessionPatch, SketchSolveRequest,
+    SketchSource, SolveRejection, tangent_circles, underconstrained_triangle,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -54,6 +54,36 @@ fn apply(session: &mut SketchSession, edit: SketchPatch) -> geosolve_sketch::Ske
     session
         .apply_patch(SketchSessionPatch::new(session.revision(), edit))
         .unwrap()
+}
+
+fn previous_state_audit(session: &SketchSession, point: PointId) -> (String, [f64; 2]) {
+    let audit = session
+        .audit_source(SketchSource::PreviousState(point))
+        .expect("previous-state source audit");
+    assert_eq!(audit.rows.len(), 2);
+    assert!(
+        audit
+            .rows
+            .iter()
+            .all(|row| row.category == ResidualCategory::Preference)
+    );
+    let targets = audit
+        .rows
+        .iter()
+        .map(|row| {
+            row.bindings
+                .iter()
+                .find(|binding| binding.name == "target")
+                .expect("preference target binding")
+                .value
+                .clone()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(targets[0], targets[1]);
+    (
+        targets[0].clone(),
+        [audit.rows[0].raw_residual, audit.rows[1].raw_residual],
+    )
 }
 
 #[test]
@@ -200,6 +230,141 @@ fn same_drag_point_updates_are_nonstructural_but_shape_changes_require_rebuild()
         .unwrap();
     assert_eq!(session.revision(), 2);
     assert!(session.request().drag.is_none());
+}
+
+#[test]
+fn repeated_drag_patches_keep_gesture_start_preferences_in_both_directions() {
+    for drag_first in [true, false] {
+        let mut sketch = Sketch::new(1.0).unwrap();
+        let first = sketch.add_point(Point2::new(0.0, 0.0)).unwrap();
+        let second = sketch.add_point(Point2::new(2.0, 0.0)).unwrap();
+        sketch.add_horizontal_points(first, second).unwrap();
+        let (active, passive, active_x, passive_x, direction) = if drag_first {
+            (first, second, 0.0, 2.0, 1.0)
+        } else {
+            (second, first, 2.0, 0.0, -1.0)
+        };
+        let mut session = SketchSession::new(
+            sketch,
+            SketchSolveRequest::default().with_drag(active, Point2::new(active_x, 0.0)),
+            SolverConfig::default(),
+        )
+        .unwrap();
+        let (gesture_target, initial_residual) = previous_state_audit(&session, passive);
+        assert_eq!(gesture_target, format!("({passive_x}, 0)"));
+        assert_eq!(
+            initial_residual.map(f64::to_bits),
+            [0.0, 0.0].map(f64::to_bits)
+        );
+
+        for step in 1..=3 {
+            let target_y = direction * f64::from(step);
+            let result = apply(
+                &mut session,
+                SketchPatch::DragTarget {
+                    point: active,
+                    target: Point2::new(active_x, target_y),
+                },
+            );
+            assert!(result.accepted(), "{result:#?}");
+            let active_position = session.sketch().point(active).unwrap().position();
+            let passive_position = session.sketch().point(passive).unwrap().position();
+            assert!((active_position.y - target_y).abs() <= 1.0e-9);
+            assert!((passive_position.x - passive_x).abs() <= 1.0e-9);
+            assert!((passive_position.y - target_y).abs() <= 1.0e-9);
+
+            let (accepted_target, residual) = previous_state_audit(&session, passive);
+            assert_eq!(
+                accepted_target, gesture_target,
+                "sample {step} recaptured solved passive geometry"
+            );
+            assert!(residual[0].abs() <= 1.0e-9);
+            assert!(
+                (residual[1] - target_y).abs() <= 1.0e-9,
+                "sample {step}: residual={residual:?}, target_y={target_y}"
+            );
+        }
+    }
+}
+
+#[test]
+fn replacing_or_clearing_drag_request_starts_a_new_preference_lifetime() {
+    let mut sketch = Sketch::new(1.0).unwrap();
+    let first = sketch.add_point(Point2::new(0.0, 0.0)).unwrap();
+    let second = sketch.add_point(Point2::new(2.0, 0.0)).unwrap();
+    sketch.add_horizontal_points(first, second).unwrap();
+    let mut session = SketchSession::new(
+        sketch,
+        SketchSolveRequest::default().with_drag(first, Point2::new(0.0, 0.0)),
+        SolverConfig::default(),
+    )
+    .unwrap();
+
+    for target_y in [1.0, 2.0] {
+        let result = apply(
+            &mut session,
+            SketchPatch::DragTarget {
+                point: first,
+                target: Point2::new(0.0, target_y),
+            },
+        );
+        assert!(result.accepted(), "{result:#?}");
+    }
+    assert_eq!(
+        previous_state_audit(&session, second).0,
+        "(2, 0)",
+        "the first gesture must still own its original target"
+    );
+
+    let replacement_first = session.sketch().point(first).unwrap().position();
+    session
+        .rebuild_request(
+            session.revision(),
+            SketchSolveRequest::default().with_drag(second, Point2::new(2.0, 2.0)),
+        )
+        .unwrap();
+    assert_eq!(
+        previous_state_audit(&session, first),
+        (
+            format!("({}, {})", replacement_first.x, replacement_first.y),
+            [0.0, 0.0],
+        ),
+        "replacing the active drag point must capture the replacement gesture start"
+    );
+    let result = apply(
+        &mut session,
+        SketchPatch::DragTarget {
+            point: second,
+            target: Point2::new(2.0, 3.0),
+        },
+    );
+    assert!(result.accepted(), "{result:#?}");
+    assert_eq!(
+        previous_state_audit(&session, first).0,
+        format!("({}, {})", replacement_first.x, replacement_first.y)
+    );
+
+    let released_first = session.sketch().point(first).unwrap().position();
+    let released_second = session.sketch().point(second).unwrap().position();
+    session
+        .rebuild_request(session.revision(), SketchSolveRequest::default())
+        .unwrap();
+    assert!(session.request().drag.is_none());
+    assert_eq!(
+        previous_state_audit(&session, first),
+        (
+            format!("({}, {})", released_first.x, released_first.y),
+            [0.0, 0.0],
+        ),
+        "clearing the drag must capture the released accepted state"
+    );
+    assert_eq!(
+        previous_state_audit(&session, second),
+        (
+            format!("({}, {})", released_second.x, released_second.y),
+            [0.0, 0.0],
+        )
+    );
 }
 
 #[test]

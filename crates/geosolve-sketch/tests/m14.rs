@@ -1,15 +1,15 @@
 use std::collections::BTreeSet;
 
 use geosolve_core::{
-    BoundStatus, DiagnosticStatus, HardValidity, OneSidedMobility, SolverConfig,
+    BoundStatus, DiagnosticStatus, HardValidity, OneSidedMobility, OperationControl, SolverConfig,
     StructuralClassification,
 };
 use geosolve_sketch::{
     AlphaScenarioIds, AlphaScenarioKind, ContactNeighborhood, ContactStateEdit, CurveDefinition,
     DocumentCommand, DocumentDimensionDefinition, DocumentDimensionMode, DocumentEdit,
-    DocumentError, DocumentSessionError, DocumentSolveRequest, MAX_LABEL_BYTES, ScalarDomain,
-    ScalarUnit, SketchDocument, SketchDocumentSession, SketchSolveRequest, TangentOrientation,
-    alpha_scenario,
+    DocumentError, DocumentSessionError, DocumentSolveRequest, MAX_LABEL_BYTES,
+    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument, SketchDocumentSession,
+    SketchSolveRequest, TangentOrientation, alpha_scenario,
 };
 
 const SCALES: [f64; 3] = [1.0e-6, 1.0, 1.0e6];
@@ -33,8 +33,14 @@ fn assert_valid(result: &geosolve_sketch::DocumentSolveResult) {
 
 fn assert_point(actual: [f64; 2], expected: [f64; 2], scale: f64) {
     let tolerance = 2.0e-9 * scale.max(1.0);
-    assert!((actual[0] - expected[0]).abs() <= tolerance, "{actual:?}");
-    assert!((actual[1] - expected[1]).abs() <= tolerance, "{actual:?}");
+    assert!(
+        (actual[0] - expected[0]).abs() <= tolerance,
+        "actual={actual:?}, expected={expected:?}, tolerance={tolerance:e}"
+    );
+    assert!(
+        (actual[1] - expected[1]).abs() <= tolerance,
+        "actual={actual:?}, expected={expected:?}, tolerance={tolerance:e}"
+    );
 }
 
 #[test]
@@ -68,8 +74,10 @@ fn alpha_fixtures_solve_with_scale_invariant_ids_and_explicit_branches() {
         let mut baseline_json = None;
         for scale in SCALES {
             let (session, _) = session(kind, scale);
-            let value: serde_json::Value =
-                serde_json::from_str(&session.export_json().unwrap()).unwrap();
+            let serialized = session
+                .export_json()
+                .unwrap_or_else(|error| panic!("kind={kind:?}, scale={scale:e}: {error}"));
+            let value: serde_json::Value = serde_json::from_str(&serialized).unwrap();
             let accepted_result = session.accepted_result();
             let report = &accepted_result.accepted_view().unstable_core_report();
             let conflicting_sources = report
@@ -82,31 +90,32 @@ fn alpha_fixtures_solve_with_scale_invariant_ids_and_explicit_branches() {
                 .iter()
                 .filter_map(|source| accepted_result.persistent_core_source(*source))
                 .collect::<Vec<_>>();
+            let document_value = value.get("document").unwrap_or(&value);
             let identity = serde_json::json!({
-                "id": value["id"],
-                "next_id": value["next_id"],
-                "point_ids": value["points"].as_array().unwrap().iter().map(|item| item["id"].clone()).collect::<Vec<_>>(),
-                "scalar_ids": value["scalars"].as_array().unwrap().iter().map(|item| item["id"].clone()).collect::<Vec<_>>(),
-                "curve_ids": value["curves"].as_array().unwrap().iter().map(|item| item["id"].clone()).collect::<Vec<_>>(),
-                "contact_ids": value["contacts"].as_array().unwrap().iter().map(|item| item["id"].clone()).collect::<Vec<_>>(),
-                "constraint_ids": value["constraints"].as_array().unwrap().iter().map(|item| [item["id"].clone(), item["source_id"].clone()]).collect::<Vec<_>>(),
-                "dimension_ids": value["dimensions"].as_array().unwrap().iter().map(|item| [item["id"].clone(), item["source_id"].clone()]).collect::<Vec<_>>(),
-                "source_order": value["source_order"],
-                "curve_branches": value["curves"].as_array().unwrap().iter().map(|item| serde_json::json!({
+                "id": document_value["id"],
+                "next_id": document_value["next_id"],
+                "point_ids": document_value["points"].as_array().unwrap().iter().map(|item| item["id"].clone()).collect::<Vec<_>>(),
+                "scalar_ids": document_value["scalars"].as_array().unwrap().iter().map(|item| item["id"].clone()).collect::<Vec<_>>(),
+                "curve_ids": document_value["curves"].as_array().unwrap().iter().map(|item| item["id"].clone()).collect::<Vec<_>>(),
+                "contact_ids": document_value["contacts"].as_array().unwrap().iter().map(|item| item["id"].clone()).collect::<Vec<_>>(),
+                "constraint_ids": document_value["constraints"].as_array().unwrap().iter().map(|item| [item["id"].clone(), item["source_id"].clone()]).collect::<Vec<_>>(),
+                "dimension_ids": document_value["dimensions"].as_array().unwrap().iter().map(|item| [item["id"].clone(), item["source_id"].clone()]).collect::<Vec<_>>(),
+                "source_order": document_value["source_order"],
+                "curve_branches": document_value["curves"].as_array().unwrap().iter().map(|item| serde_json::json!({
                     "id": item["id"],
                     "branch_direction": item["definition"]["branch_direction"],
                     "branch_directions": item["definition"]["branch_directions"],
                     "sweep": item["definition"]["sweep"],
                 })).collect::<Vec<_>>(),
-                "contact_state": value["contacts"],
-                "constraint_branches": value["constraints"].as_array().unwrap().iter().map(|item| serde_json::json!({
+                "contact_state": document_value["contacts"],
+                "constraint_branches": document_value["constraints"].as_array().unwrap().iter().map(|item| serde_json::json!({
                     "id": item["id"],
                     "kind": item["definition"]["kind"],
                     "side": item["definition"]["side"],
                     "mode": item["definition"]["mode"],
                     "endpoint": item["definition"]["endpoint"],
                 })).collect::<Vec<_>>(),
-                "dimension_modes": value["dimensions"].as_array().unwrap().iter().map(|item| [item["id"].clone(), item["mode"].clone(), item["suppressed"].clone()]).collect::<Vec<_>>(),
+                "dimension_modes": document_value["dimensions"].as_array().unwrap().iter().map(|item| [item["id"].clone(), item["mode"].clone(), item["suppressed"].clone()]).collect::<Vec<_>>(),
                 "rank": [report.rank, report.left_nullity, report.right_nullity, report.bidirectional_degrees_of_freedom],
                 "structural": [format!("{:?}", report.structural.structural_classification), report.structural.structural_rank.to_string(), report.structural.structural_left_nullity.to_string(), report.structural.structural_right_nullity.to_string()],
                 "one_sided_mobility": format!("{:?}", report.one_sided_mobility),
@@ -445,16 +454,37 @@ fn bridge_stress_example_exposes_mobility_and_rejects_degeneracy() {
 }
 
 #[test]
-fn cam_motion_projects_one_roller_while_stabilizing_the_other() {
-    let (mut cam, cam_ids) = session(AlphaScenarioKind::MotionCam, 1.0);
-    let AlphaScenarioIds::MotionCam(cam_ids) = cam_ids else {
+fn cam_motion_projects_one_roller_while_locality_keeps_the_other_stationary() {
+    let fixture = alpha_scenario(AlphaScenarioKind::MotionCam, 1.0).unwrap();
+    let AlphaScenarioIds::MotionCam(cam_ids) = fixture.ids else {
         panic!("cam IDs expected");
     };
-    let cam_result = cam.accepted_result();
-    let cam_report = &cam_result.accepted_view().unstable_core_report();
+    let cam = RetainedSketchDocumentSession::new(
+        fixture.document,
+        fixture.request,
+        SolverConfig::default(),
+    )
+    .unwrap();
+    let cam_accepted = cam.accepted_state().expect("accepted cam");
+    let cam_report = cam_accepted.solve_result().unstable_core_report();
     assert_eq!(cam_report.right_nullity, 2);
     assert_eq!(cam_report.bidirectional_degrees_of_freedom, 2);
-    let right_before = cam.document().point(cam_ids.right_center).unwrap().position;
+    let right_before = cam_accepted
+        .document()
+        .point(cam_ids.right_center)
+        .unwrap()
+        .position;
+    let locality = cam
+        .drag_locality_plan(cam_ids.left_center)
+        .expect("left roller locality");
+    assert_eq!(locality.anchors().len(), 1);
+    assert_eq!(locality.anchors()[0].point(), cam_ids.right_center);
+    assert_eq!(
+        locality.anchors()[0].target().map(f64::to_bits),
+        right_before.map(f64::to_bits)
+    );
+
+    let mut previous_preview = None;
     let mut left_target = [0.0, 0.0];
     for step in 1..=5 {
         let parameter = 0.25 + 0.01 * f64::from(step);
@@ -464,21 +494,56 @@ fn cam_motion_projects_one_roller_while_stabilizing_the_other() {
             -4.0 + 8.0 * parameter - tangent[1] / tangent_norm,
             8.0 * parameter * (1.0 - parameter) + tangent[0] / tangent_norm,
         ];
-        let request = cam
-            .request()
-            .without_previous_state_preferences()
-            .with_drag(cam_ids.left_center, left_target)
-            .with_stability_target(cam_ids.right_center, right_before);
-        let moved = cam.rebuild_request(cam.revision(), request).unwrap();
-        assert!(moved.accepted(), "{:#?}", moved.solve().rejection);
+        let request = fixture
+            .request
+            .with_previous_state_preferences()
+            .with_drag(cam_ids.left_center, left_target);
+        let mut preview = cam.clone();
+        if let Some(previous) = previous_preview.as_ref() {
+            preview
+                .reattempt_from_accepted_preview_with_drag_locality_controlled(
+                    preview.design_identity(),
+                    request,
+                    previous,
+                    &locality,
+                    OperationControl::unlimited(),
+                )
+                .unwrap();
+        } else {
+            preview
+                .reattempt_with_drag_locality_controlled(
+                    preview.design_identity(),
+                    request,
+                    &locality,
+                    OperationControl::unlimited(),
+                )
+                .unwrap();
+        }
+        assert!(
+            preview.last_attempt().accepted_state_identity().is_some(),
+            "{:#?}",
+            preview.last_attempt().solve_result()
+        );
+        previous_preview = Some(preview);
     }
-    assert_point(
-        cam.document().point(cam_ids.left_center).unwrap().position,
-        left_target,
-        1.0,
+    let cam_preview = previous_preview.expect("final cam preview");
+    let accepted_preview = cam_preview.accepted_state().expect("accepted cam preview");
+    let left_position = accepted_preview
+        .document()
+        .point(cam_ids.left_center)
+        .unwrap()
+        .position;
+    assert!(
+        (left_position[0] - left_target[0]).hypot(left_position[1] - left_target[1]) <= 5.0e-8,
+        "active roller missed its attainable target: \
+         target={left_target:?}, accepted={left_position:?}"
     );
     assert_point(
-        cam.document().point(cam_ids.right_center).unwrap().position,
+        accepted_preview
+            .document()
+            .point(cam_ids.right_center)
+            .unwrap()
+            .position,
         right_before,
         1.0,
     );

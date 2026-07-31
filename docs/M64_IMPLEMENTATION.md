@@ -2,6 +2,14 @@
 
 Status: implementation, mechanical qualification and human UAT complete as of 2026-07-30.
 
+> Historical supersession notice (M65, 2026-07-30): this report preserves the generic
+> all-non-targeted-Preferences plus passive-retry behavior shipped and approved for M64. That
+> interaction policy is not current. M65 removes the passive retry and obsolete
+> `stability_target` path; projected gestures now freeze a stamped rank-derived locality plan,
+> validate its exact process-local design-publication and accepted-state provenance, use the
+> cursor as the sole Temporary target and compile only its selected anchors as `PreviousState`
+> Preferences.
+
 ## 1. Files and APIs
 
 - `geosolve-sketch` adds public `MotionFourBarCoupler`, `MotionPantograph` and
@@ -65,5 +73,6 @@ source or bundle.
 - The workbench is still a non-authoritative desktop UAT consumer.
 - Samples intentionally contain no tutorial flow or protected starting state; reopening a sample
   is the way to obtain its pristine document.
-- `docs/M64_UAT.md` records supervising-human approval. M65 awaits its detailed
-  core-hardening/performance scope.
+- `docs/M64_UAT.md` records supervising-human approval. At M64 closure, M65 still awaited its
+  detailed core-hardening/performance scope; the subsequently scoped active work is recorded in
+  `PLAN.md` and `docs/M65_IMPLEMENTATION.md`.

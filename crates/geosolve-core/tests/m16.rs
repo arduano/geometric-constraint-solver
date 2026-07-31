@@ -5,13 +5,13 @@ use std::sync::{
 
 use geosolve_core::{
     AdaptiveStepController, AdaptiveStepDecision, AdaptiveStepPolicy, AuditBinding,
-    AuditEvaluationStatus, ContinuationError, ContinuationTangentOrientation, CoordinateBound,
-    DiagnosticBudget, EvaluationError, HardValidity, InitialParameterDirection, LinearSolveBackend,
-    LinearSolveBackendPolicy, LocalJacobian, PrioritySolveBackend, Problem,
-    PseudoArclengthVariable, ResidualBlock, ResidualCategory, ResidualEvaluator, ResidualRowAudit,
-    SecondaryStatus, SessionPatch, SolveSession, SolveTermination, SolverConfig, SourceConstraint,
-    SparseFallbackReason, StructuralClassification, VariableBlock, VariableId, VariableKind,
-    VariableValue,
+    AuditEvaluationStatus, CancellationToken, ContinuationError, ContinuationTangentOrientation,
+    CoordinateBound, DiagnosticBudget, EvaluationError, HardValidity, InitialParameterDirection,
+    LinearSolveBackend, LinearSolveBackendPolicy, LocalJacobian, OperationControl,
+    OperationOutcome, PrioritySolveBackend, Problem, PseudoArclengthVariable, ResidualBlock,
+    ResidualCategory, ResidualEvaluator, ResidualRowAudit, SecondaryStatus, SessionPatch,
+    SolveSession, SolveTermination, SolverConfig, SourceConstraint, SparseFallbackReason,
+    StructuralClassification, VariableBlock, VariableId, VariableKind, VariableValue,
 };
 use geosolve_geometry::{Pose2 as GeometryPose2, Pose3 as GeometryPose3};
 use nalgebra::DVector;
@@ -212,6 +212,32 @@ impl ResidualEvaluator for ScalarSquare {
             ));
         };
         Ok(vec![LocalJacobian::new(1, 1, vec![2.0 * value])])
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct CoupledSquareTargets;
+
+impl ResidualEvaluator for CoupledSquareTargets {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        let [VariableValue::Scalar(first), VariableValue::Scalar(second)] = variables else {
+            return Err(EvaluationError::invalid_geometry(
+                "coupled square targets expected two scalars",
+            ));
+        };
+        Ok(vec![first * first - 4.0, second * second - 9.0])
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        let [VariableValue::Scalar(first), VariableValue::Scalar(second)] = variables else {
+            return Err(EvaluationError::invalid_geometry(
+                "coupled square targets expected two scalars",
+            ));
+        };
+        Ok(vec![
+            LocalJacobian::new(2, 1, vec![2.0 * first, 0.0]),
+            LocalJacobian::new(2, 1, vec![0.0, 2.0 * second]),
+        ])
     }
 }
 
@@ -1202,6 +1228,38 @@ fn forced_dense_and_sparse_secondary_audit_and_status_parity() {
     assert_dense_sparse_parity(problem, 1);
 }
 
+#[test]
+fn forced_dense_and_sparse_positive_temporary_preference_parity() {
+    let mut problem = Problem::new();
+    let x = problem.add_variable(VariableBlock::scalar(2.0, 1.0).unwrap());
+    let y = problem.add_variable(VariableBlock::scalar(-3.0, 1.0).unwrap());
+    add_affine_target(
+        &mut problem,
+        "positive-level parity hard",
+        vec![x, y],
+        vec![vec![1.0, 0.0]],
+        vec![0.0],
+        1.0,
+    );
+    add_secondary_affine_target(
+        &mut problem,
+        "positive-level parity temporary",
+        ResidualCategory::Temporary,
+        vec![x, y],
+        vec![vec![1.0, 0.0]],
+        vec![1.0],
+    );
+    add_secondary_affine_target(
+        &mut problem,
+        "positive-level parity preference",
+        ResidualCategory::Preference,
+        vec![x, y],
+        vec![vec![0.0, 1.0]],
+        vec![2.0],
+    );
+    assert_dense_sparse_parity(problem, 1);
+}
+
 #[derive(Clone, Copy, Debug)]
 struct NonFiniteResidual;
 
@@ -1303,6 +1361,211 @@ impl ResidualEvaluator for UnitCircle {
             LocalJacobian::new(1, 1, vec![2.0 * y]),
         ])
     }
+}
+
+#[test]
+fn coupled_failed_scalar_refinement_retains_the_certified_complete_row_baseline() {
+    let mut problem = Problem::new();
+    let mut circles = Vec::new();
+    for index in 0..2 {
+        let x = problem.add_variable(VariableBlock::scalar(1.0, 1.0).unwrap());
+        let y = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());
+        let hard_source =
+            problem.add_source(SourceConstraint::new(format!("unit circle {index}")).unwrap());
+        problem
+            .add_residual(
+                ResidualBlock::new(
+                    hard_source,
+                    ResidualCategory::Hard,
+                    vec![x, y],
+                    1,
+                    vec![1.0],
+                    rows(1),
+                    UnitCircle,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        add_secondary_affine_target(
+            &mut problem,
+            &format!("constant circle Temporary {index}"),
+            ResidualCategory::Temporary,
+            vec![x, y],
+            vec![vec![1.0, 0.0], vec![0.0, 1.0]],
+            vec![0.0, 0.0],
+        );
+        circles.push([x, y]);
+    }
+    add_secondary_affine_target(
+        &mut problem,
+        "coupled opposite-point Preference",
+        ResidualCategory::Preference,
+        circles.iter().flatten().copied().collect(),
+        vec![
+            vec![1.0, 0.0, 0.0, 0.0],
+            vec![0.0, 1.0, 0.0, 0.0],
+            vec![0.0, 0.0, 1.0, 0.0],
+            vec![0.0, 0.0, 0.0, 1.0],
+        ],
+        vec![-1.0, 0.0, -1.0, 0.0],
+    );
+
+    let OperationOutcome::Completed {
+        value: report,
+        report: work,
+    } = problem
+        .solve_controlled(
+            SolverConfig {
+                max_iterations: 1,
+                ..SolverConfig::default()
+            },
+            OperationControl::unlimited(),
+        )
+        .unwrap()
+    else {
+        panic!("unlimited coupled priority solve was interrupted")
+    };
+    assert_eq!(
+        report.termination,
+        SolveTermination::Converged,
+        "{report:#?}"
+    );
+    for [x, y] in circles {
+        assert!((scalar(&problem, x) - 1.0).abs() <= 1.0e-12);
+        assert!(scalar(&problem, y).abs() <= 1.0e-12);
+    }
+    let preference = report
+        .priority_solves
+        .iter()
+        .find(|priority| priority.category == ResidualCategory::Preference)
+        .unwrap();
+    assert_eq!(preference.component_indices.len(), 2);
+    assert_eq!(preference.termination, SolveTermination::Converged);
+    assert_eq!(preference.status, SecondaryStatus::Acceptable);
+    assert!(
+        preference
+            .protected_temporary
+            .iter()
+            .all(|protected| protected.preserved),
+        "{preference:#?}"
+    );
+    assert!(preference.iterations <= 2, "{preference:#?}");
+    assert!(
+        work.consumed.factorizations <= 64 && work.consumed.nonlinear_iterations <= 32,
+        "{report:#?}\n{work:#?}"
+    );
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn coupled_optional_refinement_exhaustion_retains_the_certified_baseline() {
+    let mut problem = Problem::new();
+    let mut circles = Vec::new();
+    for index in 0..2 {
+        let x = problem.add_variable(VariableBlock::scalar(1.0, 1.0).unwrap());
+        let y = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());
+        let hard_source =
+            problem.add_source(SourceConstraint::new(format!("unit circle {index}")).unwrap());
+        problem
+            .add_residual(
+                ResidualBlock::new(
+                    hard_source,
+                    ResidualCategory::Hard,
+                    vec![x, y],
+                    1,
+                    vec![1.0],
+                    rows(1),
+                    UnitCircle,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        add_secondary_affine_target(
+            &mut problem,
+            &format!("constant circle Temporary {index}"),
+            ResidualCategory::Temporary,
+            vec![x, y],
+            vec![vec![1.0, 0.0], vec![0.0, 1.0]],
+            vec![0.0, 0.0],
+        );
+        circles.push([x, y]);
+    }
+    add_secondary_affine_target(
+        &mut problem,
+        "coupled opposite-point Preference",
+        ResidualCategory::Preference,
+        circles.iter().flatten().copied().collect(),
+        vec![
+            vec![1.0, 0.0, 0.0, 0.0],
+            vec![0.0, 1.0, 0.0, 0.0],
+            vec![0.0, 0.0, 1.0, 0.0],
+            vec![0.0, 0.0, 0.0, 1.0],
+        ],
+        vec![-1.0, 0.0, -1.0, 0.0],
+    );
+
+    let config = SolverConfig {
+        max_iterations: 1,
+        ..SolverConfig::default()
+    };
+    let mut unlimited = problem.clone();
+    let OperationOutcome::Completed {
+        value: expected,
+        report: unlimited_work,
+    } = unlimited
+        .solve_controlled(config, OperationControl::unlimited())
+        .unwrap()
+    else {
+        panic!("unlimited coupled priority solve was interrupted")
+    };
+
+    let mut limits = geosolve_core::OperationLimits::unlimited();
+    limits.document_dependency_items = 8;
+    let OperationOutcome::Completed {
+        value: report,
+        report: bounded_work,
+    } = problem
+        .solve_controlled(
+            config,
+            OperationControl::new(CancellationToken::default(), limits),
+        )
+        .unwrap()
+    else {
+        panic!("optional coupled refinement exhaustion invalidated its certified baseline")
+    };
+
+    assert_eq!(
+        report.termination,
+        SolveTermination::Converged,
+        "{report:#?}"
+    );
+    assert_eq!(
+        report.accepted_state.ambient(),
+        expected.accepted_state.ambient()
+    );
+    for [x, y] in circles {
+        assert!((scalar(&problem, x) - 1.0).abs() <= 1.0e-12);
+        assert!(scalar(&problem, y).abs() <= 1.0e-12);
+    }
+    let preference = report
+        .priority_solves
+        .iter()
+        .find(|priority| priority.category == ResidualCategory::Preference)
+        .unwrap();
+    assert_eq!(preference.status, SecondaryStatus::Acceptable);
+    assert!(
+        preference
+            .protected_temporary
+            .iter()
+            .all(|protected| protected.preserved),
+        "{preference:#?}"
+    );
+    assert_eq!(bounded_work.consumed.document_dependency_items, 4);
+    assert!(
+        unlimited_work.consumed.document_dependency_items
+            > bounded_work.consumed.document_dependency_items,
+        "{unlimited_work:#?}\n{bounded_work:#?}"
+    );
 }
 
 #[test]
@@ -1475,7 +1738,11 @@ fn preference_group_protects_each_connected_temporary_group_independently() {
     );
     assert!(scalar(&problem, first[0]).abs() <= 1.0e-12);
     assert!(scalar(&problem, first[1]).abs() <= 1.0e-12);
-    assert!(scalar(&problem, second[0]).abs() <= 1.0e-12);
+    assert!(
+        scalar(&problem, second[0]).abs() <= 1.0e-12,
+        "second hard coordinate: {:e}",
+        scalar(&problem, second[0])
+    );
     assert!(scalar(&problem, second[1]).abs() <= 1.0e-12);
     assert!((scalar(&problem, first[2]) - 0.5).abs() <= 1.0e-9);
     assert!((scalar(&problem, second[2]) - 0.5).abs() <= 1.0e-9);
@@ -1500,6 +1767,112 @@ fn preference_group_protects_each_connected_temporary_group_independently() {
             .component_solves
             .iter()
             .all(|component| component.secondary_participated)
+    );
+}
+
+#[test]
+fn coupled_preference_moves_passive_freedoms_without_worsening_positive_temporary_levels() {
+    let mut problem = Problem::new();
+    let first = [
+        problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap()),
+        problem.add_variable(VariableBlock::scalar(-3.0, 1.0).unwrap()),
+    ];
+    let second = [
+        problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap()),
+        problem.add_variable(VariableBlock::scalar(4.0, 1.0).unwrap()),
+    ];
+    for (index, (variables, temporary_target)) in
+        [(first, 1.0), (second, -1.0)].into_iter().enumerate()
+    {
+        add_affine_target(
+            &mut problem,
+            &format!("positive-level hard component {index}"),
+            variables.to_vec(),
+            vec![vec![1.0, 0.0]],
+            vec![0.0],
+            1.0,
+        );
+        add_secondary_affine_target(
+            &mut problem,
+            &format!("positive-level temporary component {index}"),
+            ResidualCategory::Temporary,
+            variables.to_vec(),
+            vec![vec![1.0, 0.0]],
+            vec![temporary_target],
+        );
+    }
+    let preference_source =
+        problem.add_source(SourceConstraint::new("coupled nonlinear passive preference").unwrap());
+    problem
+        .add_residual(
+            ResidualBlock::new(
+                preference_source,
+                ResidualCategory::Preference,
+                vec![first[1], second[1]],
+                2,
+                vec![1.0, 1.0],
+                rows(2),
+                CoupledSquareTargets,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let jacobians = problem.check_jacobians(1.0e-6).unwrap();
+    assert!(jacobians.all_within(1.0e-8), "{jacobians:#?}");
+
+    let OperationOutcome::Completed {
+        value: report,
+        report: work,
+    } = problem
+        .solve_controlled(SolverConfig::default(), OperationControl::unlimited())
+        .unwrap()
+    else {
+        panic!("unlimited coupled priority solve was interrupted")
+    };
+    assert_eq!(
+        report.termination,
+        SolveTermination::Converged,
+        "{report:#?}"
+    );
+    assert!(scalar(&problem, first[0]).abs() <= 1.0e-12);
+    assert!(scalar(&problem, second[0]).abs() <= 1.0e-12);
+    assert!((scalar(&problem, first[1]) + 2.0).abs() <= 1.0e-9);
+    assert!((scalar(&problem, second[1]) - 3.0).abs() <= 1.0e-9);
+    let temporary = report
+        .priority_solves
+        .iter()
+        .filter(|priority| priority.category == ResidualCategory::Temporary)
+        .collect::<Vec<_>>();
+    assert_eq!(temporary.len(), 2);
+    assert!(
+        temporary
+            .iter()
+            .all(|priority| (priority.final_cost.unwrap() - 0.5).abs() <= 1.0e-12),
+        "{temporary:#?}"
+    );
+    let preference = report
+        .priority_solves
+        .iter()
+        .find(|priority| priority.category == ResidualCategory::Preference)
+        .unwrap();
+    assert_eq!(preference.component_indices.len(), 2);
+    assert_eq!(preference.protected_temporary.len(), 2);
+    // Two normalized Preference rows retracted at the shared 1e-10 state
+    // resolution have a squared-cost envelope of order 1e-20.
+    assert!(preference.final_cost.unwrap() <= 1.0e-20, "{preference:#?}");
+    assert!(
+        preference.protected_temporary.iter().all(|protected| {
+            protected.preserved
+                && protected.final_cost.is_some_and(|cost| {
+                    cost <= protected.attained_cost + protected.preservation_tolerance
+                })
+        }),
+        "{preference:#?}"
+    );
+    assert!(preference.iterations <= 8, "{preference:#?}");
+    assert!(
+        work.consumed.factorizations <= 96 && work.consumed.nonlinear_iterations <= 64,
+        "{report:#?}\n{work:#?}"
     );
 }
 

@@ -10,9 +10,10 @@ use crate::solver::{RankDiagnostics, rank_diagnostics};
 use crate::{
     ComponentSolveReport, ContinuationError, ContinuationTangent, ContinuationTangentOrientation,
     CoreError, EvaluationError, HardValidity, InitialParameterDirection, LocalJacobian,
-    PackedState, Problem, ResidualBlock, ResidualCategory, ResidualId, ResidualRowRef,
-    SensitivityError, SessionRevisions, SolveReport, SolverConfig, SourceConstraintId, VariableId,
-    VariableKind, VariableValue,
+    OperationCheckpoint, OperationController, OperationWorkCounter, PackedState, Problem,
+    ResidualBlock, ResidualCategory, ResidualId, ResidualRowRef, SensitivityError,
+    SessionRevisions, SolveReport, SolverConfig, SourceConstraintId, VariableId, VariableKind,
+    VariableValue,
 };
 
 /// One active reduced tangent block in deterministic component-column order.
@@ -448,12 +449,30 @@ impl AcceptedHardComponentLinearization {
     ///
     /// Rejects non-finite/mismatched SVD evidence, failure to recover the accepted
     /// nullity, raw scaling loss, or a direction that fails equation validation.
-    #[allow(clippy::too_many_lines)]
     pub fn right_nullspace_basis(&self) -> Result<AcceptedNullspaceBasis, SensitivityError> {
+        self.right_nullspace_basis_inner(None).and_then(|basis| {
+            basis.ok_or(SensitivityError::NumericalFailure {
+                context: "uncontrolled nullspace construction was interrupted",
+            })
+        })
+    }
+
+    pub(crate) fn right_nullspace_basis_with_controller(
+        &self,
+        controller: &mut OperationController,
+    ) -> Result<Option<AcceptedNullspaceBasis>, SensitivityError> {
+        self.right_nullspace_basis_inner(Some(controller))
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn right_nullspace_basis_inner(
+        &self,
+        mut controller: Option<&mut OperationController>,
+    ) -> Result<Option<AcceptedNullspaceBasis>, SensitivityError> {
         let rows = self.normalized_jacobian.nrows();
         let columns = self.normalized_jacobian.ncols();
         if self.right_nullity == 0 {
-            return Ok(AcceptedNullspaceBasis {
+            return Ok(Some(AcceptedNullspaceBasis {
                 revisions: self.revisions,
                 component_index: self.component_index,
                 rank: self.rank,
@@ -461,14 +480,39 @@ impl AcceptedHardComponentLinearization {
                 rank_threshold: self.rank_threshold,
                 vectors: Vec::new(),
                 equation_residual_max: 0.0,
-            });
+            }));
         }
         let decomposition_rows = rows.max(columns);
+        if let Some(controller) = controller.as_deref_mut()
+            && (controller
+                .authorize_dense_kernel(
+                    decomposition_rows,
+                    columns,
+                    OperationCheckpoint::BeforeRankKernel,
+                )
+                .is_err()
+                || controller
+                    .charge(
+                        OperationWorkCounter::RankKernels,
+                        1,
+                        OperationCheckpoint::BeforeRankKernel,
+                    )
+                    .is_err())
+        {
+            return Ok(None);
+        }
         let mut padded = DMatrix::zeros(decomposition_rows, columns);
         padded
             .view_mut((0, 0), self.normalized_jacobian.shape())
             .copy_from(&self.normalized_jacobian);
         let decomposition = padded.svd(false, true);
+        if let Some(controller) = controller
+            && controller
+                .checkpoint(OperationCheckpoint::AfterRankKernel)
+                .is_err()
+        {
+            return Ok(None);
+        }
         if decomposition
             .singular_values
             .iter()
@@ -575,7 +619,7 @@ impl AcceptedHardComponentLinearization {
                 equation_residual_max: maximum,
             });
         }
-        Ok(AcceptedNullspaceBasis {
+        Ok(Some(AcceptedNullspaceBasis {
             revisions: self.revisions,
             component_index: self.component_index,
             rank: self.rank,
@@ -583,7 +627,7 @@ impl AcceptedHardComponentLinearization {
             rank_threshold: self.rank_threshold,
             vectors,
             equation_residual_max,
-        })
+        }))
     }
 
     fn recover_normalized_tangent(
@@ -818,6 +862,66 @@ impl Problem {
             layout,
             numeric: self.linearize_blocks_for_state(state, Some(residual_filter))?,
         })
+    }
+
+    fn linearize_current_component(
+        &self,
+        plan: &EliminationPlan,
+        component: &SolveComponent,
+        residual_filter: &[ResidualId],
+        mut controller: Option<&mut OperationController>,
+    ) -> Result<Option<ComponentLinearization>, CoreError> {
+        let layout = plan.component_layouts.get(component.index).cloned().ok_or(
+            CoreError::DimensionMismatch {
+                context: "cached component tangent layout",
+                expected: plan.components.len(),
+                actual: component.index,
+            },
+        )?;
+        let mut numeric = BlockLinearization::default();
+        for &residual_id in residual_filter {
+            let residual = self
+                .residuals
+                .get(residual_id)
+                .ok_or(CoreError::UnknownResidual(residual_id))?;
+            let dependency_items = residual.incident_variables().len().checked_add(1).ok_or(
+                CoreError::DimensionOverflow {
+                    context: "accepted component dependency items",
+                },
+            )?;
+            if let Some(controller) = controller.as_deref_mut()
+                && controller
+                    .charge(
+                        OperationWorkCounter::DocumentDependencyItems,
+                        dependency_items,
+                        OperationCheckpoint::DocumentDependency,
+                    )
+                    .is_err()
+            {
+                return Ok(None);
+            }
+            let variables = residual
+                .incident_variables()
+                .iter()
+                .map(|&variable_id| {
+                    let variable = self
+                        .variables
+                        .get(variable_id)
+                        .ok_or(CoreError::UnknownVariable(variable_id))?;
+                    variable.validate()?;
+                    Ok(variable.value())
+                })
+                .collect::<Result<Vec<_>, CoreError>>()?;
+            let block = evaluate_block(self, residual_id, residual, &variables)?;
+            numeric.scalar_rows = numeric
+                .scalar_rows
+                .checked_add(block.normalized_residuals.len())
+                .ok_or(CoreError::DimensionOverflow {
+                    context: "accepted component residual",
+                })?;
+            numeric.blocks.push(block);
+        }
+        Ok(Some(ComponentLinearization { layout, numeric }))
     }
 
     pub(crate) fn validate_residual_linearization(
@@ -1057,6 +1161,256 @@ fn selected_block(
                 && !plan.source_is_suppressed(block.source_id)))
 }
 
+struct FreshAcceptedHardComponent {
+    accepted: AcceptedHardComponentLinearization,
+    rank: RankDiagnostics,
+    hard_residual_max: f64,
+    hard_residual_l2: f64,
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "fresh component identity, work authorization, linearization, rank validation, and DTO publication form one fail-closed evidence boundary"
+)]
+fn build_accepted_hard_component_linearization(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    report: &SolveReport,
+    revisions: SessionRevisions,
+    config: SolverConfig,
+    component_index: usize,
+    mut controller: Option<&mut OperationController>,
+) -> Result<Option<FreshAcceptedHardComponent>, CoreError> {
+    let component = plan
+        .components
+        .get(component_index)
+        .ok_or(CoreError::DimensionMismatch {
+            context: "accepted component index",
+            expected: plan.components.len(),
+            actual: component_index,
+        })?;
+    let summary = plan
+        .structural
+        .component_summaries
+        .get(component_index)
+        .ok_or(CoreError::DimensionMismatch {
+            context: "accepted component structural summary",
+            expected: plan.structural.component_summaries.len(),
+            actual: component_index,
+        })?;
+    let component_report =
+        report
+            .component_solves
+            .get(component_index)
+            .ok_or(CoreError::DimensionMismatch {
+                context: "accepted component solve report",
+                expected: report.component_solves.len(),
+                actual: component_index,
+            })?;
+    if component.index != component_index
+        || summary.component_index != component_index
+        || component_report.component_index != component_index
+        || component_report.pattern_signature != summary.pattern_signature
+        || component_report.sparsity_signature != summary.sparsity_signature
+        || component_report.hard_validity != HardValidity::Valid
+        || !component_report.hard_residuals_validated
+        || !component_report.rank_is_valid
+        || !component_report.hard_residual_max.is_finite()
+        || !component_report.hard_residual_l2.is_finite()
+        || component_report.hard_residual_max > config.normalized_residual_tolerance
+    {
+        return invalid_accepted("component report identity or accepted validity is invalid");
+    }
+
+    let evaluated_hard_rows = summary
+        .active_hard_rows
+        .checked_add(summary.eliminated_rows)
+        .ok_or(CoreError::DimensionOverflow {
+            context: "accepted component hard rows",
+        })?;
+    let state_dependency_items = component
+        .variable_ids
+        .len()
+        .checked_add(component.referenced_variables.len())
+        .ok_or(CoreError::DimensionOverflow {
+            context: "accepted component state dependency items",
+        })?;
+    if let Some(controller) = controller.as_deref_mut()
+        && (controller
+            .charge(
+                OperationWorkCounter::DocumentDependencyItems,
+                state_dependency_items,
+                OperationCheckpoint::DocumentDependency,
+            )
+            .is_err()
+            || controller
+                .authorize_dense_kernel(
+                    evaluated_hard_rows,
+                    summary.active_tangent_dimensions,
+                    OperationCheckpoint::BeforeRankKernel,
+                )
+                .is_err()
+            || controller
+                .charge(
+                    OperationWorkCounter::ComponentLinearizations,
+                    1,
+                    OperationCheckpoint::ComponentBoundary,
+                )
+                .is_err())
+    {
+        return Ok(None);
+    }
+    if !problem.packed_state_matches_variables(&report.accepted_state, &component.variable_ids)?
+        || !problem.packed_state_matches_variables(
+            &report.accepted_state,
+            &component.referenced_variables,
+        )?
+    {
+        return invalid_accepted(
+            "retained component state does not match the accepted report state",
+        );
+    }
+
+    // Include eliminated hard blocks in fresh canonical evaluation, then project only active rows
+    // into the public reduced matrix. Iteration is over this component's retained hard IDs rather
+    // than every residual in the problem.
+    let Some(linearization) = problem.linearize_current_component(
+        plan,
+        component,
+        &component.residual_ids,
+        controller.as_deref_mut(),
+    )?
+    else {
+        return Ok(None);
+    };
+    if linearization.numeric.blocks.len() != component.residual_ids.len()
+        || linearization
+            .numeric
+            .blocks
+            .iter()
+            .zip(&component.residual_ids)
+            .any(|(block, residual_id)| {
+                block.residual_id != *residual_id
+                    || block.category != ResidualCategory::Hard
+                    || plan.source_is_suppressed(block.source_id)
+            })
+    {
+        return invalid_accepted("canonical component hard-block identity is invalid");
+    }
+    let (component_hard_max, component_hard_l2) = finite_norms(
+        linearization
+            .numeric
+            .blocks
+            .iter()
+            .flat_map(|block| block.normalized_residuals.iter().copied()),
+    )
+    .ok_or(CoreError::InvalidAcceptedLinearization {
+        context: "canonical component hard residual is non-finite",
+    })?;
+    if component_hard_max > config.normalized_residual_tolerance {
+        return invalid_accepted("fresh accepted hard residual exceeds configured tolerance");
+    }
+
+    let tangent_blocks = reduced_tangent_blocks(problem, plan, &linearization.layout)?;
+    let dense = linearization.project_dense(plan, ResidualCategory::Hard)?;
+    if dense.residuals.len() != dense.jacobian.nrows()
+        || dense.rows.len() != dense.jacobian.nrows()
+        || dense.jacobian.nrows() != summary.active_hard_rows
+        || dense.jacobian.ncols() != summary.active_tangent_dimensions
+        || tangent_blocks
+            .last()
+            .map_or(0, |block| block.tangent_range.end)
+            != dense.jacobian.ncols()
+    {
+        return invalid_accepted("reduced component row or column dimensions are invalid");
+    }
+    let hard_rows = reduced_hard_rows(problem, plan, component, &dense.rows)?;
+    if let Some(controller) = controller.as_deref_mut()
+        && controller
+            .charge(
+                OperationWorkCounter::RankKernels,
+                1,
+                OperationCheckpoint::BeforeRankKernel,
+            )
+            .is_err()
+    {
+        return Ok(None);
+    }
+    let fresh_rank = rank_diagnostics(&dense.jacobian, config.rank_relative_tolerance).ok_or(
+        CoreError::InvalidAcceptedLinearization {
+            context: "fresh component rank policy evaluation failed",
+        },
+    )?;
+    if let Some(controller) = controller
+        && controller
+            .checkpoint(OperationCheckpoint::AfterRankKernel)
+            .is_err()
+    {
+        return Ok(None);
+    }
+    validate_accepted_rank(component_report, &dense.jacobian, &fresh_rank, config)?;
+
+    Ok(Some(FreshAcceptedHardComponent {
+        accepted: AcceptedHardComponentLinearization {
+            revisions,
+            component_index,
+            pattern_signature: summary.pattern_signature,
+            tangent_blocks,
+            hard_rows,
+            normalized_residual: dense.residuals,
+            normalized_jacobian: dense.jacobian,
+            rank: component_report.rank,
+            left_nullity: component_report.left_nullity,
+            right_nullity: component_report.right_nullity,
+            rank_threshold: component_report.rank_threshold,
+            singular_values: component_report.singular_values.clone(),
+            normalized_residual_tolerance: config.normalized_residual_tolerance,
+        },
+        rank: fresh_rank,
+        hard_residual_max: component_hard_max,
+        hard_residual_l2: component_hard_l2,
+    }))
+}
+
+pub(crate) fn build_controlled_accepted_hard_component_linearization(
+    problem: &Problem,
+    plan: &EliminationPlan,
+    report: &SolveReport,
+    revisions: SessionRevisions,
+    config: SolverConfig,
+    variable: VariableId,
+    controller: &mut OperationController,
+) -> Result<Option<AcceptedHardComponentLinearization>, CoreError> {
+    config.validate()?;
+    if report.hard_validity != HardValidity::Valid
+        || !report.hard_residuals_validated
+        || !report.rank_is_valid
+        || !report.hard_residual_max.is_finite()
+        || report.hard_residual_max > config.normalized_residual_tolerance
+    {
+        return invalid_accepted("retained report is not finite, hard-valid, and rank-valid");
+    }
+    if plan.components.len() != plan.component_layouts.len()
+        || plan.components.len() != plan.structural.component_summaries.len()
+        || plan.components.len() != report.component_solves.len()
+    {
+        return invalid_accepted("component counts do not match retained session data");
+    }
+    let Some(component_index) = plan.component_for_variable(variable) else {
+        return Ok(None);
+    };
+    build_accepted_hard_component_linearization(
+        problem,
+        plan,
+        report,
+        revisions,
+        config,
+        component_index,
+        Some(controller),
+    )
+    .map(|component| component.map(|component| component.accepted))
+}
+
 #[allow(clippy::too_many_lines)]
 pub(crate) fn build_accepted_hard_linearization(
     problem: &Problem,
@@ -1088,7 +1442,6 @@ pub(crate) fn build_accepted_hard_linearization(
         return invalid_accepted("component counts do not match retained session data");
     }
 
-    let state = problem.variable_state();
     let mut components = Vec::with_capacity(plan.components.len());
     let mut aggregate_rank = 0usize;
     let mut aggregate_left_nullity = 0usize;
@@ -1101,106 +1454,39 @@ pub(crate) fn build_accepted_hard_linearization(
     let mut fresh_hard_max = 0.0_f64;
     let mut fresh_hard_l2 = 0.0_f64;
     for component in &plan.components {
-        let summary = &plan.structural.component_summaries[component.index];
         let component_report = &report.component_solves[component.index];
-        if summary.component_index != component.index
-            || component_report.component_index != component.index
-            || component_report.pattern_signature != summary.pattern_signature
-            || component_report.sparsity_signature != summary.sparsity_signature
-            || component_report.hard_validity != HardValidity::Valid
-            || !component_report.hard_residuals_validated
-            || !component_report.rank_is_valid
-            || !component_report.hard_residual_max.is_finite()
-            || !component_report.hard_residual_l2.is_finite()
-            || component_report.hard_residual_max > config.normalized_residual_tolerance
-        {
-            return invalid_accepted("component report identity or accepted validity is invalid");
-        }
-
-        // Include eliminated hard blocks in fresh canonical evaluation, then
-        // project only active rows into the public reduced matrix.
-        let linearization =
-            problem.linearize_component(plan, component, &state, &component.residual_ids)?;
-        if linearization.numeric.blocks.len() != component.residual_ids.len()
-            || linearization
-                .numeric
-                .blocks
-                .iter()
-                .zip(&component.residual_ids)
-                .any(|(block, residual_id)| {
-                    block.residual_id != *residual_id
-                        || block.category != ResidualCategory::Hard
-                        || plan.source_is_suppressed(block.source_id)
-                })
-        {
-            return invalid_accepted("canonical component hard-block identity is invalid");
-        }
-        let (component_hard_max, component_hard_l2) = finite_norms(
-            linearization
-                .numeric
-                .blocks
-                .iter()
-                .flat_map(|block| block.normalized_residuals.iter().copied()),
-        )
-        .ok_or(CoreError::InvalidAcceptedLinearization {
-            context: "canonical component hard residual is non-finite",
-        })?;
-        if component_hard_max > config.normalized_residual_tolerance {
-            return invalid_accepted("fresh accepted hard residual exceeds configured tolerance");
-        }
-        fresh_hard_max = fresh_hard_max.max(component_hard_max);
-        fresh_hard_l2 = fresh_hard_l2.hypot(component_hard_l2);
+        let fresh = build_accepted_hard_component_linearization(
+            problem,
+            plan,
+            report,
+            revisions,
+            config,
+            component.index,
+            None,
+        )?
+        .expect("uncontrolled accepted-component validation cannot be interrupted");
+        fresh_hard_max = fresh_hard_max.max(fresh.hard_residual_max);
+        fresh_hard_l2 = fresh_hard_l2.hypot(fresh.hard_residual_l2);
         if !fresh_hard_l2.is_finite() {
             return invalid_accepted("aggregate fresh accepted hard residual is non-finite");
         }
-
-        let tangent_blocks = reduced_tangent_blocks(problem, plan, &linearization.layout)?;
-        let dense = linearization.project_dense(plan, ResidualCategory::Hard)?;
-        if dense.residuals.len() != dense.jacobian.nrows()
-            || dense.rows.len() != dense.jacobian.nrows()
-            || dense.jacobian.nrows() != summary.active_hard_rows
-            || dense.jacobian.ncols() != summary.active_tangent_dimensions
-            || tangent_blocks
-                .last()
-                .map_or(0, |block| block.tangent_range.end)
-                != dense.jacobian.ncols()
-        {
-            return invalid_accepted("reduced component row or column dimensions are invalid");
-        }
-        let hard_rows = reduced_hard_rows(problem, plan, component, &dense.rows)?;
-        let fresh_rank = rank_diagnostics(&dense.jacobian, config.rank_relative_tolerance).ok_or(
-            CoreError::InvalidAcceptedLinearization {
-                context: "fresh component rank policy evaluation failed",
-            },
-        )?;
-        validate_accepted_rank(component_report, &dense.jacobian, &fresh_rank, config)?;
 
         aggregate_rank = aggregate_rank.saturating_add(component_report.rank);
         aggregate_left_nullity =
             aggregate_left_nullity.saturating_add(component_report.left_nullity);
         aggregate_right_nullity =
             aggregate_right_nullity.saturating_add(component_report.right_nullity);
-        aggregate_machine_tolerance = aggregate_machine_tolerance.max(fresh_rank.machine_tolerance);
-        aggregate_rank_threshold = aggregate_rank_threshold.max(fresh_rank.threshold);
-        aggregate_is_singular |=
-            fresh_rank.rank < dense.jacobian.nrows().min(dense.jacobian.ncols());
-        aggregate_near_singular |= fresh_rank.near_singular;
-        aggregate_singular_values.extend(fresh_rank.singular_values.iter().copied());
-        components.push(AcceptedHardComponentLinearization {
-            revisions,
-            component_index: component.index,
-            pattern_signature: summary.pattern_signature,
-            tangent_blocks,
-            hard_rows,
-            normalized_residual: dense.residuals,
-            normalized_jacobian: dense.jacobian,
-            rank: component_report.rank,
-            left_nullity: component_report.left_nullity,
-            right_nullity: component_report.right_nullity,
-            rank_threshold: component_report.rank_threshold,
-            singular_values: component_report.singular_values.clone(),
-            normalized_residual_tolerance: config.normalized_residual_tolerance,
-        });
+        aggregate_machine_tolerance = aggregate_machine_tolerance.max(fresh.rank.machine_tolerance);
+        aggregate_rank_threshold = aggregate_rank_threshold.max(fresh.rank.threshold);
+        aggregate_is_singular |= fresh.rank.rank
+            < fresh
+                .accepted
+                .normalized_jacobian
+                .nrows()
+                .min(fresh.accepted.normalized_jacobian.ncols());
+        aggregate_near_singular |= fresh.rank.near_singular;
+        aggregate_singular_values.extend(fresh.rank.singular_values.iter().copied());
+        components.push(fresh.accepted);
     }
     if !fresh_hard_max.is_finite()
         || fresh_hard_max > config.normalized_residual_tolerance

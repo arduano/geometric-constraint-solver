@@ -156,7 +156,8 @@ M8 is ready for review only when every item below is objectively present. These 
 The checked wording below is the preserved M8 completion record. Its then-current M8-M22
 allocations are historical; `PLAN.md` now governs completed work through the approved M61 gate,
 approved M62 authoring milestone, approved M63 canvas-constraint presentation and approved M64
-editable-sample cleanup, with M65 implemented and awaiting focused human UAT.
+editable-sample cleanup, with M65 open for the `M65-F003` stability repair, mechanical
+requalification and focused human UAT.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -944,40 +945,96 @@ browser E2E qualification may return. M65 is the active milestone below.
 
 ## M65 acceptance: continuation, bounded work and explicit assembly branches
 
-Status: implementation and mechanical qualification complete; focused human UAT pending.
+Status: open; the `M65-F003` corrective implementation is present, while final mechanical
+requalification and focused human UAT remain pending.
 
 - [x] Consecutive pointer samples continue from the last independently accepted preview, while a
   failed or ambiguous sample retains that preview instead of selecting another valid root.
-- [x] Ordinary pointer samples execute exactly one retained attempt with the cursor Temporary
-  target above accepted previous-state Preferences and no passive-anchor retry corpus.
+- [x] Ordinary pointer samples execute exactly one retained attempt. The cursor is the sole
+  Temporary target; the passive-anchor retry and obsolete `stability_target` request API are
+  absent.
 - [x] Stable headless evidence exposes attempt count, continuation, acceptance/rejection stage,
-  hard/Temporary/Preference iterations and deterministic operation work.
+  hard/Temporary/Preference iterations, deterministic operation work and the complete read-only
+  drag-locality plan.
+- [x] Each new gesture derives a complete deterministic passive point-anchor cover from accepted
+  hard-nullspace evidence. Selection prefers greater uncovered-rank gain, then lower point
+  mobility rank, then compile order, and an incomplete or ambiguous cover fails closed.
+- [x] The persistent locality plan is stamped with design/accepted identity and the active
+  persistent point, and carries exact process-local design-publication and accepted-state
+  provenance, hard-equality DOF, active/passive ranks and selected anchors. Ordinary clones share
+  each token; every retained-design or accepted-state publication respectively renews it. Targets
+  are copied from accepted visible geometry at gesture start and the exact plan is frozen through
+  continuation, rejection and recovery. Divergent lifecycle clones with equal numeric revisions
+  reject one another's plans and previews.
+- [x] Only selected locality anchors compile as `PreviousState` Preferences. Accepted preview
+  coordinates may seed the next numerical solve but never replace the plan's frozen targets.
 - [x] Feasible zero-cost Temporary objectives are independently validated before their complete
   row space protects Preferences; tiny nonzero objectives, sparse backend evidence, hard residual
   validation, finiteness and explicit branch state retain their frozen behavior.
-- [x] Positive-cost Temporary levels are preserved directly during lower Preference trials without
-  recursive reoptimization. Natural off-manifold pantograph cursor samples accept with bounded
-  work while constant-cost manifolds retain legitimate lower-priority motion.
+- [x] Positive-cost Temporary levels first optimize and certify a Preference baseline while
+  protecting every row of the complete attained Temporary residual vector. Optional bounded
+  scalar-level refinement may then recover legitimate motion on the larger nonlinear
+  constant-cost manifold.
+- [x] Failed, stalled, worse or uncertified scalar refinement retains the certified exact-row
+  baseline. If no finite hard-valid and priority-valid baseline exists, the projected sample
+  rejects and retains the complete last accepted preview; raw post-Temporary drift is never a
+  success-like fallback.
+- [x] Current-design continuation and next-revision branch previews prove exact retained-design
+  publication lineage as well as accepted-parent lineage. Signed-zero-distinct same-revision
+  designs and branch payloads reject atomically, while interaction-free restore retains exact
+  canonical design/accepted bytes.
+- [x] Undo/Redo/reload numerical warm starts retain the candidate graph and every equation-bearing
+  field. They import only compatible numerical coordinates and fall back to the untouched valid
+  candidate if imported values invalidate candidate-only topology.
+- [x] Exact preview release uses no-motion certification: solved-state materialization, candidate
+  validation, changed-audit discovery and audit evaluation/refresh all consume the same
+  controller. Cancellation or late work exhaustion publishes no design, attempt, accepted state,
+  canonical payload or revision high-water change.
+- [x] Rank-deficient `2 x N` priority systems use a stable row-space/fixed-SVD solve under the same
+  unsquared rank threshold. Success independently certifies stationarity and
+  minimum-norm/nullspace orthogonality; exact A5 drag/round-trip coverage passes at `1e-6`, `1`
+  and `1e6`.
 - [x] Circle circumferences expose their semantic center as a headless drag handle with preserved
-  pointer offset. Every projected pointer sample has a deterministic 2,048
-  factorization/nonlinear-iteration ceiling; exhaustion or difficult projection retains the last
-  valid preview.
-- [x] The Scotch-yoke, scissor-jack, scissor-tower and pantograph corpus accepts all samples at
-  one attempt each. Recorded `(factorizations, nonlinear iterations)` are `(17,17)`, `(18,18)`,
-  `(24,24)` and `(33,21)` respectively: pantograph is below twice tower and over 99.9% below the
-  starting-commit `(244824,240953)` evidence.
+  pointer offset. Every projected pointer sample has finite limits of 16,384 items each for
+  document validation, dependency/locality and lowering; 256 nonlinear iterations; 512 rejected
+  trials; 1,024 component linearizations; `256 x 256` dense dimensions and 33,554,432 additive
+  dense-kernel work units; 256 factorizations; 256 rank kernels; 512 diagnostic candidates; and
+  1,024 diagnostic trials. Exhaustion or difficult projection retains the last valid preview.
+- [x] Direct headless regressions cover accepted-visible target capture, stale-plan rejection,
+  fixed-point empty plans, natural horizontal and vertical off-manifold deltas for both twin
+  rollers, continued circumference gestures, difficult rejection and later same-chain recovery.
+  The non-dragged center remains within `1e-8` of the gesture baseline and every sample exposes
+  the unchanged stamped plan.
+- [x] The current corrective-source characterization covers Scotch yoke, scissor jack/tower,
+  original two-`Parallel` pantograph input/guide and wide output/center paths, symmetric natural
+  twin rollers, difficult rejection/recovery and the MotionCam lifecycle. The global per-sample
+  peak is 155 factorizations and 147 nonlinear iterations; the measured maxima of 76 rejected
+  trials, 12 component linearizations and 363 dependency/locality items also remain below the
+  production vector. A 128/128 factorization/iteration cap is insufficient; 256/256 passes the
+  representative matrix.
 - [x] Alternate-branch search uses no more than 24 deterministic seeds and offers only finite,
   independently accepted, exact-stamped alternatives representable by persistent branch state.
   Ghost preview, accept, cancel, stale rejection, atomic publication, Undo/Redo and replay are
   directly qualified.
 - [x] Editable locked-elbow and fixed-input four-bar branch examples use ordinary public
   document/session/coordinator APIs and contain no guide state or browser equation.
-- [x] Formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature WASM,
+- [ ] Formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature WASM,
   release Trunk build and `git diff --check` pass on the final candidate.
 - [ ] The supervising human completes and explicitly approves `docs/M65_UAT.md`.
 
+`M65-F003` withdraws the preceding UAT candidate: exact on-manifold twin-roller coverage did not
+exercise the natural off-manifold cursor deltas that exposed passive drift. The replacement uses
+one accepted-rank-derived, accepted-visible-target locality plan for the complete gesture and one
+certified exact-row Preference baseline per positive-Temporary solve before any optional
+scalar-level refinement.
 M65 does not add a residual family, relaxed tolerance, sample-ID policy, worker architecture or
-global root enumeration. It cannot close until the remaining human-UAT box is checked.
+global root enumeration. It cannot close until the full mechanical gate and remaining human-UAT
+box are checked.
+
+Latest focused evidence snapshot (2026-07-31): core lib 46 passed / 1 ignored; M5 28 passed; M15
+13 passed; M16 49 passed; sketch lifecycle 32 passed; `m65_history` 2 passed; and
+`m65_interaction_lifecycle` 6 passed. This evidence is intentionally narrower than, and does not
+satisfy, the unchecked final mechanical or human-UAT gates.
 
 ### M54: stable diagnostics
 

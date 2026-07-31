@@ -250,7 +250,11 @@ Expected behavior:
   transaction removes the macro anchor and generated width/height dimensions, retains hard
   horizontal/vertical topology, reports four local DOF and changes size under a projected
   corner edit.
-- R5: rotating the A5 tangent line through its endpoint applies a transient stability target to the opposite cubic Bezier handle. The opposite handle and endpoint remain stable while the constrained handle and line satisfy contact, tangent orientation and driving length.
+- R5 (historical M14 behavior, superseded by M65): rotating the A5 tangent line through its
+  endpoint applies a transient stability target to the opposite cubic Bezier handle. The opposite
+  handle and endpoint remain stable while the constrained handle and line satisfy contact, tangent
+  orientation and driving length. Current code has no `stability_target` request path; generic
+  projected drag instead uses the rank-derived locality plan described in the current M65 section.
 - R6: every supported constraint and dimension exposes a typed transactional editor delete
   action. Deletion removes owned hidden state, enters history only when accepted and restores
   the same persistent IDs on undo.
@@ -261,11 +265,13 @@ Expected behavior:
 
 - `stress-compass`: a fixed 30-degree bisector carries two symmetric equal-length arms, a reference 60-degree oriented angle, and reference arm/chord dimensions. It loads with one rotational DOF so either tip drives the symmetric mechanism; switching the angle to driving locks the compass at zero DOF and exposes one intentionally redundant hard row.
 - `stress-bridge`: two cubic Beziers meet through explicit End/Start contacts and aligned generic curve-curve tangency. The equal seam-handle source loads suppressed, exposing one bounded seam-sliding DOF; restoring it locks the C1 seam. A drag toward a collapsed handle projects to valid geometry, while an exact edit/import collapse rejects as degenerate and retains the accepted bridge.
-- `motion-cam`: two equal-radius circles have independent generic tangencies to a fixed quadratic
-  Bezier cam. The document loads with two DOF; dragging either center makes that roller follow the
-  cam's normal-offset path while a transient stability target leaves the other roller stationary.
-  `M61-F001` directly regresses the workbench route in both directions so that this domain fixture
-  policy cannot be dropped at the headless/UI seam.
+- `motion-cam` (historical M61 behavior, superseded by M65): two equal-radius circles have
+  independent generic tangencies to a fixed quadratic Bezier cam. The document loads with two
+  DOF; dragging either center makes that roller follow the cam's normal-offset path while a
+  transient stability target leaves the other roller stationary. `M61-F001` directly regresses
+  the workbench route in both directions so that this domain fixture policy cannot be dropped at
+  the headless/UI seam. This records the then-shipped fixture policy; current code has no
+  `stability_target` API or sample-owned passive mapping.
 - `motion-orbit`: a radius-1 satellite circle is externally tangent to a fixed radius-3 circle through generic curve contact with explicit opposed tangent orientation and periodic contact state. It loads with one orbital DOF; center drag follows the complete radius-4 locus while retaining the external-tangency branch.
 - `motion-trammel`: the ends of a length-5 bar slide on perpendicular bounded rails. Two nested midpoint constraints place a tracer one quarter of the way from the vertical slider, so projected drag reveals an exact ellipse without an ellipse primitive or equation in the browser.
 - `motion-scotch-yoke`: a length-5 crank rotates about a fixed center while a vertical slot shares its pin and its opposite end is restricted to a horizontal guide. Crank rotation therefore emerges as sinusoidal slider travel from only distance, vertical and fixed-coordinate constraints.
@@ -1626,6 +1632,11 @@ presentation only. Native/WASM direct tests are the objective qualification path
 
 ### M61-R1 - Replacement interactive candidate
 
+> Historical supersession notice: this section records the shipped M61 scenario coordinator and
+> its transient stability-target policy. M64 removed scenario-specific interaction ownership, and
+> M65 subsequently removed the `stability_target` API and passive retry. The current behavior is
+> the sample-agnostic rank-derived locality plan documented under M64-S1/M65 below.
+
 The first M61 candidate was withdrawn after human review found fixed-only UAT scenes, missing
 representative mechanisms, clipped third-level navigation, missing advanced authoring and no
 canvas camera. The replacement retains the four M60 leaves and nests them under **Advanced curves
@@ -1654,6 +1665,7 @@ For `twin-roller-bezier-cam`, motion metadata names both active/passive directio
 passes only the passive persistent point identity to the headless coordinator; the coordinator
 reads its current accepted position and owns the transient stability target. Thus the selected
 roller consumes one independent cam-contact freedom without allowing the other roller to wander.
+This is historical M61 behavior only and is superseded by the notice above.
 
 Ordinary mode now exposes reusable headless construction tools for quadratic/cubic Beziers,
 ellipse, directed elliptical arc, rational quadratic conic, trimmed parabola, chosen-branch
@@ -1854,33 +1866,77 @@ selection, zoom/pan and projected drag are the same actions used for a blank or 
 
 Four-bar uses fixed grounds `(0,0)` and `(8,0)`, crank/coupler/rocker lengths `5`, `4` and
 `sqrt(17)`, plus a coupler midpoint tracer, leaving one bidirectional freedom. Pantograph uses a
-fixed origin, two independently rotating arms of lengths `sqrt(17)` and `sqrt(10)`, two parallel
-translated sides and a diagonal midpoint, leaving two freedoms. Three-link drawing arm uses one
+fixed origin, two independently rotating arms of lengths `sqrt(17)` and `sqrt(10)`, exactly two
+ordinary `Parallel` relations closing the translated sides and one ordinary `Midpoint` on its
+diagonal, leaving two freedoms. It remains this canonical-v4 public fixture; M65 does not replace
+it with affine coordinate equations or a draft-v5 exception. Three-link drawing arm uses one
 fixed origin and link lengths `3`, `sqrt(8)` and `sqrt(5)`, leaving three freedoms. Each has
 scale-invariant persistent roles and is directly checked at `1e-6`, `1` and `1e6`.
 
-Projected drag is sample-agnostic. M65 executes exactly one retained attempt per pointer sample,
-places the cursor Temporary target above previous-state Preferences and continues from the last
-independently accepted preview. Rejection leaves the last valid preview in place and exposes a
-typed rejection stage plus deterministic work; there is no passive-anchor retry or sample mapping.
+Projected drag is sample-agnostic. At gesture start, M65 derives the active point rank and
+uncovered passive rank from the accepted hard nullspace. It greedily selects a complete point
+anchor cover by greatest uncovered-rank gain, then lower point mobility rank, then compile order.
+The document layer maps the result to persistent IDs and copies each target from the accepted
+geometry visible at that moment. An incomplete or ambiguous cover rejects before a partial plan is
+used.
+
+The read-only `DocumentDragLocalityPlan` records design and accepted-state identity, exact
+process-local design-publication and accepted-state provenance, the persistent active point,
+hard-equality DOF, active/passive ranks and selected anchors. Ordinary clones share both private
+tokens; every retained-design or accepted-state publication respectively renews its token. Plan
+equality and stale validation compare both tokens, so divergent lifecycle clones with equal
+numeric revisions cannot exchange plans. The coordinator freezes that complete plan for the
+gesture and exposes it in `ProjectedDragWorkEvidence`. Every pointer sample executes exactly one
+retained attempt: the cursor is the sole Temporary target, only the selected anchors become
+`PreviousState` Preferences and the last accepted preview is only a numerical continuation seed.
+Rejection leaves the complete last valid preview in place and exposes a typed rejection stage plus
+deterministic work. There is no `stability_target`, passive-anchor retry, sample mapping or
+scenario-owned driver policy.
 Temporary targets remain attempt evidence and do not enter the publication request or serialized
 workspace.
 
-The M65 deterministic path corpus deletes the Scotch-yoke horizontal guide before three
-two-freedom samples, then runs three samples each through scissor jack, five-stage scissor tower
-and pantograph. All samples accept in one attempt. Frozen `(factorizations, nonlinear iterations)`
-are Scotch yoke `(17,17)`, scissor jack `(18,18)`, tower `(24,24)` and pantograph `(33,21)`.
-Starting commit `927efb7` required pantograph `(244824,240953)`. The twin-roller fixture separately
-proves that dragging one roller does not move the other, that a rejected sample retains the last
-valid preview, and that a later valid sample continues from it.
+The M65 corrective-source path corpus uses exactly one retained attempt per ordinary sample.
+Recorded `(factorizations, nonlinear iterations)` per-sample peaks and path totals are Scotch yoke
+`39/31`, total `148/116`; scissor jack `43/35`, total `156/124`; scissor tower `56/46`, total
+`148/122`; pantograph input `116/93`, total `328/265`; pantograph guide `103/84`, total
+`291/242`; and wide pantograph output and center paths `67/57`, total `598/502` for each.
+Natural twin rollers peak globally at `155/147`, with left/right totals `878/818` and
+`920/860`; difficult rejection/recovery peaks at `120/89`, with left/right totals `130/100`
+and `127/103`; the MotionCam lifecycle move peaks at `112/106`, total `220/204`.
 
-`M65-F001` adds three natural cursor samples away from the pantograph input's exact fixed-radius
-path. They accept at total `(2155,2121)` factorization/nonlinear work instead of the reproduced
-`(120210,118679)`. `M65-F002` makes each twin-roller circumference a semantic handle for its own
-center, preserves the initial pointer offset, caps each projected sample at 2,048 factorizations
-and nonlinear iterations, and directly checks bounded difficult-target rejection followed by
+The ordinary-pointer production vector permits 16,384 items each for document validation,
+dependency/locality and lowering; 256 nonlinear iterations; 512 rejected trials; 1,024 component
+linearizations; `256 x 256` dense dimensions and 33,554,432 additive dense-kernel work units; 256
+factorizations; 256 rank kernels; 512 diagnostic candidates; and 1,024 diagnostic trials. The same
+matrix observes at most 222 validation items, 363 dependency/locality items, 218 lowering items,
+76 rejected trials, 12 component linearizations, a `43 x 22` dense kernel and 15 rank items per
+sample. A 128/128 factorization/iteration ceiling is insufficient; 256/256 passes. `M65-F002`
+additionally makes each twin-roller circumference a semantic handle for its own center, preserves
+the initial pointer offset and directly checks bounded difficult-target rejection followed by
 valid continuation recovery. These are generic headless editor/solver contracts, not sample-key
 special cases.
+
+`M65-F003` keeps the same ordinary `twin-roller-bezier-cam` leaf and adds no guide, scripted driver
+or scenario-only equation. It expands headless coverage to short horizontal and vertical
+off-manifold deltas for both left and right rollers, continued circumference gestures, difficult
+rejection and later same-chain recovery. Every accepted sample must hold the untouched center
+within `1e-8` of the gesture baseline and expose the unchanged stamped locality plan. Sketch
+lifecycle fixtures separately require accepted-visible target capture, frozen continuation,
+stale-plan rejection and an empty plan for fixed points.
+
+Core first optimizes and certifies a Preference baseline while protecting every attained Temporary
+residual row. Bounded scalar-level refinement may then seek legitimate motion on the larger
+nonlinear constant-cost manifold, but failed, stalled, worse or uncertified refinement retains the
+exact-row baseline. If no finite hard-valid and priority-valid baseline can be certified, the
+editor retains the complete last preview instead of publishing another valid-but-unexpected
+configuration.
+
+The `M65-F003`-specific human recheck is **M65-U3** in `docs/M65_UAT.md`: move each circumference
+through horizontal, vertical, diagonal and reversing paths, watch the opposite center, then force
+one difficult rejection and recover without starting a new gesture. This targeted recheck does not
+close the milestone by itself: because the preceding candidate was withdrawn, the replacement
+candidate's complete M65-U1 through M65-U6 scorecard remains pending. Review begins only after the
+corrected exact-source deployment is recorded.
 
 Two additional ordinary editable leaves exercise explicit assembly branches:
 
@@ -1897,7 +1953,8 @@ most `1e-9`, exact design/accepted stamps and persistent line-branch directions 
 No alternative, ambiguity, unrepresentable state and exhausted work are explicit outcomes.
 Ghosts are non-authoritative until Accept; Cancel and stale acceptance are atomic no-ops.
 
-`docs/M64_UAT.md` records the approved focused human scorecard.
+`docs/M64_UAT.md` records the approved preceding human scorecard. `docs/M65_UAT.md` records the
+open M65 scorecard and `M65-F003` replacement-candidate gate.
 
 ## Frozen near-singular fixtures
 

@@ -1,12 +1,15 @@
 use thiserror::Error;
 
 use crate::analysis::EliminationPlan;
-use crate::linearization::build_accepted_hard_linearization;
+use crate::linearization::{
+    build_accepted_hard_linearization, build_controlled_accepted_hard_component_linearization,
+};
 use crate::{
-    AcceptedHardLinearization, BoundId, BoundStatus, CoordinateBound, CoreError, HardValidity,
-    OperationCheckpoint, OperationController, Problem, ResidualBlock, ResidualCategory, ResidualId,
-    ResidualRowAudit, SecondaryStatus, SolveReport, SolverConfig, SourceConstraint,
-    SourceConstraintId, VariableId, VariableValue,
+    AcceptedHardComponentLinearization, AcceptedHardLinearization, AcceptedNullspaceBasis, BoundId,
+    BoundStatus, CoordinateBound, CoreError, HardValidity, OperationCheckpoint,
+    OperationController, Problem, ResidualBlock, ResidualCategory, ResidualId, ResidualRowAudit,
+    SecondaryStatus, SolveReport, SolverConfig, SourceConstraint, SourceConstraintId, VariableId,
+    VariableValue,
 };
 
 /// Independent revision counters for one accepted persistent session state.
@@ -327,6 +330,69 @@ impl SolveSession {
             self.revisions,
             self.config,
         )
+    }
+
+    /// Returns the retained evaluation dimensions used to preflight one accepted hard component.
+    ///
+    /// The row count includes active and eliminated hard rows. This retained structural shape is
+    /// only an operation-envelope preflight; the controlled nullspace call independently validates
+    /// the accepted state before returning numerical evidence.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn accepted_hard_component_dimensions(
+        &self,
+        variable: VariableId,
+    ) -> Option<(usize, usize)> {
+        let component = self.plan.component_for_variable(variable)?;
+        let summary = self.plan.structural.component_summaries.get(component)?;
+        Some((
+            summary
+                .active_hard_rows
+                .saturating_add(summary.eliminated_rows),
+            summary.active_tangent_dimensions,
+        ))
+    }
+
+    /// Freshly validates and ranks only the accepted hard component containing `variable`, then
+    /// constructs its independently checked physical right-nullspace basis under the caller's
+    /// operation controller.
+    ///
+    /// `None` means either operation control stopped work or the variable has no retained hard
+    /// component. [`OperationController::is_stopped`] distinguishes those cases. No other
+    /// disconnected component is evaluated or decomposed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the selected component no longer matches the retained accepted state,
+    /// hard residual validation, or numerical-rank evidence.
+    #[doc(hidden)]
+    pub fn accepted_hard_component_nullspace_with_controller(
+        &self,
+        variable: VariableId,
+        controller: &mut OperationController,
+    ) -> Result<Option<(AcceptedHardComponentLinearization, AcceptedNullspaceBasis)>, CoreError>
+    {
+        let Some(component) = build_controlled_accepted_hard_component_linearization(
+            &self.problem,
+            &self.plan,
+            &self.report,
+            self.revisions,
+            self.config,
+            variable,
+            controller,
+        )?
+        else {
+            return Ok(None);
+        };
+        let Some(nullspace) = component
+            .right_nullspace_basis_with_controller(controller)
+            .map_err(|_| CoreError::InvalidAcceptedLinearization {
+                context: "accepted component nullspace could not be independently validated",
+            })?
+        else {
+            return Ok(None);
+        };
+        Ok(Some((component, nullspace)))
     }
 
     /// Applies a core-only transaction.
