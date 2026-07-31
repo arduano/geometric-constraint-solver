@@ -92,13 +92,14 @@ Bezier/conic/NURBS authoring and an inspectable canvas camera. Follow-up `M61-F0
 circle Tangent contact-bearing and circle/arc Normal explicitly radial while retaining the public
 direction-at-contact domain API. M61-M64 are complete and approved. M64 supersedes active-scenario
 routing and sample-specific passive-driver metadata with one ordinary workspace coordinator.
-M65 replaces that first generic stabilization cut with accepted-preview continuation, exactly one
-retained attempt per pointer sample, deterministic work/rejection evidence and an explicit bounded
-ghost/accept assembly-branch workflow. Implementation and mechanical qualification are complete;
-focused human UAT remains open.
-UAT follow-ups `M65-F001` and `M65-F002` remove recursive positive-Temporary Preference
-reoptimization, bound every projected pointer sample and make circle circumferences semantic
-center drag handles. Focused regressions pass; complete requalification and human retest remain
+M65 is the open reduced-scope predictable-dragging cut for those existing editable mechanisms. It
+replaces retry-based stabilization with one gesture-start accepted-nullspace locality plan,
+continues exactly one retained attempt per non-stale pointer sample from the complete last valid
+preview, treats stale/out-of-order work as a no-op and enforces a finite synchronous operation
+envelope. Circle circumferences remain offset-preserving semantic handles for their own centers.
+Core publication must independently validate Hard rows and every attained Temporary row; rejected
+or exhausted work retains the last valid preview. The reduced implementation and fresh
+native/WASM/release qualification completed on 2026-07-31; the four-part focused human UAT remains
 open.
 M62 follow-up `M62-F001` corrects accepted-state line-angle seeding and exposes acute-degree
 presentation while retaining the explicit directed-radian solver branch.
@@ -153,9 +154,9 @@ constraint/dimension/branch-action parity, prepared jobs, incremental scale, ope
 production topology, the advanced workbench, approved advanced UAT and approved CAD-style
 authoring, plus approved canvas constraint visualization and interaction. The previously forecast
 M62-M64 hardening sequence was withdrawn on 2026-07-29; M62-M64 were subsequently scoped,
-completed and approved. M65 is the active continuation, deterministic-performance and explicit
-assembly-branch cut. Its implementation is complete and `docs/M65_UAT.md` is the remaining
-milestone gate; no later milestone is currently scheduled.
+completed and approved. M65 is the active predictable, bounded projected-dragging cut. Its reduced
+implementation and native/WASM/release qualification are complete;
+`docs/M65_UAT.md` approval remains its milestone gate. No later milestone is currently scheduled.
 
 Durable cleanup records:
 
@@ -186,8 +187,8 @@ Durable cleanup records:
 - `docs/M63_UAT.md` (approved M63 scorecard and finding ledger)
 - `docs/M64_IMPLEMENTATION.md`
 - `docs/M64_UAT.md` (approved M64 scorecard)
-- `docs/M65_IMPLEMENTATION.md`
-- `docs/M65_UAT.md` (focused UAT candidate; human approval pending)
+- `docs/M65_IMPLEMENTATION.md` (mechanically qualified reduced-scope implementation record)
+- `docs/M65_UAT.md` (qualified candidate scorecard; human approval pending)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

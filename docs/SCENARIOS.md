@@ -250,7 +250,10 @@ Expected behavior:
   transaction removes the macro anchor and generated width/height dimensions, retains hard
   horizontal/vertical topology, reports four local DOF and changes size under a projected
   corner edit.
-- R5: rotating the A5 tangent line through its endpoint applies a transient stability target to the opposite cubic Bezier handle. The opposite handle and endpoint remain stable while the constrained handle and line satisfy contact, tangent orientation and driving length.
+- R5: rotating the A5 tangent line through its endpoint keeps independent curve freedom local
+  while the constrained handle and line satisfy contact, tangent orientation and driving length.
+  M65 supersedes the former second Temporary stability target with deterministic frozen
+  PreviousState anchors derived from the accepted hard nullspace.
 - R6: every supported constraint and dimension exposes a typed transactional editor delete
   action. Deletion removes owned hidden state, enters history only when accepted and restores
   the same persistent IDs on undo.
@@ -263,9 +266,9 @@ Expected behavior:
 - `stress-bridge`: two cubic Beziers meet through explicit End/Start contacts and aligned generic curve-curve tangency. The equal seam-handle source loads suppressed, exposing one bounded seam-sliding DOF; restoring it locks the C1 seam. A drag toward a collapsed handle projects to valid geometry, while an exact edit/import collapse rejects as degenerate and retains the accepted bridge.
 - `motion-cam`: two equal-radius circles have independent generic tangencies to a fixed quadratic
   Bezier cam. The document loads with two DOF; dragging either center makes that roller follow the
-  cam's normal-offset path while a transient stability target leaves the other roller stationary.
-  `M61-F001` directly regresses the workbench route in both directions so that this domain fixture
-  policy cannot be dropped at the headless/UI seam.
+  cam's normal-offset path while M65 locality planning leaves the other roller stationary.
+  Symmetric headless and editor regressions cover both directions without a scenario-owned driver,
+  passive-point ID or second Temporary target.
 - `motion-orbit`: a radius-1 satellite circle is externally tangent to a fixed radius-3 circle through generic curve contact with explicit opposed tangent orientation and periodic contact state. It loads with one orbital DOF; center drag follows the complete radius-4 locus while retaining the external-tangency branch.
 - `motion-trammel`: the ends of a length-5 bar slide on perpendicular bounded rails. Two nested midpoint constraints place a tracer one quarter of the way from the vertical slider, so projected drag reveals an exact ellipse without an ellipse primitive or equation in the browser.
 - `motion-scotch-yoke`: a length-5 crank rotates about a fixed center while a vertical slot shares its pin and its opposite end is restricted to a horizontal guide. Crank rotation therefore emerges as sinusoidal slider travel from only distance, vertical and fixed-coordinate constraints.
@@ -1268,9 +1271,8 @@ prepared concurrency, incremental scale and the separate operations/production-t
 companions; M60 completes the advanced workbench and M61 completes its approved advanced UAT.
 M62 completes approved CAD-style constraint/dimension authoring, and M63 completes approved
 geometry-anchored canvas constraint/dimension presentation, and M64 completes the approved editable
-purpose-based sample library. M65 is the active continuation, bounded-work and explicit
-assembly-branch UAT cut; no later
-release sequence is currently scheduled. Every new
+purpose-based sample library. M65 is the active predictable, bounded projected-dragging cut for
+those existing editable mechanisms; no later release sequence is currently scheduled. Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
 required.
@@ -1645,15 +1647,11 @@ mechanisms** grandchildren:
 | `five-stage-scissor-tower` | `MotionScissorTower` | equality/bounded `1/1` | `right_levels[0]` |
 | `peaucellier-linkage` | `MotionPeaucellier` | equality/bounded `1/1` | `input` |
 
-Canvas selection and projected point movement dispatch to the rendered scenario coordinator.
-Accepted release changes only that ephemeral candidate; save remains suppressed. Reset rebuilds
-the same public fixture and selected persistent driver. Exit reveals the ordinary coordinator
-whose canonical workspace bytes never changed.
-
-For `twin-roller-bezier-cam`, motion metadata names both active/passive directions. The scenario
-passes only the passive persistent point identity to the headless coordinator; the coordinator
-reads its current accepted position and owns the transient stability target. Thus the selected
-roller consumes one independent cam-contact freedom without allowing the other roller to wander.
+This table records the M61 replacement candidate as reviewed at that milestone. M64 subsequently
+removed preselected-driver, reset/exit and ephemeral read-only scenario behavior: current samples
+are ordinary editable workspace documents. M65 also removes the twin-roller active/passive
+metadata and second Temporary stability target. Current projected motion is sample-agnostic and
+uses the accepted-nullspace locality contract documented in M65-S1 below.
 
 Ordinary mode now exposes reusable headless construction tools for quadratic/cubic Beziers,
 ellipse, directed elliptical arc, rational quadratic conic, trimmed parabola, chosen-branch
@@ -1841,7 +1839,7 @@ The top **Samples** selector has exactly one group level:
 
 | Purpose group | Editable samples |
 | --- | --- |
-| Mechanisms | Drafting compass · 1 DOF; Bezier continuity bridge · 1 DOF; Twin-roller cam · 2 DOF; Tangent orbit · 1 DOF; Elliptic trammel · 1 DOF; Scotch yoke · 1 DOF; Rotating constraint square · 1 DOF; Scissor jack · 1 DOF; Five-stage scissor tower · 1 DOF; Peaucellier inversor · 1 DOF; Four-bar coupler · 1 DOF; Pantograph linkage · 2 DOF; Three-link drawing arm · 3 DOF; Locked elbow · open/crossed branches; Locked four-bar · open/crossed branches |
+| Mechanisms | Drafting compass · 1 DOF; Bezier continuity bridge · 1 DOF; Twin-roller cam · 2 DOF; Tangent orbit · 1 DOF; Elliptic trammel · 1 DOF; Scotch yoke · 1 DOF; Rotating constraint square · 1 DOF; Scissor jack · 1 DOF; Five-stage scissor tower · 1 DOF; Peaucellier inversor · 1 DOF; Four-bar coupler · 1 DOF; Pantograph linkage · 2 DOF; Three-link drawing arm · 3 DOF |
 | Constraints & dimensions | Constraint and dimension sampler; Tangent and radial-normal construction; Contact branch specimen; Angle and dimension annotations; Contextual constraint annotations; Dense constraint junction |
 | Curves & constructions | Construction and reference geometry; Curve family gallery; Periodic NURBS specimen |
 
@@ -1859,45 +1857,43 @@ translated sides and a diagonal midpoint, leaving two freedoms. Three-link drawi
 fixed origin and link lengths `3`, `sqrt(8)` and `sqrt(5)`, leaving three freedoms. Each has
 scale-invariant persistent roles and is directly checked at `1e-6`, `1` and `1e6`.
 
-Projected drag is sample-agnostic. M65 executes exactly one retained attempt per pointer sample,
-places the cursor Temporary target above previous-state Preferences and continues from the last
-independently accepted preview. Rejection leaves the last valid preview in place and exposes a
-typed rejection stage plus deterministic work; there is no passive-anchor retry or sample mapping.
-Temporary targets remain attempt evidence and do not enter the publication request or serialized
-workspace.
+### M65-S1 - Predictable bounded mechanism dragging
 
-The M65 deterministic path corpus deletes the Scotch-yoke horizontal guide before three
-two-freedom samples, then runs three samples each through scissor jack, five-stage scissor tower
-and pantograph. All samples accept in one attempt. Frozen `(factorizations, nonlinear iterations)`
-are Scotch yoke `(17,17)`, scissor jack `(18,18)`, tower `(24,24)` and pantograph `(33,21)`.
-Starting commit `927efb7` required pantograph `(244824,240953)`. The twin-roller fixture separately
-proves that dragging one roller does not move the other, that a rejected sample retains the last
-valid preview, and that a later valid sample continues from it.
+Projected drag remains sample-agnostic. At gesture start, the headless sketch layer derives an
+opaque locality plan from the independently accepted hard nullspace. The selected point's rank
+covers the motion it can control; deterministic point anchors cover only remaining passive
+mobility. Anchor targets are the accepted visible positions at gesture start. The selected cursor
+is the only Temporary target, planned anchors are the only PreviousState Preferences, and neither
+sample keys nor presentation code choose a passive point.
 
-`M65-F001` adds three natural cursor samples away from the pantograph input's exact fixed-radius
-path. They accept at total `(2155,2121)` factorization/nonlinear work instead of the reproduced
-`(120210,118679)`. `M65-F002` makes each twin-roller circumference a semantic handle for its own
-center, preserves the initial pointer offset, caps each projected sample at 2,048 factorizations
-and nonlinear iterations, and directly checks bounded difficult-target rejection followed by
-valid continuation recovery. These are generic headless editor/solver contracts, not sample-key
-special cases.
+Each non-stale pointer sample performs exactly one retained attempt from the complete last
+independently accepted preview. A rejected or exhausted sample retains that preview bit-for-bit;
+a later valid sample can recover in the same gesture. Stale and out-of-order request IDs do
+nothing. Circle circumference picking resolves to that circle's own center and retains the
+gesture-start pointer offset.
 
-Two additional ordinary editable leaves exercise explicit assembly branches:
+The direct path corpus is table-driven:
 
-- `locked-elbow-branches`: two fixed endpoints and two fixed link lengths leave a discrete
-  open/crossed elbow choice but no ordinary motion. Selecting the elbow permits a bounded ghost
-  proposal and atomic accept/cancel.
-- `locked-four-bar-branches`: the existing open four-bar receives a fixed input crank, leaving
-  open/crossed output assembly modes for explicit preview. The original one-DOF four-bar remains
-  unchanged.
+| Existing editable sample | Required paths and assertions |
+| --- | --- |
+| Scotch yoke | Delete the horizontal guide, then exercise horizontal, vertical, diagonal and reversal paths through the two-DOF point without an unrelated valid-root jump. |
+| Scissor jack and five-stage tower | Exercise opening/closing reversals; accepted previews stay locally continuous and all work remains inside the projected-sample envelope. |
+| Pantograph | Drive input, guide, output and center independently. A point whose active rank covers all hard mobility needs no anchor; otherwise deterministic anchors cover only passive mobility. |
+| Twin-roller cam | Drive both rollers separately through horizontal, vertical, diagonal and reversal paths. The passive center moves by at most `1e-8`; a difficult rejected target retains the full last preview and a later valid target recovers in the same gesture. |
+| Circle handle offset | Press away from a circumference's center and verify that the semantic center moves without snapping the cursor to it. |
 
-The search uses eight canonical directions at radii `0.5`, `1` and `2` for at most 24 seeds.
-Only finite independently accepted candidates with unchanged DOF, normalized hard residual at
-most `1e-9`, exact design/accepted stamps and persistent line-branch directions may be offered.
-No alternative, ambiguity, unrepresentable state and exhausted work are explicit outcomes.
-Ghosts are non-authoritative until Accept; Cancel and stale acceptance are atomic no-ops.
+Lifecycle coverage releases an accepted preview as one independently validated history edit,
+cancels without mutation, exercises Undo/Redo, and delivers late/stale queued results after
+release or a newer request. Ordinary constraint authoring and workspace save/reload remain
+unchanged. One integrated regression authors through the headless adapter, round-trips the real
+workspace envelope, restores the same persistent constraint and proves it remains editable.
 
-`docs/M64_UAT.md` records the approved focused human scorecard.
+Every sample uses the same synchronous operation limits: `16,384` each validation, dependency and
+lowering items; `256` each nonlinear iterations, factorizations and rank kernels; `512` rejected
+trials; `1,024` component linearizations; `256 × 256` dense kernels; `512` diagnostic candidates;
+and `1,024` diagnostic trials. Exhaustion is a typed rejection, never partial publication.
+
+`docs/M65_UAT.md` owns the focused human scorecard for this active cut.
 
 ## Frozen near-singular fixtures
 

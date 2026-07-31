@@ -1,158 +1,220 @@
-# M65 implementation: continuation, bounded work and explicit assembly branches
+# M65 implementation: predictable bounded projected dragging
 
-Status: implementation and mechanical qualification complete; focused human UAT pending.
+Status: active. The reduced-scope implementation and mechanical qualification completed on
+2026-07-31. Focused supervising-human UAT is pending.
 
-## Files and public API
+## Scope
 
-`geosolve-constraint-editor` now owns:
+M65 has one goal: predictable, synchronously bounded projected dragging for the existing editable
+mechanism samples.
 
-- `ProjectedDragWorkEvidence` and `ProjectedDragRejectionStage`;
-- one accepted-preview continuation chain per pointer/point/design;
-- bounded alternate-branch search through `propose_alternate_branch`,
-  `alternate_branch_proposal`, `cancel_alternate_branch` and
-  `accept_alternate_branch`;
-- `AlternateBranchSearchResult`, status/evidence/proposal DTOs and the public
-  `ALTERNATE_BRANCH_MAX_SEEDS = 24`;
-- `visible_preview_session`, which gives presentation adapters the independently accepted
-  branch ghost before an ordinary drag preview;
-- a deterministic interactive ceiling of 2,048 nonlinear iterations and factorizations per
-  pointer sample, with exhaustion exposed as a controlled-operation rejection;
-- semantic circle-to-center drag handles and pointer-offset-preserving gestures, so dragging a
-  circumference moves its center without a cursor jump.
+The selected control should follow the cursor on its current local configuration, mathematically
+independent passive controls should remain stationary, and ordinary dragging must not choose a
+different assembly branch implicitly. Rejected or exhausted work preserves the complete last
+independently accepted preview, and a later valid sample may recover in the same gesture.
 
-`geosolve-sketch` adds:
+Stability and understandable UX take priority over throughput. Performance remains a requirement
+through a finite operation envelope, not through a frozen wall-clock or machine-specific work
+comparison.
 
-- stable `SketchSolveWorkSummary`;
-- controlled reattempt seeded from an independently accepted preview while retaining the
-  authoritative base accepted-state provenance;
-- exact preview publication for a point plus persistent line-branch edits;
-- persistent line branch getters/setters and atomic branch edit DTOs;
-- reusable `BranchLockedElbow` and `BranchFourBar` alpha scenarios.
+M65 explicitly excludes:
 
-The sole workbench adds a selected-point **Assembly branch** inspector, Preview/Accept/Cancel
-actions, bounded-search evidence and a gold dashed non-authoritative ghost. It consumes only the
-public headless/session APIs. No equation, seed search or branch inference moved into WASM.
+- alternate-assembly branch search, ghost previews, accept/cancel branch UI and branch-only
+  samples;
+- sample IDs or browser-owned driver/anchor policy;
+- new residual families or relaxed Hard/Temporary validation;
+- weighted least squares as a priority substitute;
+- global root enumeration, worker architecture or a new persistence language.
 
-## Mathematical and lifecycle behavior
+## 1. Files and APIs added or changed
 
-Each ordinary pointer sample executes one retained attempt. The cursor target is Temporary and
-accepted previous coordinates are Preferences. A consecutive sample is seeded from the last
-independently accepted preview, not the committed document. A failed sample retains that preview;
-the next valid sample continues from it. Release publishes the exact preview seed through a
-separate independently validated retained solve and creates one Undo checkpoint.
+The implementation is divided by owner:
 
-Core retains the strict Hard → Temporary → Preference hierarchy. For a small dense component that
-also owns movable Preference stabilizers, it may first try hard rows plus Temporary rows as an
-exact feasibility candidate. That candidate is accepted as a zero-cost Temporary optimum only
-after separate finite derivative evaluation, ordinary hard validation and Temporary residual
-validation. Temporary-only construction edits retain the established general lexicographic path.
-Preferences protect the complete zero-like Temporary row space and remain inside the reported
-normalized numerical-resolution envelope. Tiny nonzero Temporary objectives still optimize,
-infeasible Temporary levels use the general optimizer, and `SparsePreferred` retains its
-established sparse hard-reprojection evidence. This is not weighted least squares and does not
-relax hard success.
+- `crates/geosolve-core/src/linearization.rs` exposes controlled accepted-hard component
+  nullspace evidence without changing rank policy.
+- `crates/geosolve-core/src/solver.rs` and `src/session.rs` independently certify publishable
+  Hard/Temporary state, reject invalid terminal/audit evidence and protect the complete positive
+  Temporary vector on the single-component dense path.
+- `crates/geosolve-core/tests/m5_priority.rs` and `tests/m10.rs` cover positive-row preservation,
+  separable Preference motion, invalid terminal/audit publication, exact-state mismatch and
+  invalid evaluator certification.
+- `crates/geosolve-sketch/src/compiler.rs`, `src/session.rs`, `src/document_session.rs` and
+  `src/document_lowering.rs` implement controlled locality planning, exact transient objective
+  lowering, accepted-preview continuation and bounded exact release.
+- `crates/geosolve-sketch/src/lib.rs` exports the opaque `DocumentDragLocalityPlan`; consumers can
+  inspect only passive-DOF and anchor-count evidence, not solver matrices or anchor identities.
+- `crates/geosolve-sketch/tests/m34_lifecycle.rs` and `tests/m65_locality.rs` cover frozen accepted
+  targets, symmetric continuation, deterministic greedy ordering/minimal cover and the exact
+  cursor/anchor objective inventory.
+- `crates/geosolve-constraint-editor/src/lib.rs` stamps gesture epochs, preserves circle-handle
+  offsets and classifies stale/untracked projected results.
+- `crates/geosolve-constraint-editor/src/coordinator.rs` owns press-time planning, exactly one
+  controlled attempt per sample, last-valid-preview retention, work evidence and controlled exact
+  release. Its inline tests own the representative mechanism, lifecycle, stale-result and literal
+  envelope corpus.
+- `crates/geosolve-demo-web/src/workbench/mod.rs` routes pointer-down through the coordinator so
+  the plan is captured from the exact visible accepted state.
+- `crates/geosolve-demo-web/src/workbench/persistence.rs` directly qualifies authoring through
+  workspace encode/decode/restore and subsequent editing.
+- `crates/geosolve-sketch/src/alpha_scenarios.rs`,
+  `crates/geosolve-demo-web/src/workbench/samples.rs`, the related M14/M30 tests and workbench
+  HTML/CSS remove the discarded branch-search prototype and its two branch-only samples. The
+  ordinary M64 sample catalog otherwise remains unchanged.
 
-The previous pantograph explosion came from a positive-cost stationary Temporary pass followed by
-recursive Preference trial reprojections. The exact-feasibility candidate reaches an attainable
-cursor target directly. For an ordinary off-manifold target, a lower Preference trial now retracts
-Hard rows together with the attained scalar Temporary cost level instead of recursively optimizing
-Temporary again. A trial that cannot preserve that level returns to the independently validated
-attained state and terminates the lower level truthfully as `SecondaryStatus::Acceptable`.
-Constant-positive-cost manifolds remain free for Preference motion because the protected equation
-is the scalar objective level, not a frozen residual vector. Zero-like Preference trials continue
-to retract Hard and complete Temporary rows together.
+The public surface added for M65 is intentionally small: an opaque
+`DocumentDragLocalityPlan`, controlled retained-session plan/attempt/release methods, coordinator
+pointer-down ownership and typed projected-drag work/rejection evidence. No alternate-branch DTO,
+search API, sample policy or persisted field is part of the reduced candidate.
 
-Alternate branch search is explicit and bounded. It checks eight canonical directions at radii
-`0.5`, `1` and `2`, for at most 24 seeds. A proposal requires:
+`geosolve-sketch` owns an opaque, gesture-local drag-locality plan derived from the independently
+accepted hard nullspace. Its public surface remains small: presentation consumers do not receive
+nullspace vectors, solver matrices or a policy they can reinterpret.
 
-- exact design and accepted-state stamps;
-- finite independently accepted geometry;
-- normalized hard residual `<= 1e-9`;
-- unchanged degrees of freedom;
-- a distinct point position and persistent line-branch directions.
+The planner:
 
-Zero alternatives, multiple distinct alternatives, unrepresentable geometry and exhausted work
-are separate outcomes. A proposal is a ghost only. Accept atomically publishes the point and
-branch directions; Cancel and stale acceptance mutate nothing. Undo/Redo and replay include the
-accepted branch transaction.
+1. measures the active point's rank in the accepted hard nullspace;
+2. computes the passive mobility not covered by that active rank;
+3. considers ordinary accepted points in compile order;
+4. chooses anchors by greatest new rank gain, then lower point mobility rank, then compile order;
+5. captures those anchor targets from gesture-start accepted visible geometry.
 
-## Deterministic evidence
+The solve request compiles the cursor point as the sole Temporary target and only the planned
+anchors as PreviousState Preferences. Numerical seeds may advance between samples; the locality
+targets do not.
 
-Starting commit `927efb7` recorded pantograph drag work of:
+`geosolve-constraint-editor` owns the gesture lifecycle:
 
-| Corpus | Factorizations | Nonlinear iterations |
-| --- | ---: | ---: |
-| Pantograph at start | 244824 | 240953 |
+- pointer ID and monotonically increasing request ID;
+- active semantic point, including circle-circumference-to-center mapping and initial pointer
+  offset;
+- exact design and accepted identity at gesture start;
+- the opaque locality plan;
+- the complete last independently accepted preview;
+- typed outcome/work evidence for the latest non-stale sample.
 
-The frozen final three-sample corpus records:
+The web workbench consumes these headless results. It does not select anchors, retry candidates,
+inspect solver matrices or duplicate equations.
 
-| Corpus | Factorizations | Nonlinear iterations |
-| --- | ---: | ---: |
-| Scotch yoke after guide deletion | 17 | 17 |
-| Scissor jack | 18 | 18 |
-| Five-stage scissor tower | 24 | 24 |
-| Pantograph | 33 | 21 |
+## 2. Mathematical behavior implemented
 
-Every sample accepts with exactly one retained attempt. Pantograph is below twice the tower work
-in both counters and improves by more than 99.9% from the starting commit. Wall-clock time is not
-an acceptance metric.
+Every non-stale pointer sample executes exactly one retained attempt. The first sample starts from
+the authoritative accepted state; later samples continue from the complete last independently
+accepted preview. Rejection and operation exhaustion do not replace that preview. A request whose
+ID is stale or out of order is a no-op and cannot overwrite newer geometry.
 
-UAT follow-up uses natural cursor targets away from the pantograph input's fixed-radius manifold.
-The three samples accept at `(392,382)`, `(1407,1391)` and `(356,348)`, totaling `(2155,2121)`
-instead of the reproduced `(120210,118679)`. Every pointer sample is also independently capped at
-2,048 factorizations and nonlinear iterations. A difficult twin-roller target rejects at bounded
-work while retaining its last valid preview, and a subsequent valid target resumes the same
-continuation chain.
+The core retains strict Hard → Temporary → Preference semantics:
 
-## Direct acceptance coverage
+- a success-like result independently validates every Hard row;
+- on the single-component dense path, a positive Temporary attainment captures and independently
+  re-evaluates the complete normalized residual vector;
+- Preference processing on that path may publish only a finite candidate that preserves every
+  entry of the certified vector within
+  `max(min(normalized_residual_tolerance, normalized_step_tolerance), 8 * f64::EPSILON)`;
+- the `8 * f64::EPSILON` floor is solely the machine reproducibility band for comparing an
+  already attained positive Temporary vector after Preference work; Hard validation and
+  Temporary attainment keep their configured tolerances unchanged;
+- coupled-priority solving remains unchanged and continues to protect scalar attained Temporary
+  levels;
+- failure to preserve the applicable vector or scalar level retains the independently certified
+  attained state or rejects; raw post-Temporary numerical drift is never authoritative;
+- accepted and no-motion report reconstruction rejects invalid-geometry or numerical-failure
+  termination and requires successful audit-row evaluation; truthfully non-optimal secondary
+  termination remains separate from independently valid Hard geometry.
 
-- accepted preview continuation, base provenance and exact final commit;
-- stale, foreign, provenance-mismatched, nonaccepted and point-mismatched preview rejection;
-- atomic no-mutation failure behavior;
-- twin-roller independence plus rejection/recovery continuation;
-- both circle circumferences resolving to their own semantic center gesture without pointer jump;
-- difficult roller projection bounded before valid continuation recovery;
-- Scotch-yoke two-DOF, scissor, tower and pantograph work corpus;
-- natural off-manifold pantograph input motion with accepted bounded work;
-- zero-like Temporary row-space protection and bounded nonlinear rank-deficient work;
-- positive Temporary scalar-level preservation without recursive reoptimization;
-- tiny nonzero secondary objectives and sparse/dense backend parity;
-- bounded branch ghost, exact stamps, persistent branch publication, stale rejection,
-  Undo/Redo and replay;
-- every sample builds an accepted coordinator and both branch samples produce proposals.
+The retained rank-aware pointer solve uses only the minimal `2 × N` active-point response needed
+for locality planning; it does not broaden the priority architecture.
 
-## Commands and outcomes
+Release independently validates and publishes the exact last preview as one ordinary history edit.
+Cancel publishes nothing. Undo/Redo operate on the resulting ordinary edit. Transient cursor and
+anchor objectives never enter persisted design intent.
 
-Focused and final commands:
+### Projected-sample operation envelope
+
+Every projected sample uses the same finite limits:
+
+| Operation counter | Limit |
+| --- | ---: |
+| Document validation items | 16,384 |
+| Document dependency items | 16,384 |
+| Document lowering items | 16,384 |
+| Nonlinear iterations | 256 |
+| Factorizations | 256 |
+| Rank kernels | 256 |
+| Rejected trials | 512 |
+| Component linearizations | 1,024 |
+| Dense kernel rows | 256 |
+| Dense kernel columns | 256 |
+| Diagnostic candidates | 512 |
+| Diagnostic trials | 1,024 |
+
+Crossing any limit is a controlled rejection. It preserves the last valid preview and must not
+partially publish design, accepted geometry, history or audit state.
+
+### Direct coverage
+
+The mechanically qualified candidate directly covers:
+
+- both twin rollers across horizontal, vertical, diagonal and reversal paths, with passive-center
+  movement `<= 1e-8`;
+- a difficult twin-roller rejection followed by valid same-gesture recovery;
+- pantograph input, guide, output and center;
+- Scotch-yoke dragging after deletion of its horizontal guide, including reversals;
+- scissor jack and five-stage tower continuity;
+- semantic circle-center dragging with a nonzero pointer offset;
+- release, cancel, Undo and Redo;
+- late, duplicate and out-of-order queued results;
+- ordinary constraint authoring plus workspace save/reload;
+- core rejection of invalid Hard/Temporary publication and invalid accepted/no-motion reports.
+
+No exact work totals or percentage improvement become a compatibility baseline. The finite envelope
+is normative; wall-clock and detailed counters are diagnostic characterization only.
+
+## 3. Exact commands run and outcomes
+
+The integrated reduced candidate ran:
 
 ```text
-nix-shell shell.nix --run 'cargo test -p geosolve-sketch --test m12'
-nix-shell shell.nix --run 'cargo test -p geosolve-sketch --test m30'
-nix-shell shell.nix --run 'cargo test -p geosolve-core --test m5_priority'
-nix-shell shell.nix --run 'cargo test -p geosolve-core --test m16'
-nix-shell shell.nix --run 'cargo test -p geosolve-constraint-editor off_manifold_pantograph_cursor_path_is_accepted_with_bounded_work'
-nix-shell shell.nix --run 'cargo test -p geosolve-constraint-editor difficult_twin_roller_projection_is_bounded_and_recovery_retains_continuation'
-nix-shell shell.nix --run 'cargo test -p geosolve-constraint-editor circle_circumferences_drag_their_semantic_centers_without_pointer_jump'
-nix-shell shell.nix --run 'cargo test -p geosolve-constraint-editor deterministic_mechanism_drag_corpus_has_one_attempt_per_sample'
 nix-shell shell.nix --run 'cargo fmt --all -- --check'
 nix-shell shell.nix --run 'cargo clippy --locked --workspace --all-targets --all-features -- -D warnings'
-nix-shell shell.nix --run 'cargo test --locked --workspace --all-features --quiet'
+nix-shell shell.nix --run 'cargo test --locked --workspace --all-features'
 nix-shell shell.nix --run 'cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown-unknown'
-nix-shell shell.nix --run 'cd crates/geosolve-demo-web && env NO_COLOR=true trunk build --release'
+cd crates/geosolve-demo-web
+nix-shell ../../shell.nix --run 'env NO_COLOR=true trunk build --release'
 git diff --check
 ```
 
-All commands pass on the final source state. The full M12 scale corpus validates the exact
-Hard+Temporary machine-roundoff envelope at `1e-6`, `1` and `1e6`. The complete M30 construction
-suite proves that Temporary-only offset, mirror and fillet drags retain their established
-associated-motion behavior. The frozen mechanism corpus retains `(17,17)`, `(18,18)`, `(24,24)`
-and `(33,21)` work evidence.
-The same complete format, warnings-denied Clippy, locked all-feature workspace, WASM and release
-Trunk gates pass after `M65-F001`/`M65-F002` at code source `eee2134`.
+Outcome (2026-07-31): all commands pass. The locked all-feature workspace suite passes with only
+the pre-existing explicitly ignored manual measurement/release-performance tests; all executed
+unit, integration and doc tests pass. Trunk 0.21.14 emits a successful optimized distribution.
+The Cargo manifest warning that both `license` and `license-file` are present is pre-existing
+metadata advice and is not a warnings-denied Rust/Clippy failure.
 
-## Known limitations and next blocker
+Qualified code source: `42d55b1`, with core certification prerequisite `f647318`. The exact code
+is served for focused UAT at `http://100.94.63.83:8080/`.
 
-- Search is a bounded representable-alternative prototype, not global root enumeration.
-- Only persistent line-branch directions can currently represent an accepted assembly switch.
-- Ordinary drag deliberately retains its branch; changing branch requires the explicit action.
-- M65 cannot close until the supervising human approves `docs/M65_UAT.md`.
+## 4. Acceptance criteria passed
+
+The following objective acceptance areas pass:
+
+- deterministic gesture-start locality planning and exact transient objective ownership;
+- single-attempt continuation, rejection/exhaustion retention, recovery and stale-result no-ops;
+- symmetric offset-preserving twin-roller interaction and representative mechanism paths;
+- independently certified Hard/positive-Temporary publication and invalid-report rejection;
+- the literal synchronous operation envelope, including press planning and exact release;
+- release/cancel/Undo/Redo plus authoring/workspace/editability lifecycle;
+- formatting, warnings-denied Clippy, native tests, WASM, release Trunk and diff hygiene.
+
+The four `docs/M65_UAT.md` scorecard items remain Pending. The discarded prototype does not supply
+acceptance evidence for this candidate.
+
+## 5. Known limitations or next blocker
+
+- M65 guarantees local predictable behavior only for the existing editable mechanism sample
+  surface and directly covered ordinary authoring/lifecycle flows.
+- It does not provide an explicit command for changing assembly branch.
+- Bounded rejection is an expected truthful outcome for a target that cannot be reached inside
+  the current local configuration and operation envelope.
+- The withdrawn broader prototype remains recoverable only on
+  `recovery/m65-f003-overbuilt-20260731`; none of its branch-search UI or samples is in `main`.
+- M65 remains open until the supervising human explicitly approves `docs/M65_UAT.md` and any UAT
+  finding receives a tested disposition.

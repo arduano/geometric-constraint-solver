@@ -19,11 +19,15 @@ M46-M53 preserves released v1-v4 wire compatibility and the accepted-state safet
 while evolving the new pre-1.0 editor/workbench surface. M61 closes the currently approved
 advanced-workbench scope, M62 closes approved CAD-style authoring and M63 closes approved canvas
 constraint presentation. Approved M64 adds only public alpha fixtures and an explicit
-interaction-request preference helper; it does not freeze a new schema. M65 is an empty
-core-hardening/performance placeholder, so no API/schema hardening requirement is yet scheduled.
-Any draft-v5 representation remains explicitly unsupported until a future schema-freeze milestone
-is deliberately scoped, qualified and approved, and must not be treated as a released wire
-language.
+interaction-request preference helper; it does not freeze a new schema. M65 is the active
+predictable, bounded projected-dragging cut. Its reduced implementation and mechanical
+qualification are complete while focused human UAT remains open; it does not freeze a new
+persistence language or claim final API/schema hardening. The unreleased M61
+`DocumentSolveRequest::stability_target` field and helper were withdrawn before the next
+published minor release because a sample-selected second Temporary target conflicts with M65's
+sample-agnostic locality contract; neither API was part of the published `0.2.0` surface. Any
+draft-v5 representation remains explicitly unsupported until a future schema-freeze milestone is
+deliberately scoped, qualified and approved, and must not be treated as a released wire language.
 
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.

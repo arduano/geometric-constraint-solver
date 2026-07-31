@@ -25,9 +25,11 @@ advanced constructions, generic fillets and persistent trim views, interactive
 construction/NURBS UAT and certified all-family visual profiles.
 
 - **Baseline:** implemented and accepted behavior through M64. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology; M59 adds the read-only production-topology companion with exact accepted-input provenance and fail-closed completeness; M60 exposes the advanced curves, explicit NURBS branches, companion operations, production topology and versioned desktop workspace through the sole directly tested workbench; M61 completes approved supervising-human advanced geometry/topology UAT after targeted remediation; M62 completes approved CAD-style constraint and dimension authoring; M63 completes approved geometry-anchored canvas constraint and dimension presentation; M64 completes the approved editable sample-library cleanup and 1/2/3-DOF fixture cut. M1-M7 remain the frozen regression baseline.
-- **Active target:** M65 implementation is complete and awaiting focused human UAT. It owns
-  accepted-preview drag continuation, deterministic work evidence, bounded exact-stamped
-  alternate-branch proposals and the rank-deficient zero-feasibility priority correction.
+- **Active target:** M65 is the open predictable, bounded projected-dragging cut. Its reduced scope
+  is gesture-local accepted-nullspace locality, last-valid-preview continuation, one retained
+  attempt per non-stale sample, strict independently validated core publication and a finite
+  synchronous operation envelope. The implementation and mechanical qualification are complete;
+  focused supervising-human UAT remains.
 - **Planned sequence:** none beyond M65; every newly scoped milestone will
   end in its own human UAT.
 
@@ -299,39 +301,49 @@ toolbar, option parsing, SVG markup and event normalization. Invalid conic/NURBS
 topology reject before publication, and a NURBS gauge always names a weight exactly equal to one.
 
 M64 supersedes M61's temporary active-scenario interaction boundary. Samples have no preselected
-driver or drag metadata. M65 removes the passive-anchor retry from that generic path. The sole
-retained coordinator issues exactly one retained solve attempt for each pointer sample, ranks the
-cursor Temporary target above accepted previous-state Preferences, and continues the next sample
-from the last independently accepted preview. A rejected or ambiguous sample leaves that preview
-visible and authoritative for further continuation; it never jumps to a different root merely
-because a later seed sorted first. Stable work evidence reports attempt count, continuation,
-rejection stage, hard/priority iterations and deterministic operation counters. Exact preview
-release retains only the point-position edit; transient targets remain attempt evidence and are
-absent from the publication request. Canvas camera state remains web-only.
+driver or drag metadata. M65 keeps that ordinary sample-agnostic boundary and replaces retry-based
+stabilization with one opaque gesture-local plan derived by `geosolve-sketch` from the
+independently accepted hard nullspace. The active point's nullspace response establishes active
+rank; only uncovered passive mobility is anchored. Candidate points are chosen by greatest rank
+gain, then lower mobility rank, then compile order. Anchor coordinates are captured from the
+gesture-start accepted visible geometry, not from advancing numerical seeds.
 
-For feasible zero-cost Temporary levels on small dense components, core first attempts an
-augmented hard-plus-Temporary feasibility solve, then independently validates ordinary hard rows
-and the Temporary rows before publishing that state as the lexicographic optimum. Lower
-Preferences protect the complete zero-like Temporary Jacobian row space and may move only within
-the documented normalized numerical-resolution envelope. Tiny nonzero Temporary objectives are
-still optimized, sparse-backend evidence retains the established hard reprojection path, and
-non-feasible levels fall back to the general priority optimizer. This is neither weighted least
-squares nor relaxed hard convergence.
+The compiler receives the cursor point as the sole Temporary target and the selected anchors as
+the sole PreviousState Preferences. The plan remains presentation-independent and contains no
+sample identity. Circle circumference gestures map to their document-owned center while retaining
+the initial pointer offset. This architecture permits geometry required by the active mechanism to
+move while holding mathematically independent passive controls stationary.
 
-For a positive attained Temporary level, lower Preference trials retract directly onto the
-nonlinear scalar Temporary-cost level together with Hard rows. They never recursively invoke the
-Temporary optimizer. Failure to preserve that level retains the independently validated attained
-state and yields only an `Acceptable` lower-priority result. Constant-cost manifolds remain
-available because the scalar level, not the residual vector, is protected. The headless
-coordinator additionally caps synchronous projected work and maps a circle circumference gesture
-to its document-owned center point while preserving the initial pointer offset.
+The retained coordinator owns pointer identity, monotonically increasing request identity,
+design/accepted identity, the locality plan and the complete last independently accepted preview.
+Each non-stale sample executes exactly one retained attempt from that preview. Rejection or
+operation exhaustion leaves the entire preview unchanged; a subsequent valid sample may recover
+in the same gesture. A stale or out-of-order sample is a no-op. Release independently validates
+and publishes the exact preview as one ordinary history edit; Cancel publishes nothing. Transient
+targets remain attempt evidence and never enter persisted design intent. Canvas camera state
+remains web-only.
 
-Assembly-mode exploration is a separate explicit action. The coordinator inspects at most 24
-canonical point seeds against exact design/accepted stamps, offers only finite independently
-accepted alternatives representable by persistent line branch directions, and keeps the selected
-result as a non-authoritative ghost. Accept publishes the point and branch directions atomically;
-cancel, stale, ambiguous, exhausted and unrepresentable outcomes leave design and history
-unchanged.
+Core priority handling may publish only a finite candidate that independently validates Hard rows
+and the applicable attained-Temporary contract. On the single-component dense path, a positive
+Temporary attainment is protected as its complete normalized residual vector: Preference work may
+publish only after freshly preserving every vector entry within
+`max(min(normalized_residual_tolerance, normalized_step_tolerance), 8 * f64::EPSILON)`.
+That machine reproducibility floor compares the post-Preference vector with the independently
+attained positive Temporary vector; it does not relax Hard validation or turn an unsatisfied
+Temporary target into convergence.
+Coupled-priority solving is unchanged and continues to protect each scalar attained Temporary
+level. Failure rejects or retains the certified attained state rather than exposing raw
+post-Temporary drift. Accepted and no-motion report construction rejects invalid-geometry or
+numerical-failure termination and requires successful audit-row evaluation; a truthfully
+non-optimal secondary `Stalled` or `IterationLimit` status remains distinct from independent Hard
+validity. These requirements do not replace
+Hard/Temporary/Preference ordering with weights or relax success tolerances.
+
+One projected sample is synchronously bounded to `16,384` each validation, dependency and lowering
+items; `256` each nonlinear iterations, factorizations and rank kernels; `512` rejected trials;
+`1,024` component linearizations; `256 × 256` dense kernels; `512` diagnostic candidates; and
+`1,024` diagnostic trials. Exhaustion is an ordinary typed rejection retaining the last valid
+preview. M65 adds no alternate-assembly search, preview UI or fixture.
 
 ## 4. Numerical representation and linearization
 
@@ -525,6 +537,13 @@ Hard, temporary and preference rows are different categories, not weights in one
 3. optimize previous-state preferences without worsening the attained temporary level beyond documented numerical resolution;
 4. independently validate hard rows and report each secondary outcome.
 
+M65 refines step 3 only for the single-component dense path: a positive attained Temporary
+residual vector is preserved component by component within
+`max(min(normalized_residual_tolerance, normalized_step_tolerance), 8 * f64::EPSILON)`, while
+separable Preference motion remains permitted when that vector is unchanged within that
+reproducibility band. This is not a Hard acceptance-tolerance change. Coupled-priority solving
+retains its existing scalar attained-level semantics.
+
 Bounds participate through the M10 active-set policy. Secondary objectives spanning hard components are implemented in M16 without merging hard components or weakening hard tolerance.
 
 ## 10. Manifold and frame conventions
@@ -661,6 +680,6 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   shared CAD SVG icon presentation and a dedicated human UAT.
 - M64: completed and approved editable sample-library cleanup with purpose grouping, ordinary
   persistence/editing and directly qualified 1/2/3-DOF mechanism examples.
-- M65: implementation complete; accepted-preview continuation, one-attempt drag work evidence,
-  bounded explicit alternate branches, two editable branch fixtures and rank-deficient
-  priority/performance correction await focused human UAT.
+- M65: active predictable, bounded projected dragging for the existing editable mechanism
+  samples; reduced-scope implementation and native/WASM/release qualification are complete, while
+  focused supervising-human UAT remains open.

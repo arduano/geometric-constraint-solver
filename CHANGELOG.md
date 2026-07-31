@@ -68,6 +68,9 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   conic/topology/gauge options and public-curve previews.
 - Cursor-anchored wheel zoom, middle-drag pan, explicit zoom/Fit controls and scale feedback for
   ordinary and scenario canvas inspection.
+- An opaque accepted-hard-nullspace `DocumentDragLocalityPlan` for gesture-local projected
+  dragging. It exposes only passive-DOF and anchor-count evidence while keeping solver matrices
+  and anchor policy inside `geosolve-sketch`.
 
 ### Changed
 
@@ -78,8 +81,9 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   forecast as M54-M64, with a dedicated M55 alpha constraint/dimension/branch-action parity gate
   inserted before concurrency and scale; the roadmap-reset entry below supersedes that forecast.
 - Closed M61 with explicit supervising-human approval for its recorded advanced-workbench scope.
-  The previously forecast M62-M64 hardening sequence is removed; M62 is now an intentionally
-  unscoped placeholder, and every newly scoped milestone will end in its own UAT.
+  At that checkpoint the previously forecast M62-M64 hardening sequence was removed and M62 was
+  left intentionally unscoped. M62-M64 were subsequently scoped, completed and individually
+  approved; every newly scoped milestone continues to end in its own UAT.
 - Completed the M46 ownership freeze: every old M14/M40/M44 browser/static assertion and
   legacy inline test has a named direct-test owner or reviewed retirement, while no old
   fixture, E2E script or playground code was deleted early.
@@ -154,6 +158,36 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   alignment, while Perpendicular / Normal constrains the circle or arc centre onto the selected
   line. Direction-only line/curve Parallel/Perpendicular dispatch is no longer exposed, and a
   reusable circle-relations scenario demonstrates both geometric meanings.
+- Completed M62 with selection-sensitive CAD-style relation/dimension authoring owned by the
+  headless editor, including repeated authoring modes, acute-degree angle seeding and direct
+  coverage of every exposed resolution path.
+- Completed M63 with stable geometry-anchored constraint/dimension annotations, occurrence-level
+  proximity and picking, contextual hover corridors, density fan-out, right-angle geometry and
+  shared accessible CAD icons.
+- Completed M64 by reducing samples to ordinary editable workspace documents grouped by purpose,
+  removing guide/reset/transcript/read-only behavior and directly qualifying representative
+  one-, two- and three-DOF mechanisms.
+- M65 replaces the M61 twin-roller special case with sample-agnostic locality planning from the
+  independently accepted hard nullspace. The cursor is the sole Temporary target; deterministic
+  frozen PreviousState anchors cover only passive mobility, and accepted previews continue and
+  release without a sample-owned driver or retry policy. Each non-stale sample performs one
+  bounded retained attempt, rejected/exhausted work keeps the full last accepted preview, stale
+  results are no-ops, circle handles preserve their pointer offset and exact release uses the same
+  finite operation envelope.
+- M65 independently certifies Hard publication and, on the single-component dense path, preserves
+  every attained positive Temporary row through Preference work within
+  `max(min(normalized_residual_tolerance, normalized_step_tolerance), 8 * f64::EPSILON)`. The
+  reproducibility floor does not relax Hard or Temporary acceptance.
+
+### Removed
+
+- Withdrew the unreleased `DocumentSolveRequest::stability_target` field and
+  `with_stability_target` helper before the next published minor release. They encoded a second
+  sample-selected Temporary target and are superseded by the opaque accepted-state
+  `DocumentDragLocalityPlan`.
+- Removed the discarded alternate-assembly search/proposal UI and its two branch-only samples
+  from the reduced M65 candidate. Explicit branch state remains authoritative; automatic branch
+  search is not part of M65.
 
 ## [0.2.0] - 2026-07-22
 

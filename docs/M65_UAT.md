@@ -1,118 +1,102 @@
 # M65 focused UAT
 
-Status: mechanically qualified candidate available; supervising-human approval pending.
+Status: mechanically qualified reduced-scope candidate available; supervising-human approval is
+pending.
 
-Candidate code source: `eee2134` (with positive-Temporary prerequisite `fc88264`).
+Candidate code source: `42d55b1` (with core certification prerequisite `f647318`).
 
 Tailscale endpoint: `http://100.94.63.83:8080/`
 
-Use the ordinary workbench at that endpoint. This is a focused human usability/behavior check
-after direct native, WASM and release qualification. It is not a replacement for those tests.
+Use only the ordinary workbench candidate recorded above once it is available. This scorecard is a
+focused human behavior check after direct native, WASM and release qualification; it does not
+replace those gates.
+
+Mechanical qualification (2026-07-31): formatting, warnings-denied locked workspace Clippy,
+locked all-feature workspace tests, the all-feature `wasm32-unknown-unknown` check, the optimized
+Trunk 0.21.14 release bundle and `git diff --check` pass. A verified GET from the Tailscale
+endpoint returns the ordinary GeoSolve Sketch Workbench built from the code source recorded
+above.
 
 ## UAT scorecard
 
-### M65-U1 — continuation without branch jumps
+### M65-U1 — Scotch-yoke and scissor continuity
 
 1. Open **Mechanisms → Scotch yoke · 1 DOF**.
 2. Delete **Yoke slider on horizontal guide** so the lower point has two freedoms.
-3. Drag the lower point through a smooth curved path, including small reversals.
-4. Repeat on **Scissor jack** and **Five-stage scissor tower**.
+3. Drag that point horizontally, vertically and diagonally, including short reversals.
+4. Repeat opening/closing paths and reversals on **Scissor jack** and
+   **Five-stage scissor tower**.
 
-Expected: motion follows the current local configuration. A rejected/ambiguous sample leaves the
-last valid preview in place; later motion continues from it. No point jumps to an unrelated valid
-assembly merely because another root exists.
+Expected: the selected control follows the cursor on the current local configuration. Motion is
+continuous and does not jump to an unrelated valid assembly. A rejected or exhausted sample keeps
+the complete last valid preview, and returning to a nearby valid target can recover in the same
+gesture. The tab remains responsive.
 
 Result: Pending.
 
-### M65-U2 — pantograph interaction work
+Notes:
+
+### M65-U2 — pantograph responsiveness
 
 1. Open **Mechanisms → Pantograph linkage · 2 DOF**.
-2. Drag **Pantograph input A** through several short arcs, including natural cursor motion away
-   from its exact fixed-radius path.
-3. Drag the independent guide arm and then alternate between both controls.
+2. Drag **Pantograph input A** through short horizontal, vertical and diagonal paths with
+   reversals.
+3. Exercise the guide, output and center controls in turn.
+4. Alternate between independently movable controls.
 
-Expected: the preview remains responsive and locally continuous. The prior multi-second/tab-lock
-behavior is absent. Both freedoms remain usable.
+Expected: all intended freedoms remain usable, the selected control moves predictably, and
+independent passive motion is not introduced merely to satisfy a cursor sample. Reversal does not
+switch assembly root, and no interaction synchronously locks the main thread.
 
 Result: Pending.
 
-### M65-U3 — independent twin rollers and rejection recovery
+Notes:
+
+### M65-U3 — symmetric twin-roller independence and recovery
 
 1. Open **Mechanisms → Twin-roller cam · 2 DOF**.
-2. Drag either roller by its visible circumference while watching the other.
-3. Push toward an invalid or difficult position, then return to a nearby valid position.
+2. Press the first circle on its circumference, away from its center, and drag horizontally,
+   vertically and diagonally with reversals.
+3. Repeat symmetrically for the second circle.
+4. Push either roller toward a difficult or invalid location, then return to a nearby valid
+   location without ending the gesture.
 
-Expected: moving one roller does not reposition the other. Failure retains the last valid preview,
-and recovery continues from it.
-
-Result: Pending.
-
-### M65-U4 — locked elbow explicit branch
-
-1. Open **Mechanisms → Locked elbow · open/crossed branches**.
-2. Select the elbow point.
-3. In **Assembly branch**, choose **Preview alternate**.
-4. Inspect the gold dashed ghost, then Cancel.
-5. Preview again and Accept; exercise Undo and Redo.
-
-Expected: Preview never mutates the authoritative sketch. Cancel restores the unchanged view.
-Accept switches the representable open/crossed branch atomically, and Undo/Redo treat it as one
-edit.
+Expected: the pressed circumference behaves as an offset-preserving handle for its own center.
+The other roller remains stationary. Difficult work rejects within a responsive bounded interval,
+keeps the full last valid preview, and permits same-gesture recovery.
 
 Result: Pending.
 
-### M65-U5 — locked four-bar branch evidence
+Notes:
 
-1. Open **Mechanisms → Locked four-bar · open/crossed branches**.
-2. Select the output joint named by the sample.
-3. Preview and accept the alternate branch.
+### M65-U4 — ordinary lifecycle, authoring and persistence
 
-Expected: the inspector reports inspected/maximum deterministic seeds. Only the gold ghost changes
-before Accept. Accepted geometry is finite, satisfies the constraints and remains editable.
+1. On a movable mechanism, drag through several accepted samples and release.
+2. Undo and Redo the released move.
+3. Start another drag and cancel it; confirm history and accepted geometry are unchanged.
+4. Apply and delete an ordinary constraint using the normal authoring flow.
+5. Save/reload the workspace and verify the accepted geometry, constraint and editability.
 
-Result: Pending.
-
-### M65-U6 — ordinary workflow regression
-
-1. Return to a normal movable mechanism.
-2. Drag, release, Undo and Redo.
-3. Create/delete a constraint and save/reload the workspace.
-
-Expected: M65 adds no modal branch behavior to ordinary drag, no sample read-only state and no
-regression in ordinary history or persistence.
+Expected: one release produces one ordinary history edit, Cancel publishes nothing, and Undo/Redo
+remain coherent. Constraint authoring and save/reload behave as before M65. No alternate-branch
+control, branch-only sample or modal branch workflow is present.
 
 Result: Pending.
+
+Notes:
 
 ## Finding ledger
 
-### M65-F001 — natural pantograph input motion could still lock the tab
-
-- Reproduction: drag the input/corner point away from its exact fixed-radius manifold.
-- Root cause: positive-cost Temporary projection was followed by recursively rerunning the full
-  Temporary optimizer for every lower Preference line-search and curvature trial.
-- Disposition: fixed in the core hierarchy by direct scalar Temporary-level retraction, with the
-  independently attained state retained when no strict lower-priority move exists.
-- Direct regression: three natural off-manifold samples accept in one attempt at total
-  `(2155,2121)` factorization/nonlinear work versus reproduced `(120210,118679)`, and every
-  pointer sample has an independent 2,048/2,048 ceiling.
-- Human retest: Pending under M65-U2.
-
-### M65-F002 — twin rollers appeared immovable and a difficult drag could freeze
-
-- Reproduction: press a roller circumference rather than its small center point, then drag toward
-  a difficult cam location.
-- Root cause: curve selection did not own a point gesture, so the circumference was selectable but
-  inert; projected pointer work was also unlimited.
-- Disposition: circles publish their semantic center as a headless drag handle, gestures preserve
-  the initial pointer-to-center offset, and ordinary projected samples use deterministic work
-  limits. A rejected difficult sample retains its last valid preview and the next valid sample
-  resumes continuation.
-- Direct regression: both circle circumferences request movement of their own center without a
-  pointer jump; difficult twin-roller rejection and valid recovery are bounded and transactional.
-- Human retest: Pending under M65-U3.
+No finding is recorded for this reduced-scope candidate. Add durable `M65-Fxxx` entries here for
+any UAT failure, with reproduction, owning layer, direct regression and human retest disposition.
 
 ## Approval
 
-M65 remains open. Approval requires all scorecard items to be marked Pass (or an explicitly
-accepted scoped limitation), every finding to have a disposition, and an explicit supervising
-human approval statement.
+M65 remains open. Approval requires:
+
+1. one exact candidate commit and Tailscale endpoint recorded above;
+2. fresh formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature WASM
+   check, release Trunk build and `git diff --check` recorded against that source state;
+3. every scorecard item marked Pass or an explicitly accepted scoped limitation;
+4. every finding given a tested disposition; and
+5. an explicit supervising-human approval statement.

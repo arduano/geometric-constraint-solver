@@ -37,8 +37,8 @@ host-integration and interaction-consumer cut; M46-M53 perform the cleanup rebas
 host-semantics UAT; M54-M62 complete the subsequent functional work, approved advanced UAT and
 approved CAD-style authoring, and M63 completes approved geometry-anchored canvas constraint and
 dimension presentation. M64 completes the approved editable-sample cleanup and focused UAT cut;
-M65 is the active continuation, bounded-work and explicit assembly-branch UAT cut. This deliverable does not
-include a solid B-rep kernel, meshing or 3D sketch curves.
+M65 is the active predictable, bounded projected-dragging cut for those ordinary editable samples.
+This deliverable does not include a solid B-rep kernel, meshing or 3D sketch curves.
 
 ### Deliverable 2: 2D and 3D rigid-body kinematics
 
@@ -2945,67 +2945,68 @@ Approval record (2026-07-30): the supervising human reviewed the mechanically qu
 reported satisfaction with the result and explicitly asked to close M64. All five focused
 scorecard areas are recorded Pass in `docs/M64_UAT.md`; no M64 finding remains open.
 
-### M65: core hardening and performance
+### M65: predictable bounded projected dragging
 
-Status: implementation complete; focused human UAT pending.
+Status: active; reduced-scope implementation and mechanical qualification completed on
+2026-07-31. Focused supervising-human UAT remains open.
 
-Goal: make projected mechanism dragging continuation-stable and bounded in deterministic solver
-work, then prototype an explicit preview/accept workflow for representable assembly-branch
-changes.
+Goal: make projected dragging predictable and synchronously bounded for the existing editable
+mechanism samples. Stability and local UX take priority; bounded work must not weaken mathematical
+validation or introduce sample-specific behavior.
 
-- [x] Continue each pointer sample from the last independently accepted preview, not the last
-  committed document; retain the last valid preview at ambiguity instead of jumping roots.
-- [x] Execute exactly one retained solve attempt per ordinary pointer sample. Keep the cursor
-  target above previous-state preferences and remove persistent-ID-ordered same-priority passive
-  anchor retries.
-- [x] Publish deterministic headless drag work evidence covering attempts, hard/priority
-  iterations, factorization work, retained reuse and rejection stage.
-- [x] Correct the rank-deficient preference path and reuse compatible retained linearization
-  state without weakening hard residual, finiteness, branch or priority validation.
-- [x] Add an exact-stamped bounded alternate-branch proposal with at most 24 deterministic seeds,
-  a non-authoritative ghost preview and explicit accept/cancel. Only finite independently valid
-  alternatives representable by persistent branch state may be offered.
-- [x] Add editable locked-elbow and open/crossed four-bar branch examples without guide state or
-  browser-owned equations.
-- [x] Directly regress Scotch-yoke two-DOF dragging after guide deletion, scissor-jack continuity,
-  independent twin rollers, pantograph multi-DOF motion, stale/failed branch proposals,
-  transactionality, Undo/Redo and persistence.
-- [x] Freeze starting-commit `927efb7` work evidence and reduce the pantograph drag corpus by at
-  least 90%, with one solve per sample and no more than twice the corresponding scissor-tower
-  deterministic work. Wall-clock timing is characterization only.
+- [x] Derive one opaque locality plan at gesture start from the independently accepted hard
+  nullspace. Measure the active point rank, cover only passive mobility, and choose the smallest
+  deterministic anchor set by rank gain, then lower anchor mobility rank, then compile order.
+- [x] Capture anchor targets from the gesture-start accepted visible geometry. Compile only the
+  cursor as a Temporary target and only locality anchors as PreviousState Preferences; do not
+  reintroduce all-point stabilization, persistent-ID retry order or sample-owned driver metadata.
+- [x] Continue from the complete last independently accepted preview and execute exactly one
+  retained attempt per pointer sample. Rejected or exhausted work keeps that preview intact, a
+  later valid sample may recover in the same gesture, and stale/out-of-order request IDs are
+  deterministic no-ops.
+- [x] Preserve semantic circle-center dragging with the initial circumference-to-center pointer
+  offset. Release publishes only an independently validated exact preview, Cancel mutates no
+  history, and release/cancel/Undo/Redo remain ordinary editor lifecycle operations.
+- [x] Harden core priority publication: Hard rows must validate independently. On the
+  single-component dense path, independently capture and revalidate the complete positive
+  Temporary residual vector; Preference work may publish only a candidate that preserves that
+  vector row-by-row within
+  `max(min(normalized_residual_tolerance, normalized_step_tolerance), 8 * f64::EPSILON)`.
+  This reproducibility floor does not relax Hard validation or Temporary attainment. Coupled-
+  priority solving retains its existing scalar attained-level semantics.
+  Accepted/no-motion reports must reject invalid-geometry or numerical-failure termination and
+  require evaluable audit rows; truthfully non-optimal secondary termination remains compatible
+  with independently valid Hard geometry.
+- [x] Enforce one documented projected-sample operation envelope: `16,384` each for document
+  validation, dependency and lowering items; `256` each for nonlinear iterations,
+  factorizations and rank kernels; `512` rejected trials; `1,024` component linearizations;
+  dense kernels no larger than `256 × 256`; `512` diagnostic candidates; and `1,024`
+  diagnostic trials.
+- [x] Add compact table-driven regressions for both twin rollers across horizontal, vertical,
+  diagonal and reversal paths; passive-center movement `<= 1e-8`; bounded rejection followed by
+  same-gesture recovery; pantograph input/guide/output/center; Scotch-yoke guide deletion;
+  scissor jack/tower; circle-handle offset; release/cancel/Undo/Redo; and stale queued results.
 - [x] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature
-  WASM check, release Trunk build and `git diff --check`.
+  WASM check, release Trunk build and `git diff --check` on one final source state.
 - [ ] Complete and explicitly approve the focused M65 Tailscale UAT.
 
-Gate: ordinary drag never changes assembly branch implicitly; failed or ambiguous continuation
-retains the last valid preview; branch switching is explicit, bounded, exact-stamped and atomic;
-hard success still requires independent residual validation; no sample IDs, relaxed tolerances,
-new residual family, worker architecture or global root enumeration is introduced. M65 closes
-only after focused supervising-human UAT approval.
+Gate: ordinary projected drag follows the selected control locally, leaves independent passive
+controls stationary, never changes assembly branch implicitly, preserves the complete last valid
+preview on rejection or exhaustion, and cannot synchronously exceed the documented operation
+envelope. Hard/Temporary success remains independently validated. M65 adds no alternate-branch
+UI/search/sample, new residual family, relaxed tolerance, weighted-priority substitute,
+sample-ID policy, worker architecture or global root enumeration. It closes only after fresh
+mechanical qualification and explicit supervising-human UAT approval. See
+`docs/M65_IMPLEMENTATION.md` and `docs/M65_UAT.md`.
 
-Implementation note (2026-07-30): ordinary drag now carries one retained attempt per sample and
-continues from the last independently accepted preview. Rejection retains that preview. The
-headless work corpus records `(factorizations, nonlinear iterations)` as Scotch yoke `(17,17)`,
-scissor jack `(18,18)`, scissor tower `(24,24)` and pantograph `(33,21)`, reducing the
-starting-commit pantograph evidence `(244824,240953)` by more than 99.9%. A feasible-zero
-Temporary pass is independently revalidated before its full row space protects lower Preference
-work; it is used only when that component also owns movable Preference stabilizers, so established
-Temporary-only construction drags retain their general lexicographic path. Tiny nonzero secondary
-objectives remain optimized. Alternate branch search inspects at most 24 deterministic seeds and
-publishes only exact-stamped, finite, independently accepted, persistently representable ghost
-proposals. The complete format/diff, warnings-denied Clippy, locked all-feature workspace, WASM
-and release Trunk gates pass on the final source state. See `docs/M65_IMPLEMENTATION.md` and
-`docs/M65_UAT.md`. Only explicit supervising-human approval remains open.
-
-UAT follow-up (2026-07-30): `M65-F001` removes recursive positive-Temporary reoptimization from
-lower Preference trials. Natural off-manifold pantograph input samples now all accept in one
-attempt at total `(2155,2121)` factorization/nonlinear work instead of reproduced
-`(120210,118679)`. `M65-F002` makes circle circumferences headless semantic drag handles for their
-centers, preserves the pointer offset and gives every projected sample a deterministic
-2,048-factorization/iteration ceiling. Difficult twin-roller rejection retains the last valid
-preview and a later valid sample recovers on the same continuation chain. Focused core/editor
-regressions pass; the complete final requalification and human retest remain part of the open M65
-gate.
+Mechanical qualification record (2026-07-31): direct locality ordering and objective-inventory
+tests, exact release exhaustion/retry tests, representative mechanism paths, strict core
+publication regressions and the integrated authoring/workspace/editability lifecycle all pass.
+Formatting, warnings-denied locked workspace Clippy, locked all-feature workspace tests, the
+all-feature WASM check, the release Trunk bundle and `git diff --check` pass on the reduced
+candidate. M65 remains active solely for the focused supervising-human UAT and any resulting
+tested finding disposition. Qualified code source `42d55b1` is served at
+`http://100.94.63.83:8080/`.
 
 ## Explicit non-goals
 
