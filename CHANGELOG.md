@@ -73,11 +73,11 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   and anchor policy inside `geosolve-sketch`.
 - Controlled sketch-operation proposal application through ordinary retained transactions, so
   cancelled or exhausted scratch publication remains mutation-free as well as preparation.
-- Reusable headless Fillet, Line offset and Mirror authoring with exact accepted-input picks,
-  explicit branch/side options, independently accepted scratch previews and token/candidate-bound
-  publication through one normal history edit.
-- Three ordinary editable helper-operation workspaces for local 2D fillets, both associative line
-  offset modes and exact line/Bezier/non-rational-B-spline mirrors.
+- Reusable headless associative-2D-Fillet authoring with exact accepted-geometry picks, explicit
+  branch/radius options, independently accepted scratch previews, recoverable radius hover and
+  token/candidate-bound publication through one normal history edit.
+- One ordinary editable **2D fillet workshop** for local line/curve and open-polyline-corner
+  authoring, with no guide, protected state or alternate coordinator.
 
 ### Changed
 
@@ -185,15 +185,24 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   every attained positive Temporary row through Preference work within
   `max(min(normalized_residual_tolerance, normalized_step_tolerance), 8 * f64::EPSILON)`. The
   reproducibility floor does not relax Hard or Temporary acceptance.
-- Geometry-dependent sketch operations now require accepted geometry from the exact current
-  retained attempt input rather than merely the same design. A same-design accepted state from an
-  older or rejected input returns
-  `SketchOperationIncompleteReason::AcceptedStateForDifferentInput` and cannot prepare or publish.
-- M66 moves Fillet, Line offset and Mirror interaction policy out of the browser and into the
-  headless editor. Local fillet synthesis is bounded and branch-explicit; line offsets reuse the
-  existing exact/supporting dimension families; exact mirrors retain ordinary point-symmetry
-  constraints. Unsupported, ambiguous, stale, rejected, cancelled or exhausted work cannot
-  publish or leave a committable preview.
+- Geometry-dependent sketch operations require accepted geometry compatible with the current
+  retained publication input, not merely the same design. The domain comparison ignores only a
+  transient one-shot `candidate_request` after a successful point edit while matching publication
+  policy, inputs and attempt/accepted identity; genuinely stale/rejected work and exact proposal
+  compare-and-swap remain strict.
+- Narrowed M66 from the unapproved three-tool candidate to exceptionally polished associative 2D
+  Fillet authoring. Fillet interaction policy remains headless, local synthesis remains bounded
+  and branch-explicit, invalid exploratory hover retains both parents, hover/click share one
+  preview-aware acquisition path and controls use a canvas overlay. Affine line/polyline contacts
+  use full `Interior` support; a line/curved pair persists an outward-rounded certified `Local`
+  cell that cannot cross a tangent-parallel barrier over the complete bounded span or one explicit
+  period. Two non-affine-parent authoring is typed unsupported pending pairwise continuation, while
+  M28's underlying all-family generic Fillet API remains unchanged. Build-source commit `c1b0336`
+  passes the full native, warnings-denied, WASM and release qualification gate; human M66 UAT
+  remains open.
+- Preserved the superseded Fillet/Offset/Mirror candidate for historical inspection at
+  `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`). It is not an active or approved
+  M66 candidate.
 
 ### Removed
 
@@ -204,6 +213,10 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - Removed the discarded alternate-assembly search/proposal UI and its two branch-only samples
   from the reduced M65 candidate. Explicit branch state remains authoritative; automatic branch
   search is not part of M65.
+- Removed the unreleased M66 Offset/Mirror authoring states, palette/options/icons, samples and
+  authoring-only tests, plus the M66-only single-span/joined-chain line-offset request APIs. The
+  completed M25 signed Offset constraints and M58 exact supported-family Mirror
+  operation-companion API/history are intentionally preserved.
 
 ## [0.2.0] - 2026-07-22
 

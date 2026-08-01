@@ -25,10 +25,16 @@ advanced constructions, generic fillets and persistent trim views, interactive
 construction/NURBS UAT and certified all-family visual profiles.
 
 - **Baseline:** implemented and accepted behavior through M65. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology; M59 adds the read-only production-topology companion with exact accepted-input provenance and fail-closed completeness; M60 exposes the advanced curves, explicit NURBS branches, companion operations, production topology and versioned desktop workspace through the sole directly tested workbench; M61 completes approved supervising-human advanced geometry/topology UAT after targeted remediation; M62 completes approved CAD-style constraint and dimension authoring; M63 completes approved geometry-anchored canvas constraint and dimension presentation; M64 completes the approved editable sample-library cleanup and 1/2/3-DOF fixture cut; M65 completes approved predictable, bounded projected dragging. M1-M7 remain the frozen regression baseline.
-- **Active target:** M66 adds reusable headless authoring for associative 2D fillets, line offsets
-  and exact supported-family mirrors. `geosolve-sketch-ops` remains the equation-free proposal
-  owner, `geosolve-constraint-editor` owns operand/branch/preview/commit progression under ADR
-  0030, and the sole workbench remains a thin adapter.
+- **Active target:** M66 adds exceptionally polished reusable headless authoring for associative
+  2D Fillets. `geosolve-sketch-ops` remains the equation-free proposal owner,
+  `geosolve-constraint-editor` owns operand/branch/preview/commit progression under amended ADR
+  0030, and the sole workbench remains a thin adapter. The unapproved three-tool candidate is
+  preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`); active M66 removes
+  only its Offset/Mirror authoring, UI, samples and M66-only offset requests, not the completed M25
+  offset constraints or M58 Mirror companion API. The implemented authoring branch policy is
+  deliberately narrower than M28's generic Fillet domain surface: affine pairs use full support,
+  line/curved pairs use one interval-certified curved-parameter cell, and two non-affine parents
+  remain typed unsupported until pairwise continuation exists.
 - **Planned sequence:** no milestone is assigned after M66. Every newly scoped milestone ends in
   its own human UAT.
 
@@ -170,14 +176,25 @@ the workbench does not reproduce the dispatch matrix. Curve hit testing retains 
 parameter to seed contact-bearing actions, while endpoint continuity uses exact bounded endpoint
 parameters. All contact, direction, curvature and continuity branches remain explicit state.
 
-M66 adds a separate `OperationAuthoringState` for Fillet, Line offset and Mirror rather than
-overloading the fixed-arity M62 constraint/dimension collector. The editor owns finite
+M66 adds a separate Fillet-only `OperationAuthoringState` rather than overloading the fixed-arity
+M62 constraint/dimension collector. The editor owns finite
 model-space picks, operand progression, explicit options and branch corrections, typed warnings,
 scratch accepted previews, Apply/Escape semantics and repeated-mode re-arming. The retained
 coordinator captures exact operation snapshots, executes public proposals on scratch retained
 state and publishes only through the operations companion's exact-input compare-and-swap path.
-Presentation code forwards events and renders DTOs; it does not locate fillet roots, infer offset
-or mirror semantics, or apply document operations independently.
+Presentation code forwards events and renders DTOs; it does not locate fillet roots or apply
+document operations independently. M25 Offset constraints and the M58 exact Mirror operation API
+remain available to domain consumers, but M66 does not author them in this state machine.
+
+The sketch domain exposes the small, non-mutating
+`SketchDocument::certify_line_curve_fillet_branch_cell` query. It reuses the outward-rounded
+all-family curve-piece interval kernel to prove that
+`cross(curve_tangent(t), fixed_line_direction)` is finite, nonzero and one signed orientation on
+the returned open `ContactNeighborhood::Local` cell. The editor calls it over the complete bounded
+curved span or one explicit unwrapped period. Affine line/polyline spans instead retain
+`Interior`; two non-affine-parent authoring returns a typed unsupported warning rather than
+guessing a pairwise branch. None of this narrows or replaces M28's public all-family Fillet
+definition, residual or validation path.
 
 M40.7 separates non-authoritative `ConstructionPreview` from complete committable
 `ConstructionProposal`. A preview may represent an incomplete anchor or arc-radius
@@ -219,13 +236,12 @@ private residual equation, solver state or B-rep topology. Several visible inter
 one immutable support through exact fixed/contact boundary identity; canonical sketch v4 remains
 the supported language until a future schema-freeze milestone is explicitly scoped.
 
-M66 adds two line-offset requests to that existing proposal surface. For a line or one polyline
-span, the associative form atomically creates two target points, a target line, a positive scalar
-and either the existing exact-translated or supporting-line driving dimension. A distinct bounded
-joined form consumes only an explicitly selected endpoint-connected path and emits one ordinary
-one-shot mitered polyline without a scalar, dimension or association. Side and traversal
-orientation are explicit. Fillet and mirror authoring continue to wrap the existing public M28 and
-M25 definitions; no operation adds an equation or approximation.
+M66 wraps the existing public M28 associative-Fillet definition without adding an equation or a
+second publication path. The M66-only single-span and joined-chain line-offset requests from the
+superseded candidate are withdrawn from the active API. This does not remove M25's separately
+named signed offset constraints, and it does not remove M58's exact supported-family Mirror
+operation-companion API. Those pre-M66 capabilities retain their original ownership and history;
+only their attempted M66 authoring/UI exposure is out of active scope.
 
 M59 completes `geosolve-sketch-topology`, a read-only companion for revision-stamped production
 wires, nesting, holes and exact source provenance. It accepts only the current independently
@@ -312,12 +328,13 @@ evidence remains non-consumable. The application workspace v2 envelope labels ea
 payload as frozen canonical v4 or explicitly unstable draft v5 and migrates legacy workspace v1.
 These presentation/persistence additions own no equation, branch inference or B-rep state.
 
-M66 supersedes the operation-authoring part of that browser boundary. The workbench remains a
-direct read-only consumer of `geosolve-sketch-topology`, but Fillet, Line offset and Mirror now
-enter `geosolve-sketch-ops` only through coordinator-owned headless authoring. The editor stamps
+M66 supersedes the Fillet-authoring part of that browser boundary. The workbench remains a direct
+read-only consumer of `geosolve-sketch-topology`, but Fillet enters `geosolve-sketch-ops` only
+through coordinator-owned headless authoring. The editor stamps
 accepted picks, prepares bounded scratch proposals, exposes independently accepted preview state
 and commits only the exact token/candidate-bound result. The browser no longer depends directly
-on the operations companion or interprets its request vocabulary.
+on the operations companion or interprets its Fillet request vocabulary. Offset and Mirror have no
+M66 tool, options panel or sample; their pre-M66 domain APIs remain separate from this boundary.
 
 M66 advances only the application workspace envelope to version 3. It retains the explicit
 canonical-v4/draft-v5 document encodings from M60 and adds whether the stored accepted
@@ -380,16 +397,23 @@ items; `256` each nonlinear iterations, factorizations and rank kernels; `512` r
 `1,024` diagnostic trials. Exhaustion is an ordinary typed rejection retaining the last valid
 preview. M65 adds no alternate-assembly search, preview UI or fixture.
 
-M66 places Fillet, Line offset and Mirror in a **Modify** palette section. Compatible ordinary
-selection may seed a headless candidate, while empty selection enters repeated operation mode.
-Only an independently accepted scratch result is drawn as operation preview; Apply/Enter publishes
-that exact proposal through normal retained history and Escape clears the candidate before exiting
-the tool. Curve acquisition uses the editor's shared inclusive 12-pixel screen-space policy. A
-preview-only foreground item blocks click-through but cannot be forwarded as a live operand, so
-fillet-radius and offset-side placement clicks remain owned by the headless stage. Headless offset
-guidance distinguishes the associative single-span form from the one-shot two-or-more-span form.
-Three new catalog leaves are ordinary editable workspaces, not guided or protected scenarios.
-Camera navigation remains web-only and usable during authoring.
+M66 places Fillet in the **Modify** palette. Compatible ordinary selection may seed a headless
+candidate, while empty selection enters repeated operation mode. Only an independently accepted
+scratch result is drawn as operation preview; Apply/Enter publishes that exact proposal through
+normal retained history and Escape clears the candidate before exiting the tool. Fillet controls
+are a viewport-clamped canvas overlay rather than children of the scrolling palette. Operation
+hover and click both consume the same headless, preview-aware inclusive 12-pixel acquisition
+result, including the exact boundary and persistent-identity tie policy; a preview-only foreground
+item blocks click-through but cannot become a live operand. An invalid unconfirmed hover clears
+only the transient candidate and retains both selected parents and Fillet mode. Accepted-state
+eligibility compares the current publication semantics rather than literal one-shot drag request
+payloads, while exact proposal compare-and-swap remains strict. Affine-parent contacts use full
+`Interior` support. A line/curved pair persists the curved root in an outward-rounded certified
+`Local` cell bounded by its support and tangent-parallel barriers over one bounded span or one
+explicit period; a two-curved-parent attempt is visibly typed unsupported until pairwise
+continuation exists. The single **2D fillet workshop** leaf is an ordinary editable
+workspace, not a guided or protected scenario. Camera navigation remains web-only and usable
+during authoring.
 
 ## 4. Numerical representation and linearization
 
@@ -728,5 +752,6 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   persistence/editing and directly qualified 1/2/3-DOF mechanism examples.
 - M65: completed and approved predictable, bounded projected dragging for the existing editable
   mechanism samples, including twin-roller hit routing and rank-one pantograph-guide projection.
-- M66: active headless CAD helper authoring for associative 2D fillets, line offsets and exact
-  supported-family mirrors, ending in its own focused UAT.
+- M66: active headless authoring polish for associative 2D Fillets, ending in its own focused UAT;
+  the unapproved three-tool candidate remains archived at
+  `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).

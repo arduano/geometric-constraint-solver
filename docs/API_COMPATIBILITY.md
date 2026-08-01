@@ -22,8 +22,18 @@ advanced-workbench scope, M62 closes approved CAD-style authoring and M63 closes
 constraint presentation. Approved M64 adds only public alpha fixtures and an explicit
 interaction-request preference helper; it does not freeze a new schema. M65 completes approved
 predictable, bounded projected dragging without freezing a new persistence language or claiming
-final API/schema hardening. M66 is the active pre-1.0 helper-operation authoring cut; its editor
-and operations APIs may evolve during qualification and likewise add no persistence language.
+final API/schema hardening. M66 is the active pre-1.0 Fillet-authoring cut; its editor and
+operations APIs may evolve during qualification and likewise add no persistence language. Its new
+`SketchDocument::certify_line_curve_fillet_branch_cell` query is an additive pre-1.0 API backed by
+private outward-rounded curve-piece intervals; it returns only the existing
+`ContactNeighborhood::Local` type plus a typed error. M66 authoring currently accepts
+affine/affine and affine/non-affine parent pairs and types two non-affine parents unsupported until
+pairwise continuation exists. That authoring limitation does not narrow or deprecate M28's public
+all-family generic Fillet request, association, residual or validation APIs. The
+withdrawn M66-only Offset/Mirror authoring surface and M66-only line-offset request APIs were never
+released. Their last three-tool candidate is preserved at
+`origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`). This withdrawal does not alter the
+completed M25 offset constraints or the M58 exact supported-family Mirror operation-companion API.
 The unreleased M61
 `DocumentSolveRequest::stability_target` field and helper were withdrawn before the next
 published minor release because a sample-selected second Temporary target conflicts with M65's

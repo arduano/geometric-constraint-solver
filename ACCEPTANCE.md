@@ -156,8 +156,8 @@ M8 is ready for review only when every item below is objectively present. These 
 The checked wording below is the preserved M8 completion record. Its then-current M8-M22
 allocations are historical; `PLAN.md` now governs completed work through the approved M61 gate,
 approved M62 authoring milestone, approved M63 canvas-constraint presentation, approved M64
-editable-sample cleanup and approved reduced-scope M65 predictable dragging, with M66 helper
-operation authoring active.
+editable-sample cleanup and approved reduced-scope M65 predictable dragging, with focused M66
+associative-Fillet authoring active.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -989,89 +989,91 @@ weighted-priority semantics, sample-specific motion policy, worker architecture 
 enumeration. Replacement mechanical qualification and focused U2/U3 human approval are recorded
 in `docs/M65_UAT.md`; M65 is complete.
 
-## M66 acceptance: CAD helper-operation authoring
+## M66 acceptance: polished associative 2D Fillet authoring
 
-Status: active. Replacement code source `77eda3ec5f7fc49b69eaf6a70124b9596f4ab796` is mechanically
-qualified with direct dispositions for `M66-F001` through `M66-F006`; focused supervising-human
-UAT and approval remain open.
+Status: active after the Fillet-only pivot. Build-source commit `c1b0336` has complete mechanical
+qualification; supervising-human approval remains open.
 
-- A separate public headless operation-authoring state owns Fillet, Line offset and Mirror
-  operand progression, finite model-space picks, explicit options, warnings, repeated mode,
-  Apply/Enter and candidate-first Escape without changing M62 constraint authoring semantics.
-- Compatible preselection seeds one candidate; empty selection enters repeated mode. Completed,
-  rejected, unsupported and coordinator-error attempts clear the completed operand set and re-arm
-  without silently changing remembered process-local options.
-- Every preview comes from applying one prepared public operation proposal to scratch retained
-  state and independently accepting that exact input. Apply publishes through the same proposal's
-  exact compare-and-swap path as one normal history edit; stale, cancelled, exhausted, incomplete
-  or rejected work mutates no live state.
-- Fillet authoring records both spans, exact picked parameters, neighborhoods, winding, normal
-  sides, retained trim endpoints, periodic anchors where required, endpoint order, sweep and a
-  finite positive radius with explicit driving/reference intent before publication. Local bounded
-  synthesis defaults to the picked retained portions and minor arc and exposes side/arc correction
-  controls; it performs no global root enumeration.
-- After two parent operands, the headless state enters a pointer-radius placement stage. Its
-  `0.1 * model_scale` value is only a finite fallback seed, and an ordinary reference radius is the
-  default so placement does not silently add a hard row. Driving radius remains an explicit user
-  choice. Pointer preview, click confirmation and Apply retain exact candidate binding.
-- Two adjacent spans of one open polyline are valid direct Fillet parents, and an unambiguous
-  interior point may expand in one event to that same ordered pair with explicit `End`/`Start`
-  trim ownership. Endpoints, ambiguous corners and every other same-support pair reject without
-  allocation. Fillet ambiguity, existing trim ownership,
-  escaped parameters, zero speed, cusp, pole, parallel offset and offset singularity remain typed
-  mutation-free outcomes.
-- A circular arc exposes its stored center as presentation-neutral drag metadata. Dragging the
-  visible body of a reference-radius associated fillet therefore routes through the ordinary
-  projected point-drag lifecycle; it updates radius, contacts and visible trim intervals while a
-  rejected target retains the prior accepted geometry and explicit branch state.
-- The operations companion atomically creates two target points, one target line, one positive
-  scalar and one existing driving dimension for a selected line/polyline span. Exact translated
-  segment is default, supporting-line offset is explicit, side is explicit and orientation is
-  `Same`; no general curve offset is approximated.
-- A distinct joined-offset request accepts only an explicitly clicked ordered chain of at most 32
-  unique endpoint-connected line/polyline spans. It intersects adjacent offset supporting lines
-  for interior miters and atomically creates one ordinary one-shot polyline at the requested signed
-  distance. It creates no persistent offset scalar, dimension or association and performs no
-  recursive path discovery, healing or caps. Exact/supporting single-span choices do not
-  masquerade as joined-chain semantics.
-- Headless guidance states the association boundary before commit: exactly one selected span uses
-  the associative request and follows later source edits; two or more connected spans use the
-  bounded one-shot request and do not follow their sources. Persistent associative multi-span
-  offsets are deferred rather than implied by the shared Line offset tool.
-- Mirror authoring accepts one source then one line axis. Exact line/polyline/quadratic- or
-  cubic-Bezier/non-rational-B-spline construction remains supported; circle, arc, conic, rational
-  and NURBS sources are typed unsupported without tessellation. Multi-source mirror is not
-  claimed.
-- The sole workbench presents a **Modify** palette, text-free representative icons, headless
-  guidance/warnings/options and accepted scratch preview. Pan/zoom remains usable and a successful
-  commit selects the operation's primary created curve. The browser owns no applicability,
-  branch, fillet, offset or reflection formula.
-- Ordinary editing and operation authoring share one presentation-neutral curve-acquisition
-  contract: the nearest curve within an inclusive 12-pixel screen-space radius wins, with stable
-  persistent-identity tie-breaking. A foreground curve or point created only in accepted scratch
-  preview blocks click-through to source geometry behind it but is not forwarded as a live-document
-  operand; fillet-radius and offset-side clicks therefore remain terminal placement events.
-- **2D fillet workshop**, **Associative line offsets** and **Mirror construction workshop** are
-  ordinary editable sample workspaces under **Curves & constructions**. They carry no guide,
-  protected state, scripted action or alternate coordinator and round-trip through ordinary
-  workspace persistence.
-- Direct operation, editor/coordinator and workbench tests cover both single-span offset
-  modes/sides, bounded joined-chain expansion, adjacent-polyline corner resolution, pointer-placed
-  reference/driving radii, semantic arc-center drag, representative fillet/mirror families,
-  preselection/repeated progression, exact request state, preview/commit lifecycle,
-  stale/rejected retention, Undo/Redo, workspace reload and sample editability. Existing
-  M25/M27/M28 derivative and independent-validation corpora remain green; M66 adds no residual.
+The unapproved three-tool candidate is preserved at
+`origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`). Active M66 removes only its
+Offset/Mirror authoring/UI/samples/tests and M66-only line-offset request APIs. The completed M25
+signed Offset constraints and M58 exact supported-family Mirror operation-companion API remain
+accepted baseline behavior.
+
+- A separate public Fillet-only headless operation-authoring state owns operand progression,
+  finite model-space picks, explicit branch/radius options, warnings, repeated mode, Apply/Enter
+  and candidate-first Escape without changing M62 constraint authoring semantics.
+- Compatible preselection seeds one candidate; empty selection enters repeated mode. A terminal
+  confirmed attempt re-arms repeated mode, while an invalid unconfirmed radius hover clears only
+  its transient candidate/preview and retains both parents in radius-placement mode (`M66-F008`).
+- Every preview comes from applying one prepared public Fillet proposal to scratch retained state
+  and independently accepting the eligible current publication. Apply retains strict exact
+  proposal compare-and-swap as one normal history edit; stale, cancelled, exhausted, incomplete or
+  rejected work mutates no live state.
+- A domain-owned current-publication comparison ignores only a transient one-shot
+  `candidate_request` when determining operation eligibility after a successful point edit. It
+  still matches design, publication request, solver policy, activation, parameters, external
+  snapshots, accepted identity and attempt identity, and does not weaken proposal CAS
+  (`M66-F010`).
+- Fillet authoring records both spans, exact picked parameters, winding, normal sides, retained
+  trim endpoints, periodic anchors where required, endpoint order, sweep and a finite positive
+  radius with explicit Driving/Reference intent before publication. Local bounded synthesis
+  defaults to picked retained portions and the minor arc and performs no global root enumeration.
+- Line-line and line/polyline Fillet authoring persists `Interior` neighborhoods on both affine
+  spans. When exactly one parent is non-affine, the affine parent remains `Interior` and the
+  curved parent persists a strict `Local` cell containing the selected root. That cell is
+  certified over the curved span's complete bounded support or one explicit unwrapped period by
+  outward-rounded interval evaluation of
+  `cross(curve_tangent(t), fixed_line_direction)`: the enclosure is finite, excludes zero and
+  retains one sign throughout the cell, so it cannot cross a tangent-parallel barrier
+  (`M66-F011`).
+- Authoring between two non-affine parents returns a typed unsupported result until a bounded
+  pairwise-continuation contract exists. This is an editor-authoring limitation only: the M28
+  all-family generic Fillet document/API, residual and independent validation remain unchanged.
+- After two parent operands, the headless state enters pointer-radius placement. Its fallback is
+  only a finite seed, Reference is the default and Driving remains explicit. Pointer preview,
+  confirmation and Apply retain exact candidate binding.
+- Two adjacent spans of one open polyline are valid direct parents, and one unambiguous interior
+  point may expand atomically to that ordered pair with explicit `End`/`Start` trim ownership.
+  Endpoints, ambiguous corners, other same-support pairs, existing trim ownership, escaped
+  parameters, zero speed, cusp, pole, parallel offsets and offset singularities reject without
+  allocation (`M66-F002`).
+- A circular arc exposes its stored center as presentation-neutral drag metadata. Dragging a free
+  associated Fillet's body routes through ordinary projected point drag and updates radius,
+  contacts and visible trim intervals; deleting only its Reference dimension neither deletes nor
+  immobilizes the association (`M66-F003`).
+- The Fillet options panel is a viewport-clamped canvas overlay outside the scrolling palette, so
+  palette overflow cannot clip or break its controls. Pure placement tests cover each viewport
+  edge and resize (`M66-F007`).
+- Hover and click share the exact same headless, preview-aware nearest-geometry acquisition with an
+  inclusive 12-pixel boundary and stable persistent-identity ties. Preview-only foreground
+  geometry blocks hidden sources but is never hoverable or forwarded as a live operand
+  (`M66-F004`, `M66-F005`, `M66-F009`).
+- The sole workbench presents one text-free Fillet action, headless guidance/warnings/options,
+  accepted scratch preview and the editable **2D fillet workshop**. Pan/zoom remains usable, the
+  browser owns no applicability/branch/root formula, and no Offset/Mirror M66 action, option or
+  sample remains.
+- Direct sketch, operation, editor/coordinator and workbench tests cover F002-F005 and F007-F011,
+  including parent retention after invalid hover, overlay placement, exact hover/click boundaries,
+  point-edit publication eligibility, affine `Interior` neighborhoods, certified symmetric-cubic
+  and unwrapped-periodic line/curve branch cells, typed two-curved-parent refusal, exact request state,
+  preview/commit lifecycle, stale/rejected retention, Undo/Redo, workspace reload and sample
+  editability. Existing M27/M28 derivative and independent-validation corpora remain green; M66
+  adds no residual. M25/M58 regression coverage also confirms the pre-M66 APIs were not removed.
 - Formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature demo-web
-  WASM, release Trunk and `git diff --check` pass from replacement code source
-  `77eda3ec5f7fc49b69eaf6a70124b9596f4ab796` before the focused UAT resumes.
+  WASM, release Trunk and `git diff --check` pass on nominated build-source commit `c1b0336`.
 - The supervising human explicitly approves `docs/M66_UAT.md`; no correctness, data-loss,
-  misleading-preview or basic helper-authoring blocker remains.
+  misleading-preview or basic Fillet-authoring blocker remains.
 
-M66 does not include general curve/profile offsets, persistent associative multi-span offsets,
-automatic chain discovery, caps/self-intersection healing, same-support fillets other than one
-adjacent pair from an open polyline, global fillet search, multi-source mirror,
-unsupported-family approximation, persistent CAD feature-tree objects, a schema freeze, new
-equations, browser E2E, `/#/dev/lab` or mobile behavior.
+M66 does not include Offset or Mirror authoring, an M66 line-offset operation request, general
+curve/profile offsets, global Fillet search, same-support Fillets other than one adjacent open-
+polyline pair, unsupported-family approximation, persistent CAD feature-tree objects, a schema
+freeze, new equations, browser E2E, `/#/dev/lab` or mobile behavior.
+
+Qualification record (2026-08-02): `cargo fmt --all -- --check`, warnings-denied locked workspace
+Clippy, locked all-feature workspace tests, the all-feature demo-web WASM check, release Trunk and
+`git diff --check` all pass for build-source commit `c1b0336`. The focused human scorecard remains
+Pending, so this mechanical acceptance does not close M66.
 
 ### M54: stable diagnostics
 

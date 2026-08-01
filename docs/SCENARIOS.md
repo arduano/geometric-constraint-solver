@@ -1272,7 +1272,7 @@ companions; M60 completes the advanced workbench and M61 completes its approved 
 M62 completes approved CAD-style constraint/dimension authoring, and M63 completes approved
 geometry-anchored canvas constraint/dimension presentation, M64 completes the approved editable
 purpose-based sample library and M65 completes approved predictable, bounded projected dragging.
-M66 is the active CAD helper-operation authoring cut rather than a scheduled release sequence.
+M66 is the active Fillet-only helper-authoring cut rather than a scheduled release sequence.
 Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -1899,92 +1899,99 @@ Replacement `b6433d1` directly remediates `M65-F004` (twin-roller annotation hit
 `M65-F005` (orientation-sensitive rank-one pantograph-guide projection). Native, WASM and release
 qualification plus focused U2/U3 human approval pass; `docs/M65_UAT.md` records closure.
 
-### M66-S1 - Headless CAD helper-operation authoring
+### M66-S1 - Headless associative-Fillet authoring
 
-M66 adds three ordinary editable leaves under **Curves & constructions**:
+M66 adds one ordinary editable leaf under **Curves & constructions**:
 
 | Stable sample key | Sample title | Authoring focus |
 | --- | --- | --- |
 | `fillet-workshop` | 2D fillet workshop | Line-line, line-circle and line-Bezier pairs plus an open-polyline corner, with room for pointer radius placement, ordinary deletable support locks and no prebuilt fillet. |
-| `line-offset-workshop` | Associative line offsets | Single line/polyline sources for associative exact/supporting offsets and an explicitly clicked connected chain for one-shot mitered output. |
-| `mirror-workshop` | Mirror construction workshop | A line axis plus movable line, cubic Bezier and non-rational B-spline sources for repeated exact associative mirrors. |
 
-Opening any leaf replaces the ordinary workspace, starts normal history and autosave, fits the
-camera and leaves every object editable. The samples contain no instruction, scripted action,
-protected entity, preselection or sample-owned operation policy. UAT instructions live only in
+Opening the leaf replaces the ordinary workspace, starts normal history and autosave, fits the
+camera and leaves every object editable. It contains no instruction, scripted action, protected
+entity, preselection or sample-owned operation policy. UAT instructions live only in
 `docs/M66_UAT.md`.
 
-The direct headless operation corpus covers both workflows for every tool:
+The direct headless Fillet corpus covers both compatible preselection and persistent repeated
+authoring:
 
-1. compatible immutable preselection stages one complete or next-operand candidate without
-   changing ordinary selection; empty selection enters persistent repeated authoring;
-2. canvas/tree picks preserve semantic span identity, exact picked parameter and finite model
-   position; one event normally contributes one operand, while one unambiguous open-polyline
-   interior point may atomically contribute its ordered previous/next Fillet spans;
-3. a complete request executes against one immutable operation snapshot and may expose preview
-   only after scratch retained publication independently accepts it;
-4. Apply/Enter publishes through exact-input compare-and-swap as one history step and selects the
-   primary created curve; first Escape clears the candidate and second Escape exits;
-5. unsupported, incomplete, ambiguous, stale, cancelled, exhausted and retained-rejected work
-   leaves the live coordinator, accepted scene and history unchanged and re-arms repeated mode.
+1. canvas/tree picks preserve semantic span identity, exact picked parameter and finite model
+   position; one event normally contributes one parent, while one unambiguous open-polyline
+   interior point may atomically contribute its ordered previous/next spans;
+2. a complete request executes against one immutable operation snapshot and may expose preview
+   only after scratch retained publication independently accepts the eligible current publication;
+3. Apply/Enter publishes through exact proposal compare-and-swap as one history step and selects
+   the created arc; first Escape clears the candidate and second Escape exits;
+4. unsupported, incomplete, ambiguous, stale, cancelled, exhausted and retained-rejected work
+   leaves live design, accepted scene and history unchanged; and
+5. an invalid unconfirmed radius hover is non-terminal: it clears only transient candidate/preview
+   state while retaining both parents and the placement stage.
 
-Fillet operands are two different visible curve supports or two adjacent spans of one open
-polyline. One unambiguous interior point may atomically expand to that ordered adjacent pair. The
-shared-corner path carries explicit `End`/`Start` trim hints; it does not relax other same-support
-rejection. Pick parameters seed
-one bounded local synthesis, which explicitly records neighborhoods, winding, normal sides,
-retained endpoints, any periodic anchors, endpoint order and sweep. After the parents are known,
-pointer motion stages a finite positive radius and click confirms it. `0.1 * model_scale` is only
-the fallback seed, the ordinary radius dimension defaults to Reference, and Driving is an explicit
-choice. Side and alternate-arc controls remain deliberate branch correction. Endpoints, ambiguous
-corners, already-trimmed parents and unresolved/singular roots fail typed without global search.
+The active authoring path accepts two affine line/polyline spans, or one affine span plus one
+non-affine span. One unambiguous interior point may atomically expand to two ordered adjacent spans
+of one open polyline; the shared-corner path carries explicit `End`/`Start` trim hints and does not
+relax other same-support rejection. Affine parents persist full `Interior` neighborhoods. For a
+line/curved pair, the sketch domain certifies the curved root over the complete bounded span or one
+explicit unwrapped period. Outward-rounded interval evaluation proves
+`cross(curve_tangent(t), fixed_line_direction)` finite, nonzero and one signed orientation on the
+returned strict `Local` cell, so the accepted contact cannot cross a tangent-parallel barrier to a
+remote root. Two non-affine-parent authoring returns typed unsupported until bounded pairwise
+continuation exists; the underlying M28 all-family generic Fillet API remains unchanged.
+
+Pick parameters seed bounded local synthesis, which records winding, normal sides, retained
+endpoints, any periodic anchors, endpoint order and sweep. After the parents are known, pointer
+motion stages a finite positive radius and click confirms it. The fallback is only a seed,
+Reference is the ordinary default and Driving is an explicit choice. Side and alternate-arc
+controls remain deliberate branch correction. Endpoints, ambiguous corners, already-trimmed
+parents and unresolved/singular roots fail typed without global search.
 
 The accepted output remains an ordinary circular arc. Its stored center is the arc body's
-presentation-neutral semantic drag owner, so a reference-radius fillet moves through the ordinary
-projected-drag lifecycle and updates its radius, contacts and visible parent intervals atomically.
-Deleting the radius dimension removes only the ordinary measurement source; it does not explode
-the association or remove this mobility.
+presentation-neutral semantic drag owner, so a Reference-radius Fillet moves through ordinary
+projected drag and updates radius, contacts and visible parent intervals atomically. Deleting the
+radius dimension removes only the ordinary measurement source; it does not explode the association,
+remove mobility or reintroduce an arbitrary seed-centred parameter window. Affine contacts retain
+their full interiors; a curved contact remains bounded by its certified support/tangent branch.
 
-Single-span line offset retains the original two public modes. It atomically creates two target
-points, a target line, a positive scalar and one driving offset dimension; exact translated segment
-is default, supporting-line behavior is explicit, left/right side is explicit and generated
-endpoint orientation is `Same`.
+Operation hover and click share the same headless preview-aware inclusive 12-pixel acquisition.
+Preview-only foreground geometry blocks hidden sources but never becomes a live hover or operand.
+The options card is a viewport-clamped canvas overlay rather than a child of the scrolling palette.
+After a successful point edit, helper eligibility uses domain-owned current-publication semantics
+that ignore only the transient candidate request; exact proposal publication remains strict.
 
-Joined offset is a separate bounded one-shot expansion. It accepts at most 32 explicitly clicked,
-unique, endpoint-connected line/polyline spans in ordered path sequence, offsets each support by
-one requested signed distance and intersects adjacent offset supporting lines for interior miters.
-It emits one ordinary polyline atomically and creates no persistent distance scalar, dimension or
-association. It performs no recursive neighbor discovery, profile approximation, healing, caps or
-self-intersection repair; invalid connectivity or unresolved miter geometry rejects without
-allocation.
+### M66-S2 - Fillet remediation fixtures
 
-Mirror accepts one exact supported source followed by one line axis. Line/polyline, quadratic or
-cubic Bezier and non-rational B-spline sources remain associative through their existing ordinary
-point-symmetry constraints. Circle, arc, ellipse/conic, rational and NURBS sources warn as
-unsupported and allocate nothing. Repeated mode performs one source per transaction; atomic
-multi-source mirror is deferred.
+- `M66-F002` resolves one open-polyline interior point to exactly its ordered adjacent spans and
+  proves accepted `End`/`Start` trim ownership; endpoint/ambiguous corner attempts remain typed and
+  mutation-free.
+- `M66-F003` distinguishes pointer-derived Reference placement from explicit Driving intent. A
+  free arc body or center drag moves center/radius/contacts/trims, while rejection retains the last
+  accepted geometry and branch state.
+- `M66-F004` keeps preview-only foreground geometry from becoming a parent or stealing the
+  radius-placement click.
+- `M66-F005` owns the inclusive 12-pixel nearest-curve and stable identity-tie policy.
+- `M66-F007` covers viewport-clamped canvas-overlay placement for Fillet controls.
+- `M66-F008` keeps both parents and radius-placement mode through invalid unconfirmed hover.
+- `M66-F009` proves hover/click acquisition parity, including exact boundary and preview barriers.
+- `M66-F010` proves a successful point edit remains current-publication eligible while genuinely
+  stale/different input and exact proposal mismatches reject.
+- `M66-F011` proves affine contacts use full `Interior` support and a line/curved pair uses a
+  certified strict `Local` cell bounded by outward-rounded tangent-parallel barriers. The
+  symmetric cubic fixture excludes its remote root, the periodic fixture uses one explicit
+  unwrapped period, and two non-affine-parent authoring remains typed unsupported without removing
+  M28's generic Fillet API.
 
-### M66-S2 - UAT remediation fixtures
+The application workspace v3 envelope remains useful for this flexible-state cut while canonical
+sketch v4 and draft v5 remain unchanged. Restore treats accepted-materialization provenance only
+as a routing hint and independently exact-certifies the document. Flexible-Fillet save/reload must
+be bit-exact, while tampered intent rejects.
 
-- `M66-F001` collects a two- and three-span connected path by explicit clicks, rejects a duplicate,
-  disconnected or over-budget pick without mutation, and publishes exactly one mitered ordinary
-  polyline with no dimension or associative source. Undo/Redo and workspace round-trip retain that
-  plain output.
-- `M66-F002` resolves one open-polyline interior point to exactly its ordered adjacent spans, then
-  proves the accepted associated fillet owns the first visible `End` and second visible `Start`.
-  Endpoint/ambiguous corner attempts remain typed and mutation-free.
-- `M66-F003` distinguishes pointer-derived Reference placement from explicit Driving intent. The
-  reference case reports the expected additional fillet DOF; dragging either its center point or
-  visible arc body moves center/radius/contacts/trim intervals through one accepted projected edit,
-  while a rejected target retains the last accepted geometry and branch state.
+### Archived M66 three-tool candidate
 
-The application workspace envelope advances to v3 for this flexible-state cut while canonical
-sketch v4 and draft v5 remain unchanged. V3 records whether accepted materialization belonged to
-the stored current design; v1/v2 migrate conservatively without that claim. Restore treats the
-field only as a routing hint and independently exact-certifies, checks runtime compatibility and
-requires the accepted state materialized through the retained design to match the full stored
-accepted document. Flexible-fillet save/decode/reload is therefore bit-exact, while a same-shape
-tampered dimension target rejects.
+The unapproved pre-pivot Fillet/Offset/Mirror candidate, including its
+`line-offset-workshop`/`mirror-workshop` leaves and `M66-F001`/`M66-F006` offset findings, is
+preserved at `origin/archive/m66-three-helper-tools-2026-08-02`, commit `80d4939`. Those scenarios
+are not active M66 qualification. Their removal from active main does not remove the older M25
+signed Offset constraints or M58 exact Mirror operation-companion API and regression history.
 
 ## Frozen near-singular fixtures
 

@@ -24,7 +24,8 @@ scorecard. The first M61 candidate was withdrawn for five interaction/coverage b
 remediated scope is now explicitly approved and closed. M62 subsequently completed and received
 supervising-human approval for CAD-style constraint and dimension authoring, M63 completed approved
 canvas constraint presentation, M64 completed the approved editable sample cleanup, and M65
-completed approved predictable bounded dragging. M66 is the active helper-operation authoring cut.
+completed approved predictable bounded dragging. M66 is the active Fillet-only helper-authoring
+cut.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -103,8 +104,17 @@ Core publication must independently validate Hard rows and every attained Tempor
 or exhausted work retains the last valid preview. Replacement `b6433d1` fixes the UAT-discovered
 twin-roller annotation overlap and rank-one pantograph-guide cursor projection with direct
 regressions and strict certification. Fresh native/WASM/release qualification and focused U2/U3
-human approval completed on 2026-08-01. M66 is the active CAD helper-authoring cut for associative
-2D fillets, line offsets and exact supported-family mirroring.
+human approval completed on 2026-08-01. M66 is now the active focused cut for exceptionally
+polished associative 2D Fillet authoring. The superseded, unapproved three-tool candidate is
+preserved at `origin/archive/m66-three-helper-tools-2026-08-02`, commit `80d4939`. The active cut
+removes only its M66-specific Offset/Mirror authoring, UI, samples and offset-request APIs; the
+completed M25 signed-offset constraints and M58 exact Mirror operation-companion API remain part
+of the baseline. Build-source commit `c1b0336` replaces seed-centred Fillet contact windows with a
+closed branch-safe policy: affine line/polyline parents use full `Interior` support; a line/curved
+pair uses an outward-rounded certified curved `Local` cell over the complete bounded span or one
+explicit period; and two non-affine-parent authoring is typed unsupported until pairwise
+continuation exists. This does not narrow M28's underlying all-family generic Fillet API. The
+post-pivot source passes the full native/WASM/release gate; focused human UAT remains open.
 M62 follow-up `M62-F001` corrects accepted-state line-angle seeding and exposes acute-degree
 presentation while retaining the explicit directed-radian solver branch.
 Follow-up `M62-F002` gives canvas pointer-down exclusive ownership of canvas authoring picks,
@@ -160,9 +170,14 @@ authoring, approved canvas constraint visualization and interaction, editable sa
 predictable bounded dragging. The previously forecast
 M62-M64 hardening sequence was withdrawn on 2026-07-29; M62-M64 were subsequently scoped,
 completed and approved. M65 subsequently completed and received focused supervising-human
-approval. M66 is active under ADR 0030: the headless editor owns reusable Fillet, Line offset and
-Mirror authoring, the operations companion remains the equation-free transaction producer, and
-the sole workbench is a thin presentation consumer. M66 ends in its own focused UAT.
+approval. M66 is active under amended ADR 0030: the headless editor owns reusable Fillet
+authoring, the operations companion remains the equation-free transaction producer, and the sole
+workbench is a thin presentation consumer. Current authoring supports affine/affine and
+affine/non-affine parents with explicit interval-certified branch retention; pairwise continuation
+for two non-affine parents is deferred without removing M28's generic API. The earlier
+Fillet/Offset/Mirror candidate is preserved
+at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`) rather than carried as active
+scope. M66 ends in its own Fillet-focused UAT.
 
 Durable cleanup records:
 
@@ -195,8 +210,8 @@ Durable cleanup records:
 - `docs/M64_UAT.md` (approved M64 scorecard)
 - `docs/M65_IMPLEMENTATION.md` (approved predictable-dragging implementation record)
 - `docs/M65_UAT.md` (approved focused scorecard)
-- `docs/M66_IMPLEMENTATION.md` (active helper-operation implementation record)
-- `docs/M66_UAT.md` (active helper-operation scorecard)
+- `docs/M66_IMPLEMENTATION.md` (active Fillet-only implementation record)
+- `docs/M66_UAT.md` (active Fillet-only scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

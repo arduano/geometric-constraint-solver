@@ -1,128 +1,108 @@
-# M66 focused UAT: CAD helper operations
+# M66 focused UAT: polished associative 2D Fillet authoring
 
-Status: mechanically qualified replacement; supervising-human UAT is pending.
+Status: build-source commit `c1b0336` is mechanically qualified. Every human result remains
+Pending.
 
-Candidate code source: `77eda3ec5f7fc49b69eaf6a70124b9596f4ab796`. First replacement
-`92e6ddce1e37d6508b5dd8568078146ac2822aa7` and initial source
-`f913fb46e14308dc66563d1e602d3ae6ed2f7cb1` are superseded.
+Candidate source: `c1b0336` (`Narrow M66 to branch-safe Fillet authoring`).
 
-Tailscale endpoint: `http://100.94.63.83:8080/`.
+Tailscale endpoint: `http://100.94.63.83:8080/` (release service restarted and HTTP 200 verified
+2026-08-02).
 
-Replacement mechanical qualification completed on 2026-08-01. The exact candidate above passed
-formatting, warnings-denied locked workspace/all-target/all-feature Clippy, locked all-feature
-workspace tests, the all-feature demo-web WASM check, release Trunk build and `git diff --check`.
-Every human result below remains Pending.
-
-Use the ordinary GeoSolve Sketch Workbench only. The sample leaves are editable save-like
-workspaces; they contain no guided actions or protected state. This scorecard judges whether the
-headless Fillet, Line offset and Mirror workflows are understandable, predictable and truthful
-after their objective native/WASM qualification passes.
+Use the ordinary GeoSolve Sketch Workbench only. The **2D fillet workshop** is an editable
+save-like workspace with no guided actions or protected state. This scorecard judges whether one
+headless Fillet workflow is exceptionally predictable, recoverable and truthful after its direct
+native/WASM qualification passes.
 
 ## UAT scorecard
 
-### M66-U1 — local associative fillet authoring
+### M66-U1 — parents, corner shortcut and branch intent
 
 1. Open **Curves & constructions → 2D fillet workshop**.
 2. Choose **Modify → Fillet**, then pick the line-line pair near the portions you want to keep.
-3. After the second parent, move the pointer to place the radius, click to confirm it, and inspect
-   the accepted scratch preview before Apply. Try the first-side, second-side and alternate-arc
-   controls. Deliberately click directly on the preview arc as well as empty canvas; preview-only
-   geometry must not be consumed as a third operand or expose a hidden parent behind it.
-4. Apply the default Reference candidate. Drag its visible arc body and its center; the radius
-   measurement, contacts and parent trim endpoints should move together. Delete the reference
-   dimension and repeat the arc drag—the association must remain intact and mobile.
-5. Repeat with an explicitly Driving radius, then with the line-circle and line-Bezier pairs. For
-   the grounded line-circle pair, also edit its source-circle radius. To drag a locked line/Bezier
-   support, delete one of its ordinary Fixed constraints first, then Undo and Redo.
-6. Draw or use an open polyline. First click its two adjacent spans, then repeat by selecting only
-   their unambiguous interior corner. Both paths should resolve the same spans in visible order.
-   Try an endpoint, ambiguous/singular input and one staged candidate cancelled with Escape.
+3. After the second parent, move the pointer to place the radius. Inspect the scratch preview and
+   exercise first-side, second-side and alternate-arc controls before Apply.
+4. Repeat with line-circle and line-Bezier pairs. Also try a pair containing two non-affine
+   parents, such as circle-Bezier.
+5. Draw or use an open polyline. First choose its two adjacent spans, then repeat by choosing only
+   their unambiguous interior corner. Try an endpoint, unrelated same-support pair and ambiguous or
+   singular input.
 
 Expected: the preview follows the locally picked retained portions, uses a sensible minor-arc
-default and never changes the live document before Apply. Radius placement is a visible headless
-stage: its fallback is not silently persisted as a hard equation, Reference is flexible and only
-an explicit Driving choice locks the radius. Branch correction remains explicit rather than
-caused by moving seed geometry. Apply creates an ordinary associative fillet with visible parent
-trims. A free arc drag routes to its stored center and updates radius, contacts and trims through
-the normal projected-drag lifecycle; deleting only the dimension neither explodes nor immobilizes
-the association. The polyline-corner shortcut owns exactly the ordered adjacent `End`/`Start`
-spans. The workshop's support locks are ordinary visible, deletable constraints, not protected
-scenario state. Unsupported or unresolved local roots show a typed warning and retain the prior
-accepted scene. First Escape clears the candidate; a second Escape exits Fillet mode.
+default and never changes live design before Apply. Branch corrections are explicit rather than
+accidental consequences of seed coordinates. Direct-span and corner-shortcut paths resolve the
+same ordered parents with `End`/`Start` trim ownership. The current authoring abstraction accepts
+affine/affine and affine/non-affine pairs; two non-affine parents give a clear typed unsupported
+warning until pairwise continuation exists. That scoped authoring warning does not imply that the
+underlying M28 generic Fillet API was removed. Unsupported or unresolved geometry warns without
+partial mutation or global search.
 
 Result: Pending.
 
 Notes:
 
-### M66-U2 — exact and supporting line offsets
+### M66-U2 — placement controls, acquisition and invalid-hover recovery
 
-1. Open **Curves & constructions → Associative line offsets**.
-2. Choose **Modify → Line offset**, select one line or polyline span, choose each side in turn and
-   apply the default exact-translated preview.
-3. Edit the resulting distance in the ordinary dimension inspector and move the source geometry.
-4. Switch to **Supporting line** mode, create another offset and move a target endpoint along the
-   supporting direction or change its length.
-5. Start Line offset again and explicitly click two, then three, unique endpoint-connected spans in
-   path order. Click empty canvas to finish collection/confirm the side, inspect the mitered joined
-   preview and Apply it. Also confirm by clicking directly on the preview offset where it covers or
-   approaches a source; the preview must not intercept the side-placement click.
-6. Verify the joined result is one ordinary polyline with no offset dimension or association. Move
-   a source afterward and confirm the one-shot output does not follow. Undo/Redo and save/reload it.
-7. Try a duplicate, disconnected and over-budget path plus a circle/nonlinear curve; each must warn
-   without recursive neighbor discovery, partial output or mutation.
+1. Start Fillet from compatible preselection and again from no selection.
+2. With both parents selected, move across valid and invalid radius positions repeatedly. Return
+   to a valid position without reselecting either parent.
+3. Approach several parent curves from increasing distances and verify hover matches click. Check
+   the exact 12-pixel acquisition boundary if practical.
+4. Deliberately move and click across an accepted preview arc where it covers or closely approaches
+   a source curve.
+5. Open Fillet controls with the palette scrolled, then resize the window and place the trigger
+   near every canvas edge.
 
-Expected: the pointer side and numeric distance are clear before Apply. Exact mode preserves one
-same-oriented translated segment; supporting mode truthfully permits axial slide and length
-freedom while retaining its explicit side-qualified positive distance. Those single-span results
-retain an ordinary editable driving dimension, and guidance states that source edits propagate. A
-multi-span path has separate bounded one-shot semantics: only explicitly clicked unique connected
-spans participate, interior vertices are
-supporting-line miters, and Apply creates one plain non-associative polyline with no persistent
-distance source; guidance states that source edits will not propagate. Persistent associative
-multi-span offset remains deferred. Preview-only foreground geometry blocks click-through without
-becoming an operand. Unsupported, disconnected, duplicate, over-budget or unresolved input warns
-without approximation or allocation.
+Expected: an invalid unconfirmed hover clears only transient candidate/preview feedback; both
+parents remain selected and radius placement recovers immediately on later valid motion. Hover and
+click use the same nearest-geometry result and inclusive tolerance. Preview-only foreground
+geometry blocks hidden-source click-through but never becomes a hover or third operand. Controls
+remain legible, clickable and viewport-clamped over the canvas; palette overflow never clips them.
 
 Result: Pending.
 
 Notes:
 
-### M66-U3 — repeated exact mirror authoring
+### M66-U3 — Reference mobility and certified contact branches
 
-1. Open **Curves & constructions → Mirror construction workshop**.
-2. Choose **Modify → Mirror**, pick the line source and then the line axis; inspect and Apply the
-   preview.
-3. Keep Mirror active and repeat for the cubic Bezier and non-rational B-spline sources.
-4. Drag several original control points and verify their mirrored counterparts remain associated.
-5. Draw a circle in this same workspace and try it as an unsupported source; optionally repeat with
-   a conic or NURBS, then cancel a partially collected mirror.
+1. Place and Apply the default Reference Fillet.
+2. Drag its visible arc body and center through small and large valid motions. Observe radius,
+   contacts and both parent trim endpoints.
+3. Delete the Reference radius dimension and repeat those drags. For a line-line/polyline Fillet,
+   verify that both affine contacts can use their full interiors. For line-circle and line-Bezier,
+   move substantially within the selected branch and verify that neither curved contact jumps
+   across its nearest tangent-parallel barrier to a remote root.
+4. Repeat with an explicitly Driving radius and compare its truthful remaining mobility.
+5. Edit one source point successfully, then immediately start or continue Fillet authoring without
+   refreshing the workspace.
 
-Expected: source-then-axis progression is obvious, repeated mode re-arms after each terminal
-attempt and every preview is exact. Supported mirrored controls follow subsequent source edits.
-Unsupported families show a typed warning without tessellation, approximation or partial
-geometry. Apply selects the primary created curve and each operation is one Undo step.
+Expected: Reference is flexible and only explicit Driving intent locks radius. Arc-body/center
+drag keeps the Fillet association, contacts and trims coherent. Deleting the dimension neither
+explodes nor immobilizes the association. Affine pairs are not caged by a seed-centred parameter
+window. A line/curved pair remains inside a strict outward-rounded `Local` cell over the full
+bounded support or one explicit period, stopping conservatively at a real tangent-parallel branch
+barrier rather than jumping to a remote root. A successful point edit does not falsely trigger
+“helper operations require current accepted geometry.” Genuinely rejected or stale state still
+cannot preview or publish.
 
 Result: Pending.
 
 Notes:
 
-### M66-U4 — shared interaction, persistence and trust
+### M66-U4 — publication, persistence and trust
 
-1. Start each Modify tool both from compatible preselection and from no selection.
-2. While a candidate is pending, use wheel zoom, middle-button pan, Fit and ordinary canvas
+1. While a candidate is pending, use wheel zoom, middle-button pan, Fit and ordinary canvas
    inspection; then Apply with Enter and cancel with Escape.
-3. Create at least one flexible fillet, single-span associative offset, one-shot joined offset and
-   mirror, save/reload the ordinary workspace and continue editing their ordinary retained output.
-4. Deliberately stage an invalid candidate, then return to a valid candidate without reloading.
-5. Acquire several curves near, rather than exactly on, their strokes. The shared curve acquisition
-   radius is inclusive at 12 screen pixels; the nearest curve wins and exact ties are stable.
+2. Confirm first Escape clears a candidate and second Escape exits Fillet mode.
+3. Create both a free and Driving Fillet, Undo/Redo each, save/reload the ordinary workspace and
+   continue editing the retained output.
+4. Deliberately stage invalid, rejected and stale candidates and verify the last independently
+   accepted live scene never changes.
 
-Expected: preselection and mode-first authoring lead to the same operation. Camera navigation does
-not add operands or discard pending state. Only an independently accepted scratch result is shown
-as a solved preview, and Apply publishes exactly that result through normal history. Invalid,
-stale or rejected work never changes accepted geometry. Workspace reload preserves the ordinary
-editable operation output; no sample-specific guided harness, protected mode, old harness or
-`/#/dev/lab` appears. Headless per-tool authoring guidance remains available as intended.
+Expected: only an independently accepted scratch result is shown as solved preview, and Apply
+publishes exactly that proposal through one normal history step. Navigation neither adds operands
+nor discards pending parents. Reload preserves ordinary editable Fillets and explicit branch
+intent. No M66 Offset/Mirror tool or sample, guided harness, protected mode, legacy harness or
+`/#/dev/lab` appears.
 
 Result: Pending.
 
@@ -132,24 +112,35 @@ Notes:
 
 | Finding | UAT observation | Required disposition | Status |
 | --- | --- | --- | --- |
-| `M66-F001` | Line offset could not collect connected spans into one useful joined result; a subsequent click was consumed as side confirmation. | Add a max-32 explicitly clicked, unique, endpoint-connected ordered-chain request that emits one atomic one-shot mitered polyline with no dimension/association or automatic discovery. Directly test valid expansion, invalid retention, Undo/Redo and persistence; recheck M66-U2. | Implemented and directly qualified; focused M66-U2 retest pending. |
-| `M66-F002` | Selecting an open-polyline corner did not author a fillet across its two adjacent spans. | Resolve one unambiguous interior point headlessly to its ordered adjacent spans and explicit `End`/`Start` trim ownership. Directly test accepted M28 geometry plus endpoint/ambiguous rejection; recheck M66-U1. | Implemented and directly qualified; focused M66-U1 retest pending. |
-| `M66-F003` | Fillet creation silently used a driving fallback radius, and deleting that dimension still left the visible arc body without a drag route. | Add pointer radius placement with Reference default and explicit Driving intent; expose CircularArc center drag metadata; prove mathematical DOF, association retention, projected drag/rejection and exact preview publication; recheck M66-U1/U4. | Implemented and directly qualified; focused M66-U1/U4 retest pending. |
-| `M66-F004` | Accepted scratch preview geometry intercepted later Fillet radius and Line offset side-placement clicks, so the preview could be treated as another operand instead of completing the stage. | Resolve the best visible hit once; if its identity exists only in preview, block click-through to hidden source geometry but forward no live operand so the headless placement stage owns the click. Directly regress preview/source overlaps and recheck M66-U1/U2/U4. | Implemented and directly qualified; focused M66-U1/U2/U4 retest pending. |
-| `M66-F005` | Curve picking during repeated helper authoring was too narrow and made otherwise clear selections unnecessarily difficult. | Use the editor's shared nearest-curve acquisition with an inclusive 12-pixel radius and stable persistent-identity ties; qualify the exact inside/boundary/outside cases and recheck all operation tools. | Implemented and directly qualified; focused operation-tool retest pending. |
-| `M66-F006` | The Line offset tool did not make it sufficiently clear that adding a second connected span changes from an associative result to one-shot geometry. | Keep one-span exact/supporting offsets associative, keep two-or-more-span joined offsets explicitly one-shot, state propagation semantics in headless guidance and defer persistent associative multi-span offsets. Recheck M66-U2/U4. | Implemented and directly qualified; focused M66-U2/U4 retest pending. |
+| `M66-F002` | Selecting an open-polyline corner did not author a Fillet across its two adjacent spans. | Resolve one unambiguous interior point headlessly to ordered adjacent spans and explicit `End`/`Start` trim ownership; directly test accepted M28 geometry and endpoint/ambiguous rejection. | Implemented and mechanically qualified; U1 human retest Pending. |
+| `M66-F003` | Fillet creation used a hidden Driving fallback and deleting that dimension left the visible arc without a drag route. | Use pointer radius placement with Reference default and explicit Driving intent; expose semantic arc-center drag and prove retained association/mobility. | Implemented and mechanically qualified, including a multi-sample pointer gesture; U3 human retest Pending. |
+| `M66-F004` | Scratch preview geometry could intercept a later Fillet placement click. | Preview-only foreground geometry blocks hidden sources but is neither hoverable nor forwarded as a live operand. | Implemented and mechanically qualified; U2 human retest Pending. |
+| `M66-F005` | Curve picking was too narrow for predictable authoring. | Use one headless nearest-curve acquisition with an inclusive 12-pixel boundary and stable persistent-identity ties. | Implemented and mechanically qualified with F009 parity; U2 human retest Pending. |
+| `M66-F007` | Fillet configuration controls are broken/clipped when rendered beside the scrolling tool selector. | Render a viewport-clamped canvas overlay outside palette overflow; directly test edges, resize, scroll and palette disclosure reflow. | Implemented and mechanically qualified; U2 human retest Pending. |
+| `M66-F008` | An invalid exploratory Fillet hover exits placement and forces both parents to be selected again. | Clear only the unconfirmed candidate/preview and retain both parents plus radius-placement mode; keep confirmed terminal failure semantics separate. | Implemented and mechanically qualified; U2 human retest Pending. |
+| `M66-F009` | Click acquisition became wider but CSS stroke hover still used the painted line, so visible hover and actual click disagreed. | Route operation hover and click through the same preview-aware headless hit test, including exact 12-pixel boundary and preview barriers. | Implemented and mechanically qualified; U2 human retest Pending. |
+| `M66-F010` | A successful point drag left accepted geometry usable but literal input equality falsely disabled helper authoring because the one-shot candidate request was no longer retained. | Add sketch-owned current-publication compatibility that ignores only `candidate_request`; retain all other input/attempt identity checks and exact proposal CAS. | Implemented and mechanically qualified; U3 human retest Pending. |
+| `M66-F011` | After deleting the radius dimension, a free Fillet still had an arbitrary apparent minimum/maximum size. | Persist full `Interior` support for affine pairs. For exactly one non-affine parent, certify a strict curved `Local` cell over the full bounded support or one explicit unwrapped period using outward-rounded tangent/line cross-product intervals; never cross a tangent-parallel barrier. Keep two-non-affine authoring typed unsupported until pairwise continuation, without narrowing M28. | Implemented and mechanically qualified with exact hostile-root and mobility regressions; U3 human retest Pending. |
 
 Every objective defect requires a direct owning-layer regression before targeted human recheck. A
-replacement candidate must be rebuilt and fully qualified even when one remaining change is
+replacement candidate must be rebuilt and fully qualified even when a remaining change is
 presentation-only.
+
+## Archived three-tool history
+
+The superseded, unapproved Fillet/Offset/Mirror candidate is preserved at
+`origin/archive/m66-three-helper-tools-2026-08-02`, commit `80d4939`. Its former Offset/Mirror UAT
+sections and Offset findings `M66-F001`/`M66-F006` are archived history, not active checks. Removing
+their M66 authoring/UI/samples and M66-only offset requests does not remove the completed M25 signed
+Offset constraints or M58 exact Mirror operation-companion API.
 
 ## Approval
 
 M66 closes only after:
 
-1. one exact candidate commit and Tailscale endpoint are recorded above;
+1. one exact post-pivot candidate source and Tailscale endpoint are recorded above;
 2. formatting, warnings-denied locked workspace Clippy, locked all-feature workspace tests,
-   all-feature demo-web WASM, release Trunk and `git diff --check` pass on that source state;
-3. every scorecard item is Pass or an explicitly accepted scoped limitation;
-4. every finding has a tested disposition; and
+   all-feature demo-web WASM, release Trunk and `git diff --check` pass on that source;
+3. every active scorecard item is Pass or an explicitly accepted scoped limitation;
+4. every active finding has a tested disposition; and
 5. the supervising human explicitly approves M66.
