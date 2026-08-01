@@ -37,7 +37,7 @@ pub use operation_authoring::{
     OperationAuthoringCandidate, OperationAuthoringGuidance, OperationAuthoringOperandKind,
     OperationAuthoringOptions, OperationAuthoringOutcome, OperationAuthoringPick,
     OperationAuthoringStage, OperationAuthoringState, OperationAuthoringTool,
-    OperationAuthoringWarning, OperationAuthoringWarningKind, OperationLineOffsetMode,
+    OperationAuthoringWarning, OperationAuthoringWarningKind,
 };
 #[doc(hidden)]
 pub use qualification::{

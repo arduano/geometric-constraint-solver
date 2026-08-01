@@ -8,42 +8,19 @@ use geosolve_sketch::{
     ContactDomain, ContactNeighborhood, CurveCurveFilletRequest, CurveDefinition,
     CurveFilletParentRequest, CurveSpan, DesignPointId, DocumentArcSweep, DocumentCurveNormalSide,
     DocumentDimensionMode, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint,
-    DocumentLineOffsetOrientation, DocumentLineSide, DocumentTrimParameter, PreparedSketchInput,
-    SketchDocument,
+    DocumentTrimParameter, PreparedSketchInput, SketchDocument,
 };
-use geosolve_sketch_ops::{AssociativeLineOffsetMode, LineOffsetChainSpan, SketchOperationRequest};
+use geosolve_sketch_ops::SketchOperationRequest;
 
 use crate::SelectionItem;
 
 const LOCAL_FILLET_ITERATIONS: usize = 16;
 const LOCAL_FILLET_WINDOW_FRACTION: f64 = 0.35;
-const MAX_JOINED_OFFSET_SPANS: usize = 32;
 
-/// Closed operation palette owned by the reusable authoring state machine.
+/// Closed operation palette owned by the reusable Fillet authoring state machine.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OperationAuthoringTool {
     Fillet,
-    LineOffset,
-    Mirror,
-}
-
-/// Presentation-facing line-offset extent policy. The editor translates this
-/// closed choice into the operations companion's request vocabulary so hosts do
-/// not need a direct `geosolve-sketch-ops` dependency.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum OperationLineOffsetMode {
-    #[default]
-    ExactTranslatedSegment,
-    SupportingLine,
-}
-
-impl From<OperationLineOffsetMode> for AssociativeLineOffsetMode {
-    fn from(value: OperationLineOffsetMode) -> Self {
-        match value {
-            OperationLineOffsetMode::ExactTranslatedSegment => Self::ExactTranslatedSegment,
-            OperationLineOffsetMode::SupportingLine => Self::SupportingLine,
-        }
-    }
 }
 
 /// One finite model-space geometry pick.
@@ -173,8 +150,8 @@ impl OperationAuthoringPick {
     }
 }
 
-/// Explicit process-local authoring choices. `None` distance values acquire the
-/// documented `0.1 * model_scale` default on first tool activation and are then
+/// Explicit process-local authoring choices. A `None` radius acquires the
+/// documented `0.1 * model_scale` default on first tool activation and is then
 /// remembered by this state value.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct OperationAuthoringOptions {
@@ -183,8 +160,6 @@ pub struct OperationAuthoringOptions {
     pub fillet_flip_first_side: bool,
     pub fillet_flip_second_side: bool,
     pub fillet_alternate_arc: bool,
-    pub offset_distance: Option<f64>,
-    pub offset_mode: OperationLineOffsetMode,
 }
 
 impl Default for OperationAuthoringOptions {
@@ -195,8 +170,6 @@ impl Default for OperationAuthoringOptions {
             fillet_flip_first_side: false,
             fillet_flip_second_side: false,
             fillet_alternate_arc: false,
-            offset_distance: None,
-            offset_mode: OperationLineOffsetMode::ExactTranslatedSegment,
         }
     }
 }
@@ -208,11 +181,6 @@ pub enum OperationAuthoringStage {
     PickFirstFilletCurve,
     PickSecondFilletCurve,
     PlaceFilletRadius,
-    PickOffsetSource,
-    CollectOffsetPath,
-    ChooseOffsetSide,
-    PickMirrorSource,
-    PickMirrorAxis,
     PreviewReady,
 }
 
@@ -223,10 +191,6 @@ pub enum OperationAuthoringOperandKind {
     DistinctRegularCurveSpan,
     FilletCornerPoint,
     FilletRadius,
-    LineOrPolylineSpan,
-    MirrorableCurve,
-    LineAxis,
-    OffsetSide,
 }
 
 /// Current headless guidance for one active tool.
@@ -252,14 +216,11 @@ pub enum OperationAuthoringWarningKind {
     FilletCornerNotInterior,
     AlreadyTrimmed,
     UnsupportedCurveFamily,
+    UnsupportedFilletPair,
     SingularFillet,
     AmbiguousFilletRoot,
     AmbiguousTrimSide,
     UnresolvedLocalFilletRoot,
-    OffsetSideRequired,
-    DisconnectedOffsetPath,
-    DuplicateOffsetSpan,
-    OffsetPathLimit,
     NoPreview,
     OperationUnsupported(geosolve_sketch_ops::SketchOperationUnsupportedReason),
     OperationIncomplete(geosolve_sketch_ops::SketchOperationIncompleteReason),
@@ -316,8 +277,8 @@ impl OperationAuthoringCandidate {
         &self.request
     }
 
-    /// Whether all semantic pointer stages, including line-offset side
-    /// confirmation, are complete. This does not claim solver acceptance; only a
+    /// Whether all semantic pointer stages, including Fillet radius confirmation,
+    /// are complete. This does not claim solver acceptance; only a
     /// coordinator-held [`crate::OperationAuthoringPreview`] is apply-ready.
     #[must_use]
     pub const fn is_confirmed(&self) -> bool {
@@ -348,15 +309,14 @@ pub enum OperationAuthoringOutcome {
     Inactive,
 }
 
-/// Separate variable-arity helper-operation collector. It deliberately does not
-/// overload the fixed-arity M62 constraint [`crate::AuthoringState`].
+/// Separate Fillet-operation collector. It deliberately does not overload the
+/// M62 constraint [`crate::AuthoringState`].
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct OperationAuthoringState {
     active: Option<OperationAuthoringTool>,
     picks: Vec<OperationAuthoringPick>,
     candidate: Option<OperationAuthoringCandidate>,
     candidate_confirmed: bool,
-    offset_side: Option<DocumentLineSide>,
     options: OperationAuthoringOptions,
 }
 
@@ -400,42 +360,26 @@ impl OperationAuthoringState {
         document: &SketchDocument,
         options: OperationAuthoringOptions,
     ) -> OperationAuthoringOutcome {
-        if !valid_optional_positive(options.fillet_radius)
-            || !valid_optional_positive(options.offset_distance)
-        {
-            self.transaction_finished();
+        if !valid_optional_positive(options.fillet_radius) {
+            self.candidate = None;
+            self.candidate_confirmed = false;
             return self.warning(
                 OperationAuthoringWarningKind::NonFinitePick,
-                "operation distances must be finite and positive",
+                "fillet radius must be finite and positive",
             );
         }
         self.options = options;
         self.ensure_defaults(document);
-        let Some(tool) = self.active else {
+        let Some(OperationAuthoringTool::Fillet) = self.active else {
             return OperationAuthoringOutcome::Inactive;
         };
-        match tool {
-            OperationAuthoringTool::Fillet if self.picks.len() == 2 => {
-                self.stage_complete_candidate(document, self.candidate_confirmed)
-            }
-            OperationAuthoringTool::LineOffset if !self.picks.is_empty() => {
-                let side = self.offset_side.unwrap_or(DocumentLineSide::Left);
-                self.stage_offset_candidate(document, side, self.candidate_confirmed)
-            }
-            OperationAuthoringTool::Mirror if self.picks.len() == 2 => {
-                if let Some(candidate) = self.candidate.clone() {
-                    OperationAuthoringOutcome::PreviewRequested {
-                        candidate,
-                        guidance: self.guidance(),
-                    }
-                } else {
-                    self.stage_complete_candidate(document, true)
-                }
-            }
-            _ => OperationAuthoringOutcome::Collecting {
+        if self.picks.len() == 2 {
+            self.stage_complete_candidate(document, self.candidate_confirmed)
+        } else {
+            OperationAuthoringOutcome::Collecting {
                 picks: self.picks.clone(),
                 guidance: self.guidance(),
-            },
+            }
         }
     }
 
@@ -450,7 +394,7 @@ impl OperationAuthoringState {
         selection: &[OperationAuthoringPick],
     ) -> OperationAuthoringOutcome {
         self.begin_activation(document, tool);
-        if selection.len() > maximum_operand_count(tool) {
+        if selection.len() > 2 {
             return self.warning(
                 OperationAuthoringWarningKind::WrongArity,
                 "the preselection contains too many operands for this operation",
@@ -492,9 +436,7 @@ impl OperationAuthoringState {
                 Ok::<_, OperationAuthoringWarningKind>(picks)
             });
         match picks {
-            Ok(picks) if picks.len() <= maximum_operand_count(tool) => {
-                self.activate(document, tool, &picks)
-            }
+            Ok(picks) if picks.len() <= 2 => self.activate(document, tool, &picks),
             Ok(_) => self.warning(
                 OperationAuthoringWarningKind::WrongArity,
                 "the preselection contains too many operands for this operation",
@@ -562,7 +504,7 @@ impl OperationAuthoringState {
         outcome
     }
 
-    /// One universal pointer-down transition. Offset-side confirmation is owned
+    /// One universal pointer-down transition. Fillet radius confirmation is owned
     /// here, so a thin host never branches on pending stages.
     #[must_use]
     pub fn pointer_down(
@@ -576,8 +518,8 @@ impl OperationAuthoringState {
     }
 
     /// One universal pointer-down transition that may carry the two expanded
-    /// spans of one unambiguous Fillet corner point. Offset path collection and
-    /// radius/side confirmation remain headless stage policy.
+    /// spans of one unambiguous Fillet corner point. Radius confirmation remains
+    /// headless stage policy.
     #[must_use]
     pub fn pointer_down_picks(
         &mut self,
@@ -596,12 +538,6 @@ impl OperationAuthoringState {
         }
         if self.active == Some(OperationAuthoringTool::Fillet) && self.picks.len() == 2 {
             return self.confirm(document, model_position);
-        }
-        if self.active == Some(OperationAuthoringTool::LineOffset) && !self.picks.is_empty() {
-            if picks.is_empty() {
-                return self.confirm(document, model_position);
-            }
-            return self.pick_many(document, picks.iter().cloned());
         }
         if picks.is_empty() {
             self.warning(
@@ -632,11 +568,8 @@ impl OperationAuthoringState {
                 "helper operations accept curve-span operands",
             );
         };
-        match tool {
-            OperationAuthoringTool::Fillet => self.pick_fillet(document, pick, span),
-            OperationAuthoringTool::LineOffset => self.pick_line_offset(document, pick, span),
-            OperationAuthoringTool::Mirror => self.pick_mirror(document, pick, span),
-        }
+        let OperationAuthoringTool::Fillet = tool;
+        self.pick_fillet(document, pick, span)
     }
 
     fn pick_fillet(
@@ -693,96 +626,7 @@ impl OperationAuthoringState {
         }
     }
 
-    fn pick_line_offset(
-        &mut self,
-        document: &SketchDocument,
-        pick: OperationAuthoringPick,
-        span: CurveSpan,
-    ) -> OperationAuthoringOutcome {
-        if !is_line_span(document, span) {
-            return self.warning(
-                OperationAuthoringWarningKind::WrongOperandKind,
-                "line offset requires a line or polyline span",
-            );
-        }
-        if self.picks.len() >= MAX_JOINED_OFFSET_SPANS {
-            return self.warning(
-                OperationAuthoringWarningKind::OffsetPathLimit,
-                "joined offset paths accept at most 32 explicitly picked spans",
-            );
-        }
-        if self
-            .picks
-            .iter()
-            .filter_map(OperationAuthoringPick::curve_span)
-            .any(|source| source == span)
-        {
-            return self.warning(
-                OperationAuthoringWarningKind::DuplicateOffsetSpan,
-                "the offset path already contains this span",
-            );
-        }
-        let mut prospective = self.picks.clone();
-        prospective.push(pick.clone());
-        if offset_chain_sources(document, &prospective).is_err() {
-            return self.warning(
-                OperationAuthoringWarningKind::DisconnectedOffsetPath,
-                "pick a span connected to either open end of the current offset path",
-            );
-        }
-        self.picks.push(pick);
-        let side = self.offset_side.unwrap_or(DocumentLineSide::Left);
-        self.offset_side = Some(side);
-        // Preselection and the first pick seed a visible default-side preview;
-        // pointer motion can replace it before confirmation.
-        self.stage_offset_candidate(document, side, false)
-    }
-
-    fn pick_mirror(
-        &mut self,
-        document: &SketchDocument,
-        pick: OperationAuthoringPick,
-        span: CurveSpan,
-    ) -> OperationAuthoringOutcome {
-        if self.picks.is_empty() {
-            if !is_mirrorable_curve(document, span) {
-                return self.warning(
-                    OperationAuthoringWarningKind::UnsupportedCurveFamily,
-                    "mirror supports line/polyline, Bezier and non-rational B-spline sources",
-                );
-            }
-            self.picks.push(pick);
-            return OperationAuthoringOutcome::Collecting {
-                picks: self.picks.clone(),
-                guidance: self.guidance(),
-            };
-        }
-        if self.picks.len() > 1 {
-            return self.warning(
-                OperationAuthoringWarningKind::WrongArity,
-                "mirror already has a source and axis",
-            );
-        }
-        if !is_line_span(document, span) {
-            return self.warning(
-                OperationAuthoringWarningKind::WrongOperandKind,
-                "mirror axis must be a line or polyline span",
-            );
-        }
-        if self.picks[0]
-            .curve_span()
-            .is_some_and(|source| source.curve == span.curve)
-        {
-            return self.warning(
-                OperationAuthoringWarningKind::DuplicateSupport,
-                "mirror source and axis must be distinct curves",
-            );
-        }
-        self.picks.push(pick);
-        self.stage_complete_candidate(document, true)
-    }
-
-    /// Updates the non-committable line-offset side preview from a finite pointer
+    /// Updates the non-committable Fillet radius preview from a finite pointer
     /// location. Pan/zoom remain presentation concerns and do not mutate this state.
     #[must_use]
     pub fn hover(
@@ -806,20 +650,13 @@ impl OperationAuthoringState {
         if self.active == Some(OperationAuthoringTool::Fillet) && self.picks.len() == 2 {
             return self.stage_fillet_radius_candidate(document, model_position, false);
         }
-        if self.active == Some(OperationAuthoringTool::LineOffset) && !self.picks.is_empty() {
-            return match offset_path_side(document, &self.picks, model_position, self.offset_side) {
-                Ok(side) => self.stage_offset_candidate(document, side, false),
-                Err(kind) => self.warning(kind, "line-offset side could not be resolved"),
-            };
-        }
         OperationAuthoringOutcome::Collecting {
             picks: self.picks.clone(),
             guidance: self.guidance(),
         }
     }
 
-    /// Confirms the currently hovered line-offset side and makes its preview
-    /// committable. For other tools this returns the existing candidate unchanged.
+    /// Confirms the currently placed Fillet radius and makes its preview committable.
     #[must_use]
     pub fn confirm(
         &mut self,
@@ -828,12 +665,6 @@ impl OperationAuthoringState {
     ) -> OperationAuthoringOutcome {
         if self.active == Some(OperationAuthoringTool::Fillet) && self.picks.len() == 2 {
             return self.stage_fillet_radius_candidate(document, model_position, true);
-        }
-        if self.active == Some(OperationAuthoringTool::LineOffset) && !self.picks.is_empty() {
-            return match offset_path_side(document, &self.picks, model_position, self.offset_side) {
-                Ok(side) => self.stage_offset_candidate(document, side, true),
-                Err(kind) => self.warning(kind, "line-offset side could not be resolved"),
-            };
         }
         match self.candidate.clone() {
             Some(candidate) => OperationAuthoringOutcome::PreviewRequested {
@@ -850,21 +681,13 @@ impl OperationAuthoringState {
     /// Requests commit of the exact currently staged preview.
     #[must_use]
     pub fn apply(&self) -> OperationAuthoringOutcome {
-        let Some(tool) = self.active else {
+        let Some(OperationAuthoringTool::Fillet) = self.active else {
             return OperationAuthoringOutcome::Inactive;
         };
         match (&self.candidate, self.candidate_confirmed) {
             (Some(candidate), true) => OperationAuthoringOutcome::Apply(candidate.clone()),
-            (Some(_), false) if tool == OperationAuthoringTool::LineOffset => {
-                OperationAuthoringOutcome::Warning(OperationAuthoringWarning {
-                    tool,
-                    stage: self.guidance().stage,
-                    kind: OperationAuthoringWarningKind::OffsetSideRequired,
-                    message: "click the desired side before applying the offset".into(),
-                })
-            }
             _ => OperationAuthoringOutcome::Warning(OperationAuthoringWarning {
-                tool,
+                tool: OperationAuthoringTool::Fillet,
                 stage: self.guidance().stage,
                 kind: OperationAuthoringWarningKind::NoPreview,
                 message: "complete the operation picks before applying".into(),
@@ -883,7 +706,18 @@ impl OperationAuthoringState {
         self.picks.clear();
         self.candidate = None;
         self.candidate_confirmed = false;
-        self.offset_side = None;
+    }
+
+    /// Records a failed scratch-preview preparation without discarding reusable
+    /// Fillet operands. An unconfirmed radius preview returns to radius placement;
+    /// failure of a confirmed, apply-ready candidate remains terminal.
+    pub fn preview_failed(&mut self) {
+        if self.candidate_confirmed {
+            self.transaction_finished();
+        } else {
+            self.candidate = None;
+            self.candidate_confirmed = false;
+        }
     }
 
     /// First Escape clears picks/candidate; a subsequent Escape exits the tool.
@@ -894,7 +728,6 @@ impl OperationAuthoringState {
         };
         if self.picks.is_empty() && self.candidate.is_none() {
             self.active = None;
-            self.offset_side = None;
             OperationAuthoringOutcome::ModeExited
         } else {
             self.transaction_finished();
@@ -967,9 +800,6 @@ impl OperationAuthoringState {
         if self.options.fillet_radius.is_none() {
             self.options.fillet_radius = Some(default);
         }
-        if self.options.offset_distance.is_none() {
-            self.options.offset_distance = Some(default);
-        }
     }
 
     fn begin_activation(&mut self, document: &SketchDocument, tool: OperationAuthoringTool) {
@@ -983,13 +813,10 @@ impl OperationAuthoringState {
         document: &SketchDocument,
         ready: bool,
     ) -> OperationAuthoringOutcome {
-        let candidate = match self.active {
-            Some(OperationAuthoringTool::Fillet) => {
-                synthesize_fillet(document, &self.picks, self.options)
-            }
-            Some(OperationAuthoringTool::Mirror) => synthesize_mirror(&self.picks),
-            Some(OperationAuthoringTool::LineOffset) | None => unreachable!(),
+        let Some(OperationAuthoringTool::Fillet) = self.active else {
+            return OperationAuthoringOutcome::Inactive;
         };
+        let candidate = synthesize_fillet(document, &self.picks, self.options);
         match candidate {
             Ok(mut candidate) => {
                 candidate.confirmed = ready;
@@ -1032,70 +859,19 @@ impl OperationAuthoringState {
                 self.options.fillet_radius = Some(radius);
                 self.stage_complete_candidate(document, ready)
             }
-            Err(kind) => self.warning(kind, "fillet radius could not be resolved from the pointer"),
-        }
-    }
-
-    fn stage_offset_candidate(
-        &mut self,
-        document: &SketchDocument,
-        side: DocumentLineSide,
-        ready: bool,
-    ) -> OperationAuthoringOutcome {
-        let distance = self
-            .options
-            .offset_distance
-            .expect("operation defaults initialized");
-        let source_input = match common_source_input(&self.picks) {
-            Ok(source_input) => source_input,
             Err(kind) => {
-                return self.warning(
-                    kind,
-                    "the line-offset source belongs to an older accepted input",
-                );
-            }
-        };
-        let request = if self.picks.len() == 1 {
-            let source = self.picks[0]
-                .curve_span()
-                .expect("validated offset pick is a curve");
-            SketchOperationRequest::AssociativeLineOffset {
-                label: "Line offset".into(),
-                source,
-                distance,
-                side,
-                mode: self.options.offset_mode.into(),
-            }
-        } else {
-            let sources = match offset_chain_sources(document, &self.picks) {
-                Ok(sources) => sources,
-                Err(kind) => {
-                    return self.warning(
-                        kind,
-                        "the explicitly picked spans do not form one open offset path",
-                    );
+                if self.candidate_confirmed {
+                    return self
+                        .warning(kind, "fillet radius could not be resolved from the pointer");
                 }
-            };
-            SketchOperationRequest::JoinedLineOffset {
-                label: "Joined line offset".into(),
-                sources,
-                distance,
-                side,
+                // An exploratory pointer sample is disposable. Do not leave the
+                // previous unconfirmed geometry looking current after this sample
+                // proved invalid, but retain both parent picks so the next valid
+                // sample can immediately rebuild the preview.
+                self.candidate = None;
+                self.candidate_confirmed = false;
+                self.warning(kind, "fillet radius could not be resolved from the pointer")
             }
-        };
-        let candidate = OperationAuthoringCandidate {
-            tool: OperationAuthoringTool::LineOffset,
-            picks: self.picks.clone(),
-            request,
-            confirmed: ready,
-            source_input,
-        };
-        self.offset_side = Some(side);
-        self.candidate = Some(candidate.clone());
-        self.candidate_confirmed = ready;
-        OperationAuthoringOutcome::PreviewRequested {
-            candidate,
-            guidance: self.guidance(),
         }
     }
 
@@ -1131,21 +907,14 @@ impl OperationAuthoringState {
             .active
             .expect("guidance is requested only for an active operation tool");
         let (stage, expected, message) = if self.candidate_confirmed {
-            let message = match (tool, self.picks.len()) {
-                (OperationAuthoringTool::LineOffset, 1) => {
-                    "Associative offset preview ready; source edits will propagate. Apply or press Enter"
-                }
-                (OperationAuthoringTool::LineOffset, _) => {
-                    "One-shot joined offset preview ready; source edits will not propagate. Apply or press Enter"
-                }
-                (OperationAuthoringTool::Fillet | OperationAuthoringTool::Mirror, _) => {
-                    "Review the accepted preview, then Apply or press Enter"
-                }
-            };
-            (OperationAuthoringStage::PreviewReady, Vec::new(), message)
+            (
+                OperationAuthoringStage::PreviewReady,
+                Vec::new(),
+                "Review the accepted preview, then Apply or press Enter",
+            )
         } else {
-            match (tool, self.picks.len()) {
-                (OperationAuthoringTool::Fillet, 0) => (
+            match self.picks.len() {
+                0 => (
                     OperationAuthoringStage::PickFirstFilletCurve,
                     vec![
                         OperationAuthoringOperandKind::RegularCurveSpan,
@@ -1153,46 +922,15 @@ impl OperationAuthoringState {
                     ],
                     "Pick two curves, or pick one unambiguous polyline corner",
                 ),
-                (OperationAuthoringTool::Fillet, 1) => (
+                1 => (
                     OperationAuthoringStage::PickSecondFilletCurve,
                     vec![OperationAuthoringOperandKind::DistinctRegularCurveSpan],
                     "Pick a distinct second curve near the portion to retain",
                 ),
-                (OperationAuthoringTool::Fillet, _) => (
+                _ => (
                     OperationAuthoringStage::PlaceFilletRadius,
                     vec![OperationAuthoringOperandKind::FilletRadius],
                     "Move the pointer to place the flexible radius, then click",
-                ),
-                (OperationAuthoringTool::LineOffset, 0) => (
-                    OperationAuthoringStage::PickOffsetSource,
-                    vec![OperationAuthoringOperandKind::LineOrPolylineSpan],
-                    "Pick a line or polyline span to offset",
-                ),
-                (OperationAuthoringTool::LineOffset, 1) => (
-                    OperationAuthoringStage::CollectOffsetPath,
-                    vec![
-                        OperationAuthoringOperandKind::LineOrPolylineSpan,
-                        OperationAuthoringOperandKind::OffsetSide,
-                    ],
-                    "Associative offset: source edits will propagate. Pick connected spans for one-shot joined geometry, or click empty canvas on the desired side to finish",
-                ),
-                (OperationAuthoringTool::LineOffset, _) => (
-                    OperationAuthoringStage::CollectOffsetPath,
-                    vec![
-                        OperationAuthoringOperandKind::LineOrPolylineSpan,
-                        OperationAuthoringOperandKind::OffsetSide,
-                    ],
-                    "One-shot joined offset: source edits will not propagate. Pick connected spans, or click empty canvas on the desired side to finish",
-                ),
-                (OperationAuthoringTool::Mirror, 0) => (
-                    OperationAuthoringStage::PickMirrorSource,
-                    vec![OperationAuthoringOperandKind::MirrorableCurve],
-                    "Pick one supported source curve",
-                ),
-                (OperationAuthoringTool::Mirror, _) => (
-                    OperationAuthoringStage::PickMirrorAxis,
-                    vec![OperationAuthoringOperandKind::LineAxis],
-                    "Pick the line axis",
                 ),
             }
         };
@@ -1207,13 +945,6 @@ impl OperationAuthoringState {
 
 fn valid_optional_positive(value: Option<f64>) -> bool {
     value.is_none_or(|value| value.is_finite() && value > 0.0)
-}
-
-const fn maximum_operand_count(tool: OperationAuthoringTool) -> usize {
-    match tool {
-        OperationAuthoringTool::Fillet | OperationAuthoringTool::Mirror => 2,
-        OperationAuthoringTool::LineOffset => MAX_JOINED_OFFSET_SPANS,
-    }
 }
 
 fn common_source_input(
@@ -1256,28 +987,6 @@ fn validate_pick(
         return Err(OperationAuthoringWarningKind::StalePick);
     }
     Ok(())
-}
-
-fn is_line_span(document: &SketchDocument, span: CurveSpan) -> bool {
-    document.curve(span.curve).is_some_and(|curve| {
-        matches!(
-            curve.definition,
-            CurveDefinition::Line { .. } | CurveDefinition::Polyline { .. }
-        )
-    })
-}
-
-fn is_mirrorable_curve(document: &SketchDocument, span: CurveSpan) -> bool {
-    document.curve(span.curve).is_some_and(|curve| {
-        matches!(
-            curve.definition,
-            CurveDefinition::Line { .. }
-                | CurveDefinition::Polyline { .. }
-                | CurveDefinition::QuadraticBezier { .. }
-                | CurveDefinition::CubicBezier { .. }
-                | CurveDefinition::BSpline { .. }
-        )
-    })
 }
 
 pub(crate) fn resolve_operation_item_picks(
@@ -1424,125 +1133,6 @@ fn line_span_shared_endpoint_hints(
     Some(*hints)
 }
 
-fn offset_chain_sources(
-    document: &SketchDocument,
-    picks: &[OperationAuthoringPick],
-) -> Result<Vec<LineOffsetChainSpan>, OperationAuthoringWarningKind> {
-    let Some(first) = picks.first().and_then(OperationAuthoringPick::curve_span) else {
-        return Err(OperationAuthoringWarningKind::WrongOperandKind);
-    };
-    let (mut path_start, mut path_end) = line_span_endpoint_ids(document, first)
-        .ok_or(OperationAuthoringWarningKind::WrongOperandKind)?;
-    let mut ordered = vec![LineOffsetChainSpan {
-        source: first,
-        orientation: DocumentLineOffsetOrientation::Same,
-    }];
-    for pick in &picks[1..] {
-        let span = pick
-            .curve_span()
-            .ok_or(OperationAuthoringWarningKind::WrongOperandKind)?;
-        if ordered.iter().any(|source| source.source == span) {
-            return Err(OperationAuthoringWarningKind::DuplicateOffsetSpan);
-        }
-        let (start, end) = line_span_endpoint_ids(document, span)
-            .ok_or(OperationAuthoringWarningKind::WrongOperandKind)?;
-        let mut placements = Vec::new();
-        if start == path_end {
-            placements.push((false, DocumentLineOffsetOrientation::Same, end));
-        }
-        if end == path_end {
-            placements.push((false, DocumentLineOffsetOrientation::Reversed, start));
-        }
-        if end == path_start {
-            placements.push((true, DocumentLineOffsetOrientation::Same, start));
-        }
-        if start == path_start {
-            placements.push((true, DocumentLineOffsetOrientation::Reversed, end));
-        }
-        let [(prepend, orientation, outer)] = placements.as_slice() else {
-            return Err(OperationAuthoringWarningKind::DisconnectedOffsetPath);
-        };
-        let source = LineOffsetChainSpan {
-            source: span,
-            orientation: *orientation,
-        };
-        if *prepend {
-            ordered.insert(0, source);
-            path_start = *outer;
-        } else {
-            ordered.push(source);
-            path_end = *outer;
-        }
-    }
-    Ok(ordered)
-}
-
-fn offset_path_side(
-    document: &SketchDocument,
-    picks: &[OperationAuthoringPick],
-    model_position: [f64; 2],
-    fallback: Option<DocumentLineSide>,
-) -> Result<DocumentLineSide, OperationAuthoringWarningKind> {
-    if !model_position.into_iter().all(f64::is_finite) {
-        return Err(OperationAuthoringWarningKind::NonFinitePick);
-    }
-    let sources = offset_chain_sources(document, picks)?;
-    let mut nearest = None::<(f64, usize, f64, f64)>;
-    for (index, source) in sources.iter().enumerate() {
-        let (intrinsic_start, intrinsic_end) = line_span_endpoint_ids(document, source.source)
-            .ok_or(OperationAuthoringWarningKind::WrongOperandKind)?;
-        let (start_id, end_id) = match source.orientation {
-            DocumentLineOffsetOrientation::Same => (intrinsic_start, intrinsic_end),
-            DocumentLineOffsetOrientation::Reversed => (intrinsic_end, intrinsic_start),
-        };
-        let start = document
-            .point(start_id)
-            .ok_or(OperationAuthoringWarningKind::MissingObject)?
-            .position;
-        let end = document
-            .point(end_id)
-            .ok_or(OperationAuthoringWarningKind::MissingObject)?
-            .position;
-        let direction = [end[0] - start[0], end[1] - start[1]];
-        let length_squared = direction[0].mul_add(direction[0], direction[1] * direction[1]);
-        if !length_squared.is_finite() || length_squared <= 0.0 {
-            return Err(OperationAuthoringWarningKind::StalePick);
-        }
-        let pointer = [model_position[0] - start[0], model_position[1] - start[1]];
-        let parameter = ((pointer[0] * direction[0] + pointer[1] * direction[1]) / length_squared)
-            .clamp(0.0, 1.0);
-        let closest = [
-            start[0] + parameter * direction[0],
-            start[1] + parameter * direction[1],
-        ];
-        let distance_squared = (model_position[0] - closest[0]).mul_add(
-            model_position[0] - closest[0],
-            (model_position[1] - closest[1]) * (model_position[1] - closest[1]),
-        );
-        let cross = direction[0] * pointer[1] - direction[1] * pointer[0];
-        let length = length_squared.sqrt();
-        if !distance_squared.is_finite() || !cross.is_finite() || !length.is_finite() {
-            return Err(OperationAuthoringWarningKind::NonFinitePick);
-        }
-        let candidate = (distance_squared, index, cross, length);
-        if nearest
-            .as_ref()
-            .is_none_or(|current| (candidate.0, candidate.1) < (current.0, current.1))
-        {
-            nearest = Some(candidate);
-        }
-    }
-    let (_, _, cross, length) = nearest.ok_or(OperationAuthoringWarningKind::WrongOperandKind)?;
-    let threshold = length * document.model_scale() * 1.0e-12;
-    Ok(if cross > threshold {
-        DocumentLineSide::Left
-    } else if cross < -threshold {
-        DocumentLineSide::Right
-    } else {
-        fallback.unwrap_or(DocumentLineSide::Left)
-    })
-}
-
 fn pointer_fillet_radius(
     document: &SketchDocument,
     picks: &[OperationAuthoringPick],
@@ -1637,42 +1227,6 @@ fn pointer_fillet_radius(
     Ok(radius)
 }
 
-fn synthesize_mirror(
-    picks: &[OperationAuthoringPick],
-) -> Result<OperationAuthoringCandidate, (OperationAuthoringWarningKind, &'static str)> {
-    let [source, axis] = picks else {
-        return Err((
-            OperationAuthoringWarningKind::WrongArity,
-            "mirror requires one source and one line axis",
-        ));
-    };
-    if source.curve_span().expect("validated mirror source").curve
-        == axis.curve_span().expect("validated mirror axis").curve
-    {
-        return Err((
-            OperationAuthoringWarningKind::DuplicateSupport,
-            "mirror source and axis must be distinct curves",
-        ));
-    }
-    let source_input = common_source_input(picks).map_err(|kind| {
-        (
-            kind,
-            "mirror operands were picked from different accepted inputs",
-        )
-    })?;
-    Ok(OperationAuthoringCandidate {
-        tool: OperationAuthoringTool::Mirror,
-        picks: picks.to_vec(),
-        request: SketchOperationRequest::Mirror {
-            label: "Mirror".into(),
-            source: source.curve_span().expect("validated mirror source").curve,
-            axis: axis.curve_span().expect("validated mirror axis"),
-        },
-        confirmed: true,
-        source_input,
-    })
-}
-
 #[derive(Clone, Copy, Debug)]
 struct LocalFilletSolution {
     parameters: [f64; 2],
@@ -1705,6 +1259,12 @@ fn synthesize_fillet(
         return Err((
             OperationAuthoringWarningKind::DuplicateSupport,
             "same-curve fillet parents must be distinct adjacent line spans",
+        ));
+    }
+    if !is_affine_line_span(document, first_span) && !is_affine_line_span(document, second_span) {
+        return Err((
+            OperationAuthoringWarningKind::UnsupportedFilletPair,
+            "Fillet authoring between two curved parents requires certified pairwise continuation",
         ));
     }
     let source_input = common_source_input(picks).map_err(|kind| {
@@ -1858,8 +1418,12 @@ fn synthesize_fillet(
             }
         };
     }
-    let first_parent = fillet_parent(document, first, solution.parameters[0], solution.sides[0])?;
-    let second_parent = fillet_parent(document, second, solution.parameters[1], solution.sides[1])?;
+    let [first_parent, second_parent] = fillet_parents(
+        document,
+        [first, second],
+        solution.parameters,
+        solution.sides,
+    )?;
     Ok(OperationAuthoringCandidate {
         tool: OperationAuthoringTool::Fillet,
         picks: picks.to_vec(),
@@ -1951,6 +1515,7 @@ fn fillet_parent(
     pick: &OperationAuthoringPick,
     total_parameter: f64,
     side: DocumentCurveNormalSide,
+    neighborhood: ContactNeighborhood,
 ) -> Result<CurveFilletParentRequest, (OperationAuthoringWarningKind, &'static str)> {
     let span = pick.curve_span().expect("validated fillet pick");
     let domain = primary_domain(document, span).ok_or((
@@ -1958,7 +1523,23 @@ fn fillet_parent(
         "the selected curve does not expose a fillet contact domain",
     ))?;
     match domain {
-        ContactDomain::Periodic { period } => {
+        FilletContactDomain::Periodic { period } => {
+            let ContactNeighborhood::Local {
+                lower: neighborhood_lower,
+                upper: neighborhood_upper,
+            } = neighborhood
+            else {
+                return Err((
+                    OperationAuthoringWarningKind::UnresolvedLocalFilletRoot,
+                    "a periodic Fillet parent requires a certified local branch cell",
+                ));
+            };
+            if !(neighborhood_lower < total_parameter && total_parameter < neighborhood_upper) {
+                return Err((
+                    OperationAuthoringWarningKind::UnresolvedLocalFilletRoot,
+                    "the periodic Fillet root escaped its certified branch cell",
+                ));
+            }
             let (parameter, winding) = normalize_periodic(total_parameter, period).ok_or((
                 OperationAuthoringWarningKind::UnresolvedLocalFilletRoot,
                 "periodic fillet state cannot be represented",
@@ -1977,10 +1558,7 @@ fn fillet_parent(
                 curve: span,
                 parameter,
                 winding,
-                neighborhood: ContactNeighborhood::Local {
-                    lower: total_parameter - 0.25 * period,
-                    upper: total_parameter + 0.25 * period,
-                },
+                neighborhood,
                 side,
                 trim_endpoint,
                 periodic_anchor: Some(DocumentTrimParameter {
@@ -1989,12 +1567,7 @@ fn fillet_parent(
                 }),
             })
         }
-        ContactDomain::Bounded { .. } | ContactDomain::SupportingLine => {
-            let (lower, upper) = match domain {
-                ContactDomain::Bounded { lower, upper } => (lower, upper),
-                ContactDomain::SupportingLine => (0.0, 1.0),
-                ContactDomain::Periodic { .. } => unreachable!(),
-            };
+        FilletContactDomain::Bounded { lower, upper } => {
             if !(lower < total_parameter && total_parameter < upper) {
                 return Err((
                     OperationAuthoringWarningKind::UnresolvedLocalFilletRoot,
@@ -2003,21 +1576,105 @@ fn fillet_parent(
             }
             let trim_endpoint =
                 fillet_trim_endpoint(document, pick, total_parameter, upper - lower)?;
-            let half = 0.25 * (upper - lower);
+            let valid_neighborhood = match neighborhood {
+                ContactNeighborhood::Interior => is_affine_line_span(document, span),
+                ContactNeighborhood::Local {
+                    lower: neighborhood_lower,
+                    upper: neighborhood_upper,
+                } => {
+                    lower <= neighborhood_lower
+                        && neighborhood_lower < total_parameter
+                        && total_parameter < neighborhood_upper
+                        && neighborhood_upper <= upper
+                }
+                ContactNeighborhood::Start | ContactNeighborhood::End => false,
+            };
+            if !valid_neighborhood {
+                return Err((
+                    OperationAuthoringWarningKind::UnresolvedLocalFilletRoot,
+                    "the bounded Fillet root escaped its semantic support or certified branch cell",
+                ));
+            }
             Ok(CurveFilletParentRequest {
                 curve: span,
                 parameter: total_parameter,
                 winding: 0,
-                neighborhood: ContactNeighborhood::Local {
-                    lower: (total_parameter - half).max(lower),
-                    upper: (total_parameter + half).min(upper),
-                },
+                neighborhood,
                 side,
                 trim_endpoint,
                 periodic_anchor: None,
             })
         }
     }
+}
+
+fn fillet_parents(
+    document: &SketchDocument,
+    picks: [&OperationAuthoringPick; 2],
+    parameters: [f64; 2],
+    sides: [DocumentCurveNormalSide; 2],
+) -> Result<[CurveFilletParentRequest; 2], (OperationAuthoringWarningKind, &'static str)> {
+    let spans = picks.map(|pick| pick.curve_span().expect("validated Fillet pick"));
+    let affine = spans.map(|span| is_affine_line_span(document, span));
+    let neighborhoods = match affine {
+        [true, true] => [ContactNeighborhood::Interior; 2],
+        [true, false] => [
+            ContactNeighborhood::Interior,
+            certified_curved_fillet_neighborhood(document, spans[0], spans[1], parameters[1])?,
+        ],
+        [false, true] => [
+            certified_curved_fillet_neighborhood(document, spans[1], spans[0], parameters[0])?,
+            ContactNeighborhood::Interior,
+        ],
+        [false, false] => {
+            return Err((
+                OperationAuthoringWarningKind::UnsupportedFilletPair,
+                "Fillet authoring between two curved parents requires certified pairwise continuation",
+            ));
+        }
+    };
+    Ok([
+        fillet_parent(
+            document,
+            picks[0],
+            parameters[0],
+            sides[0],
+            neighborhoods[0],
+        )?,
+        fillet_parent(
+            document,
+            picks[1],
+            parameters[1],
+            sides[1],
+            neighborhoods[1],
+        )?,
+    ])
+}
+
+fn certified_curved_fillet_neighborhood(
+    document: &SketchDocument,
+    line: CurveSpan,
+    curve: CurveSpan,
+    parameter: f64,
+) -> Result<ContactNeighborhood, (OperationAuthoringWarningKind, &'static str)> {
+    let domain = primary_domain(document, curve).ok_or((
+        OperationAuthoringWarningKind::UnsupportedCurveFamily,
+        "the curved Fillet parent does not expose a contact domain",
+    ))?;
+    let (lower, upper) = match domain {
+        FilletContactDomain::Bounded { lower, upper } => (lower, upper),
+        FilletContactDomain::Periodic { period } => {
+            (parameter - 0.5 * period, parameter + 0.5 * period)
+        }
+    };
+    document
+        .certify_line_curve_fillet_branch_cell(line, curve, parameter, lower, upper)
+        .map_err(|_| {
+            (
+                OperationAuthoringWarningKind::UnresolvedLocalFilletRoot,
+                "the selected line/curve Fillet root has no certified tangent branch cell",
+            )
+        })
 }
 
 fn fillet_trim_endpoint(
@@ -2071,12 +1728,51 @@ fn normalize_periodic(total: f64, period: f64) -> Option<(f64, i32)> {
     Some((parameter, winding))
 }
 
-fn primary_domain(document: &SketchDocument, span: CurveSpan) -> Option<ContactDomain> {
+#[derive(Clone, Copy, Debug)]
+enum FilletContactDomain {
+    Bounded { lower: f64, upper: f64 },
+    Periodic { period: f64 },
+}
+
+fn is_affine_line_span(document: &SketchDocument, span: CurveSpan) -> bool {
+    document
+        .curve(span.curve)
+        .is_some_and(|curve| match &curve.definition {
+            CurveDefinition::Line { .. } => span.segment == 0,
+            CurveDefinition::Polyline { points, closed, .. } => {
+                let segment_count = if *closed {
+                    points.len()
+                } else {
+                    points.len().saturating_sub(1)
+                };
+                usize::try_from(span.segment).is_ok_and(|segment| segment < segment_count)
+            }
+            CurveDefinition::Circle { .. }
+            | CurveDefinition::CircularArc { .. }
+            | CurveDefinition::Ellipse { .. }
+            | CurveDefinition::EllipticalArc { .. }
+            | CurveDefinition::RationalQuadraticConic { .. }
+            | CurveDefinition::ParabolaSegment { .. }
+            | CurveDefinition::HyperbolaSegment { .. }
+            | CurveDefinition::QuadraticBezier { .. }
+            | CurveDefinition::CubicBezier { .. }
+            | CurveDefinition::BSpline { .. }
+            | CurveDefinition::Nurbs { .. } => false,
+        })
+}
+
+fn primary_domain(document: &SketchDocument, span: CurveSpan) -> Option<FilletContactDomain> {
     document
         .curve_contact_domains(span)
         .ok()?
         .into_iter()
-        .find(|domain| !matches!(domain, ContactDomain::SupportingLine))
+        .find_map(|domain| match domain {
+            ContactDomain::SupportingLine => None,
+            ContactDomain::Bounded { lower, upper } => {
+                Some(FilletContactDomain::Bounded { lower, upper })
+            }
+            ContactDomain::Periodic { period } => Some(FilletContactDomain::Periodic { period }),
+        })
 }
 
 fn local_fillet_roots(
@@ -2229,7 +1925,7 @@ fn local_parameter_bounds(
     let span = pick.curve_span()?;
     let parameter = pick.curve_parameter;
     match primary_domain(document, span)? {
-        ContactDomain::Bounded { lower, upper } => {
+        FilletContactDomain::Bounded { lower, upper } => {
             let width = upper - lower;
             let epsilon = (width * 1.0e-9).max(f64::EPSILON);
             let ordinary_start =
@@ -2243,11 +1939,10 @@ fn local_parameter_bounds(
             };
             (start < parameter && parameter < end).then_some((start, end))
         }
-        ContactDomain::Periodic { period } => Some((
+        FilletContactDomain::Periodic { period } => Some((
             parameter - LOCAL_FILLET_WINDOW_FRACTION * period,
             parameter + LOCAL_FILLET_WINDOW_FRACTION * period,
         )),
-        ContactDomain::SupportingLine => None,
     }
 }
 
@@ -2321,8 +2016,8 @@ fn offset_curve_derivative(
 #[cfg(test)]
 mod tests {
     use geosolve_sketch::{
-        CurveDefinition, DocumentBSplineForm, DocumentSolveRequest, RetainedSketchDocumentSession,
-        ScalarDomain, ScalarUnit, SketchDocument, SolverConfig,
+        CurveDefinition, DocumentSolveRequest, RetainedSketchDocumentSession, SketchDocument,
+        SolverConfig,
     };
 
     use super::*;
@@ -2464,601 +2159,7 @@ mod tests {
     }
 
     #[test]
-    fn offset_side_requires_confirmation_and_escape_is_two_stage() {
-        let (document, spans) = perpendicular_lines();
-        let source = pick(&document, spans[0], 0.5);
-        let mut state = OperationAuthoringState::default();
-        let seeded = state.activate(&document, OperationAuthoringTool::LineOffset, &[source]);
-        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = seeded else {
-            panic!("expected a seeded offset preview request");
-        };
-        assert!(!candidate.is_confirmed());
-        assert!(matches!(
-            state.apply(),
-            OperationAuthoringOutcome::Warning(OperationAuthoringWarning {
-                kind: OperationAuthoringWarningKind::OffsetSideRequired,
-                ..
-            })
-        ));
-        let confirmed = state.pointer_down(&document, None, [-2.0, -1.0]);
-        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = confirmed else {
-            panic!("expected a confirmed offset preview request");
-        };
-        assert!(candidate.is_confirmed());
-        assert!(matches!(
-            state.cancel(),
-            OperationAuthoringOutcome::CandidateCleared(_)
-        ));
-        assert!(matches!(
-            state.cancel(),
-            OperationAuthoringOutcome::ModeExited
-        ));
-    }
-
-    #[test]
-    fn offset_request_preserves_pointer_side_and_explicit_extent_mode() {
-        let (document, spans) = crossing_lines();
-        for (option_mode, request_mode) in [
-            (
-                OperationLineOffsetMode::ExactTranslatedSegment,
-                AssociativeLineOffsetMode::ExactTranslatedSegment,
-            ),
-            (
-                OperationLineOffsetMode::SupportingLine,
-                AssociativeLineOffsetMode::SupportingLine,
-            ),
-        ] {
-            for (pointer, expected_side) in [
-                ([0.0, 1.0], DocumentLineSide::Left),
-                ([0.0, -1.0], DocumentLineSide::Right),
-            ] {
-                let source = pick(&document, spans[0], 0.5);
-                let mut state = OperationAuthoringState::default();
-                let _ = state.set_options(
-                    &document,
-                    OperationAuthoringOptions {
-                        offset_distance: Some(0.75),
-                        offset_mode: option_mode,
-                        ..OperationAuthoringOptions::default()
-                    },
-                );
-                let _ = state.activate(&document, OperationAuthoringTool::LineOffset, &[source]);
-                let candidate = preview_candidate(state.confirm(&document, pointer));
-                assert!(candidate.is_confirmed());
-                assert!(matches!(
-                    candidate.request(),
-                    SketchOperationRequest::AssociativeLineOffset {
-                        source,
-                        distance,
-                        side,
-                        mode,
-                        ..
-                    } if *source == spans[0]
-                        && (*distance - 0.75).abs() <= f64::EPSILON
-                        && *side == expected_side
-                        && *mode == request_mode
-                ));
-            }
-        }
-    }
-
-    #[test]
-    fn offset_guidance_distinguishes_associative_and_one_shot_joined_output() {
-        let (document, _, spans) = open_polyline();
-        let mut state = OperationAuthoringState::default();
-        let _ = state.activate(&document, OperationAuthoringTool::LineOffset, &[]);
-
-        let OperationAuthoringOutcome::PreviewRequested {
-            candidate,
-            guidance,
-        } = state.pick(&document, pick(&document, spans[0], 0.5))
-        else {
-            panic!("one offset span should stage an associative preview");
-        };
-        assert!(matches!(
-            candidate.request(),
-            SketchOperationRequest::AssociativeLineOffset { .. }
-        ));
-        assert_eq!(guidance.stage, OperationAuthoringStage::CollectOffsetPath);
-        assert_eq!(
-            guidance.message,
-            "Associative offset: source edits will propagate. Pick connected spans for one-shot joined geometry, or click empty canvas on the desired side to finish"
-        );
-
-        let OperationAuthoringOutcome::PreviewRequested {
-            candidate,
-            guidance,
-        } = state.pick(&document, pick(&document, spans[1], 0.5))
-        else {
-            panic!("two connected offset spans should stage a joined preview");
-        };
-        assert!(matches!(
-            candidate.request(),
-            SketchOperationRequest::JoinedLineOffset { sources, .. } if sources.len() == 2
-        ));
-        assert_eq!(guidance.stage, OperationAuthoringStage::CollectOffsetPath);
-        assert_eq!(
-            guidance.message,
-            "One-shot joined offset: source edits will not propagate. Pick connected spans, or click empty canvas on the desired side to finish"
-        );
-
-        let OperationAuthoringOutcome::PreviewRequested { guidance, .. } =
-            state.confirm(&document, [1.0, 1.0])
-        else {
-            panic!("joined offset side confirmation should stage a ready preview");
-        };
-        assert_eq!(guidance.stage, OperationAuthoringStage::PreviewReady);
-        assert_eq!(
-            guidance.message,
-            "One-shot joined offset preview ready; source edits will not propagate. Apply or press Enter"
-        );
-
-        let mut associative = OperationAuthoringState::default();
-        let _ = associative.activate(&document, OperationAuthoringTool::LineOffset, &[]);
-        let _ = associative.pick(&document, pick(&document, spans[0], 0.5));
-        let OperationAuthoringOutcome::PreviewRequested { guidance, .. } =
-            associative.confirm(&document, [1.0, 1.0])
-        else {
-            panic!("single offset side confirmation should stage a ready preview");
-        };
-        assert_eq!(guidance.stage, OperationAuthoringStage::PreviewReady);
-        assert_eq!(
-            guidance.message,
-            "Associative offset preview ready; source edits will propagate. Apply or press Enter"
-        );
-    }
-
-    #[test]
-    fn offset_collects_connected_spans_until_blank_canvas_confirms_one_joined_request() {
-        let (document, _, spans) = open_polyline();
-        let mut state = OperationAuthoringState::default();
-        let _ = state.activate(&document, OperationAuthoringTool::LineOffset, &[]);
-
-        for (index, span) in spans.into_iter().enumerate() {
-            let outcome =
-                state.pointer_down_picks(&document, &[pick(&document, span, 0.5)], [1.0, 1.0]);
-            let candidate = preview_candidate(outcome);
-            assert!(!candidate.is_confirmed());
-            if index == 0 {
-                assert!(matches!(
-                    candidate.request(),
-                    SketchOperationRequest::AssociativeLineOffset { source, .. }
-                        if *source == spans[0]
-                ));
-            } else {
-                let SketchOperationRequest::JoinedLineOffset { sources, .. } = candidate.request()
-                else {
-                    panic!("joined line-offset request");
-                };
-                assert_eq!(sources.len(), index + 1);
-            }
-        }
-
-        let confirmed = preview_candidate(state.pointer_down_picks(&document, &[], [1.0, 1.0]));
-        assert!(confirmed.is_confirmed());
-        let SketchOperationRequest::JoinedLineOffset { sources, side, .. } = confirmed.request()
-        else {
-            panic!("confirmed joined line-offset request");
-        };
-        assert_eq!(
-            sources,
-            &spans.map(|source| LineOffsetChainSpan {
-                source,
-                orientation: DocumentLineOffsetOrientation::Same,
-            })
-        );
-        assert_eq!(*side, DocumentLineSide::Left);
-        assert!(matches!(state.apply(), OperationAuthoringOutcome::Apply(_)));
-    }
-
-    #[test]
-    fn offset_path_reorders_end_extensions_and_retains_prefix_after_bad_picks() {
-        let (mut document, points, spans) = open_polyline();
-        let reverse_tail = CurveSpan::line(
-            document
-                .add_curve(
-                    "reverse tail",
-                    CurveDefinition::Line {
-                        start: points[3],
-                        end: points[2],
-                        branch_direction: [-1.0, 0.0],
-                    },
-                )
-                .unwrap(),
-        );
-        let remote_start = document.add_point("remote start", [10.0, 0.0]).unwrap();
-        let remote_end = document.add_point("remote end", [12.0, 0.0]).unwrap();
-        let remote = CurveSpan::line(
-            document
-                .add_curve(
-                    "remote",
-                    CurveDefinition::Line {
-                        start: remote_start,
-                        end: remote_end,
-                        branch_direction: [1.0, 0.0],
-                    },
-                )
-                .unwrap(),
-        );
-        let mut state = OperationAuthoringState::default();
-        let _ = state.activate(&document, OperationAuthoringTool::LineOffset, &[]);
-        let _ = state.pick(&document, pick(&document, spans[1], 0.5));
-        let candidate = preview_candidate(state.pick(&document, pick(&document, spans[0], 0.5)));
-        let SketchOperationRequest::JoinedLineOffset { sources, .. } = candidate.request() else {
-            panic!("joined line-offset request");
-        };
-        assert_eq!(
-            sources,
-            &[
-                LineOffsetChainSpan {
-                    source: spans[0],
-                    orientation: DocumentLineOffsetOrientation::Same,
-                },
-                LineOffsetChainSpan {
-                    source: spans[1],
-                    orientation: DocumentLineOffsetOrientation::Same,
-                },
-            ]
-        );
-        let candidate =
-            preview_candidate(state.pick(&document, pick(&document, reverse_tail, 0.5)));
-        let SketchOperationRequest::JoinedLineOffset { sources, .. } = candidate.request() else {
-            panic!("joined line-offset request");
-        };
-        assert_eq!(
-            sources.last(),
-            Some(&LineOffsetChainSpan {
-                source: reverse_tail,
-                orientation: DocumentLineOffsetOrientation::Reversed,
-            })
-        );
-        assert!(matches!(
-            state.pick(&document, pick(&document, spans[0], 0.25)),
-            OperationAuthoringOutcome::Warning(OperationAuthoringWarning {
-                kind: OperationAuthoringWarningKind::DuplicateOffsetSpan,
-                ..
-            })
-        ));
-        assert_eq!(state.picks().len(), 3);
-        assert!(state.candidate().is_some());
-        assert!(matches!(
-            state.pick(&document, pick(&document, remote, 0.5)),
-            OperationAuthoringOutcome::Warning(OperationAuthoringWarning {
-                kind: OperationAuthoringWarningKind::DisconnectedOffsetPath,
-                ..
-            })
-        ));
-        assert_eq!(state.picks().len(), 3);
-        assert!(state.candidate().is_some());
-    }
-
-    #[test]
-    fn offset_path_limit_is_inclusive_and_keeps_the_thirty_two_span_prefix() {
-        let mut document = SketchDocument::new(1.0).unwrap();
-        let points = (0..=MAX_JOINED_OFFSET_SPANS)
-            .map(|index| {
-                document
-                    .add_point(
-                        "long path point",
-                        [f64::from(u32::try_from(index).unwrap()), 0.0],
-                    )
-                    .unwrap()
-            })
-            .collect::<Vec<_>>();
-        let curve = document
-            .add_curve(
-                "long path",
-                CurveDefinition::Polyline {
-                    points,
-                    closed: false,
-                    branch_directions: vec![[1.0, 0.0]; MAX_JOINED_OFFSET_SPANS],
-                },
-            )
-            .unwrap();
-        let spans = (0..MAX_JOINED_OFFSET_SPANS)
-            .map(|segment| CurveSpan {
-                curve,
-                segment: u32::try_from(segment).unwrap(),
-            })
-            .collect::<Vec<_>>();
-        let mut state = OperationAuthoringState::default();
-        let _ = state.activate(&document, OperationAuthoringTool::LineOffset, &[]);
-        for span in spans.iter().copied() {
-            assert!(matches!(
-                state.pick(&document, pick(&document, span, 0.5)),
-                OperationAuthoringOutcome::PreviewRequested { .. }
-            ));
-        }
-        assert_eq!(state.picks().len(), MAX_JOINED_OFFSET_SPANS);
-
-        let extra_end = document.add_point("over-limit end", [33.0, 0.0]).unwrap();
-        let last_point = document
-            .curve(curve)
-            .and_then(|curve| match &curve.definition {
-                CurveDefinition::Polyline { points, .. } => points.last().copied(),
-                _ => None,
-            })
-            .unwrap();
-        let over_limit = CurveSpan::line(
-            document
-                .add_curve(
-                    "over-limit span",
-                    CurveDefinition::Line {
-                        start: last_point,
-                        end: extra_end,
-                        branch_direction: [1.0, 0.0],
-                    },
-                )
-                .unwrap(),
-        );
-        assert!(matches!(
-            state.pick(&document, pick(&document, over_limit, 0.5)),
-            OperationAuthoringOutcome::Warning(OperationAuthoringWarning {
-                kind: OperationAuthoringWarningKind::OffsetPathLimit,
-                ..
-            })
-        ));
-        assert_eq!(state.picks().len(), MAX_JOINED_OFFSET_SPANS);
-        assert!(state.candidate().is_some());
-    }
-
-    #[test]
-    fn mirror_rejects_unsupported_source_before_axis_collection() {
-        let mut document = SketchDocument::new(1.0).unwrap();
-        let center = document.add_point("center", [0.0, 0.0]).unwrap();
-        let radius = document
-            .add_scalar(
-                "radius",
-                1.0,
-                geosolve_sketch::ScalarUnit::Length,
-                geosolve_sketch::ScalarDomain::Positive,
-            )
-            .unwrap();
-        let circle = document
-            .add_curve("circle", CurveDefinition::Circle { center, radius })
-            .unwrap();
-        let circle = CurveSpan::line(circle);
-        let mut state = OperationAuthoringState::default();
-        let _ = state.activate(&document, OperationAuthoringTool::Mirror, &[]);
-        assert!(matches!(
-            state.pick(&document, pick(&document, circle, 0.0)),
-            OperationAuthoringOutcome::Warning(OperationAuthoringWarning {
-                kind: OperationAuthoringWarningKind::UnsupportedCurveFamily,
-                ..
-            })
-        ));
-    }
-
-    #[test]
-    #[allow(
-        clippy::too_many_lines,
-        reason = "the closed exact-family matrix keeps every supported and rejected definition adjacent"
-    )]
-    fn mirror_applicability_matrix_closes_the_exact_supported_family_boundary() {
-        let mut document = SketchDocument::new(4.0).unwrap();
-        let points = [[-2.0, 0.0], [-1.0, 2.0], [1.0, -1.0], [2.0, 1.0]]
-            .map(|position| document.add_point("control", position).unwrap());
-        let radius = document
-            .add_scalar("radius", 1.0, ScalarUnit::Length, ScalarDomain::Positive)
-            .unwrap();
-        let conic_weight = document
-            .add_scalar(
-                "conic weight",
-                1.0,
-                ScalarUnit::Parameter,
-                ScalarDomain::Bounded {
-                    lower: geosolve_sketch::MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT,
-                    upper: f64::MAX,
-                },
-            )
-            .unwrap();
-        let nurbs_weights = (0..4)
-            .map(|index| {
-                document
-                    .add_scalar(
-                        format!("NURBS weight {index}"),
-                        1.0,
-                        ScalarUnit::Parameter,
-                        ScalarDomain::Positive,
-                    )
-                    .unwrap()
-            })
-            .collect::<Vec<_>>();
-        let cases = [
-            (
-                CurveDefinition::Line {
-                    start: points[0],
-                    end: points[1],
-                    branch_direction: [1.0, 0.0],
-                },
-                0.5,
-                true,
-            ),
-            (
-                CurveDefinition::Polyline {
-                    points: points[..3].to_vec(),
-                    closed: false,
-                    branch_directions: vec![[1.0, 0.0], [1.0, 0.0]],
-                },
-                0.5,
-                true,
-            ),
-            (
-                CurveDefinition::QuadraticBezier {
-                    controls: points[..3].try_into().unwrap(),
-                },
-                0.5,
-                true,
-            ),
-            (CurveDefinition::CubicBezier { controls: points }, 0.5, true),
-            (
-                CurveDefinition::BSpline {
-                    form: DocumentBSplineForm::Clamped,
-                    degree: 2,
-                    controls: points.to_vec(),
-                    knots: vec![0.0, 0.0, 0.0, 1.0, 2.0, 2.0, 2.0],
-                    span_ids: vec![0, 1],
-                    next_span_id: 2,
-                },
-                0.5,
-                true,
-            ),
-            (
-                CurveDefinition::Circle {
-                    center: points[0],
-                    radius,
-                },
-                0.0,
-                false,
-            ),
-            (
-                CurveDefinition::RationalQuadraticConic {
-                    start: points[0],
-                    weighted_middle: [0.0, 2.0],
-                    middle_weight: conic_weight,
-                    end: points[3],
-                },
-                0.5,
-                false,
-            ),
-            (
-                CurveDefinition::Nurbs {
-                    form: DocumentBSplineForm::Clamped,
-                    degree: 2,
-                    controls: points.to_vec(),
-                    weights: nurbs_weights.clone(),
-                    gauge_weight: nurbs_weights[0],
-                    knots: vec![0.0, 0.0, 0.0, 1.0, 2.0, 2.0, 2.0],
-                    span_ids: vec![0, 1],
-                    next_span_id: 2,
-                },
-                0.5,
-                false,
-            ),
-        ];
-        for (index, (definition, parameter, supported)) in cases.into_iter().enumerate() {
-            let curve = document
-                .add_curve(format!("mirror family {index}"), definition)
-                .unwrap();
-            let span = CurveSpan::line(curve);
-            let mut state = OperationAuthoringState::default();
-            let outcome = state.activate(
-                &document,
-                OperationAuthoringTool::Mirror,
-                &[pick(&document, span, parameter)],
-            );
-            assert_eq!(
-                matches!(outcome, OperationAuthoringOutcome::Collecting { .. }),
-                supported,
-                "unexpected mirror applicability for case {index}: {outcome:?}"
-            );
-            if !supported {
-                assert!(matches!(
-                    outcome,
-                    OperationAuthoringOutcome::Warning(OperationAuthoringWarning {
-                        kind: OperationAuthoringWarningKind::UnsupportedCurveFamily,
-                        ..
-                    })
-                ));
-            }
-        }
-    }
-
-    #[test]
-    fn completed_mirror_ignores_irrelevant_option_changes_without_rebuilding_or_panicking() {
-        let (document, spans) = crossing_lines();
-        let picks = [
-            pick(&document, spans[0], 0.25),
-            pick(&document, spans[1], 0.75),
-        ];
-        let mut state = OperationAuthoringState::default();
-        let candidate =
-            preview_candidate(state.activate(&document, OperationAuthoringTool::Mirror, &picks));
-        let refreshed = preview_candidate(state.set_options(
-            &document,
-            OperationAuthoringOptions {
-                fillet_radius: Some(0.75),
-                fillet_flip_first_side: true,
-                fillet_alternate_arc: true,
-                offset_distance: Some(1.25),
-                offset_mode: OperationLineOffsetMode::SupportingLine,
-                ..OperationAuthoringOptions::default()
-            },
-        ));
-        assert_eq!(refreshed, candidate);
-    }
-
-    #[test]
-    fn fixed_arity_preselection_is_atomic_and_offset_accepts_a_bounded_path() {
-        let (document, spans) = crossing_lines();
-        let picks = [
-            pick(&document, spans[0], 0.25),
-            pick(&document, spans[1], 0.75),
-            pick(&document, spans[0], 0.75),
-        ];
-        for tool in [
-            OperationAuthoringTool::Fillet,
-            OperationAuthoringTool::Mirror,
-        ] {
-            for count in 0..=3 {
-                let mut state = OperationAuthoringState::default();
-                let outcome = state.activate(&document, tool, &picks[..count]);
-                match count {
-                    0 => assert!(matches!(outcome, OperationAuthoringOutcome::ModeEntered(_))),
-                    1 => assert!(matches!(
-                        outcome,
-                        OperationAuthoringOutcome::Collecting { .. }
-                    )),
-                    2 => assert!(matches!(
-                        outcome,
-                        OperationAuthoringOutcome::PreviewRequested { .. }
-                    )),
-                    3 => {
-                        assert!(matches!(
-                            outcome,
-                            OperationAuthoringOutcome::Warning(OperationAuthoringWarning {
-                                kind: OperationAuthoringWarningKind::WrongArity,
-                                ..
-                            })
-                        ));
-                        assert!(state.picks().is_empty());
-                        assert!(state.candidate().is_none());
-                    }
-                    _ => unreachable!(),
-                }
-            }
-        }
-        for count in 0..=3 {
-            let mut state = OperationAuthoringState::default();
-            let outcome = state.activate(
-                &document,
-                OperationAuthoringTool::LineOffset,
-                &picks[..count],
-            );
-            match count {
-                0 => assert!(matches!(outcome, OperationAuthoringOutcome::ModeEntered(_))),
-                1 => assert!(matches!(
-                    outcome,
-                    OperationAuthoringOutcome::PreviewRequested { .. }
-                )),
-                2 | 3 => {
-                    assert!(matches!(
-                        outcome,
-                        OperationAuthoringOutcome::Warning(OperationAuthoringWarning {
-                            kind: OperationAuthoringWarningKind::DisconnectedOffsetPath,
-                            ..
-                        })
-                    ));
-                    assert_eq!(state.picks(), &picks[..1]);
-                    assert!(state.candidate().is_some());
-                }
-                _ => unreachable!(),
-            }
-        }
-    }
-
-    #[test]
-    fn fillet_request_records_complete_explicit_local_branch_state() {
+    fn fillet_request_records_complete_explicit_branch_and_support_state() {
         let (document, spans) = perpendicular_lines();
         let mut state = OperationAuthoringState::default();
         let candidate = preview_candidate(state.activate(
@@ -3087,24 +2188,8 @@ mod tests {
         );
         assert_eq!(request.first.periodic_anchor, None);
         assert_eq!(request.second.periodic_anchor, None);
-        let ContactNeighborhood::Local {
-            lower: first_lower,
-            upper: first_upper,
-        } = request.first.neighborhood
-        else {
-            panic!("first local neighborhood");
-        };
-        let ContactNeighborhood::Local {
-            lower: second_lower,
-            upper: second_upper,
-        } = request.second.neighborhood
-        else {
-            panic!("second local neighborhood");
-        };
-        assert_close(first_lower, 0.725);
-        assert_close(first_upper, 1.0);
-        assert_close(second_lower, 0.0);
-        assert_close(second_upper, 0.275);
+        assert_eq!(request.first.neighborhood, ContactNeighborhood::Interior);
+        assert_eq!(request.second.neighborhood, ContactNeighborhood::Interior);
         assert_eq!(
             request.endpoint_order,
             DocumentFilletEndpointOrder::FirstThenSecond
@@ -3408,7 +2493,7 @@ mod tests {
         let mut state = OperationAuthoringState::default();
         let _ = state.activate(
             &document,
-            OperationAuthoringTool::Mirror,
+            OperationAuthoringTool::Fillet,
             &[first_pick, second_pick],
         );
         let CurveDefinition::Line { start, .. } =
@@ -3426,7 +2511,7 @@ mod tests {
         ));
         assert!(state.picks().is_empty());
         assert!(state.candidate().is_none());
-        assert_eq!(state.active_tool(), Some(OperationAuthoringTool::Mirror));
+        assert_eq!(state.active_tool(), Some(OperationAuthoringTool::Fillet));
     }
 
     #[test]
@@ -3505,12 +2590,17 @@ mod tests {
                 .unwrap(),
         );
         let contact = std::f64::consts::TAU + 0.5;
+        let root_cell = ContactNeighborhood::Local {
+            lower: contact - 1.0,
+            upper: contact + 1.0,
+        };
         let retained_pick = pick(&document, span, std::f64::consts::TAU + 2.0);
         let parent = fillet_parent(
             &document,
             &retained_pick,
             contact,
             DocumentCurveNormalSide::Left,
+            root_cell,
         )
         .unwrap();
         assert_close(parent.parameter, 0.5);
@@ -3519,6 +2609,34 @@ mod tests {
         let anchor = parent.periodic_anchor.expect("periodic trim anchor");
         assert_close(anchor.parameter, std::f64::consts::PI + 0.5);
         assert_eq!(anchor.winding, 1);
+        let ContactNeighborhood::Local { lower, upper } = parent.neighborhood else {
+            panic!("periodic parent retains its explicit local root interval");
+        };
+        assert_close(lower, contact - 1.0);
+        assert_close(upper, contact + 1.0);
+
+        let discarded_start_pick = pick(&document, span, contact - 1.0);
+        let end_parent = fillet_parent(
+            &document,
+            &discarded_start_pick,
+            contact,
+            DocumentCurveNormalSide::Left,
+            root_cell,
+        )
+        .unwrap();
+        assert_eq!(end_parent.trim_endpoint, DocumentFilletTrimEndpoint::End);
+        let end_anchor = end_parent.periodic_anchor.expect("periodic trim anchor");
+        assert_close(end_anchor.parameter, 0.5 + std::f64::consts::PI);
+        assert_eq!(end_anchor.winding, 0);
+        let ContactNeighborhood::Local {
+            lower: end_lower,
+            upper: end_upper,
+        } = end_parent.neighborhood
+        else {
+            panic!("periodic end parent retains its explicit local root interval");
+        };
+        assert_close(end_lower, contact - 1.0);
+        assert_close(end_upper, contact + 1.0);
         let ambiguous_pick = pick(&document, span, contact);
         assert!(matches!(
             fillet_parent(
@@ -3526,9 +2644,110 @@ mod tests {
                 &ambiguous_pick,
                 contact,
                 DocumentCurveNormalSide::Left,
+                root_cell,
             ),
             Err((OperationAuthoringWarningKind::AmbiguousTrimSide, _))
         ));
+    }
+
+    #[test]
+    fn curved_parent_root_cells_exclude_a_remote_same_branch_bezier_root() {
+        let mut document = SketchDocument::new(8.0).unwrap();
+        let line_points = [[-10.0, 0.0], [10.0, 0.0]]
+            .map(|position| document.add_point("line point", position).unwrap());
+        let line = CurveSpan::line(
+            document
+                .add_curve(
+                    "line parent",
+                    CurveDefinition::Line {
+                        start: line_points[0],
+                        end: line_points[1],
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .unwrap(),
+        );
+        let controls = [[-6.0, 1.0], [-1.0, 8.0], [1.0, 8.0], [6.0, 1.0]]
+            .map(|position| document.add_point("Bezier control", position).unwrap());
+        let bezier = CurveSpan::line(
+            document
+                .add_curve(
+                    "symmetric multi-root Bezier",
+                    CurveDefinition::CubicBezier { controls },
+                )
+                .unwrap(),
+        );
+
+        let roots = [0.361_804_407_5, 0.638_195_592_5];
+        let radius = 3.108_415_523_5;
+        let expected_center = [0.0, radius];
+        let line_center =
+            offset_curve_point(&document, line, 0.5, DocumentCurveNormalSide::Left, radius)
+                .unwrap();
+        assert!((line_center[0] - expected_center[0]).abs() <= 1.0e-9);
+        assert!((line_center[1] - expected_center[1]).abs() <= 1.0e-9);
+        for root in roots {
+            let center = offset_curve_point(
+                &document,
+                bezier,
+                root,
+                DocumentCurveNormalSide::Right,
+                radius,
+            )
+            .unwrap();
+            assert!((center[0] - expected_center[0]).abs() <= 1.0e-7);
+            assert!((center[1] - expected_center[1]).abs() <= 1.0e-7);
+        }
+
+        let first_neighborhood =
+            certified_curved_fillet_neighborhood(&document, line, bezier, roots[0]).unwrap();
+        let first = fillet_parent(
+            &document,
+            &pick(&document, bezier, 0.15),
+            roots[0],
+            DocumentCurveNormalSide::Right,
+            first_neighborhood,
+        )
+        .unwrap();
+        let ContactNeighborhood::Local {
+            lower: first_lower,
+            upper: first_upper,
+        } = first.neighborhood
+        else {
+            panic!("a bounded nonlinear parent must retain a local root cell");
+        };
+        assert!(first_lower < roots[0] && roots[0] < first_upper);
+        assert!(roots[1] >= first_upper);
+
+        let second_neighborhood =
+            certified_curved_fillet_neighborhood(&document, line, bezier, roots[1]).unwrap();
+        let second = fillet_parent(
+            &document,
+            &pick(&document, bezier, 0.85),
+            roots[1],
+            DocumentCurveNormalSide::Right,
+            second_neighborhood,
+        )
+        .unwrap();
+        let ContactNeighborhood::Local {
+            lower: second_lower,
+            upper: second_upper,
+        } = second.neighborhood
+        else {
+            panic!("the alternate curved root must have its own local cell");
+        };
+        assert!(second_lower < roots[1] && roots[1] < second_upper);
+        assert!(roots[0] <= second_lower);
+
+        let line_parent = fillet_parent(
+            &document,
+            &pick(&document, line, 0.25),
+            0.5,
+            DocumentCurveNormalSide::Left,
+            ContactNeighborhood::Interior,
+        )
+        .unwrap();
+        assert_eq!(line_parent.neighborhood, ContactNeighborhood::Interior);
     }
 
     #[test]
@@ -3563,12 +2782,13 @@ mod tests {
         let mut state = OperationAuthoringState::default();
         let _ = state.activate(
             &document,
-            OperationAuthoringTool::Mirror,
+            OperationAuthoringTool::Fillet,
             &[
                 pick(&document, spans[0], 0.25),
                 pick(&document, spans[1], 0.75),
             ],
         );
+        let _ = state.confirm(&document, [-0.1, 0.1]);
         assert!(state.candidate_confirmed());
         assert!(matches!(
             state.pick(&document, pick(&document, spans[0], 0.75)),
@@ -3585,12 +2805,15 @@ mod tests {
 
         let _ = state.activate(
             &document,
-            OperationAuthoringTool::LineOffset,
-            &[pick(&document, spans[0], 0.5)],
+            OperationAuthoringTool::Fillet,
+            &[
+                pick(&document, spans[0], 0.25),
+                pick(&document, spans[1], 0.75),
+            ],
         );
-        let _ = state.confirm(&document, [0.0, 1.0]);
+        let _ = state.confirm(&document, [-0.1, 0.1]);
         let invalid = OperationAuthoringOptions {
-            offset_distance: Some(-1.0),
+            fillet_radius: Some(-1.0),
             ..state.options()
         };
         assert!(matches!(
@@ -3601,36 +2824,73 @@ mod tests {
             })
         ));
         assert!(state.candidate().is_none());
-    }
-
-    #[test]
-    fn confirmed_offset_ignores_late_hover_and_options_survive_rearming() {
-        let (document, spans) = crossing_lines();
-        let source = pick(&document, spans[0], 0.5);
-        let mut state = OperationAuthoringState::default();
-        let options = OperationAuthoringOptions {
-            fillet_radius: Some(0.25),
-            offset_distance: Some(0.4),
-            offset_mode: OperationLineOffsetMode::SupportingLine,
-            ..OperationAuthoringOptions::default()
-        };
-        let _ = state.set_options(&document, options);
-        let _ = state.activate(&document, OperationAuthoringTool::LineOffset, &[source]);
-        let confirmed = preview_candidate(state.confirm(&document, [0.0, 1.0]));
-        let late = preview_candidate(state.hover(&document, [0.0, -1.0]));
-        assert_eq!(late, confirmed);
-        assert!(late.is_confirmed());
-        state.transaction_finished();
-        assert_eq!(state.options().fillet_radius, Some(0.25));
-        assert_eq!(state.options().offset_distance, Some(0.4));
+        assert_eq!(state.picks().len(), 2);
         assert_eq!(
-            state.options().offset_mode,
-            OperationLineOffsetMode::SupportingLine
+            state.guidance().stage,
+            OperationAuthoringStage::PlaceFilletRadius
         );
     }
 
     #[test]
-    fn confirmed_mirror_hover_preserves_preview_and_exact_input_reconcile_rearms_stale_state() {
+    fn failed_preview_retains_unconfirmed_fillet_parents_but_confirmed_failure_is_terminal() {
+        let (document, spans) = crossing_lines();
+        let picks = [
+            pick(&document, spans[0], 0.25),
+            pick(&document, spans[1], 0.75),
+        ];
+        let mut state = OperationAuthoringState::default();
+        let options = OperationAuthoringOptions {
+            fillet_radius: Some(0.25),
+            ..OperationAuthoringOptions::default()
+        };
+        let _ = state.set_options(&document, options);
+        let initial =
+            preview_candidate(state.activate(&document, OperationAuthoringTool::Fillet, &picks));
+        assert!(!initial.is_confirmed());
+        assert!(matches!(
+            state.hover(&document, [f64::NAN, 0.0]),
+            OperationAuthoringOutcome::Warning(OperationAuthoringWarning {
+                kind: OperationAuthoringWarningKind::NonFinitePick,
+                ..
+            })
+        ));
+        assert_eq!(state.picks(), &picks);
+        assert!(state.candidate().is_none());
+        assert!(!state.candidate_confirmed());
+        assert_eq!(
+            state.guidance().stage,
+            OperationAuthoringStage::PlaceFilletRadius
+        );
+
+        // Coordinator-level scratch cleanup is idempotent after the authoring
+        // state has already discarded the invalid pointer-derived candidate.
+        state.preview_failed();
+        assert_eq!(state.picks(), &picks);
+        assert!(state.candidate().is_none());
+        assert!(!state.candidate_confirmed());
+        assert_eq!(
+            state.guidance().stage,
+            OperationAuthoringStage::PlaceFilletRadius
+        );
+
+        let recovered = preview_candidate(state.hover(&document, [-0.1, 0.1]));
+        assert!(!recovered.is_confirmed());
+        let confirmed = preview_candidate(state.confirm(&document, [-0.1, 0.1]));
+        assert!(confirmed.is_confirmed());
+        let placed_radius = state.options().fillet_radius;
+        state.preview_failed();
+        assert!(state.picks().is_empty());
+        assert!(state.candidate().is_none());
+        assert!(!state.candidate_confirmed());
+        assert_eq!(
+            state.guidance().stage,
+            OperationAuthoringStage::PickFirstFilletCurve
+        );
+        assert_eq!(state.options().fillet_radius, placed_radius);
+    }
+
+    #[test]
+    fn confirmed_fillet_hover_preserves_preview_and_exact_input_reconcile_rearms_stale_state() {
         let (document, spans) = crossing_lines();
         let mut session = RetainedSketchDocumentSession::new(
             document,
@@ -3645,8 +2905,8 @@ mod tests {
             pick(&accepted, spans[1], 0.75).bind_input(&input),
         ];
         let mut state = OperationAuthoringState::default();
-        let confirmed =
-            preview_candidate(state.activate(&accepted, OperationAuthoringTool::Mirror, &picks));
+        let _ = state.activate(&accepted, OperationAuthoringTool::Fillet, &picks);
+        let confirmed = preview_candidate(state.confirm(&accepted, [-0.1, 0.1]));
         let hovered = preview_candidate(state.hover(&accepted, [100.0, -100.0]));
         assert_eq!(hovered, confirmed);
 
@@ -3668,11 +2928,11 @@ mod tests {
         ));
         assert!(state.picks().is_empty());
         assert!(state.candidate().is_none());
-        assert_eq!(state.active_tool(), Some(OperationAuthoringTool::Mirror));
+        assert_eq!(state.active_tool(), Some(OperationAuthoringTool::Fillet));
     }
 
     #[test]
-    fn curved_parents_with_parallel_pick_tangents_still_run_bounded_local_root_search() {
+    fn two_curved_parents_fail_typed_until_pairwise_continuation_is_certified() {
         let mut document = SketchDocument::new(1.0).unwrap();
         let centers = [
             document.add_point("left center", [-1.0, 0.0]).unwrap(),
@@ -3705,8 +2965,13 @@ mod tests {
         let mut state = OperationAuthoringState::default();
         assert!(matches!(
             state.activate(&document, OperationAuthoringTool::Fillet, &picks),
-            OperationAuthoringOutcome::PreviewRequested { .. }
+            OperationAuthoringOutcome::Warning(OperationAuthoringWarning {
+                kind: OperationAuthoringWarningKind::UnsupportedFilletPair,
+                ..
+            })
         ));
+        assert!(state.candidate().is_none());
+        assert_eq!(state.picks(), &picks);
     }
 
     #[test]

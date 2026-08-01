@@ -7,8 +7,8 @@ use geosolve_sketch::{
     AlphaScenarioIds, AlphaScenarioKind, ContactNeighborhood, ContactStateEdit, CurveDefinition,
     CurveSpan, DesignPointId, DocumentCommandEffect, DocumentConstraintDefinition,
     DocumentDimensionDefinition, DocumentDimensionMode, DocumentEdit, DocumentObjectId,
-    DocumentSessionError, DocumentSolveRequest, RetainedSketchDocumentSession, ScalarDomain,
-    ScalarUnit, SketchDocument, alpha_scenario,
+    DocumentSessionError, DocumentSolveRequest, PersistentId, RetainedSketchDocumentSession,
+    ScalarDomain, ScalarUnit, SketchDocument, alpha_scenario,
 };
 
 fn rectangle_design() -> (SketchDocument, geosolve_sketch::RectangleIds) {
@@ -613,6 +613,56 @@ fn point_edit_records_both_candidate_and_publication_requests() {
         session.accepted_state().unwrap().input(),
         input,
         "accepted publication must repeat the complete implemented attempt input"
+    );
+    let current_input = session.prepared_input().attempt_input();
+    assert_ne!(
+        input.candidate_request(),
+        current_input.candidate_request(),
+        "the completed command drag must not become retained request state"
+    );
+    assert_eq!(
+        session
+            .accepted_state_for_current_input()
+            .expect("a successful point edit remains current")
+            .originating_attempt(),
+        session.last_attempt().identity()
+    );
+}
+
+#[test]
+fn current_accepted_publication_rejects_a_newer_failed_attempt() {
+    let (document, rectangle) = rectangle_design();
+    let mut session = RetainedSketchDocumentSession::new(
+        document,
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .unwrap();
+    session
+        .apply(
+            session.design_identity(),
+            DocumentEdit::SetPointPosition {
+                point: rectangle.points[1],
+                position: [5.0, 0.0],
+            },
+        )
+        .unwrap();
+    assert!(session.accepted_state_for_current_input().is_some());
+
+    let missing = DesignPointId(PersistentId::from_u128(u128::MAX));
+    let request = session
+        .last_attempt()
+        .input()
+        .candidate_request()
+        .with_drag(missing, [0.0, 0.0]);
+    let rejected = session
+        .reattempt(session.design_identity(), request)
+        .expect("retained failed attempt");
+    assert!(rejected.failure().is_some() || rejected.accepted_state_identity().is_none());
+    assert!(session.accepted_state().is_some());
+    assert!(
+        session.accepted_state_for_current_input().is_none(),
+        "an older accepted state must not become current beneath a newer failed attempt"
     );
 }
 

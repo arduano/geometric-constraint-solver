@@ -175,9 +175,9 @@ pub use model::{
 };
 pub use nurbs::NurbsCurve;
 pub use profiles::{
-    VisualProfileAnalysis, VisualProfileBudgetCounter, VisualProfileBudgetReport,
-    VisualProfileContour, VisualProfileCurveFamily, VisualProfileEdge, VisualProfileFace,
-    VisualProfileGeometryScope, VisualProfileIntersection, VisualProfileIssue,
+    LineCurveFilletBranchCellError, VisualProfileAnalysis, VisualProfileBudgetCounter,
+    VisualProfileBudgetReport, VisualProfileContour, VisualProfileCurveFamily, VisualProfileEdge,
+    VisualProfileFace, VisualProfileGeometryScope, VisualProfileIntersection, VisualProfileIssue,
     VisualProfileIssueKind, VisualProfileOptions, VisualProfileOrientation, VisualProfileStatus,
 };
 pub use scenarios::{

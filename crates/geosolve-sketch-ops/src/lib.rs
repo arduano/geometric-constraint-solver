@@ -10,23 +10,18 @@ use std::collections::BTreeSet;
 
 use geosolve_sketch::{
     ContactNeighborhood, CurveCurveFilletRequest, CurveDefinition, CurveId, CurveSpan,
-    DesignPointId, DesignScalarId, DocumentArcSweep, DocumentConstraintDefinition,
-    DocumentCurveTrimView, DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode,
-    DocumentElementId, DocumentError, DocumentLineOffsetOrientation, DocumentLineSide,
+    DesignPointId, DocumentArcSweep, DocumentConstraintDefinition, DocumentCurveTrimView,
+    DocumentDimensionDefinition, DocumentDimensionMode, DocumentElementId, DocumentError,
     DocumentTrimBoundary, DocumentTrimParameter, OperationCheckpoint, OperationControl,
     OperationController, OperationOutcome, OperationWorkCounter, PreparedSketchInput,
     RetainedDocumentTransactionOutcome, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
-    SketchAcceptedStateIdentity, SketchAttemptInput, SketchDesignIdentity, SketchDocument,
+    SketchAcceptedStateIdentity, SketchDesignIdentity, SketchDocument,
 };
 use thiserror::Error;
 
 const PARAMETER_EPSILON: f64 = 1.0e-12;
 const MAX_PATTERN_INSTANCES: usize = 256;
 const MAX_POLYGON_SIDES: usize = 256;
-const MIN_JOINED_LINE_OFFSET_SPANS: usize = 2;
-const MAX_JOINED_LINE_OFFSET_SPANS: usize = 32;
-const JOINED_LINE_OFFSET_MITER_LIMIT: f64 = 16.0;
-const JOINED_LINE_OFFSET_DIRECTION_EPSILON: f64 = 64.0 * f64::EPSILON;
 
 /// Exact retained side selected when one support is split into two visible pieces.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -47,29 +42,6 @@ pub enum TrimRetainedSide {
 pub enum LineEndpoint {
     Start,
     End,
-}
-
-/// Associative equation family used by a newly authored line offset.
-///
-/// Both modes create ordinary sketch geometry and one ordinary driving
-/// dimension. The exact mode preserves endpoint translation, while the
-/// supporting-line mode intentionally retains target axial-slide and length
-/// freedom.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum AssociativeLineOffsetMode {
-    ExactTranslatedSegment,
-    SupportingLine,
-}
-
-/// One explicitly ordered and directed source span for a joined line offset.
-///
-/// [`DocumentLineOffsetOrientation::Same`] traverses the span's intrinsic
-/// start-to-end direction. `Reversed` traverses the opposite direction. The
-/// operation never discovers neighboring spans from the document graph.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct LineOffsetChainSpan {
-    pub source: CurveSpan,
-    pub orientation: DocumentLineOffsetOrientation,
 }
 
 /// Closed sketch-operation request surface.
@@ -101,22 +73,6 @@ pub enum SketchOperationRequest {
         label: String,
         source: CurveId,
         axis: CurveSpan,
-    },
-    AssociativeLineOffset {
-        label: String,
-        source: CurveSpan,
-        distance: f64,
-        side: DocumentLineSide,
-        mode: AssociativeLineOffsetMode,
-    },
-    /// Creates one ordinary, open, miter-joined polyline from an explicitly
-    /// ordered line-span path. This is a one-shot construction with no retained
-    /// association, dimension, scalar, constraint, or neighbor discovery.
-    JoinedLineOffset {
-        label: String,
-        sources: Vec<LineOffsetChainSpan>,
-        distance: f64,
-        side: DocumentLineSide,
     },
     Chamfer {
         label: String,
@@ -165,8 +121,6 @@ impl SketchOperationRequest {
             Self::Trim { .. } => SketchOperationKind::Trim,
             Self::ExtendLineToLine { .. } => SketchOperationKind::Extend,
             Self::Mirror { .. } => SketchOperationKind::Mirror,
-            Self::AssociativeLineOffset { .. } => SketchOperationKind::AssociativeLineOffset,
-            Self::JoinedLineOffset { .. } => SketchOperationKind::JoinedLineOffset,
             Self::Chamfer { .. } => SketchOperationKind::Chamfer,
             Self::AssociativeFillet { .. } => SketchOperationKind::AssociativeFillet,
             Self::Rectangle { .. } => SketchOperationKind::Rectangle,
@@ -185,8 +139,6 @@ pub enum SketchOperationKind {
     Trim,
     Extend,
     Mirror,
-    AssociativeLineOffset,
-    JoinedLineOffset,
     Chamfer,
     AssociativeFillet,
     Rectangle,
@@ -206,7 +158,7 @@ pub struct SketchOperationSnapshot {
 #[derive(Clone, Debug)]
 struct AcceptedOperationSnapshot {
     identity: SketchAcceptedStateIdentity,
-    input: SketchAttemptInput,
+    current_publication: bool,
     design: SketchDesignIdentity,
     document: SketchDocument,
 }
@@ -215,6 +167,9 @@ impl SketchOperationSnapshot {
     /// Captures immutable operation input without changing solver lifecycle state.
     #[must_use]
     pub fn capture(session: &RetainedSketchDocumentSession) -> Self {
+        let current_accepted = session
+            .accepted_state_for_current_input()
+            .map(geosolve_sketch::SketchAcceptedDocumentState::identity);
         Self {
             input: session.prepared_input(),
             design: session.design_document().clone(),
@@ -222,7 +177,7 @@ impl SketchOperationSnapshot {
                 .accepted_state()
                 .map(|accepted| AcceptedOperationSnapshot {
                     identity: accepted.identity(),
-                    input: accepted.input(),
+                    current_publication: current_accepted == Some(accepted.identity()),
                     design: accepted.design_identity(),
                     document: accepted.document().clone(),
                 }),
@@ -355,31 +310,6 @@ pub enum SketchOperationIncompleteReason {
     LinesDoNotShareOneEndpoint,
     ParallelLines,
     IntersectionDoesNotExtendSelectedEndpoint,
-    DegenerateLineSpan {
-        support: CurveSpan,
-    },
-    JoinedLineOffsetSourceCount {
-        count: usize,
-    },
-    DuplicateJoinedLineOffsetSource {
-        source: CurveSpan,
-    },
-    DisconnectedJoinedLineOffsetPath {
-        previous: CurveSpan,
-        next: CurveSpan,
-    },
-    CyclicJoinedLineOffsetPath {
-        point: DesignPointId,
-    },
-    JoinedLineOffsetUTurn {
-        point: DesignPointId,
-    },
-    JoinedLineOffsetRemoteMiter {
-        point: DesignPointId,
-    },
-    JoinedLineOffsetCollapsedTargetSpan {
-        index: usize,
-    },
 }
 
 /// Completed preparation result.
@@ -401,19 +331,6 @@ pub enum SketchOperationIdentityChange {
         source: CurveId,
         retained: SplitRetainedPiece,
         visible_piece_count: usize,
-    },
-    AssociativeLineOffset {
-        source: CurveSpan,
-        target_start: DesignPointId,
-        target_end: DesignPointId,
-        target_segment: CurveId,
-        distance: DesignScalarId,
-        dimension: DocumentDimensionId,
-    },
-    JoinedLineOffset {
-        sources: Vec<LineOffsetChainSpan>,
-        target_points: Vec<DesignPointId>,
-        target_curve: CurveId,
     },
     Proposed(DocumentElementId),
 }
@@ -588,8 +505,6 @@ enum PlannedOperation {
         source: CurveId,
         axis: CurveSpan,
     },
-    AssociativeLineOffset(LineOffsetPlan),
-    JoinedLineOffset(JoinedLineOffsetPlan),
     Chamfer(ChamferPlan),
     Fillet {
         label: String,
@@ -628,36 +543,6 @@ struct ChamferPlan {
     second_keep_start: bool,
     first_distance: f64,
     second_distance: f64,
-}
-
-#[derive(Clone, Debug)]
-struct LineOffsetPlan {
-    label: String,
-    source: CurveSpan,
-    distance: f64,
-    side: DocumentLineSide,
-    mode: AssociativeLineOffsetMode,
-    target_start: [f64; 2],
-    target_end: [f64; 2],
-    branch_direction: [f64; 2],
-}
-
-#[derive(Clone, Debug)]
-struct JoinedLineOffsetPlan {
-    label: String,
-    sources: Vec<LineOffsetChainSpan>,
-    target_positions: Vec<[f64; 2]>,
-    branch_directions: Vec<[f64; 2]>,
-}
-
-#[derive(Clone, Copy, Debug)]
-struct JoinedLineOffsetSpanGeometry {
-    source: LineOffsetChainSpan,
-    end_id: DesignPointId,
-    start: [f64; 2],
-    end: [f64; 2],
-    direction: [f64; 2],
-    length: f64,
 }
 
 #[derive(Clone, Debug)]
@@ -911,81 +796,6 @@ fn build_result(
                 Some(accepted.identity),
             )
         }
-        SketchOperationRequest::AssociativeLineOffset {
-            label,
-            source,
-            distance,
-            side,
-            mode,
-        } => {
-            ensure_positive(*distance, "line offset distance")?;
-            let Some(accepted) = accepted_for_design(snapshot) else {
-                return Ok(missing_accepted(snapshot, kind));
-            };
-            let plan =
-                match plan_line_offset(&accepted.document, label, *source, *distance, *side, *mode)
-                {
-                    Ok(plan) => plan,
-                    Err(GeometryPlanFailure::Unsupported(curve)) => {
-                        return Ok(unsupported(
-                            kind,
-                            SketchOperationUnsupportedReason::CurveFamily {
-                                curve,
-                                operation: "line offset",
-                            },
-                        ));
-                    }
-                    Err(GeometryPlanFailure::Incomplete(reason)) => {
-                        return Ok(incomplete(kind, reason));
-                    }
-                };
-            (
-                PlannedOperation::AssociativeLineOffset(plan),
-                Some(accepted.identity),
-            )
-        }
-        SketchOperationRequest::JoinedLineOffset {
-            label,
-            sources,
-            distance,
-            side,
-        } => {
-            ensure_positive(*distance, "joined line offset distance")?;
-            if !(MIN_JOINED_LINE_OFFSET_SPANS..=MAX_JOINED_LINE_OFFSET_SPANS)
-                .contains(&sources.len())
-            {
-                return Ok(incomplete(
-                    kind,
-                    SketchOperationIncompleteReason::JoinedLineOffsetSourceCount {
-                        count: sources.len(),
-                    },
-                ));
-            }
-            let Some(accepted) = accepted_for_design(snapshot) else {
-                return Ok(missing_accepted(snapshot, kind));
-            };
-            let plan =
-                match plan_joined_line_offset(&accepted.document, label, sources, *distance, *side)
-                {
-                    Ok(plan) => plan,
-                    Err(GeometryPlanFailure::Unsupported(curve)) => {
-                        return Ok(unsupported(
-                            kind,
-                            SketchOperationUnsupportedReason::CurveFamily {
-                                curve,
-                                operation: "joined line offset",
-                            },
-                        ));
-                    }
-                    Err(GeometryPlanFailure::Incomplete(reason)) => {
-                        return Ok(incomplete(kind, reason));
-                    }
-                };
-            (
-                PlannedOperation::JoinedLineOffset(plan),
-                Some(accepted.identity),
-            )
-        }
         SketchOperationRequest::Chamfer {
             label,
             first,
@@ -1174,8 +984,7 @@ fn build_result(
 
 fn accepted_for_design(snapshot: &SketchOperationSnapshot) -> Option<&AcceptedOperationSnapshot> {
     snapshot.accepted.as_ref().filter(|accepted| {
-        accepted.design == snapshot.input.design_identity()
-            && accepted.input == snapshot.input.attempt_input()
+        accepted.design == snapshot.input.design_identity() && accepted.current_publication
     })
 }
 
@@ -1270,91 +1079,6 @@ impl PlannedOperation {
                                 })),
                         )
                         .collect(),
-                )
-            }
-            Self::AssociativeLineOffset(plan) => {
-                let target_start = document
-                    .add_point(format!("{}.target_start", plan.label), plan.target_start)?;
-                let target_end =
-                    document.add_point(format!("{}.target_end", plan.label), plan.target_end)?;
-                let target_segment = document.add_curve(
-                    format!("{}.target", plan.label),
-                    CurveDefinition::Line {
-                        start: target_start,
-                        end: target_end,
-                        branch_direction: plan.branch_direction,
-                    },
-                )?;
-                let distance = document.add_scalar(
-                    format!("{}.distance", plan.label),
-                    plan.distance,
-                    ScalarUnit::Length,
-                    ScalarDomain::Positive,
-                )?;
-                let definition = match plan.mode {
-                    AssociativeLineOffsetMode::ExactTranslatedSegment => {
-                        DocumentDimensionDefinition::ExactTranslatedSegmentOffset {
-                            source: plan.source,
-                            target_segment: CurveSpan::line(target_segment),
-                            target: distance,
-                            side: plan.side,
-                            orientation: DocumentLineOffsetOrientation::Same,
-                        }
-                    }
-                    AssociativeLineOffsetMode::SupportingLine => {
-                        DocumentDimensionDefinition::SupportingLineOffset {
-                            source: plan.source,
-                            target_segment: CurveSpan::line(target_segment),
-                            target: distance,
-                            side: plan.side,
-                            orientation: DocumentLineOffsetOrientation::Same,
-                        }
-                    }
-                };
-                let dimension = document.add_dimension(
-                    format!("{}.dimension", plan.label),
-                    definition,
-                    DocumentDimensionMode::Driving,
-                )?;
-                (
-                    SketchOperationKind::AssociativeLineOffset,
-                    vec![SketchOperationIdentityChange::AssociativeLineOffset {
-                        source: plan.source,
-                        target_start,
-                        target_end,
-                        target_segment,
-                        distance,
-                        dimension,
-                    }],
-                )
-            }
-            Self::JoinedLineOffset(plan) => {
-                let target_points = plan
-                    .target_positions
-                    .iter()
-                    .enumerate()
-                    .map(|(index, position)| {
-                        document.add_point(
-                            format!("{}.target_point_{}", plan.label, index + 1),
-                            *position,
-                        )
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
-                let target_curve = document.add_curve(
-                    format!("{}.target", plan.label),
-                    CurveDefinition::Polyline {
-                        points: target_points.clone(),
-                        closed: false,
-                        branch_directions: plan.branch_directions.clone(),
-                    },
-                )?;
-                (
-                    SketchOperationKind::JoinedLineOffset,
-                    vec![SketchOperationIdentityChange::JoinedLineOffset {
-                        sources: plan.sources.clone(),
-                        target_points,
-                        target_curve,
-                    }],
                 )
             }
             Self::Chamfer(plan) => (SketchOperationKind::Chamfer, apply_chamfer(document, plan)?),
@@ -1898,245 +1622,6 @@ fn plan_chamfer(
     })
 }
 
-fn plan_line_offset(
-    document: &SketchDocument,
-    label: &str,
-    source: CurveSpan,
-    distance: f64,
-    side: DocumentLineSide,
-    mode: AssociativeLineOffsetMode,
-) -> Result<LineOffsetPlan, GeometryPlanFailure> {
-    let (start, end) = line_endpoint_ids(document, source)
-        .ok_or(GeometryPlanFailure::Unsupported(source.curve))?;
-    let start = point_position(document, start);
-    let end = point_position(document, end);
-    let delta = subtract(end, start);
-    let length = squared_norm(delta).sqrt();
-    if !length.is_finite() || length <= f64::MIN_POSITIVE {
-        return Err(GeometryPlanFailure::Incomplete(
-            SketchOperationIncompleteReason::DegenerateLineSpan { support: source },
-        ));
-    }
-    let branch_direction = [delta[0] / length, delta[1] / length];
-    let left_normal = [-branch_direction[1], branch_direction[0]];
-    let side_sign = match side {
-        DocumentLineSide::Left => 1.0,
-        DocumentLineSide::Right => -1.0,
-    };
-    let offset = scale(left_normal, side_sign * distance);
-    let target_start = add(start, offset);
-    let target_end = add(end, offset);
-    if !target_start
-        .into_iter()
-        .chain(target_end)
-        .all(f64::is_finite)
-    {
-        return Err(GeometryPlanFailure::Incomplete(
-            SketchOperationIncompleteReason::DegenerateLineSpan { support: source },
-        ));
-    }
-    Ok(LineOffsetPlan {
-        label: label.to_owned(),
-        source,
-        distance,
-        side,
-        mode,
-        target_start,
-        target_end,
-        branch_direction,
-    })
-}
-
-fn plan_joined_line_offset(
-    document: &SketchDocument,
-    label: &str,
-    sources: &[LineOffsetChainSpan],
-    distance: f64,
-    side: DocumentLineSide,
-) -> Result<JoinedLineOffsetPlan, GeometryPlanFailure> {
-    let spans = collect_joined_line_offset_spans(document, sources)?;
-    let target_positions = joined_line_offset_positions(&spans, distance, side)?;
-    let branch_directions = joined_line_offset_directions(&spans, &target_positions, distance)?;
-    Ok(JoinedLineOffsetPlan {
-        label: label.to_owned(),
-        sources: sources.to_vec(),
-        target_positions,
-        branch_directions,
-    })
-}
-
-fn collect_joined_line_offset_spans(
-    document: &SketchDocument,
-    sources: &[LineOffsetChainSpan],
-) -> Result<Vec<JoinedLineOffsetSpanGeometry>, GeometryPlanFailure> {
-    let mut seen_sources = BTreeSet::new();
-    let mut path_points = Vec::with_capacity(sources.len() + 1);
-    let mut spans: Vec<JoinedLineOffsetSpanGeometry> = Vec::with_capacity(sources.len());
-
-    for source in sources.iter().copied() {
-        if !seen_sources.insert(source.source) {
-            return Err(GeometryPlanFailure::Incomplete(
-                SketchOperationIncompleteReason::DuplicateJoinedLineOffsetSource {
-                    source: source.source,
-                },
-            ));
-        }
-        let intrinsic = line_endpoint_ids(document, source.source)
-            .ok_or(GeometryPlanFailure::Unsupported(source.source.curve))?;
-        let (start_id, end_id) = match source.orientation {
-            DocumentLineOffsetOrientation::Same => intrinsic,
-            DocumentLineOffsetOrientation::Reversed => (intrinsic.1, intrinsic.0),
-        };
-        if let Some(previous) = spans.last() {
-            if previous.end_id != start_id {
-                return Err(GeometryPlanFailure::Incomplete(
-                    SketchOperationIncompleteReason::DisconnectedJoinedLineOffsetPath {
-                        previous: previous.source.source,
-                        next: source.source,
-                    },
-                ));
-            }
-        } else {
-            path_points.push(start_id);
-        }
-
-        let start = point_position(document, start_id);
-        let end = point_position(document, end_id);
-        let delta = subtract(end, start);
-        let length = delta[0].hypot(delta[1]);
-        let normalized_length = length / document.model_scale();
-        if !start.into_iter().chain(end).all(f64::is_finite)
-            || !length.is_finite()
-            || !normalized_length.is_finite()
-            || normalized_length <= JOINED_LINE_OFFSET_DIRECTION_EPSILON
-        {
-            return Err(GeometryPlanFailure::Incomplete(
-                SketchOperationIncompleteReason::DegenerateLineSpan {
-                    support: source.source,
-                },
-            ));
-        }
-        spans.push(JoinedLineOffsetSpanGeometry {
-            source,
-            end_id,
-            start,
-            end,
-            direction: [delta[0] / length, delta[1] / length],
-            length,
-        });
-        path_points.push(end_id);
-    }
-
-    let mut seen_points = BTreeSet::new();
-    for point in path_points {
-        if !seen_points.insert(point) {
-            return Err(GeometryPlanFailure::Incomplete(
-                SketchOperationIncompleteReason::CyclicJoinedLineOffsetPath { point },
-            ));
-        }
-    }
-    Ok(spans)
-}
-
-fn joined_line_offset_positions(
-    spans: &[JoinedLineOffsetSpanGeometry],
-    distance: f64,
-    side: DocumentLineSide,
-) -> Result<Vec<[f64; 2]>, GeometryPlanFailure> {
-    let side_sign = match side {
-        DocumentLineSide::Left => 1.0,
-        DocumentLineSide::Right => -1.0,
-    };
-    let offset_distance = side_sign * distance;
-    let mut target_positions = Vec::with_capacity(spans.len() + 1);
-    target_positions.push(offset_line_point(
-        spans[0].start,
-        spans[0].direction,
-        offset_distance,
-    ));
-
-    for pair in spans.windows(2) {
-        let previous = pair[0];
-        let next = pair[1];
-        let corner = previous.end;
-        let previous_offset = offset_line_point(corner, previous.direction, offset_distance);
-        let next_offset = offset_line_point(corner, next.direction, offset_distance);
-        let denominator = cross(previous.direction, next.direction);
-        let direction_dot = dot(previous.direction, next.direction);
-        let joined = if denominator.abs() <= JOINED_LINE_OFFSET_DIRECTION_EPSILON {
-            if direction_dot <= 0.0 {
-                return Err(GeometryPlanFailure::Incomplete(
-                    SketchOperationIncompleteReason::JoinedLineOffsetUTurn {
-                        point: previous.end_id,
-                    },
-                ));
-            }
-            previous_offset
-        } else {
-            let parameter =
-                cross(subtract(next_offset, previous_offset), next.direction) / denominator;
-            add(previous_offset, scale(previous.direction, parameter))
-        };
-        let miter_distance = subtract(joined, corner);
-        let miter_distance = miter_distance[0].hypot(miter_distance[1]);
-        let miter_limit = JOINED_LINE_OFFSET_MITER_LIMIT * distance;
-        if !joined.into_iter().all(f64::is_finite)
-            || !miter_distance.is_finite()
-            || !miter_limit.is_finite()
-            || miter_distance > miter_limit
-        {
-            return Err(GeometryPlanFailure::Incomplete(
-                SketchOperationIncompleteReason::JoinedLineOffsetRemoteMiter {
-                    point: previous.end_id,
-                },
-            ));
-        }
-        target_positions.push(joined);
-    }
-
-    let last = spans[spans.len() - 1];
-    target_positions.push(offset_line_point(last.end, last.direction, offset_distance));
-    if !target_positions
-        .iter()
-        .flatten()
-        .copied()
-        .all(f64::is_finite)
-    {
-        return Err(GeometryPlanFailure::Incomplete(
-            SketchOperationIncompleteReason::DegenerateLineSpan {
-                support: spans[0].source.source,
-            },
-        ));
-    }
-    Ok(target_positions)
-}
-
-fn joined_line_offset_directions(
-    spans: &[JoinedLineOffsetSpanGeometry],
-    target_positions: &[[f64; 2]],
-    distance: f64,
-) -> Result<Vec<[f64; 2]>, GeometryPlanFailure> {
-    let mut branch_directions = Vec::with_capacity(spans.len());
-    for (index, pair) in target_positions.windows(2).enumerate() {
-        let delta = subtract(pair[1], pair[0]);
-        let length = delta[0].hypot(delta[1]);
-        let collapse_tolerance = (spans[index].length.max(distance)
-            * JOINED_LINE_OFFSET_DIRECTION_EPSILON)
-            .max(f64::MIN_POSITIVE);
-        if !length.is_finite() || length <= collapse_tolerance {
-            return Err(GeometryPlanFailure::Incomplete(
-                SketchOperationIncompleteReason::JoinedLineOffsetCollapsedTargetSpan { index },
-            ));
-        }
-        branch_directions.push([delta[0] / length, delta[1] / length]);
-    }
-    Ok(branch_directions)
-}
-
-fn offset_line_point(point: [f64; 2], direction: [f64; 2], distance: f64) -> [f64; 2] {
-    add(point, [-direction[1] * distance, direction[0] * distance])
-}
-
 fn plan_line_extension(
     document: &SketchDocument,
     line: CurveSpan,
@@ -2308,35 +1793,6 @@ fn identity_change_mentions(
         SketchOperationIdentityChange::Split { source, .. } => {
             DocumentElementId::Curve(*source) == element
         }
-        SketchOperationIdentityChange::AssociativeLineOffset {
-            source,
-            target_start,
-            target_end,
-            target_segment,
-            distance,
-            dimension,
-        } => [
-            DocumentElementId::Curve(source.curve),
-            DocumentElementId::Point(*target_start),
-            DocumentElementId::Point(*target_end),
-            DocumentElementId::Curve(*target_segment),
-            DocumentElementId::Scalar(*distance),
-            DocumentElementId::Dimension(*dimension),
-        ]
-        .contains(&element),
-        SketchOperationIdentityChange::JoinedLineOffset {
-            sources,
-            target_points,
-            target_curve,
-        } => {
-            DocumentElementId::Curve(*target_curve) == element
-                || target_points
-                    .iter()
-                    .any(|point| DocumentElementId::Point(*point) == element)
-                || sources
-                    .iter()
-                    .any(|source| DocumentElementId::Curve(source.source.curve) == element)
-        }
     }
 }
 
@@ -2381,9 +1837,7 @@ fn request_operand_count(request: &SketchOperationRequest) -> usize {
         SketchOperationRequest::Split { .. }
         | SketchOperationRequest::Break { .. }
         | SketchOperationRequest::Trim { .. }
-        | SketchOperationRequest::Mirror { .. }
-        | SketchOperationRequest::AssociativeLineOffset { .. } => 1,
-        SketchOperationRequest::JoinedLineOffset { sources, .. } => sources.len(),
+        | SketchOperationRequest::Mirror { .. } => 1,
         SketchOperationRequest::ExtendLineToLine { .. }
         | SketchOperationRequest::Chamfer { .. }
         | SketchOperationRequest::AssociativeFillet { .. } => 2,
@@ -2463,10 +1917,6 @@ fn lerp(first: [f64; 2], second: [f64; 2], amount: f64) -> [f64; 2] {
 
 fn cross(first: [f64; 2], second: [f64; 2]) -> f64 {
     first[0] * second[1] - first[1] * second[0]
-}
-
-fn dot(first: [f64; 2], second: [f64; 2]) -> f64 {
-    first[0].mul_add(second[0], first[1] * second[1])
 }
 
 fn squared_norm(vector: [f64; 2]) -> f64 {

@@ -1272,6 +1272,28 @@ impl SketchAttemptInput {
     pub const fn external_snapshot_set_digest(self) -> ExternalSnapshotSetDigest {
         self.external_snapshot_set_digest
     }
+
+    /// Returns whether two attempt inputs describe the same independently
+    /// publishable retained input.
+    ///
+    /// A point-position edit may add one interaction-scoped drag target only to
+    /// the candidate request used to reach the nearby solution. Accepted-state
+    /// publication then repeats the retained publication request without that
+    /// transient target. The candidate request is therefore audit evidence, not
+    /// part of the durable publication identity. Every retained design, solver,
+    /// activation, parameter and external-snapshot input remains exact.
+    #[must_use]
+    pub(crate) fn publication_compatible_with(self, other: Self) -> bool {
+        self.design == other.design
+            && self.publication_request == other.publication_request
+            && self.solver_config == other.solver_config
+            && self.effective_activation_revision == other.effective_activation_revision
+            && self.activation_digest == other.activation_digest
+            && self.parameter_revision == other.parameter_revision
+            && self.parameter_digest == other.parameter_digest
+            && self.external_snapshot_set_revision == other.external_snapshot_set_revision
+            && self.external_snapshot_set_digest == other.external_snapshot_set_digest
+    }
 }
 
 /// Stage at which a retained-design attempt failed before producing a solve report.
@@ -3993,6 +4015,27 @@ impl RetainedSketchDocumentSession {
     #[must_use]
     pub fn prepared_input(&self) -> PreparedSketchInput {
         self.current_prepared_input()
+    }
+
+    /// Returns the independently accepted state only when it is the current
+    /// publication for the complete retained input and latest attempt.
+    ///
+    /// Unlike [`Self::accepted_state`], this never returns an older accepted
+    /// scene retained beneath a newer rejected attempt. A completed point edit's
+    /// candidate-only drag target is intentionally excluded from this comparison;
+    /// exact accepted identity, originating attempt and every durable input still
+    /// have to match.
+    #[must_use]
+    pub fn accepted_state_for_current_input(&self) -> Option<&SketchAcceptedDocumentState> {
+        let current = self.current_prepared_input();
+        self.accepted.as_ref().filter(|accepted| {
+            accepted.design_identity() == self.design_identity
+                && Some(accepted.identity()) == current.accepted_state_identity()
+                && accepted.originating_attempt() == current.latest_attempt_identity()
+                && accepted
+                    .input()
+                    .publication_compatible_with(current.attempt_input())
+        })
     }
 
     /// Commits a completed prepared patch only when its complete captured input

@@ -4,12 +4,13 @@
 
 use geosolve_sketch::{
     CancellationToken, ContactNeighborhood, CurveDefinition, CurveFilletParentRequest, CurveSpan,
-    DocumentArcSweep, DocumentConstraintDefinition, DocumentCurveNormalSide, DocumentCurveTrimView,
-    DocumentDimensionMode, DocumentError, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint,
-    DocumentObjectId, DocumentSolveRequest, DocumentTrimBoundary, DocumentTrimParameter,
-    OperationControl, OperationLimits, OperationOutcome, RetainedSketchDocumentSession,
-    ScalarDomain, ScalarUnit, SketchDocument, SolverConfig, VisualProfileOptions,
-    VisualProfileStatus, cancellation_pair,
+    DesignPointId, DocumentArcSweep, DocumentConstraintDefinition, DocumentCurveNormalSide,
+    DocumentCurveTrimView, DocumentDimensionMode, DocumentEdit, DocumentError,
+    DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint, DocumentObjectId,
+    DocumentSolveRequest, DocumentTrimBoundary, DocumentTrimParameter, OperationControl,
+    OperationLimits, OperationOutcome, PersistentId, RetainedSketchDocumentSession, ScalarDomain,
+    ScalarUnit, SketchDocument, SolverConfig, VisualProfileOptions, VisualProfileStatus,
+    cancellation_pair,
 };
 use geosolve_sketch_ops::{
     LineEndpoint, PreparedSketchOperation, SketchOperationApplyError,
@@ -699,6 +700,94 @@ fn identical_snapshots_produce_the_same_proposal_mapping() {
     assert_eq!(first.input(), second.input());
     assert_eq!(first.request(), second.request());
     assert_eq!(first.expected_application(), second.expected_application());
+}
+
+fn mirror_current_input_fixture() -> (
+    RetainedSketchDocumentSession,
+    SketchOperationRequest,
+    DesignPointId,
+) {
+    let mut document = SketchDocument::new(4.0).unwrap();
+    let (source, _) = line(&mut document, "source", [-3.0, 0.0], [-1.0, 0.0]);
+    let (axis, _) = line(&mut document, "axis", [0.0, -2.0], [0.0, 2.0]);
+    let probe = document.add_point("free probe", [1.0, 1.0]).unwrap();
+    (
+        session(document),
+        SketchOperationRequest::Mirror {
+            label: "current-input mirror".into(),
+            source,
+            axis: CurveSpan::line(axis),
+        },
+        probe,
+    )
+}
+
+#[test]
+fn successful_point_edit_is_current_for_geometry_operation_preparation() {
+    let (mut session, request, probe) = mirror_current_input_fixture();
+    let edit = session
+        .apply(
+            session.design_identity(),
+            DocumentEdit::SetPointPosition {
+                point: probe,
+                position: [1.5, 0.75],
+            },
+        )
+        .unwrap();
+    assert!(edit.published_accepted_identity().is_some());
+    let accepted = session
+        .accepted_state_for_current_input()
+        .expect("the successful point edit remains the current publication");
+    assert_ne!(
+        accepted.input().candidate_request(),
+        session.prepared_input().attempt_input().candidate_request(),
+        "the one-shot command drag must not become retained request state"
+    );
+
+    let outcome = SketchOperationSnapshot::capture(&session)
+        .prepare(request)
+        .execute(OperationControl::default())
+        .unwrap();
+    assert!(matches!(
+        outcome,
+        OperationOutcome::Completed {
+            value: SketchOperationResult::Proposed(_),
+            ..
+        }
+    ));
+}
+
+#[test]
+fn geometry_operation_rejects_an_older_acceptance_beneath_a_newer_same_design_attempt() {
+    let (mut session, request, _) = mirror_current_input_fixture();
+    let accepted = session.accepted_state().unwrap().identity();
+    let failed = session
+        .reattempt(
+            session.design_identity(),
+            DocumentSolveRequest::default().with_drag(
+                DesignPointId(PersistentId::from_u128(u128::MAX)),
+                [20.0, 20.0],
+            ),
+        )
+        .unwrap();
+    assert!(failed.accepted_state_identity().is_none());
+    assert_eq!(session.accepted_state().unwrap().identity(), accepted);
+    assert!(session.accepted_state_for_current_input().is_none());
+
+    let outcome = SketchOperationSnapshot::capture(&session)
+        .prepare(request)
+        .execute(OperationControl::default())
+        .unwrap();
+    let OperationOutcome::Completed { value, .. } = outcome else {
+        panic!("typed incomplete operation must finish preparation");
+    };
+    let SketchOperationResult::Incomplete(incomplete) = value else {
+        panic!("accepted geometry from another current input must be incomplete");
+    };
+    assert_eq!(
+        incomplete.reason,
+        SketchOperationIncompleteReason::AcceptedStateForDifferentInput
+    );
 }
 
 #[test]

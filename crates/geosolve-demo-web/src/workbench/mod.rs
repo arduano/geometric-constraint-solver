@@ -114,6 +114,16 @@ fn operation_preview_reusable(
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
+fn recover_operation_preview_failure(
+    state: &mut geosolve_constraint_editor::OperationAuthoringState,
+    candidate: &geosolve_constraint_editor::OperationAuthoringCandidate,
+) -> bool {
+    let retry_radius = !candidate.is_confirmed();
+    state.preview_failed();
+    retry_radius
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
 fn operation_canvas_hit(
     scene: &geosolve_constraint_editor::EditorScene,
     position: geosolve_constraint_editor::ScreenPoint,
@@ -127,6 +137,106 @@ fn operation_canvas_hit(
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
+fn operation_geometry_hover(
+    scene: &geosolve_constraint_editor::EditorScene,
+    position: geosolve_constraint_editor::ScreenPoint,
+    source: &geosolve_sketch::SketchDocument,
+) -> Option<geosolve_constraint_editor::SelectionItem> {
+    operation_canvas_hit(scene, position, source).map(|hit| hit.item)
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+const fn operation_stage_accepts_geometry(
+    stage: geosolve_constraint_editor::OperationAuthoringStage,
+) -> bool {
+    matches!(
+        stage,
+        geosolve_constraint_editor::OperationAuthoringStage::PickFirstFilletCurve
+            | geosolve_constraint_editor::OperationAuthoringStage::PickSecondFilletCurve
+    )
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct OverlayRect {
+    left: f64,
+    top: f64,
+    width: f64,
+    height: f64,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl OverlayRect {
+    fn is_valid(self) -> bool {
+        self.left.is_finite()
+            && self.top.is_finite()
+            && self.width.is_finite()
+            && self.width >= 0.0
+            && self.height.is_finite()
+            && self.height >= 0.0
+    }
+
+    fn right(self) -> f64 {
+        self.left + self.width
+    }
+}
+
+/// Places a palette-triggered surface inside the canvas coordinate system.
+///
+/// The trigger can live outside the canvas (as the Fillet trigger does), while
+/// the returned point is always clamped to the visible canvas inset.
+#[cfg(any(target_arch = "wasm32", test))]
+fn canvas_overlay_position(
+    trigger: OverlayRect,
+    canvas: OverlayRect,
+    overlay: OverlayRect,
+    inset: f64,
+    gap: f64,
+) -> Option<geosolve_constraint_editor::ScreenPoint> {
+    if !trigger.is_valid()
+        || !canvas.is_valid()
+        || !overlay.is_valid()
+        || !inset.is_finite()
+        || inset < 0.0
+        || !gap.is_finite()
+        || gap < 0.0
+    {
+        return None;
+    }
+    let minimum_x = inset.min(canvas.width);
+    let minimum_y = inset.min(canvas.height);
+    let maximum_x = (canvas.width - overlay.width - inset).max(minimum_x);
+    let maximum_y = (canvas.height - overlay.height - inset).max(minimum_y);
+    Some(geosolve_constraint_editor::ScreenPoint {
+        x: (trigger.right() + gap - canvas.left).clamp(minimum_x, maximum_x),
+        y: (trigger.top - canvas.top).clamp(minimum_y, maximum_y),
+    })
+}
+
+/// Native `details` toggle events are not required to bubble. Capture them at
+/// the palette boundary so every present or future palette disclosure that can
+/// move the Fillet trigger refreshes the canvas-relative overlay position.
+#[cfg(any(target_arch = "wasm32", test))]
+const fn palette_details_overlay_reflow_listener() -> (&'static str, bool) {
+    ("toggle", true)
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn geometry_hover_selector(item: geosolve_constraint_editor::SelectionItem) -> Option<String> {
+    match item {
+        geosolve_constraint_editor::SelectionItem::Point(point) => Some(format!(
+            "#wb-viewport [data-editor-item=\"point\"][data-persistent-id=\"{point}\"]"
+        )),
+        geosolve_constraint_editor::SelectionItem::Curve(span) => Some(format!(
+            "#wb-viewport [data-editor-item=\"curve\"][data-persistent-id=\"{}\"][data-editor-segment=\"{}\"]",
+            span.curve, span.segment
+        )),
+        geosolve_constraint_editor::SelectionItem::Constraint(_)
+        | geosolve_constraint_editor::SelectionItem::Dimension(_) => None,
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
 fn route_operation_canvas_pointer_down(
     state: &mut geosolve_constraint_editor::OperationAuthoringState,
     coordinator: &geosolve_constraint_editor::RetainedEditorCoordinator,
@@ -135,37 +245,21 @@ fn route_operation_canvas_pointer_down(
     position: geosolve_constraint_editor::ScreenPoint,
 ) -> geosolve_constraint_editor::OperationAuthoringOutcome {
     let model_position = scene.viewport.screen_to_model(position);
-    let Some(hit) = operation_canvas_hit(scene, position, source) else {
-        return state.pointer_down_picks(source, &[], model_position);
-    };
     let Some(tool) = state.active_tool() else {
         return geosolve_constraint_editor::OperationAuthoringOutcome::Inactive;
+    };
+    if !operation_stage_accepts_geometry(state.guidance().stage) {
+        // Radius placement and preview review are positional/confirmation stages,
+        // not later geometry picks. Give them exclusive ownership before querying
+        // preview/source geometry so the live fillet arc cannot consume a click.
+        return state.pointer_down_picks(source, &[], model_position);
+    }
+    let Some(hit) = operation_canvas_hit(scene, position, source) else {
+        return state.pointer_down_picks(source, &[], model_position);
     };
     match coordinator.operation_picks_for_item(tool, hit.item, hit.curve_parameter) {
         Ok(picks) => state.pointer_down_picks(source, &picks, model_position),
         Err(_) => state.pick_item(source, hit.item, hit.curve_parameter),
-    }
-}
-
-#[cfg(any(target_arch = "wasm32", test))]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum OffsetUiSemantics {
-    Choice,
-    Associative,
-    JoinedOneShot,
-}
-
-#[cfg(any(target_arch = "wasm32", test))]
-fn offset_ui_semantics(
-    state: &geosolve_constraint_editor::OperationAuthoringState,
-) -> OffsetUiSemantics {
-    if state.active_tool() != Some(geosolve_constraint_editor::OperationAuthoringTool::LineOffset) {
-        return OffsetUiSemantics::Choice;
-    }
-    match state.picks().len() {
-        0 => OffsetUiSemantics::Choice,
-        1 => OffsetUiSemantics::Associative,
-        _ => OffsetUiSemantics::JoinedOneShot,
     }
 }
 
@@ -194,10 +288,11 @@ pub(crate) mod wasm {
         ActionState, AuthoringApplication, AuthoringOperand, AuthoringOptions, AuthoringOutcome,
         AuthoringState, AuthoringTool, BranchAction, ConicConstructionOptions, ConstructionPreview,
         CoordinatorActionKind, DimensionTargetDisplayUnit, DisabledReason, EditorEffect,
-        EditorScene, EditorTool, Modifiers, NurbsConstructionOptions, OperationAuthoringOptions,
-        OperationAuthoringOutcome, OperationAuthoringPreviewOutcome, OperationAuthoringState,
-        OperationAuthoringTool, OperationLineOffsetMode, PickTolerance, PointerInput,
-        ProvisionalInferenceCandidate, RetainedEditorCoordinator, SelectionItem,
+        EditorHoverState, EditorHoverTarget, EditorScene, EditorTool, Modifiers,
+        NurbsConstructionOptions, OperationAuthoringOptions, OperationAuthoringOutcome,
+        OperationAuthoringPreviewOutcome, OperationAuthoringState, OperationAuthoringTool,
+        PickTolerance, PointerInput, ProvisionalInferenceCandidate, RetainedEditorCoordinator,
+        SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -226,6 +321,8 @@ pub(crate) mod wasm {
         samples: super::samples::SampleCatalogState,
         camera: super::scene::CanvasCamera,
         pan_gesture: Option<PanGesture>,
+        operation_pointer_position: Option<geosolve_constraint_editor::ScreenPoint>,
+        fillet_options_open: bool,
         construction_preview: Option<ConstructionPreview>,
         inference_preview: Option<ProvisionalInferenceCandidate>,
         notice: String,
@@ -285,6 +382,8 @@ pub(crate) mod wasm {
             samples: super::samples::SampleCatalogState::default(),
             camera: super::scene::CanvasCamera::default(),
             pan_gesture: None,
+            operation_pointer_position: None,
+            fillet_options_open: false,
             construction_preview: None,
             inference_preview: None,
             notice,
@@ -296,6 +395,7 @@ pub(crate) mod wasm {
         install_sample_flyout_state(document)?;
         install_canvas(document, &workbench)?;
         install_keyboard(document, &workbench)?;
+        install_fillet_options_overlay_reposition(document)?;
         Ok(())
     }
 
@@ -375,6 +475,37 @@ pub(crate) mod wasm {
         Ok(())
     }
 
+    fn install_fillet_options_overlay_reposition(document: &Document) -> Result<(), JsValue> {
+        let resize_document = document.clone();
+        let resize = Closure::<dyn FnMut(Event)>::new(move |_event: Event| {
+            let _ = reposition_fillet_options_overlay(&resize_document);
+        });
+        super::platform::window()?
+            .add_event_listener_with_callback("resize", resize.as_ref().unchecked_ref())?;
+        resize.forget();
+
+        let scroll_document = document.clone();
+        let scroll = Closure::<dyn FnMut(Event)>::new(move |_event: Event| {
+            let _ = reposition_fillet_options_overlay(&scroll_document);
+        });
+        required(document, "wb-tool-palette")?
+            .add_event_listener_with_callback("scroll", scroll.as_ref().unchecked_ref())?;
+        scroll.forget();
+
+        let toggle_document = document.clone();
+        let toggle = Closure::<dyn FnMut(Event)>::new(move |_event: Event| {
+            let _ = reposition_fillet_options_overlay(&toggle_document);
+        });
+        let (toggle_event, capture) = super::palette_details_overlay_reflow_listener();
+        required(document, "wb-tool-palette")?.add_event_listener_with_callback_and_bool(
+            toggle_event,
+            toggle.as_ref().unchecked_ref(),
+            capture,
+        )?;
+        toggle.forget();
+        Ok(())
+    }
+
     fn sample_branch(event: &Event) -> Option<Element> {
         event
             .target()?
@@ -437,7 +568,7 @@ pub(crate) mod wasm {
             if super::change_owns_option_control_click(
                 &origin.tag_name(),
                 origin
-                    .closest(".wb-palette-flyout")
+                    .closest(".wb-palette-flyout, .wb-operation-options")
                     .is_ok_and(|surface| surface.is_some()),
                 origin
                     .closest(".wb-construction-options")
@@ -479,6 +610,7 @@ pub(crate) mod wasm {
                 wb.authoring.deactivate();
                 wb.operation_authoring.deactivate();
                 wb.coordinator.clear_operation_preview();
+                wb.operation_pointer_position = None;
                 let effects = wb.coordinator.editor_mut().activate_tool(tool);
                 dispatch_effects(&mut wb, effects);
                 wb.notice = format!("{} tool active", super::icons::geometry_tool_key(tool));
@@ -656,8 +788,9 @@ pub(crate) mod wasm {
         let leave_workbench = Rc::clone(workbench);
         let leave = Closure::<dyn FnMut(PointerEvent)>::new(move |_event| {
             let mut wb = leave_workbench.borrow_mut();
+            let operation_hover_changed = wb.operation_pointer_position.take().is_some();
             let effects = wb.coordinator.editor_mut().pointer_leave();
-            if effects.is_empty() {
+            if effects.is_empty() && !operation_hover_changed {
                 return;
             }
             dispatch_effects(&mut wb, effects);
@@ -740,6 +873,7 @@ pub(crate) mod wasm {
                     return;
                 };
                 if wb.operation_authoring.active_tool().is_some() {
+                    wb.operation_pointer_position = Some(input.position);
                     let model_position = scene.viewport.screen_to_model(input.position);
                     let Some(operation_document) = operation_document(&wb) else {
                         return;
@@ -961,6 +1095,7 @@ pub(crate) mod wasm {
                 if event.button() != 0 {
                     return;
                 }
+                wb.operation_pointer_position = Some(input.position);
                 let Some(operation_document) = operation_document(&wb) else {
                     wb.notice = "Helper operations require accepted geometry".into();
                     return;
@@ -1042,6 +1177,13 @@ pub(crate) mod wasm {
                 event.prevent_default();
                 close_sample_selector(&callback_document);
                 focus_by_id(&callback_document, "wb-sample-trigger");
+                return;
+            }
+            if event.key() == "Escape" && callback_workbench.borrow().fillet_options_open {
+                event.prevent_default();
+                callback_workbench.borrow_mut().fillet_options_open = false;
+                let _ = render(&callback_document, &callback_workbench);
+                focus_by_id(&callback_document, "wb-operation-fillet-options-trigger");
                 return;
             }
             if let Some(target) = event
@@ -1251,6 +1393,8 @@ pub(crate) mod wasm {
                 wb.authoring.deactivate();
                 wb.operation_authoring.deactivate();
                 wb.camera.reset();
+                wb.operation_pointer_position = None;
+                wb.fillet_options_open = false;
                 wb.construction_preview = None;
                 wb.inference_preview = None;
             }),
@@ -1295,6 +1439,14 @@ pub(crate) mod wasm {
             "dimension-target" => apply_dimension_target(document, wb),
             "contact-branches" => apply_contact_branches(document, wb),
             "angle-orientation" => apply_angle_orientation(document, wb),
+            "fillet-options" => {
+                wb.fillet_options_open = !wb.fillet_options_open;
+                Ok(())
+            }
+            "fillet-options-close" => {
+                wb.fillet_options_open = false;
+                Ok(())
+            }
             "problems" => {
                 wb.problems_open = !wb.problems_open;
                 Ok(())
@@ -1352,7 +1504,12 @@ pub(crate) mod wasm {
         wb.notice = result.map_or_else(
             |error| error,
             |()| match action {
-                "problems" | "cancel" | "dimension-target" | "operation-apply" => wb.notice.clone(),
+                "problems"
+                | "cancel"
+                | "dimension-target"
+                | "operation-apply"
+                | "fillet-options"
+                | "fillet-options-close" => wb.notice.clone(),
                 _ => "Action retained".into(),
             },
         );
@@ -1390,6 +1547,8 @@ pub(crate) mod wasm {
                 wb.coordinator = coordinator;
                 wb.authoring.deactivate();
                 wb.operation_authoring.deactivate();
+                wb.operation_pointer_position = None;
+                wb.fillet_options_open = false;
                 wb.construction_preview = None;
                 wb.inference_preview = None;
                 fit_camera(wb);
@@ -1407,6 +1566,7 @@ pub(crate) mod wasm {
     }
 
     fn activate_authoring(document: &Document, wb: &mut Workbench, tool: AuthoringTool) {
+        wb.operation_pointer_position = None;
         let options = match authoring_options(document) {
             Ok(options) => options,
             Err(error) => {
@@ -1449,6 +1609,7 @@ pub(crate) mod wasm {
         wb: &mut Workbench,
         tool: OperationAuthoringTool,
     ) {
+        wb.operation_pointer_position = None;
         let Some(operation_document) = operation_document(wb) else {
             wb.notice = "Helper operations require current accepted geometry".into();
             return;
@@ -1466,7 +1627,7 @@ pub(crate) mod wasm {
         let _ = wb
             .operation_authoring
             .set_options(&operation_document, options);
-        let selection = match wb.coordinator.operation_authoring_preselection_for(tool) {
+        let selection = match wb.coordinator.operation_authoring_preselection(tool) {
             Ok(selection) => selection,
             Err(error) => {
                 wb.operation_authoring.deactivate();
@@ -1516,7 +1677,7 @@ pub(crate) mod wasm {
             Ok(options) => options,
             Err(error) => {
                 wb.coordinator.clear_operation_preview();
-                wb.operation_authoring.transaction_finished();
+                wb.operation_authoring.preview_failed();
                 wb.notice = error;
                 return;
             }
@@ -1551,18 +1712,6 @@ pub(crate) mod wasm {
             fillet_flip_first_side: input_checked(document, "wb-operation-fillet-flip-first"),
             fillet_flip_second_side: input_checked(document, "wb-operation-fillet-flip-second"),
             fillet_alternate_arc: input_checked(document, "wb-operation-fillet-alternate-arc"),
-            offset_distance: optional_positive_input(
-                document,
-                "wb-operation-offset-distance",
-                "offset distance",
-            )?,
-            offset_mode: if select_value(document, "wb-operation-offset-mode").as_deref()
-                == Some("supporting")
-            {
-                OperationLineOffsetMode::SupportingLine
-            } else {
-                OperationLineOffsetMode::ExactTranslatedSegment
-            },
         })
     }
 
@@ -1624,13 +1773,31 @@ pub(crate) mod wasm {
                     }
                     Ok(OperationAuthoringPreviewOutcome::Warning(warning)) => {
                         wb.coordinator.clear_operation_preview();
-                        wb.operation_authoring.transaction_finished();
-                        wb.notice = format!("{} · select new operands to retry", warning.message);
+                        let retry_radius = super::recover_operation_preview_failure(
+                            &mut wb.operation_authoring,
+                            &candidate,
+                        );
+                        wb.notice = if retry_radius {
+                            format!("{} · move to try another radius", warning.message)
+                        } else {
+                            format!("{} · select new operands to retry", warning.message)
+                        };
                     }
                     Err(error) => {
                         wb.coordinator.clear_operation_preview();
-                        wb.operation_authoring.transaction_finished();
-                        wb.notice = format!("Operation preview failed: {error}");
+                        let retry_radius = super::recover_operation_preview_failure(
+                            &mut wb.operation_authoring,
+                            &candidate,
+                        );
+                        wb.notice = if retry_radius {
+                            format!(
+                                "Operation preview failed: {error} · move to try another radius"
+                            )
+                        } else {
+                            format!(
+                                "Operation preview failed: {error} · select new operands to retry"
+                            )
+                        };
                     }
                 }
             }
@@ -1662,6 +1829,7 @@ pub(crate) mod wasm {
                 wb.notice = format!("Operands cleared · {}", guidance.message);
             }
             OperationAuthoringOutcome::ModeExited => {
+                wb.operation_pointer_position = None;
                 wb.notice = "Helper operation authoring exited; Select active".into();
             }
             OperationAuthoringOutcome::Inactive => {}
@@ -1982,20 +2150,55 @@ pub(crate) mod wasm {
                     })
                     .map(|curve| SelectionItem::Curve(curve.span)),
             );
+            pending.extend(
+                scene
+                    .points
+                    .iter()
+                    .filter(|point| preview.metadata().created_points.contains(&point.id))
+                    .map(|point| SelectionItem::Point(point.id)),
+            );
         }
         pending.sort_unstable();
         pending.dedup();
         let construction_preview = wb.construction_preview.as_ref();
+        let operation_hover = if wb.operation_authoring.active_tool().is_some()
+            && super::operation_stage_accepts_geometry(wb.operation_authoring.guidance().stage)
+        {
+            scene.as_ref().and_then(|scene| {
+                wb.operation_pointer_position.and_then(|position| {
+                    coordinator
+                        .operation_authoring_document()
+                        .and_then(|source| super::operation_geometry_hover(scene, position, source))
+                })
+            })
+        } else {
+            None
+        };
+        let hover = if wb.operation_authoring.active_tool().is_some() {
+            EditorHoverState {
+                target: operation_hover.map(EditorHoverTarget::Geometry),
+                context_owner: None,
+            }
+        } else {
+            coordinator.editor().hover_state()
+        };
         required(document, "wb-viewport")?.set_inner_html(&super::scene::svg_markup_with_context(
             scene.as_ref(),
             accepted,
             selection,
             &pending,
-            coordinator.editor().hover_state(),
+            hover,
             construction_preview,
             coordinator.current_problem_metadata().as_ref(),
             wb.camera.viewport(),
         ));
+        mark_geometry_hover(
+            document,
+            hover.target.and_then(|target| match target {
+                EditorHoverTarget::Geometry(item) => Some(item),
+                EditorHoverTarget::Annotation(_) => None,
+            }),
+        )?;
         let design = coordinator.session().design_document();
         required(document, "wb-tree")?.set_inner_html(&super::panels::tree_markup_with_pending(
             design, selection, &pending,
@@ -2092,10 +2295,84 @@ pub(crate) mod wasm {
             &wb.operation_authoring,
         )?;
         render_operation_options(document, &wb.operation_authoring)?;
+        render_fillet_options_overlay(document, wb.fillet_options_open)?;
         render_dimension_target_editor(document, coordinator)?;
         render_branch_editor(document, coordinator)?;
         required(document, "workbench-root")?
             .set_attribute("data-editor-adapter", "retained-coordinator")?;
+        Ok(())
+    }
+
+    fn mark_geometry_hover(
+        document: &Document,
+        item: Option<SelectionItem>,
+    ) -> Result<(), JsValue> {
+        let Some(selector) = item.and_then(super::geometry_hover_selector) else {
+            return Ok(());
+        };
+        let Some(element) = document.query_selector(&selector)? else {
+            return Ok(());
+        };
+        let mut classes = element.get_attribute("class").unwrap_or_default();
+        if !classes
+            .split_ascii_whitespace()
+            .any(|class| class == "geometry-hovered")
+        {
+            classes.push_str(" geometry-hovered");
+            element.set_attribute("class", classes.trim())?;
+        }
+        Ok(())
+    }
+
+    fn render_fillet_options_overlay(document: &Document, open: bool) -> Result<(), JsValue> {
+        let trigger = required(document, "wb-operation-fillet-options-trigger")?;
+        trigger.set_attribute("aria-expanded", if open { "true" } else { "false" })?;
+        let overlay = required(document, "wb-operation-options-overlay")?;
+        if !open {
+            overlay.set_attribute("hidden", "")?;
+            overlay.remove_attribute("style")?;
+            return Ok(());
+        }
+        overlay.remove_attribute("hidden")?;
+        reposition_fillet_options_overlay(document)
+    }
+
+    fn reposition_fillet_options_overlay(document: &Document) -> Result<(), JsValue> {
+        let overlay = required(document, "wb-operation-options-overlay")?;
+        if overlay.has_attribute("hidden") {
+            return Ok(());
+        }
+        let trigger_rect =
+            required(document, "wb-operation-fillet-trigger")?.get_bounding_client_rect();
+        let canvas_rect = required(document, "wb-canvas-panel")?.get_bounding_client_rect();
+        let overlay_rect = overlay.get_bounding_client_rect();
+        let position = super::canvas_overlay_position(
+            super::OverlayRect {
+                left: trigger_rect.left(),
+                top: trigger_rect.top(),
+                width: trigger_rect.width(),
+                height: trigger_rect.height(),
+            },
+            super::OverlayRect {
+                left: canvas_rect.left(),
+                top: canvas_rect.top(),
+                width: canvas_rect.width(),
+                height: canvas_rect.height(),
+            },
+            super::OverlayRect {
+                left: overlay_rect.left(),
+                top: overlay_rect.top(),
+                width: overlay_rect.width(),
+                height: overlay_rect.height(),
+            },
+            8.0,
+            8.0,
+        )
+        .unwrap_or(geosolve_constraint_editor::ScreenPoint { x: 8.0, y: 8.0 });
+        overlay.set_attribute(
+            "style",
+            &format!("left: {:.3}px; top: {:.3}px", position.x, position.y),
+        )?;
         Ok(())
     }
 
@@ -2187,8 +2464,6 @@ pub(crate) mod wasm {
             "wb-operation-fillet-flip-first",
             "wb-operation-fillet-flip-second",
             "wb-operation-fillet-alternate-arc",
-            "wb-operation-offset-distance",
-            "wb-operation-offset-mode",
         ] {
             set_disabled(&required(document, id)?, false)?;
         }
@@ -2262,40 +2537,6 @@ pub(crate) mod wasm {
                 DocumentDimensionMode::Reference => "reference",
             });
         }
-        render_optional_number(
-            document,
-            "wb-operation-offset-distance",
-            options.offset_distance,
-        )?;
-        if let Ok(select) =
-            required(document, "wb-operation-offset-mode")?.dyn_into::<HtmlSelectElement>()
-        {
-            select.set_value(match options.offset_mode {
-                OperationLineOffsetMode::ExactTranslatedSegment => "exact",
-                OperationLineOffsetMode::SupportingLine => "supporting",
-            });
-            select.set_disabled(matches!(
-                super::offset_ui_semantics(state),
-                super::OffsetUiSemantics::JoinedOneShot
-            ));
-        }
-        let semantics = required(document, "wb-operation-offset-semantics")?;
-        let (key, message) = match super::offset_ui_semantics(state) {
-            super::OffsetUiSemantics::Choice => (
-                "choice",
-                "One span stays associative. Two or more connected spans create one-shot joined geometry.",
-            ),
-            super::OffsetUiSemantics::Associative => (
-                "associative",
-                "Associative single-span offset: source edits propagate.",
-            ),
-            super::OffsetUiSemantics::JoinedOneShot => (
-                "joined-one-shot",
-                "One-shot joined offset: source edits do not propagate. Associative multi-span offsets are deferred.",
-            ),
-        };
-        semantics.set_attribute("data-offset-semantics", key)?;
-        semantics.set_text_content(Some(message));
         for (id, checked) in [
             (
                 "wb-operation-fillet-flip-first",
@@ -2825,54 +3066,41 @@ mod tests {
         EditorHoverState, Modifiers, OperationAuthoringCandidate, OperationAuthoringOutcome,
         OperationAuthoringPreviewMetadata, OperationAuthoringPreviewOutcome,
         OperationAuthoringState, OperationAuthoringTool, PickTolerance, PointerInput,
-        RetainedEditorCoordinator, SceneCurve, ScreenPoint, SelectionItem, Viewport,
+        RetainedEditorCoordinator, ScreenPoint, SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
-        CurveDefinition, CurveSpan, DocumentDimensionDefinition, DocumentEdit,
-        DocumentSolveRequest, RetainedSketchDocumentSession, SketchDocument,
+        CurveDefinition, CurveSpan, DesignPointId, DocumentEdit, DocumentSolveRequest,
+        RetainedSketchDocumentSession, SketchDocument,
     };
 
     use super::{
-        AuthoringItemInput, OffsetUiSemantics, PointerMoveQueue, change_owns_option_control_click,
-        offset_ui_semantics, operation_apply_available, operation_canvas_hit,
-        operation_preview_reusable, owns_authoring_pick, route_operation_canvas_pointer_down,
-        route_operation_item_pick,
+        AuthoringItemInput, OverlayRect, PointerMoveQueue, canvas_overlay_position,
+        change_owns_option_control_click, geometry_hover_selector, operation_apply_available,
+        operation_canvas_hit, operation_geometry_hover, operation_preview_reusable,
+        operation_stage_accepts_geometry, owns_authoring_pick,
+        palette_details_overlay_reflow_listener, recover_operation_preview_failure,
+        route_operation_canvas_pointer_down, route_operation_item_pick,
     };
 
-    fn interior_curve_position(curve: &SceneCurve) -> ScreenPoint {
-        let length_squared = |segment: &[ScreenPoint]| {
-            let dx = segment[1].x - segment[0].x;
-            let dy = segment[1].y - segment[0].y;
-            dx.mul_add(dx, dy * dy)
-        };
-        let segment = curve
-            .screen_polyline
-            .windows(2)
-            .max_by(|first, second| length_squared(first).total_cmp(&length_squared(second)))
-            .expect("a rendered curve has at least one segment");
-        ScreenPoint {
-            x: 0.5 * (segment[0].x + segment[1].x),
-            y: 0.5 * (segment[0].y + segment[1].y),
-        }
-    }
-
-    fn line_operation_fixture() -> (RetainedEditorCoordinator, CurveSpan) {
+    fn fillet_operation_fixture() -> (
+        RetainedEditorCoordinator,
+        [CurveSpan; 2],
+        [DesignPointId; 3],
+    ) {
         let mut document = SketchDocument::new(10.0).expect("document");
-        let start = document.add_point("start", [0.0, 0.0]).expect("start");
-        let end = document.add_point("end", [4.0, 0.0]).expect("end");
-        let line = CurveSpan::line(
-            document
-                .add_curve(
-                    "source",
-                    CurveDefinition::Line {
-                        start,
-                        end,
-                        branch_direction: [1.0, 0.0],
-                    },
-                )
-                .expect("line"),
-        );
+        let points = [[0.0, 0.0], [2.0, 0.0], [2.0, 2.0]]
+            .map(|position| document.add_point("corner point", position).expect("point"));
+        let curve = document
+            .add_curve(
+                "corner support",
+                CurveDefinition::Polyline {
+                    points: points.to_vec(),
+                    closed: false,
+                    branch_directions: vec![[1.0, 0.0], [0.0, 1.0]],
+                },
+            )
+            .expect("polyline");
         let session = RetainedSketchDocumentSession::new(
             document,
             DocumentSolveRequest::default(),
@@ -2881,14 +3109,18 @@ mod tests {
         .expect("session");
         (
             RetainedEditorCoordinator::new(session).expect("coordinator"),
-            line,
+            [
+                CurveSpan { curve, segment: 0 },
+                CurveSpan { curve, segment: 1 },
+            ],
+            points,
         )
     }
 
-    fn prepare_confirmed_offset(
+    fn prepare_confirmed_fillet(
         coordinator: &mut RetainedEditorCoordinator,
         state: &mut OperationAuthoringState,
-        line: CurveSpan,
+        corner: DesignPointId,
     ) -> (
         OperationAuthoringCandidate,
         OperationAuthoringPreviewMetadata,
@@ -2897,31 +3129,36 @@ mod tests {
             .operation_authoring_document()
             .expect("accepted operation document")
             .clone();
-        let pick = coordinator
-            .operation_pick_for_item(SelectionItem::Curve(line), Some(0.5))
-            .expect("stamped line pick");
-        let activated = state.activate(&document, OperationAuthoringTool::LineOffset, &[pick]);
+        let picks = coordinator
+            .operation_picks_for_item(
+                OperationAuthoringTool::Fillet,
+                SelectionItem::Point(corner),
+                None,
+            )
+            .expect("expanded corner picks");
+        let _ = state.activate(&document, OperationAuthoringTool::Fillet, &[]);
+        let activated = state.pick_many(&document, picks);
         coordinator.observe_operation_authoring_outcome(&activated);
         let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = activated else {
-            panic!("offset preselection should request a default-side preview");
+            panic!("fillet corner should request a radius preview");
         };
         let unconfirmed = coordinator
             .prepare_operation_preview(&candidate)
-            .expect("prepare default-side preview");
+            .expect("prepare default-radius preview");
         assert!(matches!(
             unconfirmed,
             OperationAuthoringPreviewOutcome::Ready(metadata) if !metadata.apply_ready
         ));
-        let confirmed = state.confirm(&document, [2.0, 2.0]);
+        let confirmed = state.confirm(&document, [1.8, 0.2]);
         coordinator.observe_operation_authoring_outcome(&confirmed);
         let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = confirmed else {
-            panic!("side confirmation should request a preview");
+            panic!("radius confirmation should request a preview");
         };
         let prepared = coordinator
             .prepare_operation_preview(&candidate)
             .expect("prepare confirmed preview");
         let OperationAuthoringPreviewOutcome::Ready(metadata) = prepared else {
-            panic!("confirmed offset preview should be accepted");
+            panic!("confirmed fillet preview should be accepted");
         };
         assert!(metadata.apply_ready);
         (candidate, metadata)
@@ -2968,6 +3205,155 @@ mod tests {
         assert!(!change_owns_option_control_click(
             "INPUT", false, false, false
         ));
+    }
+
+    #[test]
+    fn fillet_options_overlay_clamps_against_every_canvas_edge() {
+        let canvas = OverlayRect {
+            left: 300.0,
+            top: 100.0,
+            width: 800.0,
+            height: 600.0,
+        };
+        let overlay = OverlayRect {
+            left: 0.0,
+            top: 0.0,
+            width: 224.0,
+            height: 260.0,
+        };
+        let left_palette_trigger = OverlayRect {
+            left: 20.0,
+            top: 240.0,
+            width: 70.0,
+            height: 44.0,
+        };
+        assert_eq!(
+            canvas_overlay_position(left_palette_trigger, canvas, overlay, 8.0, 8.0),
+            Some(ScreenPoint { x: 8.0, y: 140.0 })
+        );
+
+        let high_trigger = OverlayRect {
+            left: 500.0,
+            top: 50.0,
+            width: 60.0,
+            height: 30.0,
+        };
+        assert_eq!(
+            canvas_overlay_position(high_trigger, canvas, overlay, 8.0, 8.0),
+            Some(ScreenPoint { x: 268.0, y: 8.0 })
+        );
+
+        let right_trigger = OverlayRect {
+            left: 1_100.0,
+            top: 250.0,
+            width: 60.0,
+            height: 30.0,
+        };
+        assert_eq!(
+            canvas_overlay_position(right_trigger, canvas, overlay, 8.0, 8.0),
+            Some(ScreenPoint { x: 568.0, y: 150.0 })
+        );
+
+        let low_trigger = OverlayRect {
+            left: 600.0,
+            top: 690.0,
+            width: 60.0,
+            height: 30.0,
+        };
+        assert_eq!(
+            canvas_overlay_position(low_trigger, canvas, overlay, 8.0, 8.0),
+            Some(ScreenPoint { x: 368.0, y: 332.0 })
+        );
+    }
+
+    #[test]
+    fn fillet_options_overlay_reflows_after_palette_scroll_and_canvas_resize() {
+        let overlay = OverlayRect {
+            left: 0.0,
+            top: 0.0,
+            width: 224.0,
+            height: 260.0,
+        };
+        let large_canvas = OverlayRect {
+            left: 300.0,
+            top: 100.0,
+            width: 800.0,
+            height: 600.0,
+        };
+        let trigger = OverlayRect {
+            left: 600.0,
+            top: 300.0,
+            width: 60.0,
+            height: 30.0,
+        };
+        assert_eq!(
+            canvas_overlay_position(trigger, large_canvas, overlay, 8.0, 8.0),
+            Some(ScreenPoint { x: 368.0, y: 200.0 })
+        );
+
+        let scrolled_trigger = OverlayRect {
+            top: 40.0,
+            ..trigger
+        };
+        assert_eq!(
+            canvas_overlay_position(scrolled_trigger, large_canvas, overlay, 8.0, 8.0),
+            Some(ScreenPoint { x: 368.0, y: 8.0 })
+        );
+
+        let resized_canvas = OverlayRect {
+            width: 420.0,
+            height: 320.0,
+            ..large_canvas
+        };
+        assert_eq!(
+            canvas_overlay_position(trigger, resized_canvas, overlay, 8.0, 8.0),
+            Some(ScreenPoint { x: 188.0, y: 52.0 })
+        );
+    }
+
+    #[test]
+    fn fillet_options_overlay_captures_native_palette_details_reflow() {
+        assert_eq!(palette_details_overlay_reflow_listener(), ("toggle", true));
+
+        let html = include_str!("../../index.html");
+        let palette_start = html
+            .find("id=\"wb-tool-palette\"")
+            .expect("tool palette markup");
+        let palette = &html[palette_start..];
+        let palette_end = palette.find("</aside>").expect("tool palette boundary");
+        assert!(
+            palette[..palette_end].contains("<details"),
+            "the captured toggle policy must cover native palette disclosures"
+        );
+    }
+
+    #[test]
+    fn fillet_options_overlay_rejects_non_finite_layout_measurements() {
+        assert_eq!(
+            canvas_overlay_position(
+                OverlayRect {
+                    left: f64::NAN,
+                    top: 0.0,
+                    width: 10.0,
+                    height: 10.0,
+                },
+                OverlayRect {
+                    left: 0.0,
+                    top: 0.0,
+                    width: 100.0,
+                    height: 100.0,
+                },
+                OverlayRect {
+                    left: 0.0,
+                    top: 0.0,
+                    width: 20.0,
+                    height: 20.0,
+                },
+                8.0,
+                8.0,
+            ),
+            None
+        );
     }
 
     #[test]
@@ -3062,9 +3448,9 @@ mod tests {
         reason = "exact preview token, candidate, warning, and stale-input gates form one lifecycle"
     )]
     fn operation_apply_requires_the_exact_current_accepted_preview() {
-        let (mut coordinator, line) = line_operation_fixture();
+        let (mut coordinator, spans, points) = fillet_operation_fixture();
         let mut state = OperationAuthoringState::default();
-        let (_, _) = prepare_confirmed_offset(&mut coordinator, &mut state, line);
+        let (_, _) = prepare_confirmed_fillet(&mut coordinator, &mut state, points[1]);
         assert!(operation_apply_available(&state, &coordinator));
 
         let document = coordinator
@@ -3072,7 +3458,7 @@ mod tests {
             .expect("operation document")
             .clone();
         let mut options = state.options();
-        options.offset_distance = Some(2.0);
+        options.fillet_alternate_arc = !options.fillet_alternate_arc;
         let changed = state.set_options(&document, options);
         coordinator.observe_operation_authoring_outcome(&changed);
         assert!(matches!(
@@ -3097,7 +3483,7 @@ mod tests {
         ));
         assert!(coordinator.operation_preview().is_none());
 
-        let (_, _) = prepare_confirmed_offset(&mut coordinator, &mut state, line);
+        let (_, _) = prepare_confirmed_fillet(&mut coordinator, &mut state, points[1]);
         assert!(operation_apply_available(&state, &coordinator));
         let cancelled = state.cancel();
         coordinator.observe_operation_authoring_outcome(&cancelled);
@@ -3108,7 +3494,7 @@ mod tests {
         assert!(coordinator.operation_preview().is_none());
         assert!(!operation_apply_available(&state, &coordinator));
 
-        let (_, _) = prepare_confirmed_offset(&mut coordinator, &mut state, line);
+        let (_, _) = prepare_confirmed_fillet(&mut coordinator, &mut state, points[1]);
         let warning = state.pointer_down(&document, None, [f64::NAN, 0.0]);
         coordinator.observe_operation_authoring_outcome(&warning);
         assert!(matches!(warning, OperationAuthoringOutcome::Warning(_)));
@@ -3118,9 +3504,9 @@ mod tests {
         assert!(!operation_apply_available(&state, &coordinator));
 
         let source_pick = coordinator
-            .operation_pick_for_item(SelectionItem::Curve(line), Some(0.5))
-            .expect("mirror source pick");
-        let _ = state.activate(&document, OperationAuthoringTool::Mirror, &[]);
+            .operation_pick_for_item(SelectionItem::Curve(spans[0]), Some(0.5))
+            .expect("fillet parent pick");
+        let _ = state.activate(&document, OperationAuthoringTool::Fillet, &[]);
         assert!(matches!(
             state.pick(&document, source_pick.clone()),
             OperationAuthoringOutcome::Collecting { .. }
@@ -3135,8 +3521,8 @@ mod tests {
         );
         state.transaction_finished();
 
-        let (_, _) = prepare_confirmed_offset(&mut coordinator, &mut state, line);
-        let switched = state.activate(&document, OperationAuthoringTool::Mirror, &[]);
+        let (_, _) = prepare_confirmed_fillet(&mut coordinator, &mut state, points[1]);
+        let switched = state.activate(&document, OperationAuthoringTool::Fillet, &[]);
         coordinator.observe_operation_authoring_outcome(&switched);
         assert!(matches!(
             switched,
@@ -3144,7 +3530,7 @@ mod tests {
         ));
         assert!(coordinator.operation_preview().is_none());
 
-        let (_, _) = prepare_confirmed_offset(&mut coordinator, &mut state, line);
+        let (_, _) = prepare_confirmed_fillet(&mut coordinator, &mut state, points[1]);
         let changed = coordinator
             .apply_edit(
                 coordinator.session().design_identity(),
@@ -3177,9 +3563,9 @@ mod tests {
 
     #[test]
     fn rejected_operation_item_pick_revokes_confirmed_preview_but_retains_valid_prefix() {
-        let (mut coordinator, line) = line_operation_fixture();
+        let (mut coordinator, spans, points) = fillet_operation_fixture();
         let mut state = OperationAuthoringState::default();
-        let _ = prepare_confirmed_offset(&mut coordinator, &mut state, line);
+        let _ = prepare_confirmed_fillet(&mut coordinator, &mut state, points[1]);
         assert!(state.candidate_confirmed());
         assert!(coordinator.operation_preview().is_some());
 
@@ -3187,15 +3573,10 @@ mod tests {
             .operation_authoring_document()
             .expect("operation document")
             .clone();
-        let CurveDefinition::Line { start: point, .. } =
-            document.curve(line.curve).expect("source line").definition
-        else {
-            panic!("fixture curve should be a line");
-        };
         let invalid_confirmed = route_operation_item_pick(
             &mut state,
             &document,
-            SelectionItem::Point(point),
+            SelectionItem::Point(points[0]),
             None,
             None,
         );
@@ -3204,20 +3585,20 @@ mod tests {
             invalid_confirmed,
             OperationAuthoringOutcome::Warning(ref warning)
                 if warning.kind
-                    == geosolve_constraint_editor::OperationAuthoringWarningKind::WrongOperandKind
+                    == geosolve_constraint_editor::OperationAuthoringWarningKind::FilletCornerNotInterior
         ));
         assert!(state.picks().is_empty());
         assert!(state.candidate().is_none());
         assert!(coordinator.operation_preview().is_none());
 
         let source_pick = coordinator
-            .operation_pick_for_item(SelectionItem::Curve(line), Some(0.5))
-            .expect("stamped mirror source");
-        let _ = state.activate(&document, OperationAuthoringTool::Mirror, &[]);
+            .operation_pick_for_item(SelectionItem::Curve(spans[0]), Some(0.5))
+            .expect("stamped fillet parent");
+        let _ = state.activate(&document, OperationAuthoringTool::Fillet, &[]);
         let collecting = route_operation_item_pick(
             &mut state,
             &document,
-            SelectionItem::Curve(line),
+            SelectionItem::Curve(spans[0]),
             Some(0.5),
             Some(vec![source_pick.clone()]),
         );
@@ -3230,7 +3611,7 @@ mod tests {
         let invalid_second = route_operation_item_pick(
             &mut state,
             &document,
-            SelectionItem::Point(point),
+            SelectionItem::Point(points[0]),
             None,
             None,
         );
@@ -3239,7 +3620,7 @@ mod tests {
             invalid_second,
             OperationAuthoringOutcome::Warning(ref warning)
                 if warning.kind
-                    == geosolve_constraint_editor::OperationAuthoringWarningKind::WrongOperandKind
+                    == geosolve_constraint_editor::OperationAuthoringWarningKind::FilletCornerNotInterior
         ));
         assert_eq!(state.picks(), &[source_pick]);
         assert!(state.candidate().is_none());
@@ -3248,9 +3629,9 @@ mod tests {
 
     #[test]
     fn accepted_operation_preview_renders_with_its_own_provenance() {
-        let (mut coordinator, line) = line_operation_fixture();
+        let (mut coordinator, _, points) = fillet_operation_fixture();
         let mut state = OperationAuthoringState::default();
-        let (_, metadata) = prepare_confirmed_offset(&mut coordinator, &mut state, line);
+        let (_, metadata) = prepare_confirmed_fillet(&mut coordinator, &mut state, points[1]);
         let preview = coordinator.operation_preview().expect("accepted preview");
         let viewport = Viewport::new([1000.0, 700.0], [2.0, 1.0], 50.0).expect("viewport");
         let scene = preview.scene(viewport, 0.8).expect("preview scene");
@@ -3274,16 +3655,16 @@ mod tests {
 
     #[test]
     fn one_physical_canvas_click_contributes_one_operation_transition() {
-        let (coordinator, line) = line_operation_fixture();
+        let (coordinator, spans, _) = fillet_operation_fixture();
         let document = coordinator
             .operation_authoring_document()
             .expect("operation document")
             .clone();
         let pick = coordinator
-            .operation_pick_for_item(SelectionItem::Curve(line), Some(0.5))
+            .operation_pick_for_item(SelectionItem::Curve(spans[0]), Some(0.5))
             .expect("pick");
         let mut state = OperationAuthoringState::default();
-        let _ = state.activate(&document, OperationAuthoringTool::LineOffset, &[]);
+        let _ = state.activate(&document, OperationAuthoringTool::Fillet, &[]);
         let outcomes = [
             AuthoringItemInput::CanvasPointerDown,
             AuthoringItemInput::CanvasClick,
@@ -3295,10 +3676,49 @@ mod tests {
         assert_eq!(outcomes.len(), 1);
         assert!(matches!(
             outcomes[0],
-            OperationAuthoringOutcome::PreviewRequested { .. }
+            OperationAuthoringOutcome::Collecting { .. }
         ));
         assert_eq!(state.picks().len(), 1);
         assert!(!state.candidate_confirmed());
+    }
+
+    #[test]
+    fn web_preview_failure_policy_retries_unconfirmed_radius_but_ends_confirmed_failure() {
+        let (coordinator, _, points) = fillet_operation_fixture();
+        let document = coordinator
+            .operation_authoring_document()
+            .expect("operation document")
+            .clone();
+        let picks = coordinator
+            .operation_picks_for_item(
+                OperationAuthoringTool::Fillet,
+                SelectionItem::Point(points[1]),
+                None,
+            )
+            .expect("expanded corner picks");
+        let mut state = OperationAuthoringState::default();
+        let _ = state.activate(&document, OperationAuthoringTool::Fillet, &[]);
+        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } =
+            state.pick_many(&document, picks)
+        else {
+            panic!("two parents must request the initial radius preview");
+        };
+        assert!(recover_operation_preview_failure(&mut state, &candidate));
+        assert_eq!(state.picks().len(), 2);
+        assert!(state.candidate().is_none());
+        assert_eq!(
+            state.guidance().stage,
+            geosolve_constraint_editor::OperationAuthoringStage::PlaceFilletRadius
+        );
+
+        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } =
+            state.confirm(&document, [1.8, 0.2])
+        else {
+            panic!("a subsequent valid radius must rebuild a confirmed preview");
+        };
+        assert!(!recover_operation_preview_failure(&mut state, &candidate));
+        assert!(state.picks().is_empty());
+        assert!(state.candidate().is_none());
     }
 
     #[test]
@@ -3398,6 +3818,11 @@ mod tests {
             None,
             "a preview-only arc is a blank operation operand, so this click places the radius"
         );
+        assert_eq!(
+            operation_geometry_hover(&preview_scene, preview_position, &operation_document),
+            None,
+            "the same preview foreground is also a hover barrier"
+        );
 
         let confirmed = route_operation_canvas_pointer_down(
             &mut state,
@@ -3414,22 +3839,18 @@ mod tests {
     }
 
     #[test]
-    #[allow(
-        clippy::too_many_lines,
-        reason = "one canvas-routed authoring, preview, commit, and source-edit lifecycle is the regression"
-    )]
-    fn canvas_routed_single_span_offset_commits_as_an_associative_relation() {
-        let (mut coordinator, source) = line_operation_fixture();
+    fn operation_geometry_hover_matches_click_at_the_exact_curve_tolerance() {
+        let (coordinator, spans, _) = fillet_operation_fixture();
         let operation_document = coordinator
             .operation_authoring_document()
-            .expect("operation document")
+            .expect("accepted operation document")
             .clone();
-        let viewport = Viewport::new([900.0, 600.0], [2.0, 0.5], 100.0).expect("viewport");
         let accepted = coordinator
             .session()
             .accepted_state()
             .expect("accepted source");
-        let source_scene = geosolve_constraint_editor::EditorScene::from_accepted_for_design(
+        let viewport = Viewport::new([800.0, 600.0], [1.0, 1.0], 100.0).expect("viewport");
+        let scene = geosolve_constraint_editor::EditorScene::from_accepted_for_design(
             accepted.identity().revision().get(),
             accepted.design_identity(),
             accepted.document(),
@@ -3438,179 +3859,83 @@ mod tests {
             0.8,
         )
         .expect("source scene");
-        let source_position = viewport.model_to_screen([2.0, 0.0]);
-        let source_hit = operation_canvas_hit(&source_scene, source_position, &operation_document)
-            .expect("single source line hit");
-        assert_eq!(source_hit.item, SelectionItem::Curve(source));
-
-        let mut state = OperationAuthoringState::default();
-        let _ = state.activate(&operation_document, OperationAuthoringTool::LineOffset, &[]);
-        let staged = route_operation_canvas_pointer_down(
-            &mut state,
-            &coordinator,
-            &source_scene,
-            &operation_document,
-            source_position,
-        );
-        coordinator.observe_operation_authoring_outcome(&staged);
-        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = staged else {
-            panic!("single source click must stage an offset preview");
-        };
-        assert_eq!(offset_ui_semantics(&state), OffsetUiSemantics::Associative);
-        let OperationAuthoringPreviewOutcome::Ready(unconfirmed_metadata) = coordinator
-            .prepare_operation_preview(&candidate)
-            .expect("unconfirmed offset preview")
-        else {
-            panic!("offset preview must be accepted");
-        };
-        assert!(!unconfirmed_metadata.apply_ready);
-
-        let preview_scene = coordinator
-            .operation_preview()
-            .expect("held offset preview")
-            .scene(viewport, 0.8)
-            .expect("offset preview scene");
-        let preview_curve = preview_scene
+        let curve = scene
             .curves
             .iter()
-            .find(|curve| curve.span.curve == unconfirmed_metadata.primary_created_curve)
-            .expect("preview offset curve");
-        let side_position = interior_curve_position(preview_curve);
-        assert!(matches!(
-            preview_scene.hit_test(side_position, PickTolerance::default()),
-            Some(hit) if hit.item == SelectionItem::Curve(preview_curve.span)
-        ));
+            .find(|curve| curve.span == spans[0])
+            .expect("first parent curve");
+        let first = curve
+            .screen_polyline
+            .first()
+            .copied()
+            .expect("first sample");
+        let last = curve.screen_polyline.last().copied().expect("last sample");
+        let tolerance = PickTolerance::default().curve_pixels;
+        let boundary = ScreenPoint {
+            x: 0.5 * (first.x + last.x),
+            y: 0.5 * (first.y + last.y) + tolerance,
+        };
+        let click = operation_canvas_hit(&scene, boundary, &operation_document)
+            .expect("the inclusive click boundary must acquire the line");
+        assert_eq!(click.item, SelectionItem::Curve(spans[0]));
         assert_eq!(
-            operation_canvas_hit(&preview_scene, side_position, &operation_document),
-            None,
-            "clicking the offset preview confirms the side instead of collecting preview geometry"
+            operation_geometry_hover(&scene, boundary, &operation_document),
+            Some(click.item)
         );
-
-        let confirmed = route_operation_canvas_pointer_down(
-            &mut state,
-            &coordinator,
-            &preview_scene,
-            &operation_document,
-            side_position,
-        );
-        coordinator.observe_operation_authoring_outcome(&confirmed);
-        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = confirmed else {
-            panic!("preview-side click must confirm the associative offset");
-        };
-        let OperationAuthoringPreviewOutcome::Ready(metadata) = coordinator
-            .prepare_operation_preview(&candidate)
-            .expect("confirmed offset preview")
-        else {
-            panic!("confirmed offset preview must be accepted");
-        };
-        assert!(metadata.apply_ready);
-        let target = metadata.primary_created_curve;
-        coordinator
-            .apply_operation_preview(metadata.token, &candidate)
-            .expect("offset commit");
         assert!(
-            coordinator
-                .session()
-                .design_document()
-                .dimensions()
-                .iter()
-                .any(|dimension| matches!(
-                    &dimension.definition,
-                    DocumentDimensionDefinition::ExactTranslatedSegmentOffset {
-                        source: relation_source,
-                        target_segment,
-                        ..
-                    } if *relation_source == source && target_segment.curve == target
-                ))
+            geometry_hover_selector(click.item)
+                .expect("geometry selector")
+                .contains(&spans[0].curve.to_string())
         );
-
-        let (source_end, target_end, target_end_before) = {
-            let accepted = coordinator
-                .session()
-                .accepted_state()
-                .expect("accepted committed offset")
-                .document();
-            let CurveDefinition::Line {
-                end: source_end, ..
-            } = accepted
-                .curve(source.curve)
-                .expect("source line")
-                .definition
-            else {
-                panic!("source must remain a line");
-            };
-            let CurveDefinition::Line {
-                end: target_end, ..
-            } = accepted.curve(target).expect("target line").definition
-            else {
-                panic!("target must be a line");
-            };
-            (
-                source_end,
-                target_end,
-                accepted
-                    .point(target_end)
-                    .expect("target endpoint")
-                    .position,
-            )
+        let outside = ScreenPoint {
+            y: boundary.y + 1.0e-6,
+            ..boundary
         };
-        let edited = coordinator
-            .apply_edit(
-                coordinator.session().design_identity(),
-                DocumentEdit::SetPointPosition {
-                    point: source_end,
-                    position: [6.0, 0.0],
-                },
-            )
-            .expect("source endpoint edit");
-        assert!(edited.published_accepted.is_some());
-        let accepted = coordinator
-            .session()
-            .accepted_state()
-            .expect("accepted associated edit")
-            .document();
-        let target_end_after = accepted
-            .point(target_end)
-            .expect("target endpoint")
-            .position;
-        assert!(
-            (target_end_after[0] - target_end_before[0]).abs() > 1.0e-6
-                || (target_end_after[1] - target_end_before[1]).abs() > 1.0e-6,
-            "the exact single-span target must respond when its source endpoint changes"
+        assert_eq!(
+            operation_canvas_hit(&scene, outside, &operation_document),
+            None
         );
+        assert_eq!(
+            operation_geometry_hover(&scene, outside, &operation_document),
+            None
+        );
+        assert!(operation_stage_accepts_geometry(
+            geosolve_constraint_editor::OperationAuthoringStage::PickFirstFilletCurve
+        ));
+        assert!(operation_stage_accepts_geometry(
+            geosolve_constraint_editor::OperationAuthoringStage::PickSecondFilletCurve
+        ));
+        assert!(!operation_stage_accepts_geometry(
+            geosolve_constraint_editor::OperationAuthoringStage::PlaceFilletRadius
+        ));
+        assert!(!operation_stage_accepts_geometry(
+            geosolve_constraint_editor::OperationAuthoringStage::PreviewReady
+        ));
     }
 
     #[test]
     fn operation_hover_forwarding_is_headless_and_preview_reuse_is_bounded() {
-        let (mut coordinator, line) = line_operation_fixture();
+        let (mut coordinator, _, points) = fillet_operation_fixture();
         let operation_document = coordinator
             .operation_authoring_document()
             .expect("accepted operation document")
             .clone();
-        for tool in [
-            OperationAuthoringTool::Fillet,
-            OperationAuthoringTool::Mirror,
-        ] {
-            let mut inactive_stage = OperationAuthoringState::default();
-            let _ = inactive_stage.activate(&operation_document, tool, &[]);
-            let before = inactive_stage.clone();
-            assert!(matches!(
-                inactive_stage.hover(&operation_document, [2.0, 2.0]),
-                OperationAuthoringOutcome::Collecting { ref picks, .. } if picks.is_empty()
-            ));
-            assert_eq!(
-                inactive_stage, before,
-                "normalized hover forwarding must be a headless no-op for {tool:?}"
-            );
-        }
+        let mut inactive_stage = OperationAuthoringState::default();
+        let _ = inactive_stage.activate(&operation_document, OperationAuthoringTool::Fillet, &[]);
+        let before = inactive_stage.clone();
+        assert!(matches!(
+            inactive_stage.hover(&operation_document, [2.0, 2.0]),
+            OperationAuthoringOutcome::Collecting { ref picks, .. } if picks.is_empty()
+        ));
+        assert_eq!(inactive_stage, before);
 
         let mut state = OperationAuthoringState::default();
-        let (_, metadata) = prepare_confirmed_offset(&mut coordinator, &mut state, line);
+        let (_, metadata) = prepare_confirmed_fillet(&mut coordinator, &mut state, points[1]);
         let document = coordinator
             .operation_authoring_document()
             .expect("operation document")
             .clone();
-        let hovered = state.hover(&document, [2.0, 2.0]);
+        let hovered = state.hover(&document, [1.8, 0.2]);
         coordinator.observe_operation_authoring_outcome(&hovered);
         let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = hovered else {
             panic!("confirmed hover should retain the exact preview candidate");

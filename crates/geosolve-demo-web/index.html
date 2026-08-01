@@ -30,7 +30,7 @@
         </div>
       </header>
 
-      <aside class="wb-tool-palette" aria-label="Sketch authoring tools">
+      <aside id="wb-tool-palette" class="wb-tool-palette" aria-label="Sketch authoring tools">
         <section class="wb-palette-section">
           <strong>Geometry</strong>
           <div class="wb-palette-grid">
@@ -91,14 +91,9 @@
           <strong>Modify</strong>
           <div class="wb-palette-grid">
             <div class="wb-palette-option-tool">
-              <button type="button" data-wb-operation="fillet" aria-pressed="false"><span class="wb-operation-icon" aria-hidden="true"></span><span>Fillet</span></button>
-              <details><summary aria-label="Fillet options">›</summary><div class="wb-palette-flyout wb-operation-options"><label>Initial radius<input id="wb-operation-fillet-radius" type="number" min="0" step="any" /></label><label>Radius intent<select id="wb-operation-fillet-radius-mode"><option value="reference">Flexible</option><option value="driving">Locked</option></select></label><label class="wb-option-check"><input id="wb-operation-fillet-flip-first" type="checkbox" /> Flip first side</label><label class="wb-option-check"><input id="wb-operation-fillet-flip-second" type="checkbox" /> Flip second side</label><label class="wb-option-check"><input id="wb-operation-fillet-alternate-arc" type="checkbox" /> Alternate arc</label></div></details>
+              <button id="wb-operation-fillet-trigger" type="button" data-wb-operation="fillet" aria-pressed="false"><span class="wb-operation-icon" aria-hidden="true"></span><span>Fillet</span></button>
+              <button id="wb-operation-fillet-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-action="fillet-options" aria-label="Fillet options" aria-controls="wb-operation-options-overlay" aria-expanded="false"><span aria-hidden="true">›</span></button>
             </div>
-            <div class="wb-palette-option-tool">
-              <button type="button" data-wb-operation="line-offset" aria-pressed="false"><span class="wb-operation-icon" aria-hidden="true"></span><span>Line offset</span></button>
-              <details><summary aria-label="Line offset options">›</summary><div class="wb-palette-flyout wb-operation-options"><label>Distance<input id="wb-operation-offset-distance" type="number" min="0" step="any" /></label><label>Single-span relation<select id="wb-operation-offset-mode"><option value="exact">Exact translated segment</option><option value="supporting">Supporting line</option></select></label><small id="wb-operation-offset-semantics">One span stays associative. Two or more connected spans create one-shot joined geometry.</small></div></details>
-            </div>
-            <button type="button" data-wb-operation="mirror" aria-pressed="false"><span class="wb-operation-icon" aria-hidden="true"></span><span>Mirror</span></button>
           </div>
         </section>
         <section class="wb-palette-section wb-palette-terminal">
@@ -114,8 +109,16 @@
         <div id="wb-tree" class="wb-tree" role="tree" aria-label="Sketch objects"></div>
       </aside>
 
-      <section class="wb-canvas-panel" aria-label="Sketch canvas">
+      <section id="wb-canvas-panel" class="wb-canvas-panel" aria-label="Sketch canvas">
         <svg id="wb-viewport" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet" role="application" aria-label="Editable sketch canvas"></svg>
+        <div id="wb-operation-options-overlay" class="wb-operation-options wb-canvas-operation-options" role="dialog" aria-label="Fillet options" hidden>
+          <div class="wb-operation-options-title"><strong>Fillet options</strong><button type="button" data-wb-action="fillet-options-close" aria-label="Close Fillet options">×</button></div>
+          <label>Initial radius<input id="wb-operation-fillet-radius" type="number" min="0" step="any" /></label>
+          <label>Radius intent<select id="wb-operation-fillet-radius-mode"><option value="reference">Flexible</option><option value="driving">Locked</option></select></label>
+          <label class="wb-option-check"><input id="wb-operation-fillet-flip-first" type="checkbox" /> Flip first side</label>
+          <label class="wb-option-check"><input id="wb-operation-fillet-flip-second" type="checkbox" /> Flip second side</label>
+          <label class="wb-option-check"><input id="wb-operation-fillet-alternate-arc" type="checkbox" /> Alternate arc</label>
+        </div>
         <div id="wb-draft-guide" class="wb-draft-guide" hidden>
           <span id="wb-draft-guide-text">Click to add the next point</span>
           <button id="wb-guide-finish" type="button" data-wb-action="finish">Finish curve</button>

@@ -123,17 +123,6 @@ const ANGLE: &str = concat!(
     "<path d=\"M-8 6H7M-8 6L3-6M-3 6A5 5 0 0 1 0-1\"/>",
     "<path d=\"M-1-1H3v4\"/>",
 );
-const LINE_OFFSET: &str = concat!(
-    "<path d=\"M-8 5L6-2M-6 8L8 1\"/>",
-    "<path d=\"M-4 3L-2 7M2 0L4 4\"/>",
-    "<path d=\"M-5 5l1-2 2 1M3 2l1-2 2 1\"/>",
-);
-const MIRROR: &str = concat!(
-    "<path d=\"M0-9v4M0-2v4M0 5v4\"/>",
-    "<path d=\"M-8 6L-4-5-1 2M8 6L4-5 1 2\"/>",
-    "<circle cx=\"-8\" cy=\"6\" r=\"1.1\"/><circle cx=\"8\" cy=\"6\" r=\"1.1\"/>",
-);
-
 pub(crate) const GEOMETRY_TOOLS: [(&str, EditorTool); 15] = [
     ("select", EditorTool::Select),
     ("point", EditorTool::Point),
@@ -294,8 +283,6 @@ pub(crate) fn authoring_icon_markup(tool: AuthoringTool) -> String {
 pub(crate) fn operation_icon_markup(tool: OperationAuthoringTool) -> String {
     let (key, fragment) = match tool {
         OperationAuthoringTool::Fillet => ("fillet", FILLET),
-        OperationAuthoringTool::LineOffset => ("line-offset", LINE_OFFSET),
-        OperationAuthoringTool::Mirror => ("mirror", MIRROR),
     };
     format!(
         "<svg class=\"wb-palette-icon\" viewBox=\"-10 -10 20 20\" aria-hidden=\"true\" focusable=\"false\" data-icon-key=\"operation-{key}\">{fragment}</svg>"
@@ -472,20 +459,12 @@ mod tests {
     }
 
     #[test]
-    fn m66_modify_tools_have_distinct_text_free_vector_symbols() {
-        let markup = [
-            OperationAuthoringTool::Fillet,
-            OperationAuthoringTool::LineOffset,
-            OperationAuthoringTool::Mirror,
-        ]
-        .map(operation_icon_markup);
-        assert_eq!(markup.iter().collect::<HashSet<_>>().len(), markup.len());
-        for icon in markup {
-            assert!(icon.starts_with("<svg class=\"wb-palette-icon\""));
-            assert!(icon.contains("data-icon-key=\"operation-"));
-            assert!(icon.contains("aria-hidden=\"true\""));
-            assert!(!icon.contains("<text"));
-        }
+    fn fillet_modify_tool_has_a_text_free_vector_symbol() {
+        let icon = operation_icon_markup(OperationAuthoringTool::Fillet);
+        assert!(icon.starts_with("<svg class=\"wb-palette-icon\""));
+        assert!(icon.contains("data-icon-key=\"operation-fillet\""));
+        assert!(icon.contains("aria-hidden=\"true\""));
+        assert!(!icon.contains("<text"));
     }
 
     #[test]

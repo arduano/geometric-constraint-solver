@@ -520,8 +520,8 @@ pub struct OperationAuthoringPreviewMetadata {
     pub created_curves: Vec<CurveId>,
     pub created_points: Vec<DesignPointId>,
     /// True only after all headless semantic stages are confirmed. The preview is
-    /// independently accepted in either case; an unconfirmed offset-side hover is
-    /// renderable but cannot enter the commit path.
+    /// independently accepted in either case; an unconfirmed Fillet-radius hover
+    /// is renderable but cannot enter the commit path.
     pub apply_ready: bool,
 }
 
@@ -931,14 +931,9 @@ impl RetainedEditorCoordinator {
     /// `None` rather than exposing the older accepted state under a newer design.
     #[must_use]
     pub fn operation_authoring_document(&self) -> Option<&SketchDocument> {
-        let input = self.session.prepared_input();
-        self.session.accepted_state().and_then(|accepted| {
-            (accepted.design_identity() == self.session.design_identity()
-                && accepted.input() == input.attempt_input()
-                && Some(accepted.identity()) == input.accepted_state_identity()
-                && accepted.originating_attempt() == input.latest_attempt_identity())
-            .then_some(accepted.document())
-        })
+        self.session
+            .accepted_state_for_current_input()
+            .map(geosolve_sketch::SketchAcceptedDocumentState::document)
     }
 
     /// Exact retained-session input paired with [`Self::operation_authoring_document`].
@@ -999,42 +994,17 @@ impl RetainedEditorCoordinator {
             .map_err(CoordinatorError::OperationAuthoringPick)
     }
 
-    /// Converts current ordinary selection into exact accepted picks. Curve-hit
-    /// parameters retained by the editor win; tree selections use the same
-    /// deterministic visible-midpoint fallback as [`Self::operation_pick_for_item`].
-    ///
-    /// # Errors
-    ///
-    /// Returns the first missing-preview or typed authoring-pick error encountered
-    /// while resolving the immutable selection snapshot.
-    pub fn operation_authoring_preselection(
-        &self,
-    ) -> Result<Vec<OperationAuthoringPick>, CoordinatorError> {
-        self.editor
-            .selection()
-            .iter()
-            .copied()
-            .map(|item| {
-                let parameter = match item {
-                    SelectionItem::Curve(span) => self.editor.curve_pick_parameter(span),
-                    SelectionItem::Point(_)
-                    | SelectionItem::Constraint(_)
-                    | SelectionItem::Dimension(_) => None,
-                };
-                self.operation_pick_for_item(item, parameter)
-            })
-            .collect()
-    }
-
-    /// Topology-aware counterpart to [`Self::operation_authoring_preselection`]
-    /// for a specific helper tool. This is required for Fillet's one-corner
-    /// shortcut and otherwise preserves the exact same accepted-input stamps.
+    /// Converts current ordinary selection into exact accepted picks using the
+    /// active helper tool's topology-aware operand policy. Curve-hit parameters
+    /// retained by the editor win; tree selections use the deterministic visible-
+    /// midpoint fallback. Fillet may expand one unambiguous corner point into its
+    /// ordered adjacent span pair.
     ///
     /// # Errors
     ///
     /// Returns the first missing-preview or typed authoring-pick error while
     /// expanding the immutable selection snapshot.
-    pub fn operation_authoring_preselection_for(
+    pub fn operation_authoring_preselection(
         &self,
         tool: OperationAuthoringTool,
     ) -> Result<Vec<OperationAuthoringPick>, CoordinatorError> {
@@ -3549,9 +3519,6 @@ impl RetainedEditorCoordinator {
     ) -> Result<(), CoordinatorError> {
         let tool = match request {
             SketchOperationRequest::AssociativeFillet { .. } => OperationAuthoringTool::Fillet,
-            SketchOperationRequest::AssociativeLineOffset { .. }
-            | SketchOperationRequest::JoinedLineOffset { .. } => OperationAuthoringTool::LineOffset,
-            SketchOperationRequest::Mirror { .. } => OperationAuthoringTool::Mirror,
             _ => {
                 return Err(CoordinatorError::InvalidActionInput(
                     "replay operation is outside the M66 authoring surface",
@@ -4048,8 +4015,6 @@ fn operation_authoring_warning(
     let stage = match (candidate.is_confirmed(), candidate.tool()) {
         (true, _) => OperationAuthoringStage::PreviewReady,
         (false, OperationAuthoringTool::Fillet) => OperationAuthoringStage::PlaceFilletRadius,
-        (false, OperationAuthoringTool::LineOffset) => OperationAuthoringStage::CollectOffsetPath,
-        (false, OperationAuthoringTool::Mirror) => OperationAuthoringStage::PickMirrorAxis,
     };
     OperationAuthoringWarning {
         tool: candidate.tool(),
@@ -4076,7 +4041,6 @@ fn operation_preview_metadata(
         .document();
     let mut curves = BTreeSet::new();
     let mut points = BTreeSet::new();
-    let mut explicit_primary = None;
     for change in &application.identity_changes {
         match change {
             SketchOperationIdentityChange::Proposed(DocumentElementId::Curve(curve)) => {
@@ -4085,36 +4049,19 @@ fn operation_preview_metadata(
             SketchOperationIdentityChange::Proposed(DocumentElementId::Point(point)) => {
                 points.insert(*point);
             }
-            SketchOperationIdentityChange::AssociativeLineOffset {
-                target_start,
-                target_end,
-                target_segment,
-                ..
-            } => {
-                points.extend([*target_start, *target_end]);
-                curves.insert(*target_segment);
-                explicit_primary = Some(*target_segment);
-            }
-            SketchOperationIdentityChange::JoinedLineOffset {
-                target_points,
-                target_curve,
-                ..
-            } => {
-                points.extend(target_points.iter().copied());
-                curves.insert(*target_curve);
-                explicit_primary = Some(*target_curve);
-            }
             _ => {}
         }
     }
     curves.retain(|curve| accepted_document.curve(*curve).is_some());
     points.retain(|point| accepted_document.point(*point).is_some());
-    let primary_created_curve = explicit_primary
-        .filter(|curve| curves.contains(curve))
-        .or_else(|| curves.iter().next().copied())
-        .ok_or(CoordinatorError::InvalidActionInput(
-            "operation proposal did not publish a primary created curve",
-        ))?;
+    let primary_created_curve =
+        curves
+            .iter()
+            .next()
+            .copied()
+            .ok_or(CoordinatorError::InvalidActionInput(
+                "operation proposal did not publish a primary created curve",
+            ))?;
     Ok(OperationAuthoringPreviewMetadata {
         token,
         tool: candidate.tool(),
@@ -5245,11 +5192,10 @@ mod tests {
     use super::*;
     use crate::{
         AuthoringOutcome, AuthoringState, EditorScene, EditorTool, Modifiers,
-        OperationAuthoringOptions, OperationAuthoringState, OperationLineOffsetMode, PointerInput,
-        ScreenPoint, Viewport,
+        OperationAuthoringOptions, OperationAuthoringState, PointerInput, ScreenPoint, Viewport,
     };
     use geosolve_sketch::{
-        AlphaScenarioIds, AlphaScenarioKind, DocumentBSplineForm, DocumentConstraintDefinition,
+        AlphaScenarioIds, AlphaScenarioKind, DocumentConstraintDefinition,
         DocumentExternalPointRef, DocumentM38DimensionDefinition, DocumentMeasurementDefinition,
         DocumentParameterKind, DocumentPointRef, ExternalLineOrientationV1, ExternalSnapshotDigest,
         ExternalSnapshotEntry, ExternalSnapshotFeatureV1, ExternalSnapshotInputError,
@@ -9828,70 +9774,6 @@ mod tests {
         assert_retained_state_snapshot(&coordinator, &snapshot);
     }
 
-    fn line_offset_operation_fixture() -> (RetainedEditorCoordinator, CurveSpan, [DesignPointId; 2])
-    {
-        let mut document = SketchDocument::new(1.0).expect("document");
-        let points = [
-            document.add_point("start", [-2.0, 0.0]).expect("point"),
-            document.add_point("end", [2.0, 0.0]).expect("point"),
-        ];
-        let line = document
-            .add_curve(
-                "source",
-                CurveDefinition::Line {
-                    start: points[0],
-                    end: points[1],
-                    branch_direction: [1.0, 0.0],
-                },
-            )
-            .expect("line");
-        let session = RetainedSketchDocumentSession::new(
-            document,
-            DocumentSolveRequest::default(),
-            SolverConfig::default(),
-        )
-        .expect("accepted line session");
-        (
-            RetainedEditorCoordinator::new(session).expect("coordinator"),
-            CurveSpan::line(line),
-            points,
-        )
-    }
-
-    fn staged_line_offset(
-        coordinator: &RetainedEditorCoordinator,
-        source: CurveSpan,
-        distance: f64,
-        confirmed: bool,
-    ) -> OperationAuthoringCandidate {
-        let document = coordinator
-            .operation_authoring_document()
-            .expect("current accepted operation document")
-            .clone();
-        let pick = coordinator
-            .operation_pick_for_item(SelectionItem::Curve(source), Some(0.5))
-            .expect("stamped operation pick");
-        let mut state = OperationAuthoringState::default();
-        let _ = state.set_options(
-            &document,
-            OperationAuthoringOptions {
-                offset_distance: Some(distance),
-                offset_mode: OperationLineOffsetMode::ExactTranslatedSegment,
-                ..OperationAuthoringOptions::default()
-            },
-        );
-        let seeded = state.activate(&document, OperationAuthoringTool::LineOffset, &[pick]);
-        let outcome = if confirmed {
-            state.confirm(&document, [0.0, 1.0])
-        } else {
-            seeded
-        };
-        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = outcome else {
-            panic!("expected line-offset candidate: {outcome:?}");
-        };
-        candidate
-    }
-
     fn operation_test_line(
         document: &mut SketchDocument,
         label: &str,
@@ -9931,11 +9813,34 @@ mod tests {
         RetainedEditorCoordinator::new(session).expect("operation coordinator")
     }
 
+    fn simple_fillet_operation_fixture() -> (
+        RetainedEditorCoordinator,
+        [CurveSpan; 2],
+        [DesignPointId; 4],
+    ) {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let (horizontal, horizontal_points) =
+            operation_test_line(&mut document, "horizontal parent", [-2.0, 0.0], [2.0, 0.0]);
+        let (vertical, vertical_points) =
+            operation_test_line(&mut document, "vertical parent", [0.0, -2.0], [0.0, 2.0]);
+        (
+            operation_test_coordinator(document),
+            [horizontal, vertical],
+            [
+                horizontal_points[0],
+                horizontal_points[1],
+                vertical_points[0],
+                vertical_points[1],
+            ],
+        )
+    }
+
     fn staged_fillet(
         coordinator: &RetainedEditorCoordinator,
         parents: [CurveSpan; 2],
         parameters: [f64; 2],
         radius: f64,
+        confirmed: bool,
     ) -> OperationAuthoringCandidate {
         let document = coordinator
             .operation_authoring_document()
@@ -9963,6 +9868,13 @@ mod tests {
             outcome,
             OperationAuthoringOutcome::PreviewRequested { .. }
         ));
+        if !confirmed {
+            let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = outcome else {
+                unreachable!("preview outcome checked above");
+            };
+            assert!(!candidate.is_confirmed());
+            return candidate;
+        }
         let jets = picks.each_ref().map(|pick| {
             document
                 .evaluate_curve_jet(pick.curve_span().expect("curve pick"), pick.curve_parameter)
@@ -9987,29 +9899,40 @@ mod tests {
         candidate
     }
 
-    fn staged_mirror(
-        coordinator: &RetainedEditorCoordinator,
-        source: CurveSpan,
-        axis: CurveSpan,
-    ) -> OperationAuthoringCandidate {
-        let document = coordinator
-            .operation_authoring_document()
-            .expect("current accepted operation document")
-            .clone();
-        let picks = [
+    #[test]
+    fn successful_point_edit_keeps_current_geometry_available_to_fillet_authoring() {
+        let (mut coordinator, parents, points) = simple_fillet_operation_fixture();
+        let edit = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: points[0],
+                    position: [-2.5, 0.25],
+                },
+            )
+            .expect("accepted point edit");
+        assert!(edit.published_accepted.is_some());
+
+        let accepted = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("point-edit publication remains current");
+        assert_ne!(
+            accepted.input().candidate_request(),
             coordinator
-                .operation_pick_for_item(SelectionItem::Curve(source), Some(0.5))
-                .expect("stamped mirror source"),
+                .session()
+                .prepared_input()
+                .attempt_input()
+                .candidate_request(),
+            "the command drag is intentionally absent from retained request state"
+        );
+        assert!(coordinator.operation_authoring_document().is_some());
+        assert!(
             coordinator
-                .operation_pick_for_item(SelectionItem::Curve(axis), Some(0.5))
-                .expect("stamped mirror axis"),
-        ];
-        let mut state = OperationAuthoringState::default();
-        let outcome = state.activate(&document, OperationAuthoringTool::Mirror, &picks);
-        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = outcome else {
-            panic!("expected mirror candidate: {outcome:?}");
-        };
-        candidate
+                .operation_pick_for_item(SelectionItem::Curve(parents[0]), Some(0.25))
+                .is_ok(),
+            "a successful drag must not disable later Fillet picks"
+        );
     }
 
     fn commit_operation_and_assert_lifecycle(
@@ -10223,79 +10146,6 @@ mod tests {
         }
     }
 
-    #[derive(Clone, Copy)]
-    enum MirrorFixtureFamily {
-        CubicBezier,
-        BSpline,
-    }
-
-    fn mirror_operation_fixture(
-        family: MirrorFixtureFamily,
-    ) -> (
-        RetainedEditorCoordinator,
-        CurveSpan,
-        CurveSpan,
-        Vec<DesignPointId>,
-    ) {
-        let mut document = SketchDocument::new(8.0).expect("document");
-        let (axis, axis_points) =
-            operation_test_line(&mut document, "mirror axis", [0.0, -7.0], [0.0, 7.0]);
-        for (index, (point, target)) in axis_points
-            .into_iter()
-            .zip([[0.0, -7.0], [0.0, 7.0]])
-            .enumerate()
-        {
-            document
-                .add_constraint(
-                    format!("fixed axis {index}"),
-                    DocumentConstraintDefinition::FixedPoint { point, target },
-                )
-                .expect("fixed axis");
-        }
-        let controls = [[-8.0, -1.0], [-7.0, 2.0], [-4.0, -2.0], [-2.0, 1.0]]
-            .map(|position| {
-                document
-                    .add_point("source control", position)
-                    .expect("control")
-            })
-            .to_vec();
-        let definition = match family {
-            MirrorFixtureFamily::CubicBezier => CurveDefinition::CubicBezier {
-                controls: controls.clone().try_into().expect("four cubic controls"),
-            },
-            MirrorFixtureFamily::BSpline => CurveDefinition::BSpline {
-                form: DocumentBSplineForm::Clamped,
-                degree: 2,
-                controls: controls.clone(),
-                knots: vec![0.0, 0.0, 0.0, 1.0, 2.0, 2.0, 2.0],
-                span_ids: vec![0, 1],
-                next_span_id: 2,
-            },
-        };
-        let source = document
-            .add_curve("mirror source", definition)
-            .expect("mirror source");
-        (
-            operation_test_coordinator(document),
-            CurveSpan::line(source),
-            axis,
-            controls,
-        )
-    }
-
-    fn operation_curve_controls(document: &SketchDocument, curve: CurveId) -> Vec<DesignPointId> {
-        match &document.curve(curve).expect("operation curve").definition {
-            CurveDefinition::Line { start, end, .. } => vec![*start, *end],
-            CurveDefinition::Polyline { points, .. }
-            | CurveDefinition::BSpline {
-                controls: points, ..
-            } => points.clone(),
-            CurveDefinition::QuadraticBezier { controls } => controls.to_vec(),
-            CurveDefinition::CubicBezier { controls } => controls.to_vec(),
-            other => panic!("operation curve has no point-defined controls: {other:?}"),
-        }
-    }
-
     #[test]
     #[allow(
         clippy::too_many_lines,
@@ -10305,7 +10155,7 @@ mod tests {
         for line_circle in [true, false] {
             let (mut coordinator, parents, parameters, radius, parent_edit) =
                 fillet_operation_fixture(line_circle);
-            let candidate = staged_fillet(&coordinator, parents, parameters, radius);
+            let candidate = staged_fillet(&coordinator, parents, parameters, radius, true);
             let metadata = commit_operation_and_assert_lifecycle(&mut coordinator, &candidate);
             assert_eq!(metadata.tool, OperationAuthoringTool::Fillet);
             let fillet = metadata.primary_created_curve;
@@ -10426,187 +10276,9 @@ mod tests {
     }
 
     #[test]
-    fn bezier_and_bspline_mirror_previews_commit_exactly_and_follow_source_control_edits() {
-        for family in [
-            MirrorFixtureFamily::CubicBezier,
-            MirrorFixtureFamily::BSpline,
-        ] {
-            let (mut coordinator, source, axis, source_controls) = mirror_operation_fixture(family);
-            let candidate = staged_mirror(&coordinator, source, axis);
-            let metadata = commit_operation_and_assert_lifecycle(&mut coordinator, &candidate);
-            assert_eq!(metadata.tool, OperationAuthoringTool::Mirror);
-            let mirrored = metadata.primary_created_curve;
-            let mirrored_controls =
-                operation_curve_controls(coordinator.session().design_document(), mirrored);
-            assert_eq!(mirrored_controls.len(), source_controls.len());
-            let source_control = source_controls[1];
-            let mirrored_control = mirrored_controls[1];
-            assert!(
-                coordinator
-                    .session()
-                    .design_document()
-                    .constraints()
-                    .iter()
-                    .any(|constraint| matches!(
-                        constraint.definition,
-                        DocumentConstraintDefinition::SymmetricAboutLine {
-                            first,
-                            second,
-                            line,
-                        } if first == source_control && second == mirrored_control && line == axis
-                    ))
-            );
-            let before = coordinator
-                .session()
-                .accepted_state()
-                .expect("accepted mirror")
-                .document()
-                .point(mirrored_control)
-                .expect("mirrored control")
-                .position;
-            let source_before = coordinator
-                .session()
-                .design_document()
-                .point(source_control)
-                .expect("source control")
-                .position;
-            let edit = coordinator
-                .apply_edit(
-                    coordinator.session().design_identity(),
-                    DocumentEdit::SetPointPosition {
-                        point: source_control,
-                        position: [source_before[0] + 0.45, source_before[1] - 0.3],
-                    },
-                )
-                .expect("accepted mirrored-source edit");
-            assert!(edit.published_accepted.is_some());
-            let accepted = coordinator
-                .session()
-                .accepted_state()
-                .expect("accepted associated mirror")
-                .document();
-            let source_after = accepted
-                .point(source_control)
-                .expect("source control after edit")
-                .position;
-            let mirrored_after = accepted
-                .point(mirrored_control)
-                .expect("mirrored control after edit")
-                .position;
-            assert!((mirrored_after[0] + source_after[0]).abs() <= 1.0e-7);
-            assert!((mirrored_after[1] - source_after[1]).abs() <= 1.0e-7);
-            assert!(
-                (mirrored_after[0] - before[0]).hypot(mirrored_after[1] - before[1]) > 1.0e-6,
-                "mirrored control did not respond to its source edit"
-            );
-        }
-    }
-
-    #[test]
-    fn joined_offset_preview_commits_replays_and_remains_plain_after_source_edits() {
-        let mut document = SketchDocument::new(1.0).expect("document");
-        let points = [[0.0, 0.0], [3.0, 0.0], [3.0, 2.0], [6.0, 2.0]]
-            .map(|position| document.add_point("path point", position).expect("point"));
-        let source = document
-            .add_curve(
-                "joined source",
-                CurveDefinition::Polyline {
-                    points: points.to_vec(),
-                    closed: false,
-                    branch_directions: vec![[1.0, 0.0], [0.0, 1.0], [1.0, 0.0]],
-                },
-            )
-            .expect("polyline");
-        let spans = [0, 1, 2].map(|segment| CurveSpan {
-            curve: source,
-            segment,
-        });
-        let mut coordinator = operation_test_coordinator(document);
-        let operation_document = coordinator
-            .operation_authoring_document()
-            .expect("operation document")
-            .clone();
-        let picks = spans.map(|span| {
-            coordinator
-                .operation_pick_for_item(SelectionItem::Curve(span), Some(0.5))
-                .expect("joined source pick")
-        });
-        let mut state = OperationAuthoringState::default();
-        let _ = state.set_options(
-            &operation_document,
-            OperationAuthoringOptions {
-                offset_distance: Some(0.4),
-                ..OperationAuthoringOptions::default()
-            },
-        );
-        let staged = state.activate(
-            &operation_document,
-            OperationAuthoringTool::LineOffset,
-            &picks,
-        );
-        assert!(matches!(
-            staged,
-            OperationAuthoringOutcome::PreviewRequested { .. }
-        ));
-        let confirmed = state.confirm(&operation_document, [1.5, 1.0]);
-        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = confirmed else {
-            panic!("joined offset candidate: {confirmed:?}");
-        };
-        assert!(candidate.is_confirmed());
-        assert!(matches!(
-            candidate.request(),
-            SketchOperationRequest::JoinedLineOffset { sources, .. } if sources.len() == 3
-        ));
-
-        let metadata = commit_operation_and_assert_lifecycle(&mut coordinator, &candidate);
-        assert_eq!(metadata.tool, OperationAuthoringTool::LineOffset);
-        let target = metadata.primary_created_curve;
-        let accepted = coordinator
-            .session()
-            .accepted_state()
-            .expect("accepted joined offset")
-            .document();
-        assert!(matches!(
-            &accepted.curve(target).expect("joined target").definition,
-            CurveDefinition::Polyline {
-                closed: false,
-                points,
-                ..
-            } if points.len() == 4
-        ));
-        assert!(accepted.dimensions().is_empty());
-        assert!(accepted.constraints().is_empty());
-        let target_before = operation_curve_controls(accepted, target)
-            .into_iter()
-            .map(|point| accepted.point(point).expect("target point").position)
-            .collect::<Vec<_>>();
-
-        let source_edit = coordinator
-            .apply_edit(
-                coordinator.session().design_identity(),
-                DocumentEdit::SetPointPosition {
-                    point: points[1],
-                    position: [2.5, -0.5],
-                },
-            )
-            .expect("source edit");
-        assert!(source_edit.published_accepted.is_some());
-        let accepted = coordinator
-            .session()
-            .accepted_state()
-            .expect("accepted source edit")
-            .document();
-        let target_after = operation_curve_controls(accepted, target)
-            .into_iter()
-            .map(|point| accepted.point(point).expect("target point").position)
-            .collect::<Vec<_>>();
-        assert_eq!(target_after, target_before);
-    }
-
-    #[test]
     fn operation_preview_is_independently_accepted_scratch_and_leaves_live_state_unchanged() {
-        let (mut coordinator, source, _) = line_offset_operation_fixture();
-        let candidate = staged_line_offset(&coordinator, source, 0.25, true);
+        let (mut coordinator, parents, _) = simple_fillet_operation_fixture();
+        let candidate = staged_fillet(&coordinator, parents, [0.25, 0.75], 0.25, true);
         let before = retained_state_snapshot(&coordinator);
         let ready = coordinator
             .prepare_operation_preview(&candidate)
@@ -10639,8 +10311,8 @@ mod tests {
 
     #[test]
     fn operation_preview_requires_exact_token_candidate_and_confirmation() {
-        let (mut coordinator, source, _) = line_offset_operation_fixture();
-        let unconfirmed = staged_line_offset(&coordinator, source, 0.2, false);
+        let (mut coordinator, parents, _) = simple_fillet_operation_fixture();
+        let unconfirmed = staged_fillet(&coordinator, parents, [0.25, 0.75], 0.2, false);
         let OperationAuthoringPreviewOutcome::Ready(unconfirmed_metadata) = coordinator
             .prepare_operation_preview(&unconfirmed)
             .expect("unconfirmed preview")
@@ -10654,14 +10326,14 @@ mod tests {
         ));
         assert!(coordinator.operation_preview().is_some());
 
-        let first = staged_line_offset(&coordinator, source, 0.2, true);
+        let first = staged_fillet(&coordinator, parents, [0.25, 0.75], 0.2, true);
         let OperationAuthoringPreviewOutcome::Ready(first_metadata) = coordinator
             .prepare_operation_preview(&first)
             .expect("first preview")
         else {
             panic!("first ready preview");
         };
-        let second = staged_line_offset(&coordinator, source, 0.4, true);
+        let second = staged_fillet(&coordinator, parents, [0.25, 0.75], 0.4, true);
         assert!(matches!(
             coordinator.apply_operation_preview(first_metadata.token, &second),
             Err(CoordinatorError::OperationPreviewMismatch)
@@ -10694,8 +10366,8 @@ mod tests {
 
     #[test]
     fn cancelled_or_exhausted_operation_preparation_is_mutation_free_and_holds_no_preview() {
-        let (mut coordinator, source, _) = line_offset_operation_fixture();
-        let candidate = staged_line_offset(&coordinator, source, 0.25, true);
+        let (mut coordinator, parents, _) = simple_fillet_operation_fixture();
+        let candidate = staged_fillet(&coordinator, parents, [0.25, 0.75], 0.25, true);
         let before = retained_state_snapshot(&coordinator);
 
         let (handle, token) = cancellation_pair();
@@ -10737,9 +10409,9 @@ mod tests {
 
     #[test]
     fn cancelled_or_exhausted_operation_commit_after_preview_is_mutation_free() {
-        let (mut coordinator, source, _) = line_offset_operation_fixture();
+        let (mut coordinator, parents, _) = simple_fillet_operation_fixture();
 
-        let cancelled_candidate = staged_line_offset(&coordinator, source, 0.25, true);
+        let cancelled_candidate = staged_fillet(&coordinator, parents, [0.25, 0.75], 0.25, true);
         let OperationAuthoringPreviewOutcome::Ready(cancelled_metadata) = coordinator
             .prepare_operation_preview(&cancelled_candidate)
             .expect("accepted preview before cancellation")
@@ -10760,7 +10432,7 @@ mod tests {
         assert!(coordinator.operation_preview().is_none());
         assert_retained_state_snapshot(&coordinator, &cancelled_before);
 
-        let exhausted_candidate = staged_line_offset(&coordinator, source, 0.3, true);
+        let exhausted_candidate = staged_fillet(&coordinator, parents, [0.25, 0.75], 0.3, true);
         let OperationAuthoringPreviewOutcome::Ready(exhausted_metadata) = coordinator
             .prepare_operation_preview(&exhausted_candidate)
             .expect("accepted preview before exhaustion")
@@ -10784,8 +10456,8 @@ mod tests {
 
     #[test]
     fn stale_candidate_after_reattempt_or_undo_cannot_prepare() {
-        let (mut coordinator, source, points) = line_offset_operation_fixture();
-        let stale_after_attempt = staged_line_offset(&coordinator, source, 0.25, true);
+        let (mut coordinator, parents, points) = simple_fillet_operation_fixture();
+        let stale_after_attempt = staged_fillet(&coordinator, parents, [0.25, 0.75], 0.25, true);
         coordinator
             .reattempt(coordinator.session().design_identity())
             .expect("reattempt");
@@ -10799,7 +10471,7 @@ mod tests {
             })
         ));
 
-        let stale_after_undo = staged_line_offset(&coordinator, source, 0.3, true);
+        let stale_after_undo = staged_fillet(&coordinator, parents, [0.25, 0.75], 0.3, true);
         coordinator
             .apply_edit(
                 coordinator.session().design_identity(),
@@ -10824,8 +10496,8 @@ mod tests {
 
     #[test]
     fn older_accepted_geometry_is_not_exposed_after_same_design_attempt_failure() {
-        let (mut coordinator, source, _) = line_offset_operation_fixture();
-        let candidate = staged_line_offset(&coordinator, source, 0.25, true);
+        let (mut coordinator, parents, _) = simple_fillet_operation_fixture();
+        let candidate = staged_fillet(&coordinator, parents, [0.25, 0.75], 0.25, true);
         let design = coordinator.session().design_identity();
         let missing = DesignPointId(PersistentId::from_u128(u128::MAX));
         let request = coordinator
@@ -10857,10 +10529,10 @@ mod tests {
 
     #[test]
     fn operation_commit_is_one_history_step_selects_primary_and_round_trips_undo_redo_replay() {
-        let (mut coordinator, source, _) = line_offset_operation_fixture();
+        let (mut coordinator, parents, _) = simple_fillet_operation_fixture();
         let initial_session = coordinator.session().clone();
         let original = coordinator.session().design_document().clone();
-        let candidate = staged_line_offset(&coordinator, source, 0.25, true);
+        let candidate = staged_fillet(&coordinator, parents, [0.25, 0.75], 0.25, true);
         let OperationAuthoringPreviewOutcome::Ready(metadata) = coordinator
             .prepare_operation_preview(&candidate)
             .expect("preview")
@@ -10898,8 +10570,8 @@ mod tests {
 
     #[test]
     fn exact_commit_fails_closed_if_held_scratch_no_longer_matches_rendered_preview() {
-        let (mut coordinator, source, points) = line_offset_operation_fixture();
-        let candidate = staged_line_offset(&coordinator, source, 0.25, true);
+        let (mut coordinator, parents, points) = simple_fillet_operation_fixture();
+        let candidate = staged_fillet(&coordinator, parents, [0.25, 0.75], 0.25, true);
         let before = retained_state_snapshot(&coordinator);
         let OperationAuthoringPreviewOutcome::Ready(metadata) = coordinator
             .prepare_operation_preview(&candidate)
@@ -10926,5 +10598,913 @@ mod tests {
             Err(CoordinatorError::OperationPreviewMismatch)
         ));
         assert_retained_state_snapshot(&coordinator, &before);
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one curved-parent release proves substantial motion without changing the authored contact branch"
+    )]
+    fn authored_line_circle_fillet_remains_on_its_contact_branch_after_radius_release() {
+        let (mut coordinator, parents, parameters, authored_radius, _) =
+            fillet_operation_fixture(true);
+        let candidate = staged_fillet(&coordinator, parents, parameters, authored_radius, true);
+        let metadata = commit_operation_and_assert_lifecycle(&mut coordinator, &candidate);
+        let arc = metadata.primary_created_curve;
+
+        let (center, radius, radius_dimension, association, contacts, trims_before) = {
+            let design = coordinator.session().design_document();
+            let CurveDefinition::CircularArc { center, radius, .. } =
+                design.curve(arc).expect("authored Fillet arc").definition
+            else {
+                panic!("primary Fillet result must be a circular arc");
+            };
+            let radius_dimension = design
+                .dimensions()
+                .iter()
+                .find_map(|dimension| match dimension.definition {
+                    DocumentDimensionDefinition::Radius { curve, .. } if curve == arc => {
+                        Some(dimension.id)
+                    }
+                    _ => None,
+                })
+                .expect("authored radius dimension");
+            let association = design
+                .curve_curve_fillet_for_arc(arc)
+                .expect("generic Fillet association")
+                .definition
+                .clone();
+            let DocumentConstraintDefinition::CurveCurveFillet {
+                first_contact,
+                second_contact,
+                ..
+            } = association
+            else {
+                unreachable!("generic Fillet association checked above");
+            };
+            let contacts = [first_contact, second_contact];
+            assert_eq!(
+                design.contact(first_contact).expect("line contact").curve,
+                parents[0]
+            );
+            assert_eq!(
+                design
+                    .contact(second_contact)
+                    .expect("circle contact")
+                    .curve,
+                parents[1]
+            );
+            assert_eq!(
+                design
+                    .contact(first_contact)
+                    .expect("line contact")
+                    .neighborhood,
+                ContactNeighborhood::Interior,
+                "bounded authoring must retain the complete semantic support"
+            );
+            let circle_neighborhood = design
+                .contact(second_contact)
+                .expect("circle contact")
+                .neighborhood;
+            let ContactNeighborhood::Local { lower, upper } = circle_neighborhood else {
+                panic!("periodic authoring must retain an explicit local root interval");
+            };
+            assert!(upper - lower < std::f64::consts::TAU);
+            let trims_before = parents.map(|parent| {
+                design
+                    .trim_views_for_span(parent)
+                    .copied()
+                    .collect::<Vec<_>>()
+            });
+            (
+                center,
+                radius,
+                radius_dimension,
+                association,
+                contacts,
+                trims_before,
+            )
+        };
+
+        let deletion = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::Delete {
+                    object: DocumentObjectId::Dimension(radius_dimension),
+                },
+            )
+            .expect("delete only the Fillet radius dimension");
+        assert!(deletion.published_accepted.is_some());
+        let accepted_before = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted free curved-parent Fillet");
+        let document_before = accepted_before.document();
+        let center_before = document_before
+            .point(center)
+            .expect("Fillet center")
+            .position;
+        let contact_state_before = contacts.map(|contact| {
+            let slot = document_before.contact(contact).expect("Fillet contact");
+            (
+                slot.curve,
+                slot.parameter,
+                slot.domain,
+                slot.winding,
+                slot.neighborhood,
+                slot.tangent_orientation,
+                document_before
+                    .scalar(slot.parameter)
+                    .expect("contact parameter")
+                    .value,
+            )
+        });
+
+        // On this retained branch the center is above the horizontal line and outside the
+        // circle.  A radius of 2 therefore has y = 1 + 2 and
+        // `(x - 6)^2 + (y - 4)^2 = (2 + 2)^2`; the left-hand root preserves the authored pick.
+        let released_radius = 2.0;
+        let target = [6.0 - 15.0_f64.sqrt(), 1.0 + released_radius];
+        let movement = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: center,
+                    position: target,
+                },
+            )
+            .expect("substantially move the free curved-parent Fillet");
+        assert!(
+            movement.published_accepted.is_some(),
+            "large compatible Fillet move must publish: attempt={:#?}",
+            coordinator.session().last_attempt()
+        );
+
+        let accepted_after = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted large curved-parent Fillet move");
+        let document_after = accepted_after.document();
+        let center_after = document_after
+            .point(center)
+            .expect("moved Fillet center")
+            .position;
+        let radius_after = document_after
+            .scalar(radius)
+            .expect("released Fillet radius")
+            .value;
+        assert!(
+            (center_after[0] - center_before[0]).hypot(center_after[1] - center_before[1]) > 1.5,
+            "the regression must exercise a substantial curved-parent move"
+        );
+        assert!((center_after[0] - target[0]).abs() <= 1.0e-7);
+        assert!((center_after[1] - target[1]).abs() <= 1.0e-7);
+        assert!((radius_after - released_radius).abs() <= 1.0e-7);
+        assert!(document_after.dimension(radius_dimension).is_none());
+        assert_eq!(
+            document_after
+                .curve_curve_fillet_for_arc(arc)
+                .expect("retained Fillet association")
+                .definition,
+            association,
+            "a free drag must not silently rewrite side, endpoint, or arc-order branch state"
+        );
+        assert_eq!(
+            parents.map(|parent| {
+                document_after
+                    .trim_views_for_span(parent)
+                    .copied()
+                    .collect::<Vec<_>>()
+            }),
+            trims_before,
+            "the contact-owned visible-interval topology must remain stable"
+        );
+
+        let DocumentConstraintDefinition::CurveCurveFillet {
+            first_side,
+            second_side,
+            ..
+        } = association
+        else {
+            unreachable!("generic Fillet association checked above");
+        };
+        let sides = [first_side, second_side];
+        let contact_state_after = contacts.map(|contact| {
+            let slot = document_after
+                .contact(contact)
+                .expect("retained Fillet contact");
+            (
+                slot.curve,
+                slot.parameter,
+                slot.domain,
+                slot.winding,
+                slot.neighborhood,
+                slot.tangent_orientation,
+                document_after
+                    .scalar(slot.parameter)
+                    .expect("moved contact parameter")
+                    .value,
+            )
+        });
+        for (index, ((before, after), side)) in contact_state_before
+            .into_iter()
+            .zip(contact_state_after)
+            .zip(sides)
+            .enumerate()
+        {
+            assert_eq!(after.0, before.0);
+            assert_eq!(after.1, before.1);
+            assert_eq!(after.2, before.2);
+            assert_eq!(after.3, before.3, "contact {index} changed winding");
+            assert_eq!(after.4, before.4, "contact {index} changed neighborhood");
+            assert_eq!(after.5, before.5);
+            let parameter_delta = after.6 - before.6;
+            assert!(
+                parameter_delta.abs() > 0.2,
+                "contact {index} must move materially in this regression"
+            );
+            assert!(
+                parameter_delta.abs() < std::f64::consts::PI,
+                "contact {index} jumped to a remote root"
+            );
+
+            let jet = document_after
+                .evaluate_contact_jet(contacts[index])
+                .expect("moved contact jet");
+            let differential = jet.differential().expect("regular moved contact");
+            let center_offset = [
+                center_after[0] - jet.position.x,
+                center_after[1] - jet.position.y,
+            ];
+            let signed_normal_offset = center_offset[0] * differential.left_normal.x
+                + center_offset[1] * differential.left_normal.y;
+            let expected_sign = match side {
+                geosolve_sketch::DocumentCurveNormalSide::Left => 1.0,
+                geosolve_sketch::DocumentCurveNormalSide::Right => -1.0,
+            };
+            assert!(
+                expected_sign * signed_normal_offset > 0.99 * radius_after,
+                "contact {index} crossed its explicitly retained normal side"
+            );
+        }
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one authored-feature lifecycle proves removal of the former hidden contact window"
+    )]
+    fn authored_fillet_moves_past_the_old_quarter_span_after_radius_dimension_deletion() {
+        let mut document = SketchDocument::new(2.0).expect("document");
+        let (horizontal, horizontal_points) =
+            operation_test_line(&mut document, "horizontal parent", [-2.0, 0.0], [2.0, 0.0]);
+        let (vertical, vertical_points) =
+            operation_test_line(&mut document, "vertical parent", [0.0, -2.0], [0.0, 2.0]);
+        for (index, (point, target)) in horizontal_points
+            .into_iter()
+            .zip([[-2.0, 0.0], [2.0, 0.0]])
+            .chain(vertical_points.into_iter().zip([[0.0, -2.0], [0.0, 2.0]]))
+            .enumerate()
+        {
+            document
+                .add_constraint(
+                    format!("fixed fillet parent {index}"),
+                    DocumentConstraintDefinition::FixedPoint { point, target },
+                )
+                .expect("fixed parent point");
+        }
+        let mut coordinator = operation_test_coordinator(document);
+        let parents = [horizontal, vertical];
+        let candidate = staged_fillet(&coordinator, parents, [0.25, 0.75], 0.25, true);
+        let metadata = commit_operation_and_assert_lifecycle(&mut coordinator, &candidate);
+        let arc = metadata.primary_created_curve;
+
+        let (center, radius, radius_dimension, contacts) = {
+            let design = coordinator.session().design_document();
+            let CurveDefinition::CircularArc { center, radius, .. } =
+                design.curve(arc).expect("fillet arc").definition
+            else {
+                panic!("primary Fillet result must be a circular arc");
+            };
+            let radius_dimension = design
+                .dimensions()
+                .iter()
+                .find_map(|dimension| match dimension.definition {
+                    DocumentDimensionDefinition::Radius { curve, .. } if curve == arc => {
+                        Some(dimension.id)
+                    }
+                    _ => None,
+                })
+                .expect("authored driving radius dimension");
+            let contacts = design
+                .constraints()
+                .iter()
+                .find_map(|constraint| match constraint.definition {
+                    DocumentConstraintDefinition::CurveCurveFillet {
+                        arc: candidate_arc,
+                        first_contact,
+                        second_contact,
+                        ..
+                    } if candidate_arc == arc => Some([first_contact, second_contact]),
+                    _ => None,
+                })
+                .expect("authored Fillet association");
+            for contact in contacts {
+                assert_eq!(
+                    design
+                        .contact(contact)
+                        .expect("fillet contact")
+                        .neighborhood,
+                    ContactNeighborhood::Interior,
+                    "bounded authored parents must persist semantic support, not a search window"
+                );
+            }
+            (center, radius, radius_dimension, contacts)
+        };
+
+        let deletion = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::Delete {
+                    object: DocumentObjectId::Dimension(radius_dimension),
+                },
+            )
+            .expect("delete Fillet radius dimension");
+        assert!(deletion.published_accepted.is_some());
+        let accepted_before = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted flexible Fillet");
+        let center_before = accepted_before
+            .document()
+            .point(center)
+            .expect("fillet center")
+            .position;
+        let radius_before = accepted_before
+            .document()
+            .scalar(radius)
+            .expect("fillet radius")
+            .value;
+        let parameters_before = contacts.map(|contact| {
+            let contact = accepted_before
+                .document()
+                .contact(contact)
+                .expect("contact");
+            accepted_before
+                .document()
+                .scalar(contact.parameter)
+                .expect("contact parameter")
+                .value
+        });
+        let target = [6.0 * center_before[0], 6.0 * center_before[1]];
+        let movement = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: center,
+                    position: target,
+                },
+            )
+            .expect("move flexible Fillet beyond its former local window");
+        assert!(movement.published_accepted.is_some());
+
+        let accepted_after = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted large Fillet move");
+        let center_after = accepted_after
+            .document()
+            .point(center)
+            .expect("moved center")
+            .position;
+        let radius_after = accepted_after
+            .document()
+            .scalar(radius)
+            .expect("moved radius")
+            .value;
+        let parameters_after = contacts.map(|contact| {
+            let contact = accepted_after.document().contact(contact).expect("contact");
+            assert_eq!(contact.neighborhood, ContactNeighborhood::Interior);
+            accepted_after
+                .document()
+                .scalar(contact.parameter)
+                .expect("contact parameter")
+                .value
+        });
+        assert!(
+            (center_after[0] - center_before[0]).hypot(center_after[1] - center_before[1]) > 1.0,
+            "the center must move materially beyond the old quarter-span envelope"
+        );
+        assert!(radius_after > radius_before + 1.0);
+        assert!(
+            parameters_after
+                .into_iter()
+                .zip(parameters_before)
+                .all(|(after, before)| (after - before).abs() > 0.25),
+            "both contacts must cross the former ±quarter-span hard bounds"
+        );
+        assert!(
+            accepted_after
+                .document()
+                .dimension(radius_dimension)
+                .is_none()
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one positive multi-sample gesture proves free Fillet travel through the ordinary pointer lifecycle"
+    )]
+    fn authored_free_line_line_fillet_center_gesture_crosses_old_contact_window_and_commits() {
+        let (mut coordinator, parents, points) = simple_fillet_operation_fixture();
+        for (index, (point, target)) in points
+            .into_iter()
+            .zip([[-2.0, 0.0], [2.0, 0.0], [0.0, -2.0], [0.0, 2.0]])
+            .enumerate()
+        {
+            let fixed = coordinator
+                .apply_edit(
+                    coordinator.session().design_identity(),
+                    DocumentEdit::CreateConstraint {
+                        label: format!("fixed Fillet parent point {index}"),
+                        definition: DocumentConstraintDefinition::FixedPoint { point, target },
+                    },
+                )
+                .expect("fix Fillet parent point");
+            assert!(fixed.published_accepted.is_some());
+        }
+
+        let candidate = staged_fillet(&coordinator, parents, [0.25, 0.75], 0.25, true);
+        let metadata = commit_operation_and_assert_lifecycle(&mut coordinator, &candidate);
+        let arc = metadata.primary_created_curve;
+        let (center, radius_dimension, association, contacts) = {
+            let document = coordinator.session().design_document();
+            let CurveDefinition::CircularArc { center, .. } =
+                document.curve(arc).expect("authored Fillet arc").definition
+            else {
+                panic!("primary Fillet result must be a circular arc");
+            };
+            let radius_dimension = document
+                .dimensions()
+                .iter()
+                .find_map(|dimension| match dimension.definition {
+                    DocumentDimensionDefinition::Radius { curve, .. } if curve == arc => {
+                        Some(dimension.id)
+                    }
+                    _ => None,
+                })
+                .expect("authored Fillet radius dimension");
+            let association = document
+                .curve_curve_fillet_for_arc(arc)
+                .expect("authored Fillet association")
+                .definition
+                .clone();
+            let contacts = match &association {
+                DocumentConstraintDefinition::CurveCurveFillet {
+                    first_contact,
+                    second_contact,
+                    ..
+                } => [*first_contact, *second_contact],
+                _ => unreachable!("generic Fillet association checked above"),
+            };
+            (center, radius_dimension, association, contacts)
+        };
+
+        let deletion = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::Delete {
+                    object: DocumentObjectId::Dimension(radius_dimension),
+                },
+            )
+            .expect("delete the Fillet radius dimension");
+        assert!(deletion.published_accepted.is_some());
+        let accepted = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted free Fillet");
+        let initial_center = accepted
+            .document()
+            .point(center)
+            .expect("Fillet center")
+            .position;
+        let parameters_before = contacts.map(|contact| {
+            let contact = accepted
+                .document()
+                .contact(contact)
+                .expect("Fillet contact");
+            assert_eq!(contact.neighborhood, ContactNeighborhood::Interior);
+            accepted
+                .document()
+                .scalar(contact.parameter)
+                .expect("Fillet contact parameter")
+                .value
+        });
+
+        let viewport = Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            coordinator.session().design_identity(),
+            accepted.document(),
+            coordinator.session().design_document(),
+            viewport,
+            0.5,
+        )
+        .expect("free Fillet scene");
+        let arc_curve = scene
+            .curves
+            .iter()
+            .find(|curve| curve.span == CurveSpan::line(arc))
+            .expect("visible Fillet arc");
+        assert_eq!(arc_curve.drag_handle_point, Some(center));
+        let press = arc_curve.screen_polyline[arc_curve.screen_polyline.len() / 2];
+        let initial_center_screen = viewport.model_to_screen(initial_center);
+        let pointer = |position| PointerInput {
+            pointer_id: 202,
+            position,
+            modifiers: Modifiers::default(),
+        };
+        coordinator.editor_mut().activate_tool(EditorTool::Select);
+        assert!(matches!(
+            coordinator.pointer_down(&scene, pointer(press)).as_slice(),
+            [EditorEffect::SelectionChanged(selection)]
+                if selection == &[SelectionItem::Curve(CurveSpan::line(arc))]
+        ));
+
+        let mut final_pointer = press;
+        let mut final_preview_document = None;
+        for (index, multiplier) in [2.0, 4.0, 6.0].into_iter().enumerate() {
+            let target = [
+                multiplier * initial_center[0],
+                multiplier * initial_center[1],
+            ];
+            let target_screen = viewport.model_to_screen(target);
+            final_pointer = ScreenPoint {
+                x: press.x + target_screen.x - initial_center_screen.x,
+                y: press.y + target_screen.y - initial_center_screen.y,
+            };
+            let request = coordinator
+                .editor_mut()
+                .pointer_move(&scene, pointer(final_pointer));
+            let [
+                EditorEffect::RequestProjectedPointMove {
+                    pointer_id,
+                    request_id,
+                    point,
+                    model_position,
+                },
+            ] = request.as_slice()
+            else {
+                panic!("Fillet center projected request");
+            };
+            assert_eq!(*point, center);
+            let preview_effects = coordinator.resolve_projected_point_move(
+                *pointer_id,
+                *request_id,
+                *point,
+                *model_position,
+            );
+            assert!(matches!(
+                preview_effects.as_slice(),
+                [EditorEffect::PreviewPointMove { point, .. }] if *point == center
+            ));
+            let work = coordinator
+                .projected_drag_work_evidence()
+                .expect("Fillet gesture work");
+            assert!(work.accepted, "sample {index} rejected: {work:#?}");
+            assert_eq!(work.attempts, 1);
+            assert_eq!(work.continued, index > 0);
+            assert_projected_drag_work_bounded(work);
+
+            let preview = coordinator
+                .solved_preview_session()
+                .expect("accepted Fillet preview")
+                .accepted_state()
+                .expect("independently accepted Fillet state");
+            let solve = preview
+                .diagnostics()
+                .solve
+                .expect("accepted Fillet solve diagnostics");
+            assert_eq!(
+                solve.hard_validity,
+                geosolve_sketch::SketchHardValidity::Valid
+            );
+            assert!(
+                solve
+                    .maximum_normalized_hard_residual
+                    .is_some_and(|residual| residual <= 1.0e-9)
+            );
+            assert_eq!(
+                preview
+                    .document()
+                    .curve_curve_fillet_for_arc(arc)
+                    .expect("retained preview association")
+                    .definition,
+                association
+            );
+            final_preview_document = Some(preview.document().clone());
+        }
+
+        let final_preview_document = final_preview_document.expect("final accepted Fillet preview");
+        let parameters_after = contacts.map(|contact| {
+            let contact = final_preview_document
+                .contact(contact)
+                .expect("moved Fillet contact");
+            final_preview_document
+                .scalar(contact.parameter)
+                .expect("moved Fillet contact parameter")
+                .value
+        });
+        assert!(
+            parameters_after
+                .into_iter()
+                .zip(parameters_before)
+                .all(|(after, before)| (after - before).abs() > 0.25),
+            "the gesture must carry both contacts beyond the former ±0.25 span window"
+        );
+
+        let expected = coordinator.session().design_identity();
+        let release = coordinator
+            .editor_mut()
+            .pointer_up(&scene, expected, pointer(final_pointer));
+        assert!(matches!(
+            release.as_slice(),
+            [
+                EditorEffect::CommitPointMove { point, .. },
+                EditorEffect::ClearPointPreview,
+            ] if *point == center
+        ));
+        let committed = coordinator
+            .apply_editor_effect(&release[0])
+            .expect("release free Fillet gesture")
+            .expect("Fillet point mutation");
+        assert!(committed.published_accepted.is_some());
+        let committed = coordinator
+            .session()
+            .accepted_state()
+            .expect("committed Fillet gesture")
+            .document();
+        assert_eq!(committed, &final_preview_document);
+        assert_eq!(
+            committed
+                .curve_curve_fillet_for_arc(arc)
+                .expect("committed Fillet association")
+                .definition,
+            association
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the hostile curved-parent regression keeps the complete public authoring and edit lifecycle visible"
+    )]
+    fn hostile_bezier_parent_edit_never_publishes_fillet_contact_outside_authored_local_neighborhood()
+     {
+        let mut document = SketchDocument::new(8.0).expect("document");
+        let (line, line_points) = operation_test_line(
+            &mut document,
+            "fixed horizontal line",
+            [-10.0, 0.0],
+            [10.0, 0.0],
+        );
+        for (index, (point, target)) in line_points
+            .into_iter()
+            .zip([[-10.0, 0.0], [10.0, 0.0]])
+            .enumerate()
+        {
+            document
+                .add_constraint(
+                    format!("fixed line point {index}"),
+                    DocumentConstraintDefinition::FixedPoint { point, target },
+                )
+                .expect("fixed line point");
+        }
+
+        let control_positions = [[-6.0, 1.0], [-1.0, 8.0], [1.0, 8.0], [6.0, 1.0]];
+        let controls = control_positions.map(|position| {
+            document
+                .add_point("Bezier control", position)
+                .expect("Bezier control")
+        });
+        let control_locks = controls
+            .iter()
+            .copied()
+            .zip(control_positions)
+            .enumerate()
+            .map(|(index, (point, target))| {
+                document
+                    .add_constraint(
+                        format!("fixed Bezier control {index}"),
+                        DocumentConstraintDefinition::FixedPoint { point, target },
+                    )
+                    .expect("fixed Bezier control")
+            })
+            .collect::<Vec<_>>();
+        let bezier = CurveSpan::line(
+            document
+                .add_curve(
+                    "hostile cubic Bezier parent",
+                    CurveDefinition::CubicBezier { controls },
+                )
+                .expect("cubic Bezier"),
+        );
+
+        let expected_bezier_parameter = 0.361_804_407_541_642_45;
+        let authored_radius = 3.108_415_523_528_273_5;
+        let mut coordinator = operation_test_coordinator(document);
+        // These are deliberately discarded-side picks, not the inferred contacts:
+        // each one identifies trim ownership while the local root search resolves
+        // the exact line/Bezier contact pair above.
+        let accepted_document = coordinator
+            .operation_authoring_document()
+            .expect("current accepted operation document")
+            .clone();
+        let picks = [
+            coordinator
+                .operation_pick_for_item(SelectionItem::Curve(line), Some(0.25))
+                .expect("stamped line pick"),
+            coordinator
+                .operation_pick_for_item(SelectionItem::Curve(bezier), Some(0.15))
+                .expect("stamped Bezier pick"),
+        ];
+        let mut authoring = OperationAuthoringState::default();
+        let _ = authoring.set_options(
+            &accepted_document,
+            OperationAuthoringOptions {
+                fillet_radius: Some(authored_radius),
+                fillet_radius_mode: DocumentDimensionMode::Driving,
+                fillet_flip_second_side: true,
+                ..OperationAuthoringOptions::default()
+            },
+        );
+        let seeded = authoring.activate(&accepted_document, OperationAuthoringTool::Fillet, &picks);
+        assert!(matches!(
+            seeded,
+            OperationAuthoringOutcome::PreviewRequested { .. }
+        ));
+        let jets = picks.each_ref().map(|pick| {
+            accepted_document
+                .evaluate_curve_jet(pick.curve_span().expect("curve pick"), pick.curve_parameter)
+                .expect("accepted operation pick jet")
+        });
+        let first_direction = jets[0].first_derivative;
+        let second_direction = jets[1].first_derivative;
+        let denominator =
+            first_direction.x * second_direction.y - first_direction.y * second_direction.x;
+        let between = jets[1].position - jets[0].position;
+        let first_parameter =
+            (between.x * second_direction.y - between.y * second_direction.x) / denominator;
+        let tangent_intersection = [
+            jets[0].position.x + first_parameter * first_direction.x,
+            jets[0].position.y + first_parameter * first_direction.y,
+        ];
+        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } =
+            authoring.confirm(&accepted_document, tangent_intersection)
+        else {
+            panic!("expected confirmed hostile Fillet candidate");
+        };
+        assert!(candidate.is_confirmed());
+        let SketchOperationRequest::AssociativeFillet { request, .. } = candidate.request() else {
+            panic!("Fillet authoring must publish an associative request");
+        };
+        assert_eq!(
+            request.first.side,
+            geosolve_sketch::DocumentCurveNormalSide::Left
+        );
+        assert_eq!(
+            request.second.side,
+            geosolve_sketch::DocumentCurveNormalSide::Right
+        );
+        assert!((request.first.parameter - 0.5).abs() <= 1.0e-9);
+        assert!((request.second.parameter - expected_bezier_parameter).abs() <= 1.0e-8);
+
+        let metadata = commit_operation_and_assert_lifecycle(&mut coordinator, &candidate);
+        let arc = metadata.primary_created_curve;
+        let (radius_dimension, contacts, bezier_neighborhood) = {
+            let accepted = coordinator.session().design_document();
+            let radius_dimension = accepted
+                .dimensions()
+                .iter()
+                .find_map(|dimension| match dimension.definition {
+                    DocumentDimensionDefinition::Radius { curve, .. } if curve == arc => {
+                        Some(dimension.id)
+                    }
+                    _ => None,
+                })
+                .expect("authored Fillet radius dimension");
+            let association = accepted
+                .curve_curve_fillet_for_arc(arc)
+                .expect("authored Fillet association");
+            let DocumentConstraintDefinition::CurveCurveFillet {
+                first_contact,
+                second_contact,
+                ..
+            } = association.definition
+            else {
+                unreachable!("generic Fillet association checked above");
+            };
+            let contacts = [first_contact, second_contact];
+            let line_contact = accepted.contact(first_contact).expect("line contact");
+            let bezier_contact = accepted.contact(second_contact).expect("Bezier contact");
+            assert_eq!(line_contact.curve, line);
+            assert_eq!(bezier_contact.curve, bezier);
+            assert_eq!(line_contact.neighborhood, ContactNeighborhood::Interior);
+            let bezier_neighborhood = bezier_contact.neighborhood;
+            let ContactNeighborhood::Local { lower, upper } = bezier_neighborhood else {
+                panic!("curved Fillet contact must retain an authored local root cell");
+            };
+            let initial_parameter = accepted
+                .scalar(bezier_contact.parameter)
+                .expect("Bezier contact parameter")
+                .value;
+            assert!((initial_parameter - expected_bezier_parameter).abs() <= 1.0e-8);
+            assert!(lower < initial_parameter && initial_parameter < upper);
+            (radius_dimension, contacts, bezier_neighborhood)
+        };
+
+        let deletion = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::Delete {
+                    object: DocumentObjectId::Dimension(radius_dimension),
+                },
+            )
+            .expect("delete the Fillet radius dimension");
+        assert!(deletion.published_accepted.is_some());
+        let unlock = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::SetElementUserSuppressed {
+                    element: DocumentElementId::Constraint(control_locks[1]),
+                    suppressed: true,
+                },
+            )
+            .expect("suppress the second Bezier control lock");
+        assert!(unlock.published_accepted.is_some());
+
+        let accepted_before = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted free-radius Fillet");
+        let accepted_identity_before = accepted_before.identity();
+        let accepted_json_before = coordinator
+            .session()
+            .export_accepted_json()
+            .expect("accepted JSON before hostile edit");
+        let hostile = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: controls[1],
+                    position: [-8.0, -5.825],
+                },
+            )
+            .expect("submit hostile Bezier control edit");
+
+        if hostile.published_accepted.is_none() {
+            assert_eq!(
+                coordinator
+                    .session()
+                    .accepted_state()
+                    .expect("retained accepted Fillet")
+                    .identity(),
+                accepted_identity_before
+            );
+            assert_eq!(
+                coordinator
+                    .session()
+                    .export_accepted_json()
+                    .expect("accepted JSON after rejected hostile edit"),
+                accepted_json_before
+            );
+            return;
+        }
+
+        let accepted_after = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted hostile Fillet edit")
+            .document();
+        let line_contact = accepted_after
+            .contact(contacts[0])
+            .expect("retained line contact");
+        let bezier_contact = accepted_after
+            .contact(contacts[1])
+            .expect("retained Bezier contact");
+        assert_eq!(line_contact.neighborhood, ContactNeighborhood::Interior);
+        assert_eq!(bezier_contact.neighborhood, bezier_neighborhood);
+        let ContactNeighborhood::Local { lower, upper } = bezier_neighborhood else {
+            unreachable!("authored Bezier neighborhood checked above");
+        };
+        let parameter = accepted_after
+            .scalar(bezier_contact.parameter)
+            .expect("edited Bezier contact parameter")
+            .value;
+        assert!(
+            lower < parameter && parameter < upper,
+            "accepted Bezier contact escaped its authored local root cell: {parameter} not in ({lower}, {upper})"
+        );
     }
 }

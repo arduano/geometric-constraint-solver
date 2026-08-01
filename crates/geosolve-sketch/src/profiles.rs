@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+mod fillet_branch;
 mod interval;
 mod pieces;
+
+pub use fillet_branch::LineCurveFilletBranchCellError;
 
 use std::cell::RefCell;
 use std::cmp::Ordering;

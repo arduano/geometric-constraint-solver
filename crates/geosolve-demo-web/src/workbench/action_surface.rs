@@ -43,15 +43,8 @@ pub(crate) const DIMENSION_ACTIONS: [(&str, &str, DimensionKind); 5] = [
     ),
 ];
 
-pub(crate) const OPERATION_ACTIONS: [(&str, &str, OperationAuthoringTool); 3] = [
-    ("fillet", "Fillet", OperationAuthoringTool::Fillet),
-    (
-        "line-offset",
-        "Line offset",
-        OperationAuthoringTool::LineOffset,
-    ),
-    ("mirror", "Mirror", OperationAuthoringTool::Mirror),
-];
+pub(crate) const OPERATION_ACTIONS: [(&str, &str, OperationAuthoringTool); 1] =
+    [("fillet", "Fillet", OperationAuthoringTool::Fillet)];
 
 pub(crate) fn constraint_from_key(key: &str) -> Option<ConstraintIntent> {
     CONSTRAINT_ACTIONS
@@ -188,11 +181,7 @@ mod tests {
     fn m66_modify_action_identity_catalog_is_closed_unique_and_headless() {
         assert_eq!(
             OPERATION_ACTIONS.map(|(_, _, tool)| tool),
-            [
-                OperationAuthoringTool::Fillet,
-                OperationAuthoringTool::LineOffset,
-                OperationAuthoringTool::Mirror,
-            ]
+            [OperationAuthoringTool::Fillet]
         );
         assert_eq!(
             OPERATION_ACTIONS
@@ -207,6 +196,8 @@ mod tests {
             assert_eq!(operation_tool_from_key(key), Some(tool));
         }
         assert_eq!(operation_tool_from_key("split"), None);
+        assert_eq!(operation_tool_from_key("line-offset"), None);
+        assert_eq!(operation_tool_from_key("mirror"), None);
         assert_eq!(operation_tool_from_key("curve-offset"), None);
         assert_eq!(operation_tool_from_key("multi-mirror"), None);
     }
@@ -290,6 +281,11 @@ mod tests {
         assert!(html.contains("<strong>Modify</strong>"));
         assert!(html.contains("data-wb-action=\"operation-apply\""));
         for forbidden in [
+            "data-wb-operation=\"line-offset\"",
+            "data-wb-operation=\"mirror\"",
+            "wb-operation-offset-distance",
+            "wb-operation-offset-mode",
+            "wb-operation-offset-semantics",
             "operation-split",
             "operation-pattern",
             "curve-offset",

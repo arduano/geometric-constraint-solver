@@ -37,12 +37,10 @@ pub(crate) enum SampleId {
     CurveGallery,
     PeriodicNurbs,
     FilletWorkshop,
-    LineOffsetWorkshop,
-    MirrorWorkshop,
 }
 
 impl SampleId {
-    pub(crate) const ALL: [Self; 25] = [
+    pub(crate) const ALL: [Self; 23] = [
         Self::DraftingCompass,
         Self::BezierContinuityBridge,
         Self::TwinRollerCam,
@@ -66,8 +64,6 @@ impl SampleId {
         Self::CurveGallery,
         Self::PeriodicNurbs,
         Self::FilletWorkshop,
-        Self::LineOffsetWorkshop,
-        Self::MirrorWorkshop,
     ];
 
     pub(crate) const fn key(self) -> &'static str {
@@ -95,8 +91,6 @@ impl SampleId {
             Self::CurveGallery => "curve-family-gallery",
             Self::PeriodicNurbs => "periodic-nurbs-specimen",
             Self::FilletWorkshop => "fillet-workshop",
-            Self::LineOffsetWorkshop => "line-offset-workshop",
-            Self::MirrorWorkshop => "mirror-workshop",
         }
     }
 
@@ -111,8 +105,6 @@ enum SampleSource {
     ConstructionReference,
     TangentRadialNormal,
     FilletWorkshop,
-    LineOffsetWorkshop,
-    MirrorWorkshop,
 }
 
 #[derive(Clone, Copy)]
@@ -229,7 +221,7 @@ const CONSTRAINTS: [SampleDefinition; 6] = [
     ),
 ];
 
-const CURVES: [SampleDefinition; 6] = [
+const CURVES: [SampleDefinition; 4] = [
     SampleDefinition {
         id: SampleId::ConstructionReference,
         title: "Construction and reference geometry",
@@ -249,16 +241,6 @@ const CURVES: [SampleDefinition; 6] = [
         id: SampleId::FilletWorkshop,
         title: "2D fillet workshop",
         source: SampleSource::FilletWorkshop,
-    },
-    SampleDefinition {
-        id: SampleId::LineOffsetWorkshop,
-        title: "Associative line offsets",
-        source: SampleSource::LineOffsetWorkshop,
-    },
-    SampleDefinition {
-        id: SampleId::MirrorWorkshop,
-        title: "Mirror construction workshop",
-        source: SampleSource::MirrorWorkshop,
     },
 ];
 
@@ -357,8 +339,6 @@ fn coordinator_from_source(source: SampleSource) -> Result<RetainedEditorCoordin
         SampleSource::ConstructionReference => construction_reference_document()?,
         SampleSource::TangentRadialNormal => tangent_radial_normal_document()?,
         SampleSource::FilletWorkshop => fillet_workshop_document()?,
-        SampleSource::LineOffsetWorkshop => line_offset_workshop_document()?,
-        SampleSource::MirrorWorkshop => mirror_workshop_document()?,
     };
     let session = RetainedSketchDocumentSession::new(document, request, SolverConfig::default())
         .map_err(|error| error.to_string())?;
@@ -479,111 +459,6 @@ fn fillet_workshop_document()
         ],
     )?;
     fix_curve_points(&mut document, polyline_corner, "Open-polyline corner")?;
-    Ok((document, geosolve_sketch::DocumentSolveRequest::default()))
-}
-
-fn line_offset_workshop_document()
--> Result<(SketchDocument, geosolve_sketch::DocumentSolveRequest), String> {
-    let mut document = workshop_document(0x6600_0000_0000_0000_0000_0000_0000_0002_u128)?;
-    add_line(
-        &mut document,
-        "Horizontal offset source",
-        ("Horizontal source start", [-8.0, -4.0]),
-        ("Horizontal source end", [-1.0, -4.0]),
-    )?;
-    add_line(
-        &mut document,
-        "Angled offset source",
-        ("Angled source start", [1.0, -4.0]),
-        ("Angled source end", [7.0, -1.0]),
-    )?;
-    add_polyline(
-        &mut document,
-        "Polyline offset source",
-        &[
-            ("Polyline source start", [-8.0, 2.0]),
-            ("Polyline source first corner", [-4.0, 6.0]),
-            ("Polyline source second corner", [1.0, 2.0]),
-            ("Polyline source end", [6.0, 6.0]),
-        ],
-    )?;
-    Ok((document, geosolve_sketch::DocumentSolveRequest::default()))
-}
-
-fn mirror_workshop_document()
--> Result<(SketchDocument, geosolve_sketch::DocumentSolveRequest), String> {
-    let mut document = workshop_document(0x6600_0000_0000_0000_0000_0000_0000_0003_u128)?;
-    let axis = add_line(
-        &mut document,
-        "Mirror axis",
-        ("Mirror axis start", [0.0, -7.0]),
-        ("Mirror axis end", [0.0, 7.0]),
-    )?;
-    document
-        .set_geometry_role(axis, GeometryRole::Construction)
-        .map_err(|error| error.to_string())?;
-    let (axis_start, axis_end) = match document.curve(axis).map(|curve| &curve.definition) {
-        Some(CurveDefinition::Line { start, end, .. }) => (*start, *end),
-        _ => return Err("mirror workshop axis must remain a line".into()),
-    };
-    for (label, point, target) in [
-        ("Fix mirror axis start", axis_start, [0.0, -7.0]),
-        ("Fix mirror axis end", axis_end, [0.0, 7.0]),
-    ] {
-        document
-            .add_constraint(
-                label,
-                DocumentConstraintDefinition::FixedPoint { point, target },
-            )
-            .map_err(|error| error.to_string())?;
-    }
-    add_line(
-        &mut document,
-        "Line mirror source",
-        ("Line source start", [-8.0, -5.0]),
-        ("Line source end", [-3.0, -3.0]),
-    )?;
-    let controls = [
-        ("Bezier mirror start", [-8.0, -1.0]),
-        ("Bezier mirror first control", [-7.0, 2.0]),
-        ("Bezier mirror second control", [-4.0, -2.0]),
-        ("Bezier mirror end", [-2.0, 1.0]),
-    ]
-    .map(|(label, position)| document.add_point(label, position))
-    .into_iter()
-    .collect::<Result<Vec<_>, _>>()
-    .map_err(|error| error.to_string())?
-    .try_into()
-    .map_err(|_| "cubic mirror source requires four controls".to_owned())?;
-    document
-        .add_curve(
-            "Bezier mirror source",
-            CurveDefinition::CubicBezier { controls },
-        )
-        .map_err(|error| error.to_string())?;
-    let spline_controls = [
-        ("B-spline mirror start", [-8.0, 4.0]),
-        ("B-spline mirror first control", [-7.0, 7.0]),
-        ("B-spline mirror second control", [-4.0, 7.0]),
-        ("B-spline mirror end", [-2.0, 4.0]),
-    ]
-    .map(|(label, position)| document.add_point(label, position))
-    .into_iter()
-    .collect::<Result<Vec<_>, _>>()
-    .map_err(|error| error.to_string())?;
-    document
-        .add_curve(
-            "B-spline mirror source",
-            CurveDefinition::BSpline {
-                form: geosolve_sketch::DocumentBSplineForm::Clamped,
-                degree: 2,
-                controls: spline_controls,
-                knots: vec![0.0, 0.0, 0.0, 1.0, 2.0, 2.0, 2.0],
-                span_ids: vec![0, 1],
-                next_span_id: 2,
-            },
-        )
-        .map_err(|error| error.to_string())?;
     Ok((document, geosolve_sketch::DocumentSolveRequest::default()))
 }
 
@@ -817,7 +692,7 @@ mod tests {
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
         CurveDefinition, CurveSpan, DocumentConstraintDefinition, DocumentDimensionDefinition,
-        DocumentEdit, GeometryRole, RetainedSketchDocumentSession,
+        DocumentEdit, RetainedSketchDocumentSession,
     };
 
     use super::super::persistence::WorkspaceSnapshot;
@@ -896,11 +771,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(
-        clippy::too_many_lines,
-        reason = "one catalog-level test compares the three plain M66 workshop contracts"
-    )]
-    fn m66_workshops_are_plain_editable_documents_with_expected_sources() {
+    fn fillet_workshop_is_a_plain_editable_document_with_expected_sources() {
         let mut catalog = SampleCatalogState::default();
         let fillet = catalog
             .open_key(SampleId::FilletWorkshop.key())
@@ -938,58 +809,6 @@ mod tests {
                 ))
         );
 
-        let offsets = catalog
-            .open_key(SampleId::LineOffsetWorkshop.key())
-            .expect("line-offset workshop");
-        assert_eq!(offsets.session().design_document().curves().len(), 3);
-        let offset_polyline = offsets
-            .session()
-            .design_document()
-            .curves()
-            .iter()
-            .find(|curve| curve.label == "Polyline offset source")
-            .expect("three-span offset source");
-        assert!(matches!(
-            &offset_polyline.definition,
-            CurveDefinition::Polyline {
-                points,
-                closed: false,
-                branch_directions,
-            } if points.len() == 4 && branch_directions.len() == 3
-        ));
-
-        let mirror = catalog
-            .open_key(SampleId::MirrorWorkshop.key())
-            .expect("mirror workshop");
-        assert_eq!(mirror.session().design_document().curves().len(), 4);
-        let axis = mirror
-            .session()
-            .design_document()
-            .curves()
-            .iter()
-            .find(|curve| curve.label == "Mirror axis")
-            .expect("mirror axis");
-        assert_eq!(
-            mirror.session().design_document().geometry_role(axis.id),
-            Some(GeometryRole::Construction)
-        );
-        assert!(
-            mirror
-                .session()
-                .design_document()
-                .curves()
-                .iter()
-                .any(|curve| matches!(curve.definition, CurveDefinition::CubicBezier { .. }))
-        );
-        assert!(
-            mirror
-                .session()
-                .design_document()
-                .curves()
-                .iter()
-                .any(|curve| matches!(curve.definition, CurveDefinition::BSpline { .. }))
-        );
-
         let fillet_document = fillet.session().design_document();
         assert_eq!(fillet_document.constraints().len(), 15);
         assert!(
@@ -1007,19 +826,6 @@ mod tests {
             DocumentDimensionDefinition::Radius { .. }
         ));
         assert!(fillet.session().accepted_state().is_some());
-
-        assert!(offsets.session().design_document().constraints().is_empty());
-        assert!(offsets.session().design_document().dimensions().is_empty());
-        assert!(offsets.session().accepted_state().is_some());
-        assert_eq!(mirror.session().design_document().constraints().len(), 2);
-        assert!(mirror.session().design_document().constraints().iter().all(
-            |constraint| matches!(
-                constraint.definition,
-                DocumentConstraintDefinition::FixedPoint { .. }
-            )
-        ));
-        assert!(mirror.session().design_document().dimensions().is_empty());
-        assert!(mirror.session().accepted_state().is_some());
     }
 
     #[test]
@@ -1259,6 +1065,13 @@ mod tests {
             assert!(
                 !markup.contains(retired),
                 "{retired} leaked into sample menu"
+            );
+        }
+        for retired in ["line-offset-workshop", "mirror-workshop"] {
+            assert!(SampleId::from_key(retired).is_none());
+            assert!(
+                !markup.contains(retired),
+                "{retired} remains in sample menu"
             );
         }
     }
