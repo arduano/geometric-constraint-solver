@@ -16,7 +16,7 @@ use geosolve_sketch::{
     DocumentTrimBoundary, DocumentTrimParameter, OperationCheckpoint, OperationControl,
     OperationController, OperationOutcome, OperationWorkCounter, PreparedSketchInput,
     RetainedDocumentTransactionOutcome, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
-    SketchAcceptedStateIdentity, SketchDesignIdentity, SketchDocument,
+    SketchAcceptedStateIdentity, SketchAttemptInput, SketchDesignIdentity, SketchDocument,
 };
 use thiserror::Error;
 
@@ -180,6 +180,7 @@ pub struct SketchOperationSnapshot {
 #[derive(Clone, Debug)]
 struct AcceptedOperationSnapshot {
     identity: SketchAcceptedStateIdentity,
+    input: SketchAttemptInput,
     design: SketchDesignIdentity,
     document: SketchDocument,
 }
@@ -195,6 +196,7 @@ impl SketchOperationSnapshot {
                 .accepted_state()
                 .map(|accepted| AcceptedOperationSnapshot {
                     identity: accepted.identity(),
+                    input: accepted.input(),
                     design: accepted.design_identity(),
                     document: accepted.document().clone(),
                 }),
@@ -321,6 +323,7 @@ pub struct SketchOperationIncomplete {
 pub enum SketchOperationIncompleteReason {
     AcceptedStateRequired,
     AcceptedStateForDifferentDesign,
+    AcceptedStateForDifferentInput,
     AcceptedGeometryDiffersFromDesign,
     ParameterNotInsideOneVisibleInterval,
     LinesDoNotShareOneEndpoint,
@@ -1054,20 +1057,22 @@ fn build_result(
 }
 
 fn accepted_for_design(snapshot: &SketchOperationSnapshot) -> Option<&AcceptedOperationSnapshot> {
-    snapshot
-        .accepted
-        .as_ref()
-        .filter(|accepted| accepted.design == snapshot.input.design_identity())
+    snapshot.accepted.as_ref().filter(|accepted| {
+        accepted.design == snapshot.input.design_identity()
+            && accepted.input == snapshot.input.attempt_input()
+    })
 }
 
 fn missing_accepted(
     snapshot: &SketchOperationSnapshot,
     kind: SketchOperationKind,
 ) -> SketchOperationResult {
-    let reason = if snapshot.accepted.is_some() {
-        SketchOperationIncompleteReason::AcceptedStateForDifferentDesign
-    } else {
-        SketchOperationIncompleteReason::AcceptedStateRequired
+    let reason = match snapshot.accepted.as_ref() {
+        None => SketchOperationIncompleteReason::AcceptedStateRequired,
+        Some(accepted) if accepted.design != snapshot.input.design_identity() => {
+            SketchOperationIncompleteReason::AcceptedStateForDifferentDesign
+        }
+        Some(_) => SketchOperationIncompleteReason::AcceptedStateForDifferentInput,
     };
     incomplete(kind, reason)
 }

@@ -6,8 +6,9 @@ use geosolve_sketch::{
     CurveDefinition, CurveSpan, DesignPointId, DesignScalarId, DocumentConstraintDefinition,
     DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode,
     DocumentLineOffsetOrientation, DocumentLineSide, DocumentSolveRequest, MAX_LABEL_BYTES,
-    OperationControl, OperationLimits, OperationOutcome, RetainedSketchDocumentSession,
-    ScalarDomain, ScalarUnit, SketchDocument, SolverConfig, cancellation_pair,
+    OperationControl, OperationLimits, OperationOutcome, PersistentId,
+    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument, SolverConfig,
+    cancellation_pair,
 };
 use geosolve_sketch_ops::{
     AssociativeLineOffsetMode, SketchOperationApplication, SketchOperationIdentityChange,
@@ -551,6 +552,60 @@ fn controlled_proposal_apply_is_mutation_free_when_cancelled_or_exhausted() {
             .map(geosolve_sketch::SketchAcceptedDocumentState::identity),
         before_accepted
     );
+}
+
+#[test]
+fn geometry_operations_reject_accepted_geometry_from_a_different_current_input() {
+    let mut document = SketchDocument::new(10.0).unwrap();
+    let (source, source_points) = line(&mut document, "source", [-3.0, 0.0], [-1.0, 0.0]);
+    let (axis, axis_points) = line(&mut document, "axis", [0.0, -2.0], [0.0, 2.0]);
+    fix_points(
+        &mut document,
+        &[
+            (source_points[0], [-3.0, 0.0]),
+            (source_points[1], [-1.0, 0.0]),
+            (axis_points[0], [0.0, -2.0]),
+            (axis_points[1], [0.0, 2.0]),
+        ],
+    );
+    let mut session = session(document);
+    let accepted = session.accepted_state().unwrap().identity();
+    let attempt = session
+        .reattempt(
+            session.design_identity(),
+            DocumentSolveRequest::default().with_drag(
+                DesignPointId(PersistentId::from_u128(u128::MAX)),
+                [20.0, 20.0],
+            ),
+        )
+        .unwrap();
+    assert!(attempt.accepted_state_identity().is_none());
+    assert_eq!(session.accepted_state().unwrap().identity(), accepted);
+    assert_ne!(
+        session.accepted_state().unwrap().input(),
+        session.prepared_input().attempt_input()
+    );
+
+    let before = session.prepared_input();
+    let outcome = SketchOperationSnapshot::capture(&session)
+        .prepare(SketchOperationRequest::Mirror {
+            label: "stale-input mirror".into(),
+            source,
+            axis: CurveSpan::line(axis),
+        })
+        .execute(OperationControl::default())
+        .unwrap();
+    let OperationOutcome::Completed { value, .. } = outcome else {
+        panic!("typed incomplete operation must finish preparation");
+    };
+    let SketchOperationResult::Incomplete(incomplete) = value else {
+        panic!("accepted geometry from another current input must be incomplete");
+    };
+    assert_eq!(
+        incomplete.reason,
+        geosolve_sketch_ops::SketchOperationIncompleteReason::AcceptedStateForDifferentInput
+    );
+    assert_eq!(session.prepared_input(), before);
 }
 
 fn add(first: [f64; 2], second: [f64; 2]) -> [f64; 2] {
