@@ -6,8 +6,8 @@ use geosolve_sketch::{
     CurveDefinition, CurveSpan, DesignPointId, DesignScalarId, DocumentConstraintDefinition,
     DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode,
     DocumentLineOffsetOrientation, DocumentLineSide, DocumentSolveRequest, MAX_LABEL_BYTES,
-    OperationControl, OperationOutcome, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
-    SketchDocument, SolverConfig,
+    OperationControl, OperationLimits, OperationOutcome, RetainedSketchDocumentSession,
+    ScalarDomain, ScalarUnit, SketchDocument, SolverConfig, cancellation_pair,
 };
 use geosolve_sketch_ops::{
     AssociativeLineOffsetMode, SketchOperationApplication, SketchOperationIdentityChange,
@@ -485,6 +485,64 @@ fn invalid_and_unsupported_offsets_never_mutate_the_live_session() {
             .is_err()
     );
 
+    assert_eq!(session.prepared_input(), before_input);
+    assert_eq!(session.design_document(), &before_document);
+    assert_eq!(
+        session
+            .accepted_state()
+            .map(geosolve_sketch::SketchAcceptedDocumentState::identity),
+        before_accepted
+    );
+}
+
+#[test]
+fn controlled_proposal_apply_is_mutation_free_when_cancelled_or_exhausted() {
+    let mut document = SketchDocument::new(10.0).unwrap();
+    let (source_curve, _) = line(&mut document, "source", [0.0, 0.0], [4.0, 0.0]);
+    let mut session = session(document);
+    let proposal = proposed(
+        &session,
+        SketchOperationRequest::AssociativeLineOffset {
+            label: "controlled offset".into(),
+            source: CurveSpan::line(source_curve),
+            distance: 1.0,
+            side: DocumentLineSide::Left,
+            mode: AssociativeLineOffsetMode::ExactTranslatedSegment,
+        },
+    );
+    let before_input = session.prepared_input();
+    let before_document = session.design_document().clone();
+    let before_accepted = session
+        .accepted_state()
+        .map(geosolve_sketch::SketchAcceptedDocumentState::identity);
+
+    let (handle, token) = cancellation_pair();
+    handle.cancel();
+    let cancelled = proposal
+        .apply_controlled(
+            &mut session,
+            OperationControl::new(token, OperationLimits::unlimited()),
+        )
+        .unwrap();
+    assert!(matches!(cancelled, OperationOutcome::Cancelled { .. }));
+    assert_eq!(session.prepared_input(), before_input);
+    assert_eq!(session.design_document(), &before_document);
+    assert_eq!(
+        session
+            .accepted_state()
+            .map(geosolve_sketch::SketchAcceptedDocumentState::identity),
+        before_accepted
+    );
+
+    let mut limits = OperationLimits::unlimited();
+    limits.document_validation_items = 0;
+    let exhausted = proposal
+        .apply_controlled(
+            &mut session,
+            OperationControl::new(Default::default(), limits),
+        )
+        .unwrap();
+    assert!(matches!(exhausted, OperationOutcome::WorkExhausted { .. }));
     assert_eq!(session.prepared_input(), before_input);
     assert_eq!(session.design_document(), &before_document);
     assert_eq!(

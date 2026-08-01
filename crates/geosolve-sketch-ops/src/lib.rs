@@ -436,6 +436,54 @@ impl SketchOperationProposal {
         })?;
         Ok(outcome)
     }
+
+    /// Controlled counterpart to [`Self::apply`].
+    ///
+    /// Exact-input compare-and-swap is checked before work begins. Cancellation
+    /// or deterministic work exhaustion returns a stopped [`OperationOutcome`]
+    /// and leaves the retained session unchanged; a completed outcome has the
+    /// same retained-design and independent-publication semantics as
+    /// [`Self::apply`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the same stale-input, deterministic-replay, document, or session
+    /// errors as [`Self::apply`].
+    pub fn apply_controlled(
+        &self,
+        session: &mut RetainedSketchDocumentSession,
+        control: OperationControl,
+    ) -> Result<
+        OperationOutcome<RetainedDocumentTransactionOutcome<SketchOperationApplication>>,
+        SketchOperationApplyError,
+    > {
+        let actual = session.prepared_input();
+        if actual != self.input {
+            return Err(SketchOperationApplyError::StaleInput {
+                expected: Box::new(self.input),
+                actual: Box::new(actual),
+            });
+        }
+        let expected_application = self.expected.clone();
+        let plan = self.plan.clone();
+        let outcome = session.transact_controlled(
+            self.input.design_identity(),
+            move |document| {
+                let application = plan.apply(document)?;
+                if application != expected_application {
+                    return Err(DocumentError::InvalidField {
+                        field: "operation proposal replay",
+                        message:
+                            "same stamped document did not reproduce the prepared identity map"
+                                .into(),
+                    });
+                }
+                Ok(application)
+            },
+            control,
+        )?;
+        Ok(outcome)
+    }
 }
 
 /// Preparation failure before a proposal exists.
