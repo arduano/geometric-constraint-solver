@@ -45,7 +45,7 @@ The editor owns a separate `OperationAuthoringState`; it does not overload M62's
 constraint/dimension `AuthoringState`. Its closed M66 tool set is:
 
 - associative 2D fillet;
-- associative line offset; and
+- line offset (associative single-span or one-shot joined-chain); and
 - exact supported-family mirror.
 
 The state publishes typed tools, finite model-space picks, expected next operands, pending stages,
@@ -83,31 +83,51 @@ apply a proposal directly.
 
 ### Fillet policy
 
-A fillet collects two distinct visible curve-span picks near the portions the user intends to
-retain. The picked parameters are local seeds. The headless editor performs a deterministic,
-bounded local branch synthesis only; it does not enumerate global roots.
+A fillet normally collects two distinct visible curve-span picks near the portions the user
+intends to retain. One unambiguous interior-point pick on an open polyline is a deliberate
+shortcut: the headless editor atomically expands it to the two ordered adjacent spans and records
+the first span's `End` and second span's `Start` as trim ownership. Polyline endpoints, ambiguous
+corners and every other same-support pair reject without mutation. The picked parameters are local
+seeds. The headless editor performs a deterministic, bounded local branch synthesis only; it does
+not enumerate global roots.
 
 Before preview, the request explicitly materializes both spans, picked parameters, contact
 neighborhoods, winding, normal sides, retained trim endpoints, periodic anchors where required,
-endpoint order, arc sweep, positive radius and driving/reference mode. The default radius is
-`0.1 * SketchDocument::model_scale()` and is remembered only for the process. Defaults prefer the
-picked retained portions and a minor output arc. Flip-first-side, flip-second-side and
-alternate-arc controls are explicit corrections.
+endpoint order, arc sweep, positive radius and driving/reference mode. Once both parents are
+known, the state enters a dedicated pointer-placement stage that derives the proposed radius from
+finite model-space pointer input. `0.1 * SketchDocument::model_scale()` is only its finite fallback
+seed. The ordinary radius dimension defaults to Reference; Driving requires explicit user intent.
+Defaults otherwise prefer the picked retained portions and a minor output arc. Flip-first-side,
+flip-second-side and alternate-arc controls are explicit corrections.
+
+A circular arc publishes its stored center as presentation-neutral semantic drag metadata.
+Dragging the body of a free associated fillet therefore routes through the ordinary projected
+center-drag lifecycle and updates its center, radius, contacts and retained parent intervals as one
+accepted edit. Deleting only the radius dimension removes that dimension without deleting the
+fillet association or this drag route.
 
 Ambiguous local roots, duplicate supports, already-trimmed parents, parallel or singular offsets,
 zero-speed/pole/cusp geometry and escaped parameters remain typed warnings or operation failures.
-Same-support/polyline-corner fillets and global root search are deferred.
+Same-support fillets other than the explicit adjacent-polyline shortcut and global root search are
+deferred.
 
 ### Line-offset policy
 
-M66 adds one `geosolve-sketch-ops` request for a line or polyline span. It atomically creates two
-target points, one target line, one positive scalar and one driving public offset dimension.
+M66 retains one `geosolve-sketch-ops` request for a single line or polyline span. It atomically
+creates two target points, one target line, one positive scalar and one driving public offset
+dimension. Exact translated segment is the default. Supporting-line offset is an explicit
+alternate mode and retains its truthful axial-slide/length freedoms. Left/right side is explicit;
+generated endpoint orientation is explicitly `Same`. The authoring pointer may seed side and
+distance, but both are stored as typed state before preview.
 
-Exact translated segment is the default. Supporting-line offset is an explicit alternate mode and
-retains its truthful axial-slide/length freedoms. Left/right side is explicit; generated endpoint
-orientation is explicitly `Same`. The authoring pointer may seed side and distance, but both are
-stored as typed state before preview. General curve, chain, joined-profile and approximated
-conic/spline offsets are unsupported.
+A distinct joined-offset request accepts an explicitly clicked ordered chain of at most 32 unique,
+endpoint-connected line/polyline spans. It offsets every support by one requested signed distance,
+uses intersections of adjacent offset supporting lines for interior miters and atomically emits
+one ordinary one-shot polyline. It creates no persistent offset scalar, dimension or association
+and performs no recursive path discovery, healing, caps or self-intersection repair. Duplicate,
+disconnected, over-budget or unresolved-miter input rejects without partial allocation. The
+Exact/Supporting choice remains a single-span contract and cannot masquerade as joined-chain
+semantics. General curve and approximated conic/spline/NURBS offsets remain unsupported.
 
 ### Mirror policy
 
@@ -119,10 +139,12 @@ approximated. Multi-source transactions are deferred.
 
 ## Verification
 
-Direct operation tests own request expansion, identity mapping, exact-CAS behavior, both offset
-modes/sides, supported mirror families and fillet transaction outcomes. Direct editor tests own
-preselection, repeated collection, exact picked parameters, option/branch state, preview
-acceptance, Apply/Escape, terminal re-arming, stale work, history and persistence lifecycle.
+Direct operation tests own request expansion, identity mapping, exact-CAS behavior, both
+single-span offset modes/sides, bounded joined-chain expansion and rejection, supported mirror
+families and fillet transaction outcomes. Direct editor tests own preselection, repeated
+collection, adjacent-polyline corner resolution, exact picked parameters, pointer radius
+placement, Reference/Driving intent, option/branch state, preview acceptance, Apply/Escape,
+terminal re-arming, stale work, semantic arc-center drag, history and persistence lifecycle.
 Direct workbench tests own only palette/icon presentation, event routing, preview rendering and
 ordinary editable sample integration.
 
@@ -137,6 +159,10 @@ workspace, WASM and release Trunk qualification must pass before the M66 human U
 - Explicit branch state remains inspectable and correctable instead of being hidden in pointer
   coordinates.
 - Preview and commit share one independently validated operations/publication seam.
-- The operations companion gains one ordinary line-offset transaction but no solver or UI state.
-- General curve offsets, approximate mirrors, global fillet search, multi-source mirror and a CAD
-  feature tree remain future scope.
+- A free fillet remains an ordinary movable associated construction instead of silently gaining a
+  hard radius from its fallback seed.
+- The operations companion owns both the associative single-span line-offset transaction and a
+  bounded non-associative joined-chain transaction, but no solver or UI state.
+- General curve offsets, persistent associative profile offsets, automatic chain discovery,
+  approximate mirrors, global fillet search, multi-source mirror and a CAD feature tree remain
+  future scope.

@@ -3015,8 +3015,8 @@ replacement candidate. M65 is closed; the historical candidate endpoint was
 
 ### M66: CAD helper-operation authoring
 
-Status: active. Implementation and direct qualification are complete; supervising-human UAT
-remains open.
+Status: active. The replacement implementation is directly qualified after supervising-human UAT
+opened three remediation findings. Focused replacement UAT remains open.
 
 Goal: expose intuitive reusable authoring for associative 2D fillets, line offsets and exact
 supported-family mirrors while keeping branch synthesis, applicability, scratch preview and
@@ -3034,27 +3034,39 @@ publication in the headless editor/operations layers rather than the browser.
 - [x] Make the retained coordinator capture immutable operation snapshots, execute proposals on
   scratch retained state, expose preview only from an independently accepted exact-input result,
   and publish the exact proposal through compare-and-swap as one normal history edit.
-- [x] Synthesize a complete branch-explicit M28 fillet request from two distinct local curve-span
-  picks, including parameter, neighborhood, winding, normal sides, retained endpoints, periodic
-  anchors, endpoint order, sweep and positive driving radius.
-- [x] Default fillets to `0.1 * document.model_scale()`, the locally picked retained portions and a
-  minor arc; expose flip-first-side, flip-second-side and alternate-arc corrections and remember
-  the radius only for the current process.
-- [x] Reject ambiguous/unresolved local fillet roots, same supports, already-trimmed parents,
-  singular/parallel offsets, zero-speed/pole/cusp geometry and escaped spans without a global root
-  search or partial mutation.
+- [x] Synthesize a complete branch-explicit M28 fillet request from two local curve-span picks,
+  including parameter, neighborhood, winding, normal sides, retained endpoints, periodic anchors,
+  endpoint order, sweep, positive radius and explicit driving/reference mode.
+- [x] Use `0.1 * document.model_scale()` only as a finite fallback seed. After parent collection,
+  place the radius from the pointer in a dedicated headless stage and default that placement to a
+  reference dimension so initial geometry does not silently become a hard radius. An explicitly
+  selected driving mode remains available.
+- [x] Accept two different curve supports or two adjacent spans of one open polyline. One
+  unambiguous interior polyline point expands atomically to that same ordered span pair with
+  explicit end/start trim ownership. Reject every other same-support, endpoint or ambiguous
+  corner case.
+- [x] Reject ambiguous/unresolved local fillet roots, already-trimmed parents, singular/parallel
+  offsets, zero-speed/pole/cusp geometry and escaped spans without a global root search or partial
+  mutation.
 - [x] Add one atomic `geosolve-sketch-ops` line-offset request for a line or polyline span that
   creates target endpoints, target line, positive scalar and the existing driving offset
   dimension with explicit side and `Same` orientation.
 - [x] Default line offset to exact translated segment and expose supporting-line offset as the
-  truthful alternate mode; do not approximate general curve, chain, conic, spline or NURBS
+  truthful alternate mode for one span; do not approximate general curve, conic, spline or NURBS
   offsets.
+- [x] For an explicitly clicked ordered chain of up to 32 unique endpoint-connected line/polyline
+  spans, add one distinct atomic one-shot joined-offset operation. It intersects adjacent offset
+  supporting lines for interior miters and emits one ordinary polyline at the requested signed
+  distance, with no persistent offset scalar, dimension, associativity, recursive discovery,
+  healing or caps.
 - [x] Author one source then one line axis for exact mirror, retaining existing supported
   line/polyline/Bezier/non-rational-B-spline behavior and typed unsupported outcomes for circle,
   arc, conic, rational and NURBS families. Multi-source mirror remains deferred.
 - [x] Add a **Modify** section to the left palette with distinct text-free Fillet, Line offset and
   Mirror icons, headless pending/warning/options presentation, accepted scratch preview and
   primary-created-curve selection after commit.
+- [x] Expose a circular arc's stored center as its headless semantic drag owner, so a free
+  associated fillet can be dragged from its visible arc without browser inference.
 - [x] Add ordinary editable **2D fillet workshop**, **Associative line offsets** and
   **Mirror construction workshop** leaves under **Curves & constructions**, with no guide,
   protection, scripted action or alternate coordinator.
@@ -3062,17 +3074,30 @@ publication in the headless editor/operations layers rather than the browser.
   preview/commit rejection, stale/exhausted work, Undo/Redo, workspace round-trip and sample
   editability. Retain M25/M27/M28 as the derivative and independent-validation owners because M66
   adds no residual.
-- [x] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature
-  demo-web WASM check, release Trunk build and `git diff --check` from one final source state.
+- [x] Pass the initial formatting, warnings-denied Clippy, locked all-feature workspace tests,
+  all-feature demo-web WASM check, release Trunk build and `git diff --check` gate.
+- [x] Directly qualify the `M66-F001` joined-chain offset, `M66-F002` polyline-corner fillet and
+  `M66-F003` pointer-placed reference-radius/arc-center-drag remediations, then repeat the complete
+  native, WASM and release gate from one replacement source state.
 - [ ] Complete and explicitly approve `docs/M66_UAT.md`.
 
 Gate: every visible helper tool is driven by public headless operation-authoring metadata and
 commits only an independently accepted public operation proposal through the ordinary retained
-history path. Every branch/side/span/winding choice is explicit before publication. Unsupported or
-ambiguous geometry is typed and mutation-free; no browser equation or applicability matrix,
-general curve offset approximation, global fillet-root enumeration, persistent feature tree,
-legacy harness, `/#/dev/lab`, browser E2E or mobile claim is added. M66 closes only after direct
+history path. Every branch/side/span/winding choice is explicit before publication; pointer
+placement is a radius seed rather than hidden hard intent. The bounded joined-chain offset is
+explicitly selected and one-shot. Unsupported or ambiguous geometry is typed and mutation-free;
+no browser equation or applicability matrix, general curve offset approximation, recursive path
+discovery, global fillet-root enumeration, persistent feature tree, legacy harness,
+`/#/dev/lab`, browser E2E or mobile claim is added. M66 closes only after replacement direct
 qualification and explicit supervising-human UAT approval.
+
+Replacement mechanical qualification record (2026-08-01): code source
+`92e6ddce1e37d6508b5dd8568078146ac2822aa7` passes formatting, warnings-denied locked
+workspace/all-target/all-feature Clippy, locked all-feature workspace tests, the all-feature
+demo-web WASM check, the release Trunk bundle and `git diff --check`. Direct owners cover the
+joined-path operation and invalid classes, adjacent-polyline direct/corner authoring, flexible and
+locked radius placement, semantic arc-center drag, exact release/Undo/Redo and bit-exact workspace
+reload. The human-UAT checkbox intentionally remains open.
 
 ## Explicit non-goals
 

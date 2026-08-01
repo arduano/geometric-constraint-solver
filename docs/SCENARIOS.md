@@ -1905,8 +1905,8 @@ M66 adds three ordinary editable leaves under **Curves & constructions**:
 
 | Stable sample key | Sample title | Authoring focus |
 | --- | --- | --- |
-| `fillet-workshop` | 2D fillet workshop | Line-line, line-circle and line-Bezier pairs with room to pick retained portions, ordinary deletable support locks for stable radius editing, and no prebuilt fillet. |
-| `line-offset-workshop` | Associative line offsets | Line/polyline sources for exact translated and supporting-line offsets on either explicit side, followed by ordinary distance editing and constrained motion. |
+| `fillet-workshop` | 2D fillet workshop | Line-line, line-circle and line-Bezier pairs plus an open-polyline corner, with room for pointer radius placement, ordinary deletable support locks and no prebuilt fillet. |
+| `line-offset-workshop` | Associative line offsets | Single line/polyline sources for associative exact/supporting offsets and an explicitly clicked connected chain for one-shot mitered output. |
 | `mirror-workshop` | Mirror construction workshop | A line axis plus movable line, cubic Bezier and non-rational B-spline sources for repeated exact associative mirrors. |
 
 Opening any leaf replaces the ordinary workspace, starts normal history and autosave, fits the
@@ -1919,7 +1919,8 @@ The direct headless operation corpus covers both workflows for every tool:
 1. compatible immutable preselection stages one complete or next-operand candidate without
    changing ordinary selection; empty selection enters persistent repeated authoring;
 2. canvas/tree picks preserve semantic span identity, exact picked parameter and finite model
-   position, with one physical event contributing one operand;
+   position; one event normally contributes one operand, while one unambiguous open-polyline
+   interior point may atomically contribute its ordered previous/next Fillet spans;
 3. a complete request executes against one immutable operation snapshot and may expose preview
    only after scratch retained publication independently accepts it;
 4. Apply/Enter publishes through exact-input compare-and-swap as one history step and selects the
@@ -1927,23 +1928,63 @@ The direct headless operation corpus covers both workflows for every tool:
 5. unsupported, incomplete, ambiguous, stale, cancelled, exhausted and retained-rejected work
    leaves the live coordinator, accepted scene and history unchanged and re-arms repeated mode.
 
-Fillet picks are distinct visible curve spans. Their parameters seed one bounded local synthesis,
-which explicitly records neighborhoods, winding, normal sides, retained endpoints, any periodic
-anchors, endpoint order, sweep and positive radius before the existing M28 operation is prepared.
-Defaults use `0.1 * model_scale`, the picked retained portions and a minor arc; side and alternate
-arc controls provide deliberate branch correction. Same-support/polyline-corner fillets,
-already-trimmed parents and unresolved/singular roots fail typed without global search.
+Fillet operands are two different visible curve supports or two adjacent spans of one open
+polyline. One unambiguous interior point may atomically expand to that ordered adjacent pair. The
+shared-corner path carries explicit `End`/`Start` trim hints; it does not relax other same-support
+rejection. Pick parameters seed
+one bounded local synthesis, which explicitly records neighborhoods, winding, normal sides,
+retained endpoints, any periodic anchors, endpoint order and sweep. After the parents are known,
+pointer motion stages a finite positive radius and click confirms it. `0.1 * model_scale` is only
+the fallback seed, the ordinary radius dimension defaults to Reference, and Driving is an explicit
+choice. Side and alternate-arc controls remain deliberate branch correction. Endpoints, ambiguous
+corners, already-trimmed parents and unresolved/singular roots fail typed without global search.
 
-Line offset accepts one line or polyline span. It atomically creates two target points, a target
-line, a positive scalar and one existing driving offset dimension. Exact translated segment is the
-default, supporting-line behavior is explicit, left/right side is explicit and generated endpoint
-orientation is `Same`. No curve/profile approximation, join or cap is implied.
+The accepted output remains an ordinary circular arc. Its stored center is the arc body's
+presentation-neutral semantic drag owner, so a reference-radius fillet moves through the ordinary
+projected-drag lifecycle and updates its radius, contacts and visible parent intervals atomically.
+Deleting the radius dimension removes only the ordinary measurement source; it does not explode
+the association or remove this mobility.
+
+Single-span line offset retains the original two public modes. It atomically creates two target
+points, a target line, a positive scalar and one driving offset dimension; exact translated segment
+is default, supporting-line behavior is explicit, left/right side is explicit and generated
+endpoint orientation is `Same`.
+
+Joined offset is a separate bounded one-shot expansion. It accepts at most 32 explicitly clicked,
+unique, endpoint-connected line/polyline spans in ordered path sequence, offsets each support by
+one requested signed distance and intersects adjacent offset supporting lines for interior miters.
+It emits one ordinary polyline atomically and creates no persistent distance scalar, dimension or
+association. It performs no recursive neighbor discovery, profile approximation, healing, caps or
+self-intersection repair; invalid connectivity or unresolved miter geometry rejects without
+allocation.
 
 Mirror accepts one exact supported source followed by one line axis. Line/polyline, quadratic or
 cubic Bezier and non-rational B-spline sources remain associative through their existing ordinary
 point-symmetry constraints. Circle, arc, ellipse/conic, rational and NURBS sources warn as
 unsupported and allocate nothing. Repeated mode performs one source per transaction; atomic
 multi-source mirror is deferred.
+
+### M66-S2 - UAT remediation fixtures
+
+- `M66-F001` collects a two- and three-span connected path by explicit clicks, rejects a duplicate,
+  disconnected or over-budget pick without mutation, and publishes exactly one mitered ordinary
+  polyline with no dimension or associative source. Undo/Redo and workspace round-trip retain that
+  plain output.
+- `M66-F002` resolves one open-polyline interior point to exactly its ordered adjacent spans, then
+  proves the accepted associated fillet owns the first visible `End` and second visible `Start`.
+  Endpoint/ambiguous corner attempts remain typed and mutation-free.
+- `M66-F003` distinguishes pointer-derived Reference placement from explicit Driving intent. The
+  reference case reports the expected additional fillet DOF; dragging either its center point or
+  visible arc body moves center/radius/contacts/trim intervals through one accepted projected edit,
+  while a rejected target retains the last accepted geometry and branch state.
+
+The application workspace envelope advances to v3 for this flexible-state cut while canonical
+sketch v4 and draft v5 remain unchanged. V3 records whether accepted materialization belonged to
+the stored current design; v1/v2 migrate conservatively without that claim. Restore treats the
+field only as a routing hint and independently exact-certifies, checks runtime compatibility and
+requires the accepted state materialized through the retained design to match the full stored
+accepted document. Flexible-fillet save/decode/reload is therefore bit-exact, while a same-shape
+tampered dimension target rejects.
 
 ## Frozen near-singular fixtures
 

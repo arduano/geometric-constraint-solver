@@ -991,8 +991,9 @@ in `docs/M65_UAT.md`; M65 is complete.
 
 ## M66 acceptance: CAD helper-operation authoring
 
-Status: active. Implementation and direct qualification are complete; supervising-human UAT
-remains pending.
+Status: active. Replacement source `92e6ddce1e37d6508b5dd8568078146ac2822aa7` is mechanically
+qualified with direct dispositions for `M66-F001` through `M66-F003`; focused
+supervising-human UAT remains open.
 
 - A separate public headless operation-authoring state owns Fillet, Line offset and Mirror
   operand progression, finite model-space picks, explicit options, warnings, repeated mode,
@@ -1006,15 +1007,33 @@ remains pending.
   or rejected work mutates no live state.
 - Fillet authoring records both spans, exact picked parameters, neighborhoods, winding, normal
   sides, retained trim endpoints, periodic anchors where required, endpoint order, sweep and a
-  finite positive driving radius before preview. Local bounded synthesis defaults to the picked
-  retained portions and minor arc and exposes side/arc correction controls; it performs no global
-  root enumeration.
-- Fillet ambiguity, duplicate support, existing trim ownership, escaped parameters, zero speed,
-  cusp, pole, parallel offset and offset singularity remain typed mutation-free outcomes.
+  finite positive radius with explicit driving/reference intent before publication. Local bounded
+  synthesis defaults to the picked retained portions and minor arc and exposes side/arc correction
+  controls; it performs no global root enumeration.
+- After two parent operands, the headless state enters a pointer-radius placement stage. Its
+  `0.1 * model_scale` value is only a finite fallback seed, and an ordinary reference radius is the
+  default so placement does not silently add a hard row. Driving radius remains an explicit user
+  choice. Pointer preview, click confirmation and Apply retain exact candidate binding.
+- Two adjacent spans of one open polyline are valid direct Fillet parents, and an unambiguous
+  interior point may expand in one event to that same ordered pair with explicit `End`/`Start`
+  trim ownership. Endpoints, ambiguous corners and every other same-support pair reject without
+  allocation. Fillet ambiguity, existing trim ownership,
+  escaped parameters, zero speed, cusp, pole, parallel offset and offset singularity remain typed
+  mutation-free outcomes.
+- A circular arc exposes its stored center as presentation-neutral drag metadata. Dragging the
+  visible body of a reference-radius associated fillet therefore routes through the ordinary
+  projected point-drag lifecycle; it updates radius, contacts and visible trim intervals while a
+  rejected target retains the prior accepted geometry and explicit branch state.
 - The operations companion atomically creates two target points, one target line, one positive
   scalar and one existing driving dimension for a selected line/polyline span. Exact translated
   segment is default, supporting-line offset is explicit, side is explicit and orientation is
   `Same`; no general curve offset is approximated.
+- A distinct joined-offset request accepts only an explicitly clicked ordered chain of at most 32
+  unique endpoint-connected line/polyline spans. It intersects adjacent offset supporting lines
+  for interior miters and atomically creates one ordinary one-shot polyline at the requested signed
+  distance. It creates no persistent offset scalar, dimension or association and performs no
+  recursive path discovery, healing or caps. Exact/supporting single-span choices do not
+  masquerade as joined-chain semantics.
 - Mirror authoring accepts one source then one line axis. Exact line/polyline/quadratic- or
   cubic-Bezier/non-rational-B-spline construction remains supported; circle, arc, conic, rational
   and NURBS sources are typed unsupported without tessellation. Multi-source mirror is not
@@ -1027,20 +1046,23 @@ remains pending.
   ordinary editable sample workspaces under **Curves & constructions**. They carry no guide,
   protected state, scripted action or alternate coordinator and round-trip through ordinary
   workspace persistence.
-- Direct operation, editor/coordinator and workbench tests cover both offset modes/sides,
-  representative fillet/mirror families, preselection/repeated progression, exact request state,
-  preview/commit lifecycle, stale/rejected retention, Undo/Redo, workspace reload and sample
-  editability. Existing M25/M27/M28 derivative and independent-validation corpora remain green;
-  M66 adds no residual.
+- Direct operation, editor/coordinator and workbench tests cover both single-span offset
+  modes/sides, bounded joined-chain expansion, adjacent-polyline corner resolution, pointer-placed
+  reference/driving radii, semantic arc-center drag, representative fillet/mirror families,
+  preselection/repeated progression, exact request state, preview/commit lifecycle,
+  stale/rejected retention, Undo/Redo, workspace reload and sample editability. Existing
+  M25/M27/M28 derivative and independent-validation corpora remain green; M66 adds no residual.
 - Formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature demo-web
-  WASM, release Trunk and `git diff --check` pass from the final candidate before UAT begins.
+  WASM, release Trunk and `git diff --check` pass from one replacement candidate before the
+  focused UAT resumes.
 - The supervising human explicitly approves `docs/M66_UAT.md`; no correctness, data-loss,
   misleading-preview or basic helper-authoring blocker remains.
 
-M66 does not include general curve/profile offsets, offset joins/caps/self-intersection healing,
-same-support/global-search fillets, multi-source mirror, unsupported-family approximation,
-persistent CAD feature-tree objects, a schema freeze, new equations, browser E2E, `/#/dev/lab`
-or mobile behavior.
+M66 does not include general curve/profile offsets, persistent associative multi-span offsets,
+automatic chain discovery, caps/self-intersection healing, same-support fillets other than one
+adjacent pair from an open polyline, global fillet search, multi-source mirror,
+unsupported-family approximation, persistent CAD feature-tree objects, a schema freeze, new
+equations, browser E2E, `/#/dev/lab` or mobile behavior.
 
 ### M54: stable diagnostics
 

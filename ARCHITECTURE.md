@@ -219,9 +219,11 @@ private residual equation, solver state or B-rep topology. Several visible inter
 one immutable support through exact fixed/contact boundary identity; canonical sketch v4 remains
 the supported language until a future schema-freeze milestone is explicitly scoped.
 
-M66 adds one associative line-offset request to that existing proposal surface. For a line or one
-polyline span it atomically creates two target points, a target line, a positive scalar and either
-the existing exact-translated or supporting-line driving dimension. Side and same endpoint
+M66 adds two line-offset requests to that existing proposal surface. For a line or one polyline
+span, the associative form atomically creates two target points, a target line, a positive scalar
+and either the existing exact-translated or supporting-line driving dimension. A distinct bounded
+joined form consumes only an explicitly selected endpoint-connected path and emits one ordinary
+one-shot mitered polyline without a scalar, dimension or association. Side and traversal
 orientation are explicit. Fillet and mirror authoring continue to wrap the existing public M28 and
 M25 definitions; no operation adds an equation or approximation.
 
@@ -316,6 +318,15 @@ enter `geosolve-sketch-ops` only through coordinator-owned headless authoring. T
 accepted picks, prepares bounded scratch proposals, exposes independently accepted preview state
 and commits only the exact token/candidate-bound result. The browser no longer depends directly
 on the operations companion or interprets its request vocabulary.
+
+M66 advances only the application workspace envelope to version 3. It retains the explicit
+canonical-v4/draft-v5 document encodings from M60 and adds whether the stored accepted
+materialization belonged to the stored current design. Workspace v1/v2 inputs migrate
+conservatively without that provenance. The persisted flag is only a routing hint: the sketch
+domain independently exact-certifies the accepted graph, checks compatible activity/runtime
+topology, materializes it against the supplied design and requires exact full-document equality
+before restoring current-design acceptance. Canonical sketch v4 and draft-v5 formats are
+unchanged.
 
 M61 remediation keeps those boundaries intact while making the candidate genuinely interactive.
 Advanced construction state and proposal/preview generation live in `geosolve-constraint-editor`;
