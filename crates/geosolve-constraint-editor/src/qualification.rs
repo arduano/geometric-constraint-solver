@@ -655,7 +655,7 @@ fn pick_matrix(input: &Value) -> Result<String, String> {
         curve_offsets: offsets,
         overlaps,
     } = parse_input(input)?;
-    if overlaps != ["point-curve", "curve-curve"] || offsets != [6.999, 7.0, 7.001] {
+    if overlaps != ["point-curve", "curve-curve"] || offsets != [11.999, 12.0, 12.001] {
         return Err("unexpected overlap matrix".into());
     }
     let mut trace = Vec::new();
@@ -1830,7 +1830,7 @@ fn model_class(class: &str) -> Result<String, String> {
                 "tie_policy": "persistent-identity"
             }))?,
             pick_matrix(&serde_json::json!({
-                "curve_offsets": [6.999, 7.0, 7.001],
+                "curve_offsets": [11.999, 12.0, 12.001],
                 "overlaps": ["point-curve", "curve-curve"]
             }))?,
             selection_matrix(&serde_json::json!({

@@ -2,9 +2,9 @@
 
 # M66 implementation: headless CAD helper-operation authoring
 
-Status: replacement mechanically qualified as of 2026-08-01. Supervising-human UAT opened
-`M66-F001` through `M66-F003`; their direct dispositions and replacement gate now pass, while the
-focused human retest remains pending.
+Status: active remediation as of 2026-08-01. The first replacement is mechanically qualified for
+`M66-F001` through `M66-F003`. Continued supervising-human UAT opened `M66-F004` through
+`M66-F006`; the next replacement gate and focused human retest remain pending.
 
 ## Scope
 
@@ -36,6 +36,18 @@ E2E and `/#/dev/lab` remain outside this milestone.
   deleting that dimension did not make the visible arc body draggable. The remediation adds a
   headless pointer-radius stage, defaults its output to Reference unless Driving is explicit, and
   exposes a circular arc's stored center as its semantic canvas drag owner.
+- `M66-F004`: accepted scratch preview geometry could win a later canvas hit and be forwarded as
+  though it were a live Fillet/Line offset operand, preventing the intended radius/side placement
+  click. The remediation resolves the best visible hit once, treats preview-only foreground
+  identity as a click-through barrier and forwards no operand so the headless placement stage owns
+  the click.
+- `M66-F005`: curve acquisition was unnecessarily narrow for repeated CAD authoring. The shared
+  presentation-neutral tolerance becomes an inclusive 12 pixels, retaining nearest-distance and
+  persistent-identity tie policy for ordinary editing and operation authoring alike.
+- `M66-F006`: the shared Line offset tool did not state clearly when source association was lost.
+  The accepted scope remains associative for exactly one span and explicitly one-shot for two or
+  more connected spans. Headless guidance now states whether source edits will propagate;
+  persistent associative multi-span offsets remain deferred.
 
 ## 1. Files and APIs added or changed
 
@@ -56,12 +68,13 @@ E2E and `/#/dev/lab` remain outside this milestone.
   records one ordinary history/replay action and selects the primary created curve.
 - `crates/geosolve-constraint-editor/src/lib.rs` exports only the presentation-neutral authoring,
   preview and semantic curve-drag surface required by hosts. Circular arcs map to their stored
-  center there; ADR 0030 authorizes the editor-to-operations dependency.
+  center there. F004/F005 add source-aware preview hit filtering and the shared inclusive 12-pixel
+  curve tolerance; ADR 0030 authorizes the editor-to-operations dependency.
 - `crates/geosolve-demo-web` removes its direct operations-companion dependency. Its sole
   workbench adds a **Modify** palette, text-free Fillet/Line offset/Mirror icons, normalized event
   forwarding, headless guidance/options/warnings, accepted scratch rendering and exact Apply/
-  Enter/Escape routing. It forwards corner/path/radius pointer events but owns no expansion,
-  radius or miter formula.
+  Enter/Escape routing. It forwards source-filtered corner/path/radius pointer events but owns no
+  expansion, radius or miter formula. Association wording comes from headless authoring guidance.
 - `crates/geosolve-demo-web/src/workbench/samples.rs` adds three ordinary editable sample
   workspaces: **2D fillet workshop**, **Associative line offsets** and
   **Mirror construction workshop**. The fillet leaf uses only ordinary deletable support locks and
@@ -126,6 +139,12 @@ association, recursive neighboring-span discovery, healing or cap is persisted. 
 unresolved miter input rejects before allocation. No nonlinear curve/profile approximation is
 implied.
 
+The shared Line offset label does not imply shared persistence semantics. One selected span stages
+the associative request and guidance says that source edits propagate. The second connected span
+changes the candidate to the distinct joined request and guidance says explicitly that the output
+is one-shot and will not follow its sources. Associative multi-span discovery and persistence are
+deferred.
+
 Mirror authoring collects one supported source and one distinct line/polyline axis. Existing
 point-symmetry constraints keep line/polyline, quadratic/cubic Bezier and non-rational B-spline
 outputs associative. Circle, arc, conic, rational and NURBS families fail typed and allocate
@@ -138,11 +157,18 @@ accepted document to equal the rendered scratch result before swapping it into l
 Cancellation, exhaustion, stale input, unsupported/incomplete work or retained rejection cannot
 publish partial state or leave a committable preview.
 
+Canvas geometry acquisition is shared with ordinary editing and uses an inclusive 12-pixel curve
+radius with nearest-distance then persistent-identity ties. A hit is resolved against the rendered
+scene first. If the winning foreground point/curve exists only in accepted scratch preview, it
+blocks hidden source geometry but is not forwarded as an operand; the headless Fillet or Line
+offset state therefore receives the intended no-operand placement click.
+
 ## 3. Exact commands run and outcomes
 
-Replacement code source `92e6ddce1e37d6508b5dd8568078146ac2822aa7` passed the exact
+First replacement code source `92e6ddce1e37d6508b5dd8568078146ac2822aa7` passed the exact
 integrated gate on 2026-08-01. Initial source `f913fb46e14308dc66563d1e602d3ae6ed2f7cb1`
-is superseded and retained only as historical evidence:
+is superseded and retained only as historical evidence. Continued UAT superseded the first
+replacement with F004-F006; its next exact source and complete rerun are pending:
 
 ```text
 nix-shell shell.nix --run 'cargo fmt --all -- --check'
@@ -167,26 +193,28 @@ Outcomes:
 
 ## 4. Acceptance status
 
-The replacement candidate passes its objective implementation and mechanical acceptance
-criteria. Direct coverage owns operation expansion, state transitions, exact picked parameters,
-local fillet branches, single-span offset modes/sides, bounded joined-chain construction and
-invalid classes, adjacent-polyline direct/corner fillets, flexible/locked radius placement,
+The first replacement candidate passes its objective implementation and mechanical acceptance
+criteria for F001-F003. Direct coverage owns operation expansion, state transitions, exact picked
+parameters, local fillet branches, single-span offset modes/sides, bounded joined-chain construction
+and invalid classes, adjacent-polyline direct/corner fillets, flexible/locked radius placement,
 semantic arc-center drag, accepted scratch provenance, token/candidate/confirmation binding,
 cancellation/exhaustion/staleness, exact scratch/commit equality, selection, history/replay,
 bit-exact workspace round-trip and editable plain samples. The retained M25/M27/M28 derivative
 and independent-validation corpora also pass; M66 adds no residual.
 
-F001-F003 have direct owning-layer regressions and the complete replacement native/WASM/release
-gate passes. The explicit supervising-human acceptance checkbox and focused human retest remain
-open, so M66 is not yet closed.
+F001-F003 have direct owning-layer regressions and their complete replacement native/WASM/release
+gate passes. F004-F006 have an in-progress implementation and direct regression surface, but the
+next complete native/WASM/release gate and focused human retest remain pending. The explicit
+supervising-human acceptance checkbox remains open, so M66 is not yet closed.
 
 ## 5. Known limitations or next blocker
 
 - Fillet root synthesis is deliberately local and bounded; an ambiguous or unavailable local root
   is a truthful warning, not a request to search every branch.
 - Joined offsets are bounded explicit one-shot polylines. They are not associative, discover no
-  neighboring spans and provide no caps or self-intersection healing.
+  neighboring spans and provide no caps or self-intersection healing. Persistent associative
+  multi-span offsets are deferred.
 - Mirrors are exact only for point-defined supported families and commit one source at a time.
 - The workbench remains a non-authoritative desktop UAT consumer.
-- The only remaining gate is focused supervising-human retest and explicit approval of
-  `docs/M66_UAT.md`.
+- The remaining gates are the F004-F006 next-replacement qualification, focused supervising-human
+  retest and explicit approval of `docs/M66_UAT.md`.

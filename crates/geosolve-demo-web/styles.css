@@ -306,6 +306,11 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 }
 .wb-palette-flyout input,
 .wb-palette-flyout select { width: 100%; min-height: 1.8rem; }
+.wb-operation-options small {
+  color: #899492;
+  font-size: 0.62rem;
+  line-height: 1.4;
+}
 .wb-palette-flyout .wb-option-check {
   grid-template-columns: auto 1fr;
   align-items: center;

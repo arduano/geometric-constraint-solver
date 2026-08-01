@@ -1131,11 +1131,18 @@ impl OperationAuthoringState {
             .active
             .expect("guidance is requested only for an active operation tool");
         let (stage, expected, message) = if self.candidate_confirmed {
-            (
-                OperationAuthoringStage::PreviewReady,
-                Vec::new(),
-                "Review the accepted preview, then Apply or press Enter",
-            )
+            let message = match (tool, self.picks.len()) {
+                (OperationAuthoringTool::LineOffset, 1) => {
+                    "Associative offset preview ready; source edits will propagate. Apply or press Enter"
+                }
+                (OperationAuthoringTool::LineOffset, _) => {
+                    "One-shot joined offset preview ready; source edits will not propagate. Apply or press Enter"
+                }
+                (OperationAuthoringTool::Fillet | OperationAuthoringTool::Mirror, _) => {
+                    "Review the accepted preview, then Apply or press Enter"
+                }
+            };
+            (OperationAuthoringStage::PreviewReady, Vec::new(), message)
         } else {
             match (tool, self.picks.len()) {
                 (OperationAuthoringTool::Fillet, 0) => (
@@ -1161,13 +1168,21 @@ impl OperationAuthoringState {
                     vec![OperationAuthoringOperandKind::LineOrPolylineSpan],
                     "Pick a line or polyline span to offset",
                 ),
+                (OperationAuthoringTool::LineOffset, 1) => (
+                    OperationAuthoringStage::CollectOffsetPath,
+                    vec![
+                        OperationAuthoringOperandKind::LineOrPolylineSpan,
+                        OperationAuthoringOperandKind::OffsetSide,
+                    ],
+                    "Associative offset: source edits will propagate. Pick connected spans for one-shot joined geometry, or click empty canvas on the desired side to finish",
+                ),
                 (OperationAuthoringTool::LineOffset, _) => (
                     OperationAuthoringStage::CollectOffsetPath,
                     vec![
                         OperationAuthoringOperandKind::LineOrPolylineSpan,
                         OperationAuthoringOperandKind::OffsetSide,
                     ],
-                    "Pick connected spans; click empty canvas on the desired side to finish",
+                    "One-shot joined offset: source edits will not propagate. Pick connected spans, or click empty canvas on the desired side to finish",
                 ),
                 (OperationAuthoringTool::Mirror, 0) => (
                     OperationAuthoringStage::PickMirrorSource,
@@ -2525,6 +2540,72 @@ mod tests {
                 ));
             }
         }
+    }
+
+    #[test]
+    fn offset_guidance_distinguishes_associative_and_one_shot_joined_output() {
+        let (document, _, spans) = open_polyline();
+        let mut state = OperationAuthoringState::default();
+        let _ = state.activate(&document, OperationAuthoringTool::LineOffset, &[]);
+
+        let OperationAuthoringOutcome::PreviewRequested {
+            candidate,
+            guidance,
+        } = state.pick(&document, pick(&document, spans[0], 0.5))
+        else {
+            panic!("one offset span should stage an associative preview");
+        };
+        assert!(matches!(
+            candidate.request(),
+            SketchOperationRequest::AssociativeLineOffset { .. }
+        ));
+        assert_eq!(guidance.stage, OperationAuthoringStage::CollectOffsetPath);
+        assert_eq!(
+            guidance.message,
+            "Associative offset: source edits will propagate. Pick connected spans for one-shot joined geometry, or click empty canvas on the desired side to finish"
+        );
+
+        let OperationAuthoringOutcome::PreviewRequested {
+            candidate,
+            guidance,
+        } = state.pick(&document, pick(&document, spans[1], 0.5))
+        else {
+            panic!("two connected offset spans should stage a joined preview");
+        };
+        assert!(matches!(
+            candidate.request(),
+            SketchOperationRequest::JoinedLineOffset { sources, .. } if sources.len() == 2
+        ));
+        assert_eq!(guidance.stage, OperationAuthoringStage::CollectOffsetPath);
+        assert_eq!(
+            guidance.message,
+            "One-shot joined offset: source edits will not propagate. Pick connected spans, or click empty canvas on the desired side to finish"
+        );
+
+        let OperationAuthoringOutcome::PreviewRequested { guidance, .. } =
+            state.confirm(&document, [1.0, 1.0])
+        else {
+            panic!("joined offset side confirmation should stage a ready preview");
+        };
+        assert_eq!(guidance.stage, OperationAuthoringStage::PreviewReady);
+        assert_eq!(
+            guidance.message,
+            "One-shot joined offset preview ready; source edits will not propagate. Apply or press Enter"
+        );
+
+        let mut associative = OperationAuthoringState::default();
+        let _ = associative.activate(&document, OperationAuthoringTool::LineOffset, &[]);
+        let _ = associative.pick(&document, pick(&document, spans[0], 0.5));
+        let OperationAuthoringOutcome::PreviewRequested { guidance, .. } =
+            associative.confirm(&document, [1.0, 1.0])
+        else {
+            panic!("single offset side confirmation should stage a ready preview");
+        };
+        assert_eq!(guidance.stage, OperationAuthoringStage::PreviewReady);
+        assert_eq!(
+            guidance.message,
+            "Associative offset preview ready; source edits will propagate. Apply or press Enter"
+        );
     }
 
     #[test]

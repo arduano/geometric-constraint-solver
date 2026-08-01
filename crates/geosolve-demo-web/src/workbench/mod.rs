@@ -114,6 +114,62 @@ fn operation_preview_reusable(
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
+fn operation_canvas_hit(
+    scene: &geosolve_constraint_editor::EditorScene,
+    position: geosolve_constraint_editor::ScreenPoint,
+    source: &geosolve_sketch::SketchDocument,
+) -> Option<geosolve_constraint_editor::Hit> {
+    scene.hit_test_for_document(
+        position,
+        geosolve_constraint_editor::PickTolerance::default(),
+        source,
+    )
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn route_operation_canvas_pointer_down(
+    state: &mut geosolve_constraint_editor::OperationAuthoringState,
+    coordinator: &geosolve_constraint_editor::RetainedEditorCoordinator,
+    scene: &geosolve_constraint_editor::EditorScene,
+    source: &geosolve_sketch::SketchDocument,
+    position: geosolve_constraint_editor::ScreenPoint,
+) -> geosolve_constraint_editor::OperationAuthoringOutcome {
+    let model_position = scene.viewport.screen_to_model(position);
+    let Some(hit) = operation_canvas_hit(scene, position, source) else {
+        return state.pointer_down_picks(source, &[], model_position);
+    };
+    let Some(tool) = state.active_tool() else {
+        return geosolve_constraint_editor::OperationAuthoringOutcome::Inactive;
+    };
+    match coordinator.operation_picks_for_item(tool, hit.item, hit.curve_parameter) {
+        Ok(picks) => state.pointer_down_picks(source, &picks, model_position),
+        Err(_) => state.pick_item(source, hit.item, hit.curve_parameter),
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum OffsetUiSemantics {
+    Choice,
+    Associative,
+    JoinedOneShot,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn offset_ui_semantics(
+    state: &geosolve_constraint_editor::OperationAuthoringState,
+) -> OffsetUiSemantics {
+    if state.active_tool() != Some(geosolve_constraint_editor::OperationAuthoringTool::LineOffset) {
+        return OffsetUiSemantics::Choice;
+    }
+    match state.picks().len() {
+        0 => OffsetUiSemantics::Choice,
+        1 => OffsetUiSemantics::Associative,
+        _ => OffsetUiSemantics::JoinedOneShot,
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
 fn route_operation_item_pick(
     state: &mut geosolve_constraint_editor::OperationAuthoringState,
     document: &geosolve_sketch::SketchDocument,
@@ -905,38 +961,22 @@ pub(crate) mod wasm {
                 if event.button() != 0 {
                     return;
                 }
-                let model_position = scene.viewport.screen_to_model(input.position);
                 let Some(operation_document) = operation_document(&wb) else {
                     wb.notice = "Helper operations require accepted geometry".into();
                     return;
                 };
-                let hit = scene.hit_test(input.position, PickTolerance::default());
-                let outcome = if let Some(hit) = hit {
-                    let tool = wb
-                        .operation_authoring
-                        .active_tool()
-                        .expect("active operation authoring has a tool");
-                    match wb.coordinator.operation_picks_for_item(
-                        tool,
-                        hit.item,
-                        hit.curve_parameter,
-                    ) {
-                        Ok(picks) => wb.operation_authoring.pointer_down_picks(
-                            &operation_document,
-                            &picks,
-                            model_position,
-                        ),
-                        Err(_) => wb.operation_authoring.pick_item(
-                            &operation_document,
-                            hit.item,
-                            hit.curve_parameter,
-                        ),
-                    }
-                } else {
-                    wb.operation_authoring.pointer_down_picks(
+                let outcome = {
+                    let Workbench {
+                        coordinator,
+                        operation_authoring,
+                        ..
+                    } = &mut *wb;
+                    super::route_operation_canvas_pointer_down(
+                        operation_authoring,
+                        coordinator,
+                        &scene,
                         &operation_document,
-                        &[],
-                        model_position,
+                        input.position,
                     )
                 };
                 handle_operation_outcome(&mut wb, outcome);
@@ -2051,7 +2091,7 @@ pub(crate) mod wasm {
             &wb.authoring,
             &wb.operation_authoring,
         )?;
-        render_operation_options(document, wb.operation_authoring.options())?;
+        render_operation_options(document, &wb.operation_authoring)?;
         render_dimension_target_editor(document, coordinator)?;
         render_branch_editor(document, coordinator)?;
         required(document, "workbench-root")?
@@ -2206,8 +2246,9 @@ pub(crate) mod wasm {
 
     fn render_operation_options(
         document: &Document,
-        options: OperationAuthoringOptions,
+        state: &OperationAuthoringState,
     ) -> Result<(), JsValue> {
+        let options = state.options();
         render_optional_number(
             document,
             "wb-operation-fillet-radius",
@@ -2233,7 +2274,28 @@ pub(crate) mod wasm {
                 OperationLineOffsetMode::ExactTranslatedSegment => "exact",
                 OperationLineOffsetMode::SupportingLine => "supporting",
             });
+            select.set_disabled(matches!(
+                super::offset_ui_semantics(state),
+                super::OffsetUiSemantics::JoinedOneShot
+            ));
         }
+        let semantics = required(document, "wb-operation-offset-semantics")?;
+        let (key, message) = match super::offset_ui_semantics(state) {
+            super::OffsetUiSemantics::Choice => (
+                "choice",
+                "One span stays associative. Two or more connected spans create one-shot joined geometry.",
+            ),
+            super::OffsetUiSemantics::Associative => (
+                "associative",
+                "Associative single-span offset: source edits propagate.",
+            ),
+            super::OffsetUiSemantics::JoinedOneShot => (
+                "joined-one-shot",
+                "One-shot joined offset: source edits do not propagate. Associative multi-span offsets are deferred.",
+            ),
+        };
+        semantics.set_attribute("data-offset-semantics", key)?;
+        semantics.set_text_content(Some(message));
         for (id, checked) in [
             (
                 "wb-operation-fillet-flip-first",
@@ -2762,20 +2824,38 @@ mod tests {
         AuthoringOperand, AuthoringOutcome, AuthoringState, AuthoringTool, ConstraintIntent,
         EditorHoverState, Modifiers, OperationAuthoringCandidate, OperationAuthoringOutcome,
         OperationAuthoringPreviewMetadata, OperationAuthoringPreviewOutcome,
-        OperationAuthoringState, OperationAuthoringTool, PointerInput, RetainedEditorCoordinator,
-        ScreenPoint, SelectionItem, Viewport,
+        OperationAuthoringState, OperationAuthoringTool, PickTolerance, PointerInput,
+        RetainedEditorCoordinator, SceneCurve, ScreenPoint, SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
-        CurveDefinition, CurveSpan, DocumentEdit, DocumentSolveRequest,
-        RetainedSketchDocumentSession, SketchDocument,
+        CurveDefinition, CurveSpan, DocumentDimensionDefinition, DocumentEdit,
+        DocumentSolveRequest, RetainedSketchDocumentSession, SketchDocument,
     };
 
     use super::{
-        AuthoringItemInput, PointerMoveQueue, change_owns_option_control_click,
-        operation_apply_available, operation_preview_reusable, owns_authoring_pick,
+        AuthoringItemInput, OffsetUiSemantics, PointerMoveQueue, change_owns_option_control_click,
+        offset_ui_semantics, operation_apply_available, operation_canvas_hit,
+        operation_preview_reusable, owns_authoring_pick, route_operation_canvas_pointer_down,
         route_operation_item_pick,
     };
+
+    fn interior_curve_position(curve: &SceneCurve) -> ScreenPoint {
+        let length_squared = |segment: &[ScreenPoint]| {
+            let dx = segment[1].x - segment[0].x;
+            let dy = segment[1].y - segment[0].y;
+            dx.mul_add(dx, dy * dy)
+        };
+        let segment = curve
+            .screen_polyline
+            .windows(2)
+            .max_by(|first, second| length_squared(first).total_cmp(&length_squared(second)))
+            .expect("a rendered curve has at least one segment");
+        ScreenPoint {
+            x: 0.5 * (segment[0].x + segment[1].x),
+            y: 0.5 * (segment[0].y + segment[1].y),
+        }
+    }
 
     fn line_operation_fixture() -> (RetainedEditorCoordinator, CurveSpan) {
         let mut document = SketchDocument::new(10.0).expect("document");
@@ -3222,7 +3302,11 @@ mod tests {
     }
 
     #[test]
-    fn fillet_corner_item_routes_two_picks_then_a_separate_radius_confirmation() {
+    #[allow(
+        clippy::too_many_lines,
+        reason = "corner expansion, live preview hit, and shared canvas routing form one regression"
+    )]
+    fn fillet_preview_arc_cannot_intercept_its_radius_confirmation_click() {
         let mut document = SketchDocument::new(10.0).expect("document");
         let points = [[0.0, 0.0], [2.0, 0.0], [2.0, 2.0]]
             .map(|position| document.add_point("corner point", position).expect("point"));
@@ -3242,7 +3326,7 @@ mod tests {
             SolverConfig::default(),
         )
         .expect("session");
-        let coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
         let operation_document = coordinator
             .operation_authoring_document()
             .expect("accepted operation document")
@@ -3265,6 +3349,7 @@ mod tests {
             None,
             Some(picks),
         );
+        coordinator.observe_operation_authoring_outcome(&routed);
         let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = routed else {
             panic!("one routed corner item must stage a fillet preview");
         };
@@ -3280,12 +3365,219 @@ mod tests {
         assert!(!candidate.is_confirmed());
         assert!(!state.candidate_confirmed());
 
-        let confirmed = state.pointer_down_picks(&operation_document, &[], [1.8, 0.2]);
+        let radius_position = [1.8, 0.2];
+        let hovered = state.hover(&operation_document, radius_position);
+        coordinator.observe_operation_authoring_outcome(&hovered);
+        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = hovered else {
+            panic!("valid radius hover must update the fillet preview: {hovered:?}");
+        };
+        let OperationAuthoringPreviewOutcome::Ready(metadata) = coordinator
+            .prepare_operation_preview(&candidate)
+            .expect("accepted fillet preview")
+        else {
+            panic!("fillet preview must be accepted");
+        };
+        let viewport = Viewport::new([800.0, 600.0], [1.0, 1.0], 100.0).expect("viewport");
+        let preview_scene = coordinator
+            .operation_preview()
+            .expect("held fillet preview")
+            .scene(viewport, 0.8)
+            .expect("fillet preview scene");
+        let preview_curve = preview_scene
+            .curves
+            .iter()
+            .find(|curve| curve.span.curve == metadata.primary_created_curve)
+            .expect("preview fillet curve");
+        let preview_position = viewport.model_to_screen(radius_position);
+        assert!(matches!(
+            preview_scene.hit_test(preview_position, PickTolerance::default()),
+            Some(hit) if hit.item == SelectionItem::Curve(preview_curve.span)
+        ));
+        assert_eq!(
+            operation_canvas_hit(&preview_scene, preview_position, &operation_document),
+            None,
+            "a preview-only arc is a blank operation operand, so this click places the radius"
+        );
+
+        let confirmed = route_operation_canvas_pointer_down(
+            &mut state,
+            &coordinator,
+            &preview_scene,
+            &operation_document,
+            preview_position,
+        );
         let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = confirmed else {
-            panic!("blank-canvas radius placement must confirm the fillet");
+            panic!("preview-arc radius placement must confirm the fillet: {confirmed:?}");
         };
         assert!(candidate.is_confirmed());
         assert!(state.candidate_confirmed());
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one canvas-routed authoring, preview, commit, and source-edit lifecycle is the regression"
+    )]
+    fn canvas_routed_single_span_offset_commits_as_an_associative_relation() {
+        let (mut coordinator, source) = line_operation_fixture();
+        let operation_document = coordinator
+            .operation_authoring_document()
+            .expect("operation document")
+            .clone();
+        let viewport = Viewport::new([900.0, 600.0], [2.0, 0.5], 100.0).expect("viewport");
+        let accepted = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted source");
+        let source_scene = geosolve_constraint_editor::EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            accepted.design_identity(),
+            accepted.document(),
+            coordinator.session().design_document(),
+            viewport,
+            0.8,
+        )
+        .expect("source scene");
+        let source_position = viewport.model_to_screen([2.0, 0.0]);
+        let source_hit = operation_canvas_hit(&source_scene, source_position, &operation_document)
+            .expect("single source line hit");
+        assert_eq!(source_hit.item, SelectionItem::Curve(source));
+
+        let mut state = OperationAuthoringState::default();
+        let _ = state.activate(&operation_document, OperationAuthoringTool::LineOffset, &[]);
+        let staged = route_operation_canvas_pointer_down(
+            &mut state,
+            &coordinator,
+            &source_scene,
+            &operation_document,
+            source_position,
+        );
+        coordinator.observe_operation_authoring_outcome(&staged);
+        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = staged else {
+            panic!("single source click must stage an offset preview");
+        };
+        assert_eq!(offset_ui_semantics(&state), OffsetUiSemantics::Associative);
+        let OperationAuthoringPreviewOutcome::Ready(unconfirmed_metadata) = coordinator
+            .prepare_operation_preview(&candidate)
+            .expect("unconfirmed offset preview")
+        else {
+            panic!("offset preview must be accepted");
+        };
+        assert!(!unconfirmed_metadata.apply_ready);
+
+        let preview_scene = coordinator
+            .operation_preview()
+            .expect("held offset preview")
+            .scene(viewport, 0.8)
+            .expect("offset preview scene");
+        let preview_curve = preview_scene
+            .curves
+            .iter()
+            .find(|curve| curve.span.curve == unconfirmed_metadata.primary_created_curve)
+            .expect("preview offset curve");
+        let side_position = interior_curve_position(preview_curve);
+        assert!(matches!(
+            preview_scene.hit_test(side_position, PickTolerance::default()),
+            Some(hit) if hit.item == SelectionItem::Curve(preview_curve.span)
+        ));
+        assert_eq!(
+            operation_canvas_hit(&preview_scene, side_position, &operation_document),
+            None,
+            "clicking the offset preview confirms the side instead of collecting preview geometry"
+        );
+
+        let confirmed = route_operation_canvas_pointer_down(
+            &mut state,
+            &coordinator,
+            &preview_scene,
+            &operation_document,
+            side_position,
+        );
+        coordinator.observe_operation_authoring_outcome(&confirmed);
+        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = confirmed else {
+            panic!("preview-side click must confirm the associative offset");
+        };
+        let OperationAuthoringPreviewOutcome::Ready(metadata) = coordinator
+            .prepare_operation_preview(&candidate)
+            .expect("confirmed offset preview")
+        else {
+            panic!("confirmed offset preview must be accepted");
+        };
+        assert!(metadata.apply_ready);
+        let target = metadata.primary_created_curve;
+        coordinator
+            .apply_operation_preview(metadata.token, &candidate)
+            .expect("offset commit");
+        assert!(
+            coordinator
+                .session()
+                .design_document()
+                .dimensions()
+                .iter()
+                .any(|dimension| matches!(
+                    &dimension.definition,
+                    DocumentDimensionDefinition::ExactTranslatedSegmentOffset {
+                        source: relation_source,
+                        target_segment,
+                        ..
+                    } if *relation_source == source && target_segment.curve == target
+                ))
+        );
+
+        let (source_end, target_end, target_end_before) = {
+            let accepted = coordinator
+                .session()
+                .accepted_state()
+                .expect("accepted committed offset")
+                .document();
+            let CurveDefinition::Line {
+                end: source_end, ..
+            } = accepted
+                .curve(source.curve)
+                .expect("source line")
+                .definition
+            else {
+                panic!("source must remain a line");
+            };
+            let CurveDefinition::Line {
+                end: target_end, ..
+            } = accepted.curve(target).expect("target line").definition
+            else {
+                panic!("target must be a line");
+            };
+            (
+                source_end,
+                target_end,
+                accepted
+                    .point(target_end)
+                    .expect("target endpoint")
+                    .position,
+            )
+        };
+        let edited = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: source_end,
+                    position: [6.0, 0.0],
+                },
+            )
+            .expect("source endpoint edit");
+        assert!(edited.published_accepted.is_some());
+        let accepted = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted associated edit")
+            .document();
+        let target_end_after = accepted
+            .point(target_end)
+            .expect("target endpoint")
+            .position;
+        assert!(
+            (target_end_after[0] - target_end_before[0]).abs() > 1.0e-6
+                || (target_end_after[1] - target_end_before[1]).abs() > 1.0e-6,
+            "the exact single-span target must respond when its source endpoint changes"
+        );
     }
 
     #[test]

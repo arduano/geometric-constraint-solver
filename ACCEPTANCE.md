@@ -991,9 +991,10 @@ in `docs/M65_UAT.md`; M65 is complete.
 
 ## M66 acceptance: CAD helper-operation authoring
 
-Status: active. Replacement source `92e6ddce1e37d6508b5dd8568078146ac2822aa7` is mechanically
-qualified with direct dispositions for `M66-F001` through `M66-F003`; focused
-supervising-human UAT remains open.
+Status: active. First replacement source `92e6ddce1e37d6508b5dd8568078146ac2822aa7` is mechanically
+qualified with direct dispositions for `M66-F001` through `M66-F003`. Continued UAT opened
+`M66-F004` through `M66-F006`; next-replacement mechanical qualification and focused
+supervising-human UAT remain open.
 
 - A separate public headless operation-authoring state owns Fillet, Line offset and Mirror
   operand progression, finite model-space picks, explicit options, warnings, repeated mode,
@@ -1034,6 +1035,10 @@ supervising-human UAT remains open.
   distance. It creates no persistent offset scalar, dimension or association and performs no
   recursive path discovery, healing or caps. Exact/supporting single-span choices do not
   masquerade as joined-chain semantics.
+- Headless guidance states the association boundary before commit: exactly one selected span uses
+  the associative request and follows later source edits; two or more connected spans use the
+  bounded one-shot request and do not follow their sources. Persistent associative multi-span
+  offsets are deferred rather than implied by the shared Line offset tool.
 - Mirror authoring accepts one source then one line axis. Exact line/polyline/quadratic- or
   cubic-Bezier/non-rational-B-spline construction remains supported; circle, arc, conic, rational
   and NURBS sources are typed unsupported without tessellation. Multi-source mirror is not
@@ -1042,6 +1047,11 @@ supervising-human UAT remains open.
   guidance/warnings/options and accepted scratch preview. Pan/zoom remains usable and a successful
   commit selects the operation's primary created curve. The browser owns no applicability,
   branch, fillet, offset or reflection formula.
+- Ordinary editing and operation authoring share one presentation-neutral curve-acquisition
+  contract: the nearest curve within an inclusive 12-pixel screen-space radius wins, with stable
+  persistent-identity tie-breaking. A foreground curve or point created only in accepted scratch
+  preview blocks click-through to source geometry behind it but is not forwarded as a live-document
+  operand; fillet-radius and offset-side clicks therefore remain terminal placement events.
 - **2D fillet workshop**, **Associative line offsets** and **Mirror construction workshop** are
   ordinary editable sample workspaces under **Curves & constructions**. They carry no guide,
   protected state, scripted action or alternate coordinator and round-trip through ordinary
@@ -1053,7 +1063,7 @@ supervising-human UAT remains open.
   stale/rejected retention, Undo/Redo, workspace reload and sample editability. Existing
   M25/M27/M28 derivative and independent-validation corpora remain green; M66 adds no residual.
 - Formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature demo-web
-  WASM, release Trunk and `git diff --check` pass from one replacement candidate before the
+  WASM, release Trunk and `git diff --check` pass from one next-replacement candidate before the
   focused UAT resumes.
 - The supervising human explicitly approves `docs/M66_UAT.md`; no correctness, data-loss,
   misleading-preview or basic helper-authoring blocker remains.

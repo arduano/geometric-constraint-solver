@@ -96,7 +96,7 @@
             </div>
             <div class="wb-palette-option-tool">
               <button type="button" data-wb-operation="line-offset" aria-pressed="false"><span class="wb-operation-icon" aria-hidden="true"></span><span>Line offset</span></button>
-              <details><summary aria-label="Line offset options">›</summary><div class="wb-palette-flyout wb-operation-options"><label>Distance<input id="wb-operation-offset-distance" type="number" min="0" step="any" /></label><label>Mode<select id="wb-operation-offset-mode"><option value="exact">Exact translated segment</option><option value="supporting">Supporting line</option></select></label></div></details>
+              <details><summary aria-label="Line offset options">›</summary><div class="wb-palette-flyout wb-operation-options"><label>Distance<input id="wb-operation-offset-distance" type="number" min="0" step="any" /></label><label>Single-span relation<select id="wb-operation-offset-mode"><option value="exact">Exact translated segment</option><option value="supporting">Supporting line</option></select></label><small id="wb-operation-offset-semantics">One span stays associative. Two or more connected spans create one-shot joined geometry.</small></div></details>
             </div>
             <button type="button" data-wb-operation="mirror" aria-pressed="false"><span class="wb-operation-icon" aria-hidden="true"></span><span>Mirror</span></button>
           </div>

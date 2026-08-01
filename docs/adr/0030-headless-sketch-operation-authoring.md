@@ -81,6 +81,13 @@ The web workbench forwards normalized events and renders these DTOs. It does not
 applicability, locate a fillet root, choose a side, derive an offset equation, reflect controls or
 apply a proposal directly.
 
+Operation canvas acquisition reuses the editor's ordinary presentation-neutral hit policy. Curves
+have an inclusive 12-pixel screen-space acquisition radius; nearest distance wins and an exact tie
+uses persistent identity. When the scene includes accepted scratch preview geometry, the best
+visible preview-only item blocks click-through to a source item underneath but is not forwarded as
+a live-document operand. The resulting empty operand event remains available to the headless state
+for fillet-radius or offset-side placement.
+
 ### Fillet policy
 
 A fillet normally collects two distinct visible curve-span picks near the portions the user
@@ -128,6 +135,11 @@ and performs no recursive path discovery, healing, caps or self-intersection rep
 disconnected, over-budget or unresolved-miter input rejects without partial allocation. The
 Exact/Supporting choice remains a single-span contract and cannot masquerade as joined-chain
 semantics. General curve and approximated conic/spline/NURBS offsets remain unsupported.
+
+The shared Line offset tool must expose that boundary before commit. With exactly one span its
+guidance says the result is associative and later source edits propagate. With two or more spans it
+says the joined result is one-shot and source edits do not propagate. Persistent associative
+multi-span offsets remain deferred rather than being inferred from path collection.
 
 ### Mirror policy
 

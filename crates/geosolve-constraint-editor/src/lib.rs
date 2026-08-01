@@ -329,41 +329,49 @@ impl EditorScene {
         let point_hit = self
             .points
             .iter()
-            .filter_map(|point| {
-                let distance = position.distance(point.screen_position);
-                (distance <= tolerance.point_pixels).then_some(Hit {
-                    item: SelectionItem::Point(point.id),
-                    distance_pixels: distance,
-                    curve_parameter: None,
-                })
-            })
+            .filter_map(|point| point_hit(point, position, tolerance.point_pixels))
             .min_by(compare_hits);
         if point_hit.is_some() {
             return point_hit;
         }
         self.curves
             .iter()
-            .filter_map(|curve| {
-                let (distance, parameter) = curve
-                    .screen_polyline
-                    .windows(2)
-                    .zip(curve.screen_parameters.windows(2))
-                    .map(|(segment, parameters)| {
-                        let (distance, projection) =
-                            point_segment_projection(position, segment[0], segment[1]);
-                        (
-                            distance,
-                            (parameters[1] - parameters[0]).mul_add(projection, parameters[0]),
-                        )
-                    })
-                    .min_by(|first, second| first.0.total_cmp(&second.0))?;
-                (distance <= tolerance.curve_pixels).then_some(Hit {
-                    item: SelectionItem::Curve(curve.span),
-                    distance_pixels: distance,
-                    curve_parameter: Some(parameter),
-                })
-            })
+            .filter_map(|curve| curve_hit(curve, position, tolerance.curve_pixels))
             .min_by(compare_hits)
+    }
+
+    /// Returns the ordinary best visible geometry hit only when that exact
+    /// persistent item still exists in `source`.
+    ///
+    /// This is the operation-authoring boundary for scenes containing accepted
+    /// preview geometry. A preview-created foreground item, including one tied
+    /// exactly with an older source item, blocks the pick; the search never
+    /// clicks through it to source geometry underneath.
+    #[must_use]
+    pub fn hit_test_for_document(
+        &self,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        source: &SketchDocument,
+    ) -> Option<Hit> {
+        let hit = self.hit_test(position, tolerance)?;
+        if !document_contains_item(source, hit.item) {
+            return None;
+        }
+        let foreground_blocks = match hit.item {
+            SelectionItem::Point(_) => self.points.iter().any(|point| {
+                !document_contains_item(source, SelectionItem::Point(point.id))
+                    && point_hit(point, position, tolerance.point_pixels)
+                        .is_some_and(|candidate| candidate.distance_pixels <= hit.distance_pixels)
+            }),
+            SelectionItem::Curve(_) => self.curves.iter().any(|curve| {
+                !document_contains_item(source, SelectionItem::Curve(curve.span))
+                    && curve_hit(curve, position, tolerance.curve_pixels)
+                        .is_some_and(|candidate| candidate.distance_pixels <= hit.distance_pixels)
+            }),
+            SelectionItem::Constraint(_) | SelectionItem::Dimension(_) => true,
+        };
+        (!foreground_blocks).then_some(hit)
     }
 
     fn drag_handle_point(&self, item: SelectionItem) -> Option<DesignPointId> {
@@ -484,7 +492,7 @@ impl Default for PickTolerance {
     fn default() -> Self {
         Self {
             point_pixels: 8.0,
-            curve_pixels: 7.0,
+            curve_pixels: 12.0,
             annotation_pixels: 10.0,
         }
     }
@@ -2286,6 +2294,45 @@ fn tessellate(
     Ok(())
 }
 
+fn point_hit(point: &ScenePoint, position: ScreenPoint, tolerance_pixels: f64) -> Option<Hit> {
+    let distance = position.distance(point.screen_position);
+    (distance <= tolerance_pixels).then_some(Hit {
+        item: SelectionItem::Point(point.id),
+        distance_pixels: distance,
+        curve_parameter: None,
+    })
+}
+
+fn curve_hit(curve: &SceneCurve, position: ScreenPoint, tolerance_pixels: f64) -> Option<Hit> {
+    let (distance, parameter) = curve
+        .screen_polyline
+        .windows(2)
+        .zip(curve.screen_parameters.windows(2))
+        .map(|(segment, parameters)| {
+            let (distance, projection) = point_segment_projection(position, segment[0], segment[1]);
+            (
+                distance,
+                (parameters[1] - parameters[0]).mul_add(projection, parameters[0]),
+            )
+        })
+        .min_by(|first, second| first.0.total_cmp(&second.0))?;
+    (distance <= tolerance_pixels).then_some(Hit {
+        item: SelectionItem::Curve(curve.span),
+        distance_pixels: distance,
+        curve_parameter: Some(parameter),
+    })
+}
+
+fn document_contains_item(document: &SketchDocument, item: SelectionItem) -> bool {
+    match item {
+        SelectionItem::Point(point) => document.point(point).is_some(),
+        SelectionItem::Curve(span) => document
+            .curve_spans(span.curve)
+            .is_ok_and(|spans| spans.contains(&span)),
+        SelectionItem::Constraint(_) | SelectionItem::Dimension(_) => false,
+    }
+}
+
 fn compare_hits(first: &Hit, second: &Hit) -> Ordering {
     first
         .distance_pixels
@@ -3792,15 +3839,29 @@ mod tests {
     fn line_is_selected_from_screen_space_without_dom_hit_targets() {
         let (document, spans, _) = line_document();
         let scene = scene(&document);
-        let hit = scene
-            .hit_test(ScreenPoint { x: 500.0, y: 306.5 }, PickTolerance::default())
-            .expect("line hit within seven pixels");
-        assert_eq!(hit.item, SelectionItem::Curve(spans[0]));
-        assert!((hit.distance_pixels - 6.5).abs() < 1.0e-12);
-        assert_eq!(hit.curve_parameter, Some(0.5));
+        for offset in [11.999, 12.0] {
+            let hit = scene
+                .hit_test(
+                    ScreenPoint {
+                        x: 500.0,
+                        y: 300.0 + offset,
+                    },
+                    PickTolerance::default(),
+                )
+                .expect("line hit within the inclusive twelve-pixel radius");
+            assert_eq!(hit.item, SelectionItem::Curve(spans[0]));
+            assert!((hit.distance_pixels - offset).abs() < 1.0e-12);
+            assert_eq!(hit.curve_parameter, Some(0.5));
+        }
         assert!(
             scene
-                .hit_test(ScreenPoint { x: 500.0, y: 292.0 }, PickTolerance::default(),)
+                .hit_test(
+                    ScreenPoint {
+                        x: 500.0,
+                        y: 312.001,
+                    },
+                    PickTolerance::default(),
+                )
                 .is_none()
         );
     }
@@ -3817,6 +3878,178 @@ mod tests {
                 distance_pixels: 0.0,
                 curve_parameter: None,
             })
+        );
+        let overlap = ScreenPoint {
+            x: endpoint.x,
+            y: endpoint.y + 7.5,
+        };
+        assert_eq!(
+            scene.hit_test(overlap, PickTolerance::default()),
+            Some(Hit {
+                item: SelectionItem::Point(points[0]),
+                distance_pixels: 7.5,
+                curve_parameter: None,
+            })
+        );
+    }
+
+    #[test]
+    fn dense_parallel_line_picks_use_distance_then_persistent_identity() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let first_start = document.add_point("a", [-4.0, 0.16]).expect("point");
+        let first_end = document.add_point("b", [4.0, 0.16]).expect("point");
+        let second_start = document.add_point("c", [-4.0, -0.16]).expect("point");
+        let second_end = document.add_point("d", [4.0, -0.16]).expect("point");
+        let first = CurveSpan::line(
+            document
+                .add_curve(
+                    "first",
+                    CurveDefinition::Line {
+                        start: first_start,
+                        end: first_end,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .expect("curve"),
+        );
+        let second = CurveSpan::line(
+            document
+                .add_curve(
+                    "second",
+                    CurveDefinition::Line {
+                        start: second_start,
+                        end: second_end,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .expect("curve"),
+        );
+        let mut scene = scene(&document);
+        scene.curves.reverse();
+
+        let nearer = scene
+            .hit_test(ScreenPoint { x: 500.0, y: 348.0 }, PickTolerance::default())
+            .expect("both parallel lines are in range");
+        assert_eq!(nearer.item, SelectionItem::Curve(first));
+        assert!((nearer.distance_pixels - 6.0).abs() < 1.0e-12);
+
+        let tie = scene
+            .hit_test(ScreenPoint { x: 500.0, y: 350.0 }, PickTolerance::default())
+            .expect("equidistant parallel lines are in range");
+        assert_eq!(tie.item, SelectionItem::Curve(first.min(second)));
+        assert!((tie.distance_pixels - 8.0).abs() < 1.0e-12);
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "separated, exact curve, and exact point preview barriers form one hit-policy regression"
+    )]
+    fn operation_hit_does_not_click_through_preview_created_geometry() {
+        let (source, source_spans, source_points) = line_document();
+        let mut preview = source.clone();
+        let preview_start = preview
+            .add_point("preview start", [-4.0, 1.1])
+            .expect("point");
+        let preview_end = preview.add_point("preview end", [4.0, 1.1]).expect("point");
+        let preview_span = CurveSpan::line(
+            preview
+                .add_curve(
+                    "preview line",
+                    CurveDefinition::Line {
+                        start: preview_start,
+                        end: preview_end,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .expect("curve"),
+        );
+        let preview_scene = scene(&preview);
+        let preview_position = ScreenPoint { x: 500.0, y: 295.0 };
+
+        assert_eq!(
+            preview_scene
+                .hit_test(preview_position, PickTolerance::default())
+                .map(|hit| hit.item),
+            Some(SelectionItem::Curve(preview_span))
+        );
+        assert_eq!(
+            preview_scene.hit_test_for_document(
+                preview_position,
+                PickTolerance::default(),
+                &source,
+            ),
+            None,
+            "the best preview-created hit must block rather than expose source geometry behind it"
+        );
+
+        let source_position = ScreenPoint { x: 500.0, y: 306.0 };
+        assert_eq!(
+            preview_scene
+                .hit_test_for_document(source_position, PickTolerance::default(), &source)
+                .map(|hit| hit.item),
+            Some(SelectionItem::Curve(source_spans[0]))
+        );
+
+        let mut exact_overlap = source.clone();
+        let overlap_start = exact_overlap
+            .add_point("overlap start", [-4.0, 1.0])
+            .expect("point");
+        let overlap_end = exact_overlap
+            .add_point("overlap end", [4.0, 1.0])
+            .expect("point");
+        let overlap_span = CurveSpan::line(
+            exact_overlap
+                .add_curve(
+                    "foreground overlap",
+                    CurveDefinition::Line {
+                        start: overlap_start,
+                        end: overlap_end,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .expect("curve"),
+        );
+        let overlap_scene = scene(&exact_overlap);
+        let overlap_position = ScreenPoint { x: 500.0, y: 300.0 };
+        assert_eq!(
+            overlap_scene
+                .hit_test(overlap_position, PickTolerance::default())
+                .map(|hit| hit.item),
+            Some(SelectionItem::Curve(source_spans[0])),
+            "ordinary persistent-identity ties still prefer the older source span"
+        );
+        assert_ne!(overlap_span, source_spans[0]);
+        assert_eq!(
+            overlap_scene.hit_test_for_document(
+                overlap_position,
+                PickTolerance::default(),
+                &source,
+            ),
+            None,
+            "a preview-only curve at the exact same distance is the foreground click barrier"
+        );
+        let endpoint_position = overlap_scene
+            .points
+            .iter()
+            .find(|point| point.id == source_points[0])
+            .expect("source endpoint")
+            .screen_position;
+        assert!(matches!(
+            overlap_scene.hit_test(endpoint_position, PickTolerance::default()),
+            Some(Hit {
+                item: SelectionItem::Point(point),
+                ..
+            }) if point == source_points[0]
+        ));
+        assert_eq!(
+            overlap_scene.hit_test_for_document(
+                endpoint_position,
+                PickTolerance::default(),
+                &source,
+            ),
+            None,
+            "a preview-only point tied over a source point is also a foreground click barrier"
         );
     }
 

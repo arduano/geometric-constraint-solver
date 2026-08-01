@@ -1,17 +1,20 @@
 # M66 focused UAT: CAD helper operations
 
-Status: replacement mechanically qualified; supervising-human UAT is pending.
+Status: active remediation; supervising-human UAT is pending.
 
-Candidate code source: `92e6ddce1e37d6508b5dd8568078146ac2822aa7`. Initial source
-`f913fb46e14308dc66563d1e602d3ae6ed2f7cb1` is superseded.
+Candidate code source: next replacement pending. First replacement
+`92e6ddce1e37d6508b5dd8568078146ac2822aa7` is superseded by `M66-F004` through `M66-F006`;
+initial source `f913fb46e14308dc66563d1e602d3ae6ed2f7cb1` is also superseded.
 
-Tailscale endpoint: `http://100.94.63.83:8080/`. The replacement service was restarted and the
-release HTML/WASM bundle was fetched successfully on 2026-08-01.
+Tailscale endpoint: next replacement pending. The prior service at
+`http://100.94.63.83:8080/` is not an approval candidate until it serves the newly qualified
+replacement bundle.
 
-Replacement mechanical qualification completed on 2026-08-01. The exact candidate source passed
+First replacement mechanical qualification completed on 2026-08-01. That exact candidate passed
 formatting, warnings-denied locked workspace/all-target/all-feature Clippy, locked all-feature
 workspace tests, the all-feature demo-web WASM check, release Trunk build and `git diff --check`.
-Every human result below remains Pending.
+The same complete gate must pass again for the F004-F006 replacement. Every human result below
+remains Pending.
 
 Use the ordinary GeoSolve Sketch Workbench only. The sample leaves are editable save-like
 workspaces; they contain no guided actions or protected state. This scorecard judges whether the
@@ -26,7 +29,8 @@ after their objective native/WASM qualification passes.
 2. Choose **Modify → Fillet**, then pick the line-line pair near the portions you want to keep.
 3. After the second parent, move the pointer to place the radius, click to confirm it, and inspect
    the accepted scratch preview before Apply. Try the first-side, second-side and alternate-arc
-   controls.
+   controls. Deliberately click directly on the preview arc as well as empty canvas; preview-only
+   geometry must not be consumed as a third operand or expose a hidden parent behind it.
 4. Apply the default Reference candidate. Drag its visible arc body and its center; the radius
    measurement, contacts and parent trim endpoints should move together. Delete the reference
    dimension and repeat the arc drag—the association must remain intact and mobile.
@@ -63,7 +67,8 @@ Notes:
    supporting direction or change its length.
 5. Start Line offset again and explicitly click two, then three, unique endpoint-connected spans in
    path order. Click empty canvas to finish collection/confirm the side, inspect the mitered joined
-   preview and Apply it.
+   preview and Apply it. Also confirm by clicking directly on the preview offset where it covers or
+   approaches a source; the preview must not intercept the side-placement click.
 6. Verify the joined result is one ordinary polyline with no offset dimension or association. Move
    a source afterward and confirm the one-shot output does not follow. Undo/Redo and save/reload it.
 7. Try a duplicate, disconnected and over-budget path plus a circle/nonlinear curve; each must warn
@@ -72,10 +77,13 @@ Notes:
 Expected: the pointer side and numeric distance are clear before Apply. Exact mode preserves one
 same-oriented translated segment; supporting mode truthfully permits axial slide and length
 freedom while retaining its explicit side-qualified positive distance. Those single-span results
-retain an ordinary editable driving dimension. A multi-span path has separate bounded one-shot
-semantics: only explicitly clicked unique connected spans participate, interior vertices are
+retain an ordinary editable driving dimension, and guidance states that source edits propagate. A
+multi-span path has separate bounded one-shot semantics: only explicitly clicked unique connected
+spans participate, interior vertices are
 supporting-line miters, and Apply creates one plain non-associative polyline with no persistent
-distance source. Unsupported, disconnected, duplicate, over-budget or unresolved input warns
+distance source; guidance states that source edits will not propagate. Persistent associative
+multi-span offset remains deferred. Preview-only foreground geometry blocks click-through without
+becoming an operand. Unsupported, disconnected, duplicate, over-budget or unresolved input warns
 without approximation or allocation.
 
 Result: Pending.
@@ -109,6 +117,8 @@ Notes:
 3. Create at least one flexible fillet, single-span associative offset, one-shot joined offset and
    mirror, save/reload the ordinary workspace and continue editing their ordinary retained output.
 4. Deliberately stage an invalid candidate, then return to a valid candidate without reloading.
+5. Acquire several curves near, rather than exactly on, their strokes. The shared curve acquisition
+   radius is inclusive at 12 screen pixels; the nearest curve wins and exact ties are stable.
 
 Expected: preselection and mode-first authoring lead to the same operation. Camera navigation does
 not add operands or discard pending state. Only an independently accepted scratch result is shown
@@ -128,6 +138,9 @@ Notes:
 | `M66-F001` | Line offset could not collect connected spans into one useful joined result; a subsequent click was consumed as side confirmation. | Add a max-32 explicitly clicked, unique, endpoint-connected ordered-chain request that emits one atomic one-shot mitered polyline with no dimension/association or automatic discovery. Directly test valid expansion, invalid retention, Undo/Redo and persistence; recheck M66-U2. | Implemented and directly qualified; focused M66-U2 retest pending. |
 | `M66-F002` | Selecting an open-polyline corner did not author a fillet across its two adjacent spans. | Resolve one unambiguous interior point headlessly to its ordered adjacent spans and explicit `End`/`Start` trim ownership. Directly test accepted M28 geometry plus endpoint/ambiguous rejection; recheck M66-U1. | Implemented and directly qualified; focused M66-U1 retest pending. |
 | `M66-F003` | Fillet creation silently used a driving fallback radius, and deleting that dimension still left the visible arc body without a drag route. | Add pointer radius placement with Reference default and explicit Driving intent; expose CircularArc center drag metadata; prove mathematical DOF, association retention, projected drag/rejection and exact preview publication; recheck M66-U1/U4. | Implemented and directly qualified; focused M66-U1/U4 retest pending. |
+| `M66-F004` | Accepted scratch preview geometry intercepted later Fillet radius and Line offset side-placement clicks, so the preview could be treated as another operand instead of completing the stage. | Resolve the best visible hit once; if its identity exists only in preview, block click-through to hidden source geometry but forward no live operand so the headless placement stage owns the click. Directly regress preview/source overlaps and recheck M66-U1/U2/U4. | Remediation implementation present; next replacement qualification and focused retest pending. |
+| `M66-F005` | Curve picking during repeated helper authoring was too narrow and made otherwise clear selections unnecessarily difficult. | Use the editor's shared nearest-curve acquisition with an inclusive 12-pixel radius and stable persistent-identity ties; qualify the exact inside/boundary/outside cases and recheck all operation tools. | Remediation implementation present; next replacement qualification and focused retest pending. |
+| `M66-F006` | The Line offset tool did not make it sufficiently clear that adding a second connected span changes from an associative result to one-shot geometry. | Keep one-span exact/supporting offsets associative, keep two-or-more-span joined offsets explicitly one-shot, state propagation semantics in headless guidance and defer persistent associative multi-span offsets. Recheck M66-U2/U4. | Remediation implementation present; next replacement qualification and focused retest pending. |
 
 Every objective defect requires a direct owning-layer regression before targeted human recheck. A
 replacement candidate must be rebuilt and fully qualified even when one remaining change is

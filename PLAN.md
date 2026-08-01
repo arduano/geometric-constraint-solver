@@ -3015,8 +3015,9 @@ replacement candidate. M65 is closed; the historical candidate endpoint was
 
 ### M66: CAD helper-operation authoring
 
-Status: active. The replacement implementation is directly qualified after supervising-human UAT
-opened three remediation findings. Focused replacement UAT remains open.
+Status: active. The first replacement implementation is directly qualified for `M66-F001` through
+`M66-F003`. Continued supervising-human UAT opened `M66-F004` through `M66-F006`; the next
+replacement qualification and focused human retest remain open.
 
 Goal: expose intuitive reusable authoring for associative 2D fillets, line offsets and exact
 supported-family mirrors while keeping branch synthesis, applicability, scratch preview and
@@ -3065,6 +3066,15 @@ publication in the headless editor/operations layers rather than the browser.
 - [x] Add a **Modify** section to the left palette with distinct text-free Fillet, Line offset and
   Mirror icons, headless pending/warning/options presentation, accepted scratch preview and
   primary-created-curve selection after commit.
+- [x] Keep canvas acquisition presentation-neutral and shared with ordinary editing: curves use an
+  inclusive 12-pixel screen-space radius with nearest-distance then persistent-identity ties. When
+  an accepted scratch preview is visible, its foreground-only geometry blocks click-through but is
+  never forwarded as a live-document operation operand, so a placement click remains a placement
+  click rather than an accidental preview selection.
+- [x] Make the offset association boundary explicit in headless guidance: a one-span result is
+  associative and follows its source, while selecting two or more connected spans deliberately
+  changes to one-shot joined geometry that will not follow later source edits. Persistent
+  associative multi-span offsets remain future work.
 - [x] Expose a circular arc's stored center as its headless semantic drag owner, so a free
   associated fillet can be dragged from its visible arc without browser inference.
 - [x] Add ordinary editable **2D fillet workshop**, **Associative line offsets** and
@@ -3079,25 +3089,32 @@ publication in the headless editor/operations layers rather than the browser.
 - [x] Directly qualify the `M66-F001` joined-chain offset, `M66-F002` polyline-corner fillet and
   `M66-F003` pointer-placed reference-radius/arc-center-drag remediations, then repeat the complete
   native, WASM and release gate from one replacement source state.
+- [ ] Directly qualify `M66-F004` preview-geometry placement routing, `M66-F005` inclusive shared
+  curve acquisition and `M66-F006` explicit associative-versus-one-shot offset guidance, then
+  repeat the complete native, WASM and release gate from one next-replacement source state.
 - [ ] Complete and explicitly approve `docs/M66_UAT.md`.
 
 Gate: every visible helper tool is driven by public headless operation-authoring metadata and
 commits only an independently accepted public operation proposal through the ordinary retained
 history path. Every branch/side/span/winding choice is explicit before publication; pointer
 placement is a radius seed rather than hidden hard intent. The bounded joined-chain offset is
-explicitly selected and one-shot. Unsupported or ambiguous geometry is typed and mutation-free;
-no browser equation or applicability matrix, general curve offset approximation, recursive path
-discovery, global fillet-root enumeration, persistent feature tree, legacy harness,
-`/#/dev/lab`, browser E2E or mobile claim is added. M66 closes only after replacement direct
+explicitly selected and one-shot, while the single-span form alone is associative. Canvas curve
+acquisition is inclusive at 12 pixels and accepted preview geometry cannot become a live operand or
+cause click-through to hidden source geometry. Unsupported or ambiguous geometry is typed and
+mutation-free; no browser equation or applicability matrix, general curve offset approximation,
+recursive path discovery, global fillet-root enumeration, persistent feature tree, legacy harness,
+`/#/dev/lab`, browser E2E or mobile claim is added. M66 closes only after next-replacement direct
 qualification and explicit supervising-human UAT approval.
 
-Replacement mechanical qualification record (2026-08-01): code source
+First replacement mechanical qualification record (2026-08-01): code source
 `92e6ddce1e37d6508b5dd8568078146ac2822aa7` passes formatting, warnings-denied locked
 workspace/all-target/all-feature Clippy, locked all-feature workspace tests, the all-feature
 demo-web WASM check, the release Trunk bundle and `git diff --check`. Direct owners cover the
 joined-path operation and invalid classes, adjacent-polyline direct/corner authoring, flexible and
 locked radius placement, semantic arc-center drag, exact release/Undo/Redo and bit-exact workspace
-reload. The human-UAT checkbox intentionally remains open.
+reload. Continued UAT superseded that source with `M66-F004` through `M66-F006`; the next exact
+candidate and its complete qualification are pending. The human-UAT checkbox intentionally remains
+open.
 
 ## Explicit non-goals
 

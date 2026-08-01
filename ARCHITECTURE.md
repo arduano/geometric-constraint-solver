@@ -384,8 +384,12 @@ M66 places Fillet, Line offset and Mirror in a **Modify** palette section. Compa
 selection may seed a headless candidate, while empty selection enters repeated operation mode.
 Only an independently accepted scratch result is drawn as operation preview; Apply/Enter publishes
 that exact proposal through normal retained history and Escape clears the candidate before exiting
-the tool. Three new catalog leaves are ordinary editable workspaces, not guided or protected
-scenarios. Camera navigation remains web-only and usable during authoring.
+the tool. Curve acquisition uses the editor's shared inclusive 12-pixel screen-space policy. A
+preview-only foreground item blocks click-through but cannot be forwarded as a live operand, so
+fillet-radius and offset-side placement clicks remain owned by the headless stage. Headless offset
+guidance distinguishes the associative single-span form from the one-shot two-or-more-span form.
+Three new catalog leaves are ordinary editable workspaces, not guided or protected scenarios.
+Camera navigation remains web-only and usable during authoring.
 
 ## 4. Numerical representation and linearization
 
