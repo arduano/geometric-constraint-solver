@@ -8,7 +8,7 @@ These are behavioral gates, not implementation suggestions. `PLAN.md` is the aut
 cargo fmt --all -- --check
 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 cargo test --locked --workspace --all-features
-cargo check --locked -p geosolve-demo-web --target wasm32-unknown-unknown
+cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown-unknown
 ```
 
 Run `(cd crates/geosolve-demo-web && trunk build --release)` when a shared public API or the WASM consumer changes.
@@ -939,7 +939,7 @@ finding dispositions and approval record are retained in `docs/M53_UAT.md`.
 
 ## M54-M65 acceptance
 
-M54-M62 are the completed post-M53 sequence. M62 received explicit supervising-human approval on
+M54-M65 are the completed post-M53 sequence. M62 received explicit supervising-human approval on
 2026-07-29, M63 and M64 received explicit supervising-human approval on 2026-07-30, and M65
 received focused supervising-human approval on 2026-08-01. No old browser E2E qualification may
 return. M66 is the active milestone below.

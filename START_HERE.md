@@ -22,9 +22,11 @@ companion and multi-interval visible topology, M59 completed the revision-stampe
 topology companion, and M60 completed the directly qualified advanced workbench and prepared M61
 scorecard. The first M61 candidate was withdrawn for five interaction/coverage blockers; the
 remediated scope is now explicitly approved and closed. M62 subsequently completed and received
-supervising-human approval for CAD-style constraint and dimension authoring. The workbench is a
-non-authoritative demo consumer, not a production UI or third solver. Mobile support and
-physics remain outside future acceptance.
+supervising-human approval for CAD-style constraint and dimension authoring, M63 completed approved
+canvas constraint presentation, M64 completed the approved editable sample cleanup, and M65
+completed approved predictable bounded dragging. M66 is the active helper-operation authoring cut.
+The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
+support and physics remain outside future acceptance.
 
 ## Read first
 
@@ -193,6 +195,7 @@ Durable cleanup records:
 - `docs/M64_UAT.md` (approved M64 scorecard)
 - `docs/M65_IMPLEMENTATION.md` (approved predictable-dragging implementation record)
 - `docs/M65_UAT.md` (approved focused scorecard)
+- `docs/M66_IMPLEMENTATION.md` (active helper-operation implementation record)
 - `docs/M66_UAT.md` (active helper-operation scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
@@ -222,7 +225,7 @@ Run through the project shell:
 nix-shell shell.nix --run 'cargo fmt --all -- --check'
 nix-shell shell.nix --run 'cargo clippy --locked --workspace --all-targets --all-features -- -D warnings'
 nix-shell shell.nix --run 'cargo test --locked --workspace --all-features'
-nix-shell shell.nix --run 'cargo check --locked -p geosolve-demo-web --target wasm32-unknown-unknown'
+nix-shell shell.nix --run 'cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown-unknown'
 ```
 
 Run the relevant Trunk build only when shared public APIs or the WASM consumer change.

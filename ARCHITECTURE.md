@@ -130,14 +130,16 @@ input revisions and never calls host code.
 
 ### `geosolve-constraint-editor`
 
-Owns presentation-independent constraint-editing interaction policy over public
-`geosolve-sketch` APIs:
+Owns presentation-independent sketch interaction policy over public `geosolve-sketch` APIs and the
+equation-free `geosolve-sketch-ops` proposal seam:
 
 - validated viewport transforms and deterministic accepted-scene primitives;
 - screen-space persistent point/span picking and ordered selection;
 - normalized gestures, drafting, snapping and action applicability;
 - persistent interaction context such as remembered hover/snap identities, prospective
   inference candidates and deterministic guide/tolerance activation;
+- constraint/dimension and helper-operation applicability, operand progression and explicit
+  branch/side option state;
 - typed document-edit, preview, commit and cancellation effects; and
 - deterministic transition/replay fixtures for native and WASM qualification.
 
@@ -284,14 +286,14 @@ web crate.
 
 M39 begins and M44 continues a staged rewrite into a CAD-like sketch workbench with a
 command bar, tool palette, sketch tree, retained canvas scene, property inspector,
-status bar and Problems/Profile/Audit panels. The rewrite remains a demo of sketch
-constraints only: it has no solid-feature tools, computes no constraint or measurement
+status bar and Problems/Profile/Audit panels. The rewrite remains a sketch-only demo:
+it has no solid-feature tools, computes no constraint or measurement
 formula and consumes stable domain diagnostics. M40.5 removed duplicated selection,
 gesture, drafting, lifecycle and history policy and made this crate a thin adapter over
 `geosolve-constraint-editor`. Cleanup M46-M50 replaces direct-test ownership and removes the
 second legacy application and old browser E2E; M51 consolidates the survivor around one workspace
 snapshot and direct presentation/evidence owners. Human acceptance is recorded at completed M40.7,
-M53 and M61-M64; every newly scoped milestone from M65 onward ends in its own UAT after direct
+M53 and M61-M65; every newly scoped milestone from M66 onward ends in its own UAT after direct
 qualification.
 
 M55 makes the surviving workbench render and dispatch the complete alpha action surface returned by
@@ -307,6 +309,13 @@ presentation exposes consumable wires/regions only from a complete current
 evidence remains non-consumable. The application workspace v2 envelope labels each document
 payload as frozen canonical v4 or explicitly unstable draft v5 and migrates legacy workspace v1.
 These presentation/persistence additions own no equation, branch inference or B-rep state.
+
+M66 supersedes the operation-authoring part of that browser boundary. The workbench remains a
+direct read-only consumer of `geosolve-sketch-topology`, but Fillet, Line offset and Mirror now
+enter `geosolve-sketch-ops` only through coordinator-owned headless authoring. The editor stamps
+accepted picks, prepares bounded scratch proposals, exposes independently accepted preview state
+and commits only the exact token/candidate-bound result. The browser no longer depends directly
+on the operations companion or interprets its request vocabulary.
 
 M61 remediation keeps those boundaries intact while making the candidate genuinely interactive.
 Advanced construction state and proposal/preview generation live in `geosolve-constraint-editor`;

@@ -16,7 +16,7 @@ cargo fmt --all -- --check
 git diff --check
 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 cargo test --locked --workspace --all-features
-cargo check --locked -p geosolve-demo-web --target wasm32-unknown-unknown
+cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown-unknown
 RUSTDOCFLAGS="-D warnings" cargo doc --locked --workspace --all-features --no-deps
 cargo bench --locked --workspace --all-features --no-run
 
@@ -40,6 +40,8 @@ for package in \
   geosolve-core \
   geosolve-sketch \
   geosolve-linkage \
+  geosolve-sketch-ops \
+  geosolve-sketch-topology \
   geosolve-constraint-editor
 do
   contents="$(cargo package --locked --allow-dirty --list -p "$package")"

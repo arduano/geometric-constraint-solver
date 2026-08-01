@@ -3,9 +3,10 @@
 ## Release line
 
 GeoSolve `0.2.0` is the current supported preview release; `0.1.0` was the first. The
-five library crates (`geosolve-geometry`, `geosolve-core`, `geosolve-sketch`,
-`geosolve-linkage` and `geosolve-constraint-editor`) version and release in lockstep.
-`geosolve-demo-web` is a non-published diagnostic consumer.
+seven library crates (`geosolve-geometry`, `geosolve-core`, `geosolve-sketch`,
+`geosolve-linkage`, `geosolve-sketch-ops`, `geosolve-sketch-topology` and
+`geosolve-constraint-editor`) version and release in lockstep. `geosolve-demo-web` is a
+non-published diagnostic consumer.
 
 Before `1.0`, a minor version may contain source-breaking changes. Patch releases
 must remain source-compatible except where retaining behavior would preserve a
@@ -19,10 +20,11 @@ M46-M53 preserves released v1-v4 wire compatibility and the accepted-state safet
 while evolving the new pre-1.0 editor/workbench surface. M61 closes the currently approved
 advanced-workbench scope, M62 closes approved CAD-style authoring and M63 closes approved canvas
 constraint presentation. Approved M64 adds only public alpha fixtures and an explicit
-interaction-request preference helper; it does not freeze a new schema. M65 is the active
-predictable, bounded projected-dragging cut. Its reduced implementation and mechanical
-qualification are complete while focused human UAT remains open; it does not freeze a new
-persistence language or claim final API/schema hardening. The unreleased M61
+interaction-request preference helper; it does not freeze a new schema. M65 completes approved
+predictable, bounded projected dragging without freezing a new persistence language or claiming
+final API/schema hardening. M66 is the active pre-1.0 helper-operation authoring cut; its editor
+and operations APIs may evolve during qualification and likewise add no persistence language.
+The unreleased M61
 `DocumentSolveRequest::stability_target` field and helper were withdrawn before the next
 published minor release because a sample-selected second Temporary target conflicts with M65's
 sample-agnostic locality contract; neither API was part of the published `0.2.0` surface. Any
@@ -43,8 +45,12 @@ The supported domain entry points are:
   kinematics;
 - immutable geometry and accepted domain result/audit types returned by those
   workflows;
+- `geosolve-sketch-ops` immutable snapshots, controlled prepared proposals and exact-input
+  application for equation-free sketch operations;
+- `geosolve-sketch-topology` complete accepted-input production-wire and region profiles; and
 - `geosolve-constraint-editor` state, scene, normalized input and typed effect APIs for
-  presentation-independent constraint editing over those sketch workflows.
+  presentation-independent constraint, dimension and helper-operation authoring over those sketch
+  workflows.
 
 Legacy direct `Sketch`, `Linkage` and `SpatialAssembly` builders remain supported
 compatibility facades in the `0.2` line.
@@ -124,11 +130,14 @@ The publishable crates are released in dependency order:
 1. `geosolve-geometry`;
 2. `geosolve-core` after the matching geometry version is visible;
 3. `geosolve-sketch` and `geosolve-linkage` after the matching core version is
+   visible;
+4. `geosolve-sketch-ops` and `geosolve-sketch-topology` after the matching sketch version is
+   visible;
+5. `geosolve-constraint-editor` after the matching sketch and sketch-operations versions are
    visible.
-4. `geosolve-constraint-editor` after the matching sketch version is visible.
 
 Cargo cannot create a registry-ready dependent archive before its path dependency
 version exists in the registry. The pre-publication gate therefore checks the exact
-archive file list for all five crates and builds every workspace target from path
+archive file list for all seven crates and builds every workspace target from path
 dependencies. Each package includes `LICENSE` and `README.md`. Registry publication
 itself remains a maintainer action after a repository URL and release tag exist.

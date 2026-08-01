@@ -1281,7 +1281,7 @@ required.
 Objective geometry, residual, derivative, rank, branch, persistence, migration, resource,
 cancellation, presentation-adapter and topology assertions are directly automated at their
 owning Rust/WASM layer. Old browser E2E is not a qualification path. Human review is
-recorded at completed M40.7, M53 and M61-M65. Every newly scoped milestone from M65 onward ends in
+recorded at completed M40.7, M53 and M61-M65. Every newly scoped milestone from M66 onward ends in
 its own UAT after direct automated qualification.
 
 ### M40-ES1 - Headless persistent line selection and relation action
@@ -1905,7 +1905,7 @@ M66 adds three ordinary editable leaves under **Curves & constructions**:
 
 | Stable sample key | Sample title | Authoring focus |
 | --- | --- | --- |
-| `fillet-workshop` | 2D fillet workshop | Raw line-line, line-circle and line-Bezier pairs with room to pick the portions to retain, author a branch-explicit associative fillet and edit its driving radius. |
+| `fillet-workshop` | 2D fillet workshop | Line-line, line-circle and line-Bezier pairs with room to pick retained portions, ordinary deletable support locks for stable radius editing, and no prebuilt fillet. |
 | `line-offset-workshop` | Associative line offsets | Line/polyline sources for exact translated and supporting-line offsets on either explicit side, followed by ordinary distance editing and constrained motion. |
 | `mirror-workshop` | Mirror construction workshop | A line axis plus movable line, cubic Bezier and non-rational B-spline sources for repeated exact associative mirrors. |
 

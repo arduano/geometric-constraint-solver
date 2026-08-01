@@ -71,6 +71,13 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - An opaque accepted-hard-nullspace `DocumentDragLocalityPlan` for gesture-local projected
   dragging. It exposes only passive-DOF and anchor-count evidence while keeping solver matrices
   and anchor policy inside `geosolve-sketch`.
+- Controlled sketch-operation proposal application through ordinary retained transactions, so
+  cancelled or exhausted scratch publication remains mutation-free as well as preparation.
+- Reusable headless Fillet, Line offset and Mirror authoring with exact accepted-input picks,
+  explicit branch/side options, independently accepted scratch previews and token/candidate-bound
+  publication through one normal history edit.
+- Three ordinary editable helper-operation workspaces for local 2D fillets, both associative line
+  offset modes and exact line/Bezier/non-rational-B-spline mirrors.
 
 ### Changed
 
@@ -178,6 +185,15 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   every attained positive Temporary row through Preference work within
   `max(min(normalized_residual_tolerance, normalized_step_tolerance), 8 * f64::EPSILON)`. The
   reproducibility floor does not relax Hard or Temporary acceptance.
+- Geometry-dependent sketch operations now require accepted geometry from the exact current
+  retained attempt input rather than merely the same design. A same-design accepted state from an
+  older or rejected input returns
+  `SketchOperationIncompleteReason::AcceptedStateForDifferentInput` and cannot prepare or publish.
+- M66 moves Fillet, Line offset and Mirror interaction policy out of the browser and into the
+  headless editor. Local fillet synthesis is bounded and branch-explicit; line offsets reuse the
+  existing exact/supporting dimension families; exact mirrors retain ordinary point-symmetry
+  constraints. Unsupported, ambiguous, stale, rejected, cancelled or exhausted work cannot
+  publish or leave a committable preview.
 
 ### Removed
 

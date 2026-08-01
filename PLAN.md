@@ -139,11 +139,11 @@ engine that a real CAD host can use. The accepted personality is:
   geometry enter one attempt as immutable revisioned values.
 - Keep cross-system expressions, B-rep projection, topological naming, feature
   history and application undo outside the sketch solver contract.
-- Keep human acceptance records explicit: M40.7, M53 and M61-M64 are complete and approved, and
-  every newly scoped milestone from M65 onward ends in its own supervising-human UAT. Every objective correctness, persistence,
-  compatibility and presentation-adapter assertion must pass through direct unit or
-  integration tests at its owning layer before a human checkpoint begins; old CDP E2E
-  suites are not a qualification path.
+- Keep human acceptance records explicit: M40.7, M53 and M61-M65 are complete and approved, and
+  every newly scoped milestone from M66 onward ends in its own supervising-human UAT. Every
+  objective correctness, persistence, compatibility and presentation-adapter assertion must pass
+  through direct unit or integration tests at its owning layer before a human checkpoint begins;
+  old CDP E2E suites are not a qualification path.
 
 ## Frozen baseline: M0-M7
 
