@@ -1,7 +1,8 @@
 # M65 implementation: predictable bounded projected dragging
 
-Status: active. The reduced-scope implementation and mechanical qualification completed on
-2026-07-31. Focused supervising-human UAT is pending.
+Status: active. The reduced-scope implementation and replacement-candidate mechanical
+qualification completed on 2026-08-01. Focused supervising-human retest of `M65-F004` and
+`M65-F005` is pending.
 
 ## Scope
 
@@ -34,7 +35,9 @@ The implementation is divided by owner:
   nullspace evidence without changing rank policy.
 - `crates/geosolve-core/src/solver.rs` and `src/session.rs` independently certify publishable
   Hard/Temporary state, reject invalid terminal/audit evidence and protect the complete positive
-  Temporary vector on the single-component dense path.
+  Temporary vector on the single-component dense path. Follow-up `M65-F005` adds a fixed-size
+  rank-aware `2 x 2` SVD path with stationarity and minimum-norm certification for the common
+  rank-one two-coordinate cursor projection.
 - `crates/geosolve-core/tests/m5_priority.rs` and `tests/m10.rs` cover positive-row preservation,
   separable Preference motion, invalid terminal/audit publication, exact-state mismatch and
   invalid evaluator certification.
@@ -47,7 +50,9 @@ The implementation is divided by owner:
   targets, symmetric continuation, deterministic greedy ordering/minimal cover and the exact
   cursor/anchor objective inventory.
 - `crates/geosolve-constraint-editor/src/lib.rs` stamps gesture epochs, preserves circle-handle
-  offsets and classifies stale/untracked projected results.
+  offsets and classifies stale/untracked projected results. Follow-up `M65-F004` gives directly
+  draggable point/semantic-curve geometry priority only where it overlaps an annotation, while
+  offset labels and non-draggable annotation interaction remain unchanged.
 - `crates/geosolve-constraint-editor/src/coordinator.rs` owns press-time planning, exactly one
   controlled attempt per sample, last-valid-preview retention, work evidence and controlled exact
   release. Its inline tests own the representative mechanism, lifecycle, stale-result and literal
@@ -158,9 +163,12 @@ The mechanically qualified candidate directly covers:
   movement `<= 1e-8`;
 - a difficult twin-roller rejection followed by valid same-gesture recovery;
 - pantograph input, guide, output and center;
+- natural off-manifold pantograph-guide projection with reciprocal passive-arm stability;
 - Scotch-yoke dragging after deletion of its horizontal guide, including reversals;
 - scissor jack and five-stage tower continuity;
 - semantic circle-center dragging with a nonzero pointer offset;
+- symmetric `MotionCam` center/circumference pointer routing through the left driving-radius
+  overlap while its offset label remains selectable;
 - release, cancel, Undo and Redo;
 - late, duplicate and out-of-order queued results;
 - ordinary constraint authoring plus workspace save/reload;
@@ -183,14 +191,14 @@ nix-shell ../../shell.nix --run 'env NO_COLOR=true trunk build --release'
 git diff --check
 ```
 
-Outcome (2026-07-31): all commands pass. The locked all-feature workspace suite passes with only
+Outcome (2026-08-01): all commands pass. The locked all-feature workspace suite passes with only
 the pre-existing explicitly ignored manual measurement/release-performance tests; all executed
 unit, integration and doc tests pass. Trunk 0.21.14 emits a successful optimized distribution.
 The Cargo manifest warning that both `license` and `license-file` are present is pre-existing
 metadata advice and is not a warnings-denied Rust/Clippy failure.
 
-Qualified code source: `42d55b1`, with core certification prerequisite `f647318`. The exact code
-is served for focused UAT at `http://100.94.63.83:8080/`.
+Qualified replacement code source: `b6433d1`. The exact code is served for focused UAT at
+`http://100.94.63.83:8080/`.
 
 ## 4. Acceptance criteria passed
 
@@ -204,8 +212,9 @@ The following objective acceptance areas pass:
 - release/cancel/Undo/Redo plus authoring/workspace/editability lifecycle;
 - formatting, warnings-denied Clippy, native tests, WASM, release Trunk and diff hygiene.
 
-The four `docs/M65_UAT.md` scorecard items remain Pending. The discarded prototype does not supply
-acceptance evidence for this candidate.
+The unaffected M65-U1 and M65-U4 areas retain the supervising-human closure-review result. M65-U2
+and M65-U3 require focused human retest of the replacement candidate. The discarded prototype
+does not supply acceptance evidence for this candidate.
 
 ## 5. Known limitations or next blocker
 
@@ -216,5 +225,6 @@ acceptance evidence for this candidate.
   the current local configuration and operation envelope.
 - The withdrawn broader prototype remains recoverable only on
   `recovery/m65-f003-overbuilt-20260731`; none of its branch-search UI or samples is in `main`.
-- M65 remains open until the supervising human explicitly approves `docs/M65_UAT.md` and any UAT
-  finding receives a tested disposition.
+- `M65-F004` and `M65-F005` have direct tested dispositions but still require focused human retest.
+- M65 remains open until the supervising human explicitly approves the corrected
+  `docs/M65_UAT.md` candidate.

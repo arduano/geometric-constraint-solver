@@ -1,9 +1,9 @@
 # M65 focused UAT
 
-Status: mechanically qualified reduced-scope candidate available; supervising-human approval is
-pending.
+Status: mechanically qualified replacement candidate available; focused supervising-human retest
+is pending for two remediated UAT findings.
 
-Candidate code source: `42d55b1` (with core certification prerequisite `f647318`).
+Candidate code source: `b6433d1`.
 
 Tailscale endpoint: `http://100.94.63.83:8080/`
 
@@ -11,11 +11,10 @@ Use only the ordinary workbench candidate recorded above once it is available. T
 focused human behavior check after direct native, WASM and release qualification; it does not
 replace those gates.
 
-Mechanical qualification (2026-07-31): formatting, warnings-denied locked workspace Clippy,
+Mechanical qualification (2026-08-01): formatting, warnings-denied locked workspace Clippy,
 locked all-feature workspace tests, the all-feature `wasm32-unknown-unknown` check, the optimized
 Trunk 0.21.14 release bundle and `git diff --check` pass. A verified GET from the Tailscale
-endpoint returns the ordinary GeoSolve Sketch Workbench built from the code source recorded
-above.
+endpoint will be refreshed to the code source recorded above before retest.
 
 ## UAT scorecard
 
@@ -32,9 +31,9 @@ continuous and does not jump to an unrelated valid assembly. A rejected or exhau
 the complete last valid preview, and returning to a nearby valid target can recover in the same
 gesture. The tab remains responsive.
 
-Result: Pending.
+Result: Pass (2026-08-01 closure review; unaffected by the replacement candidate).
 
-Notes:
+Notes: No continuity, branch-jump or responsiveness blocker remains in this scorecard area.
 
 ### M65-U2 — pantograph responsiveness
 
@@ -48,9 +47,11 @@ Expected: all intended freedoms remain usable, the selected control moves predic
 independent passive motion is not introduced merely to satisfy a cursor sample. Reversal does not
 switch assembly root, and no interaction synchronously locks the main thread.
 
-Result: Pending.
+Result: Retest required against `b6433d1`.
 
-Notes:
+Notes: Holding the opposite arm stationary while dragging either one-DOF side control is the
+accepted M65 locality policy. `M65-F005` fixes the separate numerical rejection that made natural
+off-manifold upper-guide drags appear mostly immovable.
 
 ### M65-U3 — symmetric twin-roller independence and recovery
 
@@ -65,9 +66,10 @@ Expected: the pressed circumference behaves as an offset-preserving handle for i
 The other roller remains stationary. Difficult work rejects within a responsive bounded interval,
 keeps the full last valid preview, and permits same-gesture recovery.
 
-Result: Pending.
+Result: Retest required against `b6433d1`.
 
-Notes:
+Notes: `M65-F004` restores direct access to the left roller where its driving-radius annotation
+overlaps the center or canonical circumference handle.
 
 ### M65-U4 — ordinary lifecycle, authoring and persistence
 
@@ -81,18 +83,59 @@ Expected: one release produces one ordinary history edit, Cancel publishes nothi
 remain coherent. Constraint authoring and save/reload behave as before M65. No alternate-branch
 control, branch-only sample or modal branch workflow is present.
 
-Result: Pending.
+Result: Pass (2026-08-01 closure review; unaffected by the replacement candidate).
 
-Notes:
+Notes: No lifecycle, authoring or persistence blocker was reported.
 
 ## Finding ledger
 
-No finding is recorded for this reduced-scope candidate. Add durable `M65-Fxxx` entries here for
-any UAT failure, with reproduction, owning layer, direct regression and human retest disposition.
+Finding IDs `M65-F001` through `M65-F003` remain reserved by the withdrawn earlier candidates and
+are not reused below.
+
+### M65-F004 — left twin roller was hidden behind its radius annotation
+
+- Reproduction: open **Twin-roller cam · 2 DOF** and press the left roller at its center or the
+  positive-X circumference point used by the visible radius leader. The dimension was selected
+  and no drag gesture began, while the right roller remained directly draggable.
+- Root cause: Select pointer-down tested visible annotations before accepted geometry, and radial
+  annotation hit-testing includes the complete center-to-edge leader. The left driving dimension
+  is always visible; the right reference dimension is contextual, creating asymmetric access to
+  otherwise symmetric solver freedoms.
+- Disposition: a directly draggable point or semantic curve handle now wins only its exact overlap
+  with an annotation. Offset labels and annotations over non-draggable geometry retain the
+  existing annotation-first behavior.
+- Direct regression: the real `MotionCam` scene starts the correct semantic-center gesture from
+  both roller centers and both positive-X circumferences, while the left radius label remains
+  selectable without starting a gesture.
+- Human retest: Pending under M65-U3.
+
+### M65-F005 — pantograph guide rejected ordinary off-manifold cursor targets
+
+- Reproduction: from the initial pantograph pose, project upper guide B toward `[1.2, 3.0]`.
+  Before remediation, one bounded attempt rejected after 6 nonlinear iterations and 11
+  factorizations even with unlimited control. Hard geometry remained valid with maximum residual
+  `5.55e-17`; the Temporary solve reported numerical/evaluation failure.
+- Root cause: a two-coordinate cursor projected through B's one instantaneous freedom creates an
+  almost rank-one `2 x 2` least-squares system. The dynamic bidiagonal SVD result could lose enough
+  stationarity for the strict KKT check to reject it depending on matrix orientation.
+- Disposition: the rank-aware solve uses a fixed-size analytic `2 x 2` SVD for this exact shape,
+  retains the authoritative unsquared rank cutoff, and publishes a step only after stationarity
+  and retained-row-space minimum-norm certification. No tolerance, hierarchy or work limit is
+  relaxed.
+- Direct regression: the exact reduced matrix is finite, bounded, minimum norm and KKT-certified;
+  three natural guide targets project to the nearest radius-`sqrt(10)` position in one bounded
+  attempt while input A remains within `1e-8` of its gesture-start position.
+- Human retest: Pending under M65-U2.
 
 ## Approval
 
-M65 remains open. Approval requires:
+The supervising human asked to close M65 on 2026-08-01 based on the interaction diagnosis then
+available. Before changing the milestone record, a stronger headless reproduction established
+`M65-F005` as a real numerical defect rather than inherent complexity, so that closure request is
+not treated as approval of the corrected source. M65 remains open only for focused U2/U3 retest
+and a fresh explicit approval statement.
+
+Final approval requires:
 
 1. one exact candidate commit and Tailscale endpoint recorded above;
 2. fresh formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature WASM

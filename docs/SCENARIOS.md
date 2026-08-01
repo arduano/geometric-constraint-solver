@@ -1272,7 +1272,8 @@ companions; M60 completes the advanced workbench and M61 completes its approved 
 M62 completes approved CAD-style constraint/dimension authoring, and M63 completes approved
 geometry-anchored canvas constraint/dimension presentation, and M64 completes the approved editable
 purpose-based sample library. M65 is the active predictable, bounded projected-dragging cut for
-those existing editable mechanisms; no later release sequence is currently scheduled. Every new
+those existing editable mechanisms; M66 is an intentionally empty placeholder rather than a
+scheduled release sequence. Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
 required.
@@ -1870,7 +1871,8 @@ Each non-stale pointer sample performs exactly one retained attempt from the com
 independently accepted preview. A rejected or exhausted sample retains that preview bit-for-bit;
 a later valid sample can recover in the same gesture. Stale and out-of-order request IDs do
 nothing. Circle circumference picking resolves to that circle's own center and retains the
-gesture-start pointer offset.
+gesture-start pointer offset. At a true overlap, directly draggable point/semantic-curve geometry
+wins over an annotation leader; offset annotation labels remain selectable.
 
 The direct path corpus is table-driven:
 
@@ -1878,8 +1880,8 @@ The direct path corpus is table-driven:
 | --- | --- |
 | Scotch yoke | Delete the horizontal guide, then exercise horizontal, vertical, diagonal and reversal paths through the two-DOF point without an unrelated valid-root jump. |
 | Scissor jack and five-stage tower | Exercise opening/closing reversals; accepted previews stay locally continuous and all work remains inside the projected-sample envelope. |
-| Pantograph | Drive input, guide, output and center independently. A point whose active rank covers all hard mobility needs no anchor; otherwise deterministic anchors cover only passive mobility. |
-| Twin-roller cam | Drive both rollers separately through horizontal, vertical, diagonal and reversal paths. The passive center moves by at most `1e-8`; a difficult rejected target retains the full last preview and a later valid target recovers in the same gesture. |
+| Pantograph | Drive input, guide, output and center independently, including natural off-manifold guide targets. A point whose active rank covers all hard mobility needs no anchor; otherwise deterministic anchors cover only passive mobility. Rank-one `2 x 2` cursor projection must be stationarity- and minimum-norm-certified under the authoritative rank cutoff. |
+| Twin-roller cam | Drive both rollers separately from their centers and circumferences, including the left driving-radius overlap, then exercise horizontal, vertical, diagonal and reversal paths. The passive center moves by at most `1e-8`; a difficult rejected target retains the full last preview and a later valid target recovers in the same gesture. |
 | Circle handle offset | Press away from a circumference's center and verify that the semantic center moves without snapping the cursor to it. |
 
 Lifecycle coverage releases an accepted preview as one independently validated history edit,
@@ -1893,7 +1895,9 @@ lowering items; `256` each nonlinear iterations, factorizations and rank kernels
 trials; `1,024` component linearizations; `256 × 256` dense kernels; `512` diagnostic candidates;
 and `1,024` diagnostic trials. Exhaustion is a typed rejection, never partial publication.
 
-`docs/M65_UAT.md` owns the focused human scorecard for this active cut.
+Replacement `b6433d1` directly remediates `M65-F004` (twin-roller annotation hit priority) and
+`M65-F005` (orientation-sensitive rank-one pantograph-guide projection). Native, WASM and release
+qualification pass; `docs/M65_UAT.md` owns the remaining focused U2/U3 human retest.
 
 ## Frozen near-singular fixtures
 

@@ -28,10 +28,10 @@ construction/NURBS UAT and certified all-family visual profiles.
 - **Active target:** M65 is the open predictable, bounded projected-dragging cut. Its reduced scope
   is gesture-local accepted-nullspace locality, last-valid-preview continuation, one retained
   attempt per non-stale sample, strict independently validated core publication and a finite
-  synchronous operation envelope. The implementation and mechanical qualification are complete;
-  focused supervising-human UAT remains.
-- **Planned sequence:** none beyond M65; every newly scoped milestone will
-  end in its own human UAT.
+  synchronous operation envelope. Replacement `b6433d1` and mechanical qualification are
+  complete after `M65-F004`/`M65-F005`; focused supervising-human retest remains.
+- **Planned sequence:** M66 is an intentionally empty placeholder awaiting M65 approval and
+  supervising-user scope. Every newly scoped milestone will end in its own human UAT.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
@@ -681,5 +681,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
 - M64: completed and approved editable sample-library cleanup with purpose grouping, ordinary
   persistence/editing and directly qualified 1/2/3-DOF mechanism examples.
 - M65: active predictable, bounded projected dragging for the existing editable mechanism
-  samples; reduced-scope implementation and native/WASM/release qualification are complete, while
-  focused supervising-human UAT remains open.
+  samples; replacement implementation and native/WASM/release qualification are complete after
+  the twin-roller hit-routing and rank-one pantograph-guide remediations, while focused U2/U3
+  supervising-human retest remains open.
+- M66: intentionally empty placeholder awaiting M65 approval and supervising-user scope.

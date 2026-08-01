@@ -98,9 +98,10 @@ continues exactly one retained attempt per non-stale pointer sample from the com
 preview, treats stale/out-of-order work as a no-op and enforces a finite synchronous operation
 envelope. Circle circumferences remain offset-preserving semantic handles for their own centers.
 Core publication must independently validate Hard rows and every attained Temporary row; rejected
-or exhausted work retains the last valid preview. The reduced implementation and fresh
-native/WASM/release qualification completed on 2026-07-31; the four-part focused human UAT remains
-open.
+or exhausted work retains the last valid preview. Replacement `b6433d1` fixes the UAT-discovered
+twin-roller annotation overlap and rank-one pantograph-guide cursor projection with direct
+regressions and strict certification. Fresh native/WASM/release qualification completed on
+2026-08-01; focused U2/U3 human retest remains open. M66 is an intentionally empty placeholder.
 M62 follow-up `M62-F001` corrects accepted-state line-angle seeding and exposes acute-degree
 presentation while retaining the explicit directed-radian solver branch.
 Follow-up `M62-F002` gives canvas pointer-down exclusive ownership of canvas authoring picks,
@@ -154,9 +155,10 @@ constraint/dimension/branch-action parity, prepared jobs, incremental scale, ope
 production topology, the advanced workbench, approved advanced UAT and approved CAD-style
 authoring, plus approved canvas constraint visualization and interaction. The previously forecast
 M62-M64 hardening sequence was withdrawn on 2026-07-29; M62-M64 were subsequently scoped,
-completed and approved. M65 is the active predictable, bounded projected-dragging cut. Its reduced
-implementation and native/WASM/release qualification are complete;
-`docs/M65_UAT.md` approval remains its milestone gate. No later milestone is currently scheduled.
+completed and approved. M65 is the active predictable, bounded projected-dragging cut. Its
+replacement implementation and native/WASM/release qualification are complete;
+`docs/M65_UAT.md` focused retest and approval remain its milestone gate. M66 exists only as an
+unscoped placeholder and has no implementation sequence yet.
 
 Durable cleanup records:
 
@@ -187,8 +189,8 @@ Durable cleanup records:
 - `docs/M63_UAT.md` (approved M63 scorecard and finding ledger)
 - `docs/M64_IMPLEMENTATION.md`
 - `docs/M64_UAT.md` (approved M64 scorecard)
-- `docs/M65_IMPLEMENTATION.md` (mechanically qualified reduced-scope implementation record)
-- `docs/M65_UAT.md` (qualified candidate scorecard; human approval pending)
+- `docs/M65_IMPLEMENTATION.md` (mechanically qualified replacement implementation record)
+- `docs/M65_UAT.md` (qualified replacement scorecard; focused human retest pending)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

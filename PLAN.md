@@ -37,7 +37,8 @@ host-integration and interaction-consumer cut; M46-M53 perform the cleanup rebas
 host-semantics UAT; M54-M62 complete the subsequent functional work, approved advanced UAT and
 approved CAD-style authoring, and M63 completes approved geometry-anchored canvas constraint and
 dimension presentation. M64 completes the approved editable-sample cleanup and focused UAT cut;
-M65 is the active predictable, bounded projected-dragging cut for those ordinary editable samples.
+M65 is the active predictable, bounded projected-dragging cut for those ordinary editable samples;
+M66 is an intentionally empty placeholder awaiting M65 approval and supervising-user scope.
 This deliverable does not include a solid B-rep kernel, meshing or 3D sketch curves.
 
 ### Deliverable 2: 2D and 3D rigid-body kinematics
@@ -2947,8 +2948,8 @@ scorecard areas are recorded Pass in `docs/M64_UAT.md`; no M64 finding remains o
 
 ### M65: predictable bounded projected dragging
 
-Status: active; reduced-scope implementation and mechanical qualification completed on
-2026-07-31. Focused supervising-human UAT remains open.
+Status: active; replacement implementation and mechanical qualification completed on
+2026-08-01. Focused supervising-human retest of `M65-F004` and `M65-F005` remains open.
 
 Goal: make projected dragging predictable and synchronously bounded for the existing editable
 mechanism samples. Stability and local UX take priority; bounded work must not weaken mathematical
@@ -2983,8 +2984,9 @@ validation or introduce sample-specific behavior.
   dense kernels no larger than `256 × 256`; `512` diagnostic candidates; and `1,024`
   diagnostic trials.
 - [x] Add compact table-driven regressions for both twin rollers across horizontal, vertical,
-  diagonal and reversal paths; passive-center movement `<= 1e-8`; bounded rejection followed by
-  same-gesture recovery; pantograph input/guide/output/center; Scotch-yoke guide deletion;
+  diagonal and reversal paths; real center/circumference pointer overlaps; passive-center movement
+  `<= 1e-8`; bounded rejection followed by same-gesture recovery; pantograph
+  input/guide/output/center plus natural off-manifold guide projection; Scotch-yoke guide deletion;
   scissor jack/tower; circle-handle offset; release/cancel/Undo/Redo; and stale queued results.
 - [x] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature
   WASM check, release Trunk build and `git diff --check` on one final source state.
@@ -2999,14 +3001,24 @@ sample-ID policy, worker architecture or global root enumeration. It closes only
 mechanical qualification and explicit supervising-human UAT approval. See
 `docs/M65_IMPLEMENTATION.md` and `docs/M65_UAT.md`.
 
-Mechanical qualification record (2026-07-31): direct locality ordering and objective-inventory
+Mechanical qualification record (2026-08-01): direct locality ordering and objective-inventory
 tests, exact release exhaustion/retry tests, representative mechanism paths, strict core
 publication regressions and the integrated authoring/workspace/editability lifecycle all pass.
 Formatting, warnings-denied locked workspace Clippy, locked all-feature workspace tests, the
-all-feature WASM check, the release Trunk bundle and `git diff --check` pass on the reduced
-candidate. M65 remains active solely for the focused supervising-human UAT and any resulting
-tested finding disposition. Qualified code source `42d55b1` is served at
-`http://100.94.63.83:8080/`.
+all-feature WASM check, the release Trunk bundle and `git diff --check` pass on replacement code
+source `b6433d1`. `M65-F004` makes twin-roller geometry reachable through overlapping dimension
+leaders without hiding offset labels; `M65-F005` certifies the rank-one `2 x 2` cursor projection
+and restores natural off-manifold guide motion without relaxing rank, KKT, hierarchy or work
+limits. M65 remains active only for focused U2/U3 human retest and fresh explicit approval. The
+replacement is served at `http://100.94.63.83:8080/`.
+
+### M66: unscoped placeholder
+
+Status: intentionally empty; do not begin until M65 receives fresh supervising-human approval and
+the supervising user supplies M66 goals.
+
+No goal, requirements, acceptance criteria or implementation work are assigned yet. M66 will end
+in its own UAT once it is scoped.
 
 ## Explicit non-goals
 

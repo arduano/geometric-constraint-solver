@@ -945,8 +945,8 @@ browser E2E qualification may return. M65 is the active milestone below.
 
 ## M65 acceptance: predictable bounded projected dragging
 
-Status: active; reduced-scope implementation and mechanical qualification completed on
-2026-07-31. Focused supervising-human UAT is pending.
+Status: active; replacement implementation and mechanical qualification completed on
+2026-08-01. Focused supervising-human retest of `M65-F004` and `M65-F005` is pending.
 
 - [x] One gesture-start locality plan is derived from the independently accepted hard nullspace.
   Active rank and passive rank cover are explicit, and anchors are selected deterministically by
@@ -959,7 +959,8 @@ Status: active; reduced-scope implementation and mechanical qualification comple
   same-gesture recovery is supported, and stale/out-of-order samples are no-ops.
 - [x] Both circle circumferences act as offset-preserving semantic handles for their own centers.
   Dragging either twin roller leaves the other center within `1e-8` across horizontal, vertical,
-  diagonal and reversal paths.
+  diagonal and reversal paths. A visible dimension leader cannot occlude an overlapping draggable
+  center/circumference, while its offset label remains selectable.
 - [x] Core publishes a success-like result only after independently validating Hard rows. On the
   single-component dense path, a complete positive-Temporary residual vector is independently
   captured, re-evaluated and preserved through Preference work row-by-row within
@@ -974,10 +975,10 @@ Status: active; reduced-scope implementation and mechanical qualification comple
   lowering items; `256` nonlinear iterations, `256` factorizations and `256` rank kernels;
   `512` rejected trials; `1,024` component linearizations; `256 × 256` dense kernels;
   `512` diagnostic candidates; and `1,024` diagnostic trials.
-- [x] Direct regressions cover twin-roller independence and reject/recover, all four pantograph
-  controls, Scotch-yoke guide deletion and reversals, scissor jack/tower, circle offset,
-  release/cancel/Undo/Redo, late/stale queued results, and ordinary authoring through workspace
-  save/reload and subsequent editing.
+- [x] Direct regressions cover twin-roller independence, real pointer overlaps and reject/recover;
+  all four pantograph controls plus natural off-manifold guide projection; Scotch-yoke guide
+  deletion and reversals; scissor jack/tower; circle offset; release/cancel/Undo/Redo; late/stale
+  queued results; and ordinary authoring through workspace save/reload and subsequent editing.
 - [x] Formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature WASM,
   release Trunk build and `git diff --check` pass on the same final source state.
 - [ ] The supervising human completes and explicitly approves the four-part
@@ -985,8 +986,14 @@ Status: active; reduced-scope implementation and mechanical qualification comple
 
 M65 does not add alternate-branch UI/search/samples, a residual family, relaxed tolerance,
 weighted-priority semantics, sample-specific motion policy, worker architecture or global root
-enumeration. Mechanical qualification is complete; M65 cannot close until explicit human UAT
-approval and any tested finding disposition are recorded.
+enumeration. Replacement mechanical qualification is complete; M65 cannot close until focused
+U2/U3 human retest and fresh explicit approval are recorded in `docs/M65_UAT.md`.
+
+## M66 acceptance
+
+M66 is an intentionally empty placeholder. It has no goal or acceptance criteria and cannot begin
+until M65 closes and the supervising user supplies its scope. Once scoped, it will end in its own
+human UAT.
 
 ### M54: stable diagnostics
 
