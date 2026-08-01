@@ -991,10 +991,9 @@ in `docs/M65_UAT.md`; M65 is complete.
 
 ## M66 acceptance: CAD helper-operation authoring
 
-Status: active. First replacement source `92e6ddce1e37d6508b5dd8568078146ac2822aa7` is mechanically
-qualified with direct dispositions for `M66-F001` through `M66-F003`. Continued UAT opened
-`M66-F004` through `M66-F006`; next-replacement mechanical qualification and focused
-supervising-human UAT remain open.
+Status: active. Replacement code source `77eda3ec5f7fc49b69eaf6a70124b9596f4ab796` is mechanically
+qualified with direct dispositions for `M66-F001` through `M66-F006`; focused supervising-human
+UAT and approval remain open.
 
 - A separate public headless operation-authoring state owns Fillet, Line offset and Mirror
   operand progression, finite model-space picks, explicit options, warnings, repeated mode,
@@ -1063,8 +1062,8 @@ supervising-human UAT remain open.
   stale/rejected retention, Undo/Redo, workspace reload and sample editability. Existing
   M25/M27/M28 derivative and independent-validation corpora remain green; M66 adds no residual.
 - Formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature demo-web
-  WASM, release Trunk and `git diff --check` pass from one next-replacement candidate before the
-  focused UAT resumes.
+  WASM, release Trunk and `git diff --check` pass from replacement code source
+  `77eda3ec5f7fc49b69eaf6a70124b9596f4ab796` before the focused UAT resumes.
 - The supervising human explicitly approves `docs/M66_UAT.md`; no correctness, data-loss,
   misleading-preview or basic helper-authoring blocker remains.
 

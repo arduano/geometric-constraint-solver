@@ -1,20 +1,17 @@
 # M66 focused UAT: CAD helper operations
 
-Status: active remediation; supervising-human UAT is pending.
+Status: mechanically qualified replacement; supervising-human UAT is pending.
 
-Candidate code source: next replacement pending. First replacement
-`92e6ddce1e37d6508b5dd8568078146ac2822aa7` is superseded by `M66-F004` through `M66-F006`;
-initial source `f913fb46e14308dc66563d1e602d3ae6ed2f7cb1` is also superseded.
+Candidate code source: `77eda3ec5f7fc49b69eaf6a70124b9596f4ab796`. First replacement
+`92e6ddce1e37d6508b5dd8568078146ac2822aa7` and initial source
+`f913fb46e14308dc66563d1e602d3ae6ed2f7cb1` are superseded.
 
-Tailscale endpoint: next replacement pending. The prior service at
-`http://100.94.63.83:8080/` is not an approval candidate until it serves the newly qualified
-replacement bundle.
+Tailscale endpoint: `http://100.94.63.83:8080/`.
 
-First replacement mechanical qualification completed on 2026-08-01. That exact candidate passed
+Replacement mechanical qualification completed on 2026-08-01. The exact candidate above passed
 formatting, warnings-denied locked workspace/all-target/all-feature Clippy, locked all-feature
 workspace tests, the all-feature demo-web WASM check, release Trunk build and `git diff --check`.
-The same complete gate must pass again for the F004-F006 replacement. Every human result below
-remains Pending.
+Every human result below remains Pending.
 
 Use the ordinary GeoSolve Sketch Workbench only. The sample leaves are editable save-like
 workspaces; they contain no guided actions or protected state. This scorecard judges whether the
@@ -138,9 +135,9 @@ Notes:
 | `M66-F001` | Line offset could not collect connected spans into one useful joined result; a subsequent click was consumed as side confirmation. | Add a max-32 explicitly clicked, unique, endpoint-connected ordered-chain request that emits one atomic one-shot mitered polyline with no dimension/association or automatic discovery. Directly test valid expansion, invalid retention, Undo/Redo and persistence; recheck M66-U2. | Implemented and directly qualified; focused M66-U2 retest pending. |
 | `M66-F002` | Selecting an open-polyline corner did not author a fillet across its two adjacent spans. | Resolve one unambiguous interior point headlessly to its ordered adjacent spans and explicit `End`/`Start` trim ownership. Directly test accepted M28 geometry plus endpoint/ambiguous rejection; recheck M66-U1. | Implemented and directly qualified; focused M66-U1 retest pending. |
 | `M66-F003` | Fillet creation silently used a driving fallback radius, and deleting that dimension still left the visible arc body without a drag route. | Add pointer radius placement with Reference default and explicit Driving intent; expose CircularArc center drag metadata; prove mathematical DOF, association retention, projected drag/rejection and exact preview publication; recheck M66-U1/U4. | Implemented and directly qualified; focused M66-U1/U4 retest pending. |
-| `M66-F004` | Accepted scratch preview geometry intercepted later Fillet radius and Line offset side-placement clicks, so the preview could be treated as another operand instead of completing the stage. | Resolve the best visible hit once; if its identity exists only in preview, block click-through to hidden source geometry but forward no live operand so the headless placement stage owns the click. Directly regress preview/source overlaps and recheck M66-U1/U2/U4. | Remediation implementation present; next replacement qualification and focused retest pending. |
-| `M66-F005` | Curve picking during repeated helper authoring was too narrow and made otherwise clear selections unnecessarily difficult. | Use the editor's shared nearest-curve acquisition with an inclusive 12-pixel radius and stable persistent-identity ties; qualify the exact inside/boundary/outside cases and recheck all operation tools. | Remediation implementation present; next replacement qualification and focused retest pending. |
-| `M66-F006` | The Line offset tool did not make it sufficiently clear that adding a second connected span changes from an associative result to one-shot geometry. | Keep one-span exact/supporting offsets associative, keep two-or-more-span joined offsets explicitly one-shot, state propagation semantics in headless guidance and defer persistent associative multi-span offsets. Recheck M66-U2/U4. | Remediation implementation present; next replacement qualification and focused retest pending. |
+| `M66-F004` | Accepted scratch preview geometry intercepted later Fillet radius and Line offset side-placement clicks, so the preview could be treated as another operand instead of completing the stage. | Resolve the best visible hit once; if its identity exists only in preview, block click-through to hidden source geometry but forward no live operand so the headless placement stage owns the click. Directly regress preview/source overlaps and recheck M66-U1/U2/U4. | Implemented and directly qualified; focused M66-U1/U2/U4 retest pending. |
+| `M66-F005` | Curve picking during repeated helper authoring was too narrow and made otherwise clear selections unnecessarily difficult. | Use the editor's shared nearest-curve acquisition with an inclusive 12-pixel radius and stable persistent-identity ties; qualify the exact inside/boundary/outside cases and recheck all operation tools. | Implemented and directly qualified; focused operation-tool retest pending. |
+| `M66-F006` | The Line offset tool did not make it sufficiently clear that adding a second connected span changes from an associative result to one-shot geometry. | Keep one-span exact/supporting offsets associative, keep two-or-more-span joined offsets explicitly one-shot, state propagation semantics in headless guidance and defer persistent associative multi-span offsets. Recheck M66-U2/U4. | Implemented and directly qualified; focused M66-U2/U4 retest pending. |
 
 Every objective defect requires a direct owning-layer regression before targeted human recheck. A
 replacement candidate must be rebuilt and fully qualified even when one remaining change is

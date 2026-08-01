@@ -3015,9 +3015,9 @@ replacement candidate. M65 is closed; the historical candidate endpoint was
 
 ### M66: CAD helper-operation authoring
 
-Status: active. The first replacement implementation is directly qualified for `M66-F001` through
-`M66-F003`. Continued supervising-human UAT opened `M66-F004` through `M66-F006`; the next
-replacement qualification and focused human retest remain open.
+Status: active. Replacement code source
+`77eda3ec5f7fc49b69eaf6a70124b9596f4ab796` is directly and mechanically qualified for
+`M66-F001` through `M66-F006`; focused supervising-human retest and approval remain open.
 
 Goal: expose intuitive reusable authoring for associative 2D fillets, line offsets and exact
 supported-family mirrors while keeping branch synthesis, applicability, scratch preview and
@@ -3089,9 +3089,9 @@ publication in the headless editor/operations layers rather than the browser.
 - [x] Directly qualify the `M66-F001` joined-chain offset, `M66-F002` polyline-corner fillet and
   `M66-F003` pointer-placed reference-radius/arc-center-drag remediations, then repeat the complete
   native, WASM and release gate from one replacement source state.
-- [ ] Directly qualify `M66-F004` preview-geometry placement routing, `M66-F005` inclusive shared
+- [x] Directly qualify `M66-F004` preview-geometry placement routing, `M66-F005` inclusive shared
   curve acquisition and `M66-F006` explicit associative-versus-one-shot offset guidance, then
-  repeat the complete native, WASM and release gate from one next-replacement source state.
+  repeat the complete native, WASM and release gate from one replacement source state.
 - [ ] Complete and explicitly approve `docs/M66_UAT.md`.
 
 Gate: every visible helper tool is driven by public headless operation-authoring metadata and
@@ -3103,8 +3103,8 @@ acquisition is inclusive at 12 pixels and accepted preview geometry cannot becom
 cause click-through to hidden source geometry. Unsupported or ambiguous geometry is typed and
 mutation-free; no browser equation or applicability matrix, general curve offset approximation,
 recursive path discovery, global fillet-root enumeration, persistent feature tree, legacy harness,
-`/#/dev/lab`, browser E2E or mobile claim is added. M66 closes only after next-replacement direct
-qualification and explicit supervising-human UAT approval.
+`/#/dev/lab`, browser E2E or mobile claim is added. M66 closes only after explicit
+supervising-human UAT approval of the mechanically qualified replacement.
 
 First replacement mechanical qualification record (2026-08-01): code source
 `92e6ddce1e37d6508b5dd8568078146ac2822aa7` passes formatting, warnings-denied locked
@@ -3112,9 +3112,16 @@ workspace/all-target/all-feature Clippy, locked all-feature workspace tests, the
 demo-web WASM check, the release Trunk bundle and `git diff --check`. Direct owners cover the
 joined-path operation and invalid classes, adjacent-polyline direct/corner authoring, flexible and
 locked radius placement, semantic arc-center drag, exact release/Undo/Redo and bit-exact workspace
-reload. Continued UAT superseded that source with `M66-F004` through `M66-F006`; the next exact
-candidate and its complete qualification are pending. The human-UAT checkbox intentionally remains
-open.
+reload. Continued UAT superseded that source with `M66-F004` through `M66-F006`.
+
+Second replacement mechanical qualification record (2026-08-01): code source
+`77eda3ec5f7fc49b69eaf6a70124b9596f4ab796` passes formatting, warnings-denied locked
+workspace/all-target/all-feature Clippy, locked all-feature workspace tests, the all-feature
+demo-web WASM check, the release Trunk bundle and `git diff --check`. Direct regressions prove
+source-aware preview foreground filtering including exact source/preview ties, terminal Fillet and
+Line offset placement through the shared production pointer router, inclusive 12-pixel nearest
+curve acquisition with stable persistent-identity ties, a reactive associative single-span offset
+and explicit one-shot joined-path guidance. The human-UAT checkbox intentionally remains open.
 
 ## Explicit non-goals
 

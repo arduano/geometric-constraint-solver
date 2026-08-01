@@ -2,9 +2,9 @@
 
 # M66 implementation: headless CAD helper-operation authoring
 
-Status: active remediation as of 2026-08-01. The first replacement is mechanically qualified for
-`M66-F001` through `M66-F003`. Continued supervising-human UAT opened `M66-F004` through
-`M66-F006`; the next replacement gate and focused human retest remain pending.
+Status: active UAT as of 2026-08-01. Replacement code source
+`77eda3ec5f7fc49b69eaf6a70124b9596f4ab796` is mechanically qualified for `M66-F001` through
+`M66-F006`; focused supervising-human retest and approval remain pending.
 
 ## Scope
 
@@ -165,10 +165,11 @@ offset state therefore receives the intended no-operand placement click.
 
 ## 3. Exact commands run and outcomes
 
-First replacement code source `92e6ddce1e37d6508b5dd8568078146ac2822aa7` passed the exact
-integrated gate on 2026-08-01. Initial source `f913fb46e14308dc66563d1e602d3ae6ed2f7cb1`
-is superseded and retained only as historical evidence. Continued UAT superseded the first
-replacement with F004-F006; its next exact source and complete rerun are pending:
+Replacement code source `77eda3ec5f7fc49b69eaf6a70124b9596f4ab796` passed the exact
+integrated gate on 2026-08-01. First replacement
+`92e6ddce1e37d6508b5dd8568078146ac2822aa7` and initial source
+`f913fb46e14308dc66563d1e602d3ae6ed2f7cb1` are superseded and retained only as historical
+evidence:
 
 ```text
 nix-shell shell.nix --run 'cargo fmt --all -- --check'
@@ -193,19 +194,20 @@ Outcomes:
 
 ## 4. Acceptance status
 
-The first replacement candidate passes its objective implementation and mechanical acceptance
-criteria for F001-F003. Direct coverage owns operation expansion, state transitions, exact picked
+The replacement candidate passes its objective implementation and mechanical acceptance criteria
+for F001-F006. Direct coverage owns operation expansion, state transitions, exact picked
 parameters, local fillet branches, single-span offset modes/sides, bounded joined-chain construction
 and invalid classes, adjacent-polyline direct/corner fillets, flexible/locked radius placement,
 semantic arc-center drag, accepted scratch provenance, token/candidate/confirmation binding,
 cancellation/exhaustion/staleness, exact scratch/commit equality, selection, history/replay,
-bit-exact workspace round-trip and editable plain samples. The retained M25/M27/M28 derivative
-and independent-validation corpora also pass; M66 adds no residual.
+bit-exact workspace round-trip and editable plain samples. F004-F006 additionally have direct
+owning-layer regressions for source-aware preview foreground filtering, terminal placement on a
+preview overlap, inclusive shared curve acquisition, stable nearest/tie behavior, reactive
+single-span association and truthful multi-span one-shot guidance. The retained M25/M27/M28
+derivative and independent-validation corpora also pass; M66 adds no residual.
 
-F001-F003 have direct owning-layer regressions and their complete replacement native/WASM/release
-gate passes. F004-F006 have an in-progress implementation and direct regression surface, but the
-next complete native/WASM/release gate and focused human retest remain pending. The explicit
-supervising-human acceptance checkbox remains open, so M66 is not yet closed.
+The complete replacement native/WASM/release gate passes. Focused human retest and the explicit
+supervising-human acceptance checkbox remain open, so M66 is not yet closed.
 
 ## 5. Known limitations or next blocker
 
@@ -216,5 +218,5 @@ supervising-human acceptance checkbox remains open, so M66 is not yet closed.
   multi-span offsets are deferred.
 - Mirrors are exact only for point-defined supported families and commit one source at a time.
 - The workbench remains a non-authoritative desktop UAT consumer.
-- The remaining gates are the F004-F006 next-replacement qualification, focused supervising-human
-  retest and explicit approval of `docs/M66_UAT.md`.
+- The remaining gate is focused supervising-human retest and explicit approval of
+  `docs/M66_UAT.md`.
