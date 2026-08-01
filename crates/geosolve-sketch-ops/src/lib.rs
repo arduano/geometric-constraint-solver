@@ -10,8 +10,9 @@ use std::collections::BTreeSet;
 
 use geosolve_sketch::{
     ContactNeighborhood, CurveCurveFilletRequest, CurveDefinition, CurveId, CurveSpan,
-    DesignPointId, DocumentArcSweep, DocumentConstraintDefinition, DocumentCurveTrimView,
-    DocumentDimensionDefinition, DocumentDimensionMode, DocumentElementId, DocumentError,
+    DesignPointId, DesignScalarId, DocumentArcSweep, DocumentConstraintDefinition,
+    DocumentCurveTrimView, DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode,
+    DocumentElementId, DocumentError, DocumentLineOffsetOrientation, DocumentLineSide,
     DocumentTrimBoundary, DocumentTrimParameter, OperationCheckpoint, OperationControl,
     OperationController, OperationOutcome, OperationWorkCounter, PreparedSketchInput,
     RetainedDocumentTransactionOutcome, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
@@ -44,7 +45,19 @@ pub enum LineEndpoint {
     End,
 }
 
-/// Closed M58 operation request surface.
+/// Associative equation family used by a newly authored line offset.
+///
+/// Both modes create ordinary sketch geometry and one ordinary driving
+/// dimension. The exact mode preserves endpoint translation, while the
+/// supporting-line mode intentionally retains target axial-slide and length
+/// freedom.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AssociativeLineOffsetMode {
+    ExactTranslatedSegment,
+    SupportingLine,
+}
+
+/// Closed sketch-operation request surface.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum SketchOperationRequest {
@@ -73,6 +86,13 @@ pub enum SketchOperationRequest {
         label: String,
         source: CurveId,
         axis: CurveSpan,
+    },
+    AssociativeLineOffset {
+        label: String,
+        source: CurveSpan,
+        distance: f64,
+        side: DocumentLineSide,
+        mode: AssociativeLineOffsetMode,
     },
     Chamfer {
         label: String,
@@ -121,6 +141,7 @@ impl SketchOperationRequest {
             Self::Trim { .. } => SketchOperationKind::Trim,
             Self::ExtendLineToLine { .. } => SketchOperationKind::Extend,
             Self::Mirror { .. } => SketchOperationKind::Mirror,
+            Self::AssociativeLineOffset { .. } => SketchOperationKind::AssociativeLineOffset,
             Self::Chamfer { .. } => SketchOperationKind::Chamfer,
             Self::AssociativeFillet { .. } => SketchOperationKind::AssociativeFillet,
             Self::Rectangle { .. } => SketchOperationKind::Rectangle,
@@ -139,6 +160,7 @@ pub enum SketchOperationKind {
     Trim,
     Extend,
     Mirror,
+    AssociativeLineOffset,
     Chamfer,
     AssociativeFillet,
     Rectangle,
@@ -304,6 +326,7 @@ pub enum SketchOperationIncompleteReason {
     LinesDoNotShareOneEndpoint,
     ParallelLines,
     IntersectionDoesNotExtendSelectedEndpoint,
+    DegenerateLineSpan { support: CurveSpan },
 }
 
 /// Completed preparation result.
@@ -325,6 +348,14 @@ pub enum SketchOperationIdentityChange {
         source: CurveId,
         retained: SplitRetainedPiece,
         visible_piece_count: usize,
+    },
+    AssociativeLineOffset {
+        source: CurveSpan,
+        target_start: DesignPointId,
+        target_end: DesignPointId,
+        target_segment: CurveId,
+        distance: DesignScalarId,
+        dimension: DocumentDimensionId,
     },
     Proposed(DocumentElementId),
 }
@@ -451,6 +482,7 @@ enum PlannedOperation {
         source: CurveId,
         axis: CurveSpan,
     },
+    AssociativeLineOffset(LineOffsetPlan),
     Chamfer(ChamferPlan),
     Fillet {
         label: String,
@@ -489,6 +521,18 @@ struct ChamferPlan {
     second_keep_start: bool,
     first_distance: f64,
     second_distance: f64,
+}
+
+#[derive(Clone, Debug)]
+struct LineOffsetPlan {
+    label: String,
+    source: CurveSpan,
+    distance: f64,
+    side: DocumentLineSide,
+    mode: AssociativeLineOffsetMode,
+    target_start: [f64; 2],
+    target_end: [f64; 2],
+    branch_direction: [f64; 2],
 }
 
 #[derive(Clone, Debug)]
@@ -739,6 +783,39 @@ fn build_result(
                     source: *source,
                     axis: *axis,
                 },
+                Some(accepted.identity),
+            )
+        }
+        SketchOperationRequest::AssociativeLineOffset {
+            label,
+            source,
+            distance,
+            side,
+            mode,
+        } => {
+            ensure_positive(*distance, "line offset distance")?;
+            let Some(accepted) = accepted_for_design(snapshot) else {
+                return Ok(missing_accepted(snapshot, kind));
+            };
+            let plan =
+                match plan_line_offset(&accepted.document, label, *source, *distance, *side, *mode)
+                {
+                    Ok(plan) => plan,
+                    Err(GeometryPlanFailure::Unsupported(curve)) => {
+                        return Ok(unsupported(
+                            kind,
+                            SketchOperationUnsupportedReason::CurveFamily {
+                                curve,
+                                operation: "line offset",
+                            },
+                        ));
+                    }
+                    Err(GeometryPlanFailure::Incomplete(reason)) => {
+                        return Ok(incomplete(kind, reason));
+                    }
+                };
+            (
+                PlannedOperation::AssociativeLineOffset(plan),
                 Some(accepted.identity),
             )
         }
@@ -1026,6 +1103,62 @@ impl PlannedOperation {
                         .collect(),
                 )
             }
+            Self::AssociativeLineOffset(plan) => {
+                let target_start = document
+                    .add_point(format!("{}.target_start", plan.label), plan.target_start)?;
+                let target_end =
+                    document.add_point(format!("{}.target_end", plan.label), plan.target_end)?;
+                let target_segment = document.add_curve(
+                    format!("{}.target", plan.label),
+                    CurveDefinition::Line {
+                        start: target_start,
+                        end: target_end,
+                        branch_direction: plan.branch_direction,
+                    },
+                )?;
+                let distance = document.add_scalar(
+                    format!("{}.distance", plan.label),
+                    plan.distance,
+                    ScalarUnit::Length,
+                    ScalarDomain::Positive,
+                )?;
+                let definition = match plan.mode {
+                    AssociativeLineOffsetMode::ExactTranslatedSegment => {
+                        DocumentDimensionDefinition::ExactTranslatedSegmentOffset {
+                            source: plan.source,
+                            target_segment: CurveSpan::line(target_segment),
+                            target: distance,
+                            side: plan.side,
+                            orientation: DocumentLineOffsetOrientation::Same,
+                        }
+                    }
+                    AssociativeLineOffsetMode::SupportingLine => {
+                        DocumentDimensionDefinition::SupportingLineOffset {
+                            source: plan.source,
+                            target_segment: CurveSpan::line(target_segment),
+                            target: distance,
+                            side: plan.side,
+                            orientation: DocumentLineOffsetOrientation::Same,
+                        }
+                    }
+                };
+                let dimension = document.add_dimension(
+                    format!("{}.dimension", plan.label),
+                    definition,
+                    DocumentDimensionMode::Driving,
+                )?;
+                (
+                    SketchOperationKind::AssociativeLineOffset,
+                    vec![SketchOperationIdentityChange::AssociativeLineOffset {
+                        source: plan.source,
+                        target_start,
+                        target_end,
+                        target_segment,
+                        distance,
+                        dimension,
+                    }],
+                )
+            }
             Self::Chamfer(plan) => (SketchOperationKind::Chamfer, apply_chamfer(document, plan)?),
             Self::Fillet { label, request } => {
                 let ids = document.add_curve_curve_fillet(label, *request)?;
@@ -1085,9 +1218,10 @@ impl PlannedOperation {
         };
         let after = document_elements(document);
         for element in after.difference(&before) {
-            if !explicit.iter().any(
-                |change| matches!(change, SketchOperationIdentityChange::Proposed(id) if id == element),
-            ) {
+            if !explicit
+                .iter()
+                .any(|change| identity_change_mentions(change, *element))
+            {
                 explicit.push(SketchOperationIdentityChange::Proposed(*element));
             }
         }
@@ -1566,6 +1700,55 @@ fn plan_chamfer(
     })
 }
 
+fn plan_line_offset(
+    document: &SketchDocument,
+    label: &str,
+    source: CurveSpan,
+    distance: f64,
+    side: DocumentLineSide,
+    mode: AssociativeLineOffsetMode,
+) -> Result<LineOffsetPlan, GeometryPlanFailure> {
+    let (start, end) = line_endpoint_ids(document, source)
+        .ok_or(GeometryPlanFailure::Unsupported(source.curve))?;
+    let start = point_position(document, start);
+    let end = point_position(document, end);
+    let delta = subtract(end, start);
+    let length = squared_norm(delta).sqrt();
+    if !length.is_finite() || length <= f64::MIN_POSITIVE {
+        return Err(GeometryPlanFailure::Incomplete(
+            SketchOperationIncompleteReason::DegenerateLineSpan { support: source },
+        ));
+    }
+    let branch_direction = [delta[0] / length, delta[1] / length];
+    let left_normal = [-branch_direction[1], branch_direction[0]];
+    let side_sign = match side {
+        DocumentLineSide::Left => 1.0,
+        DocumentLineSide::Right => -1.0,
+    };
+    let offset = scale(left_normal, side_sign * distance);
+    let target_start = add(start, offset);
+    let target_end = add(end, offset);
+    if !target_start
+        .into_iter()
+        .chain(target_end)
+        .all(f64::is_finite)
+    {
+        return Err(GeometryPlanFailure::Incomplete(
+            SketchOperationIncompleteReason::DegenerateLineSpan { support: source },
+        ));
+    }
+    Ok(LineOffsetPlan {
+        label: label.to_owned(),
+        source,
+        distance,
+        side,
+        mode,
+        target_start,
+        target_end,
+        branch_direction,
+    })
+}
+
 fn plan_line_extension(
     document: &SketchDocument,
     line: CurveSpan,
@@ -1726,6 +1909,36 @@ fn document_elements(document: &SketchDocument) -> BTreeSet<DocumentElementId> {
     elements
 }
 
+fn identity_change_mentions(
+    change: &SketchOperationIdentityChange,
+    element: DocumentElementId,
+) -> bool {
+    match change {
+        SketchOperationIdentityChange::Retained(id)
+        | SketchOperationIdentityChange::Replaced(id)
+        | SketchOperationIdentityChange::Proposed(id) => *id == element,
+        SketchOperationIdentityChange::Split { source, .. } => {
+            DocumentElementId::Curve(*source) == element
+        }
+        SketchOperationIdentityChange::AssociativeLineOffset {
+            source,
+            target_start,
+            target_end,
+            target_segment,
+            distance,
+            dimension,
+        } => [
+            DocumentElementId::Curve(source.curve),
+            DocumentElementId::Point(*target_start),
+            DocumentElementId::Point(*target_end),
+            DocumentElementId::Curve(*target_segment),
+            DocumentElementId::Scalar(*distance),
+            DocumentElementId::Dimension(*dimension),
+        ]
+        .contains(&element),
+    }
+}
+
 fn fixed_view(support: CurveSpan, start: f64, end: f64) -> DocumentCurveTrimView {
     DocumentCurveTrimView {
         support,
@@ -1767,7 +1980,8 @@ fn request_operand_count(request: &SketchOperationRequest) -> usize {
         SketchOperationRequest::Split { .. }
         | SketchOperationRequest::Break { .. }
         | SketchOperationRequest::Trim { .. }
-        | SketchOperationRequest::Mirror { .. } => 1,
+        | SketchOperationRequest::Mirror { .. }
+        | SketchOperationRequest::AssociativeLineOffset { .. } => 1,
         SketchOperationRequest::ExtendLineToLine { .. }
         | SketchOperationRequest::Chamfer { .. }
         | SketchOperationRequest::AssociativeFillet { .. } => 2,
