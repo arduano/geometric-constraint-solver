@@ -540,7 +540,7 @@ fn controlled_proposal_apply_is_mutation_free_when_cancelled_or_exhausted() {
     let exhausted = proposal
         .apply_controlled(
             &mut session,
-            OperationControl::new(Default::default(), limits),
+            OperationControl::new(geosolve_sketch::CancellationToken::default(), limits),
         )
         .unwrap();
     assert!(matches!(exhausted, OperationOutcome::WorkExhausted { .. }));
