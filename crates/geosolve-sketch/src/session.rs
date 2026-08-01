@@ -1642,9 +1642,21 @@ fn complete_materialized_candidate_for_problem(
     tolerance: f64,
     completion: CandidateCompletion,
 ) -> Result<CompleteSketchCandidate, SessionDomainRejection<SolveRejection>> {
-    template
-        .derive_curve_fillet_arcs(&mut candidate, tolerance)
-        .map_err(session_domain_rejection)?;
+    match completion {
+        CandidateCompletion::ProjectedSolve => template
+            .derive_curve_fillet_arcs(&mut candidate, tolerance)
+            .map_err(session_domain_rejection)?,
+        CandidateCompletion::ExactCertification => {
+            // Exact certification must not move the materialized scene. Fillet
+            // angles are derived output, so validate that derivation on a clone;
+            // `validate_m7_candidate` below independently checks the retained
+            // angles against the same contacts within the acceptance tolerance.
+            let mut derived = candidate.clone();
+            template
+                .derive_curve_fillet_arcs(&mut derived, tolerance)
+                .map_err(session_domain_rejection)?;
+        }
+    }
     if let Some(segment) = template.first_flipped_segment(&candidate.geometry) {
         return Err(session_domain_rejection(
             SolveRejection::SegmentBranchFlipped(segment),

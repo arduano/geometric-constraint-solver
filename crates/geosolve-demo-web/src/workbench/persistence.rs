@@ -3,10 +3,16 @@
 use serde::{Deserialize, Serialize};
 
 use geosolve_constraint_editor::RestoreCheckpoint;
-use geosolve_sketch::{SketchDocument, SketchLifecycleRevisionHighWater};
+use geosolve_core::SolverConfig;
+use geosolve_sketch::{
+    DocumentSolveRequest, RetainedSketchDocumentSession, SketchDocument,
+    SketchLifecycleRevisionHighWater,
+};
 
 #[cfg(target_arch = "wasm32")]
-pub(crate) const STORAGE_KEY: &str = "geosolve.workbench.session.v2";
+pub(crate) const STORAGE_KEY: &str = "geosolve.workbench.session.v3";
+#[cfg(target_arch = "wasm32")]
+pub(crate) const PREVIOUS_STORAGE_KEY: &str = "geosolve.workbench.session.v2";
 #[cfg(target_arch = "wasm32")]
 pub(crate) const LEGACY_STORAGE_KEY: &str = "geosolve.workbench.session.v1";
 
@@ -16,6 +22,7 @@ pub(crate) struct WorkspaceSnapshot {
     version: u32,
     design: WorkspaceDocumentPayload,
     accepted: Option<WorkspaceDocumentPayload>,
+    accepted_belongs_to_current_design: bool,
     pub(crate) revisions: WorkspaceRevisions,
 }
 
@@ -35,10 +42,19 @@ struct WorkspaceDocumentPayload {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct LegacyWorkspaceSnapshot {
+struct LegacyWorkspaceSnapshotV1 {
     version: u32,
     design_json: String,
     accepted_json: Option<String>,
+    revisions: WorkspaceRevisions,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LegacyWorkspaceSnapshotV2 {
+    version: u32,
+    design: WorkspaceDocumentPayload,
+    accepted: Option<WorkspaceDocumentPayload>,
     revisions: WorkspaceRevisions,
 }
 
@@ -54,7 +70,7 @@ impl WorkspaceSnapshot {
     pub(crate) fn from_checkpoint(checkpoint: &RestoreCheckpoint) -> Self {
         let revisions = checkpoint.revisions();
         Self {
-            version: 2,
+            version: 3,
             design: WorkspaceDocumentPayload {
                 encoding: if checkpoint.design_uses_draft_v5() {
                     WorkspaceDocumentEncoding::DraftV5
@@ -73,6 +89,7 @@ impl WorkspaceSnapshot {
                     },
                     json: json.to_owned(),
                 }),
+            accepted_belongs_to_current_design: checkpoint.accepted_belongs_to_current_design(),
             revisions: WorkspaceRevisions {
                 design: revisions.design().get(),
                 attempt: revisions.attempt().get(),
@@ -103,13 +120,13 @@ impl WorkspaceSnapshot {
             .ok_or_else(|| "workbench snapshot version is missing".to_owned())?;
         match version {
             1 => {
-                let legacy: LegacyWorkspaceSnapshot =
+                let legacy: LegacyWorkspaceSnapshotV1 =
                     serde_json::from_str(input).map_err(|error| error.to_string())?;
                 if legacy.version != 1 {
                     return Err("unsupported workbench snapshot version".into());
                 }
                 Ok(Self {
-                    version: 2,
+                    version: 3,
                     design: WorkspaceDocumentPayload {
                         encoding: WorkspaceDocumentEncoding::CanonicalV4,
                         json: legacy.design_json,
@@ -118,10 +135,34 @@ impl WorkspaceSnapshot {
                         encoding: WorkspaceDocumentEncoding::CanonicalV4,
                         json,
                     }),
+                    accepted_belongs_to_current_design: false,
                     revisions: legacy.revisions,
                 })
             }
-            2 => serde_json::from_str(input).map_err(|error| error.to_string()),
+            2 => {
+                let legacy: LegacyWorkspaceSnapshotV2 =
+                    serde_json::from_str(input).map_err(|error| error.to_string())?;
+                if legacy.version != 2 {
+                    return Err("unsupported workbench snapshot version".into());
+                }
+                Ok(Self {
+                    version: 3,
+                    design: legacy.design,
+                    accepted: legacy.accepted,
+                    accepted_belongs_to_current_design: false,
+                    revisions: legacy.revisions,
+                })
+            }
+            3 => {
+                let snapshot: Self =
+                    serde_json::from_str(input).map_err(|error| error.to_string())?;
+                if snapshot.accepted_belongs_to_current_design && snapshot.accepted.is_none() {
+                    return Err(
+                        "current-design accepted provenance requires an accepted payload".into(),
+                    );
+                }
+                Ok(snapshot)
+            }
             _ => Err("unsupported workbench snapshot version".into()),
         }
     }
@@ -132,6 +173,36 @@ impl WorkspaceSnapshot {
 
     pub(crate) fn accepted_document(&self) -> Result<Option<SketchDocument>, String> {
         self.accepted.as_ref().map(decode_document).transpose()
+    }
+
+    pub(crate) fn restore_session(
+        &self,
+        request: DocumentSolveRequest,
+        config: SolverConfig,
+    ) -> Result<RetainedSketchDocumentSession, String> {
+        let design = self.design_document()?;
+        let restored = if let Some(accepted) = self.accepted_document()? {
+            if self.accepted_belongs_to_current_design {
+                RetainedSketchDocumentSession::restore_current_design_with_accepted(
+                    design,
+                    accepted,
+                    self.revisions(),
+                    request,
+                    config,
+                )
+            } else {
+                RetainedSketchDocumentSession::restore_design_with_accepted(
+                    design,
+                    accepted,
+                    self.revisions(),
+                    request,
+                    config,
+                )
+            }
+        } else {
+            RetainedSketchDocumentSession::restore_design(design, self.revisions(), request, config)
+        };
+        restored.map_err(|error| error.to_string())
     }
 }
 
@@ -147,13 +218,14 @@ fn decode_document(payload: &WorkspaceDocumentPayload) -> Result<SketchDocument,
 mod tests {
     use geosolve_constraint_editor::{
         AuthoringMutation, AuthoringOperand, AuthoringOutcome, AuthoringState, AuthoringTool,
-        ConstraintIntent, OperationAuthoringOutcome, OperationAuthoringPreviewOutcome,
-        OperationAuthoringState, OperationAuthoringTool, RetainedEditorCoordinator, SelectionItem,
+        ConstraintIntent, OperationAuthoringOptions, OperationAuthoringOutcome,
+        OperationAuthoringPreviewOutcome, OperationAuthoringState, OperationAuthoringTool,
+        RetainedEditorCoordinator, SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
         AlphaScenarioIds, AlphaScenarioKind, ContactStateEdit, CurveDefinition, CurveSpan,
-        DocumentConstraintDefinition, DocumentEdit, DocumentSolveRequest,
+        DocumentConstraintDefinition, DocumentEdit, DocumentObjectId, DocumentSolveRequest,
         RetainedSketchDocumentSession, SketchDocument, alpha_scenario,
     };
 
@@ -170,6 +242,12 @@ mod tests {
         let coordinator = RetainedEditorCoordinator::new(session).unwrap();
         let snapshot = WorkspaceSnapshot::from_checkpoint(coordinator.checkpoint());
         let decoded = WorkspaceSnapshot::decode(&snapshot.encode().unwrap()).unwrap();
+        assert_eq!(snapshot.version, 3);
+        assert!(snapshot.accepted_belongs_to_current_design);
+        assert_eq!(
+            decoded.accepted_belongs_to_current_design,
+            snapshot.accepted_belongs_to_current_design
+        );
         assert_eq!(decoded.design, snapshot.design);
         assert_eq!(decoded.accepted, snapshot.accepted);
         assert_eq!(decoded.revisions().design(), snapshot.revisions().design());
@@ -180,6 +258,91 @@ mod tests {
         assert_eq!(
             decoded.revisions().accepted(),
             snapshot.revisions().accepted()
+        );
+    }
+
+    #[test]
+    fn v3_current_design_provenance_restores_flexible_fillet_bytes_exactly() {
+        let fixture = alpha_scenario(AlphaScenarioKind::FilletLineCircle, 1.0)
+            .expect("line-circle fillet fixture");
+        let AlphaScenarioIds::FilletLineCircle(ids) = fixture.ids else {
+            panic!("line-circle fillet IDs expected")
+        };
+        let session = RetainedSketchDocumentSession::new(
+            fixture.document,
+            fixture.request,
+            SolverConfig::default(),
+        )
+        .expect("fillet session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let deletion = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::Delete {
+                    object: DocumentObjectId::Dimension(ids.fillet.radius_dimension),
+                },
+            )
+            .expect("delete fillet driving radius");
+        assert!(deletion.published_accepted.is_some());
+        let initial_center = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted flexible fillet")
+            .document()
+            .point(ids.fillet.center)
+            .expect("fillet center")
+            .position;
+        let moved = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: ids.fillet.center,
+                    position: [initial_center[0] + 0.2, initial_center[1] + 0.15],
+                },
+            )
+            .expect("move flexible fillet center");
+        assert!(moved.published_accepted.is_some());
+
+        let design_before = coordinator.session().design_document().clone();
+        let accepted_before = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted moved fillet")
+            .document()
+            .clone();
+        assert_ne!(
+            design_before, accepted_before,
+            "the regression requires distinct retained seeds and solved materialization"
+        );
+        let accepted_json_before = accepted_before
+            .to_canonical_json()
+            .expect("accepted canonical bytes");
+
+        let snapshot = WorkspaceSnapshot::from_checkpoint(coordinator.checkpoint());
+        assert!(snapshot.accepted_belongs_to_current_design);
+        let decoded =
+            WorkspaceSnapshot::decode(&snapshot.encode().expect("encode v3")).expect("decode v3");
+        assert!(decoded.accepted_belongs_to_current_design);
+        let restored = decoded
+            .restore_session(DocumentSolveRequest::default(), SolverConfig::default())
+            .expect("exactly restore current flexible fillet");
+
+        assert_eq!(restored.design_document(), &design_before);
+        assert_eq!(
+            restored
+                .accepted_state()
+                .expect("restored accepted fillet")
+                .document(),
+            &accepted_before
+        );
+        assert_eq!(
+            restored
+                .accepted_state()
+                .expect("restored accepted fillet")
+                .document()
+                .to_canonical_json()
+                .expect("restored accepted canonical bytes"),
+            accepted_json_before
         );
     }
 
@@ -410,6 +573,161 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one complete joined-offset lifecycle proves plain editable persistence"
+    )]
+    fn joined_offset_round_trips_as_one_plain_editable_workspace_polyline() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let source_points = [[0.0, 0.0], [3.0, 0.0], [3.0, 2.0], [6.0, 2.0]]
+            .map(|position| document.add_point("source point", position).expect("point"));
+        let source = document
+            .add_curve(
+                "three-span source",
+                CurveDefinition::Polyline {
+                    points: source_points.to_vec(),
+                    closed: false,
+                    branch_directions: vec![[1.0, 0.0], [0.0, 1.0], [1.0, 0.0]],
+                },
+            )
+            .expect("source polyline");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let operation_document = coordinator
+            .operation_authoring_document()
+            .expect("accepted operation document")
+            .clone();
+        let picks = [0, 1, 2].map(|segment| {
+            coordinator
+                .operation_pick_for_item(
+                    SelectionItem::Curve(CurveSpan {
+                        curve: source,
+                        segment,
+                    }),
+                    Some(0.5),
+                )
+                .expect("joined source pick")
+        });
+        let mut authoring = OperationAuthoringState::default();
+        let _ = authoring.set_options(
+            &operation_document,
+            OperationAuthoringOptions {
+                offset_distance: Some(0.4),
+                ..OperationAuthoringOptions::default()
+            },
+        );
+        assert!(matches!(
+            authoring.activate(
+                &operation_document,
+                OperationAuthoringTool::LineOffset,
+                &picks
+            ),
+            OperationAuthoringOutcome::PreviewRequested { .. }
+        ));
+        let confirmed = authoring.confirm(&operation_document, [1.5, 1.0]);
+        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = confirmed else {
+            panic!("confirmed joined-offset candidate expected");
+        };
+        let prepared = coordinator
+            .prepare_operation_preview(&candidate)
+            .expect("accepted joined-offset preview");
+        let OperationAuthoringPreviewOutcome::Ready(metadata) = prepared else {
+            panic!("ready joined-offset preview expected");
+        };
+        let target = metadata.primary_created_curve;
+        coordinator
+            .apply_operation_preview(metadata.token, &candidate)
+            .expect("joined-offset commit");
+
+        let snapshot = WorkspaceSnapshot::from_checkpoint(coordinator.checkpoint());
+        let decoded =
+            WorkspaceSnapshot::decode(&snapshot.encode().expect("encode")).expect("decode");
+        let restored_session = RetainedSketchDocumentSession::restore_design_with_accepted(
+            decoded.design_document().expect("design document"),
+            decoded
+                .accepted_document()
+                .expect("accepted payload")
+                .expect("accepted document"),
+            decoded.revisions(),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("restore joined offset workspace");
+        let mut restored =
+            RetainedEditorCoordinator::new(restored_session).expect("restored coordinator");
+        let target_points = match &restored
+            .session()
+            .design_document()
+            .curve(target)
+            .expect("restored joined target")
+            .definition
+        {
+            CurveDefinition::Polyline {
+                points,
+                closed: false,
+                branch_directions,
+            } if points.len() == 4 && branch_directions.len() == 3 => points.clone(),
+            other => panic!("joined target must restore as one ordinary polyline: {other:?}"),
+        };
+        assert!(
+            restored
+                .session()
+                .design_document()
+                .constraints()
+                .is_empty()
+        );
+        assert!(restored.session().design_document().dimensions().is_empty());
+
+        let source_before = restored
+            .session()
+            .design_document()
+            .point(source_points[1])
+            .expect("restored source point")
+            .position;
+        let edited_position = [2.4, 1.1];
+        let edit = restored
+            .apply_edit(
+                restored.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: target_points[1],
+                    position: edited_position,
+                },
+            )
+            .expect("edit restored joined target");
+        assert!(edit.published_accepted.is_some());
+        let accepted_target = restored
+            .session()
+            .accepted_state()
+            .expect("accepted target edit")
+            .document()
+            .point(target_points[1])
+            .expect("edited target point")
+            .position;
+        assert_eq!(
+            accepted_target.map(f64::to_bits),
+            edited_position.map(f64::to_bits)
+        );
+        let retained_source = restored
+            .session()
+            .design_document()
+            .point(source_points[1])
+            .expect("source remains independent")
+            .position;
+        assert_eq!(
+            retained_source.map(f64::to_bits),
+            source_before.map(f64::to_bits),
+            "plain joined output must not carry a hidden source association"
+        );
+        restored.undo().expect("undo target edit");
+        restored.redo().expect("redo target edit");
+    }
+
+    #[test]
     fn m49_checkpoint_codec_round_trips_accepted_a4_contact_state() {
         let fixture = alpha_scenario(AlphaScenarioKind::A4, 1.0).unwrap();
         let AlphaScenarioIds::A4(ids) = fixture.ids else {
@@ -496,8 +814,11 @@ mod tests {
     fn codec_rejects_malformed_unknown_version_and_unknown_fields() {
         for input in [
             "not json",
+            r#"{"version":4,"design":{"encoding":"canonical_v4","json":"{}"},"accepted":null,"accepted_belongs_to_current_design":false,"revisions":{"design":1,"attempt":1,"accepted":null}}"#,
             r#"{"version":3,"design":{"encoding":"canonical_v4","json":"{}"},"accepted":null,"revisions":{"design":1,"attempt":1,"accepted":null}}"#,
+            r#"{"version":3,"design":{"encoding":"canonical_v4","json":"{}"},"accepted":null,"accepted_belongs_to_current_design":true,"revisions":{"design":1,"attempt":1,"accepted":null}}"#,
             r#"{"version":2,"design":{"encoding":"future_v6","json":"{}"},"accepted":null,"revisions":{"design":1,"attempt":1,"accepted":null}}"#,
+            r#"{"version":2,"design":{"encoding":"canonical_v4","json":"{}"},"accepted":null,"accepted_belongs_to_current_design":true,"revisions":{"design":1,"attempt":1,"accepted":null}}"#,
             r#"{"version":2,"design":{"encoding":"canonical_v4","json":"{}"},"accepted":null,"revisions":{"design":1,"attempt":1,"accepted":null},"extra":true}"#,
         ] {
             assert!(
@@ -508,7 +829,7 @@ mod tests {
     }
 
     #[test]
-    fn v2_round_trips_draft_v5_multi_interval_state_and_migrates_v1() {
+    fn v3_round_trips_draft_v5_multi_interval_state_and_migrates_v2_and_v1() {
         use geosolve_sketch::{
             CurveDefinition, CurveSpan, DocumentCurveTrimView, DocumentTrimBoundary,
             DocumentTrimParameter,
@@ -576,13 +897,34 @@ mod tests {
             2
         );
 
+        let v2 = serde_json::json!({
+            "version": 2,
+            "design": snapshot.design,
+            "accepted": snapshot.accepted,
+            "revisions": snapshot.revisions,
+        })
+        .to_string();
+        let migrated_v2 = WorkspaceSnapshot::decode(&v2).unwrap();
+        assert_eq!(migrated_v2.version, 3);
+        assert!(!migrated_v2.accepted_belongs_to_current_design);
+        assert_eq!(
+            migrated_v2
+                .design_document()
+                .unwrap()
+                .visible_intervals(support)
+                .unwrap()
+                .len(),
+            2
+        );
+
         let empty = SketchDocument::new(8.0).unwrap();
         let v1 = format!(
             r#"{{"version":1,"design_json":{},"accepted_json":null,"revisions":{{"design":1,"attempt":1,"accepted":null}}}}"#,
             serde_json::to_string(&empty.to_canonical_json().unwrap()).unwrap()
         );
         let migrated = WorkspaceSnapshot::decode(&v1).unwrap();
-        assert_eq!(migrated.version, 2);
+        assert_eq!(migrated.version, 3);
+        assert!(!migrated.accepted_belongs_to_current_design);
         assert_eq!(
             migrated.design.encoding,
             super::WorkspaceDocumentEncoding::CanonicalV4

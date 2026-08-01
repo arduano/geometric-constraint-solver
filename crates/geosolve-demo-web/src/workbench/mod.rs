@@ -119,10 +119,10 @@ fn route_operation_item_pick(
     document: &geosolve_sketch::SketchDocument,
     item: geosolve_constraint_editor::SelectionItem,
     curve_parameter: Option<f64>,
-    stamped_pick: Option<geosolve_constraint_editor::OperationAuthoringPick>,
+    stamped_picks: Option<Vec<geosolve_constraint_editor::OperationAuthoringPick>>,
 ) -> geosolve_constraint_editor::OperationAuthoringOutcome {
-    match stamped_pick {
-        Some(pick) => state.pick(document, pick),
+    match stamped_picks {
+        Some(picks) => state.pick_many(document, picks),
         None => state.pick_item(document, item, curve_parameter),
     }
 }
@@ -159,7 +159,9 @@ pub(crate) mod wasm {
         MouseEvent, PointerEvent, WheelEvent,
     };
 
-    use super::persistence::{LEGACY_STORAGE_KEY, STORAGE_KEY, WorkspaceSnapshot};
+    use super::persistence::{
+        LEGACY_STORAGE_KEY, PREVIOUS_STORAGE_KEY, STORAGE_KEY, WorkspaceSnapshot,
+    };
 
     struct Workbench {
         coordinator: RetainedEditorCoordinator,
@@ -205,6 +207,7 @@ pub(crate) mod wasm {
                 .get_item(STORAGE_KEY)
                 .ok()
                 .flatten()
+                .or_else(|| storage.get_item(PREVIOUS_STORAGE_KEY).ok().flatten())
                 .or_else(|| storage.get_item(LEGACY_STORAGE_KEY).ok().flatten())
         });
         let restored = if let Some(snapshot) = snapshot.as_deref() {
@@ -351,24 +354,8 @@ pub(crate) mod wasm {
     fn coordinator_from_snapshot(
         snapshot: &WorkspaceSnapshot,
     ) -> Result<RetainedEditorCoordinator, String> {
-        let design = snapshot.design_document()?;
-        let session = if let Some(accepted) = snapshot.accepted_document()? {
-            RetainedSketchDocumentSession::restore_design_with_accepted(
-                design,
-                accepted,
-                snapshot.revisions(),
-                DocumentSolveRequest::default(),
-                SolverConfig::default(),
-            )
-        } else {
-            RetainedSketchDocumentSession::restore_design(
-                design,
-                snapshot.revisions(),
-                DocumentSolveRequest::default(),
-                SolverConfig::default(),
-            )
-        }
-        .map_err(|error| error.to_string())?;
+        let session =
+            snapshot.restore_session(DocumentSolveRequest::default(), SolverConfig::default())?;
         RetainedEditorCoordinator::new(session).map_err(|error| error.to_string())
     }
 
@@ -923,16 +910,35 @@ pub(crate) mod wasm {
                     wb.notice = "Helper operations require accepted geometry".into();
                     return;
                 };
-                let pick = scene
-                    .hit_test(input.position, PickTolerance::default())
-                    .and_then(|hit| {
-                        wb.coordinator
-                            .operation_pick_for_item(hit.item, hit.curve_parameter)
-                            .ok()
-                    });
-                let outcome =
-                    wb.operation_authoring
-                        .pointer_down(&operation_document, pick, model_position);
+                let hit = scene.hit_test(input.position, PickTolerance::default());
+                let outcome = if let Some(hit) = hit {
+                    let tool = wb
+                        .operation_authoring
+                        .active_tool()
+                        .expect("active operation authoring has a tool");
+                    match wb.coordinator.operation_picks_for_item(
+                        tool,
+                        hit.item,
+                        hit.curve_parameter,
+                    ) {
+                        Ok(picks) => wb.operation_authoring.pointer_down_picks(
+                            &operation_document,
+                            &picks,
+                            model_position,
+                        ),
+                        Err(_) => wb.operation_authoring.pick_item(
+                            &operation_document,
+                            hit.item,
+                            hit.curve_parameter,
+                        ),
+                    }
+                } else {
+                    wb.operation_authoring.pointer_down_picks(
+                        &operation_document,
+                        &[],
+                        model_position,
+                    )
+                };
                 handle_operation_outcome(&mut wb, outcome);
                 save(&wb);
                 drop(wb);
@@ -1420,7 +1426,7 @@ pub(crate) mod wasm {
         let _ = wb
             .operation_authoring
             .set_options(&operation_document, options);
-        let selection = match wb.coordinator.operation_authoring_preselection() {
+        let selection = match wb.coordinator.operation_authoring_preselection_for(tool) {
             Ok(selection) => selection,
             Err(error) => {
                 wb.operation_authoring.deactivate();
@@ -1450,16 +1456,17 @@ pub(crate) mod wasm {
             wb.notice = "Helper operations require current accepted geometry".into();
             return;
         };
-        let stamped_pick = wb
-            .coordinator
-            .operation_pick_for_item(item, curve_parameter)
-            .ok();
+        let stamped_picks = wb.operation_authoring.active_tool().and_then(|tool| {
+            wb.coordinator
+                .operation_picks_for_item(tool, item, curve_parameter)
+                .ok()
+        });
         let outcome = super::route_operation_item_pick(
             &mut wb.operation_authoring,
             &operation_document,
             item,
             curve_parameter,
-            stamped_pick,
+            stamped_picks,
         );
         handle_operation_outcome(wb, outcome);
     }
@@ -1493,7 +1500,14 @@ pub(crate) mod wasm {
                 "wb-operation-fillet-radius",
                 "fillet radius",
             )?,
-            fillet_radius_mode: DocumentDimensionMode::Driving,
+            fillet_radius_mode: if select_value(document, "wb-operation-fillet-radius-mode")
+                .as_deref()
+                == Some("driving")
+            {
+                DocumentDimensionMode::Driving
+            } else {
+                DocumentDimensionMode::Reference
+            },
             fillet_flip_first_side: input_checked(document, "wb-operation-fillet-flip-first"),
             fillet_flip_second_side: input_checked(document, "wb-operation-fillet-flip-second"),
             fillet_alternate_arc: input_checked(document, "wb-operation-fillet-alternate-arc"),
@@ -2129,6 +2143,7 @@ pub(crate) mod wasm {
             "wb-authoring-dimension-mode",
             "wb-authoring-angle-orientation",
             "wb-operation-fillet-radius",
+            "wb-operation-fillet-radius-mode",
             "wb-operation-fillet-flip-first",
             "wb-operation-fillet-flip-second",
             "wb-operation-fillet-alternate-arc",
@@ -2198,6 +2213,14 @@ pub(crate) mod wasm {
             "wb-operation-fillet-radius",
             options.fillet_radius,
         )?;
+        if let Ok(select) =
+            required(document, "wb-operation-fillet-radius-mode")?.dyn_into::<HtmlSelectElement>()
+        {
+            select.set_value(match options.fillet_radius_mode {
+                DocumentDimensionMode::Driving => "driving",
+                DocumentDimensionMode::Reference => "reference",
+            });
+        }
         render_optional_number(
             document,
             "wb-operation-offset-distance",
@@ -3116,7 +3139,7 @@ mod tests {
             &document,
             SelectionItem::Curve(line),
             Some(0.5),
-            Some(source_pick.clone()),
+            Some(vec![source_pick.clone()]),
         );
         coordinator.observe_operation_authoring_outcome(&collecting);
         assert!(matches!(
@@ -3196,6 +3219,73 @@ mod tests {
         ));
         assert_eq!(state.picks().len(), 1);
         assert!(!state.candidate_confirmed());
+    }
+
+    #[test]
+    fn fillet_corner_item_routes_two_picks_then_a_separate_radius_confirmation() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let points = [[0.0, 0.0], [2.0, 0.0], [2.0, 2.0]]
+            .map(|position| document.add_point("corner point", position).expect("point"));
+        let curve = document
+            .add_curve(
+                "corner support",
+                CurveDefinition::Polyline {
+                    points: points.to_vec(),
+                    closed: false,
+                    branch_directions: vec![[1.0, 0.0], [0.0, 1.0]],
+                },
+            )
+            .expect("polyline");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let operation_document = coordinator
+            .operation_authoring_document()
+            .expect("accepted operation document")
+            .clone();
+        let picks = coordinator
+            .operation_picks_for_item(
+                OperationAuthoringTool::Fillet,
+                SelectionItem::Point(points[1]),
+                None,
+            )
+            .expect("expanded corner picks");
+        assert_eq!(picks.len(), 2);
+
+        let mut state = OperationAuthoringState::default();
+        let _ = state.activate(&operation_document, OperationAuthoringTool::Fillet, &[]);
+        let routed = route_operation_item_pick(
+            &mut state,
+            &operation_document,
+            SelectionItem::Point(points[1]),
+            None,
+            Some(picks),
+        );
+        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = routed else {
+            panic!("one routed corner item must stage a fillet preview");
+        };
+        assert_eq!(state.picks().len(), 2);
+        assert_eq!(
+            state.picks()[0].curve_span(),
+            Some(CurveSpan { curve, segment: 0 })
+        );
+        assert_eq!(
+            state.picks()[1].curve_span(),
+            Some(CurveSpan { curve, segment: 1 })
+        );
+        assert!(!candidate.is_confirmed());
+        assert!(!state.candidate_confirmed());
+
+        let confirmed = state.pointer_down_picks(&operation_document, &[], [1.8, 0.2]);
+        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = confirmed else {
+            panic!("blank-canvas radius placement must confirm the fillet");
+        };
+        assert!(candidate.is_confirmed());
+        assert!(state.candidate_confirmed());
     }
 
     #[test]

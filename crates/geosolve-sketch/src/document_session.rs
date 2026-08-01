@@ -3556,6 +3556,73 @@ impl RetainedSketchDocumentSession {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn new_at_from_exact_accepted(
+        document: SketchDocument,
+        request: DocumentSolveRequest,
+        config: SolverConfig,
+        design_revision: u64,
+        attempt_revision: u64,
+        prior_accepted_high_water: Option<SketchAcceptedRevision>,
+        accepted_revision: u64,
+    ) -> Result<Self, DocumentSessionError> {
+        document.validate()?;
+        let config = crate::compiler::acceptance_solver_config(config);
+        config.validate().map_err(crate::SketchError::from)?;
+        let parameter_batch = ParameterBatch::default();
+        let external_snapshots = ExternalSnapshotSet::default();
+        let design_identity = SketchDesignIdentity {
+            document: document.id(),
+            revision: SketchDesignRevision(design_revision),
+        };
+        let attempt_identity = SketchAttemptIdentity {
+            document: document.id(),
+            revision: SketchAttemptRevision(attempt_revision),
+        };
+        let input = SketchAttemptInput::for_document_with_parameters(
+            &document,
+            design_identity,
+            request,
+            request,
+            config,
+            &parameter_batch,
+            &external_snapshots,
+        );
+        let execution = certify_exact_retained_snapshot(
+            &document,
+            &parameter_batch,
+            &external_snapshots,
+            request,
+            config,
+        )?;
+        let (last_attempt, accepted) = publish_retained_attempt(
+            &document,
+            &input,
+            attempt_identity,
+            None,
+            Some(accepted_revision),
+            execution,
+        );
+        let accepted_revision_high_water = accepted
+            .as_ref()
+            .map(|accepted| accepted.identity.revision)
+            .or(prior_accepted_high_water);
+        if accepted.is_none() {
+            return Err(DocumentSessionError::InvalidAcceptedSnapshot);
+        }
+        Ok(Self {
+            design: document,
+            design_identity,
+            last_attempt,
+            accepted,
+            accepted_revision_high_water,
+            request,
+            config,
+            parameter_batch,
+            external_snapshots,
+        })
+    }
+
     /// Restores separate v1-v4 design and accepted graphs into a fresh in-memory lifecycle.
     ///
     /// Lifecycle revisions are intentionally not persisted by frozen sketch v1-v4.
@@ -3587,27 +3654,112 @@ impl RetainedSketchDocumentSession {
         let accepted_revision = revisions
             .accepted
             .map_or(Ok(0), |revision| next_revision(revision.0, "accepted"))?;
-        let mut session = Self::new_at(
+        let certification_request = if same_design && request.drag.is_none() {
+            request
+        } else {
+            DocumentSolveRequest::default()
+        };
+        let mut session = Self::new_at_from_exact_accepted(
             accepted,
-            ParameterBatch::default(),
-            ExternalSnapshotSet::default(),
-            DocumentSolveRequest::default(),
+            certification_request,
             config,
             accepted_design_revision,
             accepted_attempt_revision,
             revisions.accepted,
             accepted_revision,
         )?;
-        if session.accepted.is_none() {
-            return Err(DocumentSessionError::InvalidAcceptedSnapshot);
-        }
         session.request = request;
-        if same_design {
+        if same_design && request.drag.is_some() {
             let identity = session.design_identity;
             session.reattempt(identity, request)?;
-        } else {
+        } else if !same_design {
             session.retain_candidate(design, (), None)?;
         }
+        Ok(session)
+    }
+
+    /// Restores a checkpoint whose accepted materialization is known to belong
+    /// to the supplied current design revision.
+    ///
+    /// Unlike [`Self::restore_design_with_accepted`], this path does not infer
+    /// that unequal design/accepted graphs represent an unaccepted newer edit:
+    /// ordinary solved coordinates may differ from retained seeds. The caller
+    /// must carry lifecycle provenance proving that both graphs came from the
+    /// same accepted design. The accepted graph is independently certified
+    /// without optimization and retained bit-for-bit.
+    ///
+    /// # Errors
+    ///
+    /// Rejects temporary targets, invalid/foreign graphs, differing activation
+    /// or runtime topology, invalid policy, and snapshots that cannot be exactly
+    /// and independently certified.
+    pub fn restore_current_design_with_accepted(
+        design: SketchDocument,
+        accepted: SketchDocument,
+        revisions: SketchLifecycleRevisionHighWater,
+        request: DocumentSolveRequest,
+        config: SolverConfig,
+    ) -> Result<Self, DocumentSessionError> {
+        design.validate()?;
+        accepted.validate()?;
+        if request.drag.is_some() {
+            return Err(DocumentSessionError::InvalidAcceptedSnapshot);
+        }
+        if design.id() != accepted.id() {
+            return Err(DocumentSessionError::ForeignDesign {
+                expected: accepted.id(),
+                actual: design.id(),
+            });
+        }
+        let design_activity = design.effective_activity();
+        let accepted_activity = accepted.effective_activity();
+        if design_activity.activation_digest() != accepted_activity.activation_digest() {
+            return Err(DocumentSessionError::InvalidAcceptedSnapshot);
+        }
+        let parameters = ParameterBatch::default();
+        let snapshots = ExternalSnapshotSet::default();
+        let design_resolved = resolve_attempt_inputs(&design, &parameters, &snapshots)
+            .map_err(|_| DocumentSessionError::InvalidAcceptedSnapshot)?;
+        let design_mappings = design
+            .lower_with_resolved_parameters(&design_resolved)?
+            .into_parts()
+            .1;
+        let design_revision = next_revision(revisions.design.0, "design")?;
+        let attempt_revision = next_revision(revisions.attempt.0, "attempt")?;
+        let accepted_revision = revisions
+            .accepted
+            .map_or(Ok(0), |revision| next_revision(revision.0, "accepted"))?;
+        let mut session = Self::new_at_from_exact_accepted(
+            accepted,
+            request,
+            config,
+            design_revision,
+            attempt_revision,
+            revisions.accepted,
+            accepted_revision,
+        )?;
+        let accepted_state = session
+            .accepted
+            .as_ref()
+            .ok_or(DocumentSessionError::InvalidAcceptedSnapshot)?;
+        if !accepted_state
+            .mappings
+            .has_compatible_runtime_topology(&design_mappings)
+        {
+            return Err(DocumentSessionError::InvalidAcceptedSnapshot);
+        }
+        let mut materialized_design = design.clone();
+        materialized_design
+            .project_accepted_state(accepted_state.runtime.sketch(), &accepted_state.mappings)?;
+        if materialized_design != accepted_state.document {
+            return Err(DocumentSessionError::InvalidAcceptedSnapshot);
+        }
+        let accepted_state = session
+            .accepted
+            .as_mut()
+            .ok_or(DocumentSessionError::InvalidAcceptedSnapshot)?;
+        accepted_state.solved_design = design.clone();
+        session.design = design;
         Ok(session)
     }
 
@@ -5581,6 +5733,26 @@ fn compatible_runtime_request_shape(
         }
 }
 
+fn fillet_drag_requires_exact_runtime_certification(
+    document: &SketchDocument,
+    mappings: &DocumentRuntimeMap,
+    request: SketchSolveRequest,
+) -> bool {
+    let Some(drag) = request.drag else {
+        return false;
+    };
+    let Some(persistent_point) = mappings.persistent_point(drag.point) else {
+        return false;
+    };
+    document.curves().iter().any(|curve| {
+        matches!(
+            curve.definition,
+            CurveDefinition::CircularArc { center, .. } if center == persistent_point
+        ) && (document.line_line_fillet_for_arc(curve.id).is_some()
+            || document.curve_curve_fillet_for_arc(curve.id).is_some())
+    })
+}
+
 fn incremental_runtime_sources(
     candidate: &SketchDocument,
     mappings: &DocumentRuntimeMap,
@@ -5734,6 +5906,54 @@ struct RetainedAttemptInputStamps {
     parameter_digest: ParameterDigest,
     external_revision: u64,
     external_digest: ExternalSnapshotSetDigest,
+}
+
+fn certify_exact_retained_snapshot(
+    candidate: &SketchDocument,
+    parameters: &ParameterBatch,
+    snapshots: &ExternalSnapshotSet,
+    request: DocumentSolveRequest,
+    config: SolverConfig,
+) -> Result<RetainedAttemptExecution, DocumentSessionError> {
+    let resolved = resolve_attempt_inputs(candidate, parameters, snapshots)
+        .map_err(|_| DocumentSessionError::InvalidAcceptedSnapshot)?;
+    let stamps = RetainedAttemptInputStamps {
+        activity: resolved.activity.clone(),
+        activation_revision: resolved.activity.activation_revision(),
+        activation_digest: resolved.activity.activation_digest(),
+        parameter_revision: parameters.revision(),
+        parameter_digest: parameters.digest(),
+        external_revision: resolved.external_revision,
+        external_digest: resolved.external_digest,
+    };
+    let lowered = candidate.lower_with_resolved_parameters(&resolved)?;
+    let (sketch, mappings) = lowered.into_parts();
+    let previous_state = PreviousStateReference::capture(&sketch);
+    let runtime_request = lower_request(request, &mappings)?;
+    let mut controller = OperationController::new(OperationControl::unlimited());
+    let runtime =
+        SketchSession::certify_current_state_with_previous_state_reference_and_controller(
+            sketch,
+            runtime_request,
+            config,
+            &previous_state,
+            &mut controller,
+        )?
+        .ok_or(DocumentSessionError::InvalidAcceptedSnapshot)?;
+    let mut document = candidate.clone();
+    document.project_accepted_state(runtime.sketch(), &mappings)?;
+    if document != *candidate {
+        return Err(DocumentSessionError::InvalidAcceptedSnapshot);
+    }
+    let solve = runtime.accepted_result().clone();
+    Ok(RetainedAttemptExecution {
+        attempted_geometry: solve.attempted_geometry.clone(),
+        solve: Some(solve),
+        mappings: Some(mappings.clone()),
+        effective_activity: Some(resolved.activity),
+        accepted: Some((document, runtime, mappings, stamps)),
+        failure: None,
+    })
 }
 
 impl RetainedAttemptExecution {
@@ -6394,15 +6614,30 @@ fn run_retained_attempt_with_drag_locality_controlled(
                 }
             }
         };
-        let mut runtime = match SketchSession::from_accepted_solve_with_controller(
-            sketch,
-            &validation_sketch,
+        let runtime = if fillet_drag_requires_exact_runtime_certification(
+            candidate,
+            &mappings,
             runtime_request,
-            config,
-            runtime_solve,
-            &previous_state,
-            controller,
         ) {
+            SketchSession::certify_current_state_with_previous_state_reference_and_controller(
+                sketch,
+                runtime_request,
+                config,
+                &previous_state,
+                controller,
+            )
+        } else {
+            SketchSession::from_accepted_solve_with_controller(
+                sketch,
+                &validation_sketch,
+                runtime_request,
+                config,
+                runtime_solve,
+                &previous_state,
+                controller,
+            )
+        };
+        let mut runtime = match runtime {
             Ok(Some(runtime)) => runtime,
             Ok(None) => return None,
             Err(error) => {

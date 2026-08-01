@@ -469,6 +469,16 @@ fn fillet_workshop_document()
         ("Line-Bezier line end", [6.0, 0.0]),
     )?;
     fix_curve_points(&mut document, line_bezier_line, "Line-Bezier line")?;
+    let polyline_corner = add_polyline(
+        &mut document,
+        "Open-polyline corner support",
+        &[
+            ("Polyline corner start", [-9.0, -2.0]),
+            ("Polyline corner join", [-5.0, -2.0]),
+            ("Polyline corner end", [-5.0, -7.0]),
+        ],
+    )?;
+    fix_curve_points(&mut document, polyline_corner, "Open-polyline corner")?;
     Ok((document, geosolve_sketch::DocumentSolveRequest::default()))
 }
 
@@ -492,8 +502,9 @@ fn line_offset_workshop_document()
         "Polyline offset source",
         &[
             ("Polyline source start", [-8.0, 2.0]),
-            ("Polyline source corner", [-4.0, 6.0]),
-            ("Polyline source end", [1.0, 2.0]),
+            ("Polyline source first corner", [-4.0, 6.0]),
+            ("Polyline source second corner", [1.0, 2.0]),
+            ("Polyline source end", [6.0, 6.0]),
         ],
     )?;
     Ok((document, geosolve_sketch::DocumentSolveRequest::default()))
@@ -737,6 +748,7 @@ fn fix_curve_points(
 ) -> Result<(), String> {
     let points = match document.curve(curve).map(|curve| &curve.definition) {
         Some(CurveDefinition::Line { start, end, .. }) => vec![*start, *end],
+        Some(CurveDefinition::Polyline { points, .. }) => points.clone(),
         Some(CurveDefinition::QuadraticBezier { controls }) => controls.to_vec(),
         _ => return Err(format!("{label} does not expose fixable workshop controls")),
     };
@@ -884,12 +896,16 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one catalog-level test compares the three plain M66 workshop contracts"
+    )]
     fn m66_workshops_are_plain_editable_documents_with_expected_sources() {
         let mut catalog = SampleCatalogState::default();
         let fillet = catalog
             .open_key(SampleId::FilletWorkshop.key())
             .expect("fillet workshop");
-        assert_eq!(fillet.session().design_document().curves().len(), 6);
+        assert_eq!(fillet.session().design_document().curves().len(), 7);
         assert!(
             fillet
                 .session()
@@ -906,19 +922,41 @@ mod tests {
                 .iter()
                 .any(|curve| matches!(curve.definition, CurveDefinition::QuadraticBezier { .. }))
         );
+        assert!(
+            fillet
+                .session()
+                .design_document()
+                .curves()
+                .iter()
+                .any(|curve| matches!(
+                    curve.definition,
+                    CurveDefinition::Polyline {
+                        closed: false,
+                        ref points,
+                        ..
+                    } if points.len() == 3
+                ))
+        );
 
         let offsets = catalog
             .open_key(SampleId::LineOffsetWorkshop.key())
             .expect("line-offset workshop");
         assert_eq!(offsets.session().design_document().curves().len(), 3);
-        assert!(
-            offsets
-                .session()
-                .design_document()
-                .curves()
-                .iter()
-                .any(|curve| matches!(curve.definition, CurveDefinition::Polyline { .. }))
-        );
+        let offset_polyline = offsets
+            .session()
+            .design_document()
+            .curves()
+            .iter()
+            .find(|curve| curve.label == "Polyline offset source")
+            .expect("three-span offset source");
+        assert!(matches!(
+            &offset_polyline.definition,
+            CurveDefinition::Polyline {
+                points,
+                closed: false,
+                branch_directions,
+            } if points.len() == 4 && branch_directions.len() == 3
+        ));
 
         let mirror = catalog
             .open_key(SampleId::MirrorWorkshop.key())
@@ -953,7 +991,7 @@ mod tests {
         );
 
         let fillet_document = fillet.session().design_document();
-        assert_eq!(fillet_document.constraints().len(), 12);
+        assert_eq!(fillet_document.constraints().len(), 15);
         assert!(
             fillet_document
                 .constraints()
@@ -1026,6 +1064,7 @@ mod tests {
             &operation_document,
             OperationAuthoringOptions {
                 fillet_radius: Some(0.8),
+                fillet_radius_mode: geosolve_sketch::DocumentDimensionMode::Driving,
                 ..OperationAuthoringOptions::default()
             },
         );
@@ -1034,6 +1073,28 @@ mod tests {
         let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = outcome else {
             panic!("workshop fillet candidate expected: {outcome:?}");
         };
+        assert!(!candidate.is_confirmed());
+        let jets = picks.each_ref().map(|pick| {
+            operation_document
+                .evaluate_curve_jet(pick.curve_span().expect("curve pick"), pick.curve_parameter)
+                .expect("accepted pick jet")
+        });
+        let first_direction = jets[0].first_derivative;
+        let second_direction = jets[1].first_derivative;
+        let denominator =
+            first_direction.x * second_direction.y - first_direction.y * second_direction.x;
+        let between = jets[1].position - jets[0].position;
+        let first_parameter =
+            (between.x * second_direction.y - between.y * second_direction.x) / denominator;
+        let tangent_intersection = [
+            jets[0].position.x + first_parameter * first_direction.x,
+            jets[0].position.y + first_parameter * first_direction.y,
+        ];
+        let outcome = authoring.confirm(&operation_document, tangent_intersection);
+        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = outcome else {
+            panic!("confirmed workshop fillet candidate expected: {outcome:?}");
+        };
+        assert!(candidate.is_confirmed());
         let preview = coordinator
             .prepare_operation_preview(&candidate)
             .expect("workshop fillet preview");

@@ -6,9 +6,9 @@ use geosolve_core::{
 use geosolve_sketch::{
     AlphaScenarioIds, AlphaScenarioKind, ContactNeighborhood, ContactStateEdit, CurveDefinition,
     CurveSpan, DesignPointId, DocumentCommandEffect, DocumentConstraintDefinition,
-    DocumentDimensionDefinition, DocumentDimensionMode, DocumentEdit, DocumentSessionError,
-    DocumentSolveRequest, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument,
-    alpha_scenario,
+    DocumentDimensionDefinition, DocumentDimensionMode, DocumentEdit, DocumentObjectId,
+    DocumentSessionError, DocumentSolveRequest, RetainedSketchDocumentSession, ScalarDomain,
+    ScalarUnit, SketchDocument, alpha_scenario,
 };
 
 fn rectangle_design() -> (SketchDocument, geosolve_sketch::RectangleIds) {
@@ -1111,6 +1111,83 @@ fn same_design_restore_evaluates_the_supplied_request() {
             .map(f64::to_bits),
         [5.0, 6.0].map(f64::to_bits)
     );
+}
+
+#[test]
+fn same_design_restore_without_a_temporary_target_preserves_exact_fillet_bytes() {
+    let fixture = alpha_scenario(AlphaScenarioKind::FilletLineCircle, 1.0).unwrap();
+    let AlphaScenarioIds::FilletLineCircle(ids) = fixture.ids else {
+        panic!("line-circle fillet IDs")
+    };
+    let mut session = RetainedSketchDocumentSession::new(
+        fixture.document,
+        fixture.request,
+        SolverConfig::default(),
+    )
+    .unwrap();
+    let deleted = session
+        .apply(
+            session.design_identity(),
+            DocumentEdit::Delete {
+                object: DocumentObjectId::Dimension(ids.fillet.radius_dimension),
+            },
+        )
+        .unwrap();
+    assert!(deleted.published_accepted_identity().is_some());
+    let accepted = session.accepted_state().unwrap().document().clone();
+    let accepted_json = accepted.to_canonical_json().unwrap();
+    let request = DocumentSolveRequest::default().without_previous_state_preferences();
+
+    let restored = RetainedSketchDocumentSession::restore_design_with_accepted(
+        accepted.clone(),
+        accepted,
+        session.revision_high_water(),
+        request,
+        SolverConfig::default(),
+    )
+    .unwrap();
+    assert_eq!(restored.request(), request);
+    assert_eq!(
+        restored.accepted_state().unwrap().document(),
+        restored.design_document()
+    );
+    assert_eq!(
+        restored.export_accepted_json().unwrap().unwrap(),
+        accepted_json
+    );
+}
+
+#[test]
+fn current_design_restore_rejects_tampered_same_topology_dimension_value() {
+    let (document, rectangle) = rectangle_design();
+    let session = RetainedSketchDocumentSession::new(
+        document,
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .unwrap();
+    let accepted = session.accepted_state().unwrap().document().clone();
+    let mut tampered_design = session.design_document().clone();
+    tampered_design
+        .set_scalar_value(rectangle.targets[0], 5.0)
+        .unwrap();
+    assert_eq!(tampered_design.id(), accepted.id());
+    assert_eq!(
+        tampered_design.effective_activity().activation_digest(),
+        accepted.effective_activity().activation_digest(),
+        "the same-topology target tamper must retain the activation closure"
+    );
+
+    assert!(matches!(
+        RetainedSketchDocumentSession::restore_current_design_with_accepted(
+            tampered_design,
+            accepted,
+            session.revision_high_water(),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        ),
+        Err(DocumentSessionError::InvalidAcceptedSnapshot)
+    ));
 }
 
 fn retained_position(session: &RetainedSketchDocumentSession, point: DesignPointId) -> [f64; 2] {

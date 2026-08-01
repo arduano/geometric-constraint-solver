@@ -176,7 +176,7 @@ pub struct SceneCurve {
     /// Optional semantic point moved when this visible curve is dragged.
     ///
     /// Selection remains curve-based. The handle only defines gesture ownership,
-    /// so presentation adapters do not need to infer a circle's center.
+    /// so presentation adapters do not need to infer a circular curve's center.
     pub drag_handle_point: Option<DesignPointId>,
 }
 
@@ -299,7 +299,8 @@ impl EditorScene {
                         screen_polyline,
                         screen_parameters,
                         drag_handle_point: match &curve.definition {
-                            CurveDefinition::Circle { center, .. } => Some(*center),
+                            CurveDefinition::Circle { center, .. }
+                            | CurveDefinition::CircularArc { center, .. } => Some(*center),
                             _ => None,
                         },
                     });
@@ -4174,6 +4175,70 @@ mod tests {
                 }]
             );
         }
+    }
+
+    #[test]
+    fn circular_arc_span_drags_its_semantic_center_without_pointer_jump() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let center = document.add_point("center", [1.0, 2.0]).expect("center");
+        let radius = document
+            .add_scalar("radius", 2.0, ScalarUnit::Length, ScalarDomain::Positive)
+            .expect("radius");
+        let start_angle = document
+            .add_scalar("start angle", 0.0, ScalarUnit::Angle, ScalarDomain::Finite)
+            .expect("start angle");
+        let end_angle = document
+            .add_scalar(
+                "end angle",
+                std::f64::consts::FRAC_PI_2,
+                ScalarUnit::Angle,
+                ScalarDomain::Finite,
+            )
+            .expect("end angle");
+        let arc = document
+            .add_curve(
+                "arc",
+                CurveDefinition::CircularArc {
+                    center,
+                    radius,
+                    start_angle,
+                    end_angle,
+                    sweep: DocumentArcSweep::CounterClockwise,
+                },
+            )
+            .expect("arc");
+        let scene = scene(&document);
+        let curve = scene
+            .curves
+            .iter()
+            .find(|curve| curve.span.curve == arc)
+            .expect("scene arc");
+        assert_eq!(curve.drag_handle_point, Some(center));
+        let press = curve.screen_polyline[curve.screen_polyline.len() / 2];
+        let moved = ScreenPoint {
+            x: press.x + 10.0,
+            y: press.y - 5.0,
+        };
+        let mut editor = ConstraintEditor::default();
+        assert_eq!(
+            editor.pointer_down(&scene, pointer(1, press.x, press.y, Modifiers::default())),
+            vec![EditorEffect::SelectionChanged(vec![SelectionItem::Curve(
+                CurveSpan::line(arc)
+            )])]
+        );
+        assert!(matches!(
+            editor
+                .pointer_move(&scene, pointer(1, moved.x, moved.y, Modifiers::default()))
+                .as_slice(),
+            [EditorEffect::RequestProjectedPointMove {
+                pointer_id: 1,
+                request_id: 0,
+                point,
+                model_position,
+            }] if *point == center
+                && (model_position[0] - 1.2).abs() <= 1.0e-12
+                && (model_position[1] - 2.1).abs() <= 1.0e-12
+        ));
     }
 
     #[test]

@@ -143,6 +143,90 @@ fn line_circle_request(
     }
 }
 
+fn adjacent_polyline_fillet(
+    radius_mode: DocumentDimensionMode,
+) -> (
+    SketchDocument,
+    [CurveSpan; 2],
+    geosolve_sketch::CurveCurveFilletIds,
+) {
+    let mut document = SketchDocument::new(1.0).unwrap();
+    let points = [
+        document.add_point("start", [0.0, 0.0]).unwrap(),
+        document.add_point("corner", [4.0, 0.0]).unwrap(),
+        document.add_point("end", [4.0, 4.0]).unwrap(),
+    ];
+    for (index, (point, target)) in points
+        .into_iter()
+        .zip([[0.0, 0.0], [4.0, 0.0], [4.0, 4.0]])
+        .enumerate()
+    {
+        document
+            .add_constraint(
+                format!("fix polyline point {index}"),
+                DocumentConstraintDefinition::FixedPoint { point, target },
+            )
+            .unwrap();
+    }
+    let polyline = document
+        .add_curve(
+            "right angle polyline",
+            CurveDefinition::Polyline {
+                points: points.to_vec(),
+                closed: false,
+                branch_directions: vec![[1.0, 0.0], [0.0, 1.0]],
+            },
+        )
+        .unwrap();
+    let spans = [
+        CurveSpan {
+            curve: polyline,
+            segment: 0,
+        },
+        CurveSpan {
+            curve: polyline,
+            segment: 1,
+        },
+    ];
+    let ids = document
+        .add_curve_curve_fillet(
+            "polyline corner fillet",
+            CurveCurveFilletRequest {
+                first: CurveFilletParentRequest {
+                    curve: spans[0],
+                    parameter: 0.75,
+                    winding: 0,
+                    neighborhood: ContactNeighborhood::Interior,
+                    side: DocumentCurveNormalSide::Left,
+                    trim_endpoint: DocumentFilletTrimEndpoint::End,
+                    periodic_anchor: None,
+                },
+                second: CurveFilletParentRequest {
+                    curve: spans[1],
+                    parameter: 0.25,
+                    winding: 0,
+                    neighborhood: ContactNeighborhood::Interior,
+                    side: DocumentCurveNormalSide::Left,
+                    trim_endpoint: DocumentFilletTrimEndpoint::Start,
+                    periodic_anchor: None,
+                },
+                endpoint_order: DocumentFilletEndpointOrder::FirstThenSecond,
+                sweep: DocumentArcSweep::CounterClockwise,
+                radius: 1.0,
+                radius_mode,
+            },
+        )
+        .unwrap();
+    (document, spans, ids)
+}
+
+fn assert_independently_valid(session: &SketchDocumentSession) {
+    let accepted = session.accepted_result();
+    let report = accepted.accepted_view().unstable_core_report();
+    assert_eq!(report.hard_validity, geosolve_core::HardValidity::Valid);
+    assert!(report.hard_residual_max <= 1.0e-9, "{report:#?}");
+}
+
 #[test]
 fn reusable_trimmed_fillet_alpha_scenario_is_accepted_and_scale_invariant() {
     let mut identity = None;
@@ -183,6 +267,226 @@ fn reusable_trimmed_fillet_alpha_scenario_is_accepted_and_scale_invariant() {
             identity = Some(current);
         }
     }
+}
+
+#[test]
+fn adjacent_open_polyline_spans_accept_associative_end_start_fillet() {
+    let (document, spans, ids) = adjacent_polyline_fillet(DocumentDimensionMode::Driving);
+    let constraint = document.constraint(ids.constraint).unwrap();
+    assert!(matches!(
+        constraint.definition,
+        DocumentConstraintDefinition::CurveCurveFillet {
+            first_contact,
+            first_trim_endpoint: DocumentFilletTrimEndpoint::End,
+            second_contact,
+            second_trim_endpoint: DocumentFilletTrimEndpoint::Start,
+            ..
+        } if first_contact == ids.contacts[0] && second_contact == ids.contacts[1]
+    ));
+    let first_view = document.trim_view(spans[0]).unwrap();
+    assert!(matches!(
+        first_view.end,
+        DocumentTrimBoundary::FilletContact { owner, contact }
+            if owner == ids.constraint && contact == ids.contacts[0]
+    ));
+    let second_view = document.trim_view(spans[1]).unwrap();
+    assert!(matches!(
+        second_view.start,
+        DocumentTrimBoundary::FilletContact { owner, contact }
+            if owner == ids.constraint && contact == ids.contacts[1]
+    ));
+
+    let session = SketchDocumentSession::new(
+        document,
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .unwrap();
+    assert_independently_valid(&session);
+    let intervals = spans.map(|span| session.document().visible_interval(span).unwrap());
+    assert_eq!(intervals[0].start.to_bits(), 0.0f64.to_bits());
+    assert!((intervals[0].end - 0.75).abs() <= 1.0e-9);
+    assert!((intervals[1].start - 0.25).abs() <= 1.0e-9);
+    assert_eq!(intervals[1].end.to_bits(), 1.0f64.to_bits());
+}
+
+#[test]
+fn adjacent_polyline_reference_fillet_moves_center_and_radius_on_its_one_dof() {
+    let (document, spans, ids) = adjacent_polyline_fillet(DocumentDimensionMode::Reference);
+    let mut session = SketchDocumentSession::new(
+        document,
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .unwrap();
+    assert_independently_valid(&session);
+    assert_eq!(
+        session
+            .accepted_result()
+            .accepted_view()
+            .unstable_core_report()
+            .local_degrees_of_freedom,
+        1
+    );
+    let center_before = session.document().point(ids.center).unwrap().position;
+    let radius_before = session.document().scalar(ids.radius).unwrap().value;
+
+    let moved = session
+        .apply(DocumentCommand::new(
+            session.revision(),
+            DocumentEdit::SetPointPosition {
+                point: ids.center,
+                position: [2.0, 2.0],
+            },
+        ))
+        .unwrap();
+    assert!(moved.accepted(), "{moved:#?}");
+    assert_independently_valid(&session);
+    assert_eq!(
+        session
+            .accepted_result()
+            .accepted_view()
+            .unstable_core_report()
+            .local_degrees_of_freedom,
+        1
+    );
+    let center_after = session.document().point(ids.center).unwrap().position;
+    let radius_after = session.document().scalar(ids.radius).unwrap().value;
+    assert!((center_after[0] - 2.0).abs() <= 1.0e-9);
+    assert!((center_after[1] - 2.0).abs() <= 1.0e-9);
+    assert!((center_after[0] - center_before[0]).hypot(center_after[1] - center_before[1]) > 0.5);
+    assert!((radius_after - radius_before).abs() > 0.5);
+    assert!((radius_after - 2.0).abs() <= 1.0e-9);
+    assert!(
+        (session
+            .accepted_result()
+            .accepted_reference_value(session.document(), ids.radius_dimension)
+            .unwrap()
+            - 2.0)
+            .abs()
+            <= 1.0e-9
+    );
+    let contacts = ids.contacts.map(|contact| {
+        session
+            .document()
+            .evaluate_contact_jet(contact)
+            .unwrap()
+            .position
+    });
+    assert!((contacts[0] - Point2::new(2.0, 0.0)).norm() <= 1.0e-9);
+    assert!((contacts[1] - Point2::new(4.0, 2.0)).norm() <= 1.0e-9);
+    let intervals = spans.map(|span| session.document().visible_interval(span).unwrap());
+    assert!((intervals[0].end - 0.5).abs() <= 1.0e-9);
+    assert!((intervals[1].start - 0.5).abs() <= 1.0e-9);
+}
+
+#[test]
+fn deleting_a_driving_fillet_radius_releases_the_same_center_and_radius_motion() {
+    let (document, spans, ids) = adjacent_polyline_fillet(DocumentDimensionMode::Driving);
+    let association = document.constraint(ids.constraint).unwrap().clone();
+    let contacts = ids
+        .contacts
+        .map(|contact| document.contact(contact).unwrap().clone());
+    let trim_views = spans.map(|span| *document.trim_view(span).unwrap());
+    let output_definition = document.curve(ids.arc).unwrap().definition.clone();
+    let mut session = SketchDocumentSession::new(
+        document,
+        DocumentSolveRequest::default(),
+        SolverConfig::default(),
+    )
+    .unwrap();
+    assert_independently_valid(&session);
+    assert_eq!(
+        session
+            .accepted_result()
+            .accepted_view()
+            .unstable_core_report()
+            .local_degrees_of_freedom,
+        0
+    );
+
+    let deleted = session
+        .apply(DocumentCommand::new(
+            session.revision(),
+            DocumentEdit::Delete {
+                object: DocumentObjectId::Dimension(ids.radius_dimension),
+            },
+        ))
+        .unwrap();
+    assert!(deleted.accepted(), "{deleted:#?}");
+    assert!(session.document().dimension(ids.radius_dimension).is_none());
+    assert_eq!(
+        session.document().constraint(ids.constraint),
+        Some(&association)
+    );
+    assert_eq!(
+        ids.contacts
+            .map(|contact| session.document().contact(contact).unwrap().clone()),
+        contacts
+    );
+    assert_eq!(
+        spans.map(|span| *session.document().trim_view(span).unwrap()),
+        trim_views
+    );
+    assert_eq!(
+        session.document().curve(ids.arc).unwrap().definition,
+        output_definition
+    );
+    assert_independently_valid(&session);
+    assert_eq!(
+        session
+            .accepted_result()
+            .accepted_view()
+            .unstable_core_report()
+            .local_degrees_of_freedom,
+        1
+    );
+
+    let moved = session
+        .apply(DocumentCommand::new(
+            session.revision(),
+            DocumentEdit::SetPointPosition {
+                point: ids.center,
+                position: [2.0, 2.0],
+            },
+        ))
+        .unwrap();
+    assert!(moved.accepted(), "{moved:#?}");
+    assert_independently_valid(&session);
+    let center = session.document().point(ids.center).unwrap().position;
+    let radius = session.document().scalar(ids.radius).unwrap().value;
+    assert!((center[0] - 2.0).abs() <= 1.0e-9);
+    assert!((center[1] - 2.0).abs() <= 1.0e-9);
+    assert!((radius - 2.0).abs() <= 1.0e-9);
+    assert_eq!(
+        session.document().constraint(ids.constraint),
+        Some(&association)
+    );
+    assert_eq!(
+        ids.contacts
+            .map(|contact| session.document().contact(contact).unwrap().clone()),
+        contacts
+    );
+    assert_eq!(
+        spans.map(|span| *session.document().trim_view(span).unwrap()),
+        trim_views
+    );
+    assert_eq!(
+        session.document().curve(ids.arc).unwrap().definition,
+        output_definition
+    );
+    let contact_positions = ids.contacts.map(|contact| {
+        session
+            .document()
+            .evaluate_contact_jet(contact)
+            .unwrap()
+            .position
+    });
+    assert!((contact_positions[0] - Point2::new(2.0, 0.0)).norm() <= 1.0e-9);
+    assert!((contact_positions[1] - Point2::new(4.0, 2.0)).norm() <= 1.0e-9);
+    let intervals = spans.map(|span| session.document().visible_interval(span).unwrap());
+    assert!((intervals[0].end - 0.5).abs() <= 1.0e-9);
+    assert!((intervals[1].start - 0.5).abs() <= 1.0e-9);
 }
 
 #[test]
