@@ -1270,10 +1270,10 @@ approved post-cleanup UAT. M54-M59 complete stable diagnostics, early alpha acti
 prepared concurrency, incremental scale and the separate operations/production-topology
 companions; M60 completes the advanced workbench and M61 completes its approved advanced UAT.
 M62 completes approved CAD-style constraint/dimension authoring, and M63 completes approved
-geometry-anchored canvas constraint/dimension presentation, and M64 completes the approved editable
-purpose-based sample library. M65 is the active predictable, bounded projected-dragging cut for
-those existing editable mechanisms; M66 is an intentionally empty placeholder rather than a
-scheduled release sequence. Every new
+geometry-anchored canvas constraint/dimension presentation, M64 completes the approved editable
+purpose-based sample library and M65 completes approved predictable, bounded projected dragging.
+M66 is the active CAD helper-operation authoring cut rather than a scheduled release sequence.
+Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
 required.
@@ -1281,7 +1281,7 @@ required.
 Objective geometry, residual, derivative, rank, branch, persistence, migration, resource,
 cancellation, presentation-adapter and topology assertions are directly automated at their
 owning Rust/WASM layer. Old browser E2E is not a qualification path. Human review is
-recorded at completed M40.7, M53 and M61-M64. Every newly scoped milestone from M65 onward ends in
+recorded at completed M40.7, M53 and M61-M65. Every newly scoped milestone from M65 onward ends in
 its own UAT after direct automated qualification.
 
 ### M40-ES1 - Headless persistent line selection and relation action
@@ -1897,7 +1897,53 @@ and `1,024` diagnostic trials. Exhaustion is a typed rejection, never partial pu
 
 Replacement `b6433d1` directly remediates `M65-F004` (twin-roller annotation hit priority) and
 `M65-F005` (orientation-sensitive rank-one pantograph-guide projection). Native, WASM and release
-qualification pass; `docs/M65_UAT.md` owns the remaining focused U2/U3 human retest.
+qualification plus focused U2/U3 human approval pass; `docs/M65_UAT.md` records closure.
+
+### M66-S1 - Headless CAD helper-operation authoring
+
+M66 adds three ordinary editable leaves under **Curves & constructions**:
+
+| Stable sample key | Sample title | Authoring focus |
+| --- | --- | --- |
+| `fillet-workshop` | 2D fillet workshop | Raw line-line, line-circle and line-Bezier pairs with room to pick the portions to retain, author a branch-explicit associative fillet and edit its driving radius. |
+| `line-offset-workshop` | Associative line offsets | Line/polyline sources for exact translated and supporting-line offsets on either explicit side, followed by ordinary distance editing and constrained motion. |
+| `mirror-workshop` | Mirror construction workshop | A line axis plus movable line, cubic Bezier and non-rational B-spline sources for repeated exact associative mirrors. |
+
+Opening any leaf replaces the ordinary workspace, starts normal history and autosave, fits the
+camera and leaves every object editable. The samples contain no instruction, scripted action,
+protected entity, preselection or sample-owned operation policy. UAT instructions live only in
+`docs/M66_UAT.md`.
+
+The direct headless operation corpus covers both workflows for every tool:
+
+1. compatible immutable preselection stages one complete or next-operand candidate without
+   changing ordinary selection; empty selection enters persistent repeated authoring;
+2. canvas/tree picks preserve semantic span identity, exact picked parameter and finite model
+   position, with one physical event contributing one operand;
+3. a complete request executes against one immutable operation snapshot and may expose preview
+   only after scratch retained publication independently accepts it;
+4. Apply/Enter publishes through exact-input compare-and-swap as one history step and selects the
+   primary created curve; first Escape clears the candidate and second Escape exits;
+5. unsupported, incomplete, ambiguous, stale, cancelled, exhausted and retained-rejected work
+   leaves the live coordinator, accepted scene and history unchanged and re-arms repeated mode.
+
+Fillet picks are distinct visible curve spans. Their parameters seed one bounded local synthesis,
+which explicitly records neighborhoods, winding, normal sides, retained endpoints, any periodic
+anchors, endpoint order, sweep and positive radius before the existing M28 operation is prepared.
+Defaults use `0.1 * model_scale`, the picked retained portions and a minor arc; side and alternate
+arc controls provide deliberate branch correction. Same-support/polyline-corner fillets,
+already-trimmed parents and unresolved/singular roots fail typed without global search.
+
+Line offset accepts one line or polyline span. It atomically creates two target points, a target
+line, a positive scalar and one existing driving offset dimension. Exact translated segment is the
+default, supporting-line behavior is explicit, left/right side is explicit and generated endpoint
+orientation is `Same`. No curve/profile approximation, join or cap is implied.
+
+Mirror accepts one exact supported source followed by one line axis. Line/polyline, quadratic or
+cubic Bezier and non-rational B-spline sources remain associative through their existing ordinary
+point-symmetry constraints. Circle, arc, ellipse/conic, rational and NURBS sources warn as
+unsupported and allocate nothing. Repeated mode performs one source per transaction; atomic
+multi-source mirror is deferred.
 
 ## Frozen near-singular fixtures
 

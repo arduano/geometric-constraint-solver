@@ -34,7 +34,7 @@ physics remain outside future acceptance.
 4. `ACCEPTANCE.md`
 5. `docs/SCENARIOS.md`
 6. `REFERENCES.md`
-7. `docs/adr/0001-*.md` through `docs/adr/0029-*.md`
+7. `docs/adr/0001-*.md` through `docs/adr/0030-*.md`
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -90,9 +90,9 @@ explicit relation choice at the headless boundary, and retains picked curve para
 seeding. M61 remediation added ten movable nonzero-DOF mechanism leaves, full
 Bezier/conic/NURBS authoring and an inspectable canvas camera. Follow-up `M61-F005` makes compact
 circle Tangent contact-bearing and circle/arc Normal explicitly radial while retaining the public
-direction-at-contact domain API. M61-M64 are complete and approved. M64 supersedes active-scenario
+direction-at-contact domain API. M61-M65 are complete and approved. M64 supersedes active-scenario
 routing and sample-specific passive-driver metadata with one ordinary workspace coordinator.
-M65 is the open reduced-scope predictable-dragging cut for those existing editable mechanisms. It
+M65 completed the reduced-scope predictable-dragging cut for those existing editable mechanisms. It
 replaces retry-based stabilization with one gesture-start accepted-nullspace locality plan,
 continues exactly one retained attempt per non-stale pointer sample from the complete last valid
 preview, treats stale/out-of-order work as a no-op and enforces a finite synchronous operation
@@ -100,8 +100,9 @@ envelope. Circle circumferences remain offset-preserving semantic handles for th
 Core publication must independently validate Hard rows and every attained Temporary row; rejected
 or exhausted work retains the last valid preview. Replacement `b6433d1` fixes the UAT-discovered
 twin-roller annotation overlap and rank-one pantograph-guide cursor projection with direct
-regressions and strict certification. Fresh native/WASM/release qualification completed on
-2026-08-01; focused U2/U3 human retest remains open. M66 is an intentionally empty placeholder.
+regressions and strict certification. Fresh native/WASM/release qualification and focused U2/U3
+human approval completed on 2026-08-01. M66 is the active CAD helper-authoring cut for associative
+2D fillets, line offsets and exact supported-family mirroring.
 M62 follow-up `M62-F001` corrects accepted-state line-angle seeding and exposes acute-degree
 presentation while retaining the explicit directed-radian solver branch.
 Follow-up `M62-F002` gives canvas pointer-down exclusive ownership of canvas authoring picks,
@@ -150,15 +151,16 @@ are complete, growing the catalog to eight scenarios. The complete clean release
 build-source commit `f72116b`; `docs/M53_UAT.md` records the frozen M53-S5 manifest and temporary
 human endpoint. The targeted attribution review passed as part of final M53-S5 approval.
 
-The completed M54-M64 sequence covers stable diagnostics, alpha
+The completed M54-M65 sequence covers stable diagnostics, alpha
 constraint/dimension/branch-action parity, prepared jobs, incremental scale, operations,
 production topology, the advanced workbench, approved advanced UAT and approved CAD-style
-authoring, plus approved canvas constraint visualization and interaction. The previously forecast
+authoring, approved canvas constraint visualization and interaction, editable samples and
+predictable bounded dragging. The previously forecast
 M62-M64 hardening sequence was withdrawn on 2026-07-29; M62-M64 were subsequently scoped,
-completed and approved. M65 is the active predictable, bounded projected-dragging cut. Its
-replacement implementation and native/WASM/release qualification are complete;
-`docs/M65_UAT.md` focused retest and approval remain its milestone gate. M66 exists only as an
-unscoped placeholder and has no implementation sequence yet.
+completed and approved. M65 subsequently completed and received focused supervising-human
+approval. M66 is active under ADR 0030: the headless editor owns reusable Fillet, Line offset and
+Mirror authoring, the operations companion remains the equation-free transaction producer, and
+the sole workbench is a thin presentation consumer. M66 ends in its own focused UAT.
 
 Durable cleanup records:
 
@@ -189,8 +191,9 @@ Durable cleanup records:
 - `docs/M63_UAT.md` (approved M63 scorecard and finding ledger)
 - `docs/M64_IMPLEMENTATION.md`
 - `docs/M64_UAT.md` (approved M64 scorecard)
-- `docs/M65_IMPLEMENTATION.md` (mechanically qualified replacement implementation record)
-- `docs/M65_UAT.md` (qualified replacement scorecard; focused human retest pending)
+- `docs/M65_IMPLEMENTATION.md` (approved predictable-dragging implementation record)
+- `docs/M65_UAT.md` (approved focused scorecard)
+- `docs/M66_UAT.md` (active helper-operation scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

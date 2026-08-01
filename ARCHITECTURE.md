@@ -24,21 +24,20 @@ M23-M31 subsequently complete spatial kinematics, sketch embedding identities,
 advanced constructions, generic fillets and persistent trim views, interactive
 construction/NURBS UAT and certified all-family visual profiles.
 
-- **Baseline:** implemented and accepted behavior through M64. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology; M59 adds the read-only production-topology companion with exact accepted-input provenance and fail-closed completeness; M60 exposes the advanced curves, explicit NURBS branches, companion operations, production topology and versioned desktop workspace through the sole directly tested workbench; M61 completes approved supervising-human advanced geometry/topology UAT after targeted remediation; M62 completes approved CAD-style constraint and dimension authoring; M63 completes approved geometry-anchored canvas constraint and dimension presentation; M64 completes the approved editable sample-library cleanup and 1/2/3-DOF fixture cut. M1-M7 remain the frozen regression baseline.
-- **Active target:** M65 is the open predictable, bounded projected-dragging cut. Its reduced scope
-  is gesture-local accepted-nullspace locality, last-valid-preview continuation, one retained
-  attempt per non-stale sample, strict independently validated core publication and a finite
-  synchronous operation envelope. Replacement `b6433d1` and mechanical qualification are
-  complete after `M65-F004`/`M65-F005`; focused supervising-human retest remains.
-- **Planned sequence:** M66 is an intentionally empty placeholder awaiting M65 approval and
-  supervising-user scope. Every newly scoped milestone will end in its own human UAT.
+- **Baseline:** implemented and accepted behavior through M65. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology; M59 adds the read-only production-topology companion with exact accepted-input provenance and fail-closed completeness; M60 exposes the advanced curves, explicit NURBS branches, companion operations, production topology and versioned desktop workspace through the sole directly tested workbench; M61 completes approved supervising-human advanced geometry/topology UAT after targeted remediation; M62 completes approved CAD-style constraint and dimension authoring; M63 completes approved geometry-anchored canvas constraint and dimension presentation; M64 completes the approved editable sample-library cleanup and 1/2/3-DOF fixture cut; M65 completes approved predictable, bounded projected dragging. M1-M7 remain the frozen regression baseline.
+- **Active target:** M66 adds reusable headless authoring for associative 2D fillets, line offsets
+  and exact supported-family mirrors. `geosolve-sketch-ops` remains the equation-free proposal
+  owner, `geosolve-constraint-editor` owns operand/branch/preview/commit progression under ADR
+  0030, and the sole workbench remains a thin adapter.
+- **Planned sequence:** no milestone is assigned after M66. Every newly scoped milestone ends in
+  its own human UAT.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
 `PLAN.md` owns current execution numbering. Milestone labels in the preserved M8
 completion record and in ADRs accepted before the playground rebaseline describe the
 allocation at acceptance time; their architectural decisions remain accepted, but
-current ownership is the completed M10-M64 sequence and active M65 UAT cut listed in section 15.
+current ownership is the completed M10-M65 sequence and active M66 cut listed in section 15.
 
 ## 3. Crate responsibilities
 
@@ -142,7 +141,8 @@ Owns presentation-independent constraint-editing interaction policy over public
 - typed document-edit, preview, commit and cancellation effects; and
 - deterministic transition/replay fixtures for native and WASM qualification.
 
-It depends one way on `geosolve-sketch`. It does not own equations, accepted-state
+It depends one way on `geosolve-sketch` and, under ADR 0030, on the public equation-free
+`geosolve-sketch-ops` proposal seam. It does not own equations, accepted-state
 validation, persistent sketch identity, a renderer, DOM, widget toolkit, platform
 event loop, storage or host expressions. M40.2 implements accepted scene, picking,
 selection, basic relation applicability and the click/drag boundary; M40.3-M40.6
@@ -167,6 +167,15 @@ publishes `ResolvedConstraintKind`, explicit `ConstraintRelationChoice` and type
 the workbench does not reproduce the dispatch matrix. Curve hit testing retains the picked
 parameter to seed contact-bearing actions, while endpoint continuity uses exact bounded endpoint
 parameters. All contact, direction, curvature and continuity branches remain explicit state.
+
+M66 adds a separate `OperationAuthoringState` for Fillet, Line offset and Mirror rather than
+overloading the fixed-arity M62 constraint/dimension collector. The editor owns finite
+model-space picks, operand progression, explicit options and branch corrections, typed warnings,
+scratch accepted previews, Apply/Escape semantics and repeated-mode re-arming. The retained
+coordinator captures exact operation snapshots, executes public proposals on scratch retained
+state and publishes only through the operations companion's exact-input compare-and-swap path.
+Presentation code forwards events and renders DTOs; it does not locate fillet roots, infer offset
+or mirror semantics, or apply document operations independently.
 
 M40.7 separates non-authoritative `ConstructionPreview` from complete committable
 `ConstructionProposal`. A preview may represent an incomplete anchor or arc-radius
@@ -207,6 +216,12 @@ snapshots, applies them only through the ordinary retained transaction boundary 
 private residual equation, solver state or B-rep topology. Several visible intervals may share
 one immutable support through exact fixed/contact boundary identity; canonical sketch v4 remains
 the supported language until a future schema-freeze milestone is explicitly scoped.
+
+M66 adds one associative line-offset request to that existing proposal surface. For a line or one
+polyline span it atomically creates two target points, a target line, a positive scalar and either
+the existing exact-translated or supporting-line driving dimension. Side and same endpoint
+orientation are explicit. Fillet and mirror authoring continue to wrap the existing public M28 and
+M25 definitions; no operation adds an equation or approximation.
 
 M59 completes `geosolve-sketch-topology`, a read-only companion for revision-stamped production
 wires, nesting, holes and exact source provenance. It accepts only the current independently
@@ -344,6 +359,13 @@ items; `256` each nonlinear iterations, factorizations and rank kernels; `512` r
 `1,024` component linearizations; `256 × 256` dense kernels; `512` diagnostic candidates; and
 `1,024` diagnostic trials. Exhaustion is an ordinary typed rejection retaining the last valid
 preview. M65 adds no alternate-assembly search, preview UI or fixture.
+
+M66 places Fillet, Line offset and Mirror in a **Modify** palette section. Compatible ordinary
+selection may seed a headless candidate, while empty selection enters repeated operation mode.
+Only an independently accepted scratch result is drawn as operation preview; Apply/Enter publishes
+that exact proposal through normal retained history and Escape clears the candidate before exiting
+the tool. Three new catalog leaves are ordinary editable workspaces, not guided or protected
+scenarios. Camera navigation remains web-only and usable during authoring.
 
 ## 4. Numerical representation and linearization
 
@@ -680,8 +702,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   shared CAD SVG icon presentation and a dedicated human UAT.
 - M64: completed and approved editable sample-library cleanup with purpose grouping, ordinary
   persistence/editing and directly qualified 1/2/3-DOF mechanism examples.
-- M65: active predictable, bounded projected dragging for the existing editable mechanism
-  samples; replacement implementation and native/WASM/release qualification are complete after
-  the twin-roller hit-routing and rank-one pantograph-guide remediations, while focused U2/U3
-  supervising-human retest remains open.
-- M66: intentionally empty placeholder awaiting M65 approval and supervising-user scope.
+- M65: completed and approved predictable, bounded projected dragging for the existing editable
+  mechanism samples, including twin-roller hit routing and rank-one pantograph-guide projection.
+- M66: active headless CAD helper authoring for associative 2D fillets, line offsets and exact
+  supported-family mirrors, ending in its own focused UAT.

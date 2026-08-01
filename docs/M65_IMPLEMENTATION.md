@@ -1,8 +1,8 @@
 # M65 implementation: predictable bounded projected dragging
 
-Status: active. The reduced-scope implementation and replacement-candidate mechanical
-qualification completed on 2026-08-01. Focused supervising-human retest of `M65-F004` and
-`M65-F005` is pending.
+Status: complete and explicitly approved by the supervising human on 2026-08-01. The reduced-scope
+implementation, replacement-candidate mechanical qualification and focused retests of
+`M65-F004` and `M65-F005` all pass.
 
 ## Scope
 
@@ -213,7 +213,7 @@ The following objective acceptance areas pass:
 - formatting, warnings-denied Clippy, native tests, WASM, release Trunk and diff hygiene.
 
 The unaffected M65-U1 and M65-U4 areas retain the supervising-human closure-review result. M65-U2
-and M65-U3 require focused human retest of the replacement candidate. The discarded prototype
+and M65-U3 also passed focused human retest of the replacement candidate. The discarded prototype
 does not supply acceptance evidence for this candidate.
 
 ## 5. Known limitations or next blocker
@@ -225,6 +225,6 @@ does not supply acceptance evidence for this candidate.
   the current local configuration and operation envelope.
 - The withdrawn broader prototype remains recoverable only on
   `recovery/m65-f003-overbuilt-20260731`; none of its branch-search UI or samples is in `main`.
-- `M65-F004` and `M65-F005` have direct tested dispositions but still require focused human retest.
-- M65 remains open until the supervising human explicitly approves the corrected
-  `docs/M65_UAT.md` candidate.
+- `M65-F004` and `M65-F005` have direct tested dispositions and approved focused human retests.
+- Alternate-assembly exploration remains future scope rather than an implicit part of projected
+  dragging.

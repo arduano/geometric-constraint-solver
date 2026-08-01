@@ -1,7 +1,6 @@
 # M65 focused UAT
 
-Status: mechanically qualified replacement candidate available; focused supervising-human retest
-is pending for two remediated UAT findings.
+Status: complete and explicitly approved by the supervising human on 2026-08-01.
 
 Candidate code source: `b6433d1`.
 
@@ -47,11 +46,12 @@ Expected: all intended freedoms remain usable, the selected control moves predic
 independent passive motion is not introduced merely to satisfy a cursor sample. Reversal does not
 switch assembly root, and no interaction synchronously locks the main thread.
 
-Result: Retest required against `b6433d1`.
+Result: Pass (2026-08-01 focused retest approval against `b6433d1`).
 
 Notes: Holding the opposite arm stationary while dragging either one-DOF side control is the
 accepted M65 locality policy. `M65-F005` fixes the separate numerical rejection that made natural
-off-manifold upper-guide drags appear mostly immovable.
+off-manifold upper-guide drags appear mostly immovable. The supervising human approved this
+focused result.
 
 ### M65-U3 — symmetric twin-roller independence and recovery
 
@@ -66,10 +66,11 @@ Expected: the pressed circumference behaves as an offset-preserving handle for i
 The other roller remains stationary. Difficult work rejects within a responsive bounded interval,
 keeps the full last valid preview, and permits same-gesture recovery.
 
-Result: Retest required against `b6433d1`.
+Result: Pass (2026-08-01 focused retest approval against `b6433d1`).
 
 Notes: `M65-F004` restores direct access to the left roller where its driving-radius annotation
-overlaps the center or canonical circumference handle.
+overlaps the center or canonical circumference handle. The supervising human approved this
+focused result.
 
 ### M65-U4 — ordinary lifecycle, authoring and persistence
 
@@ -107,7 +108,7 @@ are not reused below.
 - Direct regression: the real `MotionCam` scene starts the correct semantic-center gesture from
   both roller centers and both positive-X circumferences, while the left radius label remains
   selectable without starting a gesture.
-- Human retest: Pending under M65-U3.
+- Human retest: Pass under M65-U3 on 2026-08-01.
 
 ### M65-F005 — pantograph guide rejected ordinary off-manifold cursor targets
 
@@ -125,21 +126,12 @@ are not reused below.
 - Direct regression: the exact reduced matrix is finite, bounded, minimum norm and KKT-certified;
   three natural guide targets project to the nearest radius-`sqrt(10)` position in one bounded
   attempt while input A remains within `1e-8` of its gesture-start position.
-- Human retest: Pending under M65-U2.
+- Human retest: Pass under M65-U2 on 2026-08-01.
 
 ## Approval
 
-The supervising human asked to close M65 on 2026-08-01 based on the interaction diagnosis then
-available. Before changing the milestone record, a stronger headless reproduction established
-`M65-F005` as a real numerical defect rather than inherent complexity, so that closure request is
-not treated as approval of the corrected source. M65 remains open only for focused U2/U3 retest
-and a fresh explicit approval statement.
-
-Final approval requires:
-
-1. one exact candidate commit and Tailscale endpoint recorded above;
-2. fresh formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature WASM
-   check, release Trunk build and `git diff --check` recorded against that source state;
-3. every scorecard item marked Pass or an explicitly accepted scoped limitation;
-4. every finding given a tested disposition; and
-5. an explicit supervising-human approval statement.
+The supervising human explicitly approved the two outstanding focused tests and asked to proceed
+to M66 on 2026-08-01. M65-U1 through M65-U4 are therefore all Pass against mechanically qualified
+source `b6433d1`; `M65-F004` and `M65-F005` have direct regressions and accepted human retests.
+M65 is closed without broadening its recorded scope or treating any inherent alternate-assembly
+search as implemented behavior.

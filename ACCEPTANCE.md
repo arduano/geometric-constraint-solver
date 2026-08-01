@@ -155,9 +155,9 @@ M8 is ready for review only when every item below is objectively present. These 
 
 The checked wording below is the preserved M8 completion record. Its then-current M8-M22
 allocations are historical; `PLAN.md` now governs completed work through the approved M61 gate,
-approved M62 authoring milestone, approved M63 canvas-constraint presentation and approved M64
-editable-sample cleanup, with the reduced-scope M65 implementation, requalification and focused
-human UAT still open.
+approved M62 authoring milestone, approved M63 canvas-constraint presentation, approved M64
+editable-sample cleanup and approved reduced-scope M65 predictable dragging, with M66 helper
+operation authoring active.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -937,16 +937,16 @@ finding dispositions and approval record are retained in `docs/M53_UAT.md`.
   regression/requalification plus human retest; deferred future scope retains an explicit roadmap
   owner.
 
-## M54-M64 acceptance
+## M54-M65 acceptance
 
 M54-M62 are the completed post-M53 sequence. M62 received explicit supervising-human approval on
-2026-07-29, and M63 and M64 received explicit supervising-human approval on 2026-07-30. No old
-browser E2E qualification may return. M65 is the active milestone below.
+2026-07-29, M63 and M64 received explicit supervising-human approval on 2026-07-30, and M65
+received focused supervising-human approval on 2026-08-01. No old browser E2E qualification may
+return. M66 is the active milestone below.
 
 ## M65 acceptance: predictable bounded projected dragging
 
-Status: active; replacement implementation and mechanical qualification completed on
-2026-08-01. Focused supervising-human retest of `M65-F004` and `M65-F005` is pending.
+Status: complete and explicitly approved by the supervising human on 2026-08-01.
 
 - [x] One gesture-start locality plan is derived from the independently accepted hard nullspace.
   Active rank and passive rank cover are explicit, and anchors are selected deterministically by
@@ -981,19 +981,65 @@ Status: active; replacement implementation and mechanical qualification complete
   queued results; and ordinary authoring through workspace save/reload and subsequent editing.
 - [x] Formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature WASM,
   release Trunk build and `git diff --check` pass on the same final source state.
-- [ ] The supervising human completes and explicitly approves the four-part
+- [x] The supervising human completes and explicitly approves the four-part
   `docs/M65_UAT.md` scorecard.
 
 M65 does not add alternate-branch UI/search/samples, a residual family, relaxed tolerance,
 weighted-priority semantics, sample-specific motion policy, worker architecture or global root
-enumeration. Replacement mechanical qualification is complete; M65 cannot close until focused
-U2/U3 human retest and fresh explicit approval are recorded in `docs/M65_UAT.md`.
+enumeration. Replacement mechanical qualification and focused U2/U3 human approval are recorded
+in `docs/M65_UAT.md`; M65 is complete.
 
-## M66 acceptance
+## M66 acceptance: CAD helper-operation authoring
 
-M66 is an intentionally empty placeholder. It has no goal or acceptance criteria and cannot begin
-until M65 closes and the supervising user supplies its scope. Once scoped, it will end in its own
-human UAT.
+Status: active. ADR 0030 is accepted; implementation and direct qualification are in progress.
+
+- A separate public headless operation-authoring state owns Fillet, Line offset and Mirror
+  operand progression, finite model-space picks, explicit options, warnings, repeated mode,
+  Apply/Enter and candidate-first Escape without changing M62 constraint authoring semantics.
+- Compatible preselection seeds one candidate; empty selection enters repeated mode. Completed,
+  rejected, unsupported and coordinator-error attempts clear the completed operand set and re-arm
+  without silently changing remembered process-local options.
+- Every preview comes from applying one prepared public operation proposal to scratch retained
+  state and independently accepting that exact input. Apply publishes through the same proposal's
+  exact compare-and-swap path as one normal history edit; stale, cancelled, exhausted, incomplete
+  or rejected work mutates no live state.
+- Fillet authoring records both spans, exact picked parameters, neighborhoods, winding, normal
+  sides, retained trim endpoints, periodic anchors where required, endpoint order, sweep and a
+  finite positive driving radius before preview. Local bounded synthesis defaults to the picked
+  retained portions and minor arc and exposes side/arc correction controls; it performs no global
+  root enumeration.
+- Fillet ambiguity, duplicate support, existing trim ownership, escaped parameters, zero speed,
+  cusp, pole, parallel offset and offset singularity remain typed mutation-free outcomes.
+- The operations companion atomically creates two target points, one target line, one positive
+  scalar and one existing driving dimension for a selected line/polyline span. Exact translated
+  segment is default, supporting-line offset is explicit, side is explicit and orientation is
+  `Same`; no general curve offset is approximated.
+- Mirror authoring accepts one source then one line axis. Exact line/polyline/quadratic- or
+  cubic-Bezier/non-rational-B-spline construction remains supported; circle, arc, conic, rational
+  and NURBS sources are typed unsupported without tessellation. Multi-source mirror is not
+  claimed.
+- The sole workbench presents a **Modify** palette, text-free representative icons, headless
+  guidance/warnings/options and accepted scratch preview. Pan/zoom remains usable and a successful
+  commit selects the operation's primary created curve. The browser owns no applicability,
+  branch, fillet, offset or reflection formula.
+- **2D fillet workshop**, **Associative line offsets** and **Mirror construction workshop** are
+  ordinary editable sample workspaces under **Curves & constructions**. They carry no guide,
+  protected state, scripted action or alternate coordinator and round-trip through ordinary
+  workspace persistence.
+- Direct operation, editor/coordinator and workbench tests cover both offset modes/sides,
+  representative fillet/mirror families, preselection/repeated progression, exact request state,
+  preview/commit lifecycle, stale/rejected retention, Undo/Redo, workspace reload and sample
+  editability. Existing M25/M27/M28 derivative and independent-validation corpora remain green;
+  M66 adds no residual.
+- Formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature demo-web
+  WASM, release Trunk and `git diff --check` pass from the final candidate before UAT begins.
+- The supervising human explicitly approves `docs/M66_UAT.md`; no correctness, data-loss,
+  misleading-preview or basic helper-authoring blocker remains.
+
+M66 does not include general curve/profile offsets, offset joins/caps/self-intersection healing,
+same-support/global-search fillets, multi-source mirror, unsupported-family approximation,
+persistent CAD feature-tree objects, a schema freeze, new equations, browser E2E, `/#/dev/lab`
+or mobile behavior.
 
 ### M54: stable diagnostics
 

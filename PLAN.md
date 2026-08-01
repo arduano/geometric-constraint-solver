@@ -37,8 +37,9 @@ host-integration and interaction-consumer cut; M46-M53 perform the cleanup rebas
 host-semantics UAT; M54-M62 complete the subsequent functional work, approved advanced UAT and
 approved CAD-style authoring, and M63 completes approved geometry-anchored canvas constraint and
 dimension presentation. M64 completes the approved editable-sample cleanup and focused UAT cut;
-M65 is the active predictable, bounded projected-dragging cut for those ordinary editable samples;
-M66 is an intentionally empty placeholder awaiting M65 approval and supervising-user scope.
+M65 completes approved predictable, bounded projected dragging for those ordinary editable
+samples; M66 is the active CAD helper-authoring cut for associative 2D fillets, line offsets and
+exact supported-family mirroring.
 This deliverable does not include a solid B-rep kernel, meshing or 3D sketch curves.
 
 ### Deliverable 2: 2D and 3D rigid-body kinematics
@@ -2948,8 +2949,7 @@ scorecard areas are recorded Pass in `docs/M64_UAT.md`; no M64 finding remains o
 
 ### M65: predictable bounded projected dragging
 
-Status: active; replacement implementation and mechanical qualification completed on
-2026-08-01. Focused supervising-human retest of `M65-F004` and `M65-F005` remains open.
+Status: complete and explicitly approved by the supervising human on 2026-08-01.
 
 Goal: make projected dragging predictable and synchronously bounded for the existing editable
 mechanism samples. Stability and local UX take priority; bounded work must not weaken mathematical
@@ -2990,7 +2990,7 @@ validation or introduce sample-specific behavior.
   scissor jack/tower; circle-handle offset; release/cancel/Undo/Redo; and stale queued results.
 - [x] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature
   WASM check, release Trunk build and `git diff --check` on one final source state.
-- [ ] Complete and explicitly approve the focused M65 Tailscale UAT.
+- [x] Complete and explicitly approve the focused M65 Tailscale UAT.
 
 Gate: ordinary projected drag follows the selected control locally, leaves independent passive
 controls stationary, never changes assembly branch implicitly, preserves the complete last valid
@@ -3009,16 +3009,69 @@ all-feature WASM check, the release Trunk bundle and `git diff --check` pass on 
 source `b6433d1`. `M65-F004` makes twin-roller geometry reachable through overlapping dimension
 leaders without hiding offset labels; `M65-F005` certifies the rank-one `2 x 2` cursor projection
 and restores natural off-manifold guide motion without relaxing rank, KKT, hierarchy or work
-limits. M65 remains active only for focused U2/U3 human retest and fresh explicit approval. The
-replacement is served at `http://100.94.63.83:8080/`.
+limits. The supervising human subsequently approved the focused U2/U3 retests against the
+replacement candidate. M65 is closed; the historical candidate endpoint was
+`http://100.94.63.83:8080/`.
 
-### M66: unscoped placeholder
+### M66: CAD helper-operation authoring
 
-Status: intentionally empty; do not begin until M65 receives fresh supervising-human approval and
-the supervising user supplies M66 goals.
+Status: active. M65 is approved, ADR 0030 is accepted and implementation is in progress.
 
-No goal, requirements, acceptance criteria or implementation work are assigned yet. M66 will end
-in its own UAT once it is scoped.
+Goal: expose intuitive reusable authoring for associative 2D fillets, line offsets and exact
+supported-family mirrors while keeping branch synthesis, applicability, scratch preview and
+publication in the headless editor/operations layers rather than the browser.
+
+- [x] Accept ADR 0030, extending the allowed dependency direction so
+  `geosolve-constraint-editor` may consume public `geosolve-sketch-ops` proposals without moving
+  equations, solver state or accepted authority into either the editor or web crate.
+- [ ] Add a separate `OperationAuthoringState` with Fillet, Line offset and Mirror tools, finite
+  model-space picks, typed pending stages/guidance, explicit options, warnings and terminal
+  outcomes; do not overload M62 `AuthoringState`.
+- [ ] Support compatible preselection and empty-selection persistent repeated mode, Apply/Enter,
+  two-stage Escape, stale-operand reconciliation and terminal re-arming while preserving ordinary
+  pan/zoom navigation.
+- [ ] Make the retained coordinator capture immutable operation snapshots, execute proposals on
+  scratch retained state, expose preview only from an independently accepted exact-input result,
+  and publish the exact proposal through compare-and-swap as one normal history edit.
+- [ ] Synthesize a complete branch-explicit M28 fillet request from two distinct local curve-span
+  picks, including parameter, neighborhood, winding, normal sides, retained endpoints, periodic
+  anchors, endpoint order, sweep and positive driving radius.
+- [ ] Default fillets to `0.1 * document.model_scale()`, the locally picked retained portions and a
+  minor arc; expose flip-first-side, flip-second-side and alternate-arc corrections and remember
+  the radius only for the current process.
+- [ ] Reject ambiguous/unresolved local fillet roots, same supports, already-trimmed parents,
+  singular/parallel offsets, zero-speed/pole/cusp geometry and escaped spans without a global root
+  search or partial mutation.
+- [ ] Add one atomic `geosolve-sketch-ops` line-offset request for a line or polyline span that
+  creates target endpoints, target line, positive scalar and the existing driving offset
+  dimension with explicit side and `Same` orientation.
+- [ ] Default line offset to exact translated segment and expose supporting-line offset as the
+  truthful alternate mode; do not approximate general curve, chain, conic, spline or NURBS
+  offsets.
+- [ ] Author one source then one line axis for exact mirror, retaining existing supported
+  line/polyline/Bezier/non-rational-B-spline behavior and typed unsupported outcomes for circle,
+  arc, conic, rational and NURBS families. Multi-source mirror remains deferred.
+- [ ] Add a **Modify** section to the left palette with distinct text-free Fillet, Line offset and
+  Mirror icons, headless pending/warning/options presentation, accepted scratch preview and
+  primary-created-curve selection after commit.
+- [ ] Add ordinary editable **2D fillet workshop**, **Associative line offsets** and
+  **Mirror construction workshop** leaves under **Curves & constructions**, with no guide,
+  protection, scripted action or alternate coordinator.
+- [ ] Directly qualify operation expansion, state transitions, branch/request synthesis,
+  preview/commit rejection, stale/exhausted work, Undo/Redo, workspace round-trip and sample
+  editability. Retain M25/M27/M28 as the derivative and independent-validation owners because M66
+  adds no residual.
+- [ ] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature
+  demo-web WASM check, release Trunk build and `git diff --check` from one final source state.
+- [ ] Complete and explicitly approve `docs/M66_UAT.md`.
+
+Gate: every visible helper tool is driven by public headless operation-authoring metadata and
+commits only an independently accepted public operation proposal through the ordinary retained
+history path. Every branch/side/span/winding choice is explicit before publication. Unsupported or
+ambiguous geometry is typed and mutation-free; no browser equation or applicability matrix,
+general curve offset approximation, global fillet-root enumeration, persistent feature tree,
+legacy harness, `/#/dev/lab`, browser E2E or mobile claim is added. M66 closes only after direct
+qualification and explicit supervising-human UAT approval.
 
 ## Explicit non-goals
 
