@@ -14,7 +14,7 @@ replace those gates.
 Mechanical qualification (2026-08-01): formatting, warnings-denied locked workspace Clippy,
 locked all-feature workspace tests, the all-feature `wasm32-unknown-unknown` check, the optimized
 Trunk 0.21.14 release bundle and `git diff --check` pass. A verified GET from the Tailscale
-endpoint will be refreshed to the code source recorded above before retest.
+endpoint returns the ordinary GeoSolve Sketch Workbench built from the code source recorded above.
 
 ## UAT scorecard
 
