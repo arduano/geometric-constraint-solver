@@ -1,4 +1,4 @@
-use nalgebra::{DMatrix, DVector};
+use nalgebra::{DMatrix, DVector, Matrix2, Vector2};
 
 use crate::analysis::{
     CachedComponent, DecompositionCache, EliminationPlan, SolveComponent, set_state_value,
@@ -9169,6 +9169,14 @@ fn solve_rank_aware_least_squares(
     if matrix.ncols() == 0 {
         return Some(DVector::zeros(0));
     }
+    if matrix.nrows() == 2 && matrix.ncols() == 2 {
+        return solve_fixed_2x2_rank_aware_least_squares(
+            matrix,
+            right_hand_side,
+            relative_tolerance,
+            control,
+        );
+    }
     let diagnostics = controlled_dense_factorization(
         matrix.nrows(),
         matrix.ncols(),
@@ -9227,6 +9235,136 @@ fn solve_rank_aware_least_squares(
         normal_residual_norm = candidate_norm;
     }
     Some(solution)
+}
+
+/// Rank-aware minimum-norm solve for the common two-coordinate cursor projection.
+///
+/// A 2D target projected through one instantaneous mechanism freedom produces an
+/// almost exactly rank-one `2 x 2` system. Nalgebra's fixed-size analytic SVD avoids
+/// the cancellation that its dynamic bidiagonal path can accumulate in this corner.
+/// The returned step is still accepted only after first-order stationarity and
+/// retained-row-space (minimum-norm) certification under the authoritative rank
+/// cutoff.
+fn solve_fixed_2x2_rank_aware_least_squares(
+    matrix: &DMatrix<f64>,
+    right_hand_side: &DVector<f64>,
+    relative_tolerance: f64,
+    control: Option<&mut OperationController>,
+) -> Option<DVector<f64>> {
+    let (solution, row_space_projection, threshold) =
+        controlled_dense_factorization(2, 2, control, || {
+            let fixed = Matrix2::new(
+                matrix[(0, 0)],
+                matrix[(0, 1)],
+                matrix[(1, 0)],
+                matrix[(1, 1)],
+            );
+            let decomposition = fixed.svd(true, true);
+            let sigma_max = decomposition
+                .singular_values
+                .iter()
+                .copied()
+                .fold(0.0_f64, f64::max);
+            let (_, _, threshold) = rank_thresholds(2, 2, sigma_max, relative_tolerance)?;
+            let fixed_right_hand_side = Vector2::new(right_hand_side[0], right_hand_side[1]);
+            let fixed_solution = decomposition
+                .solve(&fixed_right_hand_side, threshold)
+                .ok()?;
+            let right_vectors = decomposition.v_t.as_ref()?;
+            let mut fixed_projection = Vector2::zeros();
+            for row in 0..2 {
+                if decomposition.singular_values[row] <= threshold {
+                    continue;
+                }
+                let coefficient = right_vectors[(row, 0)] * fixed_solution[0]
+                    + right_vectors[(row, 1)] * fixed_solution[1];
+                fixed_projection[0] += right_vectors[(row, 0)] * coefficient;
+                fixed_projection[1] += right_vectors[(row, 1)] * coefficient;
+            }
+            Some((
+                DVector::from_vec(vec![fixed_solution[0], fixed_solution[1]]),
+                DVector::from_vec(vec![fixed_projection[0], fixed_projection[1]]),
+                threshold,
+            ))
+        })?;
+    rank_aware_least_squares_is_certified(
+        matrix,
+        right_hand_side,
+        &solution,
+        &row_space_projection,
+        threshold,
+    )
+    .then_some(solution)
+}
+
+fn rank_aware_least_squares_is_certified(
+    matrix: &DMatrix<f64>,
+    right_hand_side: &DVector<f64>,
+    solution: &DVector<f64>,
+    row_space_projection: &DVector<f64>,
+    singular_value_threshold: f64,
+) -> bool {
+    if solution.len() != matrix.ncols()
+        || row_space_projection.len() != solution.len()
+        || solution.iter().any(|value| !value.is_finite())
+        || row_space_projection.iter().any(|value| !value.is_finite())
+    {
+        return false;
+    }
+    let Some(solution_norm) = stable_norm(solution.iter().copied()) else {
+        return false;
+    };
+    let Some(minimum_norm_error) = stable_norm((solution - row_space_projection).iter().copied())
+    else {
+        return false;
+    };
+    let dimension = f64::from(u32::try_from(solution.len().max(1)).unwrap_or(u32::MAX));
+    let minimum_norm_roundoff = 64.0 * f64::EPSILON * dimension * solution_norm;
+    least_squares_stationarity_is_certified(
+        matrix,
+        right_hand_side,
+        solution,
+        singular_value_threshold,
+    ) && minimum_norm_roundoff.is_finite()
+        && minimum_norm_error <= minimum_norm_roundoff
+}
+
+fn least_squares_stationarity_is_certified(
+    matrix: &DMatrix<f64>,
+    right_hand_side: &DVector<f64>,
+    solution: &DVector<f64>,
+    singular_value_threshold: f64,
+) -> bool {
+    if right_hand_side.len() != matrix.nrows()
+        || solution.len() != matrix.ncols()
+        || matrix.iter().any(|value| !value.is_finite())
+        || right_hand_side.iter().any(|value| !value.is_finite())
+        || solution.iter().any(|value| !value.is_finite())
+        || !singular_value_threshold.is_finite()
+    {
+        return false;
+    }
+    let residual = matrix * solution - right_hand_side;
+    let gradient = matrix.transpose() * &residual;
+    let Some(residual_norm) = stable_norm(residual.iter().copied()) else {
+        return false;
+    };
+    let Some(gradient_norm) = stable_norm(gradient.iter().copied()) else {
+        return false;
+    };
+    let Some(matrix_norm) = stable_norm(matrix.iter().copied()) else {
+        return false;
+    };
+    let Some(solution_norm) = stable_norm(solution.iter().copied()) else {
+        return false;
+    };
+    let Some(right_hand_side_norm) = stable_norm(right_hand_side.iter().copied()) else {
+        return false;
+    };
+    let rank_cutoff = singular_value_threshold * residual_norm;
+    let roundoff =
+        64.0 * f64::EPSILON * matrix_norm * (matrix_norm * solution_norm + right_hand_side_norm);
+    rank_cutoff.is_finite() && roundoff.is_finite() && gradient_norm <= rank_cutoff.max(roundoff)
 }
 
 fn limit_block_steps(step: &mut DVector<f64>, layout: &ActiveLayout, limit: f64) -> Option<f64> {
@@ -9898,6 +10036,46 @@ mod tests {
         assert_eq!(method, LinearSolveMethod::Svd);
         assert!((solution[0] - 2.0).abs() <= f64::EPSILON);
         assert!(solution[1].abs() <= f64::EPSILON);
+    }
+
+    #[test]
+    fn rank_one_cursor_projection_is_bounded_minimum_norm_and_kkt_certified() {
+        // A two-coordinate cursor projected through one instantaneous mechanism
+        // freedom produces two dependent target rows. This is the exact reduced
+        // system observed while dragging pantograph guide B off its circle.
+        let matrix = DMatrix::from_row_slice(
+            2,
+            2,
+            &[
+                -0.197_634_476_267_791_96,
+                -0.632_455_532_033_676_2,
+                0.065_878_158_755_930_41,
+                0.210_818_510_677_892_06,
+            ],
+        );
+        let right_hand_side = DVector::from_vec(vec![0.04, 0.0]);
+        let mut controller = OperationController::new(OperationControl::default());
+        let solution = solve_rank_aware_least_squares(
+            &matrix,
+            &right_hand_side,
+            SolverConfig::default().rank_relative_tolerance,
+            Some(&mut controller),
+        )
+        .unwrap();
+
+        assert!(solution.iter().all(|value| value.is_finite()));
+        assert!(solution.norm() <= 0.1, "{solution:?}");
+        let model_residual = &matrix * &solution - &right_hand_side;
+        let normal_residual = matrix.transpose() * &model_residual;
+        assert!(normal_residual.norm() <= 1.0e-12, "{normal_residual:?}");
+        let first_row = matrix.row(0);
+        let null_direction = DVector::from_vec(vec![first_row[1], -first_row[0]]);
+        assert!(
+            solution.dot(&null_direction).abs()
+                <= 1.0e-12 * solution.norm().max(1.0) * null_direction.norm().max(1.0),
+            "{solution:?}"
+        );
+        assert_eq!(controller.report().consumed.factorizations, 1);
     }
 
     #[test]

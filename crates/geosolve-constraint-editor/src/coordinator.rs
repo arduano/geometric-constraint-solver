@@ -7824,6 +7824,70 @@ mod tests {
     }
 
     #[test]
+    fn off_manifold_pantograph_guide_path_projects_nearest_and_keeps_input_fixed() {
+        let fixture = alpha_scenario(AlphaScenarioKind::MotionPantograph, 1.0).unwrap();
+        let AlphaScenarioIds::MotionPantograph(ids) = fixture.ids else {
+            unreachable!()
+        };
+        let mut coordinator = RetainedEditorCoordinator::new(
+            RetainedSketchDocumentSession::new(
+                fixture.document,
+                fixture.request,
+                SolverConfig::default(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let input_start = coordinator
+            .session()
+            .accepted_state()
+            .unwrap()
+            .document()
+            .point(ids.input)
+            .unwrap()
+            .position;
+        let radius = 10.0_f64.sqrt();
+
+        for (index, target) in [[1.2_f64, 3.0], [0.8, 3.2], [1.3, 2.8]]
+            .into_iter()
+            .enumerate()
+        {
+            let target_norm = target[0].hypot(target[1]);
+            let expected = [
+                radius * target[0] / target_norm,
+                radius * target[1] / target_norm,
+            ];
+            let _ = coordinator.resolve_projected_point_move(
+                93,
+                u64::try_from(index + 1).unwrap(),
+                ids.guide,
+                target,
+            );
+            let work = coordinator.projected_drag_work_evidence().unwrap();
+            assert_eq!(work.attempts, 1, "{work:#?}");
+            assert!(work.accepted, "{work:#?}");
+            assert_projected_drag_work_bounded(work);
+
+            let preview = coordinator
+                .solved_preview_session()
+                .unwrap()
+                .accepted_state()
+                .unwrap()
+                .document();
+            let guide = preview.point(ids.guide).unwrap().position;
+            let input = preview.point(ids.input).unwrap().position;
+            assert!(
+                (guide[0] - expected[0]).hypot(guide[1] - expected[1]) <= 2.0e-6,
+                "guide target {target:?} projected to {guide:?}, expected {expected:?}"
+            );
+            assert!(
+                (input[0] - input_start[0]).hypot(input[1] - input_start[1]) <= 1.0e-8,
+                "guide drag moved passive input from {input_start:?} to {input:?}"
+            );
+        }
+    }
+
+    #[test]
     fn every_pantograph_control_projects_on_its_local_configuration() {
         let input_angle = 1.0_f64.atan2(4.0);
         let guide_angle = 3.0_f64.atan2(1.0);

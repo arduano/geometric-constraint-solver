@@ -1565,15 +1565,21 @@ impl ConstraintEditor {
         {
             effects.extend(self.cancel_point_gesture());
         }
-        let hit = scene
-            .annotation_hit_test(
-                input.position,
-                self.pick_tolerance,
-                &self.selection,
-                self.visibility_context(),
-                problem_items,
-            )
-            .or_else(|| scene.hit_test(input.position, self.pick_tolerance));
+        let geometry_hit = scene.hit_test(input.position, self.pick_tolerance);
+        let annotation_hit = scene.annotation_hit_test(
+            input.position,
+            self.pick_tolerance,
+            &self.selection,
+            self.visibility_context(),
+            problem_items,
+        );
+        // A visible dimension leader may cross a point or semantic circle handle.
+        // Preserve direct manipulation at that exact overlap; offset labels and
+        // annotations over non-draggable geometry retain their existing priority.
+        let hit = geometry_hit
+            .filter(|hit| scene.drag_handle_point(hit.item).is_some())
+            .or(annotation_hit)
+            .or(geometry_hit);
         let before = self.selection.clone();
         if let Some(hit) = hit {
             self.select_item(hit.item, input.modifiers);
@@ -4159,6 +4165,83 @@ mod tests {
                 }]
             );
         }
+    }
+
+    #[test]
+    fn twin_roller_geometry_remains_draggable_through_visible_dimension_overlaps() {
+        let fixture =
+            geosolve_sketch::alpha_scenario(geosolve_sketch::AlphaScenarioKind::MotionCam, 1.0)
+                .expect("motion cam");
+        let geosolve_sketch::AlphaScenarioIds::MotionCam(ids) = fixture.ids else {
+            unreachable!()
+        };
+        let scene = scene(&fixture.document);
+        let rollers = [
+            (ids.left_center, ids.left_circle),
+            (ids.right_center, ids.right_circle),
+        ];
+
+        for (roller_index, (center, circle)) in rollers.into_iter().enumerate() {
+            let model_center = fixture
+                .document
+                .point(center)
+                .expect("roller center")
+                .position;
+            let center_screen = scene.viewport.model_to_screen(model_center);
+            let circumference_screen = scene
+                .viewport
+                .model_to_screen([model_center[0] + 1.0, model_center[1]]);
+
+            for (press_index, press) in [center_screen, circumference_screen]
+                .into_iter()
+                .enumerate()
+            {
+                let pointer_id =
+                    u64::try_from(10 * roller_index + press_index + 1).expect("pointer identity");
+                let mut editor = ConstraintEditor::default();
+                let _ = editor.pointer_down(
+                    &scene,
+                    pointer(pointer_id, press.x, press.y, Modifiers::default()),
+                );
+                let gesture = editor
+                    .point_gesture_snapshot()
+                    .expect("roller press starts a point gesture");
+                assert_eq!(gesture.pointer_id, pointer_id);
+                assert_eq!(gesture.point, center);
+                assert!(
+                    matches!(
+                        editor.selection(),
+                        [SelectionItem::Point(selected)] if *selected == center
+                    ) || matches!(
+                        editor.selection(),
+                        [SelectionItem::Curve(selected)] if selected.curve == circle
+                    )
+                );
+            }
+        }
+
+        let (radius_dimension, label_anchor) = scene
+            .annotations
+            .iter()
+            .find_map(|annotation| {
+                if annotation.kind != SceneAnnotationKind::Radius {
+                    return None;
+                }
+                let SceneAnnotationGeometry::RadialDimension { label_anchor, .. } =
+                    &annotation.geometry
+                else {
+                    return None;
+                };
+                Some((annotation.item, *label_anchor))
+            })
+            .expect("left driving radius annotation");
+        let mut editor = ConstraintEditor::default();
+        let _ = editor.pointer_down(
+            &scene,
+            pointer(100, label_anchor.x, label_anchor.y, Modifiers::default()),
+        );
+        assert_eq!(editor.selection(), &[radius_dimension]);
+        assert!(editor.point_gesture_snapshot().is_none());
     }
 
     #[test]
