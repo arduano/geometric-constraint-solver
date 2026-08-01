@@ -3015,7 +3015,8 @@ replacement candidate. M65 is closed; the historical candidate endpoint was
 
 ### M66: CAD helper-operation authoring
 
-Status: active. M65 is approved, ADR 0030 is accepted and implementation is in progress.
+Status: active. Implementation and direct qualification are complete; supervising-human UAT
+remains open.
 
 Goal: expose intuitive reusable authoring for associative 2D fillets, line offsets and exact
 supported-family mirrors while keeping branch synthesis, applicability, scratch preview and
@@ -3024,44 +3025,44 @@ publication in the headless editor/operations layers rather than the browser.
 - [x] Accept ADR 0030, extending the allowed dependency direction so
   `geosolve-constraint-editor` may consume public `geosolve-sketch-ops` proposals without moving
   equations, solver state or accepted authority into either the editor or web crate.
-- [ ] Add a separate `OperationAuthoringState` with Fillet, Line offset and Mirror tools, finite
+- [x] Add a separate `OperationAuthoringState` with Fillet, Line offset and Mirror tools, finite
   model-space picks, typed pending stages/guidance, explicit options, warnings and terminal
   outcomes; do not overload M62 `AuthoringState`.
-- [ ] Support compatible preselection and empty-selection persistent repeated mode, Apply/Enter,
+- [x] Support compatible preselection and empty-selection persistent repeated mode, Apply/Enter,
   two-stage Escape, stale-operand reconciliation and terminal re-arming while preserving ordinary
   pan/zoom navigation.
-- [ ] Make the retained coordinator capture immutable operation snapshots, execute proposals on
+- [x] Make the retained coordinator capture immutable operation snapshots, execute proposals on
   scratch retained state, expose preview only from an independently accepted exact-input result,
   and publish the exact proposal through compare-and-swap as one normal history edit.
-- [ ] Synthesize a complete branch-explicit M28 fillet request from two distinct local curve-span
+- [x] Synthesize a complete branch-explicit M28 fillet request from two distinct local curve-span
   picks, including parameter, neighborhood, winding, normal sides, retained endpoints, periodic
   anchors, endpoint order, sweep and positive driving radius.
-- [ ] Default fillets to `0.1 * document.model_scale()`, the locally picked retained portions and a
+- [x] Default fillets to `0.1 * document.model_scale()`, the locally picked retained portions and a
   minor arc; expose flip-first-side, flip-second-side and alternate-arc corrections and remember
   the radius only for the current process.
-- [ ] Reject ambiguous/unresolved local fillet roots, same supports, already-trimmed parents,
+- [x] Reject ambiguous/unresolved local fillet roots, same supports, already-trimmed parents,
   singular/parallel offsets, zero-speed/pole/cusp geometry and escaped spans without a global root
   search or partial mutation.
-- [ ] Add one atomic `geosolve-sketch-ops` line-offset request for a line or polyline span that
+- [x] Add one atomic `geosolve-sketch-ops` line-offset request for a line or polyline span that
   creates target endpoints, target line, positive scalar and the existing driving offset
   dimension with explicit side and `Same` orientation.
-- [ ] Default line offset to exact translated segment and expose supporting-line offset as the
+- [x] Default line offset to exact translated segment and expose supporting-line offset as the
   truthful alternate mode; do not approximate general curve, chain, conic, spline or NURBS
   offsets.
-- [ ] Author one source then one line axis for exact mirror, retaining existing supported
+- [x] Author one source then one line axis for exact mirror, retaining existing supported
   line/polyline/Bezier/non-rational-B-spline behavior and typed unsupported outcomes for circle,
   arc, conic, rational and NURBS families. Multi-source mirror remains deferred.
-- [ ] Add a **Modify** section to the left palette with distinct text-free Fillet, Line offset and
+- [x] Add a **Modify** section to the left palette with distinct text-free Fillet, Line offset and
   Mirror icons, headless pending/warning/options presentation, accepted scratch preview and
   primary-created-curve selection after commit.
-- [ ] Add ordinary editable **2D fillet workshop**, **Associative line offsets** and
+- [x] Add ordinary editable **2D fillet workshop**, **Associative line offsets** and
   **Mirror construction workshop** leaves under **Curves & constructions**, with no guide,
   protection, scripted action or alternate coordinator.
-- [ ] Directly qualify operation expansion, state transitions, branch/request synthesis,
+- [x] Directly qualify operation expansion, state transitions, branch/request synthesis,
   preview/commit rejection, stale/exhausted work, Undo/Redo, workspace round-trip and sample
   editability. Retain M25/M27/M28 as the derivative and independent-validation owners because M66
   adds no residual.
-- [ ] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature
+- [x] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature
   demo-web WASM check, release Trunk build and `git diff --check` from one final source state.
 - [ ] Complete and explicitly approve `docs/M66_UAT.md`.
 

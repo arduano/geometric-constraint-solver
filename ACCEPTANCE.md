@@ -991,7 +991,8 @@ in `docs/M65_UAT.md`; M65 is complete.
 
 ## M66 acceptance: CAD helper-operation authoring
 
-Status: active. ADR 0030 is accepted; implementation and direct qualification are in progress.
+Status: active. Implementation and direct qualification are complete; supervising-human UAT
+remains pending.
 
 - A separate public headless operation-authoring state owns Fillet, Line offset and Mirror
   operand progression, finite model-space picks, explicit options, warnings, repeated mode,

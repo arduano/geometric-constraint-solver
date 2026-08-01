@@ -1,10 +1,15 @@
 # M66 focused UAT: CAD helper operations
 
-Status: implementation and direct qualification in progress; supervising-human UAT has not begun.
+Status: mechanically qualified; supervising-human UAT is pending.
 
-Candidate code source: to be recorded after the clean qualification commit.
+Candidate code source: `f913fb46e14308dc66563d1e602d3ae6ed2f7cb1`.
 
-Tailscale endpoint: to be recorded after the exact release bundle is served.
+Tailscale endpoint: `http://100.94.63.83:8080/`.
+
+Mechanical qualification completed on 2026-08-01. The exact candidate passed formatting,
+warnings-denied locked workspace/all-target/all-feature Clippy, locked all-feature workspace
+tests, the all-feature demo-web WASM check, release Trunk build and `git diff --check`. Every result
+below remains Pending until supervising-human UAT is performed.
 
 Use the ordinary GeoSolve Sketch Workbench only. The sample leaves are editable save-like
 workspaces; they contain no guided actions or protected state. This scorecard judges whether the

@@ -2,8 +2,8 @@
 
 # M66 implementation: headless CAD helper-operation authoring
 
-Status: implementation and direct qualification in progress. The supervising-human UAT remains
-open and is the final M66 gate.
+Status: implementation and direct qualification complete as of 2026-08-01. The supervising-human
+UAT remains open and is the final M66 gate.
 
 ## Scope
 
@@ -96,8 +96,8 @@ publish partial state or leave a committable preview.
 
 ## 3. Exact commands run and outcomes
 
-Focused operations, editor/coordinator and workbench suites are being run throughout
-implementation. The final candidate must pass this exact integrated gate from one source state:
+Code source `f913fb46e14308dc66563d1e602d3ae6ed2f7cb1` passed the exact integrated gate on
+2026-08-01:
 
 ```text
 nix-shell shell.nix --run 'cargo fmt --all -- --check'
@@ -109,15 +109,25 @@ nix-shell ../../shell.nix --run 'env NO_COLOR=true trunk build --release'
 git diff --check
 ```
 
-Final outcomes, exact candidate commit and endpoint will be recorded after the clean gate.
+Outcomes:
+
+- formatting passed without changes;
+- warnings-denied workspace/all-target/all-feature Clippy passed; Cargo emitted only the existing
+  non-failing manifest advice about declaring both `license` and `license-file`;
+- every executed workspace unit, integration and documentation test passed; the explicitly manual
+  or release-performance-only tests remained ignored;
+- the all-feature `wasm32-unknown-unknown` check passed;
+- Trunk 0.21.14 produced the optimized release distribution successfully; and
+- `git diff --check` passed from a clean worktree.
 
 ## 4. Acceptance criteria passed
 
-Objective acceptance remains in progress until the integrated gate completes. Direct coverage
-owns operation expansion, state transitions, exact picked parameters, local fillet branches,
-offset modes/sides, supported/unsupported mirror families, accepted scratch provenance,
-token/candidate/confirmation binding, cancellation/exhaustion/staleness, exact scratch/commit
-equality, selection, history/replay, workspace round-trip and editable plain samples.
+All objective implementation and mechanical acceptance criteria pass. Direct coverage owns
+operation expansion, state transitions, exact picked parameters, local fillet branches, offset
+modes/sides, supported/unsupported mirror families, accepted scratch provenance, token/candidate/
+confirmation binding, cancellation/exhaustion/staleness, exact scratch/commit equality, selection,
+history/replay, workspace round-trip and editable plain samples. The retained M25/M27/M28
+derivative and independent-validation corpora also pass; M66 adds no residual.
 
 The explicit supervising-human acceptance checkbox remains open. M66 cannot close from mechanical
 qualification alone.
@@ -130,5 +140,5 @@ qualification alone.
   healing.
 - Mirrors are exact only for point-defined supported families and commit one source at a time.
 - The workbench remains a non-authoritative desktop UAT consumer.
-- The next blocker after clean qualification is explicit supervising-human approval of
-  `docs/M66_UAT.md` against the exact Tailscale candidate.
+- The only remaining milestone gate is explicit supervising-human approval of `docs/M66_UAT.md`
+  against the exact Tailscale candidate.
