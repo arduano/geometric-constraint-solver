@@ -3084,9 +3084,10 @@ mod tests {
             .operation_authoring_document()
             .expect("operation document")
             .clone();
-        let point = match document.curve(line.curve).expect("source line").definition {
-            CurveDefinition::Line { start, .. } => start,
-            _ => panic!("fixture curve should be a line"),
+        let CurveDefinition::Line { start: point, .. } =
+            document.curve(line.curve).expect("source line").definition
+        else {
+            panic!("fixture curve should be a line");
         };
         let invalid_confirmed = route_operation_item_pick(
             &mut state,
