@@ -3,7 +3,8 @@
 //! Shared vector language for constraint and dimension concepts.
 
 use geosolve_constraint_editor::{
-    AuthoringTool, ConstraintIntent, DimensionKind, EditorTool, SceneConstraintGlyph,
+    AuthoringTool, ConstraintIntent, DimensionKind, EditorTool, OperationAuthoringTool,
+    SceneConstraintGlyph,
 };
 
 const SELECT: &str = "<path d=\"M-7-8L6 1 0 3 3 9-1 10-4 4-8 8Z\"/><path d=\"M0 3l-4 1\"/>";
@@ -121,6 +122,16 @@ const DIAMETER: &str = concat!(
 const ANGLE: &str = concat!(
     "<path d=\"M-8 6H7M-8 6L3-6M-3 6A5 5 0 0 1 0-1\"/>",
     "<path d=\"M-1-1H3v4\"/>",
+);
+const LINE_OFFSET: &str = concat!(
+    "<path d=\"M-8 5L6-2M-6 8L8 1\"/>",
+    "<path d=\"M-4 3L-2 7M2 0L4 4\"/>",
+    "<path d=\"M-5 5l1-2 2 1M3 2l1-2 2 1\"/>",
+);
+const MIRROR: &str = concat!(
+    "<path d=\"M0-9v4M0-2v4M0 5v4\"/>",
+    "<path d=\"M-8 6L-4-5-1 2M8 6L4-5 1 2\"/>",
+    "<circle cx=\"-8\" cy=\"6\" r=\"1.1\"/><circle cx=\"8\" cy=\"6\" r=\"1.1\"/>",
 );
 
 pub(crate) const GEOMETRY_TOOLS: [(&str, EditorTool); 15] = [
@@ -280,6 +291,17 @@ pub(crate) fn authoring_icon_markup(tool: AuthoringTool) -> String {
     )
 }
 
+pub(crate) fn operation_icon_markup(tool: OperationAuthoringTool) -> String {
+    let (key, fragment) = match tool {
+        OperationAuthoringTool::Fillet => ("fillet", FILLET),
+        OperationAuthoringTool::LineOffset => ("line-offset", LINE_OFFSET),
+        OperationAuthoringTool::Mirror => ("mirror", MIRROR),
+    };
+    format!(
+        "<svg class=\"wb-palette-icon\" viewBox=\"-10 -10 20 20\" aria-hidden=\"true\" focusable=\"false\" data-icon-key=\"operation-{key}\">{fragment}</svg>"
+    )
+}
+
 const fn constraint_intent_icon(intent: ConstraintIntent) -> (&'static str, &'static str) {
     match intent {
         ConstraintIntent::Lock => ("lock", FIXED),
@@ -311,12 +333,14 @@ mod tests {
     use std::collections::HashSet;
 
     use geosolve_constraint_editor::{
-        AuthoringTool, ConstraintIntent, DimensionKind, EditorTool, SceneConstraintGlyph,
+        AuthoringTool, ConstraintIntent, DimensionKind, EditorTool, OperationAuthoringTool,
+        SceneConstraintGlyph,
     };
 
     use super::{
         GEOMETRY_TOOLS, TreeIconKind, authoring_icon_markup, constraint_icon_fragment,
-        constraint_icon_key, geometry_tool_icon_markup, geometry_tool_key, tree_icon_markup,
+        constraint_icon_key, geometry_tool_icon_markup, geometry_tool_key, operation_icon_markup,
+        tree_icon_markup,
     };
 
     #[test]
@@ -442,6 +466,23 @@ mod tests {
         for icon in markup {
             assert!(icon.starts_with("<svg class=\"wb-palette-icon\""));
             assert!(icon.contains("viewBox=\"-10 -10 20 20\""));
+            assert!(icon.contains("aria-hidden=\"true\""));
+            assert!(!icon.contains("<text"));
+        }
+    }
+
+    #[test]
+    fn m66_modify_tools_have_distinct_text_free_vector_symbols() {
+        let markup = [
+            OperationAuthoringTool::Fillet,
+            OperationAuthoringTool::LineOffset,
+            OperationAuthoringTool::Mirror,
+        ]
+        .map(operation_icon_markup);
+        assert_eq!(markup.iter().collect::<HashSet<_>>().len(), markup.len());
+        for icon in markup {
+            assert!(icon.starts_with("<svg class=\"wb-palette-icon\""));
+            assert!(icon.contains("data-icon-key=\"operation-"));
             assert!(icon.contains("aria-hidden=\"true\""));
             assert!(!icon.contains("<text"));
         }

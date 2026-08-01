@@ -76,6 +76,57 @@ const fn owns_authoring_pick(input: AuthoringItemInput) -> bool {
     )
 }
 
+#[cfg(any(target_arch = "wasm32", test))]
+fn change_owns_option_control_click(
+    tag_name: &str,
+    in_palette_options: bool,
+    in_construction_options: bool,
+    in_branch_editor: bool,
+) -> bool {
+    matches!(tag_name, "INPUT" | "SELECT" | "OPTION")
+        && (in_palette_options || in_construction_options || in_branch_editor)
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn operation_apply_available(
+    state: &geosolve_constraint_editor::OperationAuthoringState,
+    coordinator: &geosolve_constraint_editor::RetainedEditorCoordinator,
+) -> bool {
+    let Some(candidate) = state.candidate() else {
+        return false;
+    };
+    state.candidate_confirmed()
+        && candidate.is_confirmed()
+        && coordinator.operation_preview().is_some_and(|preview| {
+            preview.metadata().apply_ready && preview.matches_candidate(candidate)
+        })
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn operation_preview_reusable(
+    candidate: &geosolve_constraint_editor::OperationAuthoringCandidate,
+    coordinator: &geosolve_constraint_editor::RetainedEditorCoordinator,
+) -> bool {
+    coordinator.operation_preview().is_some_and(|preview| {
+        preview.matches_candidate(candidate)
+            && preview.metadata().apply_ready == candidate.is_confirmed()
+    })
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn route_operation_item_pick(
+    state: &mut geosolve_constraint_editor::OperationAuthoringState,
+    document: &geosolve_sketch::SketchDocument,
+    item: geosolve_constraint_editor::SelectionItem,
+    curve_parameter: Option<f64>,
+    stamped_pick: Option<geosolve_constraint_editor::OperationAuthoringPick>,
+) -> geosolve_constraint_editor::OperationAuthoringOutcome {
+    match stamped_pick {
+        Some(pick) => state.pick(document, pick),
+        None => state.pick_item(document, item, curve_parameter),
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod wasm {
     use std::cell::RefCell;
@@ -87,7 +138,9 @@ pub(crate) mod wasm {
         ActionState, AuthoringApplication, AuthoringOperand, AuthoringOptions, AuthoringOutcome,
         AuthoringState, AuthoringTool, BranchAction, ConicConstructionOptions, ConstructionPreview,
         CoordinatorActionKind, DimensionTargetDisplayUnit, DisabledReason, EditorEffect,
-        EditorScene, EditorTool, Modifiers, NurbsConstructionOptions, PickTolerance, PointerInput,
+        EditorScene, EditorTool, Modifiers, NurbsConstructionOptions, OperationAuthoringOptions,
+        OperationAuthoringOutcome, OperationAuthoringPreviewOutcome, OperationAuthoringState,
+        OperationAuthoringTool, OperationLineOffsetMode, PickTolerance, PointerInput,
         ProvisionalInferenceCandidate, RetainedEditorCoordinator, SelectionItem,
     };
     use geosolve_core::SolverConfig;
@@ -111,6 +164,7 @@ pub(crate) mod wasm {
     struct Workbench {
         coordinator: RetainedEditorCoordinator,
         authoring: AuthoringState,
+        operation_authoring: OperationAuthoringState,
         samples: super::samples::SampleCatalogState,
         camera: super::scene::CanvasCamera,
         pan_gesture: Option<PanGesture>,
@@ -168,6 +222,7 @@ pub(crate) mod wasm {
         let workbench = Rc::new(RefCell::new(Workbench {
             coordinator,
             authoring: AuthoringState::default(),
+            operation_authoring: OperationAuthoringState::default(),
             samples: super::samples::SampleCatalogState::default(),
             camera: super::scene::CanvasCamera::default(),
             pan_gesture: None,
@@ -201,6 +256,17 @@ pub(crate) mod wasm {
         }
         for (key, _, kind) in super::action_surface::DIMENSION_ACTIONS {
             install_authoring_icon(document, key, AuthoringTool::Dimension(kind))?;
+        }
+        for (key, _, tool) in super::action_surface::OPERATION_ACTIONS {
+            let Some(button) =
+                document.query_selector(&format!("[data-wb-operation=\"{key}\"]"))?
+            else {
+                continue;
+            };
+            let Some(icon) = button.query_selector(".wb-operation-icon")? else {
+                continue;
+            };
+            icon.set_inner_html(&super::icons::operation_icon_markup(tool));
         }
         Ok(())
     }
@@ -325,10 +391,28 @@ pub(crate) mod wasm {
             {
                 return;
             }
+            if super::change_owns_option_control_click(
+                &origin.tag_name(),
+                origin
+                    .closest(".wb-palette-flyout")
+                    .is_ok_and(|surface| surface.is_some()),
+                origin
+                    .closest(".wb-construction-options")
+                    .is_ok_and(|surface| surface.is_some()),
+                origin
+                    .closest(".wb-branch-editor")
+                    .is_ok_and(|surface| surface.is_some()),
+            ) {
+                // The later `change` event owns reading the browser-updated value
+                // and rendering. Rendering during this bubbled click would restore
+                // the old headless value before checkbox/select activation finishes.
+                return;
+            }
             let target = origin
                 .closest(concat!(
-                    "[data-wb-tool], [data-wb-authoring], [data-editor-item], [data-wb-action], ",
-                    "[data-sample-id], [data-sample-group-trigger]"
+                    "[data-wb-tool], [data-wb-authoring], [data-wb-operation], ",
+                    "[data-editor-item], [data-wb-action], [data-sample-id], ",
+                    "[data-sample-group-trigger]"
                 ))
                 .ok()
                 .flatten()
@@ -350,6 +434,8 @@ pub(crate) mod wasm {
                     return;
                 }
                 wb.authoring.deactivate();
+                wb.operation_authoring.deactivate();
+                wb.coordinator.clear_operation_preview();
                 let effects = wb.coordinator.editor_mut().activate_tool(tool);
                 dispatch_effects(&mut wb, effects);
                 wb.notice = format!("{} tool active", super::icons::geometry_tool_key(tool));
@@ -358,7 +444,15 @@ pub(crate) mod wasm {
                 .and_then(|key| super::action_surface::authoring_tool_from_key(&key))
             {
                 let mut wb = callback_workbench.borrow_mut();
+                wb.operation_authoring.deactivate();
+                wb.coordinator.clear_operation_preview();
                 activate_authoring(&callback_document, &mut wb, tool);
+            } else if let Some(tool) = target
+                .get_attribute("data-wb-operation")
+                .and_then(|key| super::action_surface::operation_tool_from_key(&key))
+            {
+                let mut wb = callback_workbench.borrow_mut();
+                activate_operation_authoring(&callback_document, &mut wb, tool);
             } else if target.has_attribute("data-editor-item") {
                 if let Some(item) = selection_item(&target) {
                     let is_canvas_item = target
@@ -376,7 +470,16 @@ pub(crate) mod wasm {
                         })
                         .unwrap_or_default();
                     let mut wb = callback_workbench.borrow_mut();
-                    if wb.authoring.active_tool().is_some() {
+                    if wb.operation_authoring.active_tool().is_some() {
+                        let input = if is_canvas_item {
+                            super::AuthoringItemInput::CanvasClick
+                        } else {
+                            super::AuthoringItemInput::TreeClick
+                        };
+                        if super::owns_authoring_pick(input) {
+                            handle_operation_item_pick(&mut wb, item, None);
+                        }
+                    } else if wb.authoring.active_tool().is_some() {
                         let input = if is_canvas_item {
                             super::AuthoringItemInput::CanvasClick
                         } else {
@@ -424,6 +527,15 @@ pub(crate) mod wasm {
                     return;
                 }
                 if target
+                    .closest(".wb-operation-options")
+                    .ok()
+                    .flatten()
+                    .is_some()
+                {
+                    let mut wb = change_workbench.borrow_mut();
+                    update_operation_options(&change_document, &mut wb);
+                    drop(wb);
+                } else if target
                     .closest(".wb-construction-options")
                     .ok()
                     .flatten()
@@ -584,8 +696,19 @@ pub(crate) mod wasm {
                 let Some(scene) = editor_scene(&wb) else {
                     return;
                 };
-                let effects = wb.coordinator.editor_mut().pointer_move(&scene, input);
-                dispatch_effects(&mut wb, effects);
+                if wb.operation_authoring.active_tool().is_some() {
+                    let model_position = scene.viewport.screen_to_model(input.position);
+                    let Some(operation_document) = operation_document(&wb) else {
+                        return;
+                    };
+                    let outcome = wb
+                        .operation_authoring
+                        .hover(&operation_document, model_position);
+                    handle_operation_outcome(&mut wb, outcome);
+                } else {
+                    let effects = wb.coordinator.editor_mut().pointer_move(&scene, input);
+                    dispatch_effects(&mut wb, effects);
+                }
                 save(&wb);
                 drop(wb);
                 let _ = render(&frame_document, &frame_workbench);
@@ -626,7 +749,9 @@ pub(crate) mod wasm {
             let Some(input) = pointer_input(&callback_viewport, scene.viewport, &event) else {
                 return;
             };
-            if wb.authoring.active_tool().is_some() {
+            if wb.authoring.active_tool().is_some()
+                || wb.operation_authoring.active_tool().is_some()
+            {
                 return;
             }
             if let Some(pending) = callback_pointer_moves.borrow_mut().drain_before_terminal() {
@@ -789,6 +914,31 @@ pub(crate) mod wasm {
             let Some(input) = pointer_input(&callback_viewport, scene.viewport, &event) else {
                 return;
             };
+            if wb.operation_authoring.active_tool().is_some() {
+                if event.button() != 0 {
+                    return;
+                }
+                let model_position = scene.viewport.screen_to_model(input.position);
+                let Some(operation_document) = operation_document(&wb) else {
+                    wb.notice = "Helper operations require accepted geometry".into();
+                    return;
+                };
+                let pick = scene
+                    .hit_test(input.position, PickTolerance::default())
+                    .and_then(|hit| {
+                        wb.coordinator
+                            .operation_pick_for_item(hit.item, hit.curve_parameter)
+                            .ok()
+                    });
+                let outcome =
+                    wb.operation_authoring
+                        .pointer_down(&operation_document, pick, model_position);
+                handle_operation_outcome(&mut wb, outcome);
+                save(&wb);
+                drop(wb);
+                let _ = render(&callback_document, &callback_workbench);
+                return;
+            }
             if wb.authoring.active_tool().is_some() {
                 if event.button() != 0 {
                     return;
@@ -874,7 +1024,11 @@ pub(crate) mod wasm {
                     command: event.meta_key(),
                 };
                 let mut wb = callback_workbench.borrow_mut();
-                wb.coordinator.editor_mut().select_item(item, modifiers);
+                if wb.operation_authoring.active_tool().is_some() {
+                    handle_operation_item_pick(&mut wb, item, None);
+                } else {
+                    wb.coordinator.editor_mut().select_item(item, modifiers);
+                }
                 save(&wb);
                 drop(wb);
                 let _ = render(&callback_document, &callback_workbench);
@@ -911,6 +1065,23 @@ pub(crate) mod wasm {
                 let document = wb.coordinator.session().design_document().clone();
                 let outcome = wb.authoring.cancel(&document);
                 handle_authoring_outcome(&mut wb, outcome);
+                drop(wb);
+                let _ = render(&callback_document, &callback_workbench);
+                return;
+            }
+            if event.key() == "Escape" && wb.operation_authoring.active_tool().is_some() {
+                event.prevent_default();
+                let outcome = wb.operation_authoring.cancel();
+                handle_operation_outcome(&mut wb, outcome);
+                drop(wb);
+                let _ = render(&callback_document, &callback_workbench);
+                return;
+            }
+            if event.key() == "Enter" && wb.operation_authoring.active_tool().is_some() {
+                event.prevent_default();
+                let outcome = wb.operation_authoring.enter();
+                handle_operation_outcome(&mut wb, outcome);
+                save(&wb);
                 drop(wb);
                 let _ = render(&callback_document, &callback_workbench);
                 return;
@@ -1032,6 +1203,7 @@ pub(crate) mod wasm {
             "new" => empty_coordinator().map(|coordinator| {
                 wb.coordinator = coordinator;
                 wb.authoring.deactivate();
+                wb.operation_authoring.deactivate();
                 wb.camera.reset();
                 wb.construction_preview = None;
                 wb.inference_preview = None;
@@ -1039,7 +1211,10 @@ pub(crate) mod wasm {
             "undo" => wb.coordinator.undo().map_err(|error| error.to_string()),
             "redo" => wb.coordinator.redo().map_err(|error| error.to_string()),
             "cancel" => {
-                if wb.authoring.active_tool().is_some() {
+                if wb.operation_authoring.active_tool().is_some() {
+                    let outcome = wb.operation_authoring.cancel();
+                    handle_operation_outcome(wb, outcome);
+                } else if wb.authoring.active_tool().is_some() {
                     let document = wb.coordinator.session().design_document().clone();
                     let outcome = wb.authoring.cancel(&document);
                     handle_authoring_outcome(wb, outcome);
@@ -1047,6 +1222,11 @@ pub(crate) mod wasm {
                     let effects = wb.coordinator.editor_mut().cancel();
                     dispatch_effects(wb, effects);
                 }
+                Ok(())
+            }
+            "operation-apply" => {
+                let outcome = wb.operation_authoring.apply();
+                handle_operation_outcome(wb, outcome);
                 Ok(())
             }
             "finish" => {
@@ -1097,10 +1277,36 @@ pub(crate) mod wasm {
             let document = wb.coordinator.session().design_document().clone();
             let _ = wb.authoring.reconcile(&document);
         }
+        if result.is_ok()
+            && wb.operation_authoring.active_tool().is_some()
+            && matches!(
+                action,
+                "undo"
+                    | "redo"
+                    | "delete"
+                    | "dimension-target"
+                    | "contact-branches"
+                    | "angle-orientation"
+            )
+        {
+            if let (Some(document), Some(input)) = (
+                operation_document(wb),
+                wb.coordinator.operation_authoring_input(),
+            ) {
+                let outcome = wb
+                    .operation_authoring
+                    .reconcile_exact_input(&document, input);
+                handle_operation_outcome(wb, outcome);
+            } else {
+                wb.coordinator.clear_operation_preview();
+                wb.operation_authoring.transaction_finished();
+                wb.notice = "Workspace changed; select new helper-operation operands".into();
+            }
+        }
         wb.notice = result.map_or_else(
             |error| error,
             |()| match action {
-                "problems" | "cancel" | "dimension-target" => wb.notice.clone(),
+                "problems" | "cancel" | "dimension-target" | "operation-apply" => wb.notice.clone(),
                 _ => "Action retained".into(),
             },
         );
@@ -1137,6 +1343,7 @@ pub(crate) mod wasm {
             Ok(coordinator) => {
                 wb.coordinator = coordinator;
                 wb.authoring.deactivate();
+                wb.operation_authoring.deactivate();
                 wb.construction_preview = None;
                 wb.inference_preview = None;
                 fit_camera(wb);
@@ -1189,6 +1396,222 @@ pub(crate) mod wasm {
             .activate_tool(EditorTool::Select);
         dispatch_effects(wb, effects);
         handle_authoring_outcome(wb, outcome);
+    }
+
+    fn activate_operation_authoring(
+        document: &Document,
+        wb: &mut Workbench,
+        tool: OperationAuthoringTool,
+    ) {
+        let Some(operation_document) = operation_document(wb) else {
+            wb.notice = "Helper operations require current accepted geometry".into();
+            return;
+        };
+        let options = match operation_options(document) {
+            Ok(options) => options,
+            Err(error) => {
+                wb.coordinator.clear_operation_preview();
+                wb.operation_authoring.deactivate();
+                wb.notice = error;
+                return;
+            }
+        };
+        wb.coordinator.clear_operation_preview();
+        let _ = wb
+            .operation_authoring
+            .set_options(&operation_document, options);
+        let selection = match wb.coordinator.operation_authoring_preselection() {
+            Ok(selection) => selection,
+            Err(error) => {
+                wb.operation_authoring.deactivate();
+                wb.notice =
+                    format!("The current selection cannot start this helper operation: {error}");
+                return;
+            }
+        };
+        wb.authoring.deactivate();
+        let effects = wb
+            .coordinator
+            .editor_mut()
+            .activate_tool(EditorTool::Select);
+        dispatch_effects(wb, effects);
+        let outcome = wb
+            .operation_authoring
+            .activate(&operation_document, tool, &selection);
+        handle_operation_outcome(wb, outcome);
+    }
+
+    fn handle_operation_item_pick(
+        wb: &mut Workbench,
+        item: SelectionItem,
+        curve_parameter: Option<f64>,
+    ) {
+        let Some(operation_document) = operation_document(wb) else {
+            wb.notice = "Helper operations require current accepted geometry".into();
+            return;
+        };
+        let stamped_pick = wb
+            .coordinator
+            .operation_pick_for_item(item, curve_parameter)
+            .ok();
+        let outcome = super::route_operation_item_pick(
+            &mut wb.operation_authoring,
+            &operation_document,
+            item,
+            curve_parameter,
+            stamped_pick,
+        );
+        handle_operation_outcome(wb, outcome);
+    }
+
+    fn update_operation_options(document: &Document, wb: &mut Workbench) {
+        let options = match operation_options(document) {
+            Ok(options) => options,
+            Err(error) => {
+                wb.coordinator.clear_operation_preview();
+                wb.operation_authoring.transaction_finished();
+                wb.notice = error;
+                return;
+            }
+        };
+        let Some(operation_document) = operation_document(wb) else {
+            wb.coordinator.clear_operation_preview();
+            wb.operation_authoring.transaction_finished();
+            wb.notice = "Helper operations require current accepted geometry".into();
+            return;
+        };
+        let outcome = wb
+            .operation_authoring
+            .set_options(&operation_document, options);
+        handle_operation_outcome(wb, outcome);
+    }
+
+    fn operation_options(document: &Document) -> Result<OperationAuthoringOptions, String> {
+        Ok(OperationAuthoringOptions {
+            fillet_radius: optional_positive_input(
+                document,
+                "wb-operation-fillet-radius",
+                "fillet radius",
+            )?,
+            fillet_radius_mode: DocumentDimensionMode::Driving,
+            fillet_flip_first_side: input_checked(document, "wb-operation-fillet-flip-first"),
+            fillet_flip_second_side: input_checked(document, "wb-operation-fillet-flip-second"),
+            fillet_alternate_arc: input_checked(document, "wb-operation-fillet-alternate-arc"),
+            offset_distance: optional_positive_input(
+                document,
+                "wb-operation-offset-distance",
+                "offset distance",
+            )?,
+            offset_mode: if select_value(document, "wb-operation-offset-mode").as_deref()
+                == Some("supporting")
+            {
+                OperationLineOffsetMode::SupportingLine
+            } else {
+                OperationLineOffsetMode::ExactTranslatedSegment
+            },
+        })
+    }
+
+    fn optional_positive_input(
+        document: &Document,
+        id: &str,
+        label: &str,
+    ) -> Result<Option<f64>, String> {
+        let value = input_value(document, id).unwrap_or_default();
+        if value.trim().is_empty() {
+            return Ok(None);
+        }
+        value
+            .parse::<f64>()
+            .ok()
+            .filter(|value| value.is_finite() && *value > 0.0)
+            .map(Some)
+            .ok_or_else(|| format!("{label} must be finite and positive"))
+    }
+
+    fn operation_document(wb: &Workbench) -> Option<SketchDocument> {
+        wb.coordinator.operation_authoring_document().cloned()
+    }
+
+    fn handle_operation_outcome(wb: &mut Workbench, outcome: OperationAuthoringOutcome) {
+        wb.coordinator.observe_operation_authoring_outcome(&outcome);
+        match outcome {
+            OperationAuthoringOutcome::ModeEntered(guidance) => {
+                wb.notice = format!("{} · Escape exits", guidance.message);
+            }
+            OperationAuthoringOutcome::Collecting { guidance, .. } => {
+                wb.notice = guidance.message.to_owned();
+            }
+            OperationAuthoringOutcome::PreviewRequested {
+                candidate,
+                guidance,
+            } => {
+                if super::operation_preview_reusable(&candidate, &wb.coordinator) {
+                    let metadata = wb
+                        .coordinator
+                        .operation_preview()
+                        .expect("reusable preview checked above")
+                        .metadata()
+                        .clone();
+                    wb.notice = if metadata.apply_ready {
+                        "Accepted preview ready · Apply or press Enter".into()
+                    } else {
+                        guidance.message.to_owned()
+                    };
+                    return;
+                }
+                match wb.coordinator.prepare_operation_preview(&candidate) {
+                    Ok(OperationAuthoringPreviewOutcome::Ready(metadata)) => {
+                        wb.notice = if metadata.apply_ready {
+                            "Accepted preview ready · Apply or press Enter".into()
+                        } else {
+                            guidance.message.to_owned()
+                        };
+                    }
+                    Ok(OperationAuthoringPreviewOutcome::Warning(warning)) => {
+                        wb.coordinator.clear_operation_preview();
+                        wb.operation_authoring.transaction_finished();
+                        wb.notice = format!("{} · select new operands to retry", warning.message);
+                    }
+                    Err(error) => {
+                        wb.coordinator.clear_operation_preview();
+                        wb.operation_authoring.transaction_finished();
+                        wb.notice = format!("Operation preview failed: {error}");
+                    }
+                }
+            }
+            OperationAuthoringOutcome::Apply(candidate) => {
+                let ready = wb.coordinator.operation_preview().and_then(|preview| {
+                    (preview.metadata().apply_ready && preview.matches_candidate(&candidate))
+                        .then_some(preview.metadata().token)
+                });
+                let result = ready.map_or_else(
+                    || Err("the accepted preview is no longer current".to_owned()),
+                    |token| {
+                        wb.coordinator
+                            .apply_operation_preview(token, &candidate)
+                            .map(|_| ())
+                            .map_err(|error| error.to_string())
+                    },
+                );
+                wb.coordinator.clear_operation_preview();
+                wb.operation_authoring.transaction_finished();
+                wb.notice = result.map_or_else(
+                    |error| format!("Operation was not applied: {error} · select new operands"),
+                    |()| "Operation accepted · select the next operands".into(),
+                );
+            }
+            OperationAuthoringOutcome::Warning(warning) => {
+                wb.notice = warning.message;
+            }
+            OperationAuthoringOutcome::CandidateCleared(guidance) => {
+                wb.notice = format!("Operands cleared · {}", guidance.message);
+            }
+            OperationAuthoringOutcome::ModeExited => {
+                wb.notice = "Helper operation authoring exited; Select active".into();
+            }
+            OperationAuthoringOutcome::Inactive => {}
+        }
     }
 
     fn handle_authoring_outcome(wb: &mut Workbench, outcome: AuthoringOutcome) {
@@ -1437,6 +1860,9 @@ pub(crate) mod wasm {
 
     fn editor_scene(wb: &Workbench) -> Option<EditorScene> {
         let coordinator = &wb.coordinator;
+        if let Some(preview) = coordinator.operation_preview() {
+            return preview.scene(wb.camera.viewport(), 0.8).ok();
+        }
         let source = coordinator
             .visible_preview_session()
             .unwrap_or(coordinator.session());
@@ -1465,18 +1891,46 @@ pub(crate) mod wasm {
             "data-history-length",
             &coordinator.history_len().to_string(),
         )?;
+        required(document, "workbench-root")?.set_attribute(
+            "data-operation-preview",
+            if coordinator.operation_preview().is_some() {
+                "accepted"
+            } else {
+                "none"
+            },
+        )?;
         let scene = editor_scene(&wb);
         let source = coordinator
             .visible_preview_session()
             .unwrap_or(coordinator.session());
-        let accepted = source.accepted_state();
+        let accepted = coordinator
+            .operation_preview()
+            .map(|preview| preview.accepted_state())
+            .or_else(|| source.accepted_state());
         let selection = coordinator.editor().selection();
-        let pending = wb
+        let mut pending = wb
             .authoring
             .pending()
             .iter()
             .map(|operand| operand.item)
             .collect::<Vec<_>>();
+        pending.extend(wb.operation_authoring.picks().iter().map(|pick| pick.item));
+        if let (Some(scene), Some(preview)) = (scene.as_ref(), coordinator.operation_preview()) {
+            pending.extend(
+                scene
+                    .curves
+                    .iter()
+                    .filter(|curve| {
+                        preview
+                            .metadata()
+                            .created_curves
+                            .contains(&curve.span.curve)
+                    })
+                    .map(|curve| SelectionItem::Curve(curve.span)),
+            );
+        }
+        pending.sort_unstable();
+        pending.dedup();
         let construction_preview = wb.construction_preview.as_ref();
         required(document, "wb-viewport")?.set_inner_html(&super::scene::svg_markup_with_context(
             scene.as_ref(),
@@ -1529,6 +1983,7 @@ pub(crate) mod wasm {
         }
         let guide = required(document, "wb-draft-guide")?;
         if wb.authoring.active_tool().is_some()
+            || wb.operation_authoring.active_tool().is_some()
             || coordinator.editor().can_complete_draft()
             || wb.construction_preview.is_some()
         {
@@ -1536,21 +1991,33 @@ pub(crate) mod wasm {
         } else {
             guide.set_attribute("hidden", "")?;
         }
-        let guide_text = wb.authoring.active_tool().map_or_else(
-            || draft_guide_text(coordinator.editor().tool()).to_owned(),
-            |tool| {
-                format!(
-                    "{} · {} pending · Escape clears/exits",
-                    authoring_tool_label(tool),
-                    wb.authoring.pending().len()
-                )
-            },
-        );
+        let guide_text = if wb.operation_authoring.active_tool().is_some() {
+            wb.operation_authoring.guidance().message.to_owned()
+        } else {
+            wb.authoring.active_tool().map_or_else(
+                || draft_guide_text(coordinator.editor().tool()).to_owned(),
+                |tool| {
+                    format!(
+                        "{} · {} pending · Escape clears/exits",
+                        authoring_tool_label(tool),
+                        wb.authoring.pending().len()
+                    )
+                },
+            )
+        };
         required(document, "wb-draft-guide-text")?.set_text_content(Some(&guide_text));
-        if wb.authoring.active_tool().is_some() {
+        if wb.authoring.active_tool().is_some() || wb.operation_authoring.active_tool().is_some() {
             required(document, "wb-guide-finish")?.set_attribute("hidden", "")?;
         } else {
             required(document, "wb-guide-finish")?.remove_attribute("hidden")?;
+        }
+        let apply = required(document, "wb-guide-apply")?;
+        if super::operation_apply_available(&wb.operation_authoring, coordinator) {
+            apply.remove_attribute("hidden")?;
+            set_disabled(&apply, false)?;
+        } else {
+            apply.set_attribute("hidden", "")?;
+            set_disabled(&apply, true)?;
         }
         for (key, tool) in super::icons::GEOMETRY_TOOLS {
             if let Some(button) = document.query_selector(&format!("[data-wb-tool=\"{key}\"]"))? {
@@ -1564,7 +2031,13 @@ pub(crate) mod wasm {
                 )?;
             }
         }
-        render_action_availability(document, coordinator, &wb.authoring)?;
+        render_action_availability(
+            document,
+            coordinator,
+            &wb.authoring,
+            &wb.operation_authoring,
+        )?;
+        render_operation_options(document, wb.operation_authoring.options())?;
         render_dimension_target_editor(document, coordinator)?;
         render_branch_editor(document, coordinator)?;
         required(document, "workbench-root")?
@@ -1576,12 +2049,15 @@ pub(crate) mod wasm {
         document: &Document,
         coordinator: &RetainedEditorCoordinator,
         authoring: &AuthoringState,
+        operation_authoring: &OperationAuthoringState,
     ) -> Result<(), JsValue> {
         for key in ["new", "finish", "cancel", "clear-selection"] {
             if let Some(button) = document.query_selector(&format!("[data-wb-action=\"{key}\"]"))? {
                 set_disabled(
                     &button,
-                    key == "finish" && authoring.active_tool().is_some(),
+                    key == "finish"
+                        && (authoring.active_tool().is_some()
+                            || operation_authoring.active_tool().is_some()),
                 )?;
             }
         }
@@ -1630,6 +2106,20 @@ pub(crate) mod wasm {
                 )?;
             }
         }
+        for (key, _, tool) in super::action_surface::OPERATION_ACTIONS {
+            if let Some(button) =
+                document.query_selector(&format!("[data-wb-operation=\"{key}\"]"))?
+            {
+                button.set_attribute(
+                    "aria-pressed",
+                    if operation_authoring.active_tool() == Some(tool) {
+                        "true"
+                    } else {
+                        "false"
+                    },
+                )?;
+            }
+        }
         for id in [
             "wb-authoring-curvature",
             "wb-authoring-tangent-orientation",
@@ -1638,6 +2128,12 @@ pub(crate) mod wasm {
             "wb-authoring-second-rate",
             "wb-authoring-dimension-mode",
             "wb-authoring-angle-orientation",
+            "wb-operation-fillet-radius",
+            "wb-operation-fillet-flip-first",
+            "wb-operation-fillet-flip-second",
+            "wb-operation-fillet-alternate-arc",
+            "wb-operation-offset-distance",
+            "wb-operation-offset-mode",
         ] {
             set_disabled(&required(document, id)?, false)?;
         }
@@ -1689,6 +2185,69 @@ pub(crate) mod wasm {
         required(document, "wb-dimension-target-meta")?.set_text_content(Some(&meta));
         if let Some(button) = document.query_selector("[data-wb-action=\"dimension-target\"]")? {
             set_disabled(&button, false)?;
+        }
+        Ok(())
+    }
+
+    fn render_operation_options(
+        document: &Document,
+        options: OperationAuthoringOptions,
+    ) -> Result<(), JsValue> {
+        render_optional_number(
+            document,
+            "wb-operation-fillet-radius",
+            options.fillet_radius,
+        )?;
+        render_optional_number(
+            document,
+            "wb-operation-offset-distance",
+            options.offset_distance,
+        )?;
+        if let Ok(select) =
+            required(document, "wb-operation-offset-mode")?.dyn_into::<HtmlSelectElement>()
+        {
+            select.set_value(match options.offset_mode {
+                OperationLineOffsetMode::ExactTranslatedSegment => "exact",
+                OperationLineOffsetMode::SupportingLine => "supporting",
+            });
+        }
+        for (id, checked) in [
+            (
+                "wb-operation-fillet-flip-first",
+                options.fillet_flip_first_side,
+            ),
+            (
+                "wb-operation-fillet-flip-second",
+                options.fillet_flip_second_side,
+            ),
+            (
+                "wb-operation-fillet-alternate-arc",
+                options.fillet_alternate_arc,
+            ),
+        ] {
+            if let Ok(input) = required(document, id)?.dyn_into::<HtmlInputElement>() {
+                input.set_checked(checked);
+            }
+        }
+        Ok(())
+    }
+
+    fn render_optional_number(
+        document: &Document,
+        id: &str,
+        value: Option<f64>,
+    ) -> Result<(), JsValue> {
+        if document
+            .active_element()
+            .is_some_and(|element| element.id() == id)
+        {
+            return Ok(());
+        }
+        if let Ok(input) = required(document, id)?.dyn_into::<HtmlInputElement>() {
+            match value {
+                Some(value) => input.set_value_as_number(value),
+                None => input.set_value(""),
+            }
         }
         Ok(())
     }
@@ -2142,6 +2701,13 @@ pub(crate) mod wasm {
         )
     }
 
+    fn input_checked(document: &Document, id: &str) -> bool {
+        document
+            .get_element_by_id(id)
+            .and_then(|element| element.dyn_into::<HtmlInputElement>().ok())
+            .is_some_and(|input| input.checked())
+    }
+
     fn close_sample_selector(document: &Document) {
         if let Ok(selector) = required(document, "wb-sample-selector") {
             let _ = selector.remove_attribute("open");
@@ -2171,11 +2737,92 @@ pub(crate) mod wasm {
 mod tests {
     use geosolve_constraint_editor::{
         AuthoringOperand, AuthoringOutcome, AuthoringState, AuthoringTool, ConstraintIntent,
-        Modifiers, PointerInput, ScreenPoint, SelectionItem,
+        EditorHoverState, Modifiers, OperationAuthoringCandidate, OperationAuthoringOutcome,
+        OperationAuthoringPreviewMetadata, OperationAuthoringPreviewOutcome,
+        OperationAuthoringState, OperationAuthoringTool, PointerInput, RetainedEditorCoordinator,
+        ScreenPoint, SelectionItem, Viewport,
     };
-    use geosolve_sketch::{CurveDefinition, CurveSpan, SketchDocument};
+    use geosolve_core::SolverConfig;
+    use geosolve_sketch::{
+        CurveDefinition, CurveSpan, DocumentEdit, DocumentSolveRequest,
+        RetainedSketchDocumentSession, SketchDocument,
+    };
 
-    use super::{AuthoringItemInput, PointerMoveQueue, owns_authoring_pick};
+    use super::{
+        AuthoringItemInput, PointerMoveQueue, change_owns_option_control_click,
+        operation_apply_available, operation_preview_reusable, owns_authoring_pick,
+        route_operation_item_pick,
+    };
+
+    fn line_operation_fixture() -> (RetainedEditorCoordinator, CurveSpan) {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let start = document.add_point("start", [0.0, 0.0]).expect("start");
+        let end = document.add_point("end", [4.0, 0.0]).expect("end");
+        let line = CurveSpan::line(
+            document
+                .add_curve(
+                    "source",
+                    CurveDefinition::Line {
+                        start,
+                        end,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .expect("line"),
+        );
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        (
+            RetainedEditorCoordinator::new(session).expect("coordinator"),
+            line,
+        )
+    }
+
+    fn prepare_confirmed_offset(
+        coordinator: &mut RetainedEditorCoordinator,
+        state: &mut OperationAuthoringState,
+        line: CurveSpan,
+    ) -> (
+        OperationAuthoringCandidate,
+        OperationAuthoringPreviewMetadata,
+    ) {
+        let document = coordinator
+            .operation_authoring_document()
+            .expect("accepted operation document")
+            .clone();
+        let pick = coordinator
+            .operation_pick_for_item(SelectionItem::Curve(line), Some(0.5))
+            .expect("stamped line pick");
+        let activated = state.activate(&document, OperationAuthoringTool::LineOffset, &[pick]);
+        coordinator.observe_operation_authoring_outcome(&activated);
+        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = activated else {
+            panic!("offset preselection should request a default-side preview");
+        };
+        let unconfirmed = coordinator
+            .prepare_operation_preview(&candidate)
+            .expect("prepare default-side preview");
+        assert!(matches!(
+            unconfirmed,
+            OperationAuthoringPreviewOutcome::Ready(metadata) if !metadata.apply_ready
+        ));
+        let confirmed = state.confirm(&document, [2.0, 2.0]);
+        coordinator.observe_operation_authoring_outcome(&confirmed);
+        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = confirmed else {
+            panic!("side confirmation should request a preview");
+        };
+        let prepared = coordinator
+            .prepare_operation_preview(&candidate)
+            .expect("prepare confirmed preview");
+        let OperationAuthoringPreviewOutcome::Ready(metadata) = prepared else {
+            panic!("confirmed offset preview should be accepted");
+        };
+        assert!(metadata.apply_ready);
+        (candidate, metadata)
+    }
 
     #[test]
     fn pointer_move_queue_keeps_only_latest_sample_and_terminal_invalidates_old_frame() {
@@ -2203,6 +2850,21 @@ mod tests {
         assert_ne!(next_frame, stale_frame);
         assert_eq!(queue.take_for_frame(stale_frame), None);
         assert_eq!(queue.take_for_frame(next_frame), Some(input(5.0)));
+    }
+
+    #[test]
+    fn option_inputs_and_selects_defer_render_to_their_change_owner() {
+        for tag in ["INPUT", "SELECT", "OPTION"] {
+            assert!(change_owns_option_control_click(tag, true, false, false));
+            assert!(change_owns_option_control_click(tag, false, true, false));
+            assert!(change_owns_option_control_click(tag, false, false, true));
+        }
+        for tag in ["BUTTON", "DETAILS", "LABEL", "SUMMARY"] {
+            assert!(!change_owns_option_control_click(tag, true, true, true));
+        }
+        assert!(!change_owns_option_control_click(
+            "INPUT", false, false, false
+        ));
     }
 
     #[test]
@@ -2282,5 +2944,303 @@ mod tests {
         assert!(normal.pending().is_empty());
 
         assert!(owns_authoring_pick(AuthoringItemInput::TreeClick));
+    }
+
+    #[test]
+    fn workbench_owns_no_direct_operations_companion_dependency() {
+        let manifest = include_str!("../../Cargo.toml");
+        assert!(manifest.contains("geosolve-constraint-editor ="));
+        assert!(!manifest.contains("geosolve-sketch-ops ="));
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "exact preview token, candidate, warning, and stale-input gates form one lifecycle"
+    )]
+    fn operation_apply_requires_the_exact_current_accepted_preview() {
+        let (mut coordinator, line) = line_operation_fixture();
+        let mut state = OperationAuthoringState::default();
+        let (_, _) = prepare_confirmed_offset(&mut coordinator, &mut state, line);
+        assert!(operation_apply_available(&state, &coordinator));
+
+        let document = coordinator
+            .operation_authoring_document()
+            .expect("operation document")
+            .clone();
+        let mut options = state.options();
+        options.offset_distance = Some(2.0);
+        let changed = state.set_options(&document, options);
+        coordinator.observe_operation_authoring_outcome(&changed);
+        assert!(matches!(
+            changed,
+            OperationAuthoringOutcome::PreviewRequested { .. }
+        ));
+        assert!(coordinator.operation_preview().is_some());
+        assert!(
+            !operation_apply_available(&state, &coordinator),
+            "an older accepted token must not enable Apply for a changed candidate"
+        );
+        assert!(matches!(
+            coordinator.apply_operation_preview(
+                coordinator
+                    .operation_preview()
+                    .expect("old preview")
+                    .metadata()
+                    .token,
+                state.candidate().expect("changed candidate")
+            ),
+            Err(geosolve_constraint_editor::CoordinatorError::OperationPreviewMismatch)
+        ));
+        assert!(coordinator.operation_preview().is_none());
+
+        let (_, _) = prepare_confirmed_offset(&mut coordinator, &mut state, line);
+        assert!(operation_apply_available(&state, &coordinator));
+        let cancelled = state.cancel();
+        coordinator.observe_operation_authoring_outcome(&cancelled);
+        assert!(matches!(
+            cancelled,
+            OperationAuthoringOutcome::CandidateCleared(_)
+        ));
+        assert!(coordinator.operation_preview().is_none());
+        assert!(!operation_apply_available(&state, &coordinator));
+
+        let (_, _) = prepare_confirmed_offset(&mut coordinator, &mut state, line);
+        let warning = state.pointer_down(&document, None, [f64::NAN, 0.0]);
+        coordinator.observe_operation_authoring_outcome(&warning);
+        assert!(matches!(warning, OperationAuthoringOutcome::Warning(_)));
+        assert!(coordinator.operation_preview().is_none());
+        assert!(state.picks().is_empty());
+        assert!(state.candidate().is_none());
+        assert!(!operation_apply_available(&state, &coordinator));
+
+        let source_pick = coordinator
+            .operation_pick_for_item(SelectionItem::Curve(line), Some(0.5))
+            .expect("mirror source pick");
+        let _ = state.activate(&document, OperationAuthoringTool::Mirror, &[]);
+        assert!(matches!(
+            state.pick(&document, source_pick.clone()),
+            OperationAuthoringOutcome::Collecting { .. }
+        ));
+        let duplicate = state.pick(&document, source_pick.clone());
+        coordinator.observe_operation_authoring_outcome(&duplicate);
+        assert!(matches!(duplicate, OperationAuthoringOutcome::Warning(_)));
+        assert_eq!(
+            state.picks(),
+            &[source_pick],
+            "a correctable second-pick warning must retain the valid prefix"
+        );
+        state.transaction_finished();
+
+        let (_, _) = prepare_confirmed_offset(&mut coordinator, &mut state, line);
+        let switched = state.activate(&document, OperationAuthoringTool::Mirror, &[]);
+        coordinator.observe_operation_authoring_outcome(&switched);
+        assert!(matches!(
+            switched,
+            OperationAuthoringOutcome::ModeEntered(_)
+        ));
+        assert!(coordinator.operation_preview().is_none());
+
+        let (_, _) = prepare_confirmed_offset(&mut coordinator, &mut state, line);
+        let changed = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::CreatePoint {
+                    label: "external edit".into(),
+                    position: [8.0, 3.0],
+                },
+            )
+            .expect("accepted external edit");
+        assert!(changed.published_accepted.is_some());
+        let current_document = coordinator
+            .operation_authoring_document()
+            .expect("current operation document")
+            .clone();
+        let current_input = coordinator
+            .operation_authoring_input()
+            .expect("current operation input");
+        let reconciled = state.reconcile_exact_input(&current_document, current_input);
+        coordinator.observe_operation_authoring_outcome(&reconciled);
+        assert!(matches!(
+            reconciled,
+            OperationAuthoringOutcome::Warning(ref warning)
+                if warning.kind
+                    == geosolve_constraint_editor::OperationAuthoringWarningKind::StalePick
+        ));
+        assert!(state.picks().is_empty());
+        assert!(state.candidate().is_none());
+        assert!(coordinator.operation_preview().is_none());
+    }
+
+    #[test]
+    fn rejected_operation_item_pick_revokes_confirmed_preview_but_retains_valid_prefix() {
+        let (mut coordinator, line) = line_operation_fixture();
+        let mut state = OperationAuthoringState::default();
+        let _ = prepare_confirmed_offset(&mut coordinator, &mut state, line);
+        assert!(state.candidate_confirmed());
+        assert!(coordinator.operation_preview().is_some());
+
+        let document = coordinator
+            .operation_authoring_document()
+            .expect("operation document")
+            .clone();
+        let point = match document.curve(line.curve).expect("source line").definition {
+            CurveDefinition::Line { start, .. } => start,
+            _ => panic!("fixture curve should be a line"),
+        };
+        let invalid_confirmed = route_operation_item_pick(
+            &mut state,
+            &document,
+            SelectionItem::Point(point),
+            None,
+            None,
+        );
+        coordinator.observe_operation_authoring_outcome(&invalid_confirmed);
+        assert!(matches!(
+            invalid_confirmed,
+            OperationAuthoringOutcome::Warning(ref warning)
+                if warning.kind
+                    == geosolve_constraint_editor::OperationAuthoringWarningKind::WrongOperandKind
+        ));
+        assert!(state.picks().is_empty());
+        assert!(state.candidate().is_none());
+        assert!(coordinator.operation_preview().is_none());
+
+        let source_pick = coordinator
+            .operation_pick_for_item(SelectionItem::Curve(line), Some(0.5))
+            .expect("stamped mirror source");
+        let _ = state.activate(&document, OperationAuthoringTool::Mirror, &[]);
+        let collecting = route_operation_item_pick(
+            &mut state,
+            &document,
+            SelectionItem::Curve(line),
+            Some(0.5),
+            Some(source_pick.clone()),
+        );
+        coordinator.observe_operation_authoring_outcome(&collecting);
+        assert!(matches!(
+            collecting,
+            OperationAuthoringOutcome::Collecting { .. }
+        ));
+
+        let invalid_second = route_operation_item_pick(
+            &mut state,
+            &document,
+            SelectionItem::Point(point),
+            None,
+            None,
+        );
+        coordinator.observe_operation_authoring_outcome(&invalid_second);
+        assert!(matches!(
+            invalid_second,
+            OperationAuthoringOutcome::Warning(ref warning)
+                if warning.kind
+                    == geosolve_constraint_editor::OperationAuthoringWarningKind::WrongOperandKind
+        ));
+        assert_eq!(state.picks(), &[source_pick]);
+        assert!(state.candidate().is_none());
+        assert!(coordinator.operation_preview().is_none());
+    }
+
+    #[test]
+    fn accepted_operation_preview_renders_with_its_own_provenance() {
+        let (mut coordinator, line) = line_operation_fixture();
+        let mut state = OperationAuthoringState::default();
+        let (_, metadata) = prepare_confirmed_offset(&mut coordinator, &mut state, line);
+        let preview = coordinator.operation_preview().expect("accepted preview");
+        let viewport = Viewport::new([1000.0, 700.0], [2.0, 1.0], 50.0).expect("viewport");
+        let scene = preview.scene(viewport, 0.8).expect("preview scene");
+        let markup = super::scene::svg_markup_with_context(
+            Some(&scene),
+            Some(preview.accepted_state()),
+            &[],
+            &[],
+            EditorHoverState::default(),
+            None,
+            None,
+            viewport,
+        );
+        assert!(markup.contains("data-scene-provenance=\"accepted\""));
+        assert!(markup.contains(&format!(
+            "data-accepted-revision=\"{}\"",
+            metadata.accepted.revision().get()
+        )));
+        assert!(markup.contains(&metadata.primary_created_curve.0.to_string()));
+    }
+
+    #[test]
+    fn one_physical_canvas_click_contributes_one_operation_transition() {
+        let (coordinator, line) = line_operation_fixture();
+        let document = coordinator
+            .operation_authoring_document()
+            .expect("operation document")
+            .clone();
+        let pick = coordinator
+            .operation_pick_for_item(SelectionItem::Curve(line), Some(0.5))
+            .expect("pick");
+        let mut state = OperationAuthoringState::default();
+        let _ = state.activate(&document, OperationAuthoringTool::LineOffset, &[]);
+        let outcomes = [
+            AuthoringItemInput::CanvasPointerDown,
+            AuthoringItemInput::CanvasClick,
+        ]
+        .into_iter()
+        .filter(|input| owns_authoring_pick(*input))
+        .map(|_| state.pointer_down(&document, Some(pick.clone()), [2.0, 0.0]))
+        .collect::<Vec<_>>();
+        assert_eq!(outcomes.len(), 1);
+        assert!(matches!(
+            outcomes[0],
+            OperationAuthoringOutcome::PreviewRequested { .. }
+        ));
+        assert_eq!(state.picks().len(), 1);
+        assert!(!state.candidate_confirmed());
+    }
+
+    #[test]
+    fn operation_hover_forwarding_is_headless_and_preview_reuse_is_bounded() {
+        let (mut coordinator, line) = line_operation_fixture();
+        let operation_document = coordinator
+            .operation_authoring_document()
+            .expect("accepted operation document")
+            .clone();
+        for tool in [
+            OperationAuthoringTool::Fillet,
+            OperationAuthoringTool::Mirror,
+        ] {
+            let mut inactive_stage = OperationAuthoringState::default();
+            let _ = inactive_stage.activate(&operation_document, tool, &[]);
+            let before = inactive_stage.clone();
+            assert!(matches!(
+                inactive_stage.hover(&operation_document, [2.0, 2.0]),
+                OperationAuthoringOutcome::Collecting { ref picks, .. } if picks.is_empty()
+            ));
+            assert_eq!(
+                inactive_stage, before,
+                "normalized hover forwarding must be a headless no-op for {tool:?}"
+            );
+        }
+
+        let mut state = OperationAuthoringState::default();
+        let (_, metadata) = prepare_confirmed_offset(&mut coordinator, &mut state, line);
+        let document = coordinator
+            .operation_authoring_document()
+            .expect("operation document")
+            .clone();
+        let hovered = state.hover(&document, [2.0, 2.0]);
+        coordinator.observe_operation_authoring_outcome(&hovered);
+        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = hovered else {
+            panic!("confirmed hover should retain the exact preview candidate");
+        };
+        assert!(operation_preview_reusable(&candidate, &coordinator));
+        assert_eq!(
+            coordinator
+                .operation_preview()
+                .expect("held preview")
+                .metadata()
+                .token,
+            metadata.token,
+            "reusable same-side hover must not allocate another preview generation"
+        );
     }
 }

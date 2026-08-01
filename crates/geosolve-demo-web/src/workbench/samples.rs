@@ -36,10 +36,13 @@ pub(crate) enum SampleId {
     ConstructionReference,
     CurveGallery,
     PeriodicNurbs,
+    FilletWorkshop,
+    LineOffsetWorkshop,
+    MirrorWorkshop,
 }
 
 impl SampleId {
-    pub(crate) const ALL: [Self; 22] = [
+    pub(crate) const ALL: [Self; 25] = [
         Self::DraftingCompass,
         Self::BezierContinuityBridge,
         Self::TwinRollerCam,
@@ -62,6 +65,9 @@ impl SampleId {
         Self::ConstructionReference,
         Self::CurveGallery,
         Self::PeriodicNurbs,
+        Self::FilletWorkshop,
+        Self::LineOffsetWorkshop,
+        Self::MirrorWorkshop,
     ];
 
     pub(crate) const fn key(self) -> &'static str {
@@ -88,6 +94,9 @@ impl SampleId {
             Self::ConstructionReference => "construction-reference-geometry",
             Self::CurveGallery => "curve-family-gallery",
             Self::PeriodicNurbs => "periodic-nurbs-specimen",
+            Self::FilletWorkshop => "fillet-workshop",
+            Self::LineOffsetWorkshop => "line-offset-workshop",
+            Self::MirrorWorkshop => "mirror-workshop",
         }
     }
 
@@ -101,6 +110,9 @@ enum SampleSource {
     Alpha(AlphaScenarioKind),
     ConstructionReference,
     TangentRadialNormal,
+    FilletWorkshop,
+    LineOffsetWorkshop,
+    MirrorWorkshop,
 }
 
 #[derive(Clone, Copy)]
@@ -217,7 +229,7 @@ const CONSTRAINTS: [SampleDefinition; 6] = [
     ),
 ];
 
-const CURVES: [SampleDefinition; 3] = [
+const CURVES: [SampleDefinition; 6] = [
     SampleDefinition {
         id: SampleId::ConstructionReference,
         title: "Construction and reference geometry",
@@ -233,6 +245,21 @@ const CURVES: [SampleDefinition; 3] = [
         "Periodic NURBS specimen",
         AlphaScenarioKind::NurbsPeriodic,
     ),
+    SampleDefinition {
+        id: SampleId::FilletWorkshop,
+        title: "2D fillet workshop",
+        source: SampleSource::FilletWorkshop,
+    },
+    SampleDefinition {
+        id: SampleId::LineOffsetWorkshop,
+        title: "Associative line offsets",
+        source: SampleSource::LineOffsetWorkshop,
+    },
+    SampleDefinition {
+        id: SampleId::MirrorWorkshop,
+        title: "Mirror construction workshop",
+        source: SampleSource::MirrorWorkshop,
+    },
 ];
 
 pub(crate) const GROUPS: [SampleGroup; 3] = [
@@ -329,6 +356,9 @@ fn coordinator_from_source(source: SampleSource) -> Result<RetainedEditorCoordin
         }
         SampleSource::ConstructionReference => construction_reference_document()?,
         SampleSource::TangentRadialNormal => tangent_radial_normal_document()?,
+        SampleSource::FilletWorkshop => fillet_workshop_document()?,
+        SampleSource::LineOffsetWorkshop => line_offset_workshop_document()?,
+        SampleSource::MirrorWorkshop => mirror_workshop_document()?,
     };
     let session = RetainedSketchDocumentSession::new(document, request, SolverConfig::default())
         .map_err(|error| error.to_string())?;
@@ -347,6 +377,208 @@ fn construction_reference_document()
         .set_geometry_role(ids.rectangle.curves[2], GeometryRole::Construction)
         .map_err(|error| error.to_string())?;
     Ok((fixture.document, fixture.request))
+}
+
+fn fillet_workshop_document()
+-> Result<(SketchDocument, geosolve_sketch::DocumentSolveRequest), String> {
+    let mut document = workshop_document(0x6600_0000_0000_0000_0000_0000_0000_0001_u128)?;
+    let line_line_horizontal = add_line(
+        &mut document,
+        "Line-line horizontal support",
+        ("Line-line horizontal start", [-9.0, 5.0]),
+        ("Line-line horizontal end", [-1.0, 5.0]),
+    )?;
+    let line_line_vertical = add_line(
+        &mut document,
+        "Line-line vertical support",
+        ("Line-line vertical start", [-3.0, 1.0]),
+        ("Line-line vertical end", [-3.0, 9.0]),
+    )?;
+    fix_curve_points(&mut document, line_line_horizontal, "Line-line horizontal")?;
+    fix_curve_points(&mut document, line_line_vertical, "Line-line vertical")?;
+    let circle_center = document
+        .add_point("Line-circle center", [6.0, 4.0])
+        .map_err(|error| error.to_string())?;
+    let circle_radius = document
+        .add_scalar(
+            "Line-circle radius",
+            2.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .map_err(|error| error.to_string())?;
+    let circle = document
+        .add_curve(
+            "Line-circle circular support",
+            CurveDefinition::Circle {
+                center: circle_center,
+                radius: circle_radius,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+    fix_point_at_current(&mut document, circle_center, "Line-circle center")?;
+    let circle_radius_target = document
+        .add_scalar(
+            "Line-circle source radius target",
+            2.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .map_err(|error| error.to_string())?;
+    document
+        .add_dimension(
+            "Line-circle source radius",
+            DocumentDimensionDefinition::Radius {
+                curve: circle,
+                target: circle_radius_target,
+            },
+            DocumentDimensionMode::Driving,
+        )
+        .map_err(|error| error.to_string())?;
+    let line_circle_line = add_line(
+        &mut document,
+        "Line-circle linear support",
+        ("Line-circle line start", [2.0, 1.0]),
+        ("Line-circle line end", [10.0, 1.0]),
+    )?;
+    fix_curve_points(&mut document, line_circle_line, "Line-circle line")?;
+    let bezier_controls = [
+        ("Line-Bezier start", [1.0, -3.0]),
+        ("Line-Bezier control", [4.0, -7.0]),
+        ("Line-Bezier end", [8.0, -3.0]),
+    ]
+    .map(|(label, position)| document.add_point(label, position))
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|error| error.to_string())?
+    .try_into()
+    .map_err(|_| "line-Bezier workshop requires three controls".to_owned())?;
+    let bezier = document
+        .add_curve(
+            "Line-Bezier curved support",
+            CurveDefinition::QuadraticBezier {
+                controls: bezier_controls,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+    fix_curve_points(&mut document, bezier, "Line-Bezier curve")?;
+    let line_bezier_line = add_line(
+        &mut document,
+        "Line-Bezier linear support",
+        ("Line-Bezier line start", [6.0, -8.0]),
+        ("Line-Bezier line end", [6.0, 0.0]),
+    )?;
+    fix_curve_points(&mut document, line_bezier_line, "Line-Bezier line")?;
+    Ok((document, geosolve_sketch::DocumentSolveRequest::default()))
+}
+
+fn line_offset_workshop_document()
+-> Result<(SketchDocument, geosolve_sketch::DocumentSolveRequest), String> {
+    let mut document = workshop_document(0x6600_0000_0000_0000_0000_0000_0000_0002_u128)?;
+    add_line(
+        &mut document,
+        "Horizontal offset source",
+        ("Horizontal source start", [-8.0, -4.0]),
+        ("Horizontal source end", [-1.0, -4.0]),
+    )?;
+    add_line(
+        &mut document,
+        "Angled offset source",
+        ("Angled source start", [1.0, -4.0]),
+        ("Angled source end", [7.0, -1.0]),
+    )?;
+    add_polyline(
+        &mut document,
+        "Polyline offset source",
+        &[
+            ("Polyline source start", [-8.0, 2.0]),
+            ("Polyline source corner", [-4.0, 6.0]),
+            ("Polyline source end", [1.0, 2.0]),
+        ],
+    )?;
+    Ok((document, geosolve_sketch::DocumentSolveRequest::default()))
+}
+
+fn mirror_workshop_document()
+-> Result<(SketchDocument, geosolve_sketch::DocumentSolveRequest), String> {
+    let mut document = workshop_document(0x6600_0000_0000_0000_0000_0000_0000_0003_u128)?;
+    let axis = add_line(
+        &mut document,
+        "Mirror axis",
+        ("Mirror axis start", [0.0, -7.0]),
+        ("Mirror axis end", [0.0, 7.0]),
+    )?;
+    document
+        .set_geometry_role(axis, GeometryRole::Construction)
+        .map_err(|error| error.to_string())?;
+    let (axis_start, axis_end) = match document.curve(axis).map(|curve| &curve.definition) {
+        Some(CurveDefinition::Line { start, end, .. }) => (*start, *end),
+        _ => return Err("mirror workshop axis must remain a line".into()),
+    };
+    for (label, point, target) in [
+        ("Fix mirror axis start", axis_start, [0.0, -7.0]),
+        ("Fix mirror axis end", axis_end, [0.0, 7.0]),
+    ] {
+        document
+            .add_constraint(
+                label,
+                DocumentConstraintDefinition::FixedPoint { point, target },
+            )
+            .map_err(|error| error.to_string())?;
+    }
+    add_line(
+        &mut document,
+        "Line mirror source",
+        ("Line source start", [-8.0, -5.0]),
+        ("Line source end", [-3.0, -3.0]),
+    )?;
+    let controls = [
+        ("Bezier mirror start", [-8.0, -1.0]),
+        ("Bezier mirror first control", [-7.0, 2.0]),
+        ("Bezier mirror second control", [-4.0, -2.0]),
+        ("Bezier mirror end", [-2.0, 1.0]),
+    ]
+    .map(|(label, position)| document.add_point(label, position))
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|error| error.to_string())?
+    .try_into()
+    .map_err(|_| "cubic mirror source requires four controls".to_owned())?;
+    document
+        .add_curve(
+            "Bezier mirror source",
+            CurveDefinition::CubicBezier { controls },
+        )
+        .map_err(|error| error.to_string())?;
+    let spline_controls = [
+        ("B-spline mirror start", [-8.0, 4.0]),
+        ("B-spline mirror first control", [-7.0, 7.0]),
+        ("B-spline mirror second control", [-4.0, 7.0]),
+        ("B-spline mirror end", [-2.0, 4.0]),
+    ]
+    .map(|(label, position)| document.add_point(label, position))
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|error| error.to_string())?;
+    document
+        .add_curve(
+            "B-spline mirror source",
+            CurveDefinition::BSpline {
+                form: geosolve_sketch::DocumentBSplineForm::Clamped,
+                degree: 2,
+                controls: spline_controls,
+                knots: vec![0.0, 0.0, 0.0, 1.0, 2.0, 2.0, 2.0],
+                span_ids: vec![0, 1],
+                next_span_id: 2,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+    Ok((document, geosolve_sketch::DocumentSolveRequest::default()))
+}
+
+fn workshop_document(id: u128) -> Result<SketchDocument, String> {
+    SketchDocument::with_id(8.0, DocumentId(PersistentId::from_u128(id)))
+        .map_err(|error| error.to_string())
 }
 
 fn tangent_radial_normal_document()
@@ -498,13 +730,83 @@ fn add_line(
         .map_err(|error| error.to_string())
 }
 
+fn fix_curve_points(
+    document: &mut SketchDocument,
+    curve: CurveId,
+    label: &str,
+) -> Result<(), String> {
+    let points = match document.curve(curve).map(|curve| &curve.definition) {
+        Some(CurveDefinition::Line { start, end, .. }) => vec![*start, *end],
+        Some(CurveDefinition::QuadraticBezier { controls }) => controls.to_vec(),
+        _ => return Err(format!("{label} does not expose fixable workshop controls")),
+    };
+    for (index, point) in points.into_iter().enumerate() {
+        fix_point_at_current(document, point, &format!("{label} control {}", index + 1))?;
+    }
+    Ok(())
+}
+
+fn fix_point_at_current(
+    document: &mut SketchDocument,
+    point: DesignPointId,
+    label: &str,
+) -> Result<(), String> {
+    let target = document
+        .point(point)
+        .ok_or_else(|| format!("{label} point is missing"))?
+        .position;
+    document
+        .add_constraint(
+            format!("Fix {label}"),
+            DocumentConstraintDefinition::FixedPoint { point, target },
+        )
+        .map(|_| ())
+        .map_err(|error| error.to_string())
+}
+
+fn add_polyline(
+    document: &mut SketchDocument,
+    label: &str,
+    points: &[(&str, [f64; 2])],
+) -> Result<CurveId, String> {
+    let point_ids = points
+        .iter()
+        .map(|(point_label, position)| document.add_point(*point_label, *position))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    let branch_directions = points
+        .windows(2)
+        .map(|pair| {
+            let delta = [pair[1].1[0] - pair[0].1[0], pair[1].1[1] - pair[0].1[1]];
+            let norm = delta[0].hypot(delta[1]);
+            [delta[0] / norm, delta[1] / norm]
+        })
+        .collect();
+    document
+        .add_curve(
+            label,
+            CurveDefinition::Polyline {
+                points: point_ids,
+                closed: false,
+                branch_directions,
+            },
+        )
+        .map_err(|error| error.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
 
-    use geosolve_constraint_editor::{RetainedEditorCoordinator, SelectionItem};
+    use geosolve_constraint_editor::{
+        OperationAuthoringOptions, OperationAuthoringOutcome, OperationAuthoringPreviewOutcome,
+        OperationAuthoringState, OperationAuthoringTool, RetainedEditorCoordinator, SelectionItem,
+    };
     use geosolve_core::SolverConfig;
-    use geosolve_sketch::{DocumentConstraintDefinition, RetainedSketchDocumentSession};
+    use geosolve_sketch::{
+        CurveDefinition, CurveSpan, DocumentConstraintDefinition, DocumentDimensionDefinition,
+        DocumentEdit, GeometryRole, RetainedSketchDocumentSession,
+    };
 
     use super::super::persistence::WorkspaceSnapshot;
     use super::{GROUPS, SampleCatalogState, SampleId};
@@ -579,6 +881,259 @@ mod tests {
                 id.key()
             );
         }
+    }
+
+    #[test]
+    fn m66_workshops_are_plain_editable_documents_with_expected_sources() {
+        let mut catalog = SampleCatalogState::default();
+        let fillet = catalog
+            .open_key(SampleId::FilletWorkshop.key())
+            .expect("fillet workshop");
+        assert_eq!(fillet.session().design_document().curves().len(), 6);
+        assert!(
+            fillet
+                .session()
+                .design_document()
+                .curves()
+                .iter()
+                .any(|curve| matches!(curve.definition, CurveDefinition::Circle { .. }))
+        );
+        assert!(
+            fillet
+                .session()
+                .design_document()
+                .curves()
+                .iter()
+                .any(|curve| matches!(curve.definition, CurveDefinition::QuadraticBezier { .. }))
+        );
+
+        let offsets = catalog
+            .open_key(SampleId::LineOffsetWorkshop.key())
+            .expect("line-offset workshop");
+        assert_eq!(offsets.session().design_document().curves().len(), 3);
+        assert!(
+            offsets
+                .session()
+                .design_document()
+                .curves()
+                .iter()
+                .any(|curve| matches!(curve.definition, CurveDefinition::Polyline { .. }))
+        );
+
+        let mirror = catalog
+            .open_key(SampleId::MirrorWorkshop.key())
+            .expect("mirror workshop");
+        assert_eq!(mirror.session().design_document().curves().len(), 4);
+        let axis = mirror
+            .session()
+            .design_document()
+            .curves()
+            .iter()
+            .find(|curve| curve.label == "Mirror axis")
+            .expect("mirror axis");
+        assert_eq!(
+            mirror.session().design_document().geometry_role(axis.id),
+            Some(GeometryRole::Construction)
+        );
+        assert!(
+            mirror
+                .session()
+                .design_document()
+                .curves()
+                .iter()
+                .any(|curve| matches!(curve.definition, CurveDefinition::CubicBezier { .. }))
+        );
+        assert!(
+            mirror
+                .session()
+                .design_document()
+                .curves()
+                .iter()
+                .any(|curve| matches!(curve.definition, CurveDefinition::BSpline { .. }))
+        );
+
+        let fillet_document = fillet.session().design_document();
+        assert_eq!(fillet_document.constraints().len(), 12);
+        assert!(
+            fillet_document
+                .constraints()
+                .iter()
+                .all(|constraint| matches!(
+                    constraint.definition,
+                    DocumentConstraintDefinition::FixedPoint { .. }
+                ))
+        );
+        assert_eq!(fillet_document.dimensions().len(), 1);
+        assert!(matches!(
+            fillet_document.dimensions()[0].definition,
+            DocumentDimensionDefinition::Radius { .. }
+        ));
+        assert!(fillet.session().accepted_state().is_some());
+
+        assert!(offsets.session().design_document().constraints().is_empty());
+        assert!(offsets.session().design_document().dimensions().is_empty());
+        assert!(offsets.session().accepted_state().is_some());
+        assert_eq!(mirror.session().design_document().constraints().len(), 2);
+        assert!(mirror.session().design_document().constraints().iter().all(
+            |constraint| matches!(
+                constraint.definition,
+                DocumentConstraintDefinition::FixedPoint { .. }
+            )
+        ));
+        assert!(mirror.session().design_document().dimensions().is_empty());
+        assert!(mirror.session().accepted_state().is_some());
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the actual fillet sample is qualified through one complete persisted lifecycle"
+    )]
+    fn fillet_workshop_commit_round_trip_radius_and_parent_edits_remain_accepted() {
+        let mut catalog = SampleCatalogState::default();
+        let mut coordinator = catalog
+            .open_key(SampleId::FilletWorkshop.key())
+            .expect("fillet workshop");
+        let (line, circle) = {
+            let document = coordinator.session().design_document();
+            let by_label = |label: &str| {
+                document
+                    .curves()
+                    .iter()
+                    .find(|curve| curve.label == label)
+                    .expect("workshop curve")
+                    .id
+            };
+            (
+                by_label("Line-circle linear support"),
+                by_label("Line-circle circular support"),
+            )
+        };
+        let operation_document = coordinator
+            .operation_authoring_document()
+            .expect("accepted operation document")
+            .clone();
+        let picks = [
+            coordinator
+                .operation_pick_for_item(SelectionItem::Curve(CurveSpan::line(line)), Some(0.28))
+                .expect("line pick"),
+            coordinator
+                .operation_pick_for_item(SelectionItem::Curve(CurveSpan::line(circle)), Some(4.05))
+                .expect("circle pick"),
+        ];
+        let mut authoring = OperationAuthoringState::default();
+        let _ = authoring.set_options(
+            &operation_document,
+            OperationAuthoringOptions {
+                fillet_radius: Some(0.8),
+                ..OperationAuthoringOptions::default()
+            },
+        );
+        let outcome =
+            authoring.activate(&operation_document, OperationAuthoringTool::Fillet, &picks);
+        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = outcome else {
+            panic!("workshop fillet candidate expected: {outcome:?}");
+        };
+        let preview = coordinator
+            .prepare_operation_preview(&candidate)
+            .expect("workshop fillet preview");
+        let OperationAuthoringPreviewOutcome::Ready(metadata) = preview else {
+            panic!("accepted workshop fillet preview expected: {preview:?}");
+        };
+        let fillet = metadata.primary_created_curve;
+        coordinator
+            .apply_operation_preview(metadata.token, &candidate)
+            .expect("workshop fillet commit");
+
+        let snapshot = WorkspaceSnapshot::from_checkpoint(coordinator.checkpoint());
+        let decoded = WorkspaceSnapshot::decode(&snapshot.encode().expect("encode operation"))
+            .expect("decode operation");
+        let restored = RetainedSketchDocumentSession::restore_design_with_accepted(
+            decoded.design_document().expect("design document"),
+            decoded
+                .accepted_document()
+                .expect("accepted payload")
+                .expect("accepted document"),
+            decoded.revisions(),
+            geosolve_sketch::DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("restore committed fillet");
+        let mut restored = RetainedEditorCoordinator::new(restored).expect("restored coordinator");
+        let (fillet_center, fillet_radius, fillet_target, source_radius_target) = {
+            let document = restored.session().design_document();
+            let (center, radius) = match &document.curve(fillet).expect("fillet curve").definition {
+                CurveDefinition::CircularArc { center, radius, .. } => (*center, *radius),
+                other => panic!("fillet output must be a circular arc: {other:?}"),
+            };
+            let fillet_target = document
+                .dimensions()
+                .iter()
+                .find_map(|dimension| match &dimension.definition {
+                    DocumentDimensionDefinition::Radius { curve, target } if *curve == fillet => {
+                        Some(*target)
+                    }
+                    _ => None,
+                })
+                .expect("fillet radius target");
+            let source_radius_target = document
+                .dimensions()
+                .iter()
+                .find_map(|dimension| match &dimension.definition {
+                    DocumentDimensionDefinition::Radius { target, .. }
+                        if dimension.label == "Line-circle source radius" =>
+                    {
+                        Some(*target)
+                    }
+                    _ => None,
+                })
+                .expect("source circle radius target");
+            (center, radius, fillet_target, source_radius_target)
+        };
+        let radius_edit = restored
+            .apply_edit(
+                restored.session().design_identity(),
+                DocumentEdit::SetScalarValue {
+                    scalar: fillet_target,
+                    value: 0.96,
+                },
+            )
+            .expect("edit restored fillet radius");
+        assert!(radius_edit.published_accepted.is_some());
+        let accepted = restored
+            .session()
+            .accepted_state()
+            .expect("accepted fillet radius edit")
+            .document();
+        assert!(
+            (accepted.scalar(fillet_radius).expect("fillet radius").value - 0.96).abs() <= 1.0e-7
+        );
+        let center_before = accepted
+            .point(fillet_center)
+            .expect("fillet center")
+            .position;
+
+        let parent_edit = restored
+            .apply_edit(
+                restored.session().design_identity(),
+                DocumentEdit::SetScalarValue {
+                    scalar: source_radius_target,
+                    value: 2.1,
+                },
+            )
+            .expect("edit restored source radius");
+        assert!(parent_edit.published_accepted.is_some());
+        let center_after = restored
+            .session()
+            .accepted_state()
+            .expect("accepted source-radius edit")
+            .document()
+            .point(fillet_center)
+            .expect("associated fillet center")
+            .position;
+        assert!(
+            (center_after[0] - center_before[0]).hypot(center_after[1] - center_before[1]) > 1.0e-6
+        );
     }
 
     #[test]

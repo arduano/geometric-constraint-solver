@@ -10,6 +10,7 @@
 mod annotations;
 mod authoring;
 mod coordinator;
+mod operation_authoring;
 mod qualification;
 
 pub use annotations::{
@@ -25,11 +26,19 @@ pub use coordinator::{
     ContactBranchAction, CoordinatorActionKind, CoordinatorError, DimensionTargetDisplayUnit,
     DimensionTargetMetadata, DisabledReason, DisplayDimensionTarget, EditorMutation,
     EditorProblemCategory, EditorProblemMetadata, EditorProblemScope, EditorProblemTarget,
-    LifecycleDto, LifecycleStatus, MeasurementPublication, MutationOutcome, ProblemsDto,
+    LifecycleDto, LifecycleStatus, MeasurementPublication, MutationOutcome,
+    OperationAuthoringMutation, OperationAuthoringPreview, OperationAuthoringPreviewMetadata,
+    OperationAuthoringPreviewOutcome, OperationAuthoringPreviewToken, ProblemsDto,
     ProjectedDragRejectionStage, ProjectedDragWorkEvidence, ReplayAction, RestoreCheckpoint,
     RetainedEditorCoordinator, display_dimension_target,
 };
 pub use geosolve_sketch::SketchAcceptedDocumentRedundancy;
+pub use operation_authoring::{
+    OperationAuthoringCandidate, OperationAuthoringGuidance, OperationAuthoringOperandKind,
+    OperationAuthoringOptions, OperationAuthoringOutcome, OperationAuthoringPick,
+    OperationAuthoringStage, OperationAuthoringState, OperationAuthoringTool,
+    OperationAuthoringWarning, OperationAuthoringWarningKind, OperationLineOffsetMode,
+};
 #[doc(hidden)]
 pub use qualification::{
     M40QualificationCaseResult, M40QualificationReport, m40_qualification_corpus,

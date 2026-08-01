@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 
-use geosolve_constraint_editor::{AuthoringTool, ConstraintIntent, DimensionKind};
+use geosolve_constraint_editor::{
+    AuthoringTool, ConstraintIntent, DimensionKind, OperationAuthoringTool,
+};
 
 pub(crate) const CONSTRAINT_ACTIONS: [(&str, &str, ConstraintIntent); 11] = [
     ("lock", "Lock", ConstraintIntent::Lock),
@@ -41,6 +43,16 @@ pub(crate) const DIMENSION_ACTIONS: [(&str, &str, DimensionKind); 5] = [
     ),
 ];
 
+pub(crate) const OPERATION_ACTIONS: [(&str, &str, OperationAuthoringTool); 3] = [
+    ("fillet", "Fillet", OperationAuthoringTool::Fillet),
+    (
+        "line-offset",
+        "Line offset",
+        OperationAuthoringTool::LineOffset,
+    ),
+    ("mirror", "Mirror", OperationAuthoringTool::Mirror),
+];
+
 pub(crate) fn constraint_from_key(key: &str) -> Option<ConstraintIntent> {
     CONSTRAINT_ACTIONS
         .iter()
@@ -67,15 +79,21 @@ pub(crate) fn authoring_tool_from_key(key: &str) -> Option<AuthoringTool> {
         .or_else(|| dimension_from_key(key).map(AuthoringTool::Dimension))
 }
 
+pub(crate) fn operation_tool_from_key(key: &str) -> Option<OperationAuthoringTool> {
+    OPERATION_ACTIONS
+        .iter()
+        .find_map(|(candidate, _, tool)| (*candidate == key).then_some(*tool))
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
 
-    use geosolve_constraint_editor::{ConstraintIntent, DimensionKind};
+    use geosolve_constraint_editor::{ConstraintIntent, DimensionKind, OperationAuthoringTool};
 
     use super::{
-        CONSTRAINT_ACTIONS, DIMENSION_ACTIONS, authoring_tool_from_key, constraint_from_key,
-        dimension_from_key, dimension_key,
+        CONSTRAINT_ACTIONS, DIMENSION_ACTIONS, OPERATION_ACTIONS, authoring_tool_from_key,
+        constraint_from_key, dimension_from_key, dimension_key, operation_tool_from_key,
     };
     use crate::workbench::icons::GEOMETRY_TOOLS;
 
@@ -167,6 +185,33 @@ mod tests {
     }
 
     #[test]
+    fn m66_modify_action_identity_catalog_is_closed_unique_and_headless() {
+        assert_eq!(
+            OPERATION_ACTIONS.map(|(_, _, tool)| tool),
+            [
+                OperationAuthoringTool::Fillet,
+                OperationAuthoringTool::LineOffset,
+                OperationAuthoringTool::Mirror,
+            ]
+        );
+        assert_eq!(
+            OPERATION_ACTIONS
+                .iter()
+                .map(|(key, _, _)| *key)
+                .collect::<HashSet<_>>()
+                .len(),
+            OPERATION_ACTIONS.len()
+        );
+        for (key, label, tool) in OPERATION_ACTIONS {
+            assert!(!label.is_empty());
+            assert_eq!(operation_tool_from_key(key), Some(tool));
+        }
+        assert_eq!(operation_tool_from_key("split"), None);
+        assert_eq!(operation_tool_from_key("curve-offset"), None);
+        assert_eq!(operation_tool_from_key("multi-mirror"), None);
+    }
+
+    #[test]
     fn m62_palette_replaces_inspector_creation_without_restoring_a_harness() {
         let html = include_str!("../../index.html");
         for (key, _, _) in CONSTRAINT_ACTIONS {
@@ -226,6 +271,32 @@ mod tests {
                 !html.contains(retired),
                 "{retired} must not survive in the M62 workbench"
             );
+        }
+    }
+
+    #[test]
+    fn m66_modify_palette_is_present_without_operation_semantics_in_markup() {
+        let html = include_str!("../../index.html");
+        for (key, _, _) in OPERATION_ACTIONS {
+            assert!(
+                html.contains(&format!("data-wb-operation=\"{key}\"")),
+                "missing Modify action {key}"
+            );
+        }
+        assert_eq!(
+            html.matches("class=\"wb-operation-icon\"").count(),
+            OPERATION_ACTIONS.len()
+        );
+        assert!(html.contains("<strong>Modify</strong>"));
+        assert!(html.contains("data-wb-action=\"operation-apply\""));
+        for forbidden in [
+            "operation-split",
+            "operation-pattern",
+            "curve-offset",
+            "multi-source-mirror",
+            "/#/dev/lab",
+        ] {
+            assert!(!html.contains(forbidden), "{forbidden} leaked into M66 UI");
         }
     }
 }

@@ -147,13 +147,14 @@ fn decode_document(payload: &WorkspaceDocumentPayload) -> Result<SketchDocument,
 mod tests {
     use geosolve_constraint_editor::{
         AuthoringMutation, AuthoringOperand, AuthoringOutcome, AuthoringState, AuthoringTool,
-        ConstraintIntent, RetainedEditorCoordinator, SelectionItem,
+        ConstraintIntent, OperationAuthoringOutcome, OperationAuthoringPreviewOutcome,
+        OperationAuthoringState, OperationAuthoringTool, RetainedEditorCoordinator, SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
         AlphaScenarioIds, AlphaScenarioKind, ContactStateEdit, CurveDefinition, CurveSpan,
-        DocumentConstraintDefinition, DocumentSolveRequest, RetainedSketchDocumentSession,
-        SketchDocument, alpha_scenario,
+        DocumentConstraintDefinition, DocumentEdit, DocumentSolveRequest,
+        RetainedSketchDocumentSession, SketchDocument, alpha_scenario,
     };
 
     use super::WorkspaceSnapshot;
@@ -283,6 +284,128 @@ mod tests {
                 .source(source)
                 .expect("restored authored source after undo")
                 .suppressed
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one complete helper-operation persistence and edit lifecycle is clearest together"
+    )]
+    fn authored_operation_round_trips_live_workspace_and_remains_editable() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let start = document.add_point("start", [0.0, 0.0]).expect("start");
+        let end = document.add_point("end", [4.0, 0.0]).expect("end");
+        let source = CurveSpan::line(
+            document
+                .add_curve(
+                    "source",
+                    CurveDefinition::Line {
+                        start,
+                        end,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .expect("source line"),
+        );
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let operation_document = coordinator
+            .operation_authoring_document()
+            .expect("accepted operation document")
+            .clone();
+        let source_pick = coordinator
+            .operation_pick_for_item(SelectionItem::Curve(source), Some(0.5))
+            .expect("stamped source pick");
+        let mut authoring = OperationAuthoringState::default();
+        assert!(matches!(
+            authoring.activate(
+                &operation_document,
+                OperationAuthoringTool::LineOffset,
+                &[source_pick]
+            ),
+            OperationAuthoringOutcome::PreviewRequested { .. }
+        ));
+        let confirmed = authoring.confirm(&operation_document, [2.0, 2.0]);
+        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = confirmed else {
+            panic!("confirmed line offset candidate expected");
+        };
+        let prepared = coordinator
+            .prepare_operation_preview(&candidate)
+            .expect("accepted operation preview");
+        let OperationAuthoringPreviewOutcome::Ready(metadata) = prepared else {
+            panic!("accepted operation preview expected");
+        };
+        assert!(metadata.apply_ready);
+        let mutation = coordinator
+            .apply_operation_preview(metadata.token, &candidate)
+            .expect("operation commit");
+        assert!(mutation.operation.published_accepted.is_some());
+        let created = mutation.primary_created_curve;
+        assert!(
+            coordinator
+                .session()
+                .design_document()
+                .curve(created)
+                .is_some()
+        );
+
+        let snapshot = WorkspaceSnapshot::from_checkpoint(coordinator.checkpoint());
+        let decoded =
+            WorkspaceSnapshot::decode(&snapshot.encode().expect("encode")).expect("decode");
+        let restored_session = RetainedSketchDocumentSession::restore_design_with_accepted(
+            decoded.design_document().expect("design document"),
+            decoded
+                .accepted_document()
+                .expect("accepted payload")
+                .expect("accepted document"),
+            decoded.revisions(),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("restore operation workspace");
+        let mut restored =
+            RetainedEditorCoordinator::new(restored_session).expect("restored coordinator");
+        assert!(
+            restored
+                .session()
+                .design_document()
+                .curve(created)
+                .is_some()
+        );
+
+        let history = restored.history_len();
+        let edited = restored
+            .apply_edit(
+                restored.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: start,
+                    position: [0.5, 0.75],
+                },
+            )
+            .expect("edit restored source");
+        assert!(edited.published_accepted.is_some());
+        assert_eq!(restored.history_len(), history + 1);
+        assert!(
+            restored
+                .session()
+                .design_document()
+                .curve(created)
+                .is_some()
+        );
+        restored.undo().expect("undo restored source edit");
+        restored.redo().expect("redo restored source edit");
+        assert!(
+            restored
+                .session()
+                .design_document()
+                .curve(created)
+                .is_some()
         );
     }
 

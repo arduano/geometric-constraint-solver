@@ -21,15 +21,22 @@ use geosolve_sketch::{
     SketchDocument, SketchLifecycleRevisionHighWater, SketchSolveResult, SketchSource,
     SolveRejection, TangentOrientation,
 };
+use geosolve_sketch_ops::{
+    SketchOperationApplication, SketchOperationApplyError, SketchOperationError,
+    SketchOperationIdentityChange, SketchOperationProposal, SketchOperationRequest,
+    SketchOperationResult, SketchOperationSnapshot,
+};
 use thiserror::Error;
 
 use crate::{
     ActionChoice, AuthoringApplication, AuthoringOperand, AuthoringOptions, AuthoringTool,
     ConstraintActionRequest, ConstraintEditor, ConstraintIntent, ConstraintKind,
     ConstraintRelationChoice, ConstructionProposal, ConstructionResult, DimensionActionRequest,
-    DimensionKind, EditorEffect, EditorScene, PointGestureSnapshot, PointerInput,
-    ProjectedDragRequestDisposition, ProvisionalInferenceCandidate, ResolvedConstraintKind,
-    SelectionItem,
+    DimensionKind, EditorEffect, EditorScene, OperationAuthoringCandidate,
+    OperationAuthoringOutcome, OperationAuthoringPick, OperationAuthoringStage,
+    OperationAuthoringTool, OperationAuthoringWarning, OperationAuthoringWarningKind,
+    PointGestureSnapshot, PointerInput, ProjectedDragRequestDisposition,
+    ProvisionalInferenceCandidate, ResolvedConstraintKind, SelectionItem, Viewport,
 };
 
 const PROJECTED_DRAG_MAX_DOCUMENT_ITEMS: usize = 16_384;
@@ -41,6 +48,44 @@ const PROJECTED_DRAG_MAX_COMPONENT_LINEARIZATIONS: usize = 1_024;
 const PROJECTED_DRAG_MAX_DENSE_DIMENSION: usize = 256;
 const PROJECTED_DRAG_MAX_DIAGNOSTIC_CANDIDATES: usize = 512;
 const PROJECTED_DRAG_MAX_DIAGNOSTIC_TRIALS: usize = 1_024;
+
+const OPERATION_AUTHORING_MAX_DOCUMENT_ITEMS: usize = 16_384;
+const OPERATION_AUTHORING_MAX_NONLINEAR_ITERATIONS: usize = 256;
+const OPERATION_AUTHORING_MAX_FACTORIZATIONS: usize = 256;
+const OPERATION_AUTHORING_MAX_RANK_KERNELS: usize = 256;
+const OPERATION_AUTHORING_MAX_REJECTED_TRIALS: usize = 512;
+const OPERATION_AUTHORING_MAX_COMPONENT_LINEARIZATIONS: usize = 1_024;
+const OPERATION_AUTHORING_MAX_DENSE_DIMENSION: usize = 256;
+const OPERATION_AUTHORING_MAX_DIAGNOSTIC_CANDIDATES: usize = 512;
+const OPERATION_AUTHORING_MAX_DIAGNOSTIC_TRIALS: usize = 1_024;
+const OPERATION_AUTHORING_MAX_PROFILE_WORK: usize = 16_384;
+const OPERATION_AUTHORING_MAX_MEASUREMENT_WORK: usize = 16_384;
+
+fn operation_authoring_control() -> OperationControl {
+    let mut control = OperationControl::unlimited();
+    control.limits.document_validation_items = OPERATION_AUTHORING_MAX_DOCUMENT_ITEMS;
+    control.limits.document_dependency_items = OPERATION_AUTHORING_MAX_DOCUMENT_ITEMS;
+    control.limits.document_lowering_items = OPERATION_AUTHORING_MAX_DOCUMENT_ITEMS;
+    control.limits.nonlinear_iterations = OPERATION_AUTHORING_MAX_NONLINEAR_ITERATIONS;
+    control.limits.factorizations = OPERATION_AUTHORING_MAX_FACTORIZATIONS;
+    control.limits.rank_kernels = OPERATION_AUTHORING_MAX_RANK_KERNELS;
+    control.limits.rejected_trials = OPERATION_AUTHORING_MAX_REJECTED_TRIALS;
+    control.limits.component_linearizations = OPERATION_AUTHORING_MAX_COMPONENT_LINEARIZATIONS;
+    control.limits.dense_kernel_rows = OPERATION_AUTHORING_MAX_DENSE_DIMENSION;
+    control.limits.dense_kernel_columns = OPERATION_AUTHORING_MAX_DENSE_DIMENSION;
+    control.limits.diagnostic_candidates = OPERATION_AUTHORING_MAX_DIAGNOSTIC_CANDIDATES;
+    control.limits.diagnostic_trials = OPERATION_AUTHORING_MAX_DIAGNOSTIC_TRIALS;
+    control.limits.profile_candidate_pairs = OPERATION_AUTHORING_MAX_PROFILE_WORK;
+    control.limits.profile_subdivisions = OPERATION_AUTHORING_MAX_PROFILE_WORK;
+    control.limits.profile_roots = OPERATION_AUTHORING_MAX_PROFILE_WORK;
+    control.limits.profile_fragments = OPERATION_AUTHORING_MAX_PROFILE_WORK;
+    control.limits.profile_integrations = OPERATION_AUTHORING_MAX_PROFILE_WORK;
+    control.limits.profile_containment_tests = OPERATION_AUTHORING_MAX_PROFILE_WORK;
+    control.limits.profile_faces = OPERATION_AUTHORING_MAX_PROFILE_WORK;
+    control.limits.measurement_integrations = OPERATION_AUTHORING_MAX_MEASUREMENT_WORK;
+    control.limits.measurement_derivative_evaluations = OPERATION_AUTHORING_MAX_MEASUREMENT_WORK;
+    control
+}
 
 fn projected_drag_control() -> OperationControl {
     let mut control = OperationControl::unlimited();
@@ -445,6 +490,110 @@ pub enum AuthoringMutation {
     Dimension(MutationOutcome<DocumentDimensionId>),
 }
 
+/// Independently accepted scratch-preview metadata for one helper operation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct OperationAuthoringPreviewToken(u64);
+
+/// Independently accepted scratch-preview metadata for one helper operation.
+#[derive(Clone, Debug, PartialEq)]
+pub struct OperationAuthoringPreviewMetadata {
+    /// Opaque coordinator generation required together with the exact candidate
+    /// when committing this preview.
+    pub token: OperationAuthoringPreviewToken,
+    pub tool: OperationAuthoringTool,
+    pub base_design: SketchDesignIdentity,
+    pub accepted: SketchAcceptedStateIdentity,
+    pub primary_created_curve: CurveId,
+    pub created_curves: Vec<CurveId>,
+    pub created_points: Vec<DesignPointId>,
+    /// True only after all headless semantic stages are confirmed. The preview is
+    /// independently accepted in either case; an unconfirmed offset-side hover is
+    /// renderable but cannot enter the commit path.
+    pub apply_ready: bool,
+}
+
+/// Result of coordinator-owned scratch preparation. A ready result is also held
+/// by the coordinator; presentation never receives a proposal it can apply itself.
+#[derive(Clone, Debug, PartialEq)]
+pub enum OperationAuthoringPreviewOutcome {
+    Ready(OperationAuthoringPreviewMetadata),
+    Warning(OperationAuthoringWarning),
+}
+
+/// Accepted helper-operation commit result.
+#[derive(Clone, Debug)]
+pub struct OperationAuthoringMutation {
+    pub operation: MutationOutcome<SketchOperationApplication>,
+    pub primary_created_curve: CurveId,
+}
+
+/// Opaque coordinator-held accepted operation preview.
+#[derive(Clone, Debug)]
+pub struct OperationAuthoringPreview {
+    candidate: OperationAuthoringCandidate,
+    proposal: SketchOperationProposal,
+    scratch: RetainedSketchDocumentSession,
+    metadata: OperationAuthoringPreviewMetadata,
+}
+
+impl OperationAuthoringPreview {
+    #[must_use]
+    pub const fn metadata(&self) -> &OperationAuthoringPreviewMetadata {
+        &self.metadata
+    }
+
+    /// Whether this held accepted preview is bound to the exact current headless
+    /// candidate. Hosts may use this only for presentation gating; commit repeats
+    /// the same comparison authoritatively.
+    #[must_use]
+    pub fn matches_candidate(&self, candidate: &OperationAuthoringCandidate) -> bool {
+        &self.candidate == candidate
+    }
+
+    /// The independently accepted scratch document used for preview rendering.
+    #[must_use]
+    pub fn accepted_document(&self) -> &SketchDocument {
+        self.accepted_state().document()
+    }
+
+    /// Complete accepted scratch state used by truthful provenance-aware scene
+    /// renderers. It is read-only and belongs to the same session as [`Self::scene`].
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the private preview invariant is violated and a preview is
+    /// constructed without accepted scratch publication.
+    #[must_use]
+    pub fn accepted_state(&self) -> &geosolve_sketch::SketchAcceptedDocumentState {
+        self.scratch
+            .accepted_state()
+            .expect("operation previews are stored only after accepted publication")
+    }
+
+    /// Builds a complete preview scene from the independently accepted scratch
+    /// state through the same public scene adapter used for ordinary geometry.
+    ///
+    /// # Errors
+    ///
+    /// Returns an editor presentation error when the accepted preview cannot be
+    /// projected with the supplied viewport or chord tolerance.
+    pub fn scene(
+        &self,
+        viewport: Viewport,
+        chord_tolerance_pixels: f64,
+    ) -> Result<EditorScene, crate::EditorError> {
+        let accepted = self.accepted_state();
+        EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            accepted.design_identity(),
+            accepted.document(),
+            self.scratch.design_document(),
+            viewport,
+            chord_tolerance_pixels,
+        )
+    }
+}
+
 /// Editable target metadata for one selected dimension.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DimensionTargetMetadata {
@@ -524,6 +673,10 @@ pub enum ReplayAction {
         expected: SketchDesignIdentity,
         proposal: ConstructionProposal,
     },
+    Operation {
+        expected: SketchDesignIdentity,
+        request: SketchOperationRequest,
+    },
     ConstraintAction {
         expected: SketchDesignIdentity,
         selection: Vec<SelectionItem>,
@@ -592,6 +745,10 @@ pub enum CoordinatorError {
     Document(#[from] geosolve_sketch::DocumentError),
     #[error(transparent)]
     Editor(#[from] crate::EditorError),
+    #[error(transparent)]
+    SketchOperation(#[from] SketchOperationError),
+    #[error(transparent)]
+    SketchOperationApply(#[from] SketchOperationApplyError),
     #[error("selected operands cannot construct the requested dimension")]
     IncompatibleDimension,
     #[error("invalid typed action input: {0}")]
@@ -616,6 +773,16 @@ pub enum CoordinatorError {
     NothingToUndo,
     #[error("history has no later checkpoint")]
     NothingToRedo,
+    #[error("the helper-operation preview has not been independently accepted")]
+    MissingOperationPreview,
+    #[error("the helper-operation preview still requires a semantic confirmation")]
+    OperationPreviewNotConfirmed,
+    #[error("the helper-operation preview token or candidate does not match")]
+    OperationPreviewMismatch,
+    #[error("helper-operation work was cancelled or exhausted")]
+    OperationWorkStopped,
+    #[error("operation authoring pick is unavailable: {0:?}")]
+    OperationAuthoringPick(OperationAuthoringWarningKind),
 }
 
 /// Owner of retained lifecycle, interaction selection, restore history, and transcript.
@@ -630,6 +797,8 @@ pub struct RetainedEditorCoordinator {
     solved_preview: Option<RetainedSketchDocumentSession>,
     drag_continuation: Option<ProjectedDragContinuation>,
     projected_drag_work: Option<ProjectedDragWorkEvidence>,
+    operation_preview: Option<OperationAuthoringPreview>,
+    next_operation_preview_token: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -679,6 +848,8 @@ impl RetainedEditorCoordinator {
             solved_preview: None,
             drag_continuation: None,
             projected_drag_work: None,
+            operation_preview: None,
+            next_operation_preview_token: 1,
         })
     }
 
@@ -740,6 +911,391 @@ impl RetainedEditorCoordinator {
     #[must_use]
     pub const fn projected_drag_work_evidence(&self) -> Option<&ProjectedDragWorkEvidence> {
         self.projected_drag_work.as_ref()
+    }
+
+    /// Current accepted document eligible for helper-operation picks. Retained
+    /// design divergence has no current operation-authoring geometry and returns
+    /// `None` rather than exposing the older accepted state under a newer design.
+    #[must_use]
+    pub fn operation_authoring_document(&self) -> Option<&SketchDocument> {
+        let input = self.session.prepared_input();
+        self.session.accepted_state().and_then(|accepted| {
+            (accepted.design_identity() == self.session.design_identity()
+                && accepted.input() == input.attempt_input()
+                && Some(accepted.identity()) == input.accepted_state_identity()
+                && accepted.originating_attempt() == input.latest_attempt_identity())
+            .then_some(accepted.document())
+        })
+    }
+
+    /// Exact retained-session input paired with [`Self::operation_authoring_document`].
+    /// This lets the headless state invalidate otherwise geometrically identical
+    /// operands after reattempt, Undo/Redo or external-input revision changes.
+    #[must_use]
+    pub fn operation_authoring_input(&self) -> Option<geosolve_sketch::PreparedSketchInput> {
+        self.operation_authoring_document()
+            .map(|_| self.session.prepared_input())
+    }
+
+    /// Resolves one ordinary tree/canvas item into an exact accepted model-space
+    /// operation pick. A missing canvas parameter uses the deterministic midpoint
+    /// of the first visible interval; no presentation formula is involved.
+    ///
+    /// # Errors
+    ///
+    /// Returns a missing-preview or typed authoring-pick error when no exact
+    /// current accepted input exists or the requested item cannot be sampled.
+    pub fn operation_pick_for_item(
+        &self,
+        item: SelectionItem,
+        curve_parameter: Option<f64>,
+    ) -> Result<OperationAuthoringPick, CoordinatorError> {
+        let document = self
+            .operation_authoring_document()
+            .ok_or(CoordinatorError::MissingOperationPreview)?;
+        OperationAuthoringPick::for_item(document, item, curve_parameter)
+            .map(|pick| pick.bind_input(&self.session.prepared_input()))
+            .map_err(CoordinatorError::OperationAuthoringPick)
+    }
+
+    /// Converts current ordinary selection into exact accepted picks. Curve-hit
+    /// parameters retained by the editor win; tree selections use the same
+    /// deterministic visible-midpoint fallback as [`Self::operation_pick_for_item`].
+    ///
+    /// # Errors
+    ///
+    /// Returns the first missing-preview or typed authoring-pick error encountered
+    /// while resolving the immutable selection snapshot.
+    pub fn operation_authoring_preselection(
+        &self,
+    ) -> Result<Vec<OperationAuthoringPick>, CoordinatorError> {
+        self.editor
+            .selection()
+            .iter()
+            .copied()
+            .map(|item| {
+                let parameter = match item {
+                    SelectionItem::Curve(span) => self.editor.curve_pick_parameter(span),
+                    SelectionItem::Point(_)
+                    | SelectionItem::Constraint(_)
+                    | SelectionItem::Dimension(_) => None,
+                };
+                self.operation_pick_for_item(item, parameter)
+            })
+            .collect()
+    }
+
+    /// The latest independently accepted coordinator-owned helper-operation preview.
+    #[must_use]
+    pub const fn operation_preview(&self) -> Option<&OperationAuthoringPreview> {
+        self.operation_preview.as_ref()
+    }
+
+    /// Drops the current helper-operation preview without changing document state.
+    pub fn clear_operation_preview(&mut self) {
+        self.operation_preview = None;
+    }
+
+    /// Synchronizes coordinator-held preview lifetime with one headless state
+    /// transition. Only a preview request or exact Apply transition may retain a
+    /// held preview; warnings, collection, cancellation and mode exit revoke it.
+    pub fn observe_operation_authoring_outcome(&mut self, outcome: &OperationAuthoringOutcome) {
+        if !matches!(
+            outcome,
+            OperationAuthoringOutcome::PreviewRequested { .. }
+                | OperationAuthoringOutcome::Apply(_)
+        ) {
+            self.clear_operation_preview();
+        }
+    }
+
+    /// Executes one synthesized request against an immutable operation snapshot,
+    /// applies its proposal only to a scratch retained session, and stores a
+    /// preview only after ordinary independent accepted-state publication.
+    ///
+    /// # Errors
+    ///
+    /// Returns operation, retained-session, metadata, or finite-work errors. Typed
+    /// applicability and solve rejections are returned as warning outcomes.
+    pub fn prepare_operation_preview(
+        &mut self,
+        candidate: &OperationAuthoringCandidate,
+    ) -> Result<OperationAuthoringPreviewOutcome, CoordinatorError> {
+        self.prepare_operation_preview_controlled(candidate, operation_authoring_control())
+    }
+
+    /// Controlled counterpart to [`Self::prepare_operation_preview`]. Preparation
+    /// and scratch publication share one deterministic finite work envelope.
+    ///
+    /// # Errors
+    ///
+    /// Returns operation, retained-session, metadata, or control errors. Typed
+    /// applicability, cancellation, exhaustion, and solve rejection are warning
+    /// outcomes and never mutate the live coordinator.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the exact snapshot, scratch publication, provenance and preview-token lifecycle is one atomic audit path"
+    )]
+    pub fn prepare_operation_preview_controlled(
+        &mut self,
+        candidate: &OperationAuthoringCandidate,
+        control: OperationControl,
+    ) -> Result<OperationAuthoringPreviewOutcome, CoordinatorError> {
+        self.clear_transient();
+        let current_input = self.session.prepared_input();
+        let Some(current_document) = self.operation_authoring_document() else {
+            return Ok(OperationAuthoringPreviewOutcome::Warning(
+                operation_authoring_warning(
+                    candidate,
+                    OperationAuthoringWarningKind::StalePick,
+                    "operation candidate does not match the current exact accepted input",
+                ),
+            ));
+        };
+        if candidate.source_input() != Some(&current_input)
+            || candidate
+                .picks()
+                .iter()
+                .any(|pick| pick.validate(current_document).is_err())
+        {
+            return Ok(OperationAuthoringPreviewOutcome::Warning(
+                operation_authoring_warning(
+                    candidate,
+                    OperationAuthoringWarningKind::StalePick,
+                    "operation candidate does not match the current exact accepted input",
+                ),
+            ));
+        }
+        let job =
+            SketchOperationSnapshot::capture(&self.session).prepare(candidate.request().clone());
+        let configured_limits = control.limits;
+        let cancellation = control.token.clone();
+        let (result, preparation_report) = match job.execute(control)? {
+            OperationOutcome::Completed { value, report } => (value, report),
+            stopped => {
+                return Ok(OperationAuthoringPreviewOutcome::Warning(
+                    operation_authoring_warning(
+                        candidate,
+                        OperationAuthoringWarningKind::WorkStopped,
+                        format!(
+                            "operation preparation stopped: {:?}",
+                            stopped.report().stopping_reason
+                        ),
+                    ),
+                ));
+            }
+        };
+        let proposal = match result {
+            SketchOperationResult::Proposed(proposal) => *proposal,
+            SketchOperationResult::Unsupported(unsupported) => {
+                return Ok(OperationAuthoringPreviewOutcome::Warning(
+                    operation_authoring_warning(
+                        candidate,
+                        OperationAuthoringWarningKind::OperationUnsupported(unsupported.reason),
+                        "the selected curve family is not supported exactly by this operation",
+                    ),
+                ));
+            }
+            SketchOperationResult::Incomplete(incomplete) => {
+                return Ok(OperationAuthoringPreviewOutcome::Warning(
+                    operation_authoring_warning(
+                        candidate,
+                        OperationAuthoringWarningKind::OperationIncomplete(incomplete.reason),
+                        "the current accepted input is incomplete for this operation",
+                    ),
+                ));
+            }
+            _ => {
+                return Ok(OperationAuthoringPreviewOutcome::Warning(
+                    operation_authoring_warning(
+                        candidate,
+                        OperationAuthoringWarningKind::PreviewRejected,
+                        "the operation companion returned an unsupported future outcome",
+                    ),
+                ));
+            }
+        };
+        let mut scratch = self.session.clone();
+        let remaining = remaining_operation_limits(configured_limits, preparation_report.consumed);
+        let outcome = match proposal
+            .apply_controlled(&mut scratch, OperationControl::new(cancellation, remaining))?
+        {
+            OperationOutcome::Completed { value, .. } => value,
+            stopped => {
+                return Ok(OperationAuthoringPreviewOutcome::Warning(
+                    operation_authoring_warning(
+                        candidate,
+                        OperationAuthoringWarningKind::WorkStopped,
+                        format!(
+                            "operation scratch publication stopped: {:?}",
+                            stopped.report().stopping_reason
+                        ),
+                    ),
+                ));
+            }
+        };
+        let Some(published) = outcome.published_accepted_identity() else {
+            return Ok(OperationAuthoringPreviewOutcome::Warning(
+                operation_authoring_warning(
+                    candidate,
+                    OperationAuthoringWarningKind::PreviewRejected,
+                    "ordinary solve validation rejected the operation preview",
+                ),
+            ));
+        };
+        let accepted = scratch.accepted_state().filter(|accepted| {
+            accepted.identity() == published
+                && accepted.design_identity() == outcome.design_identity()
+                && accepted.design_identity() == scratch.design_identity()
+        });
+        if accepted.is_none() {
+            return Ok(OperationAuthoringPreviewOutcome::Warning(
+                operation_authoring_warning(
+                    candidate,
+                    OperationAuthoringWarningKind::PreviewRejected,
+                    "operation preview acceptance provenance is inconsistent",
+                ),
+            ));
+        }
+        let token = self.allocate_operation_preview_token()?;
+        let metadata = operation_preview_metadata(
+            candidate,
+            outcome.value(),
+            &scratch,
+            proposal.input().design_identity(),
+            published,
+            token,
+        )?;
+        self.operation_preview = Some(OperationAuthoringPreview {
+            candidate: candidate.clone(),
+            proposal,
+            scratch,
+            metadata: metadata.clone(),
+        });
+        Ok(OperationAuthoringPreviewOutcome::Ready(metadata))
+    }
+
+    /// Applies only the exact coordinator-held independently accepted preview.
+    /// The live session is changed only after the proposal reproduces accepted
+    /// publication on a clone, preserving atomicity even under an unexpected
+    /// deterministic-replay failure.
+    ///
+    /// # Errors
+    ///
+    /// Returns token/candidate mismatch, stale-input, finite-work, publication,
+    /// history, or retained-session errors without partially committing the live state.
+    pub fn apply_operation_preview(
+        &mut self,
+        token: OperationAuthoringPreviewToken,
+        candidate: &OperationAuthoringCandidate,
+    ) -> Result<OperationAuthoringMutation, CoordinatorError> {
+        self.apply_operation_preview_controlled(token, candidate, operation_authoring_control())
+    }
+
+    /// Controlled exact commit for one token/candidate-bound accepted preview.
+    ///
+    /// # Errors
+    ///
+    /// Returns token/candidate mismatch, stale-input, finite-work, publication,
+    /// history, or retained-session errors without partially committing the live state.
+    pub fn apply_operation_preview_controlled(
+        &mut self,
+        token: OperationAuthoringPreviewToken,
+        candidate: &OperationAuthoringCandidate,
+        control: OperationControl,
+    ) -> Result<OperationAuthoringMutation, CoordinatorError> {
+        let Some(held) = self.operation_preview.as_ref() else {
+            return Err(CoordinatorError::MissingOperationPreview);
+        };
+        if held.metadata.token != token {
+            return Err(CoordinatorError::OperationPreviewMismatch);
+        }
+        if &held.candidate != candidate {
+            self.operation_preview = None;
+            return Err(CoordinatorError::OperationPreviewMismatch);
+        }
+        let Some(preview) = self.operation_preview.take() else {
+            return Err(CoordinatorError::MissingOperationPreview);
+        };
+        if !preview.metadata.apply_ready {
+            self.operation_preview = Some(preview);
+            return Err(CoordinatorError::OperationPreviewNotConfirmed);
+        }
+        let expected = preview.proposal.input().design_identity();
+        self.ensure_expected(expected)?;
+        let mut next = self.session.clone();
+        let OperationOutcome::Completed { value: outcome, .. } =
+            preview.proposal.apply_controlled(&mut next, control)?
+        else {
+            return Err(CoordinatorError::OperationWorkStopped);
+        };
+        let Some(published) = outcome.published_accepted_identity() else {
+            return Err(CoordinatorError::InvalidActionInput(
+                "an accepted operation preview did not reproduce accepted publication",
+            ));
+        };
+        if next.accepted_state().is_none_or(|accepted| {
+            accepted.identity() != published
+                || accepted.design_identity() != outcome.design_identity()
+                || accepted.design_identity() != next.design_identity()
+        }) {
+            return Err(CoordinatorError::InvalidActionInput(
+                "operation publication provenance does not match its accepted preview",
+            ));
+        }
+        let Some(scratch_accepted) = preview.scratch.accepted_state() else {
+            return Err(CoordinatorError::OperationPreviewMismatch);
+        };
+        let Some(next_accepted) = next.accepted_state() else {
+            return Err(CoordinatorError::InvalidActionInput(
+                "operation publication has no matching accepted state",
+            ));
+        };
+        if next.prepared_input() != preview.scratch.prepared_input()
+            || next.design_document() != preview.scratch.design_document()
+            || next_accepted.identity() != scratch_accepted.identity()
+            || next_accepted.design_identity() != scratch_accepted.design_identity()
+            || next_accepted.document() != scratch_accepted.document()
+        {
+            return Err(CoordinatorError::OperationPreviewMismatch);
+        }
+        let value = MutationOutcome {
+            value: outcome.value().clone(),
+            design: outcome.design_identity(),
+            attempt: outcome.attempt_identity(),
+            published_accepted: Some(published),
+        };
+        let primary_created_curve = preview.metadata.primary_created_curve;
+        let primary_span = next
+            .design_document()
+            .curve_spans(primary_created_curve)?
+            .into_iter()
+            .next()
+            .ok_or(CoordinatorError::InvalidActionInput(
+                "operation primary curve has no semantic span",
+            ))?;
+        self.session = next;
+        self.editor
+            .set_selection([SelectionItem::Curve(primary_span)]);
+        self.record_mutation(ReplayAction::Operation {
+            expected,
+            request: preview.candidate.request().clone(),
+        })?;
+        Ok(OperationAuthoringMutation {
+            operation: value,
+            primary_created_curve,
+        })
+    }
+
+    fn allocate_operation_preview_token(
+        &mut self,
+    ) -> Result<OperationAuthoringPreviewToken, CoordinatorError> {
+        let token = OperationAuthoringPreviewToken(self.next_operation_preview_token);
+        self.next_operation_preview_token =
+            self.next_operation_preview_token.checked_add(1).ok_or(
+                CoordinatorError::InvalidActionInput("operation preview generation exhausted"),
+            )?;
+        Ok(token)
     }
 
     /// Returns the independently accepted drag preview visible to a presentation adapter.
@@ -1150,6 +1706,7 @@ impl RetainedEditorCoordinator {
         self.solved_preview = None;
         self.drag_continuation = None;
         self.projected_drag_work = None;
+        self.operation_preview = None;
     }
 
     #[must_use]
@@ -2833,6 +3390,7 @@ impl RetainedEditorCoordinator {
             ReplayAction::Construction { expected, proposal } => {
                 self.apply_construction(*expected, proposal)?;
             }
+            ReplayAction::Operation { request, .. } => self.replay_operation(request)?,
             ReplayAction::PointDistance {
                 expected,
                 points,
@@ -2902,6 +3460,40 @@ impl RetainedEditorCoordinator {
             }
         }
         Ok(())
+    }
+
+    fn replay_operation(
+        &mut self,
+        request: &SketchOperationRequest,
+    ) -> Result<(), CoordinatorError> {
+        let tool = match request {
+            SketchOperationRequest::AssociativeFillet { .. } => OperationAuthoringTool::Fillet,
+            SketchOperationRequest::AssociativeLineOffset { .. } => {
+                OperationAuthoringTool::LineOffset
+            }
+            SketchOperationRequest::Mirror { .. } => OperationAuthoringTool::Mirror,
+            _ => {
+                return Err(CoordinatorError::InvalidActionInput(
+                    "replay operation is outside the M66 authoring surface",
+                ));
+            }
+        };
+        let candidate = OperationAuthoringCandidate::explicit_replay(
+            tool,
+            request.clone(),
+            &self.session.prepared_input(),
+        );
+        match self.prepare_operation_preview(&candidate)? {
+            OperationAuthoringPreviewOutcome::Ready(metadata) => {
+                self.apply_operation_preview(metadata.token, &candidate)?;
+                Ok(())
+            }
+            OperationAuthoringPreviewOutcome::Warning(_) => {
+                Err(CoordinatorError::InvalidActionInput(
+                    "replayed helper operation did not reproduce its accepted preview",
+                ))
+            }
+        }
     }
 
     fn replay_m55_action(&mut self, action: &ReplayAction) -> Result<bool, CoordinatorError> {
@@ -3330,6 +3922,7 @@ impl ReplayAction {
         match self {
             Self::Edit { expected, .. }
             | Self::Construction { expected, .. }
+            | Self::Operation { expected, .. }
             | Self::ConstraintAction { expected, .. }
             | Self::DimensionAction { expected, .. }
             | Self::PointDistance { expected, .. }
@@ -3355,6 +3948,83 @@ fn mutation_from<T: Clone>(
         attempt: outcome.attempt_identity(),
         published_accepted: outcome.published_accepted_identity(),
     }
+}
+
+fn operation_authoring_warning(
+    candidate: &OperationAuthoringCandidate,
+    kind: OperationAuthoringWarningKind,
+    message: impl Into<String>,
+) -> OperationAuthoringWarning {
+    let stage = if candidate.is_confirmed() {
+        OperationAuthoringStage::PreviewReady
+    } else {
+        OperationAuthoringStage::ChooseOffsetSide
+    };
+    OperationAuthoringWarning {
+        tool: candidate.tool(),
+        stage,
+        kind,
+        message: message.into(),
+    }
+}
+
+fn operation_preview_metadata(
+    candidate: &OperationAuthoringCandidate,
+    application: &SketchOperationApplication,
+    scratch: &RetainedSketchDocumentSession,
+    base_design: SketchDesignIdentity,
+    accepted: SketchAcceptedStateIdentity,
+    token: OperationAuthoringPreviewToken,
+) -> Result<OperationAuthoringPreviewMetadata, CoordinatorError> {
+    let accepted_document = scratch
+        .accepted_state()
+        .filter(|state| state.identity() == accepted)
+        .ok_or(CoordinatorError::InvalidActionInput(
+            "operation preview has no matching accepted document",
+        ))?
+        .document();
+    let mut curves = BTreeSet::new();
+    let mut points = BTreeSet::new();
+    let mut explicit_primary = None;
+    for change in &application.identity_changes {
+        match change {
+            SketchOperationIdentityChange::Proposed(DocumentElementId::Curve(curve)) => {
+                curves.insert(*curve);
+            }
+            SketchOperationIdentityChange::Proposed(DocumentElementId::Point(point)) => {
+                points.insert(*point);
+            }
+            SketchOperationIdentityChange::AssociativeLineOffset {
+                target_start,
+                target_end,
+                target_segment,
+                ..
+            } => {
+                points.extend([*target_start, *target_end]);
+                curves.insert(*target_segment);
+                explicit_primary = Some(*target_segment);
+            }
+            _ => {}
+        }
+    }
+    curves.retain(|curve| accepted_document.curve(*curve).is_some());
+    points.retain(|point| accepted_document.point(*point).is_some());
+    let primary_created_curve = explicit_primary
+        .filter(|curve| curves.contains(curve))
+        .or_else(|| curves.iter().next().copied())
+        .ok_or(CoordinatorError::InvalidActionInput(
+            "operation proposal did not publish a primary created curve",
+        ))?;
+    Ok(OperationAuthoringPreviewMetadata {
+        token,
+        tool: candidate.tool(),
+        base_design,
+        accepted,
+        primary_created_curve,
+        created_curves: curves.into_iter().collect(),
+        created_points: points.into_iter().collect(),
+        apply_ready: candidate.is_confirmed(),
+    })
 }
 
 fn checkpoint(
@@ -4471,17 +5141,18 @@ fn source_availability(
 mod tests {
     use super::*;
     use crate::{
-        AuthoringOutcome, AuthoringState, EditorScene, EditorTool, Modifiers, PointerInput,
+        AuthoringOutcome, AuthoringState, EditorScene, EditorTool, Modifiers,
+        OperationAuthoringOptions, OperationAuthoringState, OperationLineOffsetMode, PointerInput,
         ScreenPoint, Viewport,
     };
     use geosolve_sketch::{
-        AlphaScenarioIds, AlphaScenarioKind, DocumentConstraintDefinition,
+        AlphaScenarioIds, AlphaScenarioKind, DocumentBSplineForm, DocumentConstraintDefinition,
         DocumentExternalPointRef, DocumentM38DimensionDefinition, DocumentMeasurementDefinition,
         DocumentParameterKind, DocumentPointRef, ExternalLineOrientationV1, ExternalSnapshotDigest,
         ExternalSnapshotEntry, ExternalSnapshotFeatureV1, ExternalSnapshotInputError,
         ExternalSnapshotResourcesV1, ExternalSnapshotSet, OperationStopReason,
-        OperationWorkCounter, ParameterBatch, ParameterBatchEntry, ParameterValue, SolverConfig,
-        alpha_scenario, cancellation_pair,
+        OperationWorkCounter, ParameterBatch, ParameterBatchEntry, ParameterValue, PersistentId,
+        SolverConfig, alpha_scenario, cancellation_pair,
     };
 
     #[test]
@@ -8768,5 +9439,981 @@ mod tests {
             );
         }
         assert_retained_state_snapshot(&coordinator, &snapshot);
+    }
+
+    fn line_offset_operation_fixture() -> (RetainedEditorCoordinator, CurveSpan, [DesignPointId; 2])
+    {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let points = [
+            document.add_point("start", [-2.0, 0.0]).expect("point"),
+            document.add_point("end", [2.0, 0.0]).expect("point"),
+        ];
+        let line = document
+            .add_curve(
+                "source",
+                CurveDefinition::Line {
+                    start: points[0],
+                    end: points[1],
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .expect("line");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("accepted line session");
+        (
+            RetainedEditorCoordinator::new(session).expect("coordinator"),
+            CurveSpan::line(line),
+            points,
+        )
+    }
+
+    fn staged_line_offset(
+        coordinator: &RetainedEditorCoordinator,
+        source: CurveSpan,
+        distance: f64,
+        confirmed: bool,
+    ) -> OperationAuthoringCandidate {
+        let document = coordinator
+            .operation_authoring_document()
+            .expect("current accepted operation document")
+            .clone();
+        let pick = coordinator
+            .operation_pick_for_item(SelectionItem::Curve(source), Some(0.5))
+            .expect("stamped operation pick");
+        let mut state = OperationAuthoringState::default();
+        let _ = state.set_options(
+            &document,
+            OperationAuthoringOptions {
+                offset_distance: Some(distance),
+                offset_mode: OperationLineOffsetMode::ExactTranslatedSegment,
+                ..OperationAuthoringOptions::default()
+            },
+        );
+        let seeded = state.activate(&document, OperationAuthoringTool::LineOffset, &[pick]);
+        let outcome = if confirmed {
+            state.confirm(&document, [0.0, 1.0])
+        } else {
+            seeded
+        };
+        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = outcome else {
+            panic!("expected line-offset candidate: {outcome:?}");
+        };
+        candidate
+    }
+
+    fn operation_test_line(
+        document: &mut SketchDocument,
+        label: &str,
+        start: [f64; 2],
+        end: [f64; 2],
+    ) -> (CurveSpan, [DesignPointId; 2]) {
+        let points = [
+            document
+                .add_point(format!("{label} start"), start)
+                .expect("line start"),
+            document
+                .add_point(format!("{label} end"), end)
+                .expect("line end"),
+        ];
+        let delta = [end[0] - start[0], end[1] - start[1]];
+        let length = delta[0].hypot(delta[1]);
+        let curve = document
+            .add_curve(
+                label,
+                CurveDefinition::Line {
+                    start: points[0],
+                    end: points[1],
+                    branch_direction: [delta[0] / length, delta[1] / length],
+                },
+            )
+            .expect("line");
+        (CurveSpan::line(curve), points)
+    }
+
+    fn operation_test_coordinator(document: SketchDocument) -> RetainedEditorCoordinator {
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("accepted operation fixture");
+        RetainedEditorCoordinator::new(session).expect("operation coordinator")
+    }
+
+    fn staged_fillet(
+        coordinator: &RetainedEditorCoordinator,
+        parents: [CurveSpan; 2],
+        parameters: [f64; 2],
+        radius: f64,
+    ) -> OperationAuthoringCandidate {
+        let document = coordinator
+            .operation_authoring_document()
+            .expect("current accepted operation document")
+            .clone();
+        let picks = [
+            coordinator
+                .operation_pick_for_item(SelectionItem::Curve(parents[0]), Some(parameters[0]))
+                .expect("first stamped fillet pick"),
+            coordinator
+                .operation_pick_for_item(SelectionItem::Curve(parents[1]), Some(parameters[1]))
+                .expect("second stamped fillet pick"),
+        ];
+        let mut state = OperationAuthoringState::default();
+        let _ = state.set_options(
+            &document,
+            OperationAuthoringOptions {
+                fillet_radius: Some(radius),
+                ..OperationAuthoringOptions::default()
+            },
+        );
+        let outcome = state.activate(&document, OperationAuthoringTool::Fillet, &picks);
+        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = outcome else {
+            panic!("expected fillet candidate: {outcome:?}");
+        };
+        candidate
+    }
+
+    fn staged_mirror(
+        coordinator: &RetainedEditorCoordinator,
+        source: CurveSpan,
+        axis: CurveSpan,
+    ) -> OperationAuthoringCandidate {
+        let document = coordinator
+            .operation_authoring_document()
+            .expect("current accepted operation document")
+            .clone();
+        let picks = [
+            coordinator
+                .operation_pick_for_item(SelectionItem::Curve(source), Some(0.5))
+                .expect("stamped mirror source"),
+            coordinator
+                .operation_pick_for_item(SelectionItem::Curve(axis), Some(0.5))
+                .expect("stamped mirror axis"),
+        ];
+        let mut state = OperationAuthoringState::default();
+        let outcome = state.activate(&document, OperationAuthoringTool::Mirror, &picks);
+        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = outcome else {
+            panic!("expected mirror candidate: {outcome:?}");
+        };
+        candidate
+    }
+
+    fn commit_operation_and_assert_lifecycle(
+        coordinator: &mut RetainedEditorCoordinator,
+        candidate: &OperationAuthoringCandidate,
+    ) -> OperationAuthoringPreviewMetadata {
+        let initial_session = coordinator.session().clone();
+        let original = coordinator.session().design_document().clone();
+        let outcome = coordinator
+            .prepare_operation_preview(candidate)
+            .expect("operation preview preparation");
+        let OperationAuthoringPreviewOutcome::Ready(metadata) = outcome else {
+            panic!("expected accepted operation preview: {outcome:?}");
+        };
+        let scratch_accepted = coordinator
+            .operation_preview()
+            .expect("held accepted preview")
+            .accepted_document()
+            .clone();
+        let history = coordinator.history_len();
+        let mutation = coordinator
+            .apply_operation_preview(metadata.token, candidate)
+            .expect("exact operation commit");
+        assert_eq!(coordinator.history_len(), history + 1);
+        assert_eq!(
+            mutation.primary_created_curve,
+            metadata.primary_created_curve
+        );
+        assert!(matches!(
+            coordinator.editor().selection(),
+            [SelectionItem::Curve(span)] if span.curve == metadata.primary_created_curve
+        ));
+        assert_eq!(
+            coordinator
+                .session()
+                .accepted_state()
+                .expect("live accepted operation")
+                .document(),
+            &scratch_accepted
+        );
+
+        let committed = coordinator.session().design_document().clone();
+        let action = coordinator
+            .transcript()
+            .last()
+            .expect("operation replay action")
+            .clone();
+        coordinator.undo().expect("undo operation");
+        assert_eq!(coordinator.session().design_document(), &original);
+        coordinator.redo().expect("redo operation");
+        assert_eq!(coordinator.session().design_document(), &committed);
+        let mut replay = RetainedEditorCoordinator::new(initial_session).expect("replay owner");
+        replay.replay(&action).expect("operation replay");
+        assert_eq!(replay.session().design_document(), &committed);
+        metadata
+    }
+
+    #[derive(Clone, Copy)]
+    enum FilletParentEdit {
+        UnlockPoint {
+            constraint: geosolve_sketch::DocumentConstraintId,
+            point: DesignPointId,
+            position: [f64; 2],
+        },
+        Scalar {
+            scalar: geosolve_sketch::DesignScalarId,
+            value: f64,
+        },
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the two grounded curved-parent fixtures keep their ordinary editable constraints visible beside the geometry"
+    )]
+    fn fillet_operation_fixture(
+        line_circle: bool,
+    ) -> (
+        RetainedEditorCoordinator,
+        [CurveSpan; 2],
+        [f64; 2],
+        f64,
+        FilletParentEdit,
+    ) {
+        let mut document = SketchDocument::new(8.0).expect("document");
+        if line_circle {
+            let (line, line_points) =
+                operation_test_line(&mut document, "linear parent", [2.0, 1.0], [10.0, 1.0]);
+            for (index, (point, target)) in line_points
+                .into_iter()
+                .zip([[2.0, 1.0], [10.0, 1.0]])
+                .enumerate()
+            {
+                document
+                    .add_constraint(
+                        format!("fixed line point {index}"),
+                        DocumentConstraintDefinition::FixedPoint { point, target },
+                    )
+                    .expect("fixed line point");
+            }
+            let center = document
+                .add_point("circle center", [6.0, 4.0])
+                .expect("circle center");
+            document
+                .add_constraint(
+                    "fixed circle center",
+                    DocumentConstraintDefinition::FixedPoint {
+                        point: center,
+                        target: [6.0, 4.0],
+                    },
+                )
+                .expect("fixed circle center");
+            let radius = document
+                .add_scalar(
+                    "circle radius",
+                    2.0,
+                    ScalarUnit::Length,
+                    ScalarDomain::Positive,
+                )
+                .expect("circle radius");
+            let circle = document
+                .add_curve(
+                    "circular parent",
+                    CurveDefinition::Circle { center, radius },
+                )
+                .expect("circle");
+            let source_radius_target = document
+                .add_scalar(
+                    "source circle radius target",
+                    2.0,
+                    ScalarUnit::Length,
+                    ScalarDomain::Positive,
+                )
+                .expect("source radius target");
+            document
+                .add_dimension(
+                    "source circle radius",
+                    DocumentDimensionDefinition::Radius {
+                        curve: circle,
+                        target: source_radius_target,
+                    },
+                    DocumentDimensionMode::Driving,
+                )
+                .expect("source radius dimension");
+            (
+                operation_test_coordinator(document),
+                [line, CurveSpan::line(circle)],
+                [0.28, 4.05],
+                0.8,
+                FilletParentEdit::Scalar {
+                    scalar: source_radius_target,
+                    value: 2.1,
+                },
+            )
+        } else {
+            let (line, line_points) =
+                operation_test_line(&mut document, "linear parent", [6.0, -8.0], [6.0, 0.0]);
+            for (index, (point, target)) in line_points
+                .into_iter()
+                .zip([[6.0, -8.0], [6.0, 0.0]])
+                .enumerate()
+            {
+                document
+                    .add_constraint(
+                        format!("fixed line point {index}"),
+                        DocumentConstraintDefinition::FixedPoint { point, target },
+                    )
+                    .expect("fixed line point");
+            }
+            let controls = [[1.0, -3.0], [4.0, -7.0], [8.0, -3.0]].map(|position| {
+                document
+                    .add_point("Bezier control", position)
+                    .expect("control")
+            });
+            for (index, (point, target)) in [(controls[0], [1.0, -3.0]), (controls[2], [8.0, -3.0])]
+                .into_iter()
+                .enumerate()
+            {
+                document
+                    .add_constraint(
+                        format!("fixed Bezier endpoint {index}"),
+                        DocumentConstraintDefinition::FixedPoint { point, target },
+                    )
+                    .expect("fixed Bezier endpoint");
+            }
+            let middle_lock = document
+                .add_constraint(
+                    "fixed Bezier edit handle",
+                    DocumentConstraintDefinition::FixedPoint {
+                        point: controls[1],
+                        target: [4.0, -7.0],
+                    },
+                )
+                .expect("fixed Bezier edit handle");
+            let bezier = document
+                .add_curve(
+                    "Bezier parent",
+                    CurveDefinition::QuadraticBezier { controls },
+                )
+                .expect("Bezier");
+            (
+                operation_test_coordinator(document),
+                [line, CurveSpan::line(bezier)],
+                [0.44, 0.74],
+                0.8,
+                FilletParentEdit::UnlockPoint {
+                    constraint: middle_lock,
+                    point: controls[1],
+                    position: [3.8, -7.2],
+                },
+            )
+        }
+    }
+
+    #[derive(Clone, Copy)]
+    enum MirrorFixtureFamily {
+        CubicBezier,
+        BSpline,
+    }
+
+    fn mirror_operation_fixture(
+        family: MirrorFixtureFamily,
+    ) -> (
+        RetainedEditorCoordinator,
+        CurveSpan,
+        CurveSpan,
+        Vec<DesignPointId>,
+    ) {
+        let mut document = SketchDocument::new(8.0).expect("document");
+        let (axis, axis_points) =
+            operation_test_line(&mut document, "mirror axis", [0.0, -7.0], [0.0, 7.0]);
+        for (index, (point, target)) in axis_points
+            .into_iter()
+            .zip([[0.0, -7.0], [0.0, 7.0]])
+            .enumerate()
+        {
+            document
+                .add_constraint(
+                    format!("fixed axis {index}"),
+                    DocumentConstraintDefinition::FixedPoint { point, target },
+                )
+                .expect("fixed axis");
+        }
+        let controls = [[-8.0, -1.0], [-7.0, 2.0], [-4.0, -2.0], [-2.0, 1.0]]
+            .map(|position| {
+                document
+                    .add_point("source control", position)
+                    .expect("control")
+            })
+            .to_vec();
+        let definition = match family {
+            MirrorFixtureFamily::CubicBezier => CurveDefinition::CubicBezier {
+                controls: controls.clone().try_into().expect("four cubic controls"),
+            },
+            MirrorFixtureFamily::BSpline => CurveDefinition::BSpline {
+                form: DocumentBSplineForm::Clamped,
+                degree: 2,
+                controls: controls.clone(),
+                knots: vec![0.0, 0.0, 0.0, 1.0, 2.0, 2.0, 2.0],
+                span_ids: vec![0, 1],
+                next_span_id: 2,
+            },
+        };
+        let source = document
+            .add_curve("mirror source", definition)
+            .expect("mirror source");
+        (
+            operation_test_coordinator(document),
+            CurveSpan::line(source),
+            axis,
+            controls,
+        )
+    }
+
+    fn operation_curve_controls(document: &SketchDocument, curve: CurveId) -> Vec<DesignPointId> {
+        match &document.curve(curve).expect("operation curve").definition {
+            CurveDefinition::Line { start, end, .. } => vec![*start, *end],
+            CurveDefinition::Polyline { points, .. }
+            | CurveDefinition::BSpline {
+                controls: points, ..
+            } => points.clone(),
+            CurveDefinition::QuadraticBezier { controls } => controls.to_vec(),
+            CurveDefinition::CubicBezier { controls } => controls.to_vec(),
+            other => panic!("operation curve has no point-defined controls: {other:?}"),
+        }
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "two representative curved-parent families share one complete lifecycle matrix"
+    )]
+    fn curved_parent_fillet_previews_commit_exactly_and_remain_associative_after_edits() {
+        for line_circle in [true, false] {
+            let (mut coordinator, parents, parameters, radius, parent_edit) =
+                fillet_operation_fixture(line_circle);
+            let candidate = staged_fillet(&coordinator, parents, parameters, radius);
+            let metadata = commit_operation_and_assert_lifecycle(&mut coordinator, &candidate);
+            assert_eq!(metadata.tool, OperationAuthoringTool::Fillet);
+            let fillet = metadata.primary_created_curve;
+            let (fillet_center, fillet_radius) = match coordinator
+                .session()
+                .design_document()
+                .curve(fillet)
+                .expect("fillet arc")
+                .definition
+            {
+                CurveDefinition::CircularArc { center, radius, .. } => (center, radius),
+                ref other => panic!("fillet primary must be a circular arc: {other:?}"),
+            };
+            let radius_target = coordinator
+                .session()
+                .design_document()
+                .dimensions()
+                .iter()
+                .find_map(|dimension| match dimension.definition {
+                    DocumentDimensionDefinition::Radius { curve, target } if curve == fillet => {
+                        Some(target)
+                    }
+                    _ => None,
+                })
+                .expect("fillet driving-radius target");
+            assert!(
+                coordinator
+                    .session()
+                    .design_document()
+                    .constraints()
+                    .iter()
+                    .any(|constraint| matches!(
+                        constraint.definition,
+                        DocumentConstraintDefinition::CurveCurveFillet { arc, .. } if arc == fillet
+                    ))
+            );
+            assert!(parents.iter().all(|parent| {
+                coordinator
+                    .session()
+                    .design_document()
+                    .trim_views_for_span(*parent)
+                    .next()
+                    .is_some()
+            }));
+
+            let edited_radius = radius * 1.2;
+            let radius_edit = coordinator
+                .apply_edit(
+                    coordinator.session().design_identity(),
+                    DocumentEdit::SetScalarValue {
+                        scalar: radius_target,
+                        value: edited_radius,
+                    },
+                )
+                .expect("accepted fillet-radius edit");
+            assert!(
+                radius_edit.published_accepted.is_some(),
+                "fillet radius edit rejected: mutation={radius_edit:?}, attempt={:?}",
+                coordinator.session().last_attempt()
+            );
+            let accepted = coordinator
+                .session()
+                .accepted_state()
+                .expect("accepted radius edit")
+                .document();
+            assert!(
+                (accepted.scalar(fillet_radius).expect("fillet radius").value - edited_radius)
+                    .abs()
+                    <= 1.0e-7
+            );
+            let center_before = accepted
+                .point(fillet_center)
+                .expect("fillet center")
+                .position;
+
+            let edit = match parent_edit {
+                FilletParentEdit::UnlockPoint {
+                    constraint,
+                    point,
+                    position,
+                } => {
+                    coordinator
+                        .editor_mut()
+                        .set_selection([SelectionItem::Constraint(constraint)]);
+                    let unlocked = coordinator
+                        .set_selected_suppressed(coordinator.session().design_identity(), true)
+                        .expect("suppress editable parent lock");
+                    assert!(unlocked.published_accepted.is_some());
+                    DocumentEdit::SetPointPosition { point, position }
+                }
+                FilletParentEdit::Scalar { scalar, value } => {
+                    DocumentEdit::SetScalarValue { scalar, value }
+                }
+            };
+            let parent_edit = coordinator
+                .apply_edit(coordinator.session().design_identity(), edit)
+                .expect("accepted fillet-parent edit");
+            assert!(parent_edit.published_accepted.is_some());
+            let accepted = coordinator
+                .session()
+                .accepted_state()
+                .expect("accepted parent edit")
+                .document();
+            let center_after = accepted
+                .point(fillet_center)
+                .expect("associated fillet center")
+                .position;
+            assert!(
+                (center_after[0] - center_before[0]).hypot(center_after[1] - center_before[1])
+                    > 1.0e-6,
+                "fillet center did not respond to its parent edit"
+            );
+            assert!(accepted.constraints().iter().any(|constraint| matches!(
+                constraint.definition,
+                DocumentConstraintDefinition::CurveCurveFillet { arc, .. } if arc == fillet
+            )));
+        }
+    }
+
+    #[test]
+    fn bezier_and_bspline_mirror_previews_commit_exactly_and_follow_source_control_edits() {
+        for family in [
+            MirrorFixtureFamily::CubicBezier,
+            MirrorFixtureFamily::BSpline,
+        ] {
+            let (mut coordinator, source, axis, source_controls) = mirror_operation_fixture(family);
+            let candidate = staged_mirror(&coordinator, source, axis);
+            let metadata = commit_operation_and_assert_lifecycle(&mut coordinator, &candidate);
+            assert_eq!(metadata.tool, OperationAuthoringTool::Mirror);
+            let mirrored = metadata.primary_created_curve;
+            let mirrored_controls =
+                operation_curve_controls(coordinator.session().design_document(), mirrored);
+            assert_eq!(mirrored_controls.len(), source_controls.len());
+            let source_control = source_controls[1];
+            let mirrored_control = mirrored_controls[1];
+            assert!(
+                coordinator
+                    .session()
+                    .design_document()
+                    .constraints()
+                    .iter()
+                    .any(|constraint| matches!(
+                        constraint.definition,
+                        DocumentConstraintDefinition::SymmetricAboutLine {
+                            first,
+                            second,
+                            line,
+                        } if first == source_control && second == mirrored_control && line == axis
+                    ))
+            );
+            let before = coordinator
+                .session()
+                .accepted_state()
+                .expect("accepted mirror")
+                .document()
+                .point(mirrored_control)
+                .expect("mirrored control")
+                .position;
+            let source_before = coordinator
+                .session()
+                .design_document()
+                .point(source_control)
+                .expect("source control")
+                .position;
+            let edit = coordinator
+                .apply_edit(
+                    coordinator.session().design_identity(),
+                    DocumentEdit::SetPointPosition {
+                        point: source_control,
+                        position: [source_before[0] + 0.45, source_before[1] - 0.3],
+                    },
+                )
+                .expect("accepted mirrored-source edit");
+            assert!(edit.published_accepted.is_some());
+            let accepted = coordinator
+                .session()
+                .accepted_state()
+                .expect("accepted associated mirror")
+                .document();
+            let source_after = accepted
+                .point(source_control)
+                .expect("source control after edit")
+                .position;
+            let mirrored_after = accepted
+                .point(mirrored_control)
+                .expect("mirrored control after edit")
+                .position;
+            assert!((mirrored_after[0] + source_after[0]).abs() <= 1.0e-7);
+            assert!((mirrored_after[1] - source_after[1]).abs() <= 1.0e-7);
+            assert!(
+                (mirrored_after[0] - before[0]).hypot(mirrored_after[1] - before[1]) > 1.0e-6,
+                "mirrored control did not respond to its source edit"
+            );
+        }
+    }
+
+    #[test]
+    fn operation_preview_is_independently_accepted_scratch_and_leaves_live_state_unchanged() {
+        let (mut coordinator, source, _) = line_offset_operation_fixture();
+        let candidate = staged_line_offset(&coordinator, source, 0.25, true);
+        let before = retained_state_snapshot(&coordinator);
+        let ready = coordinator
+            .prepare_operation_preview(&candidate)
+            .expect("preview preparation");
+        let OperationAuthoringPreviewOutcome::Ready(metadata) = ready else {
+            panic!("expected accepted preview: {ready:?}");
+        };
+        assert!(metadata.apply_ready);
+        let preview = coordinator.operation_preview().expect("held preview");
+        assert!(preview.matches_candidate(&candidate));
+        assert_eq!(preview.accepted_state().identity(), metadata.accepted);
+        assert_eq!(
+            preview
+                .scene(
+                    Viewport::new([800.0, 600.0], [0.0, 0.0], 50.0).unwrap(),
+                    0.5,
+                )
+                .unwrap()
+                .design_identity,
+            preview.accepted_state().design_identity()
+        );
+        assert!(
+            preview
+                .accepted_document()
+                .curve(metadata.primary_created_curve)
+                .is_some()
+        );
+        assert_retained_state_snapshot(&coordinator, &before);
+    }
+
+    #[test]
+    fn operation_preview_requires_exact_token_candidate_and_confirmation() {
+        let (mut coordinator, source, _) = line_offset_operation_fixture();
+        let unconfirmed = staged_line_offset(&coordinator, source, 0.2, false);
+        let OperationAuthoringPreviewOutcome::Ready(unconfirmed_metadata) = coordinator
+            .prepare_operation_preview(&unconfirmed)
+            .expect("unconfirmed preview")
+        else {
+            panic!("unconfirmed scratch should still be accepted");
+        };
+        assert!(!unconfirmed_metadata.apply_ready);
+        assert!(matches!(
+            coordinator.apply_operation_preview(unconfirmed_metadata.token, &unconfirmed),
+            Err(CoordinatorError::OperationPreviewNotConfirmed)
+        ));
+        assert!(coordinator.operation_preview().is_some());
+
+        let first = staged_line_offset(&coordinator, source, 0.2, true);
+        let OperationAuthoringPreviewOutcome::Ready(first_metadata) = coordinator
+            .prepare_operation_preview(&first)
+            .expect("first preview")
+        else {
+            panic!("first ready preview");
+        };
+        let second = staged_line_offset(&coordinator, source, 0.4, true);
+        assert!(matches!(
+            coordinator.apply_operation_preview(first_metadata.token, &second),
+            Err(CoordinatorError::OperationPreviewMismatch)
+        ));
+        assert!(coordinator.operation_preview().is_none());
+
+        let OperationAuthoringPreviewOutcome::Ready(replaced_metadata) = coordinator
+            .prepare_operation_preview(&first)
+            .expect("replacement first")
+        else {
+            panic!("replacement first ready");
+        };
+        let OperationAuthoringPreviewOutcome::Ready(latest_metadata) = coordinator
+            .prepare_operation_preview(&second)
+            .expect("latest preview")
+        else {
+            panic!("latest ready");
+        };
+        assert!(latest_metadata.token > replaced_metadata.token);
+        assert!(matches!(
+            coordinator.apply_operation_preview(replaced_metadata.token, &first),
+            Err(CoordinatorError::OperationPreviewMismatch)
+        ));
+        assert!(
+            coordinator
+                .operation_preview()
+                .is_some_and(|preview| preview.matches_candidate(&second))
+        );
+    }
+
+    #[test]
+    fn cancelled_or_exhausted_operation_preparation_is_mutation_free_and_holds_no_preview() {
+        let (mut coordinator, source, _) = line_offset_operation_fixture();
+        let candidate = staged_line_offset(&coordinator, source, 0.25, true);
+        let before = retained_state_snapshot(&coordinator);
+
+        let (handle, token) = cancellation_pair();
+        handle.cancel();
+        let cancelled = coordinator
+            .prepare_operation_preview_controlled(
+                &candidate,
+                OperationControl::new(token, operation_authoring_control().limits),
+            )
+            .expect("cancelled preparation outcome");
+        assert!(matches!(
+            cancelled,
+            OperationAuthoringPreviewOutcome::Warning(OperationAuthoringWarning {
+                kind: OperationAuthoringWarningKind::WorkStopped,
+                ..
+            })
+        ));
+        assert!(coordinator.operation_preview().is_none());
+        assert_retained_state_snapshot(&coordinator, &before);
+
+        let mut limits = operation_authoring_control().limits;
+        limits.document_validation_items = 1;
+        let exhausted = coordinator
+            .prepare_operation_preview_controlled(
+                &candidate,
+                OperationControl::new(geosolve_sketch::CancellationToken::default(), limits),
+            )
+            .expect("scratch exhaustion outcome");
+        assert!(matches!(
+            exhausted,
+            OperationAuthoringPreviewOutcome::Warning(OperationAuthoringWarning {
+                kind: OperationAuthoringWarningKind::WorkStopped,
+                ..
+            })
+        ));
+        assert!(coordinator.operation_preview().is_none());
+        assert_retained_state_snapshot(&coordinator, &before);
+    }
+
+    #[test]
+    fn cancelled_or_exhausted_operation_commit_after_preview_is_mutation_free() {
+        let (mut coordinator, source, _) = line_offset_operation_fixture();
+
+        let cancelled_candidate = staged_line_offset(&coordinator, source, 0.25, true);
+        let OperationAuthoringPreviewOutcome::Ready(cancelled_metadata) = coordinator
+            .prepare_operation_preview(&cancelled_candidate)
+            .expect("accepted preview before cancellation")
+        else {
+            panic!("accepted preview before cancellation");
+        };
+        let cancelled_before = retained_state_snapshot(&coordinator);
+        let (handle, token) = cancellation_pair();
+        handle.cancel();
+        assert!(matches!(
+            coordinator.apply_operation_preview_controlled(
+                cancelled_metadata.token,
+                &cancelled_candidate,
+                OperationControl::new(token, operation_authoring_control().limits),
+            ),
+            Err(CoordinatorError::OperationWorkStopped)
+        ));
+        assert!(coordinator.operation_preview().is_none());
+        assert_retained_state_snapshot(&coordinator, &cancelled_before);
+
+        let exhausted_candidate = staged_line_offset(&coordinator, source, 0.3, true);
+        let OperationAuthoringPreviewOutcome::Ready(exhausted_metadata) = coordinator
+            .prepare_operation_preview(&exhausted_candidate)
+            .expect("accepted preview before exhaustion")
+        else {
+            panic!("accepted preview before exhaustion");
+        };
+        let exhausted_before = retained_state_snapshot(&coordinator);
+        let mut limits = operation_authoring_control().limits;
+        limits.document_validation_items = 0;
+        assert!(matches!(
+            coordinator.apply_operation_preview_controlled(
+                exhausted_metadata.token,
+                &exhausted_candidate,
+                OperationControl::new(geosolve_sketch::CancellationToken::default(), limits),
+            ),
+            Err(CoordinatorError::OperationWorkStopped)
+        ));
+        assert!(coordinator.operation_preview().is_none());
+        assert_retained_state_snapshot(&coordinator, &exhausted_before);
+    }
+
+    #[test]
+    fn stale_candidate_after_reattempt_or_undo_cannot_prepare() {
+        let (mut coordinator, source, points) = line_offset_operation_fixture();
+        let stale_after_attempt = staged_line_offset(&coordinator, source, 0.25, true);
+        coordinator
+            .reattempt(coordinator.session().design_identity())
+            .expect("reattempt");
+        assert!(matches!(
+            coordinator
+                .prepare_operation_preview(&stale_after_attempt)
+                .expect("typed stale result"),
+            OperationAuthoringPreviewOutcome::Warning(OperationAuthoringWarning {
+                kind: OperationAuthoringWarningKind::StalePick,
+                ..
+            })
+        ));
+
+        let stale_after_undo = staged_line_offset(&coordinator, source, 0.3, true);
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: points[0],
+                    position: [-3.0, 0.5],
+                },
+            )
+            .expect("intervening edit");
+        coordinator.undo().expect("undo intervening edit");
+        assert!(matches!(
+            coordinator
+                .prepare_operation_preview(&stale_after_undo)
+                .expect("typed post-undo stale result"),
+            OperationAuthoringPreviewOutcome::Warning(OperationAuthoringWarning {
+                kind: OperationAuthoringWarningKind::StalePick,
+                ..
+            })
+        ));
+        assert!(coordinator.operation_preview().is_none());
+    }
+
+    #[test]
+    fn older_accepted_geometry_is_not_exposed_after_same_design_attempt_failure() {
+        let (mut coordinator, source, _) = line_offset_operation_fixture();
+        let candidate = staged_line_offset(&coordinator, source, 0.25, true);
+        let design = coordinator.session().design_identity();
+        let missing = DesignPointId(PersistentId::from_u128(u128::MAX));
+        let request = coordinator
+            .session()
+            .last_attempt()
+            .input()
+            .candidate_request()
+            .with_drag(missing, [0.0, 0.0]);
+        let attempt = coordinator
+            .session
+            .reattempt(design, request)
+            .expect("retained failed attempt");
+        assert!(attempt.failure().is_some() || attempt.accepted_state_identity().is_none());
+        assert_eq!(coordinator.session().design_identity(), design);
+        assert!(coordinator.session().accepted_state().is_some());
+        assert!(coordinator.operation_authoring_document().is_none());
+        assert!(coordinator.operation_authoring_input().is_none());
+        assert!(matches!(
+            coordinator
+                .prepare_operation_preview(&candidate)
+                .expect("typed stale preview outcome"),
+            OperationAuthoringPreviewOutcome::Warning(OperationAuthoringWarning {
+                kind: OperationAuthoringWarningKind::StalePick,
+                ..
+            })
+        ));
+        assert!(coordinator.operation_preview().is_none());
+    }
+
+    #[test]
+    fn operation_commit_is_one_history_step_selects_primary_and_round_trips_undo_redo_replay() {
+        let (mut coordinator, source, _) = line_offset_operation_fixture();
+        let initial_session = coordinator.session().clone();
+        let original = coordinator.session().design_document().clone();
+        let candidate = staged_line_offset(&coordinator, source, 0.25, true);
+        let OperationAuthoringPreviewOutcome::Ready(metadata) = coordinator
+            .prepare_operation_preview(&candidate)
+            .expect("preview")
+        else {
+            panic!("ready preview");
+        };
+        let history = coordinator.history_len();
+        let mutation = coordinator
+            .apply_operation_preview(metadata.token, &candidate)
+            .expect("operation commit");
+        assert_eq!(coordinator.history_len(), history + 1);
+        assert_eq!(
+            mutation.primary_created_curve,
+            metadata.primary_created_curve
+        );
+        assert!(matches!(
+            coordinator.editor().selection(),
+            [SelectionItem::Curve(span)] if span.curve == metadata.primary_created_curve
+        ));
+        let committed = coordinator.session().design_document().clone();
+        let action = coordinator
+            .transcript()
+            .last()
+            .expect("replay action")
+            .clone();
+        coordinator.undo().expect("undo operation");
+        assert_eq!(coordinator.session().design_document(), &original);
+        coordinator.redo().expect("redo operation");
+        assert_eq!(coordinator.session().design_document(), &committed);
+
+        let mut replay = RetainedEditorCoordinator::new(initial_session).expect("replay owner");
+        replay.replay(&action).expect("operation replay");
+        assert_eq!(replay.session().design_document(), &committed);
+    }
+
+    #[test]
+    fn exact_commit_fails_closed_if_held_scratch_no_longer_matches_rendered_preview() {
+        let (mut coordinator, source, points) = line_offset_operation_fixture();
+        let candidate = staged_line_offset(&coordinator, source, 0.25, true);
+        let before = retained_state_snapshot(&coordinator);
+        let OperationAuthoringPreviewOutcome::Ready(metadata) = coordinator
+            .prepare_operation_preview(&candidate)
+            .expect("preview")
+        else {
+            panic!("ready preview");
+        };
+        let preview = coordinator
+            .operation_preview
+            .as_mut()
+            .expect("held private preview");
+        preview
+            .scratch
+            .apply(
+                preview.scratch.design_identity(),
+                DocumentEdit::SetPointPosition {
+                    point: points[1],
+                    position: [3.0, 0.5],
+                },
+            )
+            .expect("simulate divergent scratch");
+        assert!(matches!(
+            coordinator.apply_operation_preview(metadata.token, &candidate),
+            Err(CoordinatorError::OperationPreviewMismatch)
+        ));
+        assert_retained_state_snapshot(&coordinator, &before);
     }
 }

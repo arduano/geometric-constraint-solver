@@ -17,7 +17,6 @@ crate-type = ["cdylib", "rlib"]
 geosolve-constraint-editor = { version = "0.2.0", path = "../geosolve-constraint-editor" }
 geosolve-core = { version = "0.2.0", path = "../geosolve-core" }
 geosolve-sketch = { version = "0.2.0", path = "../geosolve-sketch" }
-geosolve-sketch-ops = { version = "0.2.0", path = "../geosolve-sketch-ops" }
 geosolve-sketch-topology = { version = "0.2.0", path = "../geosolve-sketch-topology" }
 serde.workspace = true
 serde_json.workspace = true

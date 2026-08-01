@@ -87,6 +87,20 @@
           </div>
           <details class="wb-palette-group-options"><summary>Dimension options ›</summary><div class="wb-palette-flyout"><label>Mode<select id="wb-authoring-dimension-mode"><option value="driving">Driving</option><option value="reference">Reference</option></select></label><label>Angle direction<select id="wb-authoring-angle-orientation"><option value="counter-clockwise">Counter-clockwise</option><option value="clockwise">Clockwise</option></select></label></div></details>
         </section>
+        <section class="wb-palette-section">
+          <strong>Modify</strong>
+          <div class="wb-palette-grid">
+            <div class="wb-palette-option-tool">
+              <button type="button" data-wb-operation="fillet" aria-pressed="false"><span class="wb-operation-icon" aria-hidden="true"></span><span>Fillet</span></button>
+              <details><summary aria-label="Fillet options">›</summary><div class="wb-palette-flyout wb-operation-options"><label>Driving radius<input id="wb-operation-fillet-radius" type="number" min="0" step="any" /></label><label class="wb-option-check"><input id="wb-operation-fillet-flip-first" type="checkbox" /> Flip first side</label><label class="wb-option-check"><input id="wb-operation-fillet-flip-second" type="checkbox" /> Flip second side</label><label class="wb-option-check"><input id="wb-operation-fillet-alternate-arc" type="checkbox" /> Alternate arc</label></div></details>
+            </div>
+            <div class="wb-palette-option-tool">
+              <button type="button" data-wb-operation="line-offset" aria-pressed="false"><span class="wb-operation-icon" aria-hidden="true"></span><span>Line offset</span></button>
+              <details><summary aria-label="Line offset options">›</summary><div class="wb-palette-flyout wb-operation-options"><label>Distance<input id="wb-operation-offset-distance" type="number" min="0" step="any" /></label><label>Mode<select id="wb-operation-offset-mode"><option value="exact">Exact translated segment</option><option value="supporting">Supporting line</option></select></label></div></details>
+            </div>
+            <button type="button" data-wb-operation="mirror" aria-pressed="false"><span class="wb-operation-icon" aria-hidden="true"></span><span>Mirror</span></button>
+          </div>
+        </section>
         <section class="wb-palette-section wb-palette-terminal">
           <div class="wb-palette-grid">
             <button type="button" data-wb-action="finish"><kbd>↵</kbd><span>Finish</span></button>
@@ -105,6 +119,7 @@
         <div id="wb-draft-guide" class="wb-draft-guide" hidden>
           <span id="wb-draft-guide-text">Click to add the next point</span>
           <button id="wb-guide-finish" type="button" data-wb-action="finish">Finish curve</button>
+          <button id="wb-guide-apply" type="button" data-wb-action="operation-apply" hidden>Apply</button>
           <button type="button" data-wb-action="cancel">Cancel</button>
         </div>
         <div class="wb-canvas-hud">

@@ -234,7 +234,8 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-tree-row > * { pointer-events: none; }
 .wb-tool-palette kbd { color: #d6b16f; background: transparent; font: 1rem ui-monospace, monospace; }
 .wb-geometry-icon,
-.wb-authoring-icon {
+.wb-authoring-icon,
+.wb-operation-icon {
   display: grid;
   width: 1.35rem;
   height: 1.35rem;
@@ -305,6 +306,14 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 }
 .wb-palette-flyout input,
 .wb-palette-flyout select { width: 100%; min-height: 1.8rem; }
+.wb-palette-flyout .wb-option-check {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+.wb-palette-flyout .wb-option-check input {
+  width: auto;
+  min-height: auto;
+}
 .wb-palette-terminal { padding-top: 0.2rem; border-top: 1px solid #3b4142; }
 
 .wb-tree-panel,
