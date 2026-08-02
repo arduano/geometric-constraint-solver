@@ -2,8 +2,8 @@
 
 # M66 implementation: polished associative 2D Fillet authoring
 
-Status: active after the 2026-08-02 Fillet-only pivot. Replacement build-source commit `ff15c78`
-passes the complete mechanical gate including `M66-F012`; supervising-human UAT remains open.
+Status: active after the 2026-08-02 Fillet-only pivot. Replacement build-source commit `87e72b3`
+passes the complete mechanical gate including `M66-F013`; supervising-human UAT remains open.
 
 ## Scope and preserved history
 
@@ -40,7 +40,7 @@ The Fillet-relevant earlier findings remain active regression obligations:
   live parent or stealing a Fillet placement click.
 - `M66-F005`: curve acquisition uses the inclusive 12-pixel nearest/tie policy.
 
-The post-pivot remediation adds six findings:
+The post-pivot remediation adds seven findings:
 
 - `M66-F007` — **canvas-overlay controls:** move Fillet options outside the scrolling palette and
   place them as a viewport-clamped overlay over the canvas. Pure placement tests own all viewport
@@ -67,12 +67,25 @@ The post-pivot remediation adds six findings:
   restores ordinary Select, allowing the selected Reference arc to resize immediately with its
   non-driving dimension still present. A failed Apply attempt clears the terminal candidate and
   re-arms collection.
+- `M66-F013` — **Fillet-derived endpoint/report coherence:** accepted Fillet materialization must
+  not publish endpoint-angle coordinates that differ from the retained core problem/report.
+  Exact-synchronize only active Fillet-owned angle coordinates, freshly certify every acceptance
+  surface and require the final materialization patch to be empty. The radius dimension was not
+  causal; the incoherent state already prevented the Fillet and all parent points from dragging.
 
 The superseded Offset findings `M66-F001` and `M66-F006` are archived with the three-tool candidate
 and are not active M66 UAT checks.
 
 ## 1. Files and APIs being reconciled
 
+- `crates/geosolve-core` owns the doc-hidden, revision-checked `AcceptedStatePatch` boundary. It
+  certifies the exact patched state without nonlinear optimization, preserves complete Temporary
+  and Preference row vectors within the reproducibility band, rebuilds hard/rank/bound/
+  diagnostic/audit evidence and commits only when packed problem/report state is identical.
+- `crates/geosolve-sketch/src/compiler.rs` derives branch-safe Fillet output angles and constructs
+  an allowlisted materialization patch containing only active Fillet-owned Start/End variables.
+  `crates/geosolve-sketch/src/session.rs` applies that patch and requires a zero-difference final
+  materialization pass before publication.
 - `crates/geosolve-sketch/src/profiles/fillet_branch.rs` owns the public, non-mutating
   `SketchDocument::certify_line_curve_fillet_branch_cell` query and typed failure surface. It
   reuses the outward-rounded private interval/curve-piece kernel without exposing visual-profile
@@ -101,8 +114,8 @@ and are not active M66 UAT checks.
 - The application workspace v3 provenance check remains relevant to flexible-Fillet reload. It is
   only a routing hint; the sketch domain still independently exact-certifies restored acceptance.
 - `README.md`, `ARCHITECTURE.md`, `CHANGELOG.md`, `docs/API_COMPATIBILITY.md`, `PLAN.md`,
-  `ACCEPTANCE.md`, `docs/SCENARIOS.md`, amended ADR 0030 and `docs/M66_UAT.md` record the narrowed
-  boundary and open gate.
+  `ACCEPTANCE.md`, `docs/SCENARIOS.md`, amended ADRs 0023/0030 and `docs/M66_UAT.md` record the
+  narrowed boundary, exact endpoint-state contract and open gate.
 
 No solver equation, generic curve trait, browser applicability table or persisted feature-operation
 schema is added.
@@ -156,6 +169,17 @@ metadata for the visible body. A free Fillet uses normal projected point drag to
 radius, contacts and trim intervals; a Driving radius may truthfully have no remaining mobility.
 Rejected drag retains prior accepted geometry and explicit branch state.
 
+Derived output angles are now a certified state transition rather than a post-report geometry
+rewrite. After latent normalization and branch-safe Fillet derivation, the sketch layer sends
+only active Fillet-owned Start/End changes through the core exact-state boundary. Core rebuilds
+Hard validity/residuals, numerical rank, bounds, diagnostics, audit and complete Temporary and
+Preference rows at those exact coordinates; changed secondary rows outside the reproducibility
+band, cancellation or any other rejection rolls back atomically. Publication additionally checks
+bit-exact equality between the packed problem and `SolveReport::accepted_state`, then proves that
+no materialization replacement remains. Independent Fillet tangency validation uses model scale,
+matching the owning center/normal equations instead of spuriously amplifying error by a small
+Fillet radius.
+
 For every attempt, the coordinator applies the proposal first to bounded scratch retained state.
 It exposes a scene only after independent acceptance for the eligible current publication. Apply
 repeats the same public proposal on live state and retains exact compare-and-swap equality.
@@ -194,14 +218,26 @@ authoring → publication → immediate arc-body center gesture → accepted res
 → second accepted resize lifecycle proves the reported UAT path. The WASM check and optimized
 Trunk release build also pass; no tracked or untracked build output was introduced.
 
+Replacement build-source commit `87e72b3` passed the same six-command gate. The exact coordinator
+regression pointer-authors a two-segment polyline and Reference Fillet, then independently drags
+the Fillet body, both outer points and the shared corner before and after UI-style radius-dimension
+deletion. M27/M28/M30 cover bit-exact problem/report/materialized-angle equality across 48 branch,
+order, sweep and scale combinations, periodic winding, Bezier/NURBS parents, multiple Fillets and
+an unrelated arc. Core M10 covers hard/rank/bound/audit reconstruction, Temporary/Preference row
+preservation and rejection, allowlist enforcement, provenance retention and cancellation rollback.
+The locked all-feature workspace suite, warnings-denied Clippy, WASM check and optimized Trunk
+release build all pass; only the existing `license` plus `license-file` advisory remains.
+
 ## 4. Acceptance status
 
 M66 remains open only for focused supervising-human UAT. Build-source commit `c1b0336` first
 qualified symmetric-cubic remote-root separation, an
 unwrapped periodic circle cell, affine `Interior` persistence, hostile free-Fillet edit rejection,
 multi-sample semantic pointer mobility, overlay reflow, persistence and exact publication.
-Replacement `ff15c78` retains those results and closes the post-Apply routing trap. The archived
-three-tool candidate is historical evidence only and does not satisfy the active gate.
+Replacement `ff15c78` retains those results and closes the post-Apply routing trap. Replacement
+`87e72b3` additionally closes the accepted-state coherence defect that locked every related point
+after Fillet publication. The archived three-tool candidate is historical evidence only and does
+not satisfy the active gate.
 
 ## 5. Known limitations or next blocker
 
@@ -215,4 +251,4 @@ three-tool candidate is historical evidence only and does not satisfy the active
 - Offset/Mirror authoring is not part of active M66, although M25 Offset constraints and the M58
   Mirror operation API remain intact.
 - The next and only remaining gate is focused human `docs/M66_UAT.md` approval against build-source
-  commit `ff15c78` on the recorded Tailscale endpoint.
+  commit `87e72b3` on the recorded Tailscale endpoint.

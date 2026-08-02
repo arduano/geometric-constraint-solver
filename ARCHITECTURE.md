@@ -34,7 +34,9 @@ construction/NURBS UAT and certified all-family visual profiles.
   offset constraints or M58 Mirror companion API. The implemented authoring branch policy is
   deliberately narrower than M28's generic Fillet domain surface: affine pairs use full support,
   line/curved pairs use one interval-certified curved-parameter cell, and two non-affine parents
-  remain typed unsupported until pairwise continuation exists.
+  remain typed unsupported until pairwise continuation exists. Derived Fillet endpoint angles are
+  exact-synchronized through fresh core certification so materialized geometry, packed problem
+  state and the retained report cannot diverge.
 - **Planned sequence:** no milestone is assigned after M66. Every newly scoped milestone ends in
   its own human UAT.
 
@@ -70,6 +72,8 @@ Owns domain-independent numerical infrastructure:
 - strict hard, temporary and preference hierarchy;
 - nonlinear iteration, factorization, rank and diagnostic policy;
 - persistent solve sessions, bounds, active sets and validated transactions;
+- a doc-hidden exact accepted-state synchronization boundary for domain-derived coordinates that
+  rebuilds hard/rank/bound/secondary/diagnostic/audit evidence before atomic commit;
 - continuation primitives and complete solve reports.
 
 It does not contain CAD entities, curve-definition variants, rigid bodies, joints, mates, branch labels or persistence schemas from either domain.
@@ -198,6 +202,15 @@ curved span or one explicit unwrapped period. Affine line/polyline spans instead
 `Interior`; two non-affine-parent authoring returns a typed unsupported warning rather than
 guessing a pairwise branch. None of this narrows or replaces M28's public all-family Fillet
 definition, residual or validation path.
+
+Fillet endpoint-angle materialization is not an unchecked post-solve geometry patch. After the
+sketch domain derives branch-safe Start/End angles, it allowlists only active Fillet-owned angle
+variables for a revision-checked core synchronization. Core freshly certifies Hard residuals,
+rank, bounds, diagnostics, audit and the complete Temporary/Preference row vectors at the exact
+patched state; cancellation or changed evidence rejects without mutation. Publication requires
+bit-exact equality between the packed problem and `SolveReport::accepted_state`, followed by a
+zero-difference domain materialization pass. The allowlist is a trusted internal domain assertion,
+not a security boundary; independent certification remains authoritative.
 
 M40.7 separates non-authoritative `ConstructionPreview` from complete committable
 `ConstructionProposal`. A preview may represent an incomplete anchor or arc-radius
@@ -759,5 +772,6 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
 - M65: completed and approved predictable, bounded projected dragging for the existing editable
   mechanism samples, including twin-roller hit routing and rank-one pantograph-guide projection.
 - M66: active headless authoring polish for associative 2D Fillets, ending in its own focused UAT;
-  the unapproved three-tool candidate remains archived at
+  exact retained-state certification now keeps derived Fillet angles and all later parent/output
+  drags coherent; the unapproved three-tool candidate remains archived at
   `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).

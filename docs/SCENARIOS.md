@@ -1986,6 +1986,11 @@ that ignore only the transient candidate request; exact proposal publication rem
   and retained created-arc selection. The default-Reference arc immediately routes an ordinary
   body drag to its stored center and changes radius through accepted geometry both before and after
   deleting its non-driving radius dimension.
+- `M66-F013` pointer-authors a two-segment polyline and default-Reference Fillet, proves bit-exact
+  coherence among materialized angles, packed core state and the accepted report, then
+  independently drags the Fillet body, both outer points and the shared corner before and after
+  UI-style radius-dimension deletion. Branch/order/sweep/scale, periodic, Bezier, NURBS, multi-Fillet and
+  unrelated-arc fixtures prove synchronization is limited to active Fillet-owned angle variables.
 
 The application workspace v3 envelope remains useful for this flexible-state cut while canonical
 sketch v4 and draft v5 remain unchanged. Restore treats accepted-materialization provenance only

@@ -29,7 +29,10 @@ private outward-rounded curve-piece intervals; it returns only the existing
 `ContactNeighborhood::Local` type plus a typed error. M66 authoring currently accepts
 affine/affine and affine/non-affine parent pairs and types two non-affine parents unsupported until
 pairwise continuation exists. That authoring limitation does not narrow or deprecate M28's public
-all-family generic Fillet request, association, residual or validation APIs. The
+all-family generic Fillet request, association, residual or validation APIs. The doc-hidden
+`geosolve_core::AcceptedStatePatch` export exists only as a narrow cross-crate domain integration
+boundary for freshly certifying derived accepted coordinates; it is not a supported host API and
+may be narrowed or replaced before `1.0`. The
 withdrawn M66-only Offset/Mirror authoring surface and M66-only line-offset request APIs were never
 released. Their last three-tool candidate is preserved at
 `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`). This withdrawal does not alter the

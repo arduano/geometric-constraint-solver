@@ -1,6 +1,6 @@
 # ADR 0023: Generic fillets and persistent trim views
 
-Status: accepted
+Status: accepted; amended 2026-08-02 for exact derived-endpoint certification
 
 ## Context
 
@@ -86,6 +86,17 @@ Jacobian incidence through the two endpoint rows. Accepted solves still rederive
 and independently validate endpoint angles before publication; retained persistent
 angles are warm state, not an alternative topology source.
 
+Rederivation is a certified state transition, not an unchecked geometry rewrite.
+The sketch domain may allowlist only active fillet-owned Start/End coordinates for
+revision-checked exact synchronization. Core then rebuilds Hard residual, rank,
+bound, diagnostic and audit evidence and verifies complete Temporary and Preference
+row vectors at those exact coordinates before atomic commit. Publication requires
+the packed problem state to equal `SolveReport::accepted_state` bit-for-bit and a
+final domain pass to require no further endpoint replacement. Cancellation or any
+changed acceptance evidence retains the prior complete state. The allowlist narrows
+accidental internal mutation but is not an authority boundary; independent core and
+domain validation remain authoritative.
+
 ### Ownership, suppression and explosion
 
 The association owns both contacts and both contact-derived trim boundaries. The
@@ -123,6 +134,9 @@ trim or generic-fillet syntax as an older version rejects.
   remains atomic with the two solved fillet contacts.
 - Downstream constraints on associated arcs become truthful through explicit angle
   coordinates and endpoint rows rather than hidden post-solve differentiation.
+- Materialized arc endpoints, retained core coordinates and report evidence remain
+  one exact accepted state, so retained hydration and later parent/output drags do
+  not fail because of a post-report coordinate mismatch.
 - M28 supports one visible interval per support span; arbitrary multi-fragment trim
   topology remains outside this milestone.
 - Existing version-3 fillets preserve their untrimmed visual behavior after

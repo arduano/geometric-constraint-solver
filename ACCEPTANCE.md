@@ -991,8 +991,8 @@ in `docs/M65_UAT.md`; M65 is complete.
 
 ## M66 acceptance: polished associative 2D Fillet authoring
 
-Status: active after the Fillet-only pivot. Replacement build-source commit `ff15c78` passes the
-complete mechanical gate including `M66-F012`; focused supervising-human UAT remains open.
+Status: active after the Fillet-only pivot. Replacement build-source commit `87e72b3` passes the
+complete mechanical gate including `M66-F013`; focused supervising-human UAT remains open.
 
 The unapproved three-tool candidate is preserved at
 `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`). Active M66 removes only its
@@ -1046,6 +1046,12 @@ accepted baseline behavior.
   associated Fillet's body routes through ordinary projected point drag and updates radius,
   contacts and visible trim intervals; deleting only its Reference dimension neither deletes nor
   immobilizes the association (`M66-F003`).
+- Fillet endpoint-angle derivation cannot leave accepted geometry ahead of its retained numerical
+  state. Only active Fillet-owned Start/End coordinates may be exact-synchronized; core then
+  freshly certifies Hard residuals, rank, bounds, diagnostics, audit and complete Temporary and
+  Preference residual vectors before atomic commit. The packed problem state must equal
+  `SolveReport::accepted_state` bit-for-bit and the final domain pass must require no remaining
+  materialization (`M66-F013`).
 - The Fillet options panel is a viewport-clamped canvas overlay outside the scrolling palette, so
   palette overflow cannot clip or break its controls. Pure placement tests cover each viewport
   edge and resize (`M66-F007`).
@@ -1057,16 +1063,17 @@ accepted baseline behavior.
   accepted scratch preview and the editable **2D fillet workshop**. Pan/zoom remains usable, the
   browser owns no applicability/branch/root formula, and no Offset/Mirror M66 action, option or
   sample remains.
-- Direct sketch, operation, editor/coordinator and workbench tests cover F002-F005 and F007-F012,
+- Direct sketch, operation, editor/coordinator and workbench tests cover F002-F005 and F007-F013,
   including parent retention after invalid hover, overlay placement, exact hover/click boundaries,
   point-edit publication eligibility, affine `Interior` neighborhoods, certified symmetric-cubic
   and unwrapped-periodic line/curve branch cells, typed two-curved-parent refusal, exact request state,
   preview/commit lifecycle, successful-mode exit, immediate default-Reference resizing before and
-  after dimension deletion, stale/rejected retention, Undo/Redo, workspace reload and sample
+  after dimension deletion, independent motion of every source-polyline point, exact retained
+  state/report equality, stale/rejected retention, Undo/Redo, workspace reload and sample
   editability. Existing M27/M28 derivative and independent-validation corpora remain green; M66
   adds no residual. M25/M58 regression coverage also confirms the pre-M66 APIs were not removed.
 - Formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature demo-web
-  WASM, release Trunk and `git diff --check` pass on nominated build-source commit `ff15c78`.
+  WASM, release Trunk and `git diff --check` pass on nominated build-source commit `87e72b3`.
 - The supervising human explicitly approves `docs/M66_UAT.md`; no correctness, data-loss,
   misleading-preview or basic Fillet-authoring blocker remains.
 
@@ -1077,7 +1084,7 @@ freeze, new equations, browser E2E, `/#/dev/lab` or mobile behavior.
 
 Qualification record (2026-08-02): `cargo fmt --all -- --check`, warnings-denied locked workspace
 Clippy, locked all-feature workspace tests, the all-feature demo-web WASM check, release Trunk and
-`git diff --check` all pass for replacement build-source commit `ff15c78`. The focused human
+`git diff --check` all pass for replacement build-source commit `87e72b3`. The focused human
 scorecard remains Pending, so this mechanical acceptance does not close M66.
 
 ### M54: stable diagnostics

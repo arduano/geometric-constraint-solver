@@ -1,9 +1,9 @@
 # M66 focused UAT: polished associative 2D Fillet authoring
 
-Status: replacement build-source commit `ff15c78` is mechanically qualified. Every human result
+Status: replacement build-source commit `87e72b3` is mechanically qualified. Every human result
 remains Pending.
 
-Candidate source: `ff15c78` (`Fix M66 fillet post-apply interaction`).
+Candidate source: `87e72b3` (`Fix Fillet accepted-state coherence`).
 
 Tailscale endpoint: `http://100.94.63.83:8080/` (release service restarted and HTTP 200 verified
 2026-08-02).
@@ -72,19 +72,22 @@ Notes:
    verify that both affine contacts can use their full interiors. For line-circle and line-Bezier,
    move substantially within the selected branch and verify that neither curved contact jumps
    across its nearest tangent-parallel barrier to a remote root.
-4. Repeat with an explicitly Driving radius and compare its truthful remaining mobility.
-5. Edit one source point successfully, then immediately start or continue Fillet authoring without
+4. On a freshly drawn two-segment polyline, apply a Reference Fillet, delete its radius dimension,
+   then independently drag the Fillet body, both outer polyline points and the shared corner.
+5. Repeat with an explicitly Driving radius and compare its truthful remaining mobility.
+6. Edit one source point successfully, then immediately start or continue Fillet authoring without
    refreshing the workspace.
 
 Expected: Reference is flexible and only explicit Driving intent locks radius. Successful Apply
 returns to Select, and arc-body/center drag works immediately with the Reference dimension still
 present. Drag keeps the Fillet association, contacts and trims coherent. Deleting the dimension
 neither explodes nor immobilizes the association. Affine pairs are not caged by a seed-centred
-parameter window. A line/curved pair remains inside a strict outward-rounded `Local` cell over the
-full bounded support or one explicit period, stopping conservatively at a real tangent-parallel
-branch barrier rather than jumping to a remote root. A successful point edit does not falsely trigger
-“helper operations require current accepted geometry.” Genuinely rejected or stale state still
-cannot preview or publish.
+parameter window. Every original polyline point remains independently draggable after Fillet
+publication and after deleting the radius annotation. A line/curved pair remains inside a strict
+outward-rounded `Local` cell over the full bounded support or one explicit period, stopping
+conservatively at a real tangent-parallel branch barrier rather than jumping to a remote root. A
+successful point edit does not falsely trigger “helper operations require current accepted
+geometry.” Genuinely rejected or stale state still cannot preview or publish.
 
 Result: Pending.
 
@@ -124,6 +127,7 @@ Notes:
 | `M66-F010` | A successful point drag left accepted geometry usable but literal input equality falsely disabled helper authoring because the one-shot candidate request was no longer retained. | Add sketch-owned current-publication compatibility that ignores only `candidate_request`; retain all other input/attempt identity checks and exact proposal CAS. | Implemented and mechanically qualified; U3 human retest Pending. |
 | `M66-F011` | After deleting the radius dimension, a free Fillet still had an arbitrary apparent minimum/maximum size. | Persist full `Interior` support for affine pairs. For exactly one non-affine parent, certify a strict curved `Local` cell over the full bounded support or one explicit unwrapped period using outward-rounded tangent/line cross-product intervals; never cross a tangent-parallel barrier. Keep two-non-affine authoring typed unsupported until pairwise continuation, without narrowing M28. | Implemented and mechanically qualified with exact hostile-root and mobility regressions; U3 human retest Pending. |
 | `M66-F012` | After Apply, the new Reference Fillet could not be resized; deleting its displayed dimension did not help. | After successful publication, use one tested host completion handoff to exit the headless Fillet collector and explicitly restore ordinary Select. Directly prove default Reference publication immediately routes arc-body drag to the semantic center and accepts radius changes both before and after dimension deletion. Keep failed Apply attempts recoverable. | Implemented and mechanically qualified; U3 human retest Pending. |
+| `M66-F013` | After drawing a two-segment polyline, applying a Fillet and deleting its radius dimension, neither the Fillet nor any parent point could be dragged. | Publish Fillet-derived endpoint angles only through exact accepted-state synchronization: recertify hard/rank/bounds/diagnostics/audit and complete secondary rows, require bit-exact problem/report state, and reject atomically. Scale independent Fillet tangency validation by model scale. Directly replay the pointer-authored lifecycle and every affected drag before and after UI-style dimension deletion. | Implemented and mechanically qualified; U3 human retest Pending. |
 
 Every objective defect requires a direct owning-layer regression before targeted human recheck. A
 replacement candidate must be rebuilt and fully qualified even when a remaining change is

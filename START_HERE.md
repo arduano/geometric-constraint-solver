@@ -116,7 +116,12 @@ explicit period; and two non-affine-parent authoring is typed unsupported until 
 continuation exists. This does not narrow M28's underlying all-family generic Fillet API.
 Replacement build-source commit `ff15c78` additionally exits Fillet collection and restores Select
 after successful publication, making the new Reference arc immediately draggable. That source
-passes the full native/WASM/release gate; focused human UAT remains open.
+passes the full native/WASM/release gate. Replacement build-source commit `87e72b3` fixes the
+subsequent retained-state coherence finding: branch-safe Fillet endpoint derivation now exact-
+synchronizes only active Fillet-owned angle coordinates, freshly certifies the complete core
+acceptance surface and publishes only bit-identical problem/report/materialized state. The exact
+pointer-authored polyline/Fillet lifecycle keeps the arc and every parent point draggable before
+and after radius-dimension deletion. Focused human UAT remains open.
 M62 follow-up `M62-F001` corrects accepted-state line-angle seeding and exposes acute-degree
 presentation while retaining the explicit directed-radian solver branch.
 Follow-up `M62-F002` gives canvas pointer-down exclusive ownership of canvas authoring picks,
@@ -176,7 +181,9 @@ approval. M66 is active under amended ADR 0030: the headless editor owns reusabl
 authoring, the operations companion remains the equation-free transaction producer, and the sole
 workbench is a thin presentation consumer. Current authoring supports affine/affine and
 affine/non-affine parents with explicit interval-certified branch retention; pairwise continuation
-for two non-affine parents is deferred without removing M28's generic API. The earlier
+for two non-affine parents is deferred without removing M28's generic API. Fillet-derived endpoint
+angles pass through a narrow core exact-state certification boundary rather than being rewritten
+after the retained report. The earlier
 Fillet/Offset/Mirror candidate is preserved
 at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`) rather than carried as active
 scope. M66 ends in its own Fillet-focused UAT.

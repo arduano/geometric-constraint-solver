@@ -205,6 +205,13 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   Apply attempt re-arms collection. A default Reference Fillet is immediately draggable through
   its semantic center both before and after deleting its non-driving radius dimension. Replacement
   build-source commit `ff15c78` passes the complete native, warnings-denied, WASM and release gate.
+- Corrected Fillet accepted-state coherence after UAT showed that a newly authored Fillet could
+  immobilize both itself and every parent-polyline point. Branch-safe endpoint derivation now
+  exact-synchronizes only active Fillet-owned angle coordinates, freshly certifies hard/rank/
+  bound/secondary/diagnostic/audit evidence and requires bit-exact problem/report/materialized
+  state before publication. Independent Fillet tangency validation now scales by model scale rather
+  than radius. Replacement build-source commit `87e72b3` passes the complete native,
+  warnings-denied, WASM and release gate plus the exact pointer-authored UI lifecycle.
 - Preserved the superseded Fillet/Offset/Mirror candidate for historical inspection at
   `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`). It is not an active or approved
   M66 candidate.

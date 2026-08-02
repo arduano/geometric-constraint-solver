@@ -3016,8 +3016,8 @@ replacement candidate. M65 is closed; the historical candidate endpoint was
 
 ### M66: polished associative 2D Fillet authoring
 
-Status: active after the 2026-08-02 Fillet-only pivot. Replacement build-source commit `ff15c78`
-passes the complete mechanical gate including `M66-F012`; focused supervising-human UAT remains
+Status: active after the 2026-08-02 Fillet-only pivot. Replacement build-source commit `87e72b3`
+passes the complete mechanical gate including `M66-F013`; focused supervising-human UAT remains
 open.
 
 Goal: make associative 2D Fillet authoring exceptionally predictable and reusable, with branch
@@ -3065,10 +3065,15 @@ M58's exact supported-family Mirror operation-companion API/history remain uncha
   collection, and make the shared workbench completion adapter explicitly restore ordinary Select
   so the selected output arc is immediately draggable. A failed Apply attempt retains the prior
   re-arm behavior; invalid unconfirmed hover still retains both parents.
-- [x] Directly regress F002-F005 and F007-F012 across operations/editor/coordinator/workbench owners,
+- [x] `M66-F013`: keep Fillet-derived endpoint angles, the accepted core problem and its
+  `SolveReport::accepted_state` exactly coherent. Synchronize only active Fillet-owned angle
+  coordinates, freshly recertify Hard/rank/bounds/diagnostics/audit and complete Temporary/
+  Preference rows, and reject atomically if any evidence changes outside its reproducibility
+  band. Scale redundant independent Fillet tangency checks by model scale rather than radius.
+- [x] Directly regress F002-F005 and F007-F013 across operations/editor/coordinator/workbench owners,
   including invalid-hover recovery, exact 12-pixel hover/click parity, point-edit publication
   eligibility, persistence, Undo/Redo, successful-mode exit and default-Reference motion before
-  dimension deletion.
+  and after dimension deletion, plus independent motion of every source-polyline point.
 - [x] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature
   demo-web WASM check, release Trunk build and `git diff --check` on one post-pivot source state.
 - [ ] Complete and explicitly approve the Fillet-only `docs/M66_UAT.md`.
@@ -3101,7 +3106,14 @@ gesture. Replacement build-source commit `ff15c78` makes successful publication 
 directly regresses an immediate default-Reference resize with its non-driving dimension still
 present. It passes formatting, warnings-denied Clippy, locked all-feature workspace tests, the
 all-feature WASM check, release Trunk build and `git diff --check`; M66 is again open solely for
-focused supervising-human UAT.
+focused supervising-human UAT. The next UAT found `M66-F013`: Fillet endpoint derivation changed
+published arc coordinates after the core report was produced, so retained hydration rejected
+subsequent projected drags for the Fillet and its parent points; deleting the radius annotation
+was incidental. Replacement build-source commit `87e72b3` exact-synchronizes those derived
+coordinates through fresh core certification and corrects the independent tangency scale. The
+full native/WASM/release gate passes, including the exact pointer-authored two-segment-polyline
+lifecycle before and after UI-style radius-dimension deletion. Focused supervising-human UAT
+remains open.
 
 ## Explicit non-goals
 
