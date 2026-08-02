@@ -384,7 +384,7 @@ impl OperationAuthoringState {
     }
 
     /// Activates a tool from an immutable accepted-selection snapshot. Empty
-    /// selection enters persistent repeated mode; compatible preselection is fed
+    /// selection enters operand-collection mode; compatible preselection is fed
     /// through the same pick transitions and seeds a preview.
     #[must_use]
     pub fn activate(
@@ -415,7 +415,7 @@ impl OperationAuthoringState {
 
     /// Activates directly from ordinary selection identities and optional canvas
     /// parameters. This preserves an incompatible non-empty selection as a typed
-    /// warning instead of accidentally treating it as empty repeated mode.
+    /// warning instead of accidentally treating it as empty collection mode.
     #[must_use]
     pub fn activate_items(
         &mut self,
@@ -701,11 +701,28 @@ impl OperationAuthoringState {
         self.apply()
     }
 
-    /// Clears a terminal application attempt and re-arms the same persistent tool.
+    /// Clears a rejected terminal application attempt and re-arms the same tool.
+    /// Successful publication must instead use [`Self::publication_succeeded`]
+    /// so the newly created geometry immediately returns to ordinary interaction.
     pub fn transaction_finished(&mut self) {
         self.picks.clear();
         self.candidate = None;
         self.candidate_confirmed = false;
+    }
+
+    /// Records successful publication and leaves operation authoring so a host
+    /// can expose the published geometry to its ordinary interaction tool.
+    ///
+    /// This is a trusted completion notification: call it only after the exact
+    /// candidate returned by [`Self::apply`] has published successfully.
+    #[must_use]
+    pub fn publication_succeeded(&mut self) -> OperationAuthoringOutcome {
+        if self.active.is_none() {
+            self.transaction_finished();
+            return OperationAuthoringOutcome::Inactive;
+        }
+        self.deactivate();
+        OperationAuthoringOutcome::ModeExited
     }
 
     /// Records a failed scratch-preview preparation without discarding reusable
@@ -2124,7 +2141,7 @@ mod tests {
     }
 
     #[test]
-    fn fillet_collects_local_picks_and_rearms_after_terminal_attempt() {
+    fn fillet_collects_local_picks_and_rearms_after_rejected_terminal_attempt() {
         let (document, spans) = perpendicular_lines();
         let mut state = OperationAuthoringState::default();
         assert!(matches!(
@@ -2154,6 +2171,57 @@ mod tests {
         assert!(matches!(state.enter(), OperationAuthoringOutcome::Apply(_)));
         state.transaction_finished();
         assert_eq!(state.active_tool(), Some(OperationAuthoringTool::Fillet));
+        assert!(state.picks().is_empty());
+        assert!(state.candidate().is_none());
+    }
+
+    #[test]
+    fn successful_fillet_publication_exits_to_ordinary_interaction() {
+        let (document, spans) = perpendicular_lines();
+        let mut state = OperationAuthoringState::default();
+        let remembered_options = OperationAuthoringOptions {
+            fillet_radius: Some(0.1),
+            fillet_radius_mode: DocumentDimensionMode::Driving,
+            ..OperationAuthoringOptions::default()
+        };
+        assert_eq!(
+            state.set_options(&document, remembered_options),
+            OperationAuthoringOutcome::Inactive
+        );
+        let _ = state.activate(
+            &document,
+            OperationAuthoringTool::Fillet,
+            &[
+                pick(&document, spans[0], 0.8),
+                pick(&document, spans[1], 0.2),
+            ],
+        );
+        let _ = state.confirm(&document, [0.03, 0.03]);
+        let remembered_after_confirmation = state.options();
+        assert_eq!(
+            remembered_after_confirmation.fillet_radius_mode,
+            DocumentDimensionMode::Driving
+        );
+        assert!(matches!(state.apply(), OperationAuthoringOutcome::Apply(_)));
+
+        assert_eq!(
+            state.publication_succeeded(),
+            OperationAuthoringOutcome::ModeExited
+        );
+        assert_eq!(state.active_tool(), None);
+        assert!(state.picks().is_empty());
+        assert!(state.candidate().is_none());
+        assert!(!state.candidate_confirmed());
+        assert_eq!(state.options(), remembered_after_confirmation);
+        assert_eq!(
+            state.publication_succeeded(),
+            OperationAuthoringOutcome::Inactive
+        );
+        assert!(matches!(
+            state.activate(&document, OperationAuthoringTool::Fillet, &[]),
+            OperationAuthoringOutcome::ModeEntered(_)
+        ));
+        assert_eq!(state.options(), remembered_after_confirmation);
         assert!(state.picks().is_empty());
         assert!(state.candidate().is_none());
     }

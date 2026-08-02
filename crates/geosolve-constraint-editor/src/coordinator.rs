@@ -9835,6 +9835,121 @@ mod tests {
         )
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the test helper preserves one complete normalized pointer-to-publication gesture"
+    )]
+    fn drag_operation_arc_body_once(
+        coordinator: &mut RetainedEditorCoordinator,
+        arc: CurveId,
+        pointer_id: u64,
+        screen_delta: [f64; 2],
+    ) -> ([f64; 2], [f64; 2]) {
+        assert_eq!(coordinator.editor().tool(), EditorTool::Select);
+        let (center, center_before, scene, press) = {
+            let accepted = coordinator
+                .session()
+                .accepted_state()
+                .expect("accepted Fillet before gesture");
+            let CurveDefinition::CircularArc { center, .. } = coordinator
+                .session()
+                .design_document()
+                .curve(arc)
+                .expect("Fillet arc before gesture")
+                .definition
+            else {
+                panic!("Fillet output must be circular");
+            };
+            let center_before = accepted
+                .document()
+                .point(center)
+                .expect("Fillet center before gesture")
+                .position;
+            let viewport = Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport");
+            let scene = EditorScene::from_accepted_for_design(
+                accepted.identity().revision().get(),
+                coordinator.session().design_identity(),
+                accepted.document(),
+                coordinator.session().design_document(),
+                viewport,
+                0.5,
+            )
+            .expect("Fillet gesture scene");
+            let arc_curve = scene
+                .curves
+                .iter()
+                .find(|curve| curve.span == CurveSpan::line(arc))
+                .expect("visible Fillet gesture arc");
+            assert_eq!(arc_curve.drag_handle_point, Some(center));
+            let press = arc_curve.screen_polyline[arc_curve.screen_polyline.len() / 2];
+            (center, center_before, scene, press)
+        };
+        let moved = ScreenPoint {
+            x: press.x + screen_delta[0],
+            y: press.y + screen_delta[1],
+        };
+        let pointer = |position| PointerInput {
+            pointer_id,
+            position,
+            modifiers: Modifiers::default(),
+        };
+        let _ = coordinator.pointer_down(&scene, pointer(press));
+        assert!(matches!(
+            coordinator.editor().selection(),
+            [SelectionItem::Curve(span)] if span.curve == arc
+        ));
+        let request = coordinator
+            .editor_mut()
+            .pointer_move(&scene, pointer(moved));
+        let [
+            EditorEffect::RequestProjectedPointMove {
+                pointer_id,
+                request_id,
+                point,
+                model_position,
+            },
+        ] = request.as_slice()
+        else {
+            panic!("Fillet arc must route to its semantic center");
+        };
+        assert_eq!(*point, center);
+        let preview = coordinator.resolve_projected_point_move(
+            *pointer_id,
+            *request_id,
+            *point,
+            *model_position,
+        );
+        assert!(matches!(
+            preview.as_slice(),
+            [EditorEffect::PreviewPointMove { point, .. }] if *point == center
+        ));
+        let expected = coordinator.session().design_identity();
+        let release = coordinator
+            .editor_mut()
+            .pointer_up(&scene, expected, pointer(moved));
+        assert!(matches!(
+            release.as_slice(),
+            [
+                EditorEffect::CommitPointMove { point, .. },
+                EditorEffect::ClearPointPreview,
+            ] if *point == center
+        ));
+        let committed = coordinator
+            .apply_editor_effect(&release[0])
+            .expect("release Fillet body gesture")
+            .expect("Fillet center mutation");
+        assert!(committed.published_accepted.is_some());
+        let center_after = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted Fillet after gesture")
+            .document()
+            .point(center)
+            .expect("Fillet center after gesture")
+            .position;
+        (center_before, center_after)
+    }
+
     fn staged_fillet(
         coordinator: &RetainedEditorCoordinator,
         parents: [CurveSpan; 2],
@@ -11253,6 +11368,180 @@ mod tests {
                 .definition,
             association
         );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one exact authoring-to-drag lifecycle guards Reference Fillet interaction before and after dimension deletion"
+    )]
+    fn default_reference_fillet_exits_and_resizes_before_and_after_dimension_deletion() {
+        let (mut coordinator, parents, points) = simple_fillet_operation_fixture();
+        for (index, (point, target)) in points
+            .into_iter()
+            .zip([[-2.0, 0.0], [2.0, 0.0], [0.0, -2.0], [0.0, 2.0]])
+            .enumerate()
+        {
+            let fixed = coordinator
+                .apply_edit(
+                    coordinator.session().design_identity(),
+                    DocumentEdit::CreateConstraint {
+                        label: format!("fixed immediate-drag parent point {index}"),
+                        definition: DocumentConstraintDefinition::FixedPoint { point, target },
+                    },
+                )
+                .expect("fix immediate-drag Fillet parent point");
+            assert!(fixed.published_accepted.is_some());
+        }
+
+        let document = coordinator
+            .operation_authoring_document()
+            .expect("current operation document")
+            .clone();
+        let picks = [
+            coordinator
+                .operation_pick_for_item(SelectionItem::Curve(parents[0]), Some(0.25))
+                .expect("first stamped Fillet pick"),
+            coordinator
+                .operation_pick_for_item(SelectionItem::Curve(parents[1]), Some(0.75))
+                .expect("second stamped Fillet pick"),
+        ];
+        let mut authoring = OperationAuthoringState::default();
+        assert!(matches!(
+            authoring.activate(&document, OperationAuthoringTool::Fillet, &picks),
+            OperationAuthoringOutcome::PreviewRequested { .. }
+        ));
+        let confirmed = authoring.confirm(&document, [0.25, 0.25]);
+        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = confirmed else {
+            panic!("pointer placement must confirm a default Fillet candidate");
+        };
+        let SketchOperationRequest::AssociativeFillet { request, .. } = candidate.request() else {
+            panic!("Fillet request");
+        };
+        assert_eq!(request.radius_mode, DocumentDimensionMode::Reference);
+        let OperationAuthoringPreviewOutcome::Ready(metadata) = coordinator
+            .prepare_operation_preview(&candidate)
+            .expect("prepare immediate-drag Fillet")
+        else {
+            panic!("confirmed Fillet preview must be accepted");
+        };
+        assert!(metadata.apply_ready);
+        let mutation = coordinator
+            .apply_operation_preview(metadata.token, &candidate)
+            .expect("publish immediate-drag Fillet");
+        let arc = mutation.primary_created_curve;
+        assert_eq!(arc, metadata.primary_created_curve);
+        assert_eq!(
+            authoring.publication_succeeded(),
+            OperationAuthoringOutcome::ModeExited
+        );
+        assert_eq!(authoring.active_tool(), None);
+
+        let (radius, radius_dimension) = {
+            let design = coordinator.session().design_document();
+            let CurveDefinition::CircularArc { radius, .. } =
+                design.curve(arc).expect("published Fillet arc").definition
+            else {
+                panic!("published Fillet must be circular");
+            };
+            let radius_dimension = design
+                .dimensions()
+                .iter()
+                .find(|dimension| {
+                    matches!(
+                        dimension.definition,
+                        DocumentDimensionDefinition::Radius { curve, .. } if curve == arc
+                    )
+                })
+                .expect("published Fillet radius dimension");
+            assert_eq!(radius_dimension.mode, DocumentDimensionMode::Reference);
+            (radius, radius_dimension.id)
+        };
+        let radius_before = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted published Fillet")
+            .document()
+            .scalar(radius)
+            .expect("Fillet radius")
+            .value;
+        let (center_before, center_after) =
+            drag_operation_arc_body_once(&mut coordinator, arc, 203, [-10.0, -10.0]);
+        let accepted = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted immediately resized Fillet");
+        let radius_after = accepted
+            .document()
+            .scalar(radius)
+            .expect("immediately resized Fillet radius")
+            .value;
+        assert!(
+            (center_after[0] - center_before[0]).hypot(center_after[1] - center_before[1]) > 1.0e-4
+        );
+        assert!((radius_after - radius_before).abs() > 1.0e-4);
+        assert_eq!(
+            accepted
+                .document()
+                .dimension(radius_dimension)
+                .expect("Reference dimension remains after drag")
+                .mode,
+            DocumentDimensionMode::Reference
+        );
+
+        let deletion = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::Delete {
+                    object: DocumentObjectId::Dimension(radius_dimension),
+                },
+            )
+            .expect("delete the authored Reference radius dimension");
+        assert!(deletion.published_accepted.is_some());
+        assert!(
+            coordinator
+                .session()
+                .accepted_state()
+                .expect("accepted Fillet after dimension deletion")
+                .document()
+                .dimension(radius_dimension)
+                .is_none()
+        );
+        let radius_before_second_drag = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted dimension-free Fillet")
+            .document()
+            .scalar(radius)
+            .expect("dimension-free Fillet radius")
+            .value;
+        let (second_center_before, second_center_after) =
+            drag_operation_arc_body_once(&mut coordinator, arc, 204, [-10.0, -10.0]);
+        let accepted = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted second Fillet resize");
+        let radius_after_second_drag = accepted
+            .document()
+            .scalar(radius)
+            .expect("twice-resized Fillet radius")
+            .value;
+        assert!(
+            (second_center_after[0] - second_center_before[0])
+                .hypot(second_center_after[1] - second_center_before[1])
+                > 1.0e-4
+        );
+        assert!((radius_after_second_drag - radius_before_second_drag).abs() > 1.0e-4);
+        assert!(accepted.document().dimension(radius_dimension).is_none());
+        assert!(matches!(
+            &accepted
+                .document()
+                .curve_curve_fillet_for_arc(arc)
+                .expect("association survives both drags and dimension deletion")
+                .definition,
+            DocumentConstraintDefinition::CurveCurveFillet { arc: retained, .. }
+                if *retained == arc
+        ));
     }
 
     #[test]

@@ -179,12 +179,15 @@ parameters. All contact, direction, curvature and continuity branches remain exp
 M66 adds a separate Fillet-only `OperationAuthoringState` rather than overloading the fixed-arity
 M62 constraint/dimension collector. The editor owns finite
 model-space picks, operand progression, explicit options and branch corrections, typed warnings,
-scratch accepted previews, Apply/Escape semantics and repeated-mode re-arming. The retained
+scratch accepted previews, Apply/Escape semantics, rejected-attempt re-arming and successful
+publication notification that exits operation collection. The retained
 coordinator captures exact operation snapshots, executes public proposals on scratch retained
 state and publishes only through the operations companion's exact-input compare-and-swap path.
-Presentation code forwards events and renders DTOs; it does not locate fillet roots or apply
-document operations independently. M25 Offset constraints and the M58 exact Mirror operation API
-remain available to domain consumers, but M66 does not author them in this state machine.
+The thin workbench completion adapter maps that coordinator result to either successful state exit
+plus explicit `EditorTool::Select`, or failed-attempt re-arming. Presentation code otherwise
+forwards events and renders DTOs; it does not locate fillet roots or apply document operations
+independently. M25 Offset constraints and the M58 exact Mirror operation API remain available to
+domain consumers, but M66 does not author them in this state machine.
 
 The sketch domain exposes the small, non-mutating
 `SketchDocument::certify_line_curve_fillet_branch_cell` query. It reuses the outward-rounded
@@ -398,9 +401,12 @@ items; `256` each nonlinear iterations, factorizations and rank kernels; `512` r
 preview. M65 adds no alternate-assembly search, preview UI or fixture.
 
 M66 places Fillet in the **Modify** palette. Compatible ordinary selection may seed a headless
-candidate, while empty selection enters repeated operation mode. Only an independently accepted
-scratch result is drawn as operation preview; Apply/Enter publishes that exact proposal through
-normal retained history and Escape clears the candidate before exiting the tool. Fillet controls
+candidate, while empty selection enters operation collection mode. Only an independently accepted
+scratch result is drawn as operation preview. Apply/Enter requests publication of that exact
+proposal through normal retained history; only after publication succeeds does the common host
+handoff exit collection and explicitly restore ordinary Select so the selected output arc can be
+dragged immediately. A failed Apply attempt re-arms collection, while Escape clears the candidate
+before exiting the tool. Fillet controls
 are a viewport-clamped canvas overlay rather than children of the scrolling palette. Operation
 hover and click both consume the same headless, preview-aware inclusive 12-pixel acquisition
 result, including the exact boundary and persistent-identity tie policy; a preview-only foreground

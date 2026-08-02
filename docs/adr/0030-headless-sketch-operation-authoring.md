@@ -49,12 +49,15 @@ fixed-arity constraint/dimension `AuthoringState`. The state publishes finite mo
 expected next operands, pending stages, branch/radius options, warnings, preview status and
 terminal outcomes. A pick carries persistent selection identity, exact curve parameter where
 applicable and finite model position. Compatible selection may seed the operation once; empty
-selection enters persistent repeated mode.
+selection enters operand-collection mode.
 
-The first Escape clears a staged candidate and the second exits the tool. Apply or Enter commits a
-complete accepted preview. Pan and zoom remain available while Fillet is active. Confirmed success,
-retained rejection, unsupported input or coordinator failure clears the completed candidate and
-re-arms repeated mode without changing remembered process-local options.
+The first Escape clears a staged candidate and the second exits the tool. Apply or Enter requests
+commit of a complete accepted preview. Pan and zoom remain available while Fillet is active. Only
+after the exact coordinator publication succeeds does the host send the trusted
+`publication_succeeded` notification, exit operation collection and explicitly activate ordinary
+Select so the newly selected output arc is immediately draggable. A failed Apply attempt clears
+the completed candidate and re-arms collection without changing remembered process-local options.
+Unsupported input stays typed and mutation-free according to its current acquisition stage.
 
 An unconfirmed hover is different. If pointer-derived radius/branch synthesis becomes invalid, the
 state clears only the transient candidate and scratch preview. It retains both parents and remains
@@ -63,7 +66,7 @@ is the required disposition for `M66-F008`.
 
 ### Preview, current-publication eligibility and publication
 
-`RetainedEditorCoordinator` owns the complete Fillet lifecycle:
+`RetainedEditorCoordinator` owns the complete Fillet proposal, preview and publication lifecycle:
 
 1. capture one immutable `SketchOperationSnapshot` from the current retained session;
 2. synthesize one fully explicit public Fillet request from headless state;
@@ -84,7 +87,8 @@ This is `M66-F010`; it is not permission to accept a stale or rejected state.
 
 Cancelled, unsupported, incomplete, stale, exhausted or retained-rejected work cannot carry an
 accepted preview and cannot mutate live design, accepted state, selection or history. A successful
-commit selects the created arc. Undo, Redo, workspace persistence and later ordinary
+commit selects the created arc; the host's tested completion handoff then exits operation
+authoring and restores Select. Undo, Redo, workspace persistence and later ordinary
 constraint/dimension editing use the existing coordinator paths.
 
 ### Shared acquisition and preview barriers
@@ -163,12 +167,14 @@ outward-rounded symmetric-cubic and explicit-period certificates plus typed/non-
 direct sketch lifecycle tests own current-publication compatibility after successful point edits
 and rejection of genuinely stale/different input. Direct editor/coordinator tests own affine
 `Interior` persistence, line/curved certified-cell integration, typed two-curved-parent refusal,
-preselection, repeated
-collection, exact picked parameters, pointer radius placement, Reference/Driving intent,
+preselection, empty-selection collection, exact picked parameters, pointer radius placement,
+Reference/Driving intent,
 option/branch state, preview acceptance, invalid-hover recovery, Apply/Escape, stale work,
-semantic arc-center drag, shared hover/click acquisition, history and persistence. Direct
-workbench tests own only icon/palette presentation, overlay placement, event routing, preview
-rendering and ordinary editable sample integration.
+successful-mode exit, immediate default-Reference semantic arc-center drag, shared hover/click
+acquisition, history and persistence. Direct
+workbench tests own icon/palette presentation, overlay placement, event routing, preview rendering,
+the successful/failed operation-application completion reducer and ordinary editable sample
+integration.
 
 The existing M27/M28 derivative, all-family and independent-validation corpora remain the
 mathematical gate because M66 adds no residual. M25 Offset and M58 Mirror regressions must also

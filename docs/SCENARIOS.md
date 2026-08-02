@@ -1912,16 +1912,19 @@ camera and leaves every object editable. It contains no instruction, scripted ac
 entity, preselection or sample-owned operation policy. UAT instructions live only in
 `docs/M66_UAT.md`.
 
-The direct headless Fillet corpus covers both compatible preselection and persistent repeated
-authoring:
+The direct headless Fillet corpus covers both compatible preselection and empty-selection
+collection:
 
 1. canvas/tree picks preserve semantic span identity, exact picked parameter and finite model
    position; one event normally contributes one parent, while one unambiguous open-polyline
    interior point may atomically contribute its ordered previous/next spans;
 2. a complete request executes against one immutable operation snapshot and may expose preview
    only after scratch retained publication independently accepts the eligible current publication;
-3. Apply/Enter publishes through exact proposal compare-and-swap as one history step and selects
-   the created arc; first Escape clears the candidate and second Escape exits;
+3. Apply/Enter requests exact proposal compare-and-swap publication as one history step; successful
+   coordinator publication selects the created arc, after which the host completion handoff
+   preserves that selection, exits operation collection and restores ordinary Select so the arc
+   can be dragged immediately. A failed Apply attempt clears its candidate and re-arms collection,
+   while first Escape clears a candidate and second Escape exits;
 4. unsupported, incomplete, ambiguous, stale, cancelled, exhausted and retained-rejected work
    leaves live design, accepted scene and history unchanged; and
 5. an invalid unconfirmed radius hover is non-terminal: it clears only transient candidate/preview
@@ -1979,6 +1982,10 @@ that ignore only the transient candidate request; exact proposal publication rem
   symmetric cubic fixture excludes its remote root, the periodic fixture uses one explicit
   unwrapped period, and two non-affine-parent authoring remains typed unsupported without removing
   M28's generic Fillet API.
+- `M66-F012` proves the workbench's success/failure completion handoff, explicit Select restoration
+  and retained created-arc selection. The default-Reference arc immediately routes an ordinary
+  body drag to its stored center and changes radius through accepted geometry both before and after
+  deleting its non-driving radius dimension.
 
 The application workspace v3 envelope remains useful for this flexible-state cut while canonical
 sketch v4 and draft v5 remain unchanged. Restore treats accepted-materialization provenance only

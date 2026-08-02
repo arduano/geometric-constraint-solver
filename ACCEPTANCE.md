@@ -991,8 +991,9 @@ in `docs/M65_UAT.md`; M65 is complete.
 
 ## M66 acceptance: polished associative 2D Fillet authoring
 
-Status: active after the Fillet-only pivot. Build-source commit `c1b0336` has complete mechanical
-qualification; supervising-human approval remains open.
+Status: active after the Fillet-only pivot. Build-source commit `c1b0336` passed the initial
+mechanical qualification; the `M66-F012` replacement awaits the same complete gate before focused
+supervising-human UAT resumes.
 
 The unapproved three-tool candidate is preserved at
 `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`). Active M66 removes only its
@@ -1001,15 +1002,19 @@ signed Offset constraints and M58 exact supported-family Mirror operation-compan
 accepted baseline behavior.
 
 - A separate public Fillet-only headless operation-authoring state owns operand progression,
-  finite model-space picks, explicit branch/radius options, warnings, repeated mode, Apply/Enter
-  and candidate-first Escape without changing M62 constraint authoring semantics.
-- Compatible preselection seeds one candidate; empty selection enters repeated mode. A terminal
-  confirmed attempt re-arms repeated mode, while an invalid unconfirmed radius hover clears only
-  its transient candidate/preview and retains both parents in radius-placement mode (`M66-F008`).
+  finite model-space picks, explicit branch/radius options, warnings, collection mode,
+  Apply/Enter and candidate-first Escape without changing M62 constraint authoring semantics.
+- Compatible preselection seeds one candidate; empty selection enters collection mode. After
+  successful publication, the shared host completion adapter notifies the headless state, exits
+  collection and explicitly activates ordinary Select so the selected arc is immediately draggable
+  (`M66-F012`). A failed Apply attempt re-arms collection. An invalid unconfirmed radius hover
+  clears only its transient candidate/preview and retains both parents in radius-placement mode
+  (`M66-F008`).
 - Every preview comes from applying one prepared public Fillet proposal to scratch retained state
   and independently accepting the eligible current publication. Apply retains strict exact
   proposal compare-and-swap as one normal history edit; stale, cancelled, exhausted, incomplete or
-  rejected work mutates no live state.
+  rejected work mutates no live design, accepted scene, selection or history state. Transient
+  authoring state may clear or re-arm for recovery.
 - A domain-owned current-publication comparison ignores only a transient one-shot
   `candidate_request` when determining operation eligibility after a successful point edit. It
   still matches design, publication request, solver policy, activation, parameters, external

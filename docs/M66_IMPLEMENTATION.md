@@ -2,17 +2,18 @@
 
 # M66 implementation: polished associative 2D Fillet authoring
 
-Status: active after the 2026-08-02 Fillet-only pivot. Build-source commit `c1b0336` contains the
-line/curve branch-cell implementation and passes the complete post-pivot mechanical gate;
-supervising-human UAT remains open.
+Status: active after the 2026-08-02 Fillet-only pivot. Build-source commit `c1b0336` passed the
+initial post-pivot mechanical gate. `M66-F012` has a replacement implementation awaiting the same
+complete qualification; supervising-human UAT remains open.
 
 ## Scope and preserved history
 
 M66 now has one goal: exceptionally predictable, reusable authoring of an associative 2D Fillet.
-The headless editor owns parent collection, applicability, branch/radius options, warning recovery,
-shared hover/click acquisition, scratch preview and exact publication. The operations companion
-remains the deterministic public transaction producer, and the workbench remains a thin
-renderer/event adapter.
+The constraint-editor layer owns the reusable flow: its headless authoring state owns parent
+collection, applicability, branch/radius options and warning recovery, while its retained
+coordinator owns shared hover/click acquisition, scratch preview and exact publication. The
+operations companion remains the deterministic public transaction producer, and the workbench
+remains a thin renderer/event adapter.
 
 The superseded unapproved Fillet/Offset/Mirror candidate is preserved at
 `origin/archive/m66-three-helper-tools-2026-08-02`, commit `80d4939`. Active main removes only that
@@ -40,14 +41,14 @@ The Fillet-relevant earlier findings remain active regression obligations:
   live parent or stealing a Fillet placement click.
 - `M66-F005`: curve acquisition uses the inclusive 12-pixel nearest/tie policy.
 
-The post-pivot remediation adds five open findings:
+The post-pivot remediation adds six findings:
 
 - `M66-F007` — **canvas-overlay controls:** move Fillet options outside the scrolling palette and
   place them as a viewport-clamped overlay over the canvas. Pure placement tests own all viewport
   edges and resize.
 - `M66-F008` — **recoverable invalid hover:** an invalid unconfirmed radius hover clears only the
   transient candidate/preview, retaining both parents and the radius-placement stage. Confirmed
-  terminal failure may still re-arm repeated mode.
+  terminal failure may still re-arm collection mode.
 - `M66-F009` — **shared headless hover/click acquisition:** operation hover and click use the same
   preview-aware headless hit test, including the exact inclusive 12-pixel boundary, nearest
   distance, stable identity ties and preview-only barrier semantics.
@@ -62,6 +63,11 @@ The post-pivot remediation adds five open findings:
   barrier relative to the fixed affine-parent direction. Two non-affine-parent authoring is typed
   unsupported until pairwise continuation exists; the underlying M28 generic Fillet API remains
   unchanged.
+- `M66-F012` — **immediate accepted-arc interaction:** after successful publication, a shared
+  host completion reducer notifies the headless state, exits Fillet collection and explicitly
+  restores ordinary Select, allowing the selected Reference arc to resize immediately with its
+  non-driving dimension still present. A failed Apply attempt clears the terminal candidate and
+  re-arms collection.
 
 The superseded Offset findings `M66-F001` and `M66-F006` are archived with the three-tool candidate
 and are not active M66 UAT checks.
@@ -182,13 +188,21 @@ quarter-span window, periodic branch certificate, overlay-toggle reflow and M25/
 The only non-failure output was the pre-existing Cargo advisory that workspace crates specify both
 `license` and `license-file`.
 
+Focused native tests for `M66-F012` prove the exact workbench success/failure handoff, explicit
+Select restoration, retained output selection and process-local option memory. One integrated
+default-Reference authoring → publication → immediate arc-body center gesture → accepted resize →
+dimension deletion → second accepted resize lifecycle proves the reported UAT path. Complete
+replacement-source qualification is pending.
+
 ## 4. Acceptance status
 
-M66 remains open only for focused supervising-human UAT. Build-source commit `c1b0336` is the
-mechanically qualified candidate. Its regressions cover symmetric-cubic remote-root separation, an
+M66 remains open for replacement mechanical qualification and focused supervising-human UAT.
+Build-source commit `c1b0336` is the prior mechanically qualified candidate. Its regressions cover
+symmetric-cubic remote-root separation, an
 unwrapped periodic circle cell, affine `Interior` persistence, hostile free-Fillet edit rejection,
 multi-sample semantic pointer mobility, overlay reflow, persistence and exact publication. The
-archived three-tool candidate is historical evidence only and does not satisfy the active gate.
+replacement additionally closes the post-Apply routing trap. The archived three-tool candidate is
+historical evidence only and does not satisfy the active gate.
 
 ## 5. Known limitations or next blocker
 

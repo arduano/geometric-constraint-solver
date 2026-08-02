@@ -1,9 +1,8 @@
 # M66 focused UAT: polished associative 2D Fillet authoring
 
-Status: build-source commit `c1b0336` is mechanically qualified. Every human result remains
-Pending.
+Status: `M66-F012` replacement qualification is pending. Every human result remains Pending.
 
-Candidate source: `c1b0336` (`Narrow M66 to branch-safe Fillet authoring`).
+Candidate source: pending replacement qualification after `M66-F012`.
 
 Tailscale endpoint: `http://100.94.63.83:8080/` (release service restarted and HTTP 200 verified
 2026-08-02).
@@ -64,7 +63,8 @@ Notes:
 
 ### M66-U3 — Reference mobility and certified contact branches
 
-1. Place and Apply the default Reference Fillet.
+1. Place and Apply the default Reference Fillet. Confirm Fillet mode exits automatically and
+   ordinary Select becomes active.
 2. Drag its visible arc body and center through small and large valid motions. Observe radius,
    contacts and both parent trim endpoints.
 3. Delete the Reference radius dimension and repeat those drags. For a line-line/polyline Fillet,
@@ -75,12 +75,13 @@ Notes:
 5. Edit one source point successfully, then immediately start or continue Fillet authoring without
    refreshing the workspace.
 
-Expected: Reference is flexible and only explicit Driving intent locks radius. Arc-body/center
-drag keeps the Fillet association, contacts and trims coherent. Deleting the dimension neither
-explodes nor immobilizes the association. Affine pairs are not caged by a seed-centred parameter
-window. A line/curved pair remains inside a strict outward-rounded `Local` cell over the full
-bounded support or one explicit period, stopping conservatively at a real tangent-parallel branch
-barrier rather than jumping to a remote root. A successful point edit does not falsely trigger
+Expected: Reference is flexible and only explicit Driving intent locks radius. Successful Apply
+returns to Select, and arc-body/center drag works immediately with the Reference dimension still
+present. Drag keeps the Fillet association, contacts and trims coherent. Deleting the dimension
+neither explodes nor immobilizes the association. Affine pairs are not caged by a seed-centred
+parameter window. A line/curved pair remains inside a strict outward-rounded `Local` cell over the
+full bounded support or one explicit period, stopping conservatively at a real tangent-parallel
+branch barrier rather than jumping to a remote root. A successful point edit does not falsely trigger
 “helper operations require current accepted geometry.” Genuinely rejected or stale state still
 cannot preview or publish.
 
@@ -92,7 +93,7 @@ Notes:
 
 1. While a candidate is pending, use wheel zoom, middle-button pan, Fit and ordinary canvas
    inspection; then Apply with Enter and cancel with Escape.
-2. Confirm first Escape clears a candidate and second Escape exits Fillet mode.
+2. Before Apply, confirm first Escape clears a candidate and second Escape exits Fillet mode.
 3. Create both a free and Driving Fillet, Undo/Redo each, save/reload the ordinary workspace and
    continue editing the retained output.
 4. Deliberately stage invalid, rejected and stale candidates and verify the last independently
@@ -121,6 +122,7 @@ Notes:
 | `M66-F009` | Click acquisition became wider but CSS stroke hover still used the painted line, so visible hover and actual click disagreed. | Route operation hover and click through the same preview-aware headless hit test, including exact 12-pixel boundary and preview barriers. | Implemented and mechanically qualified; U2 human retest Pending. |
 | `M66-F010` | A successful point drag left accepted geometry usable but literal input equality falsely disabled helper authoring because the one-shot candidate request was no longer retained. | Add sketch-owned current-publication compatibility that ignores only `candidate_request`; retain all other input/attempt identity checks and exact proposal CAS. | Implemented and mechanically qualified; U3 human retest Pending. |
 | `M66-F011` | After deleting the radius dimension, a free Fillet still had an arbitrary apparent minimum/maximum size. | Persist full `Interior` support for affine pairs. For exactly one non-affine parent, certify a strict curved `Local` cell over the full bounded support or one explicit unwrapped period using outward-rounded tangent/line cross-product intervals; never cross a tangent-parallel barrier. Keep two-non-affine authoring typed unsupported until pairwise continuation, without narrowing M28. | Implemented and mechanically qualified with exact hostile-root and mobility regressions; U3 human retest Pending. |
+| `M66-F012` | After Apply, the new Reference Fillet could not be resized; deleting its displayed dimension did not help. | After successful publication, use one tested host completion handoff to exit the headless Fillet collector and explicitly restore ordinary Select. Directly prove default Reference publication immediately routes arc-body drag to the semantic center and accepts radius changes both before and after dimension deletion. Keep failed Apply attempts recoverable. | Implemented; replacement mechanical qualification and U3 human retest Pending. |
 
 Every objective defect requires a direct owning-layer regression before targeted human recheck. A
 replacement candidate must be rebuilt and fully qualified even when a remaining change is

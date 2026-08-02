@@ -3016,8 +3016,9 @@ replacement candidate. M65 is closed; the historical candidate endpoint was
 
 ### M66: polished associative 2D Fillet authoring
 
-Status: active after the 2026-08-02 Fillet-only pivot. Build-source commit `c1b0336` passes the
-complete post-pivot mechanical gate; supervising-human UAT remains open.
+Status: active after the 2026-08-02 Fillet-only pivot. Build-source commit `c1b0336` passed the
+initial post-pivot mechanical gate; `M66-F012` now has a replacement implementation awaiting the
+same complete qualification before focused supervising-human UAT resumes.
 
 Goal: make associative 2D Fillet authoring exceptionally predictable and reusable, with branch
 synthesis, applicability, acquisition, scratch preview, recovery and publication owned by the
@@ -3033,9 +3034,11 @@ M58's exact supported-family Mirror operation-companion API/history remain uncha
   active main.
 - [x] Retain ADR 0030's one-way editor-to-operations dependency and a separate Fillet
   `OperationAuthoringState`; do not overload M62 constraint/dimension authoring or add equations.
-- [x] Retain compatible preselection and empty-selection repeated mode, Apply/Enter, candidate-first
-  Escape, immutable scratch preparation, independent accepted-preview validation and exact
-  proposal compare-and-swap publication through one normal history edit.
+- [x] Retain compatible preselection and empty-selection collection mode, Apply/Enter,
+  candidate-first Escape, immutable scratch preparation, independent accepted-preview validation
+  and exact proposal compare-and-swap publication through one normal history edit. Rejected
+  terminal attempts re-arm collection; successful publication notifies the headless exit and the
+  host restores ordinary Select.
 - [x] Retain complete branch-explicit M28 request synthesis, pointer-derived Reference radius by
   default, explicit Driving intent, adjacent-open-polyline corner resolution and semantic arc-body
   drag through its stored center (`M66-F002` through `M66-F004`).
@@ -3058,9 +3061,14 @@ M58's exact supported-family Mirror operation-companion API/history remain uncha
   cannot cross a tangent-parallel barrier relative to the fixed affine-parent direction. Two
   non-affine-parent authoring is typed unsupported until pairwise continuation is implemented;
   this does not narrow the existing all-family M28 generic Fillet document/API surface.
-- [x] Directly regress F002-F005 and F007-F011 across operations/editor/coordinator/workbench owners,
+- [x] `M66-F012`: add a trusted headless successful-publication transition that exits Fillet
+  collection, and make the shared workbench completion adapter explicitly restore ordinary Select
+  so the selected output arc is immediately draggable. A failed Apply attempt retains the prior
+  re-arm behavior; invalid unconfirmed hover still retains both parents.
+- [x] Directly regress F002-F005 and F007-F012 across operations/editor/coordinator/workbench owners,
   including invalid-hover recovery, exact 12-pixel hover/click parity, point-edit publication
-  eligibility, persistence, Undo/Redo and free-Fillet motion.
+  eligibility, persistence, Undo/Redo, successful-mode exit and default-Reference motion before
+  dimension deletion.
 - [x] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature
   demo-web WASM check, release Trunk build and `git diff --check` on one post-pivot source state.
 - [ ] Complete and explicitly approve the Fillet-only `docs/M66_UAT.md`.
@@ -3068,14 +3076,16 @@ M58's exact supported-family Mirror operation-companion API/history remain uncha
 Gate: the only M66 tool is Fillet, driven entirely by public headless metadata and independently
 accepted public proposals through ordinary retained history. Both parents and every
 side/span/winding/order/sweep choice are explicit; pointer placement is a radius seed, not hidden
-hard intent. Invalid hover is recoverable without losing parents, hover and click share exact
-headless acquisition, controls do not clip, a successful point edit does not make current accepted
-geometry falsely ineligible, and a free authored line/curve Fillet cannot jump across its
-certified tangent branch. Line-line/polyline contacts retain full `Interior` support; two
+hard intent. After successful publication, the host completion handoff exits Fillet collection and
+restores Select so the new arc is immediately editable; a failed Apply remains re-armed. Invalid
+hover is recoverable without losing parents, hover and click share exact headless acquisition,
+controls do not clip, a successful point edit does not make current accepted geometry falsely
+ineligible, and a free authored line/curve Fillet cannot
+jump across its certified tangent branch. Line-line/polyline contacts retain full `Interior`
+support; two
 non-affine-parent authoring remains a typed scoped limitation while the underlying M28 generic
 Fillet API remains unchanged. Unsupported or ambiguous geometry remains typed and mutation-free.
-No browser equation
-or applicability matrix, Offset/Mirror authoring, M66 line-offset request, global Fillet-root
+No browser equation or applicability matrix, Offset/Mirror authoring, M66 line-offset request, global Fillet-root
 enumeration, persistent feature tree, legacy harness, `/#/dev/lab`, browser E2E or mobile claim is
 added. M66 closes only after one post-pivot source passes the full mechanical gate and the
 supervising human explicitly approves the focused UAT.
@@ -3085,7 +3095,11 @@ Mechanical qualification record (2026-08-02): build-source commit `c1b0336` pass
 workspace test suite, the all-feature `wasm32-unknown-unknown` demo-web check, the release Trunk
 build and `git diff --check`. The only output outside successful gates is the pre-existing Cargo
 advisory that workspace crates specify both `license` and `license-file`. M66 remains open solely
-for the focused supervising-human UAT.
+for the focused supervising-human UAT. That UAT subsequently found `M66-F012`: successful Apply
+left the Fillet collector active, which intercepted the selected output arc's ordinary pointer
+gesture. The replacement makes successful publication single-shot and directly regresses an
+immediate default-Reference resize with its non-driving dimension still present; complete
+replacement-source qualification is pending.
 
 ## Explicit non-goals
 

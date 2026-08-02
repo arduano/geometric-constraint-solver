@@ -124,6 +124,55 @@ fn recover_operation_preview_failure(
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
+#[derive(Debug)]
+struct OperationApplicationCompletion {
+    authoring_outcome: geosolve_constraint_editor::OperationAuthoringOutcome,
+    editor_effects: Vec<geosolve_constraint_editor::EditorEffect>,
+    clear_operation_pointer: bool,
+    close_fillet_options: bool,
+    notice: String,
+}
+
+/// Owns the thin-host handoff after an exact operation-application attempt.
+/// The coordinator result is already final: success exits operation collection
+/// and explicitly restores Select, while failure re-arms the existing tool.
+#[cfg(any(target_arch = "wasm32", test))]
+fn complete_operation_application(
+    state: &mut geosolve_constraint_editor::OperationAuthoringState,
+    coordinator: &mut geosolve_constraint_editor::RetainedEditorCoordinator,
+    result: Result<(), String>,
+) -> OperationApplicationCompletion {
+    match result {
+        Ok(()) => OperationApplicationCompletion {
+            authoring_outcome: state.publication_succeeded(),
+            editor_effects: coordinator
+                .editor_mut()
+                .activate_tool(geosolve_constraint_editor::EditorTool::Select),
+            clear_operation_pointer: true,
+            close_fillet_options: true,
+            notice: "Fillet accepted · Select active; drag its arc to resize".into(),
+        },
+        Err(error) => {
+            let authoring_outcome = if state.active_tool().is_some() {
+                state.transaction_finished();
+                geosolve_constraint_editor::OperationAuthoringOutcome::CandidateCleared(
+                    state.guidance(),
+                )
+            } else {
+                geosolve_constraint_editor::OperationAuthoringOutcome::Inactive
+            };
+            OperationApplicationCompletion {
+                authoring_outcome,
+                editor_effects: Vec::new(),
+                clear_operation_pointer: false,
+                close_fillet_options: false,
+                notice: format!("Operation was not applied: {error} · select new operands"),
+            }
+        }
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
 fn operation_canvas_hit(
     scene: &geosolve_constraint_editor::EditorScene,
     position: geosolve_constraint_editor::ScreenPoint,
@@ -1816,11 +1865,28 @@ pub(crate) mod wasm {
                     },
                 );
                 wb.coordinator.clear_operation_preview();
-                wb.operation_authoring.transaction_finished();
-                wb.notice = result.map_or_else(
-                    |error| format!("Operation was not applied: {error} · select new operands"),
-                    |()| "Operation accepted · select the next operands".into(),
-                );
+                let completion = {
+                    let Workbench {
+                        coordinator,
+                        operation_authoring,
+                        ..
+                    } = &mut *wb;
+                    super::complete_operation_application(operation_authoring, coordinator, result)
+                };
+                debug_assert!(matches!(
+                    completion.authoring_outcome,
+                    OperationAuthoringOutcome::ModeExited
+                        | OperationAuthoringOutcome::CandidateCleared(_)
+                        | OperationAuthoringOutcome::Inactive
+                ));
+                dispatch_effects(wb, completion.editor_effects);
+                if completion.clear_operation_pointer {
+                    wb.operation_pointer_position = None;
+                }
+                if completion.close_fillet_options {
+                    wb.fillet_options_open = false;
+                }
+                wb.notice = completion.notice;
             }
             OperationAuthoringOutcome::Warning(warning) => {
                 wb.notice = warning.message;
@@ -3063,10 +3129,11 @@ pub(crate) mod wasm {
 mod tests {
     use geosolve_constraint_editor::{
         AuthoringOperand, AuthoringOutcome, AuthoringState, AuthoringTool, ConstraintIntent,
-        EditorHoverState, Modifiers, OperationAuthoringCandidate, OperationAuthoringOutcome,
-        OperationAuthoringPreviewMetadata, OperationAuthoringPreviewOutcome,
-        OperationAuthoringState, OperationAuthoringTool, PickTolerance, PointerInput,
-        RetainedEditorCoordinator, ScreenPoint, SelectionItem, Viewport,
+        EditorHoverState, EditorTool, Modifiers, OperationAuthoringCandidate,
+        OperationAuthoringOutcome, OperationAuthoringPreviewMetadata,
+        OperationAuthoringPreviewOutcome, OperationAuthoringState, OperationAuthoringTool,
+        PickTolerance, PointerInput, RetainedEditorCoordinator, ScreenPoint, SelectionItem,
+        Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -3076,9 +3143,9 @@ mod tests {
 
     use super::{
         AuthoringItemInput, OverlayRect, PointerMoveQueue, canvas_overlay_position,
-        change_owns_option_control_click, geometry_hover_selector, operation_apply_available,
-        operation_canvas_hit, operation_geometry_hover, operation_preview_reusable,
-        operation_stage_accepts_geometry, owns_authoring_pick,
+        change_owns_option_control_click, complete_operation_application, geometry_hover_selector,
+        operation_apply_available, operation_canvas_hit, operation_geometry_hover,
+        operation_preview_reusable, operation_stage_accepts_geometry, owns_authoring_pick,
         palette_details_overlay_reflow_listener, recover_operation_preview_failure,
         route_operation_canvas_pointer_down, route_operation_item_pick,
     };
@@ -3558,6 +3625,61 @@ mod tests {
         ));
         assert!(state.picks().is_empty());
         assert!(state.candidate().is_none());
+        assert!(coordinator.operation_preview().is_none());
+    }
+
+    #[test]
+    fn operation_application_handoff_exits_on_success_and_rearms_on_failure() {
+        let (mut coordinator, _, points) = fillet_operation_fixture();
+        let mut state = OperationAuthoringState::default();
+        let (candidate, metadata) =
+            prepare_confirmed_fillet(&mut coordinator, &mut state, points[1]);
+        let _ = coordinator.editor_mut().activate_tool(EditorTool::Line);
+        let result = coordinator
+            .apply_operation_preview(metadata.token, &candidate)
+            .map(|_| ())
+            .map_err(|error| error.to_string());
+        coordinator.clear_operation_preview();
+        let completion = complete_operation_application(&mut state, &mut coordinator, result);
+        assert!(matches!(
+            completion.authoring_outcome,
+            OperationAuthoringOutcome::ModeExited
+        ));
+        assert!(completion.clear_operation_pointer);
+        assert!(completion.close_fillet_options);
+        assert!(completion.notice.contains("Select active"));
+        assert!(completion.editor_effects.is_empty());
+        assert_eq!(state.active_tool(), None);
+        assert_eq!(coordinator.editor().tool(), EditorTool::Select);
+        assert!(matches!(
+            coordinator.editor().selection(),
+            [SelectionItem::Curve(span)] if span.curve == metadata.primary_created_curve
+        ));
+        assert!(coordinator.operation_preview().is_none());
+
+        let (mut coordinator, _, points) = fillet_operation_fixture();
+        let mut state = OperationAuthoringState::default();
+        let (candidate, metadata) =
+            prepare_confirmed_fillet(&mut coordinator, &mut state, points[1]);
+        coordinator.clear_operation_preview();
+        let result = coordinator
+            .apply_operation_preview(metadata.token, &candidate)
+            .map(|_| ())
+            .map_err(|error| error.to_string());
+        assert!(result.is_err());
+        let completion = complete_operation_application(&mut state, &mut coordinator, result);
+        assert!(matches!(
+            completion.authoring_outcome,
+            OperationAuthoringOutcome::CandidateCleared(_)
+        ));
+        assert!(!completion.clear_operation_pointer);
+        assert!(!completion.close_fillet_options);
+        assert!(completion.notice.contains("was not applied"));
+        assert!(completion.editor_effects.is_empty());
+        assert_eq!(state.active_tool(), Some(OperationAuthoringTool::Fillet));
+        assert!(state.picks().is_empty());
+        assert!(state.candidate().is_none());
+        assert!(!state.candidate_confirmed());
         assert!(coordinator.operation_preview().is_none());
     }
 
