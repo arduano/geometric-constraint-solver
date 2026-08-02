@@ -113,8 +113,10 @@ of the baseline. Build-source commit `c1b0336` replaces seed-centred Fillet cont
 closed branch-safe policy: affine line/polyline parents use full `Interior` support; a line/curved
 pair uses an outward-rounded certified curved `Local` cell over the complete bounded span or one
 explicit period; and two non-affine-parent authoring is typed unsupported until pairwise
-continuation exists. This does not narrow M28's underlying all-family generic Fillet API. The
-post-pivot source passes the full native/WASM/release gate; focused human UAT remains open.
+continuation exists. This does not narrow M28's underlying all-family generic Fillet API.
+Replacement build-source commit `ff15c78` additionally exits Fillet collection and restores Select
+after successful publication, making the new Reference arc immediately draggable. That source
+passes the full native/WASM/release gate; focused human UAT remains open.
 M62 follow-up `M62-F001` corrects accepted-state line-angle seeding and exposes acute-degree
 presentation while retaining the explicit directed-radian solver branch.
 Follow-up `M62-F002` gives canvas pointer-down exclusive ownership of canvas authoring picks,

@@ -203,7 +203,8 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - Corrected the M66 post-Apply lifecycle with one tested host completion handoff: successful Fillet
   publication exits the headless collector and explicitly restores ordinary Select, while a failed
   Apply attempt re-arms collection. A default Reference Fillet is immediately draggable through
-  its semantic center both before and after deleting its non-driving radius dimension.
+  its semantic center both before and after deleting its non-driving radius dimension. Replacement
+  build-source commit `ff15c78` passes the complete native, warnings-denied, WASM and release gate.
 - Preserved the superseded Fillet/Offset/Mirror candidate for historical inspection at
   `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`). It is not an active or approved
   M66 candidate.

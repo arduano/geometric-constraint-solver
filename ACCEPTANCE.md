@@ -991,9 +991,8 @@ in `docs/M65_UAT.md`; M65 is complete.
 
 ## M66 acceptance: polished associative 2D Fillet authoring
 
-Status: active after the Fillet-only pivot. Build-source commit `c1b0336` passed the initial
-mechanical qualification; the `M66-F012` replacement awaits the same complete gate before focused
-supervising-human UAT resumes.
+Status: active after the Fillet-only pivot. Replacement build-source commit `ff15c78` passes the
+complete mechanical gate including `M66-F012`; focused supervising-human UAT remains open.
 
 The unapproved three-tool candidate is preserved at
 `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`). Active M66 removes only its
@@ -1058,15 +1057,16 @@ accepted baseline behavior.
   accepted scratch preview and the editable **2D fillet workshop**. Pan/zoom remains usable, the
   browser owns no applicability/branch/root formula, and no Offset/Mirror M66 action, option or
   sample remains.
-- Direct sketch, operation, editor/coordinator and workbench tests cover F002-F005 and F007-F011,
+- Direct sketch, operation, editor/coordinator and workbench tests cover F002-F005 and F007-F012,
   including parent retention after invalid hover, overlay placement, exact hover/click boundaries,
   point-edit publication eligibility, affine `Interior` neighborhoods, certified symmetric-cubic
   and unwrapped-periodic line/curve branch cells, typed two-curved-parent refusal, exact request state,
-  preview/commit lifecycle, stale/rejected retention, Undo/Redo, workspace reload and sample
+  preview/commit lifecycle, successful-mode exit, immediate default-Reference resizing before and
+  after dimension deletion, stale/rejected retention, Undo/Redo, workspace reload and sample
   editability. Existing M27/M28 derivative and independent-validation corpora remain green; M66
   adds no residual. M25/M58 regression coverage also confirms the pre-M66 APIs were not removed.
 - Formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature demo-web
-  WASM, release Trunk and `git diff --check` pass on nominated build-source commit `c1b0336`.
+  WASM, release Trunk and `git diff --check` pass on nominated build-source commit `ff15c78`.
 - The supervising human explicitly approves `docs/M66_UAT.md`; no correctness, data-loss,
   misleading-preview or basic Fillet-authoring blocker remains.
 
@@ -1077,8 +1077,8 @@ freeze, new equations, browser E2E, `/#/dev/lab` or mobile behavior.
 
 Qualification record (2026-08-02): `cargo fmt --all -- --check`, warnings-denied locked workspace
 Clippy, locked all-feature workspace tests, the all-feature demo-web WASM check, release Trunk and
-`git diff --check` all pass for build-source commit `c1b0336`. The focused human scorecard remains
-Pending, so this mechanical acceptance does not close M66.
+`git diff --check` all pass for replacement build-source commit `ff15c78`. The focused human
+scorecard remains Pending, so this mechanical acceptance does not close M66.
 
 ### M54: stable diagnostics
 

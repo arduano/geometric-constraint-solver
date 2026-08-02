@@ -3016,9 +3016,9 @@ replacement candidate. M65 is closed; the historical candidate endpoint was
 
 ### M66: polished associative 2D Fillet authoring
 
-Status: active after the 2026-08-02 Fillet-only pivot. Build-source commit `c1b0336` passed the
-initial post-pivot mechanical gate; `M66-F012` now has a replacement implementation awaiting the
-same complete qualification before focused supervising-human UAT resumes.
+Status: active after the 2026-08-02 Fillet-only pivot. Replacement build-source commit `ff15c78`
+passes the complete mechanical gate including `M66-F012`; focused supervising-human UAT remains
+open.
 
 Goal: make associative 2D Fillet authoring exceptionally predictable and reusable, with branch
 synthesis, applicability, acquisition, scratch preview, recovery and publication owned by the
@@ -3097,9 +3097,11 @@ build and `git diff --check`. The only output outside successful gates is the pr
 advisory that workspace crates specify both `license` and `license-file`. M66 remains open solely
 for the focused supervising-human UAT. That UAT subsequently found `M66-F012`: successful Apply
 left the Fillet collector active, which intercepted the selected output arc's ordinary pointer
-gesture. The replacement makes successful publication single-shot and directly regresses an
-immediate default-Reference resize with its non-driving dimension still present; complete
-replacement-source qualification is pending.
+gesture. Replacement build-source commit `ff15c78` makes successful publication single-shot and
+directly regresses an immediate default-Reference resize with its non-driving dimension still
+present. It passes formatting, warnings-denied Clippy, locked all-feature workspace tests, the
+all-feature WASM check, release Trunk build and `git diff --check`; M66 is again open solely for
+focused supervising-human UAT.
 
 ## Explicit non-goals
 

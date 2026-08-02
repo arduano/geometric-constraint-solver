@@ -2,9 +2,8 @@
 
 # M66 implementation: polished associative 2D Fillet authoring
 
-Status: active after the 2026-08-02 Fillet-only pivot. Build-source commit `c1b0336` passed the
-initial post-pivot mechanical gate. `M66-F012` has a replacement implementation awaiting the same
-complete qualification; supervising-human UAT remains open.
+Status: active after the 2026-08-02 Fillet-only pivot. Replacement build-source commit `ff15c78`
+passes the complete mechanical gate including `M66-F012`; supervising-human UAT remains open.
 
 ## Scope and preserved history
 
@@ -188,21 +187,21 @@ quarter-span window, periodic branch certificate, overlay-toggle reflow and M25/
 The only non-failure output was the pre-existing Cargo advisory that workspace crates specify both
 `license` and `license-file`.
 
-Focused native tests for `M66-F012` prove the exact workbench success/failure handoff, explicit
-Select restoration, retained output selection and process-local option memory. One integrated
-default-Reference authoring → publication → immediate arc-body center gesture → accepted resize →
-dimension deletion → second accepted resize lifecycle proves the reported UAT path. Complete
-replacement-source qualification is pending.
+Replacement build-source commit `ff15c78` passed the same six-command gate. Focused native tests
+for `M66-F012` prove the exact workbench success/failure handoff, explicit Select restoration,
+retained output selection and process-local option memory. One integrated default-Reference
+authoring → publication → immediate arc-body center gesture → accepted resize → dimension deletion
+→ second accepted resize lifecycle proves the reported UAT path. The WASM check and optimized
+Trunk release build also pass; no tracked or untracked build output was introduced.
 
 ## 4. Acceptance status
 
-M66 remains open for replacement mechanical qualification and focused supervising-human UAT.
-Build-source commit `c1b0336` is the prior mechanically qualified candidate. Its regressions cover
-symmetric-cubic remote-root separation, an
+M66 remains open only for focused supervising-human UAT. Build-source commit `c1b0336` first
+qualified symmetric-cubic remote-root separation, an
 unwrapped periodic circle cell, affine `Interior` persistence, hostile free-Fillet edit rejection,
-multi-sample semantic pointer mobility, overlay reflow, persistence and exact publication. The
-replacement additionally closes the post-Apply routing trap. The archived three-tool candidate is
-historical evidence only and does not satisfy the active gate.
+multi-sample semantic pointer mobility, overlay reflow, persistence and exact publication.
+Replacement `ff15c78` retains those results and closes the post-Apply routing trap. The archived
+three-tool candidate is historical evidence only and does not satisfy the active gate.
 
 ## 5. Known limitations or next blocker
 
@@ -216,4 +215,4 @@ historical evidence only and does not satisfy the active gate.
 - Offset/Mirror authoring is not part of active M66, although M25 Offset constraints and the M58
   Mirror operation API remain intact.
 - The next and only remaining gate is focused human `docs/M66_UAT.md` approval against build-source
-  commit `c1b0336` on the recorded Tailscale endpoint.
+  commit `ff15c78` on the recorded Tailscale endpoint.
