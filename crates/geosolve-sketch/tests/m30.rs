@@ -4,12 +4,12 @@
 use geosolve_core::{HardValidity, SolverConfig};
 use geosolve_geometry::Point2;
 use geosolve_sketch::{
-    AlphaScenarioIds, AlphaScenarioKind, ContactNeighborhood, CurveDefinition, CurveSpan,
-    DocumentAngleOrientation, DocumentBSplineSpanDirection, DocumentCommand,
+    AlphaScenarioIds, AlphaScenarioKind, ArcAngleRole, ContactNeighborhood, CurveDefinition,
+    CurveSpan, DocumentAngleOrientation, DocumentBSplineSpanDirection, DocumentCommand,
     DocumentConstraintDefinition, DocumentCurveMeasurementKind, DocumentCurveNormalSide,
     DocumentDimensionDefinition, DocumentDimensionMode, DocumentEdit, DocumentFilletEndpointOrder,
     DocumentFilletTrimEndpoint, DocumentLineOffsetOrientation, DocumentLineSide,
-    DocumentSolveRequest, SketchDocument, SketchDocumentSession, alpha_scenario,
+    DocumentSolveRequest, RuntimeCurve, SketchDocument, SketchDocumentSession, alpha_scenario,
 };
 
 const M30_SCENARIOS: [(AlphaScenarioKind, usize, usize); 12] = [
@@ -66,6 +66,51 @@ fn assert_round_trip(session: &SketchDocumentSession) {
             .unwrap(),
         json
     );
+}
+
+fn assert_fillet_runtime_is_bitwise_certified(
+    session: &SketchDocumentSession,
+    persistent_arc: geosolve_sketch::CurveId,
+) {
+    let runtime = session.runtime();
+    let compiled = runtime.sketch().compile(runtime.request()).unwrap();
+    let packed = compiled.problem().packed_state().unwrap();
+    let accepted = &runtime
+        .accepted_result()
+        .unstable_core_report()
+        .accepted_state;
+    assert_eq!(packed.layout(), accepted.layout());
+    assert_eq!(
+        packed
+            .ambient()
+            .iter()
+            .map(|value| value.to_bits())
+            .collect::<Vec<_>>(),
+        accepted
+            .ambient()
+            .iter()
+            .map(|value| value.to_bits())
+            .collect::<Vec<_>>()
+    );
+
+    let Some(RuntimeCurve::CircularArc(arc)) = session.mappings().runtime_curve(persistent_arc)
+    else {
+        panic!("persistent Fillet output must lower to one circular arc")
+    };
+    let geometry = runtime.sketch().geometry();
+    let solved = geometry.arc(*arc).unwrap();
+    for (role, expected) in [
+        (ArcAngleRole::Start, solved.start_angle),
+        (ArcAngleRole::End, solved.end_angle),
+    ] {
+        let variable = compiled.variable_for_arc_angle(*arc, role).unwrap();
+        let geosolve_core::VariableValue::Scalar(actual) =
+            compiled.problem().variable(variable).unwrap().value()
+        else {
+            panic!("arc angle coordinate must be scalar")
+        };
+        assert_eq!(actual.to_bits(), expected.to_bits());
+    }
 }
 
 #[test]
@@ -378,6 +423,7 @@ fn line_and_generic_fillet_drags_move_contacts_output_and_trim_state() {
                     kind.key(),
                     moved.solve()
                 );
+                assert_fillet_runtime_is_bitwise_certified(&preview, ids.fillet.arc);
             }
             preview
                 .rebuild_request(
@@ -413,6 +459,7 @@ fn line_and_generic_fillet_drags_move_contacts_output_and_trim_state() {
                 ))
                 .unwrap();
             assert!(moved.accepted(), "{}: {moved:#?}", kind.key());
+            assert_fillet_runtime_is_bitwise_certified(&session, ids.fillet.arc);
         }
         let center_after = point(session.document(), ids.fillet.center);
         assert!(
@@ -440,6 +487,7 @@ fn line_and_generic_fillet_drags_move_contacts_output_and_trim_state() {
             .map(|curve| session.document().visible_curve_intervals(curve).unwrap());
         assert_ne!(intervals_before, intervals_after, "{}", kind.key());
         assert_fillet_association(session.document(), &ids.fillet);
+        assert_fillet_runtime_is_bitwise_certified(&session, ids.fillet.arc);
         assert_eq!(session.history_len(), 1);
         assert_round_trip(&session);
     }

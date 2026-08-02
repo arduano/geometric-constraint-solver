@@ -13,11 +13,59 @@ use geosolve_sketch::{
     DocumentConstraintDefinition, DocumentCurveNormalSide, DocumentDimensionDefinition,
     DocumentDimensionMode, DocumentEdit, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint,
     DocumentObjectId, DocumentSolveRequest, DocumentTrimBoundary, DocumentTrimParameter,
-    FilletEndpointOrder, LineParameterDomain, ScalarDomain, ScalarUnit, Sketch, SketchCurve,
-    SketchCurveContact, SketchDocument, SketchDocumentSession, SketchPatch, SketchSession,
-    SketchSessionPatch, SketchSolveRequest, SketchSource, VisualProfileOptions,
+    FilletEndpointOrder, LineParameterDomain, RuntimeCurve, ScalarDomain, ScalarUnit, Sketch,
+    SketchCurve, SketchCurveContact, SketchDocument, SketchDocumentSession, SketchPatch,
+    SketchSession, SketchSessionPatch, SketchSolveRequest, SketchSource, VisualProfileOptions,
     VisualProfileStatus, alpha_scenario,
 };
+
+fn assert_fillet_runtime_is_bitwise_certified(
+    session: &SketchDocumentSession,
+    persistent_arcs: &[geosolve_sketch::CurveId],
+) {
+    let runtime = session.runtime();
+    let compiled = runtime.sketch().compile(runtime.request()).unwrap();
+    let packed = compiled.problem().packed_state().unwrap();
+    let accepted = &runtime
+        .accepted_result()
+        .unstable_core_report()
+        .accepted_state;
+    assert_eq!(packed.layout(), accepted.layout());
+    assert_eq!(
+        packed
+            .ambient()
+            .iter()
+            .map(|value| value.to_bits())
+            .collect::<Vec<_>>(),
+        accepted
+            .ambient()
+            .iter()
+            .map(|value| value.to_bits())
+            .collect::<Vec<_>>()
+    );
+
+    let geometry = runtime.sketch().geometry();
+    for persistent_arc in persistent_arcs {
+        let Some(RuntimeCurve::CircularArc(arc)) =
+            session.mappings().runtime_curve(*persistent_arc)
+        else {
+            panic!("persistent Fillet output must lower to one circular arc")
+        };
+        let solved = geometry.arc(*arc).unwrap();
+        for (role, expected) in [
+            (ArcAngleRole::Start, solved.start_angle),
+            (ArcAngleRole::End, solved.end_angle),
+        ] {
+            let variable = compiled.variable_for_arc_angle(*arc, role).unwrap();
+            let geosolve_core::VariableValue::Scalar(actual) =
+                compiled.problem().variable(variable).unwrap().value()
+            else {
+                panic!("arc angle coordinate must be scalar")
+            };
+            assert_eq!(actual.to_bits(), expected.to_bits());
+        }
+    }
+}
 
 struct LineCircleFixture {
     document: SketchDocument,
@@ -1026,6 +1074,7 @@ fn periodic_anchor_uses_unwrapped_local_root_and_singular_offsets_reject() {
         SolverConfig::default(),
     )
     .unwrap();
+    assert_fillet_runtime_is_bitwise_certified(&session, &[ids.arc]);
     let contact = session.document().contact(ids.contacts[0]).unwrap();
     assert_eq!(contact.winding, 1);
     assert!(matches!(

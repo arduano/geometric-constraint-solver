@@ -9923,6 +9923,12 @@ mod tests {
             preview.as_slice(),
             [EditorEffect::PreviewPointMove { point, .. }] if *point == center
         ));
+        let work = coordinator
+            .projected_drag_work_evidence()
+            .expect("Fillet arc gesture work");
+        assert!(work.accepted, "{work:#?}");
+        assert_eq!(work.attempts, 1);
+        assert_projected_drag_work_bounded(work);
         let expected = coordinator.session().design_identity();
         let release = coordinator
             .editor_mut()
@@ -9948,6 +9954,108 @@ mod tests {
             .expect("Fillet center after gesture")
             .position;
         (center_before, center_after)
+    }
+
+    fn drag_operation_point_once(
+        coordinator: &mut RetainedEditorCoordinator,
+        point: DesignPointId,
+        pointer_id: u64,
+        screen_delta: [f64; 2],
+    ) -> ([f64; 2], [f64; 2]) {
+        assert_eq!(coordinator.editor().tool(), EditorTool::Select);
+        let accepted = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted point before gesture");
+        let before = accepted
+            .document()
+            .point(point)
+            .expect("gesture point")
+            .position;
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            coordinator.session().design_identity(),
+            accepted.document(),
+            coordinator.session().design_document(),
+            Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport"),
+            0.5,
+        )
+        .expect("point gesture scene");
+        let press = scene
+            .points
+            .iter()
+            .find(|candidate| candidate.id == point)
+            .expect("visible gesture point")
+            .screen_position;
+        let moved = ScreenPoint {
+            x: press.x + screen_delta[0],
+            y: press.y + screen_delta[1],
+        };
+        let pointer = |position| PointerInput {
+            pointer_id,
+            position,
+            modifiers: Modifiers::default(),
+        };
+        let _ = coordinator.pointer_down(&scene, pointer(press));
+        let request = coordinator
+            .editor_mut()
+            .pointer_move(&scene, pointer(moved));
+        let [
+            EditorEffect::RequestProjectedPointMove {
+                pointer_id,
+                request_id,
+                point: requested,
+                model_position,
+            },
+        ] = request.as_slice()
+        else {
+            panic!("point must request one projected move")
+        };
+        assert_eq!(*requested, point);
+        let preview = coordinator.resolve_projected_point_move(
+            *pointer_id,
+            *request_id,
+            *requested,
+            *model_position,
+        );
+        let work = coordinator
+            .projected_drag_work_evidence()
+            .expect("point gesture work");
+        assert!(
+            matches!(
+                preview.as_slice(),
+                [EditorEffect::PreviewPointMove { point: previewed, .. }] if *previewed == point
+            ),
+            "preview={preview:#?}; work={work:#?}"
+        );
+        assert!(work.accepted, "{work:#?}");
+        assert_eq!(work.attempts, 1);
+        assert_projected_drag_work_bounded(work);
+        let expected = coordinator.session().design_identity();
+        let release = coordinator
+            .editor_mut()
+            .pointer_up(&scene, expected, pointer(moved));
+        assert!(matches!(
+            release.as_slice(),
+            [
+                EditorEffect::CommitPointMove { point: committed, .. },
+                EditorEffect::ClearPointPreview,
+            ] if *committed == point
+        ));
+        let mutation = coordinator
+            .apply_editor_effect(&release[0])
+            .expect("release point gesture")
+            .expect("point mutation");
+        assert!(mutation.published_accepted.is_some());
+        let after = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted point after gesture")
+            .document()
+            .point(point)
+            .expect("moved gesture point")
+            .position;
+        (before, after)
     }
 
     fn staged_fillet(
@@ -11542,6 +11650,234 @@ mod tests {
             DocumentConstraintDefinition::CurveCurveFillet { arc: retained, .. }
                 if *retained == arc
         ));
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one real pointer-authoring lifecycle qualifies three independent Fillet gestures on both sides of UI deletion"
+    )]
+    fn drawn_polyline_fillet_remains_interactive_after_ui_style_radius_deletion() {
+        let document = SketchDocument::new(10.0).expect("empty sketch");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("empty retained session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let viewport =
+            Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("authoring viewport");
+        let empty_scene = {
+            let accepted = coordinator
+                .session()
+                .accepted_state()
+                .expect("accepted empty sketch");
+            EditorScene::from_accepted_for_design(
+                accepted.identity().revision().get(),
+                coordinator.session().design_identity(),
+                accepted.document(),
+                coordinator.session().design_document(),
+                viewport,
+                0.5,
+            )
+            .expect("empty authoring scene")
+        };
+        let pointer = |position| PointerInput {
+            pointer_id: 301,
+            position: viewport.model_to_screen(position),
+            modifiers: Modifiers::default(),
+        };
+
+        let _ = coordinator.editor_mut().activate_tool(EditorTool::Polyline);
+        for position in [[-4.0, 0.0], [4.0, 0.0], [4.0, 4.0]] {
+            let effects = coordinator
+                .editor_mut()
+                .pointer_down(&empty_scene, pointer(position));
+            assert!(
+                effects
+                    .iter()
+                    .all(|effect| !matches!(effect, EditorEffect::CommitConstruction { .. }))
+            );
+        }
+        let expected = coordinator.session().design_identity();
+        let completion = coordinator.editor_mut().complete_draft(expected);
+        let construction = completion
+            .iter()
+            .find(|effect| matches!(effect, EditorEffect::CommitConstruction { .. }))
+            .expect("complete two-segment polyline");
+        let mutation = coordinator
+            .apply_editor_effect(construction)
+            .expect("apply polyline construction")
+            .expect("polyline mutation");
+        let EditorMutation::Construction(construction) = mutation.value else {
+            panic!("polyline construction mutation expected");
+        };
+        let points: [DesignPointId; 3] = construction
+            .points
+            .try_into()
+            .expect("three newly drawn polyline points");
+        let [polyline] = construction.curves.as_slice() else {
+            panic!("one newly drawn polyline");
+        };
+        let spans = [
+            CurveSpan {
+                curve: *polyline,
+                segment: 0,
+            },
+            CurveSpan {
+                curve: *polyline,
+                segment: 1,
+            },
+        ];
+
+        let operation_document = coordinator
+            .operation_authoring_document()
+            .expect("accepted drawn polyline")
+            .clone();
+        let picks = coordinator
+            .operation_picks_for_item(
+                OperationAuthoringTool::Fillet,
+                SelectionItem::Point(points[1]),
+                None,
+            )
+            .expect("corner expands to adjacent spans");
+        assert_eq!(
+            picks
+                .iter()
+                .filter_map(OperationAuthoringPick::curve_span)
+                .collect::<Vec<_>>(),
+            spans
+        );
+        let mut authoring = OperationAuthoringState::default();
+        let activated =
+            authoring.activate(&operation_document, OperationAuthoringTool::Fillet, &picks);
+        let OperationAuthoringOutcome::PreviewRequested {
+            candidate: unconfirmed,
+            ..
+        } = activated
+        else {
+            panic!("drawn corner must stage a Fillet preview: {activated:?}");
+        };
+        assert!(!unconfirmed.is_confirmed());
+        let _ = coordinator
+            .prepare_operation_preview(&unconfirmed)
+            .expect("prepare unconfirmed drawn-corner preview");
+
+        let confirmed = authoring.confirm(&operation_document, [3.8, 0.2]);
+        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = confirmed else {
+            panic!("drawn corner must confirm a Fillet preview: {confirmed:?}");
+        };
+        assert!(candidate.is_confirmed());
+        let SketchOperationRequest::AssociativeFillet { request, .. } = candidate.request() else {
+            panic!("drawn corner must resolve an associative Fillet request");
+        };
+        assert_eq!(request.radius_mode, DocumentDimensionMode::Reference);
+        let OperationAuthoringPreviewOutcome::Ready(metadata) = coordinator
+            .prepare_operation_preview(&candidate)
+            .expect("prepare confirmed drawn-corner preview")
+        else {
+            panic!("confirmed drawn-corner preview must be accepted");
+        };
+        assert!(metadata.apply_ready);
+        let mutation = coordinator
+            .apply_operation_preview(metadata.token, &candidate)
+            .expect("apply drawn-corner Fillet");
+        let arc = mutation.primary_created_curve;
+        assert_eq!(arc, metadata.primary_created_curve);
+        assert_eq!(
+            authoring.publication_succeeded(),
+            OperationAuthoringOutcome::ModeExited
+        );
+        assert_eq!(authoring.active_tool(), None);
+        let _ = coordinator.editor_mut().activate_tool(EditorTool::Select);
+        assert_eq!(coordinator.editor().tool(), EditorTool::Select);
+
+        let radius_dimension = coordinator
+            .session()
+            .design_document()
+            .dimensions()
+            .iter()
+            .find(|dimension| {
+                matches!(
+                    dimension.definition,
+                    DocumentDimensionDefinition::Radius { curve, .. } if curve == arc
+                )
+            })
+            .expect("generated Fillet radius dimension");
+        assert_eq!(radius_dimension.mode, DocumentDimensionMode::Reference);
+        let radius_dimension = radius_dimension.id;
+
+        let before_radius_deletion = coordinator.session().clone();
+        let mut arc_probe = RetainedEditorCoordinator::new(before_radius_deletion.clone())
+            .expect("pre-deletion arc probe");
+        let (before, after) = drag_operation_arc_body_once(&mut arc_probe, arc, 302, [-5.0, -5.0]);
+        assert!((after[0] - before[0]).hypot(after[1] - before[1]) > 1.0e-6);
+
+        let mut outer_point_probe = RetainedEditorCoordinator::new(before_radius_deletion.clone())
+            .expect("pre-deletion outer-point probe");
+        let (before, after) =
+            drag_operation_point_once(&mut outer_point_probe, points[0], 303, [4.0, -2.8]);
+        assert!((after[0] - before[0]).hypot(after[1] - before[1]) > 1.0e-6);
+
+        let mut corner_probe = RetainedEditorCoordinator::new(before_radius_deletion.clone())
+            .expect("pre-deletion shared-corner probe");
+        let (before, after) =
+            drag_operation_point_once(&mut corner_probe, points[1], 304, [4.0, -2.8]);
+        assert!((after[0] - before[0]).hypot(after[1] - before[1]) > 1.0e-6);
+
+        let mut second_outer_point_probe = RetainedEditorCoordinator::new(before_radius_deletion)
+            .expect("pre-deletion second outer-point probe");
+        let (before, after) =
+            drag_operation_point_once(&mut second_outer_point_probe, points[2], 305, [-2.8, 4.0]);
+        assert!((after[0] - before[0]).hypot(after[1] - before[1]) > 1.0e-6);
+
+        coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::Dimension(radius_dimension)]);
+        let expected = coordinator.session().design_identity();
+        let deletion = coordinator
+            .delete_selected(expected)
+            .expect("UI-style radius deletion");
+        assert!(deletion.published_accepted.is_some());
+        assert_eq!(
+            deletion.value,
+            [DocumentObjectId::Dimension(radius_dimension)]
+        );
+        let design = coordinator.session().design_document();
+        assert!(design.dimension(radius_dimension).is_none());
+        assert!(matches!(
+            &design
+                .curve_curve_fillet_for_arc(arc)
+                .expect("Fillet association survives radius deletion")
+                .definition,
+            DocumentConstraintDefinition::CurveCurveFillet { arc: retained, .. }
+                if *retained == arc
+        ));
+
+        let after_radius_deletion = coordinator.session().clone();
+        let mut arc_probe = RetainedEditorCoordinator::new(after_radius_deletion.clone())
+            .expect("post-deletion arc probe");
+        let (before, after) = drag_operation_arc_body_once(&mut arc_probe, arc, 306, [-5.0, -5.0]);
+        assert!((after[0] - before[0]).hypot(after[1] - before[1]) > 1.0e-6);
+
+        let mut outer_point_probe = RetainedEditorCoordinator::new(after_radius_deletion.clone())
+            .expect("post-deletion outer-point probe");
+        let (before, after) =
+            drag_operation_point_once(&mut outer_point_probe, points[0], 307, [4.0, -2.8]);
+        assert!((after[0] - before[0]).hypot(after[1] - before[1]) > 1.0e-6);
+
+        let mut corner_probe = RetainedEditorCoordinator::new(after_radius_deletion.clone())
+            .expect("post-deletion shared-corner probe");
+        let (before, after) =
+            drag_operation_point_once(&mut corner_probe, points[1], 308, [4.0, -2.8]);
+        assert!((after[0] - before[0]).hypot(after[1] - before[1]) > 1.0e-6);
+
+        let mut second_outer_point_probe = RetainedEditorCoordinator::new(after_radius_deletion)
+            .expect("post-deletion second outer-point probe");
+        let (before, after) =
+            drag_operation_point_once(&mut second_outer_point_probe, points[2], 309, [-2.8, 4.0]);
+        assert!((after[0] - before[0]).hypot(after[1] - before[1]) > 1.0e-6);
     }
 
     #[test]

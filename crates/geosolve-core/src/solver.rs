@@ -678,6 +678,26 @@ impl Problem {
         config: SolverConfig,
         controller: &mut OperationController,
     ) -> Result<Option<SolveReport>, CoreError> {
+        self.certify_current_state_inner(config, None, controller)
+            .map(|certification| certification.map(|(report, _)| report))
+    }
+
+    pub(crate) fn certify_current_state_preserving_secondary_with_controller(
+        &self,
+        retained: &Self,
+        retained_report: &SolveReport,
+        config: SolverConfig,
+        controller: &mut OperationController,
+    ) -> Result<Option<(SolveReport, ExactSecondaryPreservation)>, CoreError> {
+        self.certify_current_state_inner(config, Some((retained, retained_report)), controller)
+    }
+
+    fn certify_current_state_inner(
+        &self,
+        config: SolverConfig,
+        retained: Option<(&Self, &SolveReport)>,
+        controller: &mut OperationController,
+    ) -> Result<Option<(SolveReport, ExactSecondaryPreservation)>, CoreError> {
         config.validate()?;
         if controller
             .checkpoint(OperationCheckpoint::ComponentBoundary)
@@ -727,12 +747,15 @@ impl Problem {
                 trace: SolveTrace::default(),
             })
             .collect::<Vec<_>>();
-        let Some(PriorityPassOutcome {
-            reports,
-            component_participated,
-            component_state_changed,
-            ..
-        }) = certify_current_priorities(self, &plan, &state, config, controller)
+        let Some((
+            PriorityPassOutcome {
+                reports,
+                component_participated,
+                component_state_changed,
+                ..
+            },
+            secondary_preservation,
+        )) = certify_current_priorities(self, retained, &plan, &state, config, controller)?
         else {
             return Ok(None);
         };
@@ -749,7 +772,7 @@ impl Problem {
         {
             return Ok(None);
         }
-        let Some(report) = self.build_report(
+        let Some(mut report) = self.build_report(
             config,
             &plan,
             &executions,
@@ -762,13 +785,16 @@ impl Problem {
         else {
             return Ok(None);
         };
+        if let Some((_, retained_report)) = retained {
+            merge_exact_certification_execution_provenance(&mut report, retained_report);
+        }
         if controller
             .checkpoint(OperationCheckpoint::AfterFinalValidation)
             .is_err()
         {
             return Ok(None);
         }
-        Ok(Some(report))
+        Ok(Some((report, secondary_preservation)))
     }
 
     /// Solves edited/cache-invalid components and reuses independently validated cache entries.
@@ -1425,7 +1451,7 @@ impl Problem {
         }))
     }
 
-    fn update_decomposition_cache(
+    pub(crate) fn update_decomposition_cache(
         &mut self,
         plan: &EliminationPlan,
         report: &SolveReport,
@@ -1915,6 +1941,93 @@ struct PriorityPassOutcome {
     component_state_changed: Vec<bool>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct SecondaryResidualPreservation {
+    pub(crate) preserved: bool,
+    pub(crate) maximum_row_error: f64,
+    pub(crate) tolerance: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ExactSecondaryPreservation {
+    pub(crate) temporary: SecondaryResidualPreservation,
+    pub(crate) preference: SecondaryResidualPreservation,
+}
+
+fn merge_exact_certification_execution_provenance(fresh: &mut SolveReport, retained: &SolveReport) {
+    for component in &mut fresh.component_solves {
+        let Some(prior) = retained.component_solves.iter().find(|prior| {
+            prior.component_index == component.component_index
+                && prior.pattern_signature == component.pattern_signature
+                && prior.sparsity_signature == component.sparsity_signature
+        }) else {
+            continue;
+        };
+        component.actual_backend = prior.actual_backend;
+        component.symbolic_analysis_reused = prior.symbolic_analysis_reused;
+        component.symbolic_analysis_reuse_count = prior.symbolic_analysis_reuse_count;
+        component.sparse_fallback_reason = prior.sparse_fallback_reason;
+        component.reused = prior.reused;
+        component.secondary_participated |= prior.secondary_participated;
+        component.state_changed_by_secondary = prior.state_changed_by_secondary;
+        component.iterations = prior.iterations;
+        component.hard_termination = prior.hard_termination;
+        component.trace.clone_from(&prior.trace);
+    }
+    for priority in &mut fresh.priority_solves {
+        let Some(prior) = retained.priority_solves.iter().find(|prior| {
+            prior.group_index == priority.group_index
+                && prior.component_indices == priority.component_indices
+                && prior.scope == priority.scope
+                && prior.category == priority.category
+        }) else {
+            continue;
+        };
+        priority.backend = prior.backend;
+        priority.largest_explicit_nullspace_block_rows =
+            prior.largest_explicit_nullspace_block_rows;
+        priority.iterations = prior.iterations;
+    }
+    fresh.actual_backend = fresh
+        .component_solves
+        .iter()
+        .fold(None, |aggregate, component| {
+            merge_actual_backend(aggregate, component.actual_backend)
+        });
+    fresh.symbolic_analysis_reuse_count = fresh
+        .component_solves
+        .iter()
+        .map(|component| component.symbolic_analysis_reuse_count)
+        .sum();
+    fresh.symbolic_analysis_reused = fresh.symbolic_analysis_reuse_count > 0;
+    fresh.sparse_fallback_reason = fresh
+        .component_solves
+        .iter()
+        .find_map(|component| component.sparse_fallback_reason);
+    fresh.hard_termination = fresh
+        .component_solves
+        .iter()
+        .map(|component| component.hard_termination)
+        .fold(SolveTermination::Converged, worse_termination);
+    let mut trace = SolveTrace::default();
+    for component in &fresh.component_solves {
+        append_component_trace(&mut trace, &component.trace);
+    }
+    fresh.trace = trace;
+    fresh.iterations = fresh
+        .component_solves
+        .iter()
+        .map(|component| component.iterations)
+        .sum::<usize>()
+        .saturating_add(
+            fresh
+                .priority_solves
+                .iter()
+                .map(|priority| priority.iterations)
+                .sum::<usize>(),
+        );
+}
+
 #[derive(Debug)]
 struct PriorityReportRecord {
     report: PrioritySolveReport,
@@ -2192,34 +2305,116 @@ fn optimize_priorities(
 #[allow(clippy::too_many_lines)]
 fn certify_current_priorities(
     problem: &Problem,
+    retained: Option<(&Problem, &SolveReport)>,
     plan: &EliminationPlan,
     state: &VariableState,
     config: SolverConfig,
     controller: &mut OperationController,
-) -> Option<PriorityPassOutcome> {
+) -> Result<Option<(PriorityPassOutcome, ExactSecondaryPreservation)>, CoreError> {
     let priority_plan = build_priority_plan(problem, plan);
+    let unchanged = SecondaryResidualPreservation {
+        preserved: true,
+        maximum_row_error: 0.0,
+        tolerance: residual_target_row_tolerance(config),
+    };
+    let secondary_preservation = match retained {
+        Some((retained, _)) => {
+            let temporary_ids = priority_category_residual_ids(&priority_plan.temporary);
+            let preference_ids = priority_category_residual_ids(&priority_plan.preference);
+            let retained_group_linearizations = priority_plan
+                .temporary
+                .movable
+                .iter()
+                .chain(&priority_plan.preference.movable)
+                .map(|group| group.residual_ids.len())
+                .sum::<usize>();
+            let protected_temporary_linearizations = priority_plan
+                .preference
+                .movable
+                .iter()
+                .flat_map(|group| group.protected_temporary_groups.iter().copied())
+                .filter_map(|index| priority_plan.temporary.movable.get(index))
+                .map(|group| group.residual_ids.len())
+                .sum::<usize>();
+            let comparison_work = temporary_ids
+                .len()
+                .saturating_add(preference_ids.len())
+                .saturating_mul(2)
+                .saturating_add(retained_group_linearizations)
+                .saturating_add(protected_temporary_linearizations);
+            if controller
+                .charge(
+                    OperationWorkCounter::ComponentLinearizations,
+                    comparison_work,
+                    OperationCheckpoint::ComponentBoundary,
+                )
+                .is_err()
+            {
+                return Ok(None);
+            }
+            ExactSecondaryPreservation {
+                temporary: category_residual_preservation(
+                    problem,
+                    retained,
+                    state,
+                    ResidualCategory::Temporary,
+                    &temporary_ids,
+                    config,
+                )?,
+                preference: category_residual_preservation(
+                    problem,
+                    retained,
+                    state,
+                    ResidualCategory::Preference,
+                    &preference_ids,
+                    config,
+                )?,
+            }
+        }
+        None => ExactSecondaryPreservation {
+            temporary: unchanged,
+            preference: unchanged,
+        },
+    };
     let mut reports = Vec::new();
     let mut component_participated = vec![false; plan.components.len()];
     let mut temporary_levels = vec![None; priority_plan.temporary.movable.len()];
 
     for group in &priority_plan.temporary.movable {
         if !charge_priority_certification(controller, &group.residual_ids) {
-            return None;
+            return Ok(None);
         }
         for &component_index in &group.component_indices {
             component_participated[component_index] = true;
         }
-        let record = certify_movable_priority(
-            problem,
-            state,
-            group,
-            ResidualCategory::Temporary,
-            &[],
-            config,
-        );
+        let record = match retained {
+            Some((retained_problem, retained_report)) => certify_preserved_priority_group(
+                problem,
+                retained_problem,
+                retained_report,
+                state,
+                group,
+                ResidualCategory::Temporary,
+                &[],
+                secondary_preservation.temporary.preserved,
+                secondary_preservation.temporary.preserved,
+                config,
+            ),
+            None => certify_movable_priority(
+                problem,
+                state,
+                group,
+                ResidualCategory::Temporary,
+                &[],
+                config,
+            ),
+        };
         if record.report.termination == SolveTermination::Converged
-            && record.report.status == SecondaryStatus::Optimal
-            && let Some(attained_cost) = record.report.final_cost
+            && matches!(
+                record.report.status,
+                SecondaryStatus::Optimal | SecondaryStatus::Acceptable
+            )
+            && let Some(attained_cost) = record.report.attained_temporary_cost
         {
             temporary_levels[group.group_index] = Some(TemporaryLevel {
                 group_index: group.group_index,
@@ -2234,7 +2429,7 @@ fn certify_current_priorities(
     let mut next_temporary_group = priority_plan.temporary.movable.len();
     if !priority_plan.temporary.fixed.is_empty() {
         if !charge_priority_certification(controller, &priority_plan.temporary.fixed) {
-            return None;
+            return Ok(None);
         }
         reports.push(evaluate_nonmoving_priority(
             problem,
@@ -2261,7 +2456,7 @@ fn certify_current_priorities(
 
     for group in &priority_plan.preference.movable {
         if !charge_priority_certification(controller, &group.residual_ids) {
-            return None;
+            return Ok(None);
         }
         for &component_index in &group.component_indices {
             component_participated[component_index] = true;
@@ -2272,14 +2467,28 @@ fn certify_current_priorities(
             .map(|&index| temporary_levels.get(index)?.clone())
             .collect::<Option<Vec<_>>>();
         reports.push(if let Some(protected) = protected {
-            certify_movable_priority(
-                problem,
-                state,
-                group,
-                ResidualCategory::Preference,
-                &protected,
-                config,
-            )
+            match retained {
+                Some((retained_problem, retained_report)) => certify_preserved_priority_group(
+                    problem,
+                    retained_problem,
+                    retained_report,
+                    state,
+                    group,
+                    ResidualCategory::Preference,
+                    &protected,
+                    secondary_preservation.preference.preserved,
+                    secondary_preservation.temporary.preserved,
+                    config,
+                ),
+                None => certify_movable_priority(
+                    problem,
+                    state,
+                    group,
+                    ResidualCategory::Preference,
+                    &protected,
+                    config,
+                ),
+            }
         } else {
             PriorityReportRecord {
                 report: priority_group_failure_report(
@@ -2298,7 +2507,7 @@ fn certify_current_priorities(
     let mut next_preference_group = priority_plan.preference.movable.len();
     if !priority_plan.preference.fixed.is_empty() {
         if !charge_priority_certification(controller, &priority_plan.preference.fixed) {
-            return None;
+            return Ok(None);
         }
         reports.push(evaluate_nonmoving_priority(
             problem,
@@ -2323,12 +2532,221 @@ fn certify_current_priorities(
         ));
     }
 
-    Some(PriorityPassOutcome {
-        state: state.clone(),
-        reports,
-        component_participated,
-        component_state_changed: vec![false; plan.components.len()],
+    Ok(Some((
+        PriorityPassOutcome {
+            state: state.clone(),
+            reports,
+            component_participated,
+            component_state_changed: vec![false; plan.components.len()],
+        },
+        secondary_preservation,
+    )))
+}
+
+fn priority_category_residual_ids(category: &PriorityCategoryPlan) -> Vec<ResidualId> {
+    let mut residual_ids = Vec::new();
+    for residual_id in category
+        .movable
+        .iter()
+        .flat_map(|group| group.residual_ids.iter().copied())
+        .chain(category.fixed.iter().copied())
+        .chain(category.invalid.iter().copied())
+    {
+        if !residual_ids.contains(&residual_id) {
+            residual_ids.push(residual_id);
+        }
+    }
+    residual_ids
+}
+
+fn category_residual_preservation(
+    problem: &Problem,
+    retained: &Problem,
+    state: &VariableState,
+    category: ResidualCategory,
+    residual_ids: &[ResidualId],
+    config: SolverConfig,
+) -> Result<SecondaryResidualPreservation, CoreError> {
+    let retained_state = retained.variable_state();
+    let before = retained.normalized_category_values_for_residuals(
+        &retained_state,
+        category,
+        residual_ids,
+    )?;
+    let after = problem.normalized_category_values_for_residuals(state, category, residual_ids)?;
+    if before.len() != after.len()
+        || before.iter().zip(&after).any(|(before, after)| {
+            before.0 != after.0 || before.1 != after.1 || before.2 != after.2
+        })
+    {
+        return Err(CoreError::InvalidAcceptedLinearization {
+            context: "exact-state synchronization changed a secondary residual layout",
+        });
+    }
+    let maximum_row_error = before
+        .iter()
+        .zip(&after)
+        .try_fold(0.0_f64, |maximum, (before, after)| {
+            let error = (after.3 - before.3).abs();
+            error.is_finite().then_some(maximum.max(error))
+        })
+        .ok_or(CoreError::InvalidAcceptedLinearization {
+            context: "exact-state synchronization produced a non-finite secondary residual",
+        })?;
+    let tolerance = residual_target_row_tolerance(config);
+    Ok(SecondaryResidualPreservation {
+        preserved: maximum_row_error <= tolerance,
+        maximum_row_error,
+        tolerance,
     })
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    reason = "one preserved priority group rebuilds its cost, status, and protected-Temporary evidence atomically"
+)]
+fn certify_preserved_priority_group(
+    problem: &Problem,
+    retained_problem: &Problem,
+    retained_report: &SolveReport,
+    state: &VariableState,
+    group: &PriorityGroup,
+    category: ResidualCategory,
+    protected: &[TemporaryLevel],
+    category_rows_preserved: bool,
+    temporary_rows_preserved: bool,
+    config: SolverConfig,
+) -> PriorityReportRecord {
+    let retained_group = retained_report.priority_solves.iter().find(|report| {
+        report.group_index == group.group_index
+            && report.component_indices == group.component_indices
+            && report.category == category
+            && report.scope == PrioritySolveScope::Movable
+    });
+    let retained_state = retained_problem.variable_state();
+    let before =
+        priority_cost_for_residuals(retained_problem, &retained_state, &group.residual_ids);
+    let after = priority_cost_for_residuals(problem, state, &group.residual_ids);
+    let mut valid = category_rows_preserved;
+    let (initial_cost, final_cost) = if let (Ok(initial), Ok(final_cost)) = (before, after) {
+        (Some(initial), Some(final_cost))
+    } else {
+        valid = false;
+        (None, None)
+    };
+    let mut attained_temporary_cost = None;
+    if category == ResidualCategory::Temporary {
+        attained_temporary_cost = retained_group.and_then(|report| report.attained_temporary_cost);
+        let rows = priority_residual_rows(problem, &group.residual_ids);
+        valid &= attained_temporary_cost.is_some_and(|attained| {
+            initial_cost
+                .is_some_and(|cost| priority_cost_within_vector_limit(cost, attained, rows, config))
+                && final_cost.is_some_and(|cost| {
+                    priority_cost_within_vector_limit(cost, attained, rows, config)
+                })
+        });
+    }
+    valid &= retained_group.is_some_and(|report| {
+        !matches!(
+            report.status,
+            SecondaryStatus::NotRequested | SecondaryStatus::EvaluationFailure
+        ) && !matches!(
+            report.termination,
+            SolveTermination::InvalidGeometry | SolveTermination::NumericalFailure
+        )
+    });
+    let (termination, status) = if !valid {
+        (
+            SolveTermination::NumericalFailure,
+            SecondaryStatus::EvaluationFailure,
+        )
+    } else if final_cost == Some(0.0) {
+        (SolveTermination::Converged, SecondaryStatus::Optimal)
+    } else {
+        match retained_group
+            .expect("validated retained priority group")
+            .status
+        {
+            SecondaryStatus::Optimal | SecondaryStatus::Acceptable => {
+                (SolveTermination::Converged, SecondaryStatus::Acceptable)
+            }
+            SecondaryStatus::Stalled => (SolveTermination::Stalled, SecondaryStatus::Stalled),
+            SecondaryStatus::IterationLimit => (
+                SolveTermination::IterationLimit,
+                SecondaryStatus::IterationLimit,
+            ),
+            SecondaryStatus::NotRequested | SecondaryStatus::EvaluationFailure => (
+                SolveTermination::NumericalFailure,
+                SecondaryStatus::EvaluationFailure,
+            ),
+        }
+    };
+
+    let mut protected_temporary = protected_reports(protected);
+    for protection in &mut protected_temporary {
+        let Some(level) = protected
+            .iter()
+            .find(|level| level.group_index == protection.group_index)
+        else {
+            protection.preserved = false;
+            continue;
+        };
+        let rows = priority_residual_rows(problem, &level.residual_ids);
+        protection.preservation_tolerance =
+            residual_vector_cost_tolerance(level.attained_cost, rows, config);
+        protection.final_cost =
+            priority_cost_for_residuals(problem, state, &level.residual_ids).ok();
+        protection.preserved = temporary_rows_preserved
+            && protection.final_cost.is_some_and(|cost| {
+                priority_cost_within_vector_limit(cost, level.attained_cost, rows, config)
+            });
+    }
+    let (termination, status) = if protected_temporary
+        .iter()
+        .all(|protection| protection.preserved)
+    {
+        (termination, status)
+    } else {
+        (
+            SolveTermination::NumericalFailure,
+            SecondaryStatus::EvaluationFailure,
+        )
+    };
+    PriorityReportRecord {
+        report: PrioritySolveReport {
+            group_index: group.group_index,
+            component_index: (group.component_indices.len() == 1)
+                .then_some(group.component_indices[0]),
+            component_indices: group.component_indices.clone(),
+            scope: PrioritySolveScope::Movable,
+            backend: None,
+            largest_explicit_nullspace_block_rows: 0,
+            protected_temporary,
+            category,
+            iterations: 0,
+            initial_cost,
+            final_cost,
+            attained_temporary_cost: match category {
+                ResidualCategory::Temporary => attained_temporary_cost,
+                ResidualCategory::Preference => protected.first().map(|level| level.attained_cost),
+                ResidualCategory::Hard => None,
+            },
+            termination,
+            status,
+        },
+        residual_ids: group.residual_ids.clone(),
+    }
+}
+
+fn priority_cost_within_vector_limit(
+    candidate: f64,
+    attained: f64,
+    residual_rows: usize,
+    config: SolverConfig,
+) -> bool {
+    candidate <= attained
+        || candidate - attained <= residual_vector_cost_tolerance(attained, residual_rows, config)
 }
 
 fn charge_priority_certification(

@@ -62,9 +62,9 @@ pub use residual::{
     ResidualEvaluatorClone, ResidualRowAudit, SourceConstraint,
 };
 pub use session::{
-    AcceptedAuditPatch, ComponentDependencyStamp, SessionCoreRejection, SessionDomainRejection,
-    SessionError, SessionPatch, SessionRevisions, SessionTransaction, SessionTransactionRejection,
-    SolveSession,
+    AcceptedAuditPatch, AcceptedStatePatch, ComponentDependencyStamp, SessionCoreRejection,
+    SessionDomainRejection, SessionError, SessionPatch, SessionRevisions, SessionTransaction,
+    SessionTransactionRejection, SolveSession,
 };
 pub use solver::{
     AUTO_SPARSE_MAX_DENSITY, AUTO_SPARSE_MIN_COLUMNS, AUTO_SPARSE_MIN_NNZ, AUTO_SPARSE_MIN_ROWS,

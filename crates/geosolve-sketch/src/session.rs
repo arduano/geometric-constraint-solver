@@ -1,7 +1,8 @@
 use geosolve_core::{
-    AcceptedAuditPatch, HardValidity, OperationCheckpoint, OperationControl, OperationController,
-    OperationOutcome, SessionCoreRejection, SessionDomainRejection, SessionError, SessionPatch,
-    SessionTransactionRejection, SolveSession, SolveTermination, SolverConfig,
+    AcceptedAuditPatch, AcceptedStatePatch, HardValidity, OperationCheckpoint, OperationControl,
+    OperationController, OperationOutcome, SessionCoreRejection, SessionDomainRejection,
+    SessionError, SessionPatch, SessionTransactionRejection, SolveSession, SolveTermination,
+    SolverConfig,
 };
 use geosolve_geometry::{Point2, Vector2};
 use thiserror::Error;
@@ -200,8 +201,12 @@ struct CompleteSketchCandidate {
     sketch: Sketch,
     geometry: SketchGeometry,
     reference_values: Vec<ReferenceDimensionValue>,
-    normalized_latents: Vec<SolvedLatent>,
     independent_hard_residual_max: f64,
+}
+
+#[derive(Debug)]
+struct PreparedSketchCandidate {
+    state: crate::compiler::SolvedSketchState,
 }
 
 struct DragLocalityCandidate {
@@ -212,12 +217,12 @@ struct DragLocalityCandidate {
 }
 
 #[derive(Clone, Copy)]
-enum CandidateCompletion {
+enum CandidateCertification {
     ProjectedSolve,
-    ExactCertification,
+    ExactState,
 }
 
-enum LatentSynchronization {
+enum AcceptedStateSynchronization {
     Unchanged,
     Committed,
     Rejected(Box<geosolve_core::SolveReport>, SolveRejection),
@@ -334,6 +339,7 @@ impl SketchSession {
             &sketch,
             request,
             config.normalized_residual_tolerance,
+            CandidateCertification::ExactState,
         )
         .map_err(|rejection| SketchSessionError::InitialRejected(rejection.reason))?;
         let independent_hard_residual_max = complete.independent_hard_residual_max;
@@ -1196,36 +1202,27 @@ impl SketchSession {
         let validation_compiled = self.compiled.clone();
         let validation_template = candidate_sketch.clone();
         let mut candidate_core = self.core.clone();
-        let validation_tolerance = candidate_core.config().normalized_residual_tolerance;
         let transaction = match controller.as_deref_mut() {
             Some(controller) => candidate_core.apply_with_output_controlled(
                 core_patch,
-                |problem, report| {
-                    complete_candidate_for_problem(
+                |problem, _| {
+                    prepare_candidate_for_materialization(
                         problem,
-                        report,
                         &validation_compiled,
                         &validation_template,
-                        candidate_request,
-                        validation_tolerance,
                     )
                 },
                 controller,
             )?,
-            None => Some(
-                candidate_core.apply_with_output(core_patch, |problem, report| {
-                    complete_candidate_for_problem(
-                        problem,
-                        report,
-                        &validation_compiled,
-                        &validation_template,
-                        candidate_request,
-                        validation_tolerance,
-                    )
-                })?,
-            ),
+            None => Some(candidate_core.apply_with_output(core_patch, |problem, _| {
+                prepare_candidate_for_materialization(
+                    problem,
+                    &validation_compiled,
+                    &validation_template,
+                )
+            })?),
         };
-        let Some((transaction, complete_candidate)) = transaction else {
+        let Some((transaction, prepared_candidate)) = transaction else {
             return Ok(None);
         };
 
@@ -1255,7 +1252,7 @@ impl SketchSession {
             }));
         }
 
-        let _ = complete_candidate.ok_or(SketchSessionError::MissingCandidate)?;
+        let _ = prepared_candidate.ok_or(SketchSessionError::MissingCandidate)?;
         let complete = match finalize_solved_candidate_controlled(
             &mut candidate_core,
             &validation_compiled,
@@ -1576,14 +1573,11 @@ impl SketchSession {
     }
 }
 
-fn complete_candidate_for_problem(
+fn prepare_candidate_for_materialization(
     problem: &geosolve_core::Problem,
-    report: &geosolve_core::SolveReport,
     compiled: &CompiledSketch,
     template: &Sketch,
-    request: SketchSolveRequest,
-    tolerance: f64,
-) -> Result<CompleteSketchCandidate, SessionDomainRejection<SolveRejection>> {
+) -> Result<PreparedSketchCandidate, SessionDomainRejection<SolveRejection>> {
     let mut candidate = compiled
         .solved_state_for_problem(problem, template)
         .map_err(|error| {
@@ -1592,14 +1586,15 @@ fn complete_candidate_for_problem(
             ))
         })?;
     template.normalize_candidate_latents(&mut candidate);
-    complete_materialized_candidate_for_problem(
-        candidate,
-        report,
-        template,
-        request,
-        tolerance,
-        CandidateCompletion::ProjectedSolve,
-    )
+    template
+        .prepare_curve_fillet_arcs(&mut candidate)
+        .map_err(session_domain_rejection)?;
+    if let Some(segment) = template.first_flipped_segment(&candidate.geometry) {
+        return Err(session_domain_rejection(
+            SolveRejection::SegmentBranchFlipped(segment),
+        ));
+    }
+    Ok(PreparedSketchCandidate { state: candidate })
 }
 
 fn complete_current_candidate_for_problem(
@@ -1609,6 +1604,7 @@ fn complete_current_candidate_for_problem(
     template: &Sketch,
     request: SketchSolveRequest,
     tolerance: f64,
+    certification: CandidateCertification,
 ) -> Result<CompleteSketchCandidate, SessionDomainRejection<SolveRejection>> {
     let mut candidate = compiled
         .solved_state_for_problem(problem, template)
@@ -1624,39 +1620,14 @@ fn complete_current_candidate_for_problem(
             ),
         ));
     }
-    complete_materialized_candidate_for_problem(
-        candidate,
-        report,
-        template,
-        request,
-        tolerance,
-        CandidateCompletion::ExactCertification,
-    )
-}
-
-fn complete_materialized_candidate_for_problem(
-    mut candidate: crate::compiler::SolvedSketchState,
-    report: &geosolve_core::SolveReport,
-    template: &Sketch,
-    request: SketchSolveRequest,
-    tolerance: f64,
-    completion: CandidateCompletion,
-) -> Result<CompleteSketchCandidate, SessionDomainRejection<SolveRejection>> {
-    match completion {
-        CandidateCompletion::ProjectedSolve => template
-            .derive_curve_fillet_arcs(&mut candidate, tolerance)
-            .map_err(session_domain_rejection)?,
-        CandidateCompletion::ExactCertification => {
-            // Exact certification must not move the materialized scene. Fillet
-            // angles are derived output, so validate that derivation on a clone;
-            // `validate_m7_candidate` below independently checks the retained
-            // angles against the same contacts within the acceptance tolerance.
-            let mut derived = candidate.clone();
-            template
-                .derive_curve_fillet_arcs(&mut derived, tolerance)
-                .map_err(session_domain_rejection)?;
-        }
-    }
+    // Exact certification must not move the materialized scene. Fillet angles
+    // are derived output, so validate that derivation on a clone;
+    // `validate_m7_candidate` below independently checks the retained angles
+    // against the same contacts within the acceptance tolerance.
+    let mut derived = candidate.clone();
+    template
+        .derive_curve_fillet_arcs(&mut derived, tolerance)
+        .map_err(session_domain_rejection)?;
     if let Some(segment) = template.first_flipped_segment(&candidate.geometry) {
         return Err(session_domain_rejection(
             SolveRejection::SegmentBranchFlipped(segment),
@@ -1679,9 +1650,9 @@ fn complete_materialized_candidate_for_problem(
             error.to_string(),
         ))
     })?;
-    let termination_is_compatible = match completion {
-        CandidateCompletion::ProjectedSolve => report.termination == SolveTermination::Converged,
-        CandidateCompletion::ExactCertification => matches!(
+    let termination_is_compatible = match certification {
+        CandidateCertification::ProjectedSolve => report.termination == SolveTermination::Converged,
+        CandidateCertification::ExactState => matches!(
             report.termination,
             SolveTermination::Converged
                 | SolveTermination::Stalled
@@ -1697,7 +1668,6 @@ fn complete_materialized_candidate_for_problem(
         geometry: complete.geometry(),
         sketch: complete,
         reference_values,
-        normalized_latents: candidate.latents,
         independent_hard_residual_max,
     })
 }
@@ -1723,60 +1693,115 @@ fn finalize_solved_candidate_controlled(
     request: SketchSolveRequest,
     mut controller: Option<&mut OperationController>,
 ) -> Result<Option<CandidateFinalization>, SketchSessionError> {
+    let mut stable = None;
     for _ in 0..4 {
-        let tolerance = core.config().normalized_residual_tolerance;
-        let complete = match complete_candidate_for_problem(
-            core.problem(),
-            core.report(),
-            compiled,
-            template,
-            request,
-            tolerance,
-        ) {
-            Ok(complete) => complete,
-            Err(rejection) => {
-                let mut report = core.report().clone();
-                report.hard_validity = rejection.hard_validity;
-                return Ok(Some(Err((report, rejection.reason))));
-            }
-        };
+        let prepared =
+            match prepare_candidate_for_materialization(core.problem(), compiled, template) {
+                Ok(prepared) => prepared,
+                Err(rejection) => {
+                    let mut report = core.report().clone();
+                    report.hard_validity = rejection.hard_validity;
+                    return Ok(Some(Err((report, rejection.reason))));
+                }
+            };
         let synchronization = match controller.as_deref_mut() {
             Some(controller) => synchronize_accepted_latents_controlled(
                 core,
                 compiled,
-                &complete.normalized_latents,
+                &prepared.state.latents,
                 controller,
             )?,
             None => Some(synchronize_accepted_latents(
                 core,
                 compiled,
-                &complete.normalized_latents,
+                &prepared.state.latents,
             )?),
         };
         let Some(synchronization) = synchronization else {
             return Ok(None);
         };
         match synchronization {
-            LatentSynchronization::Unchanged => return Ok(Some(Ok(complete))),
-            LatentSynchronization::Committed => {}
-            LatentSynchronization::Rejected(report, rejection) => {
+            AcceptedStateSynchronization::Unchanged => {
+                stable = Some(prepared);
+                break;
+            }
+            AcceptedStateSynchronization::Committed => {}
+            AcceptedStateSynchronization::Rejected(report, rejection) => {
                 return Ok(Some(Err((*report, rejection))));
             }
         }
     }
-    let mut report = core.report().clone();
-    report.termination = SolveTermination::Stalled;
-    Ok(Some(Err((
-        report,
-        SolveRejection::CoreTermination(SolveTermination::Stalled),
-    ))))
+    let Some(prepared) = stable else {
+        let mut report = core.report().clone();
+        report.termination = SolveTermination::Stalled;
+        return Ok(Some(Err((
+            report,
+            SolveRejection::CoreTermination(SolveTermination::Stalled),
+        ))));
+    };
+
+    let synchronization = match controller {
+        Some(controller) => synchronize_accepted_fillet_angles_controlled(
+            core,
+            compiled,
+            template,
+            &prepared.state.geometry,
+            controller,
+        )?,
+        None => Some(synchronize_accepted_fillet_angles(
+            core,
+            compiled,
+            template,
+            &prepared.state.geometry,
+        )?),
+    };
+    let Some(synchronization) = synchronization else {
+        return Ok(None);
+    };
+    match synchronization {
+        AcceptedStateSynchronization::Rejected(report, rejection) => {
+            return Ok(Some(Err((*report, rejection))));
+        }
+        AcceptedStateSynchronization::Unchanged | AcceptedStateSynchronization::Committed => {}
+    }
+
+    let tolerance = core.config().normalized_residual_tolerance;
+    let verified = match complete_current_candidate_for_problem(
+        core.problem(),
+        core.report(),
+        compiled,
+        template,
+        request,
+        tolerance,
+        CandidateCertification::ProjectedSolve,
+    ) {
+        Ok(complete) => complete,
+        Err(rejection) => {
+            let mut report = core.report().clone();
+            report.hard_validity = rejection.hard_validity;
+            return Ok(Some(Err((report, rejection.reason))));
+        }
+    };
+    if !compiled
+        .accepted_materialization_patch(core.problem(), template, &verified.geometry)?
+        .replacements
+        .is_empty()
+    {
+        let mut report = core.report().clone();
+        report.termination = SolveTermination::Stalled;
+        return Ok(Some(Err((
+            report,
+            SolveRejection::CoreTermination(SolveTermination::Stalled),
+        ))));
+    }
+    Ok(Some(Ok(verified)))
 }
 
 fn synchronize_accepted_latents(
     core: &mut SolveSession,
     compiled: &CompiledSketch,
     latents: &[SolvedLatent],
-) -> Result<LatentSynchronization, SketchSessionError> {
+) -> Result<AcceptedStateSynchronization, SketchSessionError> {
     synchronize_accepted_latents_inner(core, compiled, latents, None)
         .map(|result| result.expect("uncontrolled latent synchronization cannot be interrupted"))
 }
@@ -1786,7 +1811,7 @@ fn synchronize_accepted_latents_controlled(
     compiled: &CompiledSketch,
     latents: &[SolvedLatent],
     controller: &mut OperationController,
-) -> Result<Option<LatentSynchronization>, SketchSessionError> {
+) -> Result<Option<AcceptedStateSynchronization>, SketchSessionError> {
     synchronize_accepted_latents_inner(core, compiled, latents, Some(controller))
 }
 
@@ -1795,7 +1820,7 @@ fn synchronize_accepted_latents_inner(
     compiled: &CompiledSketch,
     latents: &[SolvedLatent],
     controller: Option<&mut OperationController>,
-) -> Result<Option<LatentSynchronization>, SketchSessionError> {
+) -> Result<Option<AcceptedStateSynchronization>, SketchSessionError> {
     let mut patch = SessionPatch::new(core.revisions());
     let mut changed = false;
     for latent in latents {
@@ -1825,7 +1850,7 @@ fn synchronize_accepted_latents_inner(
         }
     }
     if !changed {
-        return Ok(Some(LatentSynchronization::Unchanged));
+        return Ok(Some(AcceptedStateSynchronization::Unchanged));
     }
     let transaction = match controller {
         Some(controller) => core
@@ -1841,7 +1866,7 @@ fn synchronize_accepted_latents_inner(
         return Ok(None);
     };
     if transaction.committed() {
-        return Ok(Some(LatentSynchronization::Committed));
+        return Ok(Some(AcceptedStateSynchronization::Committed));
     }
     let rejection = match transaction.rejection.as_ref() {
         Some(SessionTransactionRejection::Core(rejection)) => {
@@ -1852,7 +1877,69 @@ fn synchronize_accepted_latents_inner(
             "unknown core latent synchronization rejection".into(),
         ),
     };
-    Ok(Some(LatentSynchronization::Rejected(
+    Ok(Some(AcceptedStateSynchronization::Rejected(
+        Box::new(transaction.report),
+        rejection,
+    )))
+}
+
+fn synchronize_accepted_fillet_angles(
+    core: &mut SolveSession,
+    compiled: &CompiledSketch,
+    template: &Sketch,
+    geometry: &SketchGeometry,
+) -> Result<AcceptedStateSynchronization, SketchSessionError> {
+    synchronize_accepted_fillet_angles_inner(core, compiled, template, geometry, None).map(
+        |result| result.expect("uncontrolled Fillet-angle synchronization cannot be interrupted"),
+    )
+}
+
+fn synchronize_accepted_fillet_angles_controlled(
+    core: &mut SolveSession,
+    compiled: &CompiledSketch,
+    template: &Sketch,
+    geometry: &SketchGeometry,
+    controller: &mut OperationController,
+) -> Result<Option<AcceptedStateSynchronization>, SketchSessionError> {
+    synchronize_accepted_fillet_angles_inner(core, compiled, template, geometry, Some(controller))
+}
+
+fn synchronize_accepted_fillet_angles_inner(
+    core: &mut SolveSession,
+    compiled: &CompiledSketch,
+    template: &Sketch,
+    geometry: &SketchGeometry,
+    controller: Option<&mut OperationController>,
+) -> Result<Option<AcceptedStateSynchronization>, SketchSessionError> {
+    let materialization =
+        compiled.accepted_materialization_patch(core.problem(), template, geometry)?;
+    if materialization.replacements.is_empty() {
+        return Ok(Some(AcceptedStateSynchronization::Unchanged));
+    }
+    let mut patch = AcceptedStatePatch::new(core.revisions(), materialization.allowed_variables);
+    for (variable, value) in materialization.replacements {
+        patch.set_variable_value(variable, value);
+    }
+    let transaction = match controller {
+        Some(controller) => core.synchronize_accepted_state_with_controller(patch, controller)?,
+        None => Some(core.synchronize_accepted_state(patch)?),
+    };
+    let Some(transaction) = transaction else {
+        return Ok(None);
+    };
+    if transaction.committed() {
+        return Ok(Some(AcceptedStateSynchronization::Committed));
+    }
+    let rejection = match transaction.rejection.as_ref() {
+        Some(SessionTransactionRejection::Core(rejection)) => {
+            map_core_rejection(rejection, &transaction.report, core.config())
+        }
+        Some(SessionTransactionRejection::Domain(never)) => match *never {},
+        _ => SolveRejection::IndependentValidationFailed(
+            "unknown core Fillet-angle synchronization rejection".into(),
+        ),
+    };
+    Ok(Some(AcceptedStateSynchronization::Rejected(
         Box::new(transaction.report),
         rejection,
     )))
@@ -2051,6 +2138,16 @@ fn map_core_rejection(
         | SessionCoreRejection::EvaluationFailure
         | SessionCoreRejection::NonFiniteReport => {
             SolveRejection::CoreTermination(report.termination)
+        }
+        SessionCoreRejection::TemporaryResidualChanged { maximum, tolerance } => {
+            SolveRejection::IndependentValidationFailed(format!(
+                "exact materialization changed a Temporary residual row by {maximum}, exceeding {tolerance}"
+            ))
+        }
+        SessionCoreRejection::PreferenceResidualChanged { maximum, tolerance } => {
+            SolveRejection::IndependentValidationFailed(format!(
+                "exact materialization changed a Preference residual row by {maximum}, exceeding {tolerance}"
+            ))
         }
         _ => SolveRejection::IndependentValidationFailed("unknown core session rejection".into()),
     }

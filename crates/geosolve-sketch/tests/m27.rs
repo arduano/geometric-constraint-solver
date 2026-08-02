@@ -4,15 +4,107 @@
 use geosolve_core::{HardValidity, SolveTermination, SolverConfig};
 use geosolve_geometry::Point2;
 use geosolve_sketch::{
-    ArcSweep, ContactDefinition, ContactDomain, ContactNeighborhood, ContactState,
-    CurveContactNeighborhood, CurveDefinition, CurveMeasurementKind, CurveNormalSide, CurveSpan,
-    DimensionMode, DocumentArcSweep, DocumentCommand, DocumentCommandEffect,
-    DocumentConstraintDefinition, DocumentCurveNormalSide, DocumentDimensionMode, DocumentEdit,
-    DocumentFilletEndpointOrder, DocumentObjectId, DocumentSolveRequest, FilletEndpointOrder,
-    LatentVariableRole, LineLineFilletIds, LineLineFilletRequest, LineParameterDomain,
-    ScalarDomain, ScalarUnit, Sketch, SketchBound, SketchCurve, SketchCurveContact, SketchDocument,
-    SketchDocumentSession, SketchSolveRequest, SolveRejection,
+    ArcAngleEndpoint, ArcAngleRole, ArcSweep, ContactDefinition, ContactDomain,
+    ContactNeighborhood, ContactState, CurveContactNeighborhood, CurveDefinition,
+    CurveMeasurementKind, CurveNormalSide, CurveSpan, DimensionMode, DocumentArcSweep,
+    DocumentCommand, DocumentCommandEffect, DocumentConstraintDefinition, DocumentCurveNormalSide,
+    DocumentDimensionMode, DocumentEdit, DocumentFilletEndpointOrder, DocumentObjectId,
+    DocumentSolveRequest, FilletEndpointOrder, LatentVariableRole, LineLineFilletIds,
+    LineLineFilletRequest, LineParameterDomain, RuntimeCurve, ScalarDomain, ScalarUnit, Sketch,
+    SketchBound, SketchCurve, SketchCurveContact, SketchDocument, SketchDocumentSession,
+    SketchSession, SketchSolveRequest, SolveRejection,
 };
+
+fn assert_fillet_runtime_is_bitwise_certified(
+    session: &SketchDocumentSession,
+    persistent_arcs: &[geosolve_sketch::CurveId],
+) {
+    let runtime = session.runtime();
+    let compiled = runtime.sketch().compile(runtime.request()).unwrap();
+    let packed = compiled.problem().packed_state().unwrap();
+    let accepted = &runtime
+        .accepted_result()
+        .unstable_core_report()
+        .accepted_state;
+    assert_eq!(packed.layout(), accepted.layout());
+    assert_eq!(
+        packed
+            .ambient()
+            .iter()
+            .map(|value| value.to_bits())
+            .collect::<Vec<_>>(),
+        accepted
+            .ambient()
+            .iter()
+            .map(|value| value.to_bits())
+            .collect::<Vec<_>>()
+    );
+
+    let geometry = runtime.sketch().geometry();
+    for persistent_arc in persistent_arcs {
+        let Some(RuntimeCurve::CircularArc(arc)) =
+            session.mappings().runtime_curve(*persistent_arc)
+        else {
+            panic!("persistent Fillet output must lower to one circular arc")
+        };
+        let solved = geometry.arc(*arc).unwrap();
+        for (role, expected) in [
+            (ArcAngleRole::Start, solved.start_angle),
+            (ArcAngleRole::End, solved.end_angle),
+        ] {
+            let variable = compiled.variable_for_arc_angle(*arc, role).unwrap();
+            let geosolve_core::VariableValue::Scalar(actual) =
+                compiled.problem().variable(variable).unwrap().value()
+            else {
+                panic!("arc angle coordinate must be scalar")
+            };
+            assert_eq!(actual.to_bits(), expected.to_bits());
+        }
+    }
+}
+
+fn assert_sketch_fillet_runtime_is_bitwise_certified(
+    session: &SketchSession,
+    arcs: &[geosolve_sketch::ArcId],
+) {
+    let compiled = session.sketch().compile(session.request()).unwrap();
+    let packed = compiled.problem().packed_state().unwrap();
+    let accepted = &session
+        .accepted_result()
+        .unstable_core_report()
+        .accepted_state;
+    assert_eq!(packed.layout(), accepted.layout());
+    assert_eq!(
+        packed
+            .ambient()
+            .iter()
+            .map(|value| value.to_bits())
+            .collect::<Vec<_>>(),
+        accepted
+            .ambient()
+            .iter()
+            .map(|value| value.to_bits())
+            .collect::<Vec<_>>()
+    );
+    assert!(compiled.arc_angle_variables().len() >= 2 * arcs.len());
+
+    let geometry = session.sketch().geometry();
+    for arc in arcs {
+        let solved = geometry.arc(*arc).unwrap();
+        for (role, expected) in [
+            (ArcAngleRole::Start, solved.start_angle),
+            (ArcAngleRole::End, solved.end_angle),
+        ] {
+            let variable = compiled.variable_for_arc_angle(*arc, role).unwrap();
+            let geosolve_core::VariableValue::Scalar(actual) =
+                compiled.problem().variable(variable).unwrap().value()
+            else {
+                panic!("arc angle coordinate must be scalar")
+            };
+            assert_eq!(actual.to_bits(), expected.to_bits());
+        }
+    }
+}
 
 fn transformed(point: [f64; 2], scale: f64, angle: f64, offset: [f64; 2]) -> [f64; 2] {
     let (sine, cosine) = angle.sin_cos();
@@ -91,6 +183,52 @@ fn request(
         radius,
         radius_mode,
     }
+}
+
+fn add_fixed_right_angle_runtime_fillet(
+    sketch: &mut Sketch,
+    offset: f64,
+) -> (geosolve_sketch::ArcId, geosolve_sketch::PointId) {
+    let first_start = sketch.add_point(Point2::new(offset, 0.0)).unwrap();
+    let corner = sketch.add_point(Point2::new(offset + 4.0, 0.0)).unwrap();
+    let second_end = sketch.add_point(Point2::new(offset + 4.0, 4.0)).unwrap();
+    let center = sketch.add_point(Point2::new(offset + 3.0, 1.0)).unwrap();
+    let first = sketch.add_segment(first_start, corner).unwrap();
+    let second = sketch.add_segment(corner, second_end).unwrap();
+    for point in [first_start, corner, second_end] {
+        sketch.add_fixed_point(point).unwrap();
+    }
+    let arc = sketch
+        .add_arc(
+            center,
+            1.0,
+            -std::f64::consts::FRAC_PI_2,
+            0.0,
+            ArcSweep::CounterClockwise,
+        )
+        .unwrap();
+    let contact = |segment, parameter| SketchCurveContact {
+        curve: SketchCurve::Line {
+            segment,
+            domain: LineParameterDomain::BoundedSegment,
+        },
+        parameter,
+        neighborhood: CurveContactNeighborhood::Interior,
+    };
+    sketch
+        .add_line_line_fillet(
+            arc,
+            contact(first, 0.75),
+            CurveNormalSide::Left,
+            contact(second, 0.25),
+            CurveNormalSide::Left,
+            FilletEndpointOrder::FirstThenSecond,
+        )
+        .unwrap();
+    sketch
+        .add_arc_radius(arc, 1.0, DimensionMode::Reference)
+        .unwrap();
+    (arc, center)
 }
 
 #[test]
@@ -600,6 +738,7 @@ fn every_side_order_and_sweep_is_similarity_covariant_at_all_scales() {
                         )
                         .unwrap();
                         assert!(session.runtime().accepted_result().accepted());
+                        assert_fillet_runtime_is_bitwise_certified(&session, &[ids.arc]);
                         assert_eq!(
                             session
                                 .runtime()
@@ -652,6 +791,63 @@ fn every_side_order_and_sweep_is_similarity_covariant_at_all_scales() {
             }
         }
     }
+}
+
+#[test]
+fn multiple_fillet_outputs_are_bitwise_certified_in_one_drag_solve() {
+    let mut sketch = Sketch::new(16.0).unwrap();
+    let (first_arc, first_center) = add_fixed_right_angle_runtime_fillet(&mut sketch, 0.0);
+    let (second_arc, _) = add_fixed_right_angle_runtime_fillet(&mut sketch, 10.0);
+    let ordinary_center = sketch.add_point(Point2::new(20.0, 2.0)).unwrap();
+    sketch.add_fixed_point(ordinary_center).unwrap();
+    let ordinary_arc = sketch
+        .add_arc(ordinary_center, 2.0, 0.25, 1.25, ArcSweep::CounterClockwise)
+        .unwrap();
+    sketch
+        .add_fixed_arc_angle(ordinary_arc, ArcAngleEndpoint::Start, 0.25)
+        .unwrap();
+    sketch
+        .add_fixed_arc_angle(ordinary_arc, ArcAngleEndpoint::End, 1.25)
+        .unwrap();
+    sketch
+        .add_arc_radius(ordinary_arc, 2.0, DimensionMode::Driving)
+        .unwrap();
+    let second_before = {
+        let geometry = sketch.geometry();
+        let arc = geometry.arc(second_arc).unwrap();
+        [arc.start_angle.to_bits(), arc.end_angle.to_bits()]
+    };
+    let request = SketchSolveRequest::default().with_drag(first_center, Point2::new(2.0, 2.0));
+
+    let session = SketchSession::new(sketch, request, SolverConfig::default()).unwrap();
+    assert!(session.accepted_result().accepted());
+    assert_sketch_fillet_runtime_is_bitwise_certified(&session, &[first_arc, second_arc]);
+    let compiled = session.sketch().compile(session.request()).unwrap();
+    assert_eq!(compiled.arc_angle_variables().len(), 6);
+    let geometry = session.sketch().geometry();
+    let ordinary = geometry.arc(ordinary_arc).unwrap();
+    for (role, expected) in [
+        (ArcAngleRole::Start, ordinary.start_angle),
+        (ArcAngleRole::End, ordinary.end_angle),
+    ] {
+        let variable = compiled.variable_for_arc_angle(ordinary_arc, role).unwrap();
+        let geosolve_core::VariableValue::Scalar(actual) =
+            compiled.problem().variable(variable).unwrap().value()
+        else {
+            panic!("ordinary arc angle coordinate must be scalar")
+        };
+        assert_eq!(actual.to_bits(), expected.to_bits());
+    }
+    assert_eq!(ordinary.start_angle.to_bits(), 0.25_f64.to_bits());
+    assert_eq!(ordinary.end_angle.to_bits(), 1.25_f64.to_bits());
+    let first_center_after = session.sketch().geometry().point(first_center).unwrap();
+    assert!((first_center_after - Point2::new(2.0, 2.0)).norm() <= 1.0e-9);
+    let second_after = {
+        let geometry = session.sketch().geometry();
+        let arc = geometry.arc(second_arc).unwrap();
+        [arc.start_angle.to_bits(), arc.end_angle.to_bits()]
+    };
+    assert_eq!(second_after, second_before);
 }
 
 #[test]

@@ -5776,26 +5776,6 @@ fn compatible_runtime_request_shape(
         }
 }
 
-fn fillet_drag_requires_exact_runtime_certification(
-    document: &SketchDocument,
-    mappings: &DocumentRuntimeMap,
-    request: SketchSolveRequest,
-) -> bool {
-    let Some(drag) = request.drag else {
-        return false;
-    };
-    let Some(persistent_point) = mappings.persistent_point(drag.point) else {
-        return false;
-    };
-    document.curves().iter().any(|curve| {
-        matches!(
-            curve.definition,
-            CurveDefinition::CircularArc { center, .. } if center == persistent_point
-        ) && (document.line_line_fillet_for_arc(curve.id).is_some()
-            || document.curve_curve_fillet_for_arc(curve.id).is_some())
-    })
-}
-
 fn incremental_runtime_sources(
     candidate: &SketchDocument,
     mappings: &DocumentRuntimeMap,
@@ -6657,29 +6637,15 @@ fn run_retained_attempt_with_drag_locality_controlled(
                 }
             }
         };
-        let runtime = if fillet_drag_requires_exact_runtime_certification(
-            candidate,
-            &mappings,
+        let runtime = SketchSession::from_accepted_solve_with_controller(
+            sketch,
+            &validation_sketch,
             runtime_request,
-        ) {
-            SketchSession::certify_current_state_with_previous_state_reference_and_controller(
-                sketch,
-                runtime_request,
-                config,
-                &previous_state,
-                controller,
-            )
-        } else {
-            SketchSession::from_accepted_solve_with_controller(
-                sketch,
-                &validation_sketch,
-                runtime_request,
-                config,
-                runtime_solve,
-                &previous_state,
-                controller,
-            )
-        };
+            config,
+            runtime_solve,
+            &previous_state,
+            controller,
+        );
         let mut runtime = match runtime {
             Ok(Some(runtime)) => runtime,
             Ok(None) => return None,

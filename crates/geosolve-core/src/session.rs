@@ -105,6 +105,48 @@ impl SessionPatch {
     }
 }
 
+/// Revision-checked replacement of already accepted derived coordinates.
+///
+/// This narrow patch is reserved for a domain materialization step that replaces
+/// coordinates without optimization, then freshly certifies the exact state.
+/// Its allowlist is a trusted cross-crate domain assertion that narrows accidental
+/// mutation; it is not an authority boundary. Core still independently rebuilds
+/// and validates all acceptance evidence before committing any listed value.
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct AcceptedStatePatch {
+    expected_revisions: SessionRevisions,
+    allowed_variable_ids: Vec<VariableId>,
+    variable_values: Vec<(VariableId, VariableValue)>,
+}
+
+impl AcceptedStatePatch {
+    #[must_use]
+    pub fn new(
+        expected_revisions: SessionRevisions,
+        allowed_variable_ids: Vec<VariableId>,
+    ) -> Self {
+        Self {
+            expected_revisions,
+            allowed_variable_ids,
+            variable_values: Vec::new(),
+        }
+    }
+
+    pub fn set_variable_value(
+        &mut self,
+        variable_id: VariableId,
+        value: VariableValue,
+    ) -> &mut Self {
+        self.variable_values.push((variable_id, value));
+        self
+    }
+
+    fn is_empty(&self) -> bool {
+        self.variable_values.is_empty()
+    }
+}
+
 /// Revision-checked accepted-state metadata refresh.
 ///
 /// This patch cannot replace an evaluator, scale, equation, variable, or bound.
@@ -159,6 +201,8 @@ pub enum SessionCoreRejection {
     BoundViolation(BoundId),
     EvaluationFailure,
     NonFiniteReport,
+    TemporaryResidualChanged { maximum: f64, tolerance: f64 },
+    PreferenceResidualChanged { maximum: f64, tolerance: f64 },
 }
 
 /// Construction or pre-mutation patch validation failure.
@@ -174,6 +218,8 @@ pub enum SessionError {
     },
     #[error("session patch repeats {kind} ID {id}")]
     DuplicatePatchTarget { kind: &'static str, id: String },
+    #[error("accepted-state patch variable {variable:?} is not in its explicit allowlist")]
+    AcceptedStateVariableNotAllowed { variable: VariableId },
     #[error("initial problem is not an accepted finite session state: {0:?}")]
     InitialRejected(SessionCoreRejection),
 }
@@ -690,6 +736,168 @@ impl SolveSession {
         )))
     }
 
+    /// Replaces accepted derived coordinates and freshly certifies the exact
+    /// patched state without running nonlinear optimization.
+    ///
+    /// Complete Temporary and Preference normalized residual vectors must be
+    /// reproduced at the patched state. Hard, rank, bound, secondary,
+    /// diagnostic, and audit evidence is rebuilt there before commit.
+    #[doc(hidden)]
+    pub fn synchronize_accepted_state(
+        &mut self,
+        patch: AcceptedStatePatch,
+    ) -> Result<SessionTransaction<std::convert::Infallible>, SessionError> {
+        let mut controller = OperationController::new(crate::OperationControl::unlimited());
+        self.synchronize_accepted_state_inner(patch, &mut controller)
+            .map(|transaction| {
+                transaction.expect("uncontrolled accepted-state synchronization cannot stop")
+            })
+    }
+
+    /// Controlled counterpart to [`Self::synchronize_accepted_state`].
+    #[doc(hidden)]
+    pub fn synchronize_accepted_state_with_controller(
+        &mut self,
+        patch: AcceptedStatePatch,
+        controller: &mut OperationController,
+    ) -> Result<Option<SessionTransaction<std::convert::Infallible>>, SessionError> {
+        self.synchronize_accepted_state_inner(patch, controller)
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "revision checks, exact certification, rejection, cache refresh, and commit form one atomic state transition"
+    )]
+    fn synchronize_accepted_state_inner(
+        &mut self,
+        patch: AcceptedStatePatch,
+        controller: &mut OperationController,
+    ) -> Result<Option<SessionTransaction<std::convert::Infallible>>, SessionError> {
+        if patch.expected_revisions != self.revisions {
+            return Err(SessionError::StalePatch {
+                expected: patch.expected_revisions,
+                actual: self.revisions,
+            });
+        }
+        unique_ids(
+            "accepted-state variable",
+            patch
+                .variable_values
+                .iter()
+                .map(|(id, _)| format!("{id:?}")),
+        )?;
+        unique_ids(
+            "accepted-state allowlist variable",
+            patch
+                .allowed_variable_ids
+                .iter()
+                .map(|id| format!("{id:?}")),
+        )?;
+        if let Some((variable, _)) = patch
+            .variable_values
+            .iter()
+            .find(|(variable, _)| !patch.allowed_variable_ids.contains(variable))
+        {
+            return Err(SessionError::AcceptedStateVariableNotAllowed {
+                variable: *variable,
+            });
+        }
+        let patch_is_empty = patch.is_empty();
+        let mut candidate = self.problem.clone();
+        let mut dirty_components = Vec::new();
+        for (variable_id, value) in patch.variable_values {
+            add_variable_dependencies(&self.plan, variable_id, &mut dirty_components)?;
+            candidate.set_variable_value(variable_id, value)?;
+        }
+        dirty_components.sort_unstable();
+        dirty_components.dedup();
+
+        let Some((report, secondary_preservation)) = candidate
+            .certify_current_state_preserving_secondary_with_controller(
+                &self.problem,
+                &self.report,
+                self.config,
+                controller,
+            )?
+        else {
+            return Ok(None);
+        };
+        let rejection = exact_state_core_rejection_before_secondary(&report, self.config)
+            .or_else(|| {
+                (!secondary_preservation.temporary.preserved).then_some(
+                    SessionCoreRejection::TemporaryResidualChanged {
+                        maximum: secondary_preservation.temporary.maximum_row_error,
+                        tolerance: secondary_preservation.temporary.tolerance,
+                    },
+                )
+            })
+            .or_else(|| {
+                (!secondary_preservation.preference.preserved).then_some(
+                    SessionCoreRejection::PreferenceResidualChanged {
+                        maximum: secondary_preservation.preference.maximum_row_error,
+                        tolerance: secondary_preservation.preference.tolerance,
+                    },
+                )
+            })
+            .or_else(|| secondary_rejection(&report));
+        if let Some(rejection) = rejection {
+            return Ok(Some(SessionTransaction {
+                report,
+                rejection: Some(SessionTransactionRejection::Core(rejection)),
+                revisions: self.revisions,
+            }));
+        }
+        if controller
+            .checkpoint(OperationCheckpoint::BeforeCommit)
+            .is_err()
+        {
+            return Ok(None);
+        }
+
+        candidate.update_decomposition_cache(&self.plan, &report)?;
+        let mut revisions = self.revisions;
+        if !patch_is_empty {
+            revisions.state = revisions.state.saturating_add(1);
+        }
+        let mut affected_components = dirty_components;
+        affected_components.extend(
+            report
+                .component_solves
+                .iter()
+                .filter(|component| component.secondary_participated)
+                .map(|component| component.component_index),
+        );
+        affected_components.sort_unstable();
+        affected_components.dedup();
+        let mut stamps = self.component_stamps.clone();
+        let stamp_count = stamps.len();
+        for component_index in affected_components {
+            let stamp = stamps
+                .get_mut(component_index)
+                .ok_or(CoreError::DimensionMismatch {
+                    context: "accepted-state synchronization component stamp",
+                    expected: stamp_count,
+                    actual: component_index,
+                })?;
+            stamp.state_revision = revisions.state;
+        }
+        if candidate.packed_state()? != report.accepted_state {
+            return Err(CoreError::InvalidAcceptedLinearization {
+                context: "exact synchronized state differs from its certified report",
+            }
+            .into());
+        }
+        self.problem = candidate;
+        self.report = report.clone();
+        self.revisions = revisions;
+        self.component_stamps = stamps;
+        Ok(Some(SessionTransaction {
+            report,
+            rejection: None,
+            revisions,
+        }))
+    }
+
     /// Refreshes accepted source labels and residual row descriptors without
     /// exposing an equation-changing post-acceptance path.
     ///
@@ -1028,8 +1236,26 @@ fn core_rejection_before_domain(
     report: &SolveReport,
     config: SolverConfig,
 ) -> Option<SessionCoreRejection> {
+    core_rejection_before_domain_with_termination(report, config, report.termination)
+}
+
+fn exact_state_core_rejection_before_secondary(
+    report: &SolveReport,
+    config: SolverConfig,
+) -> Option<SessionCoreRejection> {
+    // Exact-state certification deliberately marks the aggregate termination as
+    // failed when a secondary vector changed. Certify the hard solve independently
+    // here so the caller receives the specific transactional preservation failure.
+    core_rejection_before_domain_with_termination(report, config, report.hard_termination)
+}
+
+fn core_rejection_before_domain_with_termination(
+    report: &SolveReport,
+    config: SolverConfig,
+    termination: SolveTermination,
+) -> Option<SessionCoreRejection> {
     if matches!(
-        report.termination,
+        termination,
         SolveTermination::InvalidGeometry | SolveTermination::NumericalFailure
     ) || report.audit.sources.iter().any(|source| {
         source

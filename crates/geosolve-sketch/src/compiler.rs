@@ -1,8 +1,9 @@
 use geosolve_core::{
-    AuditBinding, AuditEvaluationStatus, AuditSnapshot, BoundId, CoordinateBound, HardValidity,
-    OperationCheckpoint, OperationController, OperationWorkCounter, Problem, ResidualBlock,
-    ResidualCategory, ResidualId, ResidualRowAudit, SolveReport, SolveTermination, SolverConfig,
-    SourceConstraint, SourceConstraintId, VariableBlock, VariableId, VariableValue,
+    AcceptedStatePatch, AuditBinding, AuditEvaluationStatus, AuditSnapshot, BoundId,
+    CoordinateBound, CoreError, HardValidity, OperationCheckpoint, OperationController,
+    OperationWorkCounter, Problem, ResidualBlock, ResidualCategory, ResidualId, ResidualRowAudit,
+    SolveReport, SolveSession, SolveTermination, SolverConfig, SourceConstraint,
+    SourceConstraintId, VariableBlock, VariableId, VariableValue,
 };
 use geosolve_geometry::{Point2, Vector2};
 use slotmap::SecondaryMap;
@@ -336,6 +337,18 @@ pub(crate) struct CompiledSourcePatch {
     pub(crate) bounds: Vec<(BoundId, CoordinateBound)>,
 }
 
+#[derive(Debug)]
+pub(crate) struct AcceptedMaterializationPatch {
+    pub(crate) allowed_variables: Vec<VariableId>,
+    pub(crate) replacements: Vec<(VariableId, VariableValue)>,
+}
+
+#[derive(Clone, Copy)]
+enum FilletArcAlignment {
+    Deferred,
+    Validate { tolerance: f64 },
+}
+
 impl CompiledSketch {
     #[must_use]
     pub const fn problem(&self) -> &Problem {
@@ -390,6 +403,49 @@ impl CompiledSketch {
     #[must_use]
     pub fn source_mappings(&self) -> &[SketchSourceMapping] {
         &self.source_mappings
+    }
+
+    pub(crate) fn accepted_materialization_patch(
+        &self,
+        problem: &Problem,
+        template: &Sketch,
+        geometry: &SketchGeometry,
+    ) -> Result<AcceptedMaterializationPatch, SketchError> {
+        let mut allowed_variables = Vec::new();
+        let mut replacements = Vec::new();
+        let fillet_arcs = template
+            .constraints()
+            .filter_map(|(_, constraint)| match constraint.kind() {
+                SketchConstraintKind::CurveCurveFillet { arc, .. } => Some(arc),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        for mapping in self
+            .arc_angle_variables
+            .iter()
+            .filter(|mapping| fillet_arcs.contains(&mapping.arc_id))
+        {
+            let solved = geometry
+                .arcs
+                .iter()
+                .find(|arc| arc.arc_id == mapping.arc_id)
+                .ok_or(SketchError::UnknownArc(mapping.arc_id))?;
+            let derived = match mapping.role {
+                ArcAngleRole::Start => solved.start_angle,
+                ArcAngleRole::End => solved.end_angle,
+            };
+            push_materialized_scalar(
+                problem,
+                mapping.variable_id,
+                derived,
+                &mut allowed_variables,
+                &mut replacements,
+            )?;
+        }
+        Ok(AcceptedMaterializationPatch {
+            allowed_variables,
+            replacements,
+        })
     }
 
     pub(crate) fn diagnostic_variable_owners(&self) -> Vec<(VariableId, DiagnosticVariableOwner)> {
@@ -1060,6 +1116,33 @@ impl CompiledSketch {
             bounds,
         }))
     }
+}
+
+fn push_materialized_scalar(
+    problem: &Problem,
+    variable: VariableId,
+    value: f64,
+    allowed_variables: &mut Vec<VariableId>,
+    replacements: &mut Vec<(VariableId, VariableValue)>,
+) -> Result<(), SketchError> {
+    let current = problem
+        .variable(variable)
+        .ok_or(CoreError::UnknownVariable(variable))?
+        .value();
+    let VariableValue::Scalar(current) = current else {
+        return Err(CoreError::VariableKindMismatch {
+            expected: geosolve_core::VariableKind::Scalar,
+            actual: current.kind(),
+        }
+        .into());
+    };
+    if !allowed_variables.contains(&variable) {
+        allowed_variables.push(variable);
+    }
+    if current.to_bits() != value.to_bits() {
+        replacements.push((variable, VariableValue::Scalar(value)));
+    }
+    Ok(())
 }
 
 /// One solved point in deterministic insertion order.
@@ -2097,8 +2180,7 @@ impl Sketch {
             compiled.problem.solve(config)?
         };
         let mut candidate = compiled.solved_state(self)?;
-        let mut candidate_preparation =
-            self.derive_curve_fillet_arcs(&mut candidate, config.normalized_residual_tolerance);
+        let mut candidate_preparation = self.prepare_curve_fillet_arcs(&mut candidate);
         let mut acceptance_hard_residual_max = None;
 
         if core_report_is_successful(&core_report, config) {
@@ -2110,8 +2192,7 @@ impl Sketch {
                     break;
                 }
                 let normalized = self.normalize_candidate_latents(&mut candidate);
-                candidate_preparation = self
-                    .derive_curve_fillet_arcs(&mut candidate, config.normalized_residual_tolerance);
+                candidate_preparation = self.prepare_curve_fillet_arcs(&mut candidate);
                 if candidate_preparation.is_err() {
                     break;
                 }
@@ -2150,15 +2231,13 @@ impl Sketch {
                     compiled.problem.solve(config)?
                 };
                 candidate = compiled.solved_state(&analysis_sketch)?;
-                candidate_preparation = self
-                    .derive_curve_fillet_arcs(&mut candidate, config.normalized_residual_tolerance);
+                candidate_preparation = self.prepare_curve_fillet_arcs(&mut candidate);
                 if !core_report_is_successful(&core_report, config) {
                     break;
                 }
             }
         }
 
-        let core_hard_validity = core_report.hard_validity;
         if let Some(controller) = control.as_deref_mut()
             && controller
                 .checkpoint(geosolve_core::OperationCheckpoint::BeforeFinalValidation)
@@ -2173,12 +2252,12 @@ impl Sketch {
             Ok(maximum) => *maximum,
             Err(rejection) => rejection_residual_max(rejection).unwrap_or(0.0),
         };
-        let candidate_domain_rejection = self
+        let mut domain_rejection = self
             .first_flipped_segment(&candidate.geometry)
             .map(SolveRejection::SegmentBranchFlipped)
             .or_else(|| candidate_validation.err());
-        let domain_rejection = if core_hard_validity == HardValidity::Valid {
-            match independent_hard_residual_metrics(&compiled.problem) {
+        if core_report.hard_validity == HardValidity::Valid {
+            domain_rejection = match independent_hard_residual_metrics(&compiled.problem) {
                 Ok((maximum, _, _)) => {
                     let maximum = maximum.max(independent_advanced_max);
                     acceptance_hard_residual_max = Some(maximum);
@@ -2188,26 +2267,21 @@ impl Sketch {
                             tolerance: config.normalized_residual_tolerance,
                         })
                     } else {
-                        candidate_domain_rejection
+                        domain_rejection
                     }
                 }
-                Err(error) => candidate_domain_rejection.or_else(|| {
+                Err(error) => domain_rejection.or_else(|| {
                     Some(SolveRejection::IndependentValidationFailed(
                         error.to_string(),
                     ))
                 }),
-            }
-        } else {
-            candidate_domain_rejection
-        };
-        core_report.hard_validity =
-            domain_hard_validity(core_hard_validity, domain_rejection.as_ref());
-
-        let mut rejection = if let Some(rejection) = domain_rejection {
+            };
+        }
+        let mut rejection = if let Some(rejection) = domain_rejection.clone() {
             Some(rejection)
         } else if core_report.termination != SolveTermination::Converged {
             Some(SolveRejection::CoreTermination(core_report.termination))
-        } else if core_hard_validity != HardValidity::Valid
+        } else if core_report.hard_validity != HardValidity::Valid
             || !core_report.hard_residuals_validated
             || core_report.hard_residual_max > config.normalized_residual_tolerance
         {
@@ -2221,17 +2295,118 @@ impl Sketch {
         if let Some(constraint) = self.drag_requests_zero_circle_arc_radius(request) {
             core_report.termination = SolveTermination::Stalled;
             rejection = Some(SolveRejection::AmbiguousTangencyScale(constraint));
-        } else if self
-            .validate_drag_selected_span(request, &candidate)
-            .is_err()
-        {
-            core_report.termination = SolveTermination::Stalled;
-            rejection = Some(SolveRejection::CoreTermination(SolveTermination::Stalled));
-        } else if request.drag.is_some()
-            && matches!(rejection, Some(SolveRejection::AmbiguousTangencyScale(_)))
-        {
-            core_report.termination = SolveTermination::Stalled;
         }
+
+        if rejection.is_none() {
+            let materialization = compiled.accepted_materialization_patch(
+                &compiled.problem,
+                self,
+                &candidate.geometry,
+            )?;
+            if !materialization.replacements.is_empty() {
+                let mut core = SolveSession::from_accepted_report(
+                    compiled.problem.clone(),
+                    config,
+                    core_report.clone(),
+                )
+                .map_err(|_| CoreError::InvalidAcceptedLinearization {
+                    context: "raw accepted sketch solve could not retain its compiled state",
+                })?;
+                let mut patch =
+                    AcceptedStatePatch::new(core.revisions(), materialization.allowed_variables);
+                for (variable, value) in materialization.replacements {
+                    patch.set_variable_value(variable, value);
+                }
+                let transaction = match control.as_deref_mut() {
+                    Some(controller) => core
+                        .synchronize_accepted_state_with_controller(patch, controller)
+                        .map_err(|_| CoreError::InvalidAcceptedLinearization {
+                            context: "controlled Fillet output synchronization failed",
+                        })?,
+                    None => Some(core.synchronize_accepted_state(patch).map_err(|_| {
+                        CoreError::InvalidAcceptedLinearization {
+                            context: "Fillet output synchronization failed",
+                        }
+                    })?),
+                };
+                let Some(transaction) = transaction else {
+                    return Ok(None);
+                };
+                let committed = transaction.committed();
+                core_report = transaction.report;
+                if committed {
+                    compiled.replace_problem(core.problem().clone());
+                } else {
+                    rejection = Some(SolveRejection::IndependentValidationFailed(
+                        "exact Fillet output materialization was rejected by core".into(),
+                    ));
+                }
+            }
+        }
+
+        if rejection.is_none() {
+            candidate = compiled.solved_state(self)?;
+            let candidate_validation = if self.normalize_candidate_latents(&mut candidate) {
+                Err(SolveRejection::IndependentValidationFailed(
+                    "exact Fillet output certification would normalize a latent coordinate".into(),
+                ))
+            } else {
+                self.derive_curve_fillet_arcs(&mut candidate, config.normalized_residual_tolerance)
+                    .and_then(|()| {
+                        self.validate_m7_candidate(&candidate, config.normalized_residual_tolerance)
+                    })
+            };
+            let independent_advanced_max = match &candidate_validation {
+                Ok(maximum) => *maximum,
+                Err(rejection) => rejection_residual_max(rejection).unwrap_or(0.0),
+            };
+            domain_rejection = self
+                .first_flipped_segment(&candidate.geometry)
+                .map(SolveRejection::SegmentBranchFlipped)
+                .or_else(|| candidate_validation.err());
+            if core_report.hard_validity == HardValidity::Valid {
+                domain_rejection = match independent_hard_residual_metrics(&compiled.problem) {
+                    Ok((maximum, _, _)) => {
+                        let maximum = maximum.max(independent_advanced_max);
+                        acceptance_hard_residual_max = Some(maximum);
+                        if maximum > config.normalized_residual_tolerance {
+                            Some(SolveRejection::HardResidual {
+                                maximum,
+                                tolerance: config.normalized_residual_tolerance,
+                            })
+                        } else {
+                            domain_rejection
+                        }
+                    }
+                    Err(error) => domain_rejection.or_else(|| {
+                        Some(SolveRejection::IndependentValidationFailed(
+                            error.to_string(),
+                        ))
+                    }),
+                };
+            }
+            if domain_rejection.is_none()
+                && self
+                    .validate_drag_selected_span(request, &candidate)
+                    .is_err()
+            {
+                core_report.termination = SolveTermination::Stalled;
+                domain_rejection = Some(SolveRejection::CoreTermination(SolveTermination::Stalled));
+            }
+            if domain_rejection.is_none()
+                && !compiled
+                    .accepted_materialization_patch(&compiled.problem, self, &candidate.geometry)?
+                    .replacements
+                    .is_empty()
+            {
+                core_report.termination = SolveTermination::Stalled;
+                domain_rejection = Some(SolveRejection::CoreTermination(SolveTermination::Stalled));
+            }
+            rejection.clone_from(&domain_rejection);
+        }
+
+        core_report.hard_validity =
+            domain_hard_validity(core_report.hard_validity, domain_rejection.as_ref());
 
         // `solved_state_for_problem` constructs every geometry family in retained
         // order and rejects any non-finite variable before returning the candidate.
@@ -2359,11 +2534,26 @@ impl Sketch {
         })
     }
 
-    #[allow(clippy::too_many_lines)]
+    pub(crate) fn prepare_curve_fillet_arcs(
+        &self,
+        candidate: &mut SolvedSketchState,
+    ) -> Result<(), SolveRejection> {
+        self.derive_curve_fillet_arcs_inner(candidate, FilletArcAlignment::Deferred)
+    }
+
     pub(crate) fn derive_curve_fillet_arcs(
         &self,
         candidate: &mut SolvedSketchState,
         tolerance: f64,
+    ) -> Result<(), SolveRejection> {
+        self.derive_curve_fillet_arcs_inner(candidate, FilletArcAlignment::Validate { tolerance })
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn derive_curve_fillet_arcs_inner(
+        &self,
+        candidate: &mut SolvedSketchState,
+        alignment: FilletArcAlignment,
     ) -> Result<(), SolveRejection> {
         for (constraint_id, constraint) in self.constraints.iter() {
             let SketchConstraintKind::CurveCurveFillet {
@@ -2454,15 +2644,17 @@ impl Sketch {
                 .map_err(|_| SolveRejection::InvalidFilletGeometry(constraint_id))?;
             let core_signed_sweep = solved.end_angle - solved.start_angle
                 + f64::from(turn_offset) * std::f64::consts::TAU;
-            validate_independent_constraint_rows(
-                constraint_id,
-                &[
-                    start_angle - solved.start_angle,
-                    end_angle - solved.end_angle,
-                    signed_sweep - core_signed_sweep,
-                ],
-                tolerance,
-            )?;
+            if let FilletArcAlignment::Validate { tolerance } = alignment {
+                validate_independent_constraint_rows(
+                    constraint_id,
+                    &[
+                        start_angle - solved.start_angle,
+                        end_angle - solved.end_angle,
+                        signed_sweep - core_signed_sweep,
+                    ],
+                    tolerance,
+                )?;
+            }
             solved.start_angle = start_angle;
             solved.end_angle = end_angle;
             solved.signed_sweep = signed_sweep;
@@ -7951,28 +8143,29 @@ fn validate_curve_fillet_candidate(
     let second_center_error = second_offset - second_expected;
     let start_error = actual_start - expected_start;
     let end_error = actual_end - expected_end;
-    validate_independent_constraint_rows(
-        constraint,
-        &[
-            first_center_error.x / sketch.model_scale,
-            first_center_error.y / sketch.model_scale,
-            second_center_error.x / sketch.model_scale,
-            second_center_error.y / sketch.model_scale,
-            (first_radial_norm - solved_arc.radius) / sketch.model_scale,
-            (second_radial_norm - solved_arc.radius) / sketch.model_scale,
-            first_tangent.dot(&(first_radial / first_radial_norm)),
-            second_tangent.dot(&(second_radial / second_radial_norm)),
-            start_error.x / sketch.model_scale,
-            start_error.y / sketch.model_scale,
-            end_error.x / sketch.model_scale,
-            end_error.y / sketch.model_scale,
-            cross_2d(output_start_radial, expected_start_radial),
-            cross_2d(output_end_radial, expected_end_radial),
-            stored_signed_sweep - solved_arc.signed_sweep,
-            expected_signed_sweep - solved_arc.signed_sweep,
-        ],
-        tolerance,
-    )
+    // Keep the independently reconstructed orthogonality checks in the same
+    // model-length normalization as their owning center/normal equations. Using
+    // unit radial vectors here would make this redundant check arbitrarily more
+    // restrictive as a valid Fillet radius becomes small.
+    let rows = [
+        first_center_error.x / sketch.model_scale,
+        first_center_error.y / sketch.model_scale,
+        second_center_error.x / sketch.model_scale,
+        second_center_error.y / sketch.model_scale,
+        (first_radial_norm - solved_arc.radius) / sketch.model_scale,
+        (second_radial_norm - solved_arc.radius) / sketch.model_scale,
+        first_tangent.dot(&first_radial) / sketch.model_scale,
+        second_tangent.dot(&second_radial) / sketch.model_scale,
+        start_error.x / sketch.model_scale,
+        start_error.y / sketch.model_scale,
+        end_error.x / sketch.model_scale,
+        end_error.y / sketch.model_scale,
+        cross_2d(output_start_radial, expected_start_radial),
+        cross_2d(output_end_radial, expected_end_radial),
+        stored_signed_sweep - solved_arc.signed_sweep,
+        expected_signed_sweep - solved_arc.signed_sweep,
+    ];
+    validate_independent_constraint_rows(constraint, &rows, tolerance)
 }
 
 const fn fillet_side_sign(side: crate::CurveNormalSide) -> f64 {

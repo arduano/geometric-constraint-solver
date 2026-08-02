@@ -4,13 +4,14 @@ use std::sync::{
 };
 
 use geosolve_core::{
-    AcceptedAuditPatch, AuditBinding, AuditEvaluationStatus, BoundStatus, CoordinateBound,
-    CoreError, DiagnosticBudget, DiagnosticIncompleteReason, DiagnosticStatus, EvaluationError,
-    HardValidity, LocalJacobian, OneSidedMobility, OperationControl, OperationController, Problem,
-    ResidualBlock, ResidualCategory, ResidualEvaluator, ResidualRowAudit, SecondaryStatus,
+    AcceptedAuditPatch, AcceptedStatePatch, AuditBinding, AuditEvaluationStatus, BoundStatus,
+    CoordinateBound, CoreError, DiagnosticBudget, DiagnosticIncompleteReason, DiagnosticStatus,
+    EvaluationError, HardValidity, LocalJacobian, OneSidedMobility, OperationControl,
+    OperationController, OperationLimits, Problem, ResidualBlock, ResidualCategory,
+    ResidualEvaluator, ResidualRowAudit, SecondaryStatus, SessionCoreRejection,
     SessionDomainRejection, SessionError, SessionPatch, SessionTransactionRejection, SolveSession,
     SolveTermination, SolverConfig, SourceConstraint, VariableBlock, VariableId, VariableKind,
-    VariableValue,
+    VariableValue, cancellation_pair,
 };
 
 fn row(label: &str) -> ResidualRowAudit {
@@ -69,6 +70,29 @@ impl ResidualEvaluator for DifferenceTarget {
             LocalJacobian::new(1, 1, vec![1.0]),
             LocalJacobian::new(1, 1, vec![-1.0]),
         ])
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct UnitCircleRows;
+
+impl ResidualEvaluator for UnitCircleRows {
+    fn evaluate(&self, variables: &[VariableValue]) -> Result<Vec<f64>, EvaluationError> {
+        let [VariableValue::Scalar(value)] = variables else {
+            return Err(EvaluationError::invalid_geometry("expected scalar"));
+        };
+        Ok(vec![value.cos(), value.sin()])
+    }
+
+    fn jacobian(&self, variables: &[VariableValue]) -> Result<Vec<LocalJacobian>, EvaluationError> {
+        let [VariableValue::Scalar(value)] = variables else {
+            return Err(EvaluationError::invalid_geometry("expected scalar"));
+        };
+        Ok(vec![LocalJacobian::new(
+            2,
+            1,
+            vec![-value.sin(), value.cos()],
+        )])
     }
 }
 
@@ -828,6 +852,345 @@ fn session_derives_dirty_components_preserves_ids_and_rejects_stale_or_failed_pa
     assert_eq!(session.revisions(), before_revisions);
     assert_eq!(session.component_dependency_stamps(), before_stamps);
     assert_ne!(session.report(), &accepted_report);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one transaction lifecycle proves exact secondary preservation, provenance, row-level rejection, and rollback"
+)]
+fn exact_state_synchronization_preserves_secondary_rows_and_rejects_equal_cost_row_changes() {
+    let mut problem = Problem::new();
+    let patched_hard = problem.add_variable(VariableBlock::scalar(0.25, 1.0).unwrap());
+    let secondary = problem.add_variable(VariableBlock::scalar(-0.25, 1.0).unwrap());
+    let rotating = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());
+    let preference_rotating = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());
+    let movable_first = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());
+    let movable_second = problem.add_variable(VariableBlock::scalar(0.0, 1.0).unwrap());
+    for (variable, label) in [
+        (patched_hard, "patchable hard coordinate"),
+        (secondary, "secondary hard coordinate"),
+        (rotating, "rotating hard coordinate"),
+        (preference_rotating, "preference-rotating hard coordinate"),
+    ] {
+        add_scalar_target(&mut problem, variable, ResidualCategory::Hard, 0.0, label);
+    }
+    add_scalar_target(
+        &mut problem,
+        secondary,
+        ResidualCategory::Temporary,
+        1.0,
+        "positive attained Temporary row",
+    );
+    add_scalar_target(
+        &mut problem,
+        secondary,
+        ResidualCategory::Preference,
+        -1.0,
+        "positive attained Preference row",
+    );
+    let movable_hard_source = source(&mut problem, "movable secondary equality");
+    problem
+        .add_residual(
+            ResidualBlock::new(
+                movable_hard_source,
+                ResidualCategory::Hard,
+                vec![movable_first, movable_second],
+                1,
+                vec![1.0],
+                vec![row("movable_first - movable_second")],
+                DifferenceTarget(0.0),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let preference_rotating_source = source(&mut problem, "equal-cost rotating Preference rows");
+    problem
+        .add_residual(
+            ResidualBlock::new(
+                preference_rotating_source,
+                ResidualCategory::Preference,
+                vec![preference_rotating],
+                2,
+                vec![1.0, 1.0],
+                vec![row("cos(angle)"), row("sin(angle)")],
+                UnitCircleRows,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    for (variable, target, label) in [
+        (movable_first, 1.0, "movable positive Temporary first"),
+        (movable_second, -1.0, "movable positive Temporary second"),
+    ] {
+        add_scalar_target(
+            &mut problem,
+            variable,
+            ResidualCategory::Temporary,
+            target,
+            label,
+        );
+    }
+    for (variable, target, label) in [
+        (movable_first, 2.0, "movable positive Preference first"),
+        (movable_second, -2.0, "movable positive Preference second"),
+    ] {
+        add_scalar_target(
+            &mut problem,
+            variable,
+            ResidualCategory::Preference,
+            target,
+            label,
+        );
+    }
+    let rotating_source = source(&mut problem, "equal-cost rotating Temporary rows");
+    problem
+        .add_residual(
+            ResidualBlock::new(
+                rotating_source,
+                ResidualCategory::Temporary,
+                vec![rotating],
+                2,
+                vec![1.0, 1.0],
+                vec![row("cos(angle)"), row("sin(angle)")],
+                UnitCircleRows,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let jacobian = problem.check_jacobians(1.0e-5).unwrap();
+    assert!(jacobian.all_within(1.0e-8), "{jacobian:#?}");
+
+    let mut session = SolveSession::new(problem, SolverConfig::default()).unwrap();
+    let before = session.report().clone();
+    assert!(
+        before.iterations > 0,
+        "the retained solve must carry real work"
+    );
+    assert!(before.priority_solves.iter().any(|priority| {
+        priority.category == ResidualCategory::Temporary
+            && priority.final_cost.is_some_and(|cost| cost > 0.0)
+    }));
+    assert!(before.priority_solves.iter().any(|priority| {
+        priority.category == ResidualCategory::Preference
+            && priority.final_cost.is_some_and(|cost| cost > 0.0)
+    }));
+    let secondary_rows = |report: &geosolve_core::SolveReport| {
+        report
+            .audit
+            .sources
+            .iter()
+            .flat_map(|source| &source.rows)
+            .filter(|row| {
+                matches!(
+                    row.category,
+                    ResidualCategory::Temporary | ResidualCategory::Preference
+                )
+            })
+            .map(|row| {
+                (
+                    row.residual_id,
+                    row.row_in_block,
+                    row.normalized_residual.to_bits(),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let retained_secondary_rows = secondary_rows(&before);
+    let retained_component_provenance = before
+        .component_solves
+        .iter()
+        .map(|component| {
+            (
+                component.iterations,
+                component.reused,
+                component.actual_backend,
+                component.symbolic_analysis_reused,
+                component.symbolic_analysis_reuse_count,
+                component.sparse_fallback_reason,
+                component.trace.clone(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let retained_priority_provenance = before
+        .priority_solves
+        .iter()
+        .map(|priority| {
+            (
+                priority.group_index,
+                priority.category,
+                priority.backend,
+                priority.largest_explicit_nullspace_block_rows,
+                priority.iterations,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let before_allowlist_problem = session.problem().packed_state().unwrap();
+    let before_allowlist_revisions = session.revisions();
+    let before_allowlist_stamps = session.component_dependency_stamps().to_vec();
+    let mut outside_allowlist =
+        AcceptedStatePatch::new(before_allowlist_revisions, vec![patched_hard]);
+    outside_allowlist.set_variable_value(secondary, VariableValue::Scalar(5.0e-10));
+    assert!(matches!(
+        session.synchronize_accepted_state(outside_allowlist),
+        Err(SessionError::AcceptedStateVariableNotAllowed { variable }) if variable == secondary
+    ));
+    assert_eq!(
+        session.problem().packed_state().unwrap(),
+        before_allowlist_problem
+    );
+    assert_eq!(session.report(), &before);
+    assert_eq!(session.revisions(), before_allowlist_revisions);
+    assert_eq!(
+        session.component_dependency_stamps(),
+        before_allowlist_stamps
+    );
+
+    let secondary_before = secondary_rows(&before);
+    let movable_after = 5.0e-11;
+    let mut exact_patch = AcceptedStatePatch::new(
+        session.revisions(),
+        vec![patched_hard, movable_first, movable_second],
+    );
+    exact_patch.set_variable_value(patched_hard, VariableValue::Scalar(5.0e-10));
+    exact_patch.set_variable_value(movable_first, VariableValue::Scalar(movable_after));
+    exact_patch.set_variable_value(movable_second, VariableValue::Scalar(movable_after));
+    let committed = session.synchronize_accepted_state(exact_patch).unwrap();
+    assert!(committed.committed(), "{:#?}", committed.rejection);
+    let secondary_after = secondary_rows(&committed.report);
+    assert_ne!(
+        secondary_after, secondary_before,
+        "the accepted path must exercise changed secondary rows"
+    );
+    assert_eq!(secondary_after.len(), secondary_before.len());
+    assert!(
+        secondary_before
+            .iter()
+            .zip(&secondary_after)
+            .all(|(before, after)| {
+                before.0 == after.0
+                    && before.1 == after.1
+                    && (f64::from_bits(before.2) - f64::from_bits(after.2)).abs() <= 1.0e-10
+            })
+    );
+    assert_eq!(committed.report.iterations, before.iterations);
+    assert_eq!(
+        committed
+            .report
+            .component_solves
+            .iter()
+            .map(|component| (
+                component.iterations,
+                component.reused,
+                component.actual_backend,
+                component.symbolic_analysis_reused,
+                component.symbolic_analysis_reuse_count,
+                component.sparse_fallback_reason,
+                component.trace.clone()
+            ))
+            .collect::<Vec<_>>(),
+        retained_component_provenance,
+        "fresh certification must retain the execution provenance of the solve it certifies"
+    );
+    assert_eq!(
+        committed
+            .report
+            .priority_solves
+            .iter()
+            .map(|priority| (
+                priority.group_index,
+                priority.category,
+                priority.backend,
+                priority.largest_explicit_nullspace_block_rows,
+                priority.iterations,
+            ))
+            .collect::<Vec<_>>(),
+        retained_priority_provenance
+    );
+    assert_ne!(secondary_after, retained_secondary_rows);
+
+    let stopped_problem = session.problem().packed_state().unwrap();
+    let stopped_report = session.report().clone();
+    let stopped_revisions = session.revisions();
+    let stopped_stamps = session.component_dependency_stamps().to_vec();
+    let baseline = session.clone();
+    let (cancel, token) = cancellation_pair();
+    cancel.cancel();
+    let mut controller =
+        OperationController::new(OperationControl::new(token, OperationLimits::unlimited()));
+    let mut stopped_patch = AcceptedStatePatch::new(stopped_revisions, vec![patched_hard]);
+    stopped_patch.set_variable_value(patched_hard, VariableValue::Scalar(7.5e-10));
+    assert!(
+        session
+            .synchronize_accepted_state_with_controller(stopped_patch, &mut controller)
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(session.problem().packed_state().unwrap(), stopped_problem);
+    assert_eq!(session.report(), &stopped_report);
+    assert_eq!(session.revisions(), stopped_revisions);
+    assert_eq!(session.component_dependency_stamps(), stopped_stamps);
+    let mut baseline = baseline;
+    let baseline_probe = baseline
+        .apply(SessionPatch::new(baseline.revisions()))
+        .unwrap();
+    let stopped_probe = session
+        .apply(SessionPatch::new(session.revisions()))
+        .unwrap();
+    assert_eq!(stopped_probe.report, baseline_probe.report);
+
+    let retained_problem = session.problem().packed_state().unwrap();
+    let retained_report = session.report().clone();
+    let retained_revisions = session.revisions();
+    let rotating_before = scalar(session.problem(), rotating);
+    let rotating_after = 5.0e-10_f64;
+    let before_cost = 0.5 * (rotating_before.cos().powi(2) + rotating_before.sin().powi(2));
+    let after_cost = 0.5 * (rotating_after.cos().powi(2) + rotating_after.sin().powi(2));
+    assert_eq!(before_cost.to_bits(), after_cost.to_bits());
+
+    let mut changed_rows = AcceptedStatePatch::new(retained_revisions, vec![rotating]);
+    changed_rows.set_variable_value(rotating, VariableValue::Scalar(rotating_after));
+    let rejected = session.synchronize_accepted_state(changed_rows).unwrap();
+    assert!(!rejected.committed());
+    assert!(
+        matches!(
+            rejected.rejection,
+            Some(SessionTransactionRejection::Core(
+                SessionCoreRejection::TemporaryResidualChanged { .. }
+            ))
+        ),
+        "{:#?}",
+        rejected.rejection
+    );
+    assert_eq!(session.problem().packed_state().unwrap(), retained_problem);
+    assert_eq!(session.report(), &retained_report);
+    assert_eq!(session.revisions(), retained_revisions);
+
+    let preference_rotating_after = 5.0e-10_f64;
+    let mut changed_preference_rows =
+        AcceptedStatePatch::new(retained_revisions, vec![preference_rotating]);
+    changed_preference_rows.set_variable_value(
+        preference_rotating,
+        VariableValue::Scalar(preference_rotating_after),
+    );
+    let rejected = session
+        .synchronize_accepted_state(changed_preference_rows)
+        .unwrap();
+    assert!(!rejected.committed());
+    assert!(
+        matches!(
+            rejected.rejection,
+            Some(SessionTransactionRejection::Core(
+                SessionCoreRejection::PreferenceResidualChanged { .. }
+            ))
+        ),
+        "{:#?}",
+        rejected.rejection
+    );
+    assert_eq!(session.problem().packed_state().unwrap(), retained_problem);
+    assert_eq!(session.report(), &retained_report);
+    assert_eq!(session.revisions(), retained_revisions);
 }
 
 #[test]
