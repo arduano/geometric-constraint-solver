@@ -3,18 +3,32 @@
 
 use std::fmt::Write as _;
 
-use geosolve_constraint_editor::{LifecycleStatus, SelectionItem};
+use geosolve_constraint_editor::{
+    ComputedFeatureProblemMetadata, ComputedProfileBoundary, LifecycleStatus, SelectionItem,
+};
 use geosolve_sketch::{
     DocumentMeasurementProvenance, DocumentParameterTarget, ExternalSnapshotInputError,
     GeometryRole, InactivityReason, OperationControl, OperationOutcome, ParameterValue,
     RetainedSketchDocumentSession, SketchAcceptedDocumentRedundancy, SketchDiagnosticSearch,
     SketchDiagnosticSearchStatus, SketchDiagnosticSnapshot, SketchDocument,
 };
+use geosolve_sketch_features::{
+    ComputedCornerRef, ComputedFeatureDefinition, ComputedFeatureDocument,
+    ComputedFeatureEvaluationState, ComputedFeatureSnapshot,
+};
 use geosolve_sketch_topology::{TopologyCompleteness, TopologyRequest, TopologySnapshot};
 
 use super::icons::TreeIconKind;
 
-pub(crate) fn production_topology_markup(session: &RetainedSketchDocumentSession) -> String {
+pub(crate) fn production_topology_markup(
+    session: &RetainedSketchDocumentSession,
+    computed_boundary: ComputedProfileBoundary,
+) -> String {
+    if let ComputedProfileBoundary::Withheld { active_features } = computed_boundary {
+        return format!(
+            "<section class=\"wb-topology-card\" data-topology-status=\"computed-geometry-not-included\" data-computed-active-features=\"{active_features}\"><h3>Production topology</h3><p><strong>Withheld</strong>: computed geometry is not yet included in production topology.</p><p class=\"wb-topology-scope\">Base-sketch-only profiles and fills are hidden while an active computed feature could change visible boundaries.</p></section>"
+        );
+    }
     let snapshot = match TopologySnapshot::capture(session) {
         Ok(snapshot) => snapshot,
         Err(error) => {
@@ -153,7 +167,7 @@ pub(super) const fn lifecycle_presentation(
 
 pub(crate) fn problem_markup(problem: &str) -> String {
     format!(
-        "<span class=\"wb-problem\" aria-label=\"Current solver problem\" role=\"status\">{}</span>",
+        "<span class=\"wb-problem\" aria-label=\"Current sketch or computed-feature problem\" role=\"status\">{}</span>",
         escape(problem)
     )
 }
@@ -274,6 +288,95 @@ pub(crate) fn tree_markup_with_pending(
     }
     if output.is_empty() {
         output.push_str("<p class=\"wb-empty\">No sketch objects</p>");
+    }
+    output
+}
+
+pub(crate) fn tree_markup_with_features(
+    document: &SketchDocument,
+    features: &ComputedFeatureDocument,
+    snapshot: Option<&ComputedFeatureSnapshot>,
+    problems: &[ComputedFeatureProblemMetadata],
+    selection: &[SelectionItem],
+    pending: &[SelectionItem],
+) -> String {
+    let mut output = String::from("<div class=\"wb-tree-group-label\"><span>Sketch</span></div>");
+    output.push_str(&tree_markup_with_pending(document, selection, pending));
+    let _ = write!(
+        output,
+        "<div class=\"wb-tree-group-label\"><span>Features</span><span>{}</span></div>",
+        features.features().len()
+    );
+    if features.features().is_empty() {
+        output.push_str("<p class=\"wb-empty\">No computed features</p>");
+        return output;
+    }
+    for feature in features.features() {
+        let evaluation = snapshot.and_then(|snapshot| {
+            snapshot
+                .feature_evaluations()
+                .iter()
+                .find(|value| value.feature == feature.id)
+        });
+        let (state, detail) = match evaluation.map(|value| &value.state) {
+            Some(ComputedFeatureEvaluationState::Current { .. }) => ("current", String::new()),
+            Some(ComputedFeatureEvaluationState::Failed { failure }) => (
+                "failed",
+                format!(" title=\"{}\"", escape(&failure.to_string())),
+            ),
+            Some(ComputedFeatureEvaluationState::Suppressed) | None if feature.suppressed => {
+                ("suppressed", String::new())
+            }
+            None => ("unavailable", String::new()),
+            Some(ComputedFeatureEvaluationState::Suppressed) => ("suppressed", String::new()),
+        };
+        let selected = selection.contains(&SelectionItem::Feature(feature.id));
+        let has_problem = problems
+            .iter()
+            .any(|problem| problem.feature == Some(feature.id));
+        let _ = write!(
+            output,
+            "<button class=\"wb-tree-row wb-tree-feature{}{}\" role=\"treeitem\" aria-selected=\"{}\" data-editor-item=\"feature\" data-feature-id=\"{}\" data-feature-state=\"{state}\"{}{}><span class=\"wb-tree-icon\">{}</span>{}</button>",
+            if selected { " selected" } else { "" },
+            if has_problem { " has-problem" } else { "" },
+            selected,
+            feature.id,
+            if has_problem {
+                " data-feature-problem=\"true\""
+            } else {
+                ""
+            },
+            detail,
+            super::icons::tree_icon_markup(TreeIconKind::Feature),
+            escape(&feature.label),
+        );
+        let ComputedFeatureDefinition::FilletSet(fillet) = &feature.definition;
+        for (index, corner) in fillet.corners.iter().enumerate() {
+            let item = SelectionItem::FeatureCorner(ComputedCornerRef {
+                feature: feature.id,
+                corner: corner.id,
+            });
+            let selected = selection.contains(&item);
+            let has_problem = problems.iter().any(|problem| {
+                problem.feature == Some(feature.id) && problem.corners.contains(&corner.id)
+            });
+            let _ = write!(
+                output,
+                "<button class=\"wb-tree-row wb-tree-feature-corner{}{}\" role=\"treeitem\" aria-selected=\"{}\" data-editor-item=\"feature-corner\" data-feature-id=\"{}\" data-feature-corner-id=\"{}\"{}><span class=\"wb-tree-icon\">{}</span>Corner {}</button>",
+                if selected { " selected" } else { "" },
+                if has_problem { " has-problem" } else { "" },
+                selected,
+                feature.id,
+                corner.id,
+                if has_problem {
+                    " data-feature-problem=\"true\""
+                } else {
+                    ""
+                },
+                super::icons::tree_icon_markup(TreeIconKind::FeatureCorner),
+                index + 1,
+            );
+        }
     }
     output
 }
@@ -804,7 +907,14 @@ pub(crate) fn escape(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use geosolve_constraint_editor::{LifecycleStatus, RetainedEditorCoordinator, SelectionItem};
+    use super::{
+        accepted_hard_residual_max, accepted_redundancy_markup, accepted_report_markup,
+        host_state_markup, lifecycle_presentation, problem_markup, production_topology_markup,
+        tree_markup, tree_markup_with_pending,
+    };
+    use geosolve_constraint_editor::{
+        ComputedProfileBoundary, LifecycleStatus, RetainedEditorCoordinator, SelectionItem,
+    };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
         AlphaScenarioKind, CurveDefinition, CurveSpan, DocumentConstraintDefinition,
@@ -817,12 +927,6 @@ mod tests {
         ParameterBatchEntry, ParameterValue, RetainedSketchDocumentSession, ScalarDomain,
         ScalarUnit, SketchDiagnosticIncompleteReason, SketchDiagnosticSearchStatus, SketchDocument,
         alpha_scenario,
-    };
-
-    use super::{
-        accepted_hard_residual_max, accepted_redundancy_markup, accepted_report_markup,
-        host_state_markup, lifecycle_presentation, problem_markup, production_topology_markup,
-        tree_markup, tree_markup_with_pending,
     };
 
     const TOPOLOGY_A: ExternalTopologyDigest = ExternalTopologyDigest::from_bytes([0x41; 32]);
@@ -945,7 +1049,7 @@ mod tests {
             ("rejected-attempt", "Rejected attempt")
         );
         let problem = problem_markup("bad < geometry");
-        assert!(problem.contains("aria-label=\"Current solver problem\""));
+        assert!(problem.contains("aria-label=\"Current sketch or computed-feature problem\""));
         assert!(problem.contains("role=\"status\""));
         assert!(problem.contains("bad &lt; geometry"));
     }
@@ -1438,7 +1542,8 @@ mod tests {
             SolverConfig::default(),
         )
         .unwrap();
-        let complete_markup = production_topology_markup(&complete);
+        let complete_markup =
+            production_topology_markup(&complete, ComputedProfileBoundary::BaseOnly);
         assert!(complete_markup.contains("data-topology-status=\"complete\""));
         assert!(complete_markup.contains("data-production-regions=\"true\""));
         assert!(complete_markup.contains("exact accepted revision"));
@@ -1461,7 +1566,7 @@ mod tests {
             SolverConfig::default(),
         )
         .unwrap();
-        let open_markup = production_topology_markup(&open);
+        let open_markup = production_topology_markup(&open, ComputedProfileBoundary::BaseOnly);
         assert!(open_markup.contains("data-topology-status=\"skipped\""));
         assert!(open_markup.contains("UncoveredEligibleSource"));
         assert!(!open_markup.contains("data-production-regions=\"true\""));

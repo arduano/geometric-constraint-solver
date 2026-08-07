@@ -4,11 +4,11 @@
 use std::{collections::BTreeSet, fmt::Write as _};
 
 use geosolve_constraint_editor::{
-    AdvancedConstructionKind, ConstructionPreview, ConstructionPreviewGeometry,
-    DimensionTargetDisplayUnit, EditorHoverState, EditorHoverTarget, EditorProblemCategory,
-    EditorProblemMetadata, EditorProblemScope, EditorProblemTarget, EditorScene,
-    SceneAnnotationGeometry, SceneAnnotationKind, ScreenPoint, SelectionItem, Viewport,
-    display_dimension_target,
+    AdvancedConstructionKind, ComputedFeatureProblemMetadata, ConstructionPreview,
+    ConstructionPreviewGeometry, DimensionTargetDisplayUnit, EditorHoverState, EditorHoverTarget,
+    EditorProblemCategory, EditorProblemMetadata, EditorProblemScope, EditorProblemTarget,
+    EditorScene, SceneAnnotationGeometry, SceneAnnotationKind, ScreenPoint, SelectionItem,
+    Viewport, display_dimension_target,
 };
 #[cfg(test)]
 use geosolve_sketch::DocumentConstraintDefinition;
@@ -16,6 +16,7 @@ use geosolve_sketch::{
     DesignScalarId, DocumentDimensionDefinition, DocumentDimensionMode, GeometryRole, ScalarUnit,
     SketchAcceptedDocumentState,
 };
+use geosolve_sketch_features::NativeCurveSpanSource;
 
 const SCREEN_SIZE: [f64; 2] = [1000.0, 700.0];
 const DEFAULT_PIXELS_PER_MODEL_UNIT: f64 = 50.0;
@@ -89,27 +90,9 @@ impl CanvasCamera {
     }
 
     pub(crate) fn fit_scene(&mut self, scene: &EditorScene) -> bool {
-        let mut minimum = [f64::INFINITY; 2];
-        let mut maximum = [f64::NEG_INFINITY; 2];
-        let mut include = |point: [f64; 2]| {
-            if point.into_iter().all(f64::is_finite) {
-                for axis in 0..2 {
-                    minimum[axis] = minimum[axis].min(point[axis]);
-                    maximum[axis] = maximum[axis].max(point[axis]);
-                }
-            }
-        };
-        for point in &scene.points {
-            include(point.model_position);
-        }
-        for curve in &scene.curves {
-            for point in &curve.screen_polyline {
-                include(scene.viewport.screen_to_model(*point));
-            }
-        }
-        if !minimum.into_iter().all(f64::is_finite) || !maximum.into_iter().all(f64::is_finite) {
+        let Some((minimum, maximum)) = scene.model_bounds() else {
             return false;
-        }
+        };
         let width = (maximum[0] - minimum[0]).max(1.0e-9);
         let height = (maximum[1] - minimum[1]).max(1.0e-9);
         let available = [
@@ -186,8 +169,34 @@ pub(crate) fn svg_markup_with_context(
     problem: Option<&EditorProblemMetadata>,
     viewport: Viewport,
 ) -> String {
+    svg_markup_with_computed_context(
+        scene,
+        accepted,
+        &[],
+        selection,
+        pending,
+        hover,
+        construction_preview,
+        problem,
+        viewport,
+    )
+}
+
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+pub(crate) fn svg_markup_with_computed_context(
+    scene: Option<&EditorScene>,
+    accepted: Option<&SketchAcceptedDocumentState>,
+    computed_problems: &[ComputedFeatureProblemMetadata],
+    selection: &[SelectionItem],
+    pending: &[SelectionItem],
+    hover: EditorHoverState,
+    construction_preview: Option<&ConstructionPreview>,
+    problem: Option<&EditorProblemMetadata>,
+    viewport: Viewport,
+) -> String {
     let mut output = String::new();
     let mut problem_markers = String::new();
+    let mut computed_problem_markers = String::new();
     let mut resolved_targets = BTreeSet::new();
     let problem_items = problem
         .map(|problem| {
@@ -215,6 +224,7 @@ pub(crate) fn svg_markup_with_context(
                 .collect::<BTreeSet<_>>()
         })
         .unwrap_or_default();
+    let failed_feature_sources = failed_computed_sources(computed_problems);
     if let Some(accepted) = accepted {
         let identity = accepted.identity();
         let input = accepted.input();
@@ -258,7 +268,7 @@ pub(crate) fn svg_markup_with_context(
             let item = SelectionItem::Curve(curve.span);
             let _ = write!(
                 output,
-                "<path class=\"wb-curve{}{}{}{}{}\" d=\"{path}\" data-persistent-id=\"{}\" data-editor-item=\"curve\" data-editor-segment=\"{}\" data-role=\"{}\"/>",
+                "<path class=\"wb-curve{}{}{}{}{}{}\" d=\"{path}\" data-persistent-id=\"{}\" data-editor-item=\"curve\" data-editor-segment=\"{}\" data-role=\"{}\"/>",
                 if selected { " selected" } else { "" },
                 if pending { " authoring-pending" } else { "" },
                 if related.contains(&item) {
@@ -272,6 +282,11 @@ pub(crate) fn svg_markup_with_context(
                     ""
                 },
                 if has_problem { " has-problem" } else { "" },
+                if failed_feature_sources.contains(&NativeCurveSpanSource { span: curve.span }) {
+                    " has-problem"
+                } else {
+                    ""
+                },
                 curve.span.curve,
                 curve.span.segment,
                 if role == GeometryRole::Construction {
@@ -291,6 +306,8 @@ pub(crate) fn svg_markup_with_context(
                 );
             }
         }
+        render_computed_geometry(&mut output, scene, selection);
+        render_computed_problem_markers(&mut computed_problem_markers, scene, computed_problems);
         output.push_str("</g><g class=\"wb-points\">");
         for point in &scene.points {
             let selected = selection.contains(&SelectionItem::Point(point.id));
@@ -365,8 +382,151 @@ pub(crate) fn svg_markup_with_context(
             problem_category_key(problem.category),
         );
     }
+    if !computed_problem_markers.is_empty() {
+        let _ = write!(
+            output,
+            "<g class=\"wb-error-overlay wb-computed-error-overlay\" data-computed-problems=\"{}\">{computed_problem_markers}</g>",
+            computed_problems.len(),
+        );
+    }
     output.push_str("</g>");
     output
+}
+
+fn failed_computed_sources(
+    problems: &[ComputedFeatureProblemMetadata],
+) -> BTreeSet<NativeCurveSpanSource> {
+    problems
+        .iter()
+        .filter(|problem| problem.scope == EditorProblemScope::Targeted)
+        .flat_map(|problem| problem.sources.iter().copied())
+        .collect()
+}
+
+fn render_computed_problem_markers(
+    output: &mut String,
+    scene: &EditorScene,
+    problems: &[ComputedFeatureProblemMetadata],
+) {
+    for (index, problem) in problems.iter().enumerate() {
+        let marker_row = u32::try_from(index).unwrap_or(u32::MAX);
+        let source_anchor = (problem.scope == EditorProblemScope::Targeted)
+            .then(|| {
+                problem.sources.iter().find_map(|source| {
+                    scene
+                        .curves
+                        .iter()
+                        .find(|curve| curve.span == source.span)
+                        .and_then(|curve| {
+                            (!curve.screen_polyline.is_empty()).then(|| {
+                                (
+                                    curve.screen_polyline[curve.screen_polyline.len() / 2],
+                                    *source,
+                                )
+                            })
+                        })
+                })
+            })
+            .flatten();
+        let (anchor, source, global) = source_anchor.map_or_else(
+            || {
+                (
+                    ScreenPoint {
+                        x: 970.0,
+                        y: 28.0 + 24.0 * f64::from(marker_row),
+                    },
+                    None,
+                    true,
+                )
+            },
+            |(anchor, source)| (anchor, Some(source), false),
+        );
+        computed_problem_marker(output, anchor, source, problem, global, index);
+    }
+}
+
+fn computed_problem_marker(
+    output: &mut String,
+    anchor: ScreenPoint,
+    source: Option<NativeCurveSpanSource>,
+    problem: &ComputedFeatureProblemMetadata,
+    global: bool,
+    index: usize,
+) {
+    let message = escape(&problem.message);
+    let feature = problem
+        .feature
+        .map_or_else(|| "global".to_owned(), |feature| feature.to_string());
+    let source_key = source.map_or_else(
+        || "global".to_owned(),
+        |source| format!("{}:{}", source.span.curve, source.span.segment),
+    );
+    let tooltip_x = if global || anchor.x > 610.0 {
+        -370.0
+    } else {
+        14.0
+    };
+    let tooltip_y = if anchor.y > 610.0 { -82.0 } else { 14.0 };
+    let _ = write!(
+        output,
+        concat!(
+            "<g class=\"wb-error-marker computed{}\" transform=\"translate({:.3} {:.3})\" ",
+            "tabindex=\"0\" role=\"img\" aria-label=\"{}\" ",
+            "data-problem-marker=\"computed:{}:{}\" data-computed-problem=\"{}\" ",
+            "data-feature-id=\"{}\" data-computed-source=\"{}\">",
+            "<circle r=\"10\"/>{}",
+            "<foreignObject class=\"wb-error-tooltip\" x=\"{}\" y=\"{}\" width=\"360\" height=\"72\">",
+            "<div xmlns=\"http://www.w3.org/1999/xhtml\">{}</div></foreignObject></g>"
+        ),
+        if global { " global" } else { "" },
+        anchor.x,
+        anchor.y,
+        message,
+        feature,
+        source_key,
+        index,
+        feature,
+        source_key,
+        super::icons::PROBLEM_ICON,
+        tooltip_x,
+        tooltip_y,
+        message,
+    );
+}
+
+fn render_computed_geometry(output: &mut String, scene: &EditorScene, selection: &[SelectionItem]) {
+    let evaluation = scene
+        .computed_curves
+        .first()
+        .map_or(0, |curve| curve.edge.evaluation.raw());
+    let _ = write!(
+        output,
+        "<g class=\"wb-computed-geometry\" data-computed-evaluation=\"{evaluation}\">"
+    );
+    for curve in &scene.computed_curves {
+        let item = SelectionItem::FeatureCorner(curve.owner);
+        let selected = selection.contains(&item)
+            || selection.contains(&SelectionItem::Feature(curve.owner.feature));
+        let path = polyline_path(&curve.screen_polyline);
+        let _ = write!(
+            output,
+            concat!(
+                "<g class=\"wb-computed-item{}\" data-editor-item=\"feature-corner\" ",
+                "data-feature-id=\"{}\" data-feature-corner-id=\"{}\" ",
+                "data-computed-evaluation=\"{}\" data-computed-edge=\"{}\">",
+                "<path class=\"wb-curve wb-computed-fillet\" d=\"{}\"/>",
+                "<path class=\"wb-computed-hit\" d=\"{}\"/></g>"
+            ),
+            if selected { " selected" } else { "" },
+            curve.owner.feature,
+            curve.owner.corner,
+            curve.edge.evaluation.raw(),
+            curve.edge.ordinal,
+            path,
+            path,
+        );
+    }
+    output.push_str("</g>");
 }
 
 fn digest(bytes: [u8; 32]) -> String {
@@ -451,7 +611,10 @@ fn render_annotations(
                     },
                 )
             }
-            SelectionItem::Point(_) | SelectionItem::Curve(_) => continue,
+            SelectionItem::Point(_)
+            | SelectionItem::Curve(_)
+            | SelectionItem::Feature(_)
+            | SelectionItem::FeatureCorner(_) => continue,
         };
         let escaped_label = escape(&label);
         let _ = write!(
@@ -481,7 +644,10 @@ fn render_annotations(
             let target = match annotation.item {
                 SelectionItem::Constraint(id) => EditorProblemTarget::Constraint(id),
                 SelectionItem::Dimension(id) => EditorProblemTarget::Dimension(id),
-                SelectionItem::Point(_) | SelectionItem::Curve(_) => unreachable!(),
+                SelectionItem::Point(_)
+                | SelectionItem::Curve(_)
+                | SelectionItem::Feature(_)
+                | SelectionItem::FeatureCorner(_) => unreachable!(),
             };
             if resolved_targets.insert(target)
                 && let Some(anchor) = annotation_anchor(&annotation.geometry)
@@ -1077,9 +1243,9 @@ fn escape(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use geosolve_constraint_editor::{
-        ConstructionPreviewGeometry, EditorHoverState, EditorHoverTarget, EditorScene,
-        RetainedEditorCoordinator, SceneAnnotationGeometry, SceneAnnotationOccurrence, ScreenPoint,
-        SelectionItem,
+        ComputedFeatureProblemMetadata, ConstructionPreviewGeometry, EditorHoverState,
+        EditorHoverTarget, EditorProblemScope, EditorScene, RetainedEditorCoordinator,
+        SceneAnnotationGeometry, SceneAnnotationOccurrence, ScreenPoint, SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -1090,10 +1256,13 @@ mod tests {
         ParameterValue, PersistentId, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
         SketchDocument,
     };
+    use geosolve_sketch_features::{
+        ComputedFeatureCornerId, ComputedFeatureId, NativeCurveSpanSource,
+    };
 
     use super::{
         CanvasCamera, constraint_glyph, construction_geometry_markup, dimension_kind, svg_markup,
-        svg_markup_with_context, viewport,
+        svg_markup_with_computed_context, svg_markup_with_context, viewport,
     };
     use crate::workbench::panels::{
         accepted_redundancy_markup, host_state_markup, lifecycle_presentation, problem_markup,
@@ -1879,5 +2048,105 @@ mod tests {
         let recovered = coordinator.session().accepted_state().unwrap();
         assert_ne!(recovered.identity(), accepted_before);
         assert_eq!(recovered.input().parameter_revision(), 9);
+    }
+
+    #[test]
+    fn computed_feature_problems_highlight_exact_sources_and_have_global_fallback() {
+        let mut document = SketchDocument::new(8.0).unwrap();
+        let points = [[-3.0, 0.0], [-1.0, 0.0], [1.0, 0.0], [3.0, 0.0]]
+            .map(|position| document.add_point("source point", position).unwrap());
+        let first = document
+            .add_curve(
+                "affected source",
+                CurveDefinition::Line {
+                    start: points[0],
+                    end: points[1],
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .unwrap();
+        let second = document
+            .add_curve(
+                "unaffected source",
+                CurveDefinition::Line {
+                    start: points[2],
+                    end: points[3],
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .unwrap();
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .unwrap();
+        let coordinator = RetainedEditorCoordinator::new(session).unwrap();
+        let accepted = coordinator.session().accepted_state().unwrap();
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            coordinator.session().design_identity(),
+            accepted.document(),
+            coordinator.session().design_document(),
+            viewport(),
+            0.8,
+        )
+        .unwrap();
+        let feature = ComputedFeatureId::from_raw(7);
+        let targeted = ComputedFeatureProblemMetadata {
+            feature: Some(feature),
+            corners: vec![ComputedFeatureCornerId::from_raw(9)],
+            sources: vec![NativeCurveSpanSource {
+                span: CurveSpan::line(first),
+            }],
+            scope: EditorProblemScope::Targeted,
+            message: "Fillet <root> is unavailable".into(),
+        };
+        let markup = svg_markup_with_computed_context(
+            Some(&scene),
+            Some(accepted),
+            &[targeted],
+            &[],
+            &[],
+            EditorHoverState::default(),
+            None,
+            None,
+            viewport(),
+        );
+        let curve_tag = |curve| {
+            let key = format!("data-persistent-id=\"{curve}\"");
+            let end = markup.find(&key).expect("native source path");
+            let start = markup[..end].rfind("<path").expect("path boundary");
+            &markup[start..end]
+        };
+        assert!(curve_tag(first).contains("has-problem"));
+        assert!(!curve_tag(second).contains("has-problem"));
+        assert!(markup.contains(&format!("data-feature-id=\"{feature}\"")));
+        assert!(markup.contains(&format!("data-computed-source=\"{first}:0\"")));
+        assert!(markup.contains("tabindex=\"0\" role=\"img\""));
+        assert!(markup.contains("aria-label=\"Fillet &lt;root&gt; is unavailable\""));
+
+        let global = ComputedFeatureProblemMetadata {
+            feature: None,
+            corners: Vec::new(),
+            sources: Vec::new(),
+            scope: EditorProblemScope::Global,
+            message: "Computed evaluation unavailable".into(),
+        };
+        let global_markup = svg_markup_with_computed_context(
+            Some(&scene),
+            Some(accepted),
+            &[global],
+            &[],
+            &[],
+            EditorHoverState::default(),
+            None,
+            None,
+            viewport(),
+        );
+        assert!(global_markup.contains("class=\"wb-error-marker computed global\""));
+        assert!(global_markup.contains("data-feature-id=\"global\""));
+        assert!(global_markup.contains("data-computed-source=\"global\""));
+        assert!(!global_markup.contains("wb-curve has-problem"));
     }
 }

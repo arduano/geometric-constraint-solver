@@ -235,7 +235,7 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-tool-palette kbd { color: #d6b16f; background: transparent; font: 1rem ui-monospace, monospace; }
 .wb-geometry-icon,
 .wb-authoring-icon,
-.wb-operation-icon {
+.wb-feature-icon {
   display: grid;
   width: 1.35rem;
   height: 1.35rem;
@@ -346,6 +346,20 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 }
 .wb-panel-title span:last-child { color: #747e7c; font-size: 0.58rem; }
 .wb-tree { height: calc(100% - 2.4rem); overflow: auto; padding: 0.35rem; }
+.wb-tree-group-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0.35rem 0.25rem 0.2rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid #343b3c;
+  color: #7f8b89;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.wb-tree-group-label:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
 .wb-tree-row {
   display: flex;
   width: 100%;
@@ -384,6 +398,15 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-empty { padding: 1rem 0.6rem; color: #707977; font-size: 0.75rem; }
 .wb-tree-row[data-role="construction"] { color: #91a6a7; font-style: italic; }
 .wb-tree-external { border-left: 2px solid #638b91 !important; color: #9cc6c9; }
+.wb-tree-feature { color: #dfc88f; }
+.wb-tree-feature[data-feature-state="failed"] { color: #f1a99b; }
+.wb-tree-feature[data-feature-state="suppressed"] { opacity: 0.58; }
+.wb-tree-feature-corner { padding-left: 1.3rem; color: #a8b4b1; }
+.wb-tree-feature.has-problem,
+.wb-tree-feature-corner.has-problem {
+  color: #ff9b8f;
+  box-shadow: inset 2px 0 #d95e50;
+}
 
 .wb-canvas-panel {
   position: relative;
@@ -395,7 +418,7 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   background-size: 25px 25px;
 }
 #wb-viewport { width: 100%; height: 100%; touch-action: none; }
-.wb-canvas-operation-options {
+.wb-canvas-feature-options {
   position: absolute;
   z-index: 5;
   display: grid;
@@ -410,35 +433,43 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   background: rgb(24 29 29 / 98%);
   box-shadow: 0 10px 28px rgb(0 0 0 / 48%);
 }
-.wb-canvas-operation-options[hidden] { display: none; }
-.wb-operation-options-title {
+.wb-canvas-feature-options[hidden] { display: none; }
+.wb-feature-options-title {
   display: flex;
   align-items: center;
   justify-content: space-between;
   color: #e6c785;
   font-size: 0.72rem;
 }
-.wb-operation-options-title button {
+.wb-feature-options-title button {
   min-width: 1.75rem;
   min-height: 1.75rem;
   padding: 0;
   font-size: 1rem;
 }
-.wb-canvas-operation-options label {
+.wb-canvas-feature-options label {
   display: grid;
   gap: 0.2rem;
   font-size: 0.67rem;
 }
-.wb-canvas-operation-options input,
-.wb-canvas-operation-options select { width: 100%; min-height: 1.8rem; }
-.wb-canvas-operation-options .wb-option-check {
+.wb-canvas-feature-options input,
+.wb-canvas-feature-options select { width: 100%; min-height: 1.8rem; }
+.wb-canvas-feature-options .wb-option-check {
   grid-template-columns: auto 1fr;
   align-items: center;
 }
-.wb-canvas-operation-options .wb-option-check input {
+.wb-canvas-feature-options .wb-option-check input {
   width: auto;
   min-height: auto;
 }
+.wb-feature-help,
+.wb-feature-editor p {
+  margin: 0;
+  color: #899492;
+  font-size: 0.64rem;
+  line-height: 1.4;
+}
+#wb-feature-branch-scope[data-branch-scope="selected-corner"] { color: #efc77d; }
 .wb-grid path { fill: none; stroke: #3b4445; stroke-width: 1; }
 .wb-profiles { fill: rgb(63 119 113 / 16%); fill-rule: evenodd; pointer-events: none; stroke: none; }
 .wb-curve {
@@ -450,6 +481,29 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   vector-effect: non-scaling-stroke;
   cursor: pointer;
 }
+.wb-computed-source-fragment {
+  stroke: #e5e8df;
+}
+.wb-computed-fillet {
+  stroke: #8ed5ca;
+  stroke-width: 2.6;
+}
+.wb-computed-item:hover .wb-computed-fillet,
+.wb-computed-item.geometry-hovered .wb-computed-fillet,
+.wb-computed-item.selected .wb-computed-fillet {
+  stroke: #efb856;
+  filter: drop-shadow(0 0 3px rgb(239 184 86 / 45%));
+}
+.wb-computed-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 14;
+  pointer-events: stroke;
+  cursor: ew-resize;
+}
+.wb-computed-item.has-problem .wb-computed-fillet { stroke: #ff7666; }
 .wb-curve.geometry-hovered,
 .wb-point.geometry-hovered { stroke: #efb856; }
 .wb-curve.selected,

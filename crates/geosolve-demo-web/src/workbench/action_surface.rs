@@ -2,7 +2,7 @@
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 
 use geosolve_constraint_editor::{
-    AuthoringTool, ConstraintIntent, DimensionKind, OperationAuthoringTool,
+    AuthoringTool, ConstraintIntent, DimensionKind, FeatureAuthoringTool,
 };
 
 pub(crate) const CONSTRAINT_ACTIONS: [(&str, &str, ConstraintIntent); 11] = [
@@ -43,8 +43,8 @@ pub(crate) const DIMENSION_ACTIONS: [(&str, &str, DimensionKind); 5] = [
     ),
 ];
 
-pub(crate) const OPERATION_ACTIONS: [(&str, &str, OperationAuthoringTool); 1] =
-    [("fillet", "Fillet", OperationAuthoringTool::Fillet)];
+pub(crate) const FEATURE_ACTIONS: [(&str, &str, FeatureAuthoringTool); 1] =
+    [("fillet", "Fillet", FeatureAuthoringTool::Fillet)];
 
 pub(crate) fn constraint_from_key(key: &str) -> Option<ConstraintIntent> {
     CONSTRAINT_ACTIONS
@@ -72,8 +72,8 @@ pub(crate) fn authoring_tool_from_key(key: &str) -> Option<AuthoringTool> {
         .or_else(|| dimension_from_key(key).map(AuthoringTool::Dimension))
 }
 
-pub(crate) fn operation_tool_from_key(key: &str) -> Option<OperationAuthoringTool> {
-    OPERATION_ACTIONS
+pub(crate) fn feature_tool_from_key(key: &str) -> Option<FeatureAuthoringTool> {
+    FEATURE_ACTIONS
         .iter()
         .find_map(|(candidate, _, tool)| (*candidate == key).then_some(*tool))
 }
@@ -82,11 +82,11 @@ pub(crate) fn operation_tool_from_key(key: &str) -> Option<OperationAuthoringToo
 mod tests {
     use std::collections::HashSet;
 
-    use geosolve_constraint_editor::{ConstraintIntent, DimensionKind, OperationAuthoringTool};
+    use geosolve_constraint_editor::{ConstraintIntent, DimensionKind, FeatureAuthoringTool};
 
     use super::{
-        CONSTRAINT_ACTIONS, DIMENSION_ACTIONS, OPERATION_ACTIONS, authoring_tool_from_key,
-        constraint_from_key, dimension_from_key, dimension_key, operation_tool_from_key,
+        CONSTRAINT_ACTIONS, DIMENSION_ACTIONS, FEATURE_ACTIONS, authoring_tool_from_key,
+        constraint_from_key, dimension_from_key, dimension_key, feature_tool_from_key,
     };
     use crate::workbench::icons::GEOMETRY_TOOLS;
 
@@ -180,26 +180,26 @@ mod tests {
     #[test]
     fn m66_modify_action_identity_catalog_is_closed_unique_and_headless() {
         assert_eq!(
-            OPERATION_ACTIONS.map(|(_, _, tool)| tool),
-            [OperationAuthoringTool::Fillet]
+            FEATURE_ACTIONS.map(|(_, _, tool)| tool),
+            [FeatureAuthoringTool::Fillet]
         );
         assert_eq!(
-            OPERATION_ACTIONS
+            FEATURE_ACTIONS
                 .iter()
                 .map(|(key, _, _)| *key)
                 .collect::<HashSet<_>>()
                 .len(),
-            OPERATION_ACTIONS.len()
+            FEATURE_ACTIONS.len()
         );
-        for (key, label, tool) in OPERATION_ACTIONS {
+        for (key, label, tool) in FEATURE_ACTIONS {
             assert!(!label.is_empty());
-            assert_eq!(operation_tool_from_key(key), Some(tool));
+            assert_eq!(feature_tool_from_key(key), Some(tool));
         }
-        assert_eq!(operation_tool_from_key("split"), None);
-        assert_eq!(operation_tool_from_key("line-offset"), None);
-        assert_eq!(operation_tool_from_key("mirror"), None);
-        assert_eq!(operation_tool_from_key("curve-offset"), None);
-        assert_eq!(operation_tool_from_key("multi-mirror"), None);
+        assert_eq!(feature_tool_from_key("split"), None);
+        assert_eq!(feature_tool_from_key("line-offset"), None);
+        assert_eq!(feature_tool_from_key("mirror"), None);
+        assert_eq!(feature_tool_from_key("curve-offset"), None);
+        assert_eq!(feature_tool_from_key("multi-mirror"), None);
     }
 
     #[test]
@@ -268,21 +268,24 @@ mod tests {
     #[test]
     fn m66_modify_palette_is_present_without_operation_semantics_in_markup() {
         let html = include_str!("../../index.html");
-        for (key, _, _) in OPERATION_ACTIONS {
+        for (key, _, _) in FEATURE_ACTIONS {
             assert!(
-                html.contains(&format!("data-wb-operation=\"{key}\"")),
+                html.contains(&format!("data-wb-feature=\"{key}\"")),
                 "missing Modify action {key}"
             );
         }
         assert_eq!(
-            html.matches("class=\"wb-operation-icon\"").count(),
-            OPERATION_ACTIONS.len()
+            html.matches("class=\"wb-feature-icon\"").count(),
+            FEATURE_ACTIONS.len()
         );
         assert!(html.contains("<strong>Modify</strong>"));
-        assert!(html.contains("data-wb-action=\"operation-apply\""));
+        assert!(html.contains("data-wb-action=\"feature-apply\""));
+        assert!(html.contains("id=\"wb-feature-branch-scope\""));
+        assert!(html.contains("Branch choices set defaults for the next corner"));
+        assert!(html.contains("Select a preview arc to edit one completed corner"));
         for forbidden in [
-            "data-wb-operation=\"line-offset\"",
-            "data-wb-operation=\"mirror\"",
+            "data-wb-feature=\"line-offset\"",
+            "data-wb-feature=\"mirror\"",
             "wb-operation-offset-distance",
             "wb-operation-offset-mode",
             "wb-operation-offset-semantics",

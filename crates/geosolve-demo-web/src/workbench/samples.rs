@@ -686,13 +686,13 @@ mod tests {
     use std::collections::HashSet;
 
     use geosolve_constraint_editor::{
-        OperationAuthoringOptions, OperationAuthoringOutcome, OperationAuthoringPreviewOutcome,
-        OperationAuthoringState, OperationAuthoringTool, RetainedEditorCoordinator, SelectionItem,
+        FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringState,
+        FeatureAuthoringTool, RetainedEditorCoordinator, SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
-        CurveDefinition, CurveSpan, DocumentConstraintDefinition, DocumentDimensionDefinition,
-        DocumentEdit, RetainedSketchDocumentSession,
+        CurveDefinition, DocumentConstraintDefinition, DocumentDimensionDefinition,
+        RetainedSketchDocumentSession,
     };
 
     use super::super::persistence::WorkspaceSnapshot;
@@ -742,7 +742,8 @@ mod tests {
             assert_eq!(coordinator.history_len(), 1, "{}", id.key());
             assert!(!coordinator.can_undo(), "{}", id.key());
 
-            let snapshot = WorkspaceSnapshot::from_checkpoint(coordinator.checkpoint());
+            let snapshot = WorkspaceSnapshot::from_coordinator(&coordinator)
+                .expect("capture sample workspace");
             let decoded =
                 WorkspaceSnapshot::decode(&snapshot.encode().expect("encode")).expect("decode");
             let design = decoded.design_document().expect("design document");
@@ -831,175 +832,171 @@ mod tests {
     #[test]
     #[allow(
         clippy::too_many_lines,
-        reason = "the actual fillet sample is qualified through one complete persisted lifecycle"
+        reason = "one exact computed-feature persisted lifecycle"
     )]
-    fn fillet_workshop_commit_round_trip_radius_and_parent_edits_remain_accepted() {
+    fn fillet_workshop_computed_set_round_trips_without_mutating_the_sketch_graph() {
         let mut catalog = SampleCatalogState::default();
         let mut coordinator = catalog
             .open_key(SampleId::FilletWorkshop.key())
             .expect("fillet workshop");
-        let (line, circle) = {
+        let corner = {
             let document = coordinator.session().design_document();
-            let by_label = |label: &str| {
-                document
-                    .curves()
-                    .iter()
-                    .find(|curve| curve.label == label)
-                    .expect("workshop curve")
-                    .id
+            let polyline = document
+                .curves()
+                .iter()
+                .find(|curve| curve.label == "Open-polyline corner support")
+                .expect("workshop polyline corner");
+            let CurveDefinition::Polyline { points, .. } = &polyline.definition else {
+                panic!("workshop corner support must remain a polyline");
             };
+            points[1]
+        };
+        let ordinary_before = coordinator
+            .session()
+            .design_document()
+            .to_draft_v5_json()
+            .expect("ordinary sketch JSON");
+        let ordinary_identity = coordinator.session().design_identity();
+        let ordinary_counts = {
+            let document = coordinator.session().design_document();
             (
-                by_label("Line-circle linear support"),
-                by_label("Line-circle circular support"),
+                document.points().len(),
+                document.curves().len(),
+                document.constraints().len(),
+                document.dimensions().len(),
+                document.contacts().len(),
+                document.trim_views().len(),
             )
         };
-        let operation_document = coordinator
+        let authoring_snapshot = coordinator
+            .feature_authoring_snapshot()
+            .expect("current accepted feature-authoring snapshot");
+        let accepted_document = coordinator
             .operation_authoring_document()
-            .expect("accepted operation document")
+            .expect("current accepted document")
             .clone();
-        let picks = [
-            coordinator
-                .operation_pick_for_item(SelectionItem::Curve(CurveSpan::line(line)), Some(0.28))
-                .expect("line pick"),
-            coordinator
-                .operation_pick_for_item(SelectionItem::Curve(CurveSpan::line(circle)), Some(4.05))
-                .expect("circle pick"),
-        ];
-        let mut authoring = OperationAuthoringState::default();
-        let _ = authoring.set_options(
-            &operation_document,
-            OperationAuthoringOptions {
-                fillet_radius: Some(0.8),
-                fillet_radius_mode: geosolve_sketch::DocumentDimensionMode::Driving,
-                ..OperationAuthoringOptions::default()
-            },
+        let picks = coordinator
+            .feature_authoring_picks_for_item(SelectionItem::Point(corner), None)
+            .expect("unambiguous polyline corner picks");
+        let mut authoring = FeatureAuthoringState::default();
+        let _ = authoring.activate(
+            &authoring_snapshot,
+            &accepted_document,
+            FeatureAuthoringTool::Fillet,
+            &[],
         );
-        let outcome =
-            authoring.activate(&operation_document, OperationAuthoringTool::Fillet, &picks);
-        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = outcome else {
-            panic!("workshop fillet candidate expected: {outcome:?}");
+        assert!(matches!(
+            authoring.set_options(
+                &authoring_snapshot,
+                FeatureAuthoringOptions {
+                    fillet_radius: Some(0.8),
+                    ..FeatureAuthoringOptions::default()
+                },
+            ),
+            FeatureAuthoringOutcome::Collecting { .. }
+        ));
+        let outcome = authoring.pick_many(&authoring_snapshot, picks);
+        let FeatureAuthoringOutcome::PreviewRequested { candidate, .. } = outcome else {
+            panic!("workshop computed Fillet candidate expected: {outcome:?}");
         };
-        assert!(!candidate.is_confirmed());
-        let jets = picks.each_ref().map(|pick| {
-            operation_document
-                .evaluate_curve_jet(pick.curve_span().expect("curve pick"), pick.curve_parameter)
-                .expect("accepted pick jet")
-        });
-        let first_direction = jets[0].first_derivative;
-        let second_direction = jets[1].first_derivative;
-        let denominator =
-            first_direction.x * second_direction.y - first_direction.y * second_direction.x;
-        let between = jets[1].position - jets[0].position;
-        let first_parameter =
-            (between.x * second_direction.y - between.y * second_direction.x) / denominator;
-        let tangent_intersection = [
-            jets[0].position.x + first_parameter * first_direction.x,
-            jets[0].position.y + first_parameter * first_direction.y,
-        ];
-        let outcome = authoring.confirm(&operation_document, tangent_intersection);
-        let OperationAuthoringOutcome::PreviewRequested { candidate, .. } = outcome else {
-            panic!("confirmed workshop fillet candidate expected: {outcome:?}");
-        };
-        assert!(candidate.is_confirmed());
-        let preview = coordinator
-            .prepare_operation_preview(&candidate)
-            .expect("workshop fillet preview");
-        let OperationAuthoringPreviewOutcome::Ready(metadata) = preview else {
-            panic!("accepted workshop fillet preview expected: {preview:?}");
-        };
-        let fillet = metadata.primary_created_curve;
-        coordinator
-            .apply_operation_preview(metadata.token, &candidate)
-            .expect("workshop fillet commit");
+        let metadata = coordinator
+            .prepare_feature_authoring_preview(
+                coordinator.feature_document().identity(),
+                &candidate,
+                "Workshop computed Fillet",
+            )
+            .expect("whole-set computed preview");
+        assert_eq!(
+            coordinator
+                .feature_authoring_preview()
+                .expect("held preview")
+                .metadata()
+                .token,
+            metadata.token
+        );
+        let fillet = coordinator
+            .apply_feature_authoring_preview(metadata.token, &candidate)
+            .expect("exact held-preview apply")
+            .value;
 
-        let snapshot = WorkspaceSnapshot::from_checkpoint(coordinator.checkpoint());
-        let decoded = WorkspaceSnapshot::decode(&snapshot.encode().expect("encode operation"))
-            .expect("decode operation");
-        let restored = RetainedSketchDocumentSession::restore_design_with_accepted(
-            decoded.design_document().expect("design document"),
-            decoded
-                .accepted_document()
-                .expect("accepted payload")
-                .expect("accepted document"),
-            decoded.revisions(),
-            geosolve_sketch::DocumentSolveRequest::default(),
-            SolverConfig::default(),
+        assert_eq!(coordinator.session().design_identity(), ordinary_identity);
+        assert_eq!(
+            coordinator
+                .session()
+                .design_document()
+                .to_draft_v5_json()
+                .expect("ordinary sketch JSON after feature"),
+            ordinary_before
+        );
+        let ordinary_after_counts = {
+            let document = coordinator.session().design_document();
+            (
+                document.points().len(),
+                document.curves().len(),
+                document.constraints().len(),
+                document.dimensions().len(),
+                document.contacts().len(),
+                document.trim_views().len(),
+            )
+        };
+        assert_eq!(ordinary_after_counts, ordinary_counts);
+        assert_eq!(coordinator.feature_document().features().len(), 1);
+        assert!(
+            coordinator
+                .computed_snapshot()
+                .expect("computed geometry")
+                .edges()
+                .iter()
+                .any(|edge| matches!(
+                    edge.geometry,
+                    geosolve_sketch_features::ComputedEdgeGeometry::CircularArc(_)
+                ))
+        );
+
+        let snapshot =
+            WorkspaceSnapshot::from_coordinator(&coordinator).expect("capture workspace");
+        let decoded = WorkspaceSnapshot::decode(&snapshot.encode().expect("encode v4 workspace"))
+            .expect("decode v4 workspace");
+        let session = decoded
+            .restore_session(
+                geosolve_sketch::DocumentSolveRequest::default(),
+                SolverConfig::default(),
+            )
+            .expect("restore sketch lifecycle");
+        let mut restored = RetainedEditorCoordinator::with_features_and_high_water(
+            session,
+            decoded.feature_document().expect("restore feature sidecar"),
+            decoded.feature_lifecycle_high_water(),
+            decoded.computed_evaluation_high_water(),
         )
-        .expect("restore committed fillet");
-        let mut restored = RetainedEditorCoordinator::new(restored).expect("restored coordinator");
-        let (fillet_center, fillet_radius, fillet_target, source_radius_target) = {
-            let document = restored.session().design_document();
-            let (center, radius) = match &document.curve(fillet).expect("fillet curve").definition {
-                CurveDefinition::CircularArc { center, radius, .. } => (*center, *radius),
-                other => panic!("fillet output must be a circular arc: {other:?}"),
-            };
-            let fillet_target = document
-                .dimensions()
-                .iter()
-                .find_map(|dimension| match &dimension.definition {
-                    DocumentDimensionDefinition::Radius { curve, target } if *curve == fillet => {
-                        Some(*target)
-                    }
-                    _ => None,
-                })
-                .expect("fillet radius target");
-            let source_radius_target = document
-                .dimensions()
-                .iter()
-                .find_map(|dimension| match &dimension.definition {
-                    DocumentDimensionDefinition::Radius { target, .. }
-                        if dimension.label == "Line-circle source radius" =>
-                    {
-                        Some(*target)
-                    }
-                    _ => None,
-                })
-                .expect("source circle radius target");
-            (center, radius, fillet_target, source_radius_target)
-        };
-        let radius_edit = restored
-            .apply_edit(
-                restored.session().design_identity(),
-                DocumentEdit::SetScalarValue {
-                    scalar: fillet_target,
-                    value: 0.96,
-                },
-            )
-            .expect("edit restored fillet radius");
-        assert!(radius_edit.published_accepted.is_some());
-        let accepted = restored
-            .session()
-            .accepted_state()
-            .expect("accepted fillet radius edit")
-            .document();
-        assert!(
-            (accepted.scalar(fillet_radius).expect("fillet radius").value - 0.96).abs() <= 1.0e-7
+        .expect("restore computed workspace");
+        assert_eq!(restored.feature_document().features().len(), 1);
+        assert_eq!(
+            restored
+                .session()
+                .design_document()
+                .to_draft_v5_json()
+                .expect("restored ordinary sketch JSON"),
+            ordinary_before
         );
-        let center_before = accepted
-            .point(fillet_center)
-            .expect("fillet center")
-            .position;
-
-        let parent_edit = restored
-            .apply_edit(
-                restored.session().design_identity(),
-                DocumentEdit::SetScalarValue {
-                    scalar: source_radius_target,
-                    value: 2.1,
-                },
-            )
-            .expect("edit restored source radius");
-        assert!(parent_edit.published_accepted.is_some());
-        let center_after = restored
-            .session()
-            .accepted_state()
-            .expect("accepted source-radius edit")
-            .document()
-            .point(fillet_center)
-            .expect("associated fillet center")
-            .position;
-        assert!(
-            (center_after[0] - center_before[0]).hypot(center_after[1] - center_before[1]) > 1.0e-6
+        restored
+            .set_computed_fillet_radius(restored.feature_document().identity(), fillet, 0.96)
+            .expect("edit restored shared computed radius");
+        let feature = restored
+            .feature_document()
+            .feature(fillet)
+            .expect("restored Fillet set");
+        let geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet_set) =
+            &feature.definition;
+        assert!((fillet_set.radius - 0.96).abs() <= 1.0e-12);
+        assert_eq!(
+            restored
+                .session()
+                .design_document()
+                .to_draft_v5_json()
+                .expect("ordinary sketch after radius edit"),
+            ordinary_before,
+            "computed radius editing must not create an M28 curve, constraint, dimension, contact, or trim"
         );
     }
 

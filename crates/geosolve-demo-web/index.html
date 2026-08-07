@@ -91,8 +91,8 @@
           <strong>Modify</strong>
           <div class="wb-palette-grid">
             <div class="wb-palette-option-tool">
-              <button id="wb-operation-fillet-trigger" type="button" data-wb-operation="fillet" aria-pressed="false"><span class="wb-operation-icon" aria-hidden="true"></span><span>Fillet</span></button>
-              <button id="wb-operation-fillet-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-action="fillet-options" aria-label="Fillet options" aria-controls="wb-operation-options-overlay" aria-expanded="false"><span aria-hidden="true">›</span></button>
+              <button id="wb-feature-fillet-trigger" type="button" data-wb-feature="fillet" aria-pressed="false"><span class="wb-feature-icon" aria-hidden="true"></span><span>Fillet</span></button>
+              <button id="wb-feature-fillet-options-trigger" class="wb-palette-option-trigger" type="button" data-wb-action="fillet-options" aria-label="Fillet options" aria-controls="wb-feature-options-overlay" aria-expanded="false"><span aria-hidden="true">›</span></button>
             </div>
           </div>
         </section>
@@ -111,18 +111,19 @@
 
       <section id="wb-canvas-panel" class="wb-canvas-panel" aria-label="Sketch canvas">
         <svg id="wb-viewport" viewBox="0 0 1000 700" preserveAspectRatio="xMidYMid meet" role="application" aria-label="Editable sketch canvas"></svg>
-        <div id="wb-operation-options-overlay" class="wb-operation-options wb-canvas-operation-options" role="dialog" aria-label="Fillet options" hidden>
-          <div class="wb-operation-options-title"><strong>Fillet options</strong><button type="button" data-wb-action="fillet-options-close" aria-label="Close Fillet options">×</button></div>
-          <label>Initial radius<input id="wb-operation-fillet-radius" type="number" min="0" step="any" /></label>
-          <label>Radius intent<select id="wb-operation-fillet-radius-mode"><option value="reference">Flexible</option><option value="driving">Locked</option></select></label>
-          <label class="wb-option-check"><input id="wb-operation-fillet-flip-first" type="checkbox" /> Flip first side</label>
-          <label class="wb-option-check"><input id="wb-operation-fillet-flip-second" type="checkbox" /> Flip second side</label>
-          <label class="wb-option-check"><input id="wb-operation-fillet-alternate-arc" type="checkbox" /> Alternate arc</label>
+        <div id="wb-feature-options-overlay" class="wb-feature-options wb-canvas-feature-options" role="dialog" aria-label="Fillet options" hidden>
+          <div class="wb-feature-options-title"><strong>Fillet options</strong><button type="button" data-wb-action="fillet-options-close" aria-label="Close Fillet options">×</button></div>
+          <label>Shared radius<input id="wb-feature-fillet-radius" type="number" min="0" step="any" /></label>
+          <label class="wb-option-check"><input id="wb-feature-fillet-flip-first" type="checkbox" /> Flip first side</label>
+          <label class="wb-option-check"><input id="wb-feature-fillet-flip-second" type="checkbox" /> Flip second side</label>
+          <label class="wb-option-check"><input id="wb-feature-fillet-alternate-arc" type="checkbox" /> Alternate arc</label>
+          <p id="wb-feature-branch-scope" class="wb-feature-help">Branch choices set defaults for the next corner. Select a preview arc to edit one completed corner.</p>
+          <p class="wb-feature-help">Pick one or more corners, then Apply. Every corner in this batch shares the radius.</p>
         </div>
         <div id="wb-draft-guide" class="wb-draft-guide" hidden>
           <span id="wb-draft-guide-text">Click to add the next point</span>
           <button id="wb-guide-finish" type="button" data-wb-action="finish">Finish curve</button>
-          <button id="wb-guide-apply" type="button" data-wb-action="operation-apply" hidden>Apply</button>
+          <button id="wb-guide-apply" type="button" data-wb-action="feature-apply" hidden>Apply</button>
           <button type="button" data-wb-action="cancel">Cancel</button>
         </div>
         <div class="wb-canvas-hud">
@@ -184,6 +185,13 @@
           <button id="wb-apply-contact-branches" type="button" data-wb-action="contact-branches" hidden>Apply contact branches</button>
           <button id="wb-apply-angle-orientation" type="button" data-wb-action="angle-orientation" hidden>Apply angle orientation</button>
         </section>
+        <section id="wb-feature-editor" class="wb-inspector-section wb-feature-editor" hidden>
+          <span class="wb-field-label">Computed Fillet set</span>
+          <label>Shared radius<input id="wb-feature-radius" type="number" min="0" step="any" /></label>
+          <button type="button" data-wb-action="feature-radius">Update shared radius</button>
+          <button id="wb-feature-suppression" type="button" data-wb-action="feature-suppression">Suppress feature</button>
+          <p>Generated arcs remain outside the sketch constraint graph. Drag an arc to resize the complete set.</p>
+        </section>
         <section id="wb-production-topology" class="wb-inspector-section wb-production-topology" aria-live="polite" aria-label="Production topology"></section>
         <section id="wb-host-state" class="wb-inspector-section wb-host-state" aria-live="polite" aria-label="Host-state evidence"></section>
         <section id="wb-redundancy" class="wb-inspector-section wb-redundancy" aria-live="polite" aria-label="Accepted redundancy"></section>
@@ -191,8 +199,8 @@
       </aside>
 
       <section class="wb-problems" id="wb-problems" aria-label="Problems" aria-live="assertive" hidden>
-        <div><strong>Problems</strong><span>Latest exact attempt</span></div>
-        <p id="wb-problem-text">No current solver problem</p>
+        <div><strong>Problems</strong><span>Current sketch &amp; computed features</span></div>
+        <p id="wb-problem-text">No current solver or computed-feature problem</p>
       </section>
 
       <footer class="wb-status-bar">

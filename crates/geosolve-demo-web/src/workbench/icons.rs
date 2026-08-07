@@ -3,7 +3,7 @@
 //! Shared vector language for constraint and dimension concepts.
 
 use geosolve_constraint_editor::{
-    AuthoringTool, ConstraintIntent, DimensionKind, EditorTool, OperationAuthoringTool,
+    AuthoringTool, ConstraintIntent, DimensionKind, EditorTool, FeatureAuthoringTool,
     SceneConstraintGlyph,
 };
 
@@ -195,6 +195,8 @@ pub(crate) enum TreeIconKind {
     Curve,
     Constraint,
     Dimension,
+    Feature,
+    FeatureCorner,
     External,
 }
 
@@ -210,6 +212,14 @@ pub(crate) fn tree_icon_markup(kind: TreeIconKind) -> String {
             "<circle cx=\"-5\" r=\"2.3\"/><circle cx=\"5\" r=\"2.3\"/><path d=\"M-2.7 0H2.7\"/>",
         ),
         TreeIconKind::Dimension => ("dimension", POINT_DISTANCE),
+        TreeIconKind::Feature => (
+            "feature",
+            "<path d=\"M-7 5A9 9 0 001-5\"/><path d=\"M1-5H7V1\"/><circle cx=\"-7\" cy=\"5\" r=\"1.3\"/><circle cx=\"7\" cy=\"1\" r=\"1.3\"/>",
+        ),
+        TreeIconKind::FeatureCorner => (
+            "feature-corner",
+            "<path d=\"M-7 6V-5H5\"/><path d=\"M-2 6A8 8 0 005-1\"/>",
+        ),
         TreeIconKind::External => (
             "external",
             "<rect x=\"-7\" y=\"-6\" width=\"11\" height=\"12\" stroke-dasharray=\"2 2\"/><path d=\"M-1 0H8M5-3L8 0 5 3\"/>",
@@ -280,12 +290,12 @@ pub(crate) fn authoring_icon_markup(tool: AuthoringTool) -> String {
     )
 }
 
-pub(crate) fn operation_icon_markup(tool: OperationAuthoringTool) -> String {
+pub(crate) fn feature_icon_markup(tool: FeatureAuthoringTool) -> String {
     let (key, fragment) = match tool {
-        OperationAuthoringTool::Fillet => ("fillet", FILLET),
+        FeatureAuthoringTool::Fillet => ("fillet", FILLET),
     };
     format!(
-        "<svg class=\"wb-palette-icon\" viewBox=\"-10 -10 20 20\" aria-hidden=\"true\" focusable=\"false\" data-icon-key=\"operation-{key}\">{fragment}</svg>"
+        "<svg class=\"wb-palette-icon\" viewBox=\"-10 -10 20 20\" aria-hidden=\"true\" focusable=\"false\" data-icon-key=\"feature-{key}\">{fragment}</svg>"
     )
 }
 
@@ -320,13 +330,13 @@ mod tests {
     use std::collections::HashSet;
 
     use geosolve_constraint_editor::{
-        AuthoringTool, ConstraintIntent, DimensionKind, EditorTool, OperationAuthoringTool,
+        AuthoringTool, ConstraintIntent, DimensionKind, EditorTool, FeatureAuthoringTool,
         SceneConstraintGlyph,
     };
 
     use super::{
         GEOMETRY_TOOLS, TreeIconKind, authoring_icon_markup, constraint_icon_fragment,
-        constraint_icon_key, geometry_tool_icon_markup, geometry_tool_key, operation_icon_markup,
+        constraint_icon_key, feature_icon_markup, geometry_tool_icon_markup, geometry_tool_key,
         tree_icon_markup,
     };
 
@@ -460,9 +470,9 @@ mod tests {
 
     #[test]
     fn fillet_modify_tool_has_a_text_free_vector_symbol() {
-        let icon = operation_icon_markup(OperationAuthoringTool::Fillet);
+        let icon = feature_icon_markup(FeatureAuthoringTool::Fillet);
         assert!(icon.starts_with("<svg class=\"wb-palette-icon\""));
-        assert!(icon.contains("data-icon-key=\"operation-fillet\""));
+        assert!(icon.contains("data-icon-key=\"feature-fillet\""));
         assert!(icon.contains("aria-hidden=\"true\""));
         assert!(!icon.contains("<text"));
     }
