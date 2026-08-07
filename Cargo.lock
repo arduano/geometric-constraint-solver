@@ -561,6 +561,7 @@ name = "geosolve-constraint-editor"
 version = "0.2.0"
 dependencies = [
  "geosolve-sketch",
+ "geosolve-sketch-features",
  "geosolve-sketch-ops",
  "serde",
  "serde_json",
@@ -592,6 +593,7 @@ dependencies = [
  "geosolve-constraint-editor",
  "geosolve-core",
  "geosolve-sketch",
+ "geosolve-sketch-features",
  "geosolve-sketch-topology",
  "serde",
  "serde_json",
@@ -634,6 +636,17 @@ dependencies = [
  "serde",
  "serde_json",
  "slotmap",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "geosolve-sketch-features"
+version = "0.2.0"
+dependencies = [
+ "geosolve-geometry",
+ "geosolve-sketch",
+ "serde",
+ "serde_json",
  "thiserror 2.0.18",
 ]
 

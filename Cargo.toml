@@ -6,6 +6,7 @@ members = [
     "crates/geosolve-geometry",
     "crates/geosolve-linkage",
     "crates/geosolve-sketch",
+    "crates/geosolve-sketch-features",
     "crates/geosolve-sketch-ops",
     "crates/geosolve-sketch-topology",
 ]

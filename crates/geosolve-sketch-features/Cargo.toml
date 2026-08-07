@@ -1,0 +1,23 @@
+[package]
+name = "geosolve-sketch-features"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+license-file.workspace = true
+readme.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Persistent computed-feature intent and revision-stamped geometry for GeoSolve sketches"
+documentation = "https://docs.rs/geosolve-sketch-features/0.2.0"
+keywords = ["cad", "sketch", "geometry", "features"]
+categories = ["algorithms", "mathematics", "science"]
+
+[dependencies]
+geosolve-geometry = { version = "0.2.0", path = "../geosolve-geometry" }
+geosolve-sketch = { version = "0.2.0", path = "../geosolve-sketch" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true
