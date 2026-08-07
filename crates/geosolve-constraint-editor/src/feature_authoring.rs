@@ -13,10 +13,12 @@ use geosolve_sketch_features::{
     NewComputedFilletCorner,
 };
 
-use crate::SelectionItem;
 use crate::coordinator::computed_feature_authoring_control;
+use crate::{EditorScene, PickTolerance, ScreenPoint, SelectionItem};
 
 const MAX_GROUPED_FILLET_CORNERS: usize = 16_384;
+const MAX_FEATURE_AUTHORING_HIT_CANDIDATES: usize = 256;
+const MAX_FEATURE_AUTHORING_SEMANTIC_TARGETS: usize = 16_384;
 
 /// Closed computed-feature palette owned by this authoring state machine.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -45,7 +47,25 @@ impl FeatureAuthoringPick {
     }
 }
 
+/// One semantic click/preselection target. A corner stays atomic instead of
+/// being flattened into two unrelated clicks that can cross-pair with an
+/// already pending curve.
+#[derive(Clone, Debug, PartialEq)]
+enum FeatureAuthoringTarget {
+    Curve(Box<FeatureAuthoringPick>),
+    Corner(Box<[FeatureAuthoringPick; 2]>),
+}
+
+type FeatureCornerOccurrence = (CurveSpan, f64, DocumentFilletTrimEndpoint);
+type FeatureCornerIncidenceIndex =
+    std::collections::BTreeMap<DesignPointId, Vec<FeatureCornerOccurrence>>;
+const MAX_RETAINED_FEATURE_CORNER_OCCURRENCES: usize = 3;
+
 /// Process-local shared-radius and next-corner branch choices.
+///
+/// `fillet_radius: None` is an absent host override. Once authoring is active,
+/// the state retains its remembered or model-scale default radius rather than
+/// allowing an optional presentation field to erase that required value.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FeatureAuthoringOptions {
     pub fillet_radius: Option<f64>,
@@ -169,6 +189,10 @@ impl FeatureAuthoringCandidate {
 #[derive(Clone, Debug, PartialEq)]
 pub enum FeatureAuthoringOutcome {
     ModeEntered(FeatureAuthoringGuidance),
+    /// A screen pick found no native sketch item. Presentation adapters may use
+    /// this state-neutral result to try a computed preview radius grip without
+    /// allowing that generated geometry to mask any native candidate.
+    NoNativeHit(FeatureAuthoringGuidance),
     Collecting {
         pending: Vec<FeatureAuthoringPick>,
         guidance: FeatureAuthoringGuidance,
@@ -209,7 +233,8 @@ impl FeatureAuthoringState {
         self.corners.len()
     }
 
-    /// Activates grouped Fillet authoring and consumes every complete preselected pair.
+    /// Activates grouped Fillet authoring and consumes every complete preselected
+    /// semantic target. Point corners remain atomic when mixed with curve picks.
     #[must_use]
     pub fn activate(
         &mut self,
@@ -225,17 +250,7 @@ impl FeatureAuthoringState {
         if selection.is_empty() {
             return FeatureAuthoringOutcome::ModeEntered(self.guidance());
         }
-        let mut picks = Vec::new();
-        for (item, parameter) in selection {
-            let resolved = match resolve_feature_item_picks(snapshot, document, *item, *parameter) {
-                Ok(resolved) => resolved,
-                Err(kind) => {
-                    return self.warning(kind, "the non-empty selection is not a Fillet corner");
-                }
-            };
-            picks.extend(resolved);
-        }
-        self.pick_many(snapshot, picks)
+        self.pick_items(snapshot, document, selection)
     }
 
     /// Activates directly from coordinator-stamped exact picks.
@@ -268,6 +283,180 @@ impl FeatureAuthoringState {
         self.pick_many_controlled(snapshot, picks, computed_feature_authoring_control())
     }
 
+    /// Adds semantic native items as one atomic transition. A point that owns
+    /// exactly two incident spans is one complete corner, not an untyped stream
+    /// of two curve picks.
+    #[must_use]
+    pub fn pick_items(
+        &mut self,
+        snapshot: &ComputedFeatureAuthoringSnapshot,
+        document: &SketchDocument,
+        items: &[(SelectionItem, Option<f64>)],
+    ) -> FeatureAuthoringOutcome {
+        if self.active.is_none() {
+            return FeatureAuthoringOutcome::Inactive;
+        }
+        if items.len() > MAX_FEATURE_AUTHORING_SEMANTIC_TARGETS {
+            return self.warning(
+                FeatureAuthoringWarningKind::WorkStopped,
+                "Fillet semantic target limit was exhausted",
+            );
+        }
+        let selected_points = items
+            .iter()
+            .filter_map(|(item, _)| match item {
+                SelectionItem::Point(point) => Some(*point),
+                SelectionItem::Curve(_)
+                | SelectionItem::Constraint(_)
+                | SelectionItem::Dimension(_)
+                | SelectionItem::Feature(_)
+                | SelectionItem::FeatureCorner(_) => None,
+            })
+            .collect::<std::collections::BTreeSet<_>>();
+        let incidences = match feature_corner_incidence_index(document, &selected_points) {
+            Ok(incidences) => incidences,
+            Err(kind) => {
+                return self.warning(kind, "the selected item is not a Fillet corner operand");
+            }
+        };
+        let mut targets = Vec::new();
+        for (item, parameter) in items {
+            if matches!(
+                item,
+                SelectionItem::Feature(_) | SelectionItem::FeatureCorner(_)
+            ) {
+                // Computed output is deliberately not a sketch operand. Ignore a
+                // prior result selection so it cannot poison entry into the next
+                // Fillet batch.
+                continue;
+            }
+            let target = match resolve_feature_item_target_with_incidence(
+                snapshot,
+                document,
+                *item,
+                *parameter,
+                &incidences,
+            ) {
+                Ok(target) => target,
+                Err(kind) => {
+                    return self.warning(kind, "the selected item is not a Fillet corner operand");
+                }
+            };
+            targets.push(target);
+        }
+        if targets.is_empty() && self.pending.is_empty() && self.corners.is_empty() {
+            return FeatureAuthoringOutcome::ModeEntered(self.guidance());
+        }
+        self.pick_targets_controlled(snapshot, targets, computed_feature_authoring_control())
+    }
+
+    /// Resolves one screen click using domain-aware fallback over every native
+    /// hit candidate. An inapplicable point cannot mask a curve beneath it, and
+    /// an already-pending span cannot mask a distinct overlapping second span.
+    #[must_use]
+    pub fn pick_at(
+        &mut self,
+        snapshot: &ComputedFeatureAuthoringSnapshot,
+        document: &SketchDocument,
+        scene: &EditorScene,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+    ) -> FeatureAuthoringOutcome {
+        if self.active.is_none() {
+            return FeatureAuthoringOutcome::Inactive;
+        }
+        if scene.accepted_revision != snapshot.accepted_state_identity().revision().get()
+            || scene.design_identity != snapshot.sketch_input().design_identity()
+            || document.id() != snapshot.accepted_state_identity().document()
+        {
+            return self.warning(
+                FeatureAuthoringWarningKind::StalePick,
+                "the visible Fillet hit scene belongs to an older accepted sketch input",
+            );
+        }
+        let hits = match scene.native_authoring_hit_candidates(
+            position,
+            tolerance,
+            MAX_FEATURE_AUTHORING_HIT_CANDIDATES,
+        ) {
+            Ok(hits) => hits,
+            Err(crate::NativeAuthoringHitError::CandidateLimitExceeded { .. }) => {
+                return self.warning(
+                    FeatureAuthoringWarningKind::WorkStopped,
+                    "too many overlapping native Fillet hit candidates",
+                );
+            }
+        };
+        if hits.is_empty() {
+            return FeatureAuthoringOutcome::NoNativeHit(self.guidance());
+        }
+        let incidences = match feature_hit_incidence_index(document, &hits) {
+            Ok(incidences) => incidences,
+            Err(kind) => {
+                return self.warning(
+                    kind,
+                    "the native point under this click is not a current Fillet operand",
+                );
+            }
+        };
+        let mut first_resolution_warning = None;
+        let mut duplicate_support_warning = None;
+        for hit in hits {
+            let target = match resolve_feature_item_target_with_incidence(
+                snapshot,
+                document,
+                hit.item,
+                hit.curve_parameter,
+                &incidences,
+            ) {
+                Ok(target) => target,
+                Err(kind) => {
+                    if matches!(hit.item, SelectionItem::Point(_))
+                        && kind != FeatureAuthoringWarningKind::WrongOperandKind
+                    {
+                        return self.warning(
+                            kind,
+                            "the native point under this click is not an unambiguous Fillet corner",
+                        );
+                    }
+                    first_resolution_warning.get_or_insert(kind);
+                    continue;
+                }
+            };
+            let is_corner = matches!(target, FeatureAuthoringTarget::Corner(_));
+            let mut trial = self.clone();
+            let outcome = trial.pick_targets_controlled(
+                snapshot,
+                std::iter::once(target),
+                computed_feature_authoring_control(),
+            );
+            match outcome {
+                FeatureAuthoringOutcome::Warning(warning) => {
+                    if is_corner {
+                        return FeatureAuthoringOutcome::Warning(warning);
+                    }
+                    if warning.kind == FeatureAuthoringWarningKind::DuplicateSupport {
+                        duplicate_support_warning.get_or_insert(warning);
+                    } else {
+                        return FeatureAuthoringOutcome::Warning(warning);
+                    }
+                }
+                accepted => {
+                    *self = trial;
+                    return accepted;
+                }
+            }
+        }
+        if let Some(warning) = duplicate_support_warning {
+            FeatureAuthoringOutcome::Warning(warning)
+        } else {
+            self.warning(
+                first_resolution_warning.unwrap_or(FeatureAuthoringWarningKind::WrongOperandKind),
+                "no applicable native Fillet operand is under this click",
+            )
+        }
+    }
+
     /// Controlled counterpart used to qualify cancellation and exhaustion.
     #[must_use]
     pub fn pick_many_controlled(
@@ -276,31 +465,85 @@ impl FeatureAuthoringState {
         picks: impl IntoIterator<Item = FeatureAuthoringPick>,
         control: OperationControl,
     ) -> FeatureAuthoringOutcome {
+        self.pick_targets_controlled(
+            snapshot,
+            picks
+                .into_iter()
+                .map(|pick| FeatureAuthoringTarget::Curve(Box::new(pick))),
+            control,
+        )
+    }
+
+    fn pick_targets_controlled(
+        &mut self,
+        snapshot: &ComputedFeatureAuthoringSnapshot,
+        targets: impl IntoIterator<Item = FeatureAuthoringTarget>,
+        control: OperationControl,
+    ) -> FeatureAuthoringOutcome {
         if self.active.is_none() {
             return FeatureAuthoringOutcome::Inactive;
         }
+        if !self.matches_snapshot(snapshot) {
+            return self.warning(
+                FeatureAuthoringWarningKind::StalePick,
+                "the active Fillet batch belongs to an older accepted sketch input",
+            );
+        }
         let mut next = self.clone();
         let mut requests = Vec::new();
-        for pick in picks {
-            if pick.sketch_input != snapshot.sketch_input()
-                || pick.accepted != snapshot.accepted_state_identity()
-            {
+        for target in targets {
+            if !target_matches_snapshot(&target, snapshot) {
                 return self.warning(
                     FeatureAuthoringWarningKind::StalePick,
                     "the pick belongs to an older accepted sketch input",
                 );
             }
-            next.pending.push(pick);
-            if next.pending.len() == 2 {
-                if next.corners.len() + requests.len() >= MAX_GROUPED_FILLET_CORNERS {
-                    return self.warning(
-                        FeatureAuthoringWarningKind::WorkStopped,
-                        "grouped Fillet corner limit was exhausted",
-                    );
+            let pair = match target {
+                FeatureAuthoringTarget::Curve(pick) => {
+                    next.pending.push(*pick);
+                    if next.pending.len() < 2 {
+                        continue;
+                    }
+                    if next.pending.len() > 2 {
+                        return self.warning(
+                            FeatureAuthoringWarningKind::WorkStopped,
+                            "Fillet authoring accumulated an invalid pending operand count",
+                        );
+                    }
+                    [next.pending.remove(0), next.pending.remove(0)]
                 }
-                let pair = [next.pending.remove(0), next.pending.remove(0)];
-                requests.push((pair, next.options));
+                FeatureAuthoringTarget::Corner(pair) => match next.pending.as_slice() {
+                    [] => *pair,
+                    [pending] => {
+                        let matches_first = same_support(pending, &pair[0]);
+                        let matches_second = same_support(pending, &pair[1]);
+                        let other = match (matches_first, matches_second) {
+                            (true, false) => pair[1].clone(),
+                            (false, true) => pair[0].clone(),
+                            _ => {
+                                return self.warning(
+                                    FeatureAuthoringWarningKind::AmbiguousTrimSide,
+                                    "the corner does not unambiguously complete the pending Fillet support",
+                                );
+                            }
+                        };
+                        [next.pending.remove(0), other]
+                    }
+                    _ => {
+                        return self.warning(
+                            FeatureAuthoringWarningKind::WorkStopped,
+                            "Fillet authoring accumulated an invalid pending operand count",
+                        );
+                    }
+                },
+            };
+            if next.corners.len() + requests.len() >= MAX_GROUPED_FILLET_CORNERS {
+                return self.warning(
+                    FeatureAuthoringWarningKind::WorkStopped,
+                    "grouped Fillet corner limit was exhausted",
+                );
             }
+            requests.push((pair, next.options));
         }
         match resolve_corners(snapshot, requests, control) {
             Ok(mut corners) => next.corners.append(&mut corners),
@@ -341,12 +584,21 @@ impl FeatureAuthoringState {
     fn update_options_once(
         &mut self,
         snapshot: &ComputedFeatureAuthoringSnapshot,
-        options: FeatureAuthoringOptions,
+        mut options: FeatureAuthoringOptions,
         selected_corner: Option<(usize, ComputedFilletAuthoringOptions)>,
     ) -> FeatureAuthoringOutcome {
         if self.active.is_none() {
             self.options = options;
             return FeatureAuthoringOutcome::Inactive;
+        }
+        if !self.matches_snapshot(snapshot) {
+            return self.warning(
+                FeatureAuthoringWarningKind::StalePick,
+                "the active Fillet batch belongs to an older accepted sketch input",
+            );
+        }
+        if options.fillet_radius.is_none() {
+            options.fillet_radius = self.options.fillet_radius;
         }
         if !valid_radius(options.fillet_radius) {
             return self.warning(
@@ -486,9 +738,16 @@ impl FeatureAuthoringState {
     }
 
     fn ensure_radius(&mut self, document: &SketchDocument) {
-        if !valid_radius(self.options.fillet_radius) || self.options.fillet_radius.is_none() {
+        if !valid_radius(self.options.fillet_radius) {
             self.options.fillet_radius = Some(0.1 * document.model_scale());
         }
+    }
+
+    fn matches_snapshot(&self, snapshot: &ComputedFeatureAuthoringSnapshot) -> bool {
+        self.pending
+            .iter()
+            .chain(self.corners.iter().flat_map(|corner| corner.picks.iter()))
+            .all(|pick| pick_matches_snapshot(pick, snapshot))
     }
 
     fn candidate(&self) -> FeatureAuthoringCandidate {
@@ -546,16 +805,77 @@ pub(crate) fn resolve_feature_item_picks(
     item: SelectionItem,
     parameter: Option<f64>,
 ) -> Result<Vec<FeatureAuthoringPick>, FeatureAuthoringWarningKind> {
+    resolve_feature_item_target(snapshot, document, item, parameter).map(|target| match target {
+        FeatureAuthoringTarget::Curve(pick) => vec![*pick],
+        FeatureAuthoringTarget::Corner(picks) => Vec::from(*picks),
+    })
+}
+
+fn resolve_feature_item_target(
+    snapshot: &ComputedFeatureAuthoringSnapshot,
+    document: &SketchDocument,
+    item: SelectionItem,
+    parameter: Option<f64>,
+) -> Result<FeatureAuthoringTarget, FeatureAuthoringWarningKind> {
+    let selected_points = match item {
+        SelectionItem::Point(point) => std::collections::BTreeSet::from([point]),
+        SelectionItem::Curve(_)
+        | SelectionItem::Constraint(_)
+        | SelectionItem::Dimension(_)
+        | SelectionItem::Feature(_)
+        | SelectionItem::FeatureCorner(_) => std::collections::BTreeSet::new(),
+    };
+    let incidences = feature_corner_incidence_index(document, &selected_points)?;
+    resolve_feature_item_target_with_incidence(snapshot, document, item, parameter, &incidences)
+}
+
+fn resolve_feature_item_target_with_incidence(
+    snapshot: &ComputedFeatureAuthoringSnapshot,
+    document: &SketchDocument,
+    item: SelectionItem,
+    parameter: Option<f64>,
+    incidences: &FeatureCornerIncidenceIndex,
+) -> Result<FeatureAuthoringTarget, FeatureAuthoringWarningKind> {
     match item {
-        SelectionItem::Curve(span) => Ok(vec![feature_curve_pick(
-            snapshot, document, span, parameter, None,
-        )?]),
-        SelectionItem::Point(point) => resolve_feature_corner_point(snapshot, document, point),
+        SelectionItem::Curve(span) => Ok(FeatureAuthoringTarget::Curve(Box::new(
+            feature_curve_pick(snapshot, document, span, parameter, None)?,
+        ))),
+        SelectionItem::Point(point) => {
+            let picks =
+                resolve_feature_corner_point_from_incidence(snapshot, document, point, incidences)?;
+            let picks = <[FeatureAuthoringPick; 2]>::try_from(picks)
+                .map_err(|_| FeatureAuthoringWarningKind::AmbiguousTrimSide)?;
+            Ok(FeatureAuthoringTarget::Corner(Box::new(picks)))
+        }
         SelectionItem::Constraint(_)
         | SelectionItem::Dimension(_)
         | SelectionItem::Feature(_)
         | SelectionItem::FeatureCorner(_) => Err(FeatureAuthoringWarningKind::WrongOperandKind),
     }
+}
+
+fn pick_matches_snapshot(
+    pick: &FeatureAuthoringPick,
+    snapshot: &ComputedFeatureAuthoringSnapshot,
+) -> bool {
+    pick.sketch_input == snapshot.sketch_input()
+        && pick.accepted == snapshot.accepted_state_identity()
+}
+
+fn target_matches_snapshot(
+    target: &FeatureAuthoringTarget,
+    snapshot: &ComputedFeatureAuthoringSnapshot,
+) -> bool {
+    match target {
+        FeatureAuthoringTarget::Curve(pick) => pick_matches_snapshot(pick, snapshot),
+        FeatureAuthoringTarget::Corner(picks) => picks
+            .iter()
+            .all(|pick| pick_matches_snapshot(pick, snapshot)),
+    }
+}
+
+fn same_support(first: &FeatureAuthoringPick, second: &FeatureAuthoringPick) -> bool {
+    first.curve.source == second.curve.source
 }
 
 fn feature_curve_pick(
@@ -600,64 +920,145 @@ fn feature_curve_pick(
     })
 }
 
+#[cfg(test)]
 fn resolve_feature_corner_point(
     snapshot: &ComputedFeatureAuthoringSnapshot,
     document: &SketchDocument,
     point: DesignPointId,
 ) -> Result<Vec<FeatureAuthoringPick>, FeatureAuthoringWarningKind> {
-    if document.point(point).is_none() {
-        return Err(FeatureAuthoringWarningKind::MissingObject);
+    let points = std::collections::BTreeSet::from([point]);
+    let incidences = feature_corner_incidence_index(document, &points)?;
+    resolve_feature_corner_point_from_incidence(snapshot, document, point, &incidences)
+}
+
+fn feature_corner_incidence_index(
+    document: &SketchDocument,
+    selected_points: &std::collections::BTreeSet<DesignPointId>,
+) -> Result<FeatureCornerIncidenceIndex, FeatureAuthoringWarningKind> {
+    let mut incidences = FeatureCornerIncidenceIndex::new();
+    for point in selected_points {
+        if document.point(*point).is_none() {
+            return Err(FeatureAuthoringWarningKind::MissingObject);
+        }
+        incidences.insert(*point, Vec::new());
     }
-    let mut endpoint_seen = false;
-    let mut candidates = Vec::new();
+    if selected_points.is_empty() {
+        return Ok(incidences);
+    }
     for curve in document.curves() {
-        let CurveDefinition::Polyline { points, closed, .. } = &curve.definition else {
-            continue;
-        };
-        if *closed {
-            endpoint_seen |= points.contains(&point);
-            continue;
-        }
-        for (index, candidate) in points.iter().copied().enumerate() {
-            if candidate != point {
-                continue;
+        match &curve.definition {
+            CurveDefinition::Line { start, end, .. } => {
+                let span = CurveSpan {
+                    curve: curve.id,
+                    segment: 0,
+                };
+                if let Some(occurrences) = incidences.get_mut(start) {
+                    retain_feature_corner_occurrence(
+                        occurrences,
+                        (span, 0.25, DocumentFilletTrimEndpoint::Start),
+                    );
+                }
+                if let Some(occurrences) = incidences.get_mut(end) {
+                    retain_feature_corner_occurrence(
+                        occurrences,
+                        (span, 0.75, DocumentFilletTrimEndpoint::End),
+                    );
+                }
             }
-            if index == 0 || index + 1 == points.len() {
-                endpoint_seen = true;
-                continue;
+            CurveDefinition::Polyline { points, closed, .. } => {
+                let span_count = if *closed {
+                    points.len()
+                } else {
+                    points.len().saturating_sub(1)
+                };
+                for index in 0..span_count {
+                    let span = CurveSpan {
+                        curve: curve.id,
+                        segment: u32::try_from(index)
+                            .map_err(|_| FeatureAuthoringWarningKind::MissingObject)?,
+                    };
+                    if let Some(occurrences) = incidences.get_mut(&points[index]) {
+                        retain_feature_corner_occurrence(
+                            occurrences,
+                            (span, 0.25, DocumentFilletTrimEndpoint::Start),
+                        );
+                    }
+                    if let Some(occurrences) =
+                        incidences.get_mut(&points[(index + 1) % points.len()])
+                    {
+                        retain_feature_corner_occurrence(
+                            occurrences,
+                            (span, 0.75, DocumentFilletTrimEndpoint::End),
+                        );
+                    }
+                }
             }
-            let incoming = CurveSpan {
-                curve: curve.id,
-                segment: u32::try_from(index - 1)
-                    .map_err(|_| FeatureAuthoringWarningKind::MissingObject)?,
-            };
-            let outgoing = CurveSpan {
-                curve: curve.id,
-                segment: u32::try_from(index)
-                    .map_err(|_| FeatureAuthoringWarningKind::MissingObject)?,
-            };
-            candidates.push(vec![
-                feature_curve_pick(
-                    snapshot,
-                    document,
-                    incoming,
-                    Some(0.75),
-                    Some(DocumentFilletTrimEndpoint::End),
-                )?,
-                feature_curve_pick(
-                    snapshot,
-                    document,
-                    outgoing,
-                    Some(0.25),
-                    Some(DocumentFilletTrimEndpoint::Start),
-                )?,
-            ]);
+            _ => {}
         }
     }
-    match candidates.len() {
-        1 => Ok(candidates.pop().expect("single corner candidate")),
-        0 if endpoint_seen => Err(FeatureAuthoringWarningKind::AmbiguousTrimSide),
-        0 => Err(FeatureAuthoringWarningKind::WrongOperandKind),
+    Ok(incidences)
+}
+
+fn feature_hit_incidence_index(
+    document: &SketchDocument,
+    hits: &[crate::Hit],
+) -> Result<FeatureCornerIncidenceIndex, FeatureAuthoringWarningKind> {
+    let points = hits
+        .iter()
+        .filter_map(|hit| match hit.item {
+            SelectionItem::Point(point) => Some(point),
+            SelectionItem::Curve(_)
+            | SelectionItem::Constraint(_)
+            | SelectionItem::Dimension(_)
+            | SelectionItem::Feature(_)
+            | SelectionItem::FeatureCorner(_) => None,
+        })
+        .collect::<std::collections::BTreeSet<_>>();
+    feature_corner_incidence_index(document, &points)
+}
+
+fn retain_feature_corner_occurrence(
+    occurrences: &mut Vec<FeatureCornerOccurrence>,
+    occurrence: FeatureCornerOccurrence,
+) {
+    // Resolution distinguishes only zero, exactly two distinct supports, and
+    // every ambiguous cardinality. Three retained entries therefore preserve
+    // the complete decision while bounding a pathological high-valence point.
+    if occurrences.len() < MAX_RETAINED_FEATURE_CORNER_OCCURRENCES {
+        occurrences.push(occurrence);
+    }
+}
+
+fn resolve_feature_corner_point_from_incidence(
+    snapshot: &ComputedFeatureAuthoringSnapshot,
+    document: &SketchDocument,
+    point: DesignPointId,
+    incidences: &FeatureCornerIncidenceIndex,
+) -> Result<Vec<FeatureAuthoringPick>, FeatureAuthoringWarningKind> {
+    let occurrences = incidences
+        .get(&point)
+        .ok_or(FeatureAuthoringWarningKind::MissingObject)?;
+    match occurrences.as_slice() {
+        [] | [_] => Err(FeatureAuthoringWarningKind::WrongOperandKind),
+        [
+            (first_span, first_parameter, first_endpoint),
+            (second_span, second_parameter, second_endpoint),
+        ] if first_span != second_span => Ok(vec![
+            feature_curve_pick(
+                snapshot,
+                document,
+                *first_span,
+                Some(*first_parameter),
+                Some(*first_endpoint),
+            )?,
+            feature_curve_pick(
+                snapshot,
+                document,
+                *second_span,
+                Some(*second_parameter),
+                Some(*second_endpoint),
+            )?,
+        ]),
         _ => Err(FeatureAuthoringWarningKind::AmbiguousTrimSide),
     }
 }
@@ -815,7 +1216,7 @@ fn span_endpoint_ids(
 
 const fn valid_radius(value: Option<f64>) -> bool {
     match value {
-        None => true,
+        None => false,
         Some(value) => value.is_finite() && value > 0.0,
     }
 }
@@ -1235,6 +1636,248 @@ mod tests {
         assert_eq!(
             state.guidance().stage,
             FeatureAuthoringStage::PickFirstFilletCurve
+        );
+    }
+
+    fn retained_session(document: SketchDocument) -> RetainedSketchDocumentSession {
+        RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("accepted session")
+    }
+
+    fn add_test_line(
+        document: &mut SketchDocument,
+        label: &str,
+        start: DesignPointId,
+        end: DesignPointId,
+        branch_direction: [f64; 2],
+    ) -> CurveSpan {
+        let curve = document
+            .add_curve(
+                label,
+                CurveDefinition::Line {
+                    start,
+                    end,
+                    branch_direction,
+                },
+            )
+            .expect("line");
+        CurveSpan { curve, segment: 0 }
+    }
+
+    fn assert_resolved_pick(
+        pick: &FeatureAuthoringPick,
+        source: CurveSpan,
+        parameter: f64,
+        endpoint: DocumentFilletTrimEndpoint,
+    ) {
+        assert_eq!(pick.curve.source.span, source);
+        assert_eq!(pick.curve.parameter.to_bits(), parameter.to_bits());
+        assert_eq!(pick.curve.retained_endpoint_hint, Some(endpoint));
+    }
+
+    #[test]
+    fn shared_endpoint_of_two_lines_resolves_exact_end_and_start_picks() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let first = document.add_point("first", [0.0, 0.0]).expect("first");
+        let corner = document.add_point("corner", [4.0, 0.0]).expect("corner");
+        let last = document.add_point("last", [4.0, 4.0]).expect("last");
+        let incoming = add_test_line(&mut document, "incoming", first, corner, [1.0, 0.0]);
+        let outgoing = add_test_line(&mut document, "outgoing", corner, last, [0.0, 1.0]);
+        let session = retained_session(document);
+        let snapshot =
+            ComputedFeatureAuthoringSnapshot::capture(&session).expect("authoring snapshot");
+
+        let picks = resolve_feature_corner_point(&snapshot, session.design_document(), corner)
+            .expect("picks");
+
+        assert_eq!(picks.len(), 2);
+        assert_resolved_pick(&picks[0], incoming, 0.75, DocumentFilletTrimEndpoint::End);
+        assert_resolved_pick(&picks[1], outgoing, 0.25, DocumentFilletTrimEndpoint::Start);
+
+        let mut state = FeatureAuthoringState::default();
+        let outcome = state.activate(
+            &snapshot,
+            session.design_document(),
+            FeatureAuthoringTool::Fillet,
+            &[(SelectionItem::Point(corner), None)],
+        );
+        assert!(matches!(
+            outcome,
+            FeatureAuthoringOutcome::PreviewRequested {
+                ref candidate,
+                ref guidance,
+            } if candidate.corners().len() == 1
+                && guidance.completed_corners == 1
+                && guidance.stage == FeatureAuthoringStage::PreviewReady
+        ));
+    }
+
+    #[test]
+    fn shared_endpoint_of_line_and_open_polyline_resolves() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let first = document.add_point("first", [0.0, 0.0]).expect("first");
+        let corner = document.add_point("corner", [4.0, 0.0]).expect("corner");
+        let next = document.add_point("next", [4.0, 4.0]).expect("next");
+        let last = document.add_point("last", [8.0, 4.0]).expect("last");
+        let incoming = add_test_line(&mut document, "incoming", first, corner, [1.0, 0.0]);
+        let polyline = document
+            .add_curve(
+                "outgoing polyline",
+                CurveDefinition::Polyline {
+                    points: vec![corner, next, last],
+                    closed: false,
+                    branch_directions: vec![[0.0, 1.0], [1.0, 0.0]],
+                },
+            )
+            .expect("polyline");
+        let session = retained_session(document);
+        let snapshot =
+            ComputedFeatureAuthoringSnapshot::capture(&session).expect("authoring snapshot");
+
+        let picks = resolve_feature_corner_point(&snapshot, session.design_document(), corner)
+            .expect("picks");
+
+        assert_eq!(picks.len(), 2);
+        assert_resolved_pick(&picks[0], incoming, 0.75, DocumentFilletTrimEndpoint::End);
+        assert_resolved_pick(
+            &picks[1],
+            CurveSpan {
+                curve: polyline,
+                segment: 0,
+            },
+            0.25,
+            DocumentFilletTrimEndpoint::Start,
+        );
+    }
+
+    #[test]
+    fn open_polyline_interior_vertex_continues_to_resolve() {
+        let fixture = adjacent_corner_fixture();
+        let snapshot = ComputedFeatureAuthoringSnapshot::capture(&fixture.session)
+            .expect("authoring snapshot");
+
+        let picks = resolve_feature_corner_point(
+            &snapshot,
+            fixture.session.design_document(),
+            fixture.points[1],
+        )
+        .expect("picks");
+
+        assert_eq!(picks.len(), 2);
+        assert_resolved_pick(
+            &picks[0],
+            fixture.spans[0],
+            0.75,
+            DocumentFilletTrimEndpoint::End,
+        );
+        assert_resolved_pick(
+            &picks[1],
+            fixture.spans[1],
+            0.25,
+            DocumentFilletTrimEndpoint::Start,
+        );
+    }
+
+    #[test]
+    fn closed_polyline_vertex_zero_resolves_across_wrap_span() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let points = [
+            document.add_point("p0", [0.0, 0.0]).expect("p0"),
+            document.add_point("p1", [4.0, 0.0]).expect("p1"),
+            document.add_point("p2", [0.0, 4.0]).expect("p2"),
+        ];
+        let curve = document
+            .add_curve(
+                "closed polyline",
+                CurveDefinition::Polyline {
+                    points: points.to_vec(),
+                    closed: true,
+                    branch_directions: vec![
+                        [1.0, 0.0],
+                        [
+                            -std::f64::consts::FRAC_1_SQRT_2,
+                            std::f64::consts::FRAC_1_SQRT_2,
+                        ],
+                        [0.0, -1.0],
+                    ],
+                },
+            )
+            .expect("closed polyline");
+        let session = retained_session(document);
+        let snapshot =
+            ComputedFeatureAuthoringSnapshot::capture(&session).expect("authoring snapshot");
+
+        let picks = resolve_feature_corner_point(&snapshot, session.design_document(), points[0])
+            .expect("picks");
+
+        assert_eq!(picks.len(), 2);
+        assert_resolved_pick(
+            &picks[0],
+            CurveSpan { curve, segment: 0 },
+            0.25,
+            DocumentFilletTrimEndpoint::Start,
+        );
+        assert_resolved_pick(
+            &picks[1],
+            CurveSpan { curve, segment: 2 },
+            0.75,
+            DocumentFilletTrimEndpoint::End,
+        );
+    }
+
+    #[test]
+    fn lone_line_endpoint_is_not_a_complete_fillet_corner() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let start = document.add_point("start", [0.0, 0.0]).expect("start");
+        let end = document.add_point("end", [4.0, 0.0]).expect("end");
+        add_test_line(&mut document, "line", start, end, [1.0, 0.0]);
+        let session = retained_session(document);
+        let snapshot =
+            ComputedFeatureAuthoringSnapshot::capture(&session).expect("authoring snapshot");
+
+        assert_eq!(
+            resolve_feature_corner_point(&snapshot, session.design_document(), start),
+            Err(FeatureAuthoringWarningKind::WrongOperandKind)
+        );
+    }
+
+    #[test]
+    fn three_line_junction_is_an_ambiguous_fillet_corner() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let corner = document.add_point("corner", [0.0, 0.0]).expect("corner");
+        let right = document.add_point("right", [4.0, 0.0]).expect("right");
+        let up = document.add_point("up", [0.0, 4.0]).expect("up");
+        let left = document.add_point("left", [-4.0, 0.0]).expect("left");
+        add_test_line(&mut document, "right", corner, right, [1.0, 0.0]);
+        add_test_line(&mut document, "up", corner, up, [0.0, 1.0]);
+        add_test_line(&mut document, "left", left, corner, [1.0, 0.0]);
+        let session = retained_session(document);
+        let snapshot =
+            ComputedFeatureAuthoringSnapshot::capture(&session).expect("authoring snapshot");
+
+        assert_eq!(
+            resolve_feature_corner_point(&snapshot, session.design_document(), corner),
+            Err(FeatureAuthoringWarningKind::AmbiguousTrimSide)
+        );
+    }
+
+    #[test]
+    fn isolated_point_is_not_a_fillet_corner_operand() {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let isolated = document
+            .add_point("isolated", [0.0, 0.0])
+            .expect("isolated");
+        let session = retained_session(document);
+        let snapshot =
+            ComputedFeatureAuthoringSnapshot::capture(&session).expect("authoring snapshot");
+
+        assert_eq!(
+            resolve_feature_corner_point(&snapshot, session.design_document(), isolated),
+            Err(FeatureAuthoringWarningKind::WrongOperandKind)
         );
     }
 }

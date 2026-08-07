@@ -44,12 +44,13 @@ use crate::{
     ActionChoice, AuthoringApplication, AuthoringOperand, AuthoringOptions, AuthoringTool,
     ConstraintActionRequest, ConstraintEditor, ConstraintIntent, ConstraintKind,
     ConstraintRelationChoice, ConstructionProposal, ConstructionResult, DimensionActionRequest,
-    DimensionKind, EditorEffect, EditorScene, FeatureAuthoringCandidate, FeatureAuthoringPick,
-    FeatureAuthoringTool, OperationAuthoringCandidate, OperationAuthoringOutcome,
-    OperationAuthoringPick, OperationAuthoringStage, OperationAuthoringTool,
-    OperationAuthoringWarning, OperationAuthoringWarningKind, PointGestureSnapshot, PointerInput,
+    DimensionKind, EditorEffect, EditorScene, FeatureAuthoringCandidate, FeatureAuthoringOptions,
+    FeatureAuthoringOutcome, FeatureAuthoringPick, FeatureAuthoringState, FeatureAuthoringTool,
+    OperationAuthoringCandidate, OperationAuthoringOutcome, OperationAuthoringPick,
+    OperationAuthoringStage, OperationAuthoringTool, OperationAuthoringWarning,
+    OperationAuthoringWarningKind, PickTolerance, PointGestureSnapshot, PointerInput,
     ProjectedDragRequestDisposition, ProvisionalInferenceCandidate, ResolvedConstraintKind,
-    SelectionItem, Viewport,
+    ScreenPoint, SelectionItem, Viewport,
 };
 
 const PROJECTED_DRAG_MAX_DOCUMENT_ITEMS: usize = 16_384;
@@ -148,6 +149,26 @@ fn evaluate_computed_features(
     )?
     .prepare(allocator)?
     .execute(control)?)
+}
+
+fn require_current_feature_authoring_evaluation(
+    snapshot: &ComputedFeatureSnapshot,
+    feature: ComputedFeatureId,
+) -> Result<(), CoordinatorError> {
+    match snapshot
+        .feature_evaluations()
+        .iter()
+        .find(|evaluation| evaluation.feature == feature)
+        .map(|evaluation| &evaluation.state)
+    {
+        Some(ComputedFeatureEvaluationState::Current { .. }) => Ok(()),
+        Some(ComputedFeatureEvaluationState::Failed { failure }) => Err(
+            CoordinatorError::FeatureAuthoringPreviewRejected(failure.clone()),
+        ),
+        Some(ComputedFeatureEvaluationState::Suppressed) | None => {
+            Err(CoordinatorError::ComputedFeatureWorkStopped)
+        }
+    }
 }
 
 const fn merge_feature_lifecycle_high_water(
@@ -678,6 +699,16 @@ pub struct FeatureAuthoringPreviewMetadata {
     pub input: geosolve_sketch_features::ComputedFeatureEvaluationInput,
 }
 
+/// One coordinator-accepted authoring-state transition and its optional exact
+/// provisional feature. On [`Err`], neither the supplied authoring state nor a
+/// previously held preview is replaced.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct FeatureAuthoringTransaction {
+    pub outcome: FeatureAuthoringOutcome,
+    pub preview: Option<FeatureAuthoringPreviewMetadata>,
+}
+
 /// Stable temporary owner mapped to its grouped candidate occurrence.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct FeatureAuthoringCornerBinding {
@@ -1060,6 +1091,8 @@ pub enum CoordinatorError {
     StaleComputedFeatureCandidate,
     #[error("computed-feature evaluation stopped before publication")]
     ComputedFeatureWorkStopped,
+    #[error("computed-feature authoring preview was rejected: {0}")]
+    FeatureAuthoringPreviewRejected(ComputedFeatureFailure),
     #[error("computed-feature authoring preview is missing or does not match")]
     FeatureAuthoringPreviewMismatch,
     #[error("computed-feature authoring preview identity space is exhausted")]
@@ -1452,6 +1485,117 @@ impl RetainedEditorCoordinator {
         self.feature_authoring_preview.as_ref()
     }
 
+    /// Applies native semantic items to a trial authoring state and commits the
+    /// transition only after any resulting whole-batch preview is accepted.
+    ///
+    /// # Errors
+    ///
+    /// Returns a snapshot, document, evaluation, or provisional-feature error
+    /// without changing `state` or replacing a previously held exact preview.
+    pub fn transact_feature_authoring_pick_items(
+        &mut self,
+        state: &mut FeatureAuthoringState,
+        items: &[(SelectionItem, Option<f64>)],
+        label: impl Into<String>,
+    ) -> Result<FeatureAuthoringTransaction, CoordinatorError> {
+        let snapshot = self.feature_authoring_snapshot()?;
+        let document = self
+            .operation_authoring_document()
+            .cloned()
+            .ok_or(CoordinatorError::MissingOperationPreview)?;
+        let mut trial = state.clone();
+        let outcome = trial.pick_items(&snapshot, &document, items);
+        self.finish_feature_authoring_transaction(state, trial, outcome, label.into())
+    }
+
+    /// Resolves one native screen click against a trial authoring state and
+    /// commits it only after any resulting whole-batch preview is accepted.
+    ///
+    /// # Errors
+    ///
+    /// Returns a snapshot, document, evaluation, or provisional-feature error
+    /// without changing `state` or replacing a previously held exact preview.
+    pub fn transact_feature_authoring_pick_at(
+        &mut self,
+        state: &mut FeatureAuthoringState,
+        scene: &EditorScene,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        label: impl Into<String>,
+    ) -> Result<FeatureAuthoringTransaction, CoordinatorError> {
+        let snapshot = self.feature_authoring_snapshot()?;
+        let document = self
+            .operation_authoring_document()
+            .cloned()
+            .ok_or(CoordinatorError::MissingOperationPreview)?;
+        let mut trial = state.clone();
+        let outcome = trial.pick_at(&snapshot, &document, scene, position, tolerance);
+        self.finish_feature_authoring_transaction(state, trial, outcome, label.into())
+    }
+
+    /// Applies shared-radius and branch-option changes to a trial authoring
+    /// state and commits them only after the complete provisional feature is
+    /// independently accepted.
+    ///
+    /// # Errors
+    ///
+    /// Returns a snapshot, evaluation, or provisional-feature error without
+    /// changing `state` or replacing a previously held exact preview.
+    pub fn transact_feature_authoring_options(
+        &mut self,
+        state: &mut FeatureAuthoringState,
+        options: FeatureAuthoringOptions,
+        selected_corner: Option<usize>,
+        label: impl Into<String>,
+    ) -> Result<FeatureAuthoringTransaction, CoordinatorError> {
+        let snapshot = self.feature_authoring_snapshot()?;
+        let mut trial = state.clone();
+        let outcome = trial.set_options_with_corner(&snapshot, options, selected_corner);
+        self.finish_feature_authoring_transaction(state, trial, outcome, label.into())
+    }
+
+    fn finish_feature_authoring_transaction(
+        &mut self,
+        state: &mut FeatureAuthoringState,
+        trial: FeatureAuthoringState,
+        outcome: FeatureAuthoringOutcome,
+        label: String,
+    ) -> Result<FeatureAuthoringTransaction, CoordinatorError> {
+        if matches!(
+            outcome,
+            FeatureAuthoringOutcome::NoNativeHit(_)
+                | FeatureAuthoringOutcome::Warning(_)
+                | FeatureAuthoringOutcome::Inactive
+        ) {
+            return Ok(FeatureAuthoringTransaction {
+                outcome,
+                preview: None,
+            });
+        }
+        let preview = match &outcome {
+            FeatureAuthoringOutcome::PreviewRequested { candidate, .. } => {
+                Some(self.prepare_feature_authoring_preview(
+                    self.feature_document().identity(),
+                    candidate,
+                    label,
+                )?)
+            }
+            FeatureAuthoringOutcome::ModeEntered(_)
+            | FeatureAuthoringOutcome::Collecting { .. }
+            | FeatureAuthoringOutcome::CandidateCleared(_)
+            | FeatureAuthoringOutcome::ModeExited => {
+                self.clear_feature_authoring_preview();
+                None
+            }
+            FeatureAuthoringOutcome::Apply(_)
+            | FeatureAuthoringOutcome::NoNativeHit(_)
+            | FeatureAuthoringOutcome::Warning(_)
+            | FeatureAuthoringOutcome::Inactive => None,
+        };
+        *state = trial;
+        Ok(FeatureAuthoringTransaction { outcome, preview })
+    }
+
     /// Evaluates the complete multi-corner candidate, including endpoint-claim
     /// composition with every existing set, without publishing intent.
     ///
@@ -1503,6 +1647,7 @@ impl RetainedEditorCoordinator {
         {
             return Err(CoordinatorError::StaleComputedFeatureCandidate);
         }
+        require_current_feature_authoring_evaluation(&snapshot, feature)?;
         let token_value = self.next_feature_authoring_preview_token;
         self.next_feature_authoring_preview_token = token_value
             .checked_add(1)
@@ -1519,6 +1664,7 @@ impl RetainedEditorCoordinator {
             snapshot: snapshot.clone(),
             metadata: metadata.clone(),
         });
+        self.clear_feature_authoring_preview();
         self.feature_authoring_preview = Some(FeatureAuthoringPreview {
             candidate: candidate.clone(),
             expected,
@@ -1600,6 +1746,7 @@ impl RetainedEditorCoordinator {
         {
             return Err(CoordinatorError::StaleComputedFeatureCandidate);
         }
+        require_current_feature_authoring_evaluation(&snapshot, feature)?;
         let token_value = self.next_feature_authoring_preview_token;
         self.next_feature_authoring_preview_token = token_value
             .checked_add(1)
@@ -1700,6 +1847,7 @@ impl RetainedEditorCoordinator {
         {
             return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
         }
+        require_current_feature_authoring_evaluation(&preview.snapshot, preview.metadata.feature)?;
         let preview = self
             .feature_authoring_preview
             .take()
@@ -1725,7 +1873,12 @@ impl RetainedEditorCoordinator {
     }
 
     pub fn clear_feature_authoring_preview(&mut self) {
-        self.feature_authoring_preview = None;
+        let Some(preview) = self.feature_authoring_preview.take() else {
+            return;
+        };
+        let temporary_feature = preview.metadata.feature;
+        self.editor
+            .revoke_computed_feature_interaction(temporary_feature);
     }
 
     /// Commits one exact grouped authoring candidate as one persistent Fillet set.
@@ -2837,7 +2990,7 @@ impl RetainedEditorCoordinator {
         self.drag_continuation = None;
         self.projected_drag_work = None;
         self.operation_preview = None;
-        self.feature_authoring_preview = None;
+        self.clear_feature_authoring_preview();
         self.computed_preview_snapshot = None;
         self.computed_preview_input = None;
         self.computed_preview_evaluation_problem = None;
@@ -6816,8 +6969,8 @@ mod tests {
     use super::*;
     use crate::{
         AuthoringOutcome, AuthoringState, EditorScene, EditorTool, FeatureAuthoringOutcome,
-        FeatureAuthoringState, Modifiers, OperationAuthoringOptions, OperationAuthoringState,
-        PickTolerance, PointerInput, ScreenPoint, Viewport,
+        FeatureAuthoringStage, FeatureAuthoringState, Modifiers, OperationAuthoringOptions,
+        OperationAuthoringState, PickTolerance, PointerInput, ScreenPoint, Viewport,
     };
     use geosolve_sketch::{
         AlphaScenarioIds, AlphaScenarioKind, DocumentConstraintDefinition,
@@ -14419,6 +14572,503 @@ mod tests {
             fillet_radius(&fixture.coordinator, published.value).to_bits(),
             0.6_f64.to_bits()
         );
+    }
+
+    #[test]
+    fn clearing_feature_authoring_preview_removes_only_temporary_selection() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        fixture
+            .coordinator
+            .prepare_feature_authoring_preview(
+                fixture.coordinator.feature_document().identity(),
+                &candidate,
+                "temporary corner",
+            )
+            .expect("preview");
+        let owner = fixture
+            .coordinator
+            .feature_authoring_preview()
+            .expect("held preview")
+            .corner_bindings()[0]
+            .owner;
+        let native = SelectionItem::Point(fixture.points[0]);
+        fixture
+            .coordinator
+            .editor_mut()
+            .set_selection([native, SelectionItem::FeatureCorner(owner)]);
+
+        fixture.coordinator.clear_feature_authoring_preview();
+
+        assert!(fixture.coordinator.feature_authoring_preview().is_none());
+        assert_eq!(fixture.coordinator.editor().selection(), &[native]);
+    }
+
+    #[test]
+    fn replacing_feature_authoring_preview_clears_reused_temporary_selection() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let first = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        let first_metadata = fixture
+            .coordinator
+            .prepare_feature_authoring_preview(
+                fixture.coordinator.feature_document().identity(),
+                &first,
+                "first temporary corner",
+            )
+            .expect("first preview");
+        let first_owner = fixture
+            .coordinator
+            .feature_authoring_preview()
+            .expect("first held preview")
+            .corner_bindings()[0]
+            .owner;
+        let native = SelectionItem::Curve(fixture.spans[0]);
+        fixture
+            .coordinator
+            .editor_mut()
+            .set_selection([native, SelectionItem::FeatureCorner(first_owner)]);
+
+        let second = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[2]]);
+        let second_metadata = fixture
+            .coordinator
+            .prepare_feature_authoring_preview(
+                fixture.coordinator.feature_document().identity(),
+                &second,
+                "replacement temporary corner",
+            )
+            .expect("replacement preview");
+
+        assert_eq!(
+            second_metadata.feature, first_metadata.feature,
+            "a replacement preview from the unchanged base document reuses its provisional feature ID"
+        );
+        assert!(fixture.coordinator.feature_authoring_preview().is_some());
+        assert_eq!(fixture.coordinator.editor().selection(), &[native]);
+    }
+
+    #[test]
+    fn refreshing_held_feature_authoring_batch_preserves_temporary_selection() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let snapshot = fixture
+            .coordinator
+            .feature_authoring_snapshot()
+            .expect("authoring snapshot");
+        let mut authoring = FeatureAuthoringState::default();
+        let initial = feature_candidate(authoring.activate(
+            &snapshot,
+            fixture.coordinator.session().design_document(),
+            FeatureAuthoringTool::Fillet,
+            &[(SelectionItem::Point(fixture.points[1]), None)],
+        ));
+        let prepared = fixture
+            .coordinator
+            .prepare_feature_authoring_preview(
+                fixture.coordinator.feature_document().identity(),
+                &initial,
+                "refreshable corner",
+            )
+            .expect("initial preview");
+        let owner = fixture
+            .coordinator
+            .feature_authoring_preview()
+            .expect("initial held preview")
+            .corner_bindings()[0]
+            .owner;
+        let native = SelectionItem::Point(fixture.points[0]);
+        let expected_selection = [native, SelectionItem::FeatureCorner(owner)];
+        fixture
+            .coordinator
+            .editor_mut()
+            .set_selection(expected_selection);
+        let resized = feature_candidate(authoring.set_options(
+            &snapshot,
+            crate::FeatureAuthoringOptions {
+                fillet_radius: Some(0.8),
+                ..authoring.options()
+            },
+        ));
+
+        let refreshed = fixture
+            .coordinator
+            .refresh_feature_authoring_preview(prepared.input, &resized)
+            .expect("refreshed preview");
+
+        assert_eq!(refreshed.feature, prepared.feature);
+        assert_eq!(
+            fixture
+                .coordinator
+                .feature_authoring_preview()
+                .expect("refreshed held preview")
+                .corner_bindings()[0]
+                .owner,
+            owner
+        );
+        assert_eq!(
+            fixture.coordinator.editor().selection(),
+            &expected_selection
+        );
+    }
+
+    #[test]
+    fn clearing_transient_state_removes_temporary_feature_selection() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        fixture
+            .coordinator
+            .prepare_feature_authoring_preview(
+                fixture.coordinator.feature_document().identity(),
+                &candidate,
+                "transient corner",
+            )
+            .expect("preview");
+        let owner = fixture
+            .coordinator
+            .feature_authoring_preview()
+            .expect("held preview")
+            .corner_bindings()[0]
+            .owner;
+        let native = SelectionItem::Curve(fixture.spans[0]);
+        fixture
+            .coordinator
+            .editor_mut()
+            .set_selection([native, SelectionItem::FeatureCorner(owner)]);
+
+        fixture.coordinator.clear_transient();
+
+        assert!(fixture.coordinator.feature_authoring_preview().is_none());
+        assert_eq!(fixture.coordinator.editor().selection(), &[native]);
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn clearing_feature_preview_revokes_hover_context_and_active_radius_gesture() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        let metadata = fixture
+            .coordinator
+            .prepare_feature_authoring_preview(
+                fixture.coordinator.feature_document().identity(),
+                &candidate,
+                "interactive temporary corner",
+            )
+            .expect("preview");
+        let scene = {
+            let accepted = fixture
+                .coordinator
+                .session()
+                .accepted_state()
+                .expect("accepted sketch");
+            let preview = fixture
+                .coordinator
+                .feature_authoring_preview()
+                .expect("held preview");
+            EditorScene::from_accepted_with_computed(
+                accepted.identity().revision().get(),
+                accepted.design_identity(),
+                accepted.document(),
+                fixture.coordinator.session().design_document(),
+                &fixture
+                    .coordinator
+                    .session()
+                    .accepted_prepared_input()
+                    .expect("accepted input"),
+                &metadata.input,
+                preview.snapshot(),
+                Viewport::new([900.0, 700.0], [1.0, 1.0], 50.0).expect("viewport"),
+                0.5,
+            )
+            .expect("composite preview scene")
+        };
+        let arc = scene
+            .computed_curves
+            .iter()
+            .find(|curve| curve.owner.feature == metadata.feature)
+            .expect("temporary arc")
+            .clone();
+        let owner = SelectionItem::FeatureCorner(arc.owner);
+        let press = arc.screen_polyline[arc.screen_polyline.len() / 2];
+        let press_model = scene.viewport.screen_to_model(press);
+        let direction = [
+            (press_model[0] - arc.center[0]) / arc.radius,
+            (press_model[1] - arc.center[1]) / arc.radius,
+        ];
+        let moved = scene.viewport.model_to_screen([
+            0.2_f64.mul_add(direction[0], press_model[0]),
+            0.2_f64.mul_add(direction[1], press_model[1]),
+        ]);
+        let pointer = |position| PointerInput {
+            pointer_id: 1_337,
+            position,
+            modifiers: Modifiers::default(),
+        };
+
+        let hover = fixture
+            .coordinator
+            .editor_mut()
+            .pointer_move(&scene, pointer(press));
+        assert!(matches!(
+            hover.as_slice(),
+            [EditorEffect::HoverChanged(state)]
+                if state.target.is_some() && state.context_owner == Some(owner)
+        ));
+        assert_eq!(fixture.coordinator.editor().hovered(), Some(owner));
+        assert_eq!(
+            fixture.coordinator.editor().hover_state().context_owner,
+            Some(owner)
+        );
+
+        fixture.coordinator.pointer_down(&scene, pointer(press));
+        let active_move = fixture
+            .coordinator
+            .editor_mut()
+            .pointer_move(&scene, pointer(moved));
+        assert!(matches!(
+            active_move.as_slice(),
+            [EditorEffect::PreviewComputedFeatureRadius { feature, .. }]
+                if *feature == metadata.feature
+        ));
+
+        fixture.coordinator.clear_feature_authoring_preview();
+
+        assert!(fixture.coordinator.feature_authoring_preview().is_none());
+        assert_eq!(
+            fixture.coordinator.editor().hover_state(),
+            crate::EditorHoverState::default()
+        );
+        let base_scene = {
+            let accepted = fixture
+                .coordinator
+                .session()
+                .accepted_state()
+                .expect("accepted sketch");
+            EditorScene::from_accepted_for_design(
+                accepted.identity().revision().get(),
+                accepted.design_identity(),
+                accepted.document(),
+                fixture.coordinator.session().design_document(),
+                scene.viewport,
+                0.5,
+            )
+            .expect("base scene after preview clear")
+        };
+        let move_after_clear = fixture
+            .coordinator
+            .editor_mut()
+            .pointer_move(&base_scene, pointer(moved));
+        let expected_design = fixture.coordinator.session().design_identity();
+        let up_after_clear = fixture.coordinator.editor_mut().pointer_up(
+            &base_scene,
+            expected_design,
+            pointer(moved),
+        );
+        assert!(
+            move_after_clear
+                .iter()
+                .chain(&up_after_clear)
+                .all(|effect| !matches!(
+                    effect,
+                    EditorEffect::PreviewComputedFeatureRadius { feature, .. }
+                        | EditorEffect::CommitComputedFeatureRadius { feature, .. }
+                        | EditorEffect::RestoreComputedFeatureRadius { feature, .. }
+                        if *feature == metadata.feature
+                )),
+            "a destroyed preview owner must not emit later radius lifecycle effects"
+        );
+        assert!(up_after_clear.is_empty());
+    }
+
+    #[test]
+    fn transactional_feature_pick_rolls_back_duplicate_and_keeps_prior_preview() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let snapshot = fixture
+            .coordinator
+            .feature_authoring_snapshot()
+            .expect("authoring snapshot");
+        let mut state = FeatureAuthoringState::default();
+        assert!(matches!(
+            state.activate(
+                &snapshot,
+                fixture.coordinator.session().design_document(),
+                FeatureAuthoringTool::Fillet,
+                &[],
+            ),
+            FeatureAuthoringOutcome::ModeEntered(_)
+        ));
+        let first = fixture
+            .coordinator
+            .transact_feature_authoring_pick_items(
+                &mut state,
+                &[(SelectionItem::Point(fixture.points[1]), None)],
+                "first corner",
+            )
+            .expect("first preview transaction");
+        assert!(matches!(
+            first.outcome,
+            FeatureAuthoringOutcome::PreviewRequested {
+                ref candidate,
+                ..
+            } if candidate.corners().len() == 1
+        ));
+        let prior_metadata = first.preview.expect("first preview metadata");
+        let prior_state = state.clone();
+
+        let duplicate = fixture
+            .coordinator
+            .transact_feature_authoring_pick_items(
+                &mut state,
+                &[(SelectionItem::Point(fixture.points[1]), None)],
+                "duplicate corner",
+            )
+            .expect_err("duplicate candidate must be rejected");
+
+        assert!(matches!(
+            duplicate,
+            CoordinatorError::ComputedFeatureDocument(ComputedFeatureDocumentError::InvalidField {
+                field: "corner parents",
+                ..
+            })
+        ));
+        assert_eq!(state, prior_state);
+        assert_eq!(state.completed_corner_count(), 1);
+        assert_eq!(
+            fixture
+                .coordinator
+                .feature_authoring_preview()
+                .expect("prior preview retained")
+                .metadata(),
+            &prior_metadata
+        );
+
+        let retry = fixture
+            .coordinator
+            .transact_feature_authoring_pick_items(
+                &mut state,
+                &[(SelectionItem::Point(fixture.points[2]), None)],
+                "two valid corners",
+            )
+            .expect("retry with a distinct corner");
+        assert!(matches!(
+            retry.outcome,
+            FeatureAuthoringOutcome::PreviewRequested {
+                ref candidate,
+                ..
+            } if candidate.corners().len() == 2
+        ));
+        assert!(retry.preview.is_some());
+        assert_eq!(state.completed_corner_count(), 2);
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn transactional_feature_pick_restores_pending_support_after_crossed_claim_rejection() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let snapshot = fixture
+            .coordinator
+            .feature_authoring_snapshot()
+            .expect("authoring snapshot");
+        let mut state = FeatureAuthoringState::default();
+        assert!(matches!(
+            state.activate(
+                &snapshot,
+                fixture.coordinator.session().design_document(),
+                FeatureAuthoringTool::Fillet,
+                &[],
+            ),
+            FeatureAuthoringOutcome::ModeEntered(_)
+        ));
+        assert!(matches!(
+            state.set_options(
+                &snapshot,
+                crate::FeatureAuthoringOptions {
+                    fillet_radius: Some(3.0),
+                    ..crate::FeatureAuthoringOptions::default()
+                },
+            ),
+            FeatureAuthoringOutcome::Collecting { .. }
+        ));
+        fixture
+            .coordinator
+            .transact_feature_authoring_pick_items(
+                &mut state,
+                &[(SelectionItem::Point(fixture.points[1]), None)],
+                "large first corner",
+            )
+            .expect("locally valid first corner");
+        let pending = fixture
+            .coordinator
+            .transact_feature_authoring_pick_items(
+                &mut state,
+                &[(SelectionItem::Curve(fixture.spans[1]), Some(0.75))],
+                "pending second corner",
+            )
+            .expect("first support of second corner");
+        assert!(matches!(
+            pending.outcome,
+            FeatureAuthoringOutcome::Collecting {
+                ref pending,
+                ref guidance,
+            } if pending.len() == 1
+                && guidance.completed_corners == 1
+                && guidance.stage == FeatureAuthoringStage::PickSecondFilletCurve
+        ));
+        assert!(fixture.coordinator.feature_authoring_preview().is_none());
+        let state_before_rejection = state.clone();
+
+        let crossed = fixture
+            .coordinator
+            .transact_feature_authoring_pick_items(
+                &mut state,
+                &[(SelectionItem::Curve(fixture.spans[2]), Some(0.25))],
+                "crossed second corner",
+            )
+            .expect_err("crossed source claims must reject the whole preview");
+
+        assert!(matches!(
+            crossed,
+            CoordinatorError::FeatureAuthoringPreviewRejected(
+                ComputedFeatureFailure::ConsumedSourceInterval { .. }
+                    | ComputedFeatureFailure::EndpointClaimConflict { .. }
+            )
+        ));
+        assert_eq!(state, state_before_rejection);
+        assert_eq!(state.completed_corner_count(), 1);
+        assert_eq!(
+            state.guidance().stage,
+            FeatureAuthoringStage::PickSecondFilletCurve
+        );
+        assert!(fixture.coordinator.feature_authoring_preview().is_none());
+
+        assert!(matches!(
+            state.set_options(
+                &snapshot,
+                crate::FeatureAuthoringOptions {
+                    fillet_radius: Some(1.0),
+                    ..state.options()
+                },
+            ),
+            FeatureAuthoringOutcome::Collecting {
+                ref pending,
+                ..
+            } if pending.len() == 1
+        ));
+        let recovered = fixture
+            .coordinator
+            .transact_feature_authoring_pick_items(
+                &mut state,
+                &[(SelectionItem::Curve(fixture.spans[2]), Some(0.25))],
+                "recovered second corner",
+            )
+            .expect("retry after reducing the shared radius");
+        assert!(matches!(
+            recovered.outcome,
+            FeatureAuthoringOutcome::PreviewRequested {
+                ref candidate,
+                ..
+            } if candidate.corners().len() == 2
+        ));
+        assert!(recovered.preview.is_some());
+        assert_eq!(state.completed_corner_count(), 2);
+        assert_eq!(state.guidance().stage, FeatureAuthoringStage::PreviewReady);
     }
 
     #[test]

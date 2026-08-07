@@ -320,37 +320,12 @@ fn selected_feature_authoring_corner_index(
         .corner_index(*owner)
 }
 
-/// Revokes one temporary computed-feature owner and any selection that names
-/// its allocator-local feature/corners. Native and persistent selection is
-/// retained; a later preview may safely reuse the temporary identity.
+/// Revokes one temporary computed-feature owner. Selection cleanup belongs to
+/// the headless coordinator so every caller gets identical lifetime semantics.
 #[cfg(any(target_arch = "wasm32", test))]
 fn revoke_held_feature_authoring_preview(
     coordinator: &mut geosolve_constraint_editor::RetainedEditorCoordinator,
 ) {
-    if let Some(feature) = coordinator
-        .feature_authoring_preview()
-        .map(|preview| preview.metadata().feature)
-    {
-        let retained = coordinator
-            .editor()
-            .selection()
-            .iter()
-            .copied()
-            .filter(|item| match item {
-                geosolve_constraint_editor::SelectionItem::Feature(candidate) => {
-                    *candidate != feature
-                }
-                geosolve_constraint_editor::SelectionItem::FeatureCorner(owner) => {
-                    owner.feature != feature
-                }
-                geosolve_constraint_editor::SelectionItem::Point(_)
-                | geosolve_constraint_editor::SelectionItem::Curve(_)
-                | geosolve_constraint_editor::SelectionItem::Constraint(_)
-                | geosolve_constraint_editor::SelectionItem::Dimension(_) => true,
-            })
-            .collect::<Vec<_>>();
-        coordinator.editor_mut().set_selection(retained);
-    }
     coordinator.clear_feature_authoring_preview();
 }
 
@@ -394,19 +369,6 @@ fn computed_profile_boundary_with_authoring(
     }
 }
 
-/// Applies overlay values with distinct shared-radius, next-corner-default and
-/// selected-corner semantics. The headless transition resolves the whole batch
-/// exactly once and publishes nothing on rejection.
-#[cfg(any(target_arch = "wasm32", test))]
-fn apply_feature_authoring_options(
-    state: &mut geosolve_constraint_editor::FeatureAuthoringState,
-    snapshot: &geosolve_sketch_features::ComputedFeatureAuthoringSnapshot,
-    options: geosolve_constraint_editor::FeatureAuthoringOptions,
-    selected_corner: Option<usize>,
-) -> geosolve_constraint_editor::FeatureAuthoringOutcome {
-    state.set_options_with_corner(snapshot, options, selected_corner)
-}
-
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod wasm {
     use std::cell::RefCell;
@@ -420,9 +382,9 @@ pub(crate) mod wasm {
         ConstructionPreview, CoordinatorActionKind, DimensionTargetDisplayUnit, DisabledReason,
         EditorEffect, EditorHoverTarget, EditorScene, EditorTool, FeatureAuthoringCandidate,
         FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringPick,
-        FeatureAuthoringStage, FeatureAuthoringState, FeatureAuthoringTool, Modifiers,
-        NurbsConstructionOptions, PickTolerance, PointerInput, ProvisionalInferenceCandidate,
-        RetainedEditorCoordinator, SelectionItem,
+        FeatureAuthoringStage, FeatureAuthoringState, FeatureAuthoringTool,
+        FeatureAuthoringTransaction, Modifiers, NurbsConstructionOptions, PickTolerance,
+        PointerInput, ProvisionalInferenceCandidate, RetainedEditorCoordinator, SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -1217,24 +1179,30 @@ pub(crate) mod wasm {
                 if event.button() != 0 {
                     return;
                 }
-                if let Some(hit) =
-                    scene.native_authoring_hit_test(input.position, PickTolerance::default())
-                {
-                    handle_feature_item_pick(&mut wb, hit.item, hit.curve_parameter);
-                } else if let Some(hit) = scene.hit_test(input.position, PickTolerance::default())
-                    && matches!(hit.item, SelectionItem::FeatureCorner(owner)
-                        if wb
-                            .coordinator
-                            .feature_authoring_preview()
-                            .is_some_and(|preview| preview.metadata().feature == owner.feature))
-                {
-                    // Generated preview arcs are radius grips only after native
-                    // authoring hits have had priority. They can never become a
-                    // Fillet operand or mask a source span underneath.
-                    let effects = transition(&mut wb.coordinator, &scene, input, &[]);
-                    dispatch_effects(&mut wb, effects);
-                } else {
-                    wb.notice = "Pick a native span or an unambiguous polyline corner".into();
+                if let Some(transaction) = feature_canvas_pick(&mut wb, &scene, input.position) {
+                    if matches!(
+                        &transaction.outcome,
+                        FeatureAuthoringOutcome::NoNativeHit(_)
+                    ) {
+                        if let Some(hit) = scene.hit_test(input.position, PickTolerance::default())
+                            && matches!(hit.item, SelectionItem::FeatureCorner(owner)
+                                if wb
+                                    .coordinator
+                                    .feature_authoring_preview()
+                                    .is_some_and(|preview| preview.metadata().feature == owner.feature))
+                        {
+                            // Generated preview arcs are radius grips only after one
+                            // bounded transactional native-hit transition found no
+                            // native operand. They can never mask a source span.
+                            let effects = transition(&mut wb.coordinator, &scene, input, &[]);
+                            dispatch_effects(&mut wb, effects);
+                        } else {
+                            wb.notice =
+                                "Pick a native span or an unambiguous polyline corner".into();
+                        }
+                    } else {
+                        handle_feature_transaction(&mut wb, transaction);
+                    }
                 }
                 save(&wb);
                 drop(wb);
@@ -1917,15 +1885,26 @@ pub(crate) mod wasm {
             wb.notice = "Computed features require current accepted geometry".into();
             return;
         };
-        let selection = match wb.coordinator.feature_authoring_preselection() {
-            Ok(selection) => selection,
-            Err(error) => {
-                clear_feature_authoring(wb);
-                wb.notice =
-                    format!("The current selection cannot start this Fillet batch: {error}");
-                return;
-            }
-        };
+        let selection = wb
+            .coordinator
+            .editor()
+            .selection()
+            .iter()
+            .copied()
+            .map(|item| {
+                let parameter = match item {
+                    SelectionItem::Curve(span) => {
+                        wb.coordinator.editor().curve_pick_parameter(span)
+                    }
+                    SelectionItem::Point(_)
+                    | SelectionItem::Constraint(_)
+                    | SelectionItem::Dimension(_)
+                    | SelectionItem::Feature(_)
+                    | SelectionItem::FeatureCorner(_) => None,
+                };
+                (item, parameter)
+            })
+            .collect::<Vec<_>>();
         wb.authoring.deactivate();
         let effects = wb
             .coordinator
@@ -1940,8 +1919,38 @@ pub(crate) mod wasm {
             handle_feature_outcome(wb, options_outcome);
             return;
         }
-        let outcome = wb.feature_authoring.pick_many(&snapshot, selection);
-        handle_feature_outcome(wb, outcome);
+        let label = next_feature_authoring_label(wb);
+        match wb.coordinator.transact_feature_authoring_pick_items(
+            &mut wb.feature_authoring,
+            &selection,
+            label,
+        ) {
+            Ok(transaction) => handle_feature_transaction(wb, transaction),
+            Err(error) => {
+                wb.notice = format!("Fillet preview is unavailable: {error}");
+            }
+        }
+    }
+
+    fn feature_canvas_pick(
+        wb: &mut Workbench,
+        scene: &EditorScene,
+        position: geosolve_constraint_editor::ScreenPoint,
+    ) -> Option<FeatureAuthoringTransaction> {
+        let label = next_feature_authoring_label(wb);
+        match wb.coordinator.transact_feature_authoring_pick_at(
+            &mut wb.feature_authoring,
+            scene,
+            position,
+            PickTolerance::default(),
+            label,
+        ) {
+            Ok(transaction) => Some(transaction),
+            Err(error) => {
+                wb.notice = format!("Fillet preview is unavailable: {error}");
+                None
+            }
+        }
     }
 
     fn handle_feature_item_pick(
@@ -1949,25 +1958,17 @@ pub(crate) mod wasm {
         item: SelectionItem,
         curve_parameter: Option<f64>,
     ) {
-        let snapshot = match wb.coordinator.feature_authoring_snapshot() {
-            Ok(snapshot) => snapshot,
+        let label = next_feature_authoring_label(wb);
+        match wb.coordinator.transact_feature_authoring_pick_items(
+            &mut wb.feature_authoring,
+            &[(item, curve_parameter)],
+            label,
+        ) {
+            Ok(transaction) => handle_feature_transaction(wb, transaction),
             Err(error) => {
-                wb.notice = format!("Computed features require current accepted geometry: {error}");
-                return;
+                wb.notice = format!("Fillet preview is unavailable: {error}");
             }
-        };
-        let picks = match wb
-            .coordinator
-            .feature_authoring_picks_for_item(item, curve_parameter)
-        {
-            Ok(picks) => picks,
-            Err(error) => {
-                wb.notice = format!("That item is not a Fillet corner operand: {error}");
-                return;
-            }
-        };
-        let outcome = wb.feature_authoring.pick_many(&snapshot, picks);
-        handle_feature_outcome(wb, outcome);
+        }
     }
 
     fn update_feature_options(document: &Document, wb: &mut Workbench) {
@@ -1978,21 +1979,19 @@ pub(crate) mod wasm {
                 return;
             }
         };
-        let snapshot = match wb.coordinator.feature_authoring_snapshot() {
-            Ok(snapshot) => snapshot,
-            Err(error) => {
-                wb.notice = error.to_string();
-                return;
-            }
-        };
         let selected_corner = super::selected_feature_authoring_corner_index(&wb.coordinator);
-        let outcome = super::apply_feature_authoring_options(
+        let label = next_feature_authoring_label(wb);
+        match wb.coordinator.transact_feature_authoring_options(
             &mut wb.feature_authoring,
-            &snapshot,
             options,
             selected_corner,
-        );
-        handle_feature_outcome(wb, outcome);
+            label,
+        ) {
+            Ok(transaction) => handle_feature_transaction(wb, transaction),
+            Err(error) => {
+                wb.notice = format!("Fillet preview is unavailable: {error}");
+            }
+        }
     }
 
     fn feature_options(document: &Document) -> Result<FeatureAuthoringOptions, String> {
@@ -2025,6 +2024,37 @@ pub(crate) mod wasm {
             .ok_or_else(|| format!("{label} must be finite and positive"))
     }
 
+    fn next_feature_authoring_label(wb: &Workbench) -> String {
+        format!(
+            "Fillet {}",
+            wb.coordinator.feature_document().features().len() + 1
+        )
+    }
+
+    /// Consumes a coordinator-accepted state/preview transaction. A complete
+    /// candidate already owns its exact held preview, so this path must not
+    /// prepare it a second time.
+    fn handle_feature_transaction(wb: &mut Workbench, transaction: FeatureAuthoringTransaction) {
+        match transaction.outcome {
+            FeatureAuthoringOutcome::PreviewRequested {
+                candidate,
+                guidance,
+            } => {
+                if transaction.preview.is_none() {
+                    wb.notice = "The exact current Fillet preview is unavailable".into();
+                    return;
+                }
+                wb.feature_pending.clear();
+                wb.feature_candidate = Some(candidate);
+                wb.notice = format!("{} · Apply or press Enter", guidance.message);
+            }
+            outcome => {
+                debug_assert!(transaction.preview.is_none());
+                handle_feature_outcome(wb, outcome);
+            }
+        }
+    }
+
     fn handle_feature_outcome(wb: &mut Workbench, outcome: FeatureAuthoringOutcome) {
         super::observe_feature_authoring_preview_lifecycle(&mut wb.coordinator, &outcome);
         match outcome {
@@ -2032,6 +2062,9 @@ pub(crate) mod wasm {
                 wb.feature_candidate = None;
                 wb.feature_pending.clear();
                 wb.notice = format!("{} · Escape exits", guidance.message);
+            }
+            FeatureAuthoringOutcome::NoNativeHit(guidance) => {
+                wb.notice = guidance.message.to_owned();
             }
             FeatureAuthoringOutcome::Collecting { pending, guidance } => {
                 wb.feature_candidate = None;
@@ -2044,10 +2077,7 @@ pub(crate) mod wasm {
             } => {
                 wb.feature_pending.clear();
                 wb.feature_candidate = None;
-                let label = format!(
-                    "Fillet {}",
-                    wb.coordinator.feature_document().features().len() + 1
-                );
+                let label = next_feature_authoring_label(wb);
                 let expected = wb.coordinator.feature_document().identity();
                 match wb
                     .coordinator
@@ -3427,7 +3457,7 @@ mod tests {
 
     use super::{
         AuthoringItemInput, FeatureAuthoringRadiusRefresh, OverlayRect, PointerMoveQueue,
-        apply_feature_authoring_options, canvas_overlay_position, change_owns_option_control_click,
+        canvas_overlay_position, change_owns_option_control_click,
         computed_profile_boundary_with_authoring, geometry_hover_selector,
         observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
         palette_details_overlay_reflow_listener, refresh_held_feature_authoring_radius,
@@ -4374,8 +4404,7 @@ mod tests {
         let snapshot = coordinator
             .feature_authoring_snapshot()
             .expect("current authoring snapshot");
-        let edited = apply_feature_authoring_options(
-            &mut state,
+        let edited = state.set_options_with_corner(
             &snapshot,
             FeatureAuthoringOptions {
                 fillet_radius: Some(0.5),
@@ -4402,8 +4431,7 @@ mod tests {
 
         coordinator.editor_mut().set_selection([]);
         assert_eq!(selected_feature_authoring_corner_index(&coordinator), None);
-        let defaults = apply_feature_authoring_options(
-            &mut state,
+        let defaults = state.set_options_with_corner(
             &snapshot,
             FeatureAuthoringOptions {
                 fillet_radius: Some(0.5),

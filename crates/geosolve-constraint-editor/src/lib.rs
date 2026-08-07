@@ -29,12 +29,12 @@ pub use coordinator::{
     DimensionTargetDisplayUnit, DimensionTargetMetadata, DisabledReason, DisplayDimensionTarget,
     EditorMutation, EditorProblemCategory, EditorProblemMetadata, EditorProblemScope,
     EditorProblemTarget, FeatureAuthoringCornerBinding, FeatureAuthoringPreview,
-    FeatureAuthoringPreviewMetadata, FeatureAuthoringPreviewToken, LifecycleDto, LifecycleStatus,
-    MeasurementPublication, MutationOutcome, OperationAuthoringMutation, OperationAuthoringPreview,
-    OperationAuthoringPreviewMetadata, OperationAuthoringPreviewOutcome,
-    OperationAuthoringPreviewToken, ProblemsDto, ProjectedDragRejectionStage,
-    ProjectedDragWorkEvidence, ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator,
-    display_dimension_target,
+    FeatureAuthoringPreviewMetadata, FeatureAuthoringPreviewToken, FeatureAuthoringTransaction,
+    LifecycleDto, LifecycleStatus, MeasurementPublication, MutationOutcome,
+    OperationAuthoringMutation, OperationAuthoringPreview, OperationAuthoringPreviewMetadata,
+    OperationAuthoringPreviewOutcome, OperationAuthoringPreviewToken, ProblemsDto,
+    ProjectedDragRejectionStage, ProjectedDragWorkEvidence, ReplayAction, RestoreCheckpoint,
+    RetainedEditorCoordinator, display_dimension_target,
 };
 pub use feature_authoring::{
     FeatureAuthoringCandidate, FeatureAuthoringCornerPreview, FeatureAuthoringGuidance,
@@ -513,6 +513,60 @@ impl EditorScene {
             })
     }
 
+    /// Returns bounded native authoring hits in deterministic interaction order.
+    ///
+    /// Point candidates retain their semantic priority over curves, while the
+    /// complete ordered list lets a domain-specific headless authoring state
+    /// reject an inapplicable point or already-pending support and continue to
+    /// another curve under the same click. Repeated visible fragments of one
+    /// persistent span contribute only their nearest occurrence and count once
+    /// against `maximum_candidates`. Collection stops before allocating a
+    /// candidate beyond that explicit limit.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`NativeAuthoringHitError::CandidateLimitExceeded`] on the first
+    /// distinct in-tolerance item beyond `maximum_candidates`.
+    pub(crate) fn native_authoring_hit_candidates(
+        &self,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+        maximum_candidates: usize,
+    ) -> Result<Vec<Hit>, NativeAuthoringHitError> {
+        if !position.is_finite() || !tolerance.is_valid() {
+            return Ok(Vec::new());
+        }
+        let candidates = self
+            .points
+            .iter()
+            .filter_map(|point| point_hit(point, position, tolerance.point_pixels))
+            .chain(
+                self.curves
+                    .iter()
+                    .filter_map(|curve| curve_hit(curve, position, tolerance.curve_pixels)),
+            );
+        let mut unique = std::collections::BTreeMap::<SelectionItem, Hit>::new();
+        for hit in candidates {
+            if let Some(existing) = unique.get_mut(&hit.item) {
+                if compare_hits(&hit, existing).is_lt() {
+                    *existing = hit;
+                }
+                continue;
+            }
+            if unique.len() >= maximum_candidates {
+                return Err(NativeAuthoringHitError::CandidateLimitExceeded { maximum_candidates });
+            }
+            unique.insert(hit.item, hit);
+        }
+        let mut hits = unique.into_values().collect::<Vec<_>>();
+        hits.sort_by(|first, second| {
+            native_hit_priority(first.item)
+                .cmp(&native_hit_priority(second.item))
+                .then_with(|| compare_hits(first, second))
+        });
+        Ok(hits)
+    }
+
     /// Returns the ordinary best visible geometry hit only when that exact
     /// persistent item still exists in `source`.
     ///
@@ -739,6 +793,13 @@ pub struct Hit {
     pub distance_pixels: f64,
     /// Explicit curve feature picked by the user, when the hit is a curve.
     pub curve_parameter: Option<f64>,
+}
+
+/// Typed bounded-work result for native authoring hit collection.
+#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
+pub(crate) enum NativeAuthoringHitError {
+    #[error("native authoring hit candidate limit {maximum_candidates} was exceeded")]
+    CandidateLimitExceeded { maximum_candidates: usize },
 }
 
 /// One concrete presentation occurrence of a persistent scene annotation.
@@ -1799,6 +1860,34 @@ impl ConstraintEditor {
         }
     }
 
+    pub(crate) fn revoke_computed_feature_interaction(
+        &mut self,
+        feature: geosolve_sketch_features::ComputedFeatureId,
+    ) {
+        self.selection
+            .retain(|item| !item_belongs_to_computed_feature(*item, feature));
+        self.curve_pick_parameters
+            .retain(|(span, _)| self.selection.contains(&SelectionItem::Curve(*span)));
+        if self
+            .hover_target
+            .is_some_and(|target| item_belongs_to_computed_feature(target.item(), feature))
+        {
+            self.hover_target = None;
+        }
+        if self
+            .hover_context
+            .is_some_and(|context| item_belongs_to_computed_feature(context.owner, feature))
+        {
+            self.hover_context = None;
+        }
+        if self
+            .feature_radius_gesture
+            .is_some_and(|gesture| gesture.owner.feature == feature)
+        {
+            self.feature_radius_gesture = None;
+        }
+    }
+
     /// Applies one toolkit-independent selection click.
     pub fn select_item(&mut self, item: SelectionItem, modifiers: Modifiers) {
         if modifiers.extends_selection() {
@@ -2795,6 +2884,31 @@ fn compare_hits(first: &Hit, second: &Hit) -> Ordering {
         .distance_pixels
         .total_cmp(&second.distance_pixels)
         .then_with(|| first.item.cmp(&second.item))
+}
+
+const fn native_hit_priority(item: SelectionItem) -> u8 {
+    match item {
+        SelectionItem::Point(_) => 0,
+        SelectionItem::Curve(_) => 1,
+        SelectionItem::Constraint(_)
+        | SelectionItem::Dimension(_)
+        | SelectionItem::Feature(_)
+        | SelectionItem::FeatureCorner(_) => 2,
+    }
+}
+
+fn item_belongs_to_computed_feature(
+    item: SelectionItem,
+    feature: geosolve_sketch_features::ComputedFeatureId,
+) -> bool {
+    match item {
+        SelectionItem::Feature(candidate) => candidate == feature,
+        SelectionItem::FeatureCorner(owner) => owner.feature == feature,
+        SelectionItem::Point(_)
+        | SelectionItem::Curve(_)
+        | SelectionItem::Constraint(_)
+        | SelectionItem::Dimension(_) => false,
+    }
 }
 
 fn point_segment_projection(
@@ -4346,6 +4460,66 @@ mod tests {
                 item: SelectionItem::Point(points[0]),
                 distance_pixels: 7.5,
                 curve_parameter: None,
+            })
+        );
+    }
+
+    #[test]
+    fn native_authoring_candidates_preserve_point_priority_without_hiding_the_curve() {
+        let (document, spans, points) = line_document();
+        let scene = scene(&document);
+        let endpoint = scene.viewport.model_to_screen([-4.0, 1.0]);
+        let candidates = scene
+            .native_authoring_hit_candidates(endpoint, PickTolerance::default(), 2)
+            .expect("bounded candidates");
+
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(candidates[0].item, SelectionItem::Point(points[0]));
+        assert_eq!(candidates[1].item, SelectionItem::Curve(spans[0]));
+        assert_eq!(candidates[1].curve_parameter, Some(0.0));
+        assert_eq!(
+            scene.native_authoring_hit_test(endpoint, PickTolerance::default()),
+            candidates.first().copied()
+        );
+        assert!(
+            scene
+                .native_authoring_hit_candidates(
+                    ScreenPoint {
+                        x: f64::NAN,
+                        y: 0.0,
+                    },
+                    PickTolerance::default(),
+                    2,
+                )
+                .expect("invalid positions produce no candidates")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn native_authoring_candidate_collection_is_bounded_before_sorting() {
+        let (document, _spans, _points) = line_document();
+        let mut scene = scene(&document);
+        let endpoint = scene.viewport.model_to_screen([-4.0, 1.0]);
+        scene.curves.push(scene.curves[0].clone());
+
+        let exact = scene
+            .native_authoring_hit_candidates(endpoint, PickTolerance::default(), 2)
+            .expect("a repeated fragment counts as one persistent curve");
+        assert_eq!(exact.len(), 2);
+        assert!(matches!(exact[0].item, SelectionItem::Point(_)));
+        assert!(matches!(exact[1].item, SelectionItem::Curve(_)));
+
+        assert_eq!(
+            scene.native_authoring_hit_candidates(endpoint, PickTolerance::default(), 1),
+            Err(NativeAuthoringHitError::CandidateLimitExceeded {
+                maximum_candidates: 1,
+            })
+        );
+        assert_eq!(
+            scene.native_authoring_hit_candidates(endpoint, PickTolerance::default(), 0),
+            Err(NativeAuthoringHitError::CandidateLimitExceeded {
+                maximum_candidates: 0,
             })
         );
     }
