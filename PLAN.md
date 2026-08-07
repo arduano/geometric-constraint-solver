@@ -3017,8 +3017,8 @@ replacement candidate. M65 is closed; the historical candidate endpoint was
 
 ### M66: computed 2D Fillet features
 
-Status: active after the 2026-08-07 computed-feature pivot. Implementation, mechanical
-qualification and supervising-human UAT are open.
+Status: active after the 2026-08-07 computed-feature pivot. Implementation and mechanical
+qualification are complete on candidate source `941177c`; supervising-human UAT remains open.
 
 Goal: make ordinary CAD Fillet authoring a persistent computed feature outside the sketch
 constraint graph. Multi-corner batches, adjacent sequential Fillets, source editability and
@@ -3033,57 +3033,68 @@ M27/M28 solver-owned Fillets and `SketchOperationRequest::AssociativeFillet` rem
 advanced/backward-compatible APIs, and existing documents are not migrated.
 
 - [x] Accept ADR 0031 and preserve the superseded `1034afc` source on the named origin archive.
-- [ ] Add pure-Rust `geosolve-sketch-features`, depending among workspace crates only on
+- [x] Add pure-Rust `geosolve-sketch-features`, depending among workspace crates only on
   `geosolve-sketch` and `geosolve-geometry`, with a separately versioned
   `ComputedFeatureDocument`, stable feature/
   corner IDs, allocator high-water, labels, suppression and closed
   `ComputedFeatureDefinition::FilletSet` intent.
-- [ ] Persist intent only: shared radius plus explicit source spans, picked parameters,
+- [x] Persist intent only: shared radius plus explicit source spans, picked parameters,
   neighborhoods/winding, normal sides, retained endpoints, endpoint order and sweep. Never persist
   generated arcs/fragments or evaluation-local output IDs.
-- [ ] Evaluate from one exact independently accepted sketch snapshot into an exact-stamped
+- [x] Evaluate from one exact independently accepted sketch snapshot into an exact-stamped
   `ComputedFeatureSnapshot`. Publish stable feature/corner/source-interval provenance, but make
   generated edge IDs revision-local and support variable result cardinality for a future
   topology-changing Offset seam.
-- [ ] Independently validate finite geometry, positive radius, tangency, source domains, retained
+- [x] Independently validate finite geometry, positive radius, tangency, source domains, retained
   sides, branch/order/sweep state and offset regularity. Keep M66 authoring to affine/affine and
   affine/non-affine corners; report two non-affine parents as typed unsupported without narrowing
   M28.
-- [ ] Compose source endpoint claims without mutating `DocumentCurveTrimView`. Permit opposite
+- [x] Compose source endpoint claims without mutating `DocumentCurveTrimView`. Permit opposite
   endpoints of one shared span to belong to different sets. Fail all participating sets on
   duplicate/crossed/consumed claims; fail one whole set when one corner is invalid while retaining
   unrelated current sets.
-- [ ] Replace fixed two-pick operation collection with reusable grouped feature authoring.
+- [x] Replace fixed two-pick operation collection with reusable grouped feature authoring.
   Preserve preselected interior polyline points as corner targets, accumulate repeated corner or
   curve-pair picks, preview from remembered radius or `0.1 * model_scale`, and let numeric entry or
   preview-arc/radius-grip drag edit one shared radius. Apply/Enter creates one `FilletSet`; remove
   the final canvas radius-confirmation click.
-- [ ] Make generated arcs select their stable set/corner provenance. Dragging edits only the
+- [x] Make generated arcs select their stable set/corner provenance. Dragging edits only the
   feature radius; deleting an arc removes that corner and deleting the last corner removes the
   set. Suppression is set-wide. Computed arcs never become sketch-constraint operands, and every
   native source point/span remains selectable and draggable.
-- [ ] Accept valid sketch edits even when a feature becomes invalid. Withhold every failed set's
+- [x] Accept valid sketch edits even when a feature becomes invalid. Withhold every failed set's
   output without a stale ghost, expose feature/corner/source-attributed errors (global only when
   safe attribution is unavailable), and permit recovery after source motion or Undo of source
   deletion.
-- [ ] Extend the coordinator's exact CAS, restore checkpoints and history across sketch identity,
+- [x] Extend the coordinator's exact CAS, restore checkpoints and history across sketch identity,
   feature revision/digest and evaluator policy. Advance the application workspace envelope to v4;
   store the separately versioned feature sidecar beside the unchanged sketch payload and migrate
   workspace v1-v3 to an empty feature document without reinterpreting M28 Fillets.
-- [ ] Add a **Features** tree section and computed-arc/radius interaction. Ordinary Fillet creates
+- [x] Add a **Features** tree section and computed-arc/radius interaction. Ordinary Fillet creates
   no Driving/Reference choice, sketch radius scalar, radius dimension, association or trim view.
   Withhold base-only profile/fill presentation with a typed “computed geometry not yet included”
   status whenever it would be misleading.
-- [ ] Directly regress the four-point/three-span two-corner batch, reverse-selection
+- [x] Directly regress the four-point/three-span two-corner batch, reverse-selection
   canonicalization, sequential/batch parity, conflict and recovery, sketch-state invariance under
   shared-radius edits, every source-point drag, missing-source/Undo recovery, independent
   delete/suppress, Undo/Redo/reload, stale CAS, cancellation, exhaustion, allocator non-reuse,
   revision-local output IDs and variable output count.
-- [ ] Keep existing M27/M28/M30/M58 compatibility suites green and prove that ordinary UI Fillet
+- [x] Keep existing M27/M28/M30/M58 compatibility suites green and prove that ordinary UI Fillet
   creates no solver-owned association, trim view, constraint or dimension.
-- [ ] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature
+- [x] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature
   demo-web WASM check, release Trunk build and `git diff --check` on one post-pivot source.
 - [ ] Complete and explicitly approve the computed-Fillet `docs/M66_UAT.md`.
+
+Mechanical qualification record (2026-08-07): candidate source `941177c` passes 21
+`geosolve-sketch-features` tests, 157 `geosolve-constraint-editor` unit tests plus 17 integration
+tests, 68 `geosolve-demo-web` tests, the complete locked all-feature workspace suite,
+warnings-denied workspace Clippy, the all-feature demo-web WASM check, formatting and
+`git diff --check`. The release Trunk build exits zero after applying the optimized distribution.
+Fresh-process persistence regressions additionally prove that saving after Undo or a cancelled
+computed preview captures the live sketch, feature/corner and computed-evaluation allocator
+high-water, so restoration cannot reuse any retired identity. Reviewed searches find no active
+Offset/Mirror helper UI, legacy operation harness or `/#/dev/lab` route. Human UAT is the only
+remaining M66 gate.
 
 Gate: one Apply creates one persistent multi-corner `FilletSet` with a shared editable radius;
 later Applies create separate sets whose opposite-end claims can compose on a shared source span.

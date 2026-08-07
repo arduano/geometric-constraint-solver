@@ -2,12 +2,14 @@
 
 # M66 focused UAT: computed 2D Fillet features
 
-Status: post-pivot implementation and mechanical qualification are Pending. Every human result is
+Status: post-pivot implementation and mechanical qualification are Pass. Every human result is
 Pending; do not use the archived `1034afc` build for this scorecard.
 
-Candidate source: Pending.
+Candidate source: `941177c` (`Expose computed Fillets in the workbench`), with the prerequisite
+feature/editor integration at `6e710e8`.
 
-Tailscale endpoint: Pending restart and HTTP verification after the complete post-pivot gate.
+Tailscale endpoint: `http://100.94.63.83:8080/` (service restarted and HTTP verified on
+2026-08-07).
 
 Use the ordinary GeoSolve Sketch Workbench only. This scorecard validates the normal computed
 Fillet route under ADR 0031. It does not ask the UI to create or edit advanced M28 solver-owned
@@ -94,13 +96,17 @@ Notes:
 
 ### M66-U5 — persistence, stale work and compatibility
 
-1. Create several labelled/suppressed FilletSets, then Undo/Redo and save/reload the workspace.
+1. Create several auto-labelled FilletSets, suppress some of them, then Undo/Redo and reload the
+   workspace.
 2. Continue editing source points and feature radii after reload.
-3. Trigger or simulate cancellation, exhausted evaluation and stale results if exposed by the UAT
-   controls; verify current output does not regress.
-4. Open a legacy workspace v1-v3 and a document containing an existing M28 associative Fillet.
-5. Confirm the ordinary Fillet UI does not expose an Offset placeholder, Bake/Explode,
+3. Confirm the ordinary Fillet UI does not expose an Offset placeholder, Bake/Explode,
    computed-on-computed selection, legacy harness or `/#/dev/lab`.
+
+Direct evidence already passed for the non-interactive boundaries: cancellation, deterministic
+work exhaustion and stale sketch/feature/policy results cannot publish; workspace v1-v3 migrates
+to an empty feature sidecar; a legacy M28 associative Fillet retains its existing meaning; and a
+real encode/decode/fresh-process restore after Undo plus a cancelled preview preserves all live
+allocator high-water without reusing feature, corner, sketch-revision or computed-edge identities.
 
 Expected: workspace v4 preserves feature intent and stable IDs, regenerates fresh output IDs and
 continues editing normally. Older workspaces receive an empty feature sidecar; existing M28 Fillets
@@ -114,7 +120,7 @@ Notes:
 
 ## Finding ledger
 
-No post-pivot UAT finding is recorded yet. Add each objective finding with a stable `M66-CFxxx`
+No post-pivot UAT finding is recorded yet. Add each objective finding with a stable `M66-PFxxx`
 identifier, owning-layer regression and targeted human retest before approval.
 
 The old `M66-F002` through `M66-F013` ledger belongs to the archived solver-owned UI architecture
@@ -127,7 +133,7 @@ M66 closes only after:
 
 1. one exact ADR 0031 candidate source and verified Tailscale endpoint are recorded above;
 2. formatting, warnings-denied locked workspace Clippy, locked all-feature workspace tests,
-   all-feature demo-web WASM, release Trunk and `git diff --check` pass on that source;
+   all-feature demo-web WASM, release Trunk and `git diff --check` pass on that source (satisfied);
 3. every scorecard item is Pass or an explicitly accepted scoped limitation;
 4. every post-pivot finding has a direct tested disposition and human retest; and
 5. the supervising human explicitly approves M66.

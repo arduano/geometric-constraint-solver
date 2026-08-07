@@ -33,7 +33,8 @@ construction/NURBS UAT and certified all-family visual profiles.
   adapter. The qualified but unapproved solver-owned UI source is preserved at
   `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`). M27/M28 and M58 associative-
   Fillet APIs remain advanced/backward-compatible behavior with no automatic migration. M66 adds
-  no Offset implementation or profile consumption.
+  no Offset implementation or profile consumption. Implementation and mechanical qualification
+  pass on candidate source `941177c`; focused supervising-human UAT remains open.
 - **Planned sequence:** no milestone is assigned after M66. Every newly scoped milestone ends in
   its own human UAT.
 

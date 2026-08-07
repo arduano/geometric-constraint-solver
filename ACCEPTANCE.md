@@ -991,8 +991,8 @@ in `docs/M65_UAT.md`; M65 is complete.
 
 ## M66 acceptance: computed 2D Fillet features
 
-Status: active after the 2026-08-07 computed-feature pivot. No post-pivot implementation,
-mechanical qualification or human UAT is yet accepted.
+Status: active after the 2026-08-07 computed-feature pivot. Post-pivot implementation and
+mechanical qualification pass on candidate source `941177c`; supervising-human UAT remains open.
 
 The superseded solver-owned ordinary-UI build is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`). ADR 0031 replaces only the
