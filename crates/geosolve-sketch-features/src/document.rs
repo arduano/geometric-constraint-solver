@@ -668,17 +668,24 @@ impl ComputedFeatureDocument {
         radius: f64,
     ) -> Result<(), ComputedFeatureDocumentError> {
         validate_radius(radius)?;
+        let current = self
+            .features
+            .iter()
+            .find(|value| value.id == feature)
+            .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
+        let ComputedFeatureDefinition::FilletSet(fillet) = &current.definition;
+        if fillet.radius.to_bits() == radius.to_bits() {
+            return Ok(());
+        }
+        let next_revision = next_revision(self.revision)?;
         let value = self
             .features
             .iter_mut()
             .find(|value| value.id == feature)
             .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
         let ComputedFeatureDefinition::FilletSet(fillet) = &mut value.definition;
-        if fillet.radius.to_bits() == radius.to_bits() {
-            return Ok(());
-        }
         fillet.radius = radius;
-        self.revision = next_revision(self.revision)?;
+        self.revision = next_revision;
         Ok(())
     }
 
@@ -691,13 +698,13 @@ impl ComputedFeatureDocument {
     ) -> Result<(), ComputedFeatureDocumentError> {
         let replacement = replacement.canonicalized();
         validate_new_corner(replacement)?;
-        let value = self
+        let current_feature = self
             .features
-            .iter_mut()
+            .iter()
             .find(|value| value.id == feature)
             .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
-        let ComputedFeatureDefinition::FilletSet(fillet) = &mut value.definition;
-        if fillet.corners.iter().any(|value| {
+        let ComputedFeatureDefinition::FilletSet(current_fillet) = &current_feature.definition;
+        if current_fillet.corners.iter().any(|value| {
             value.id != corner
                 && corner_source_pair(value.without_id()) == corner_source_pair(replacement)
         }) {
@@ -706,14 +713,26 @@ impl ComputedFeatureDocument {
                 "a Fillet set cannot contain duplicate canonical source pairs",
             ));
         }
+        let current = current_fillet
+            .corners
+            .iter()
+            .find(|value| value.id == corner)
+            .ok_or(ComputedFeatureDocumentError::UnknownCorner(corner))?;
+        if current.without_id() == replacement {
+            return Ok(());
+        }
+        let next_revision = next_revision(self.revision)?;
+        let value = self
+            .features
+            .iter_mut()
+            .find(|value| value.id == feature)
+            .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
+        let ComputedFeatureDefinition::FilletSet(fillet) = &mut value.definition;
         let value = fillet
             .corners
             .iter_mut()
             .find(|value| value.id == corner)
             .ok_or(ComputedFeatureDocumentError::UnknownCorner(corner))?;
-        if value.without_id() == replacement {
-            return Ok(());
-        }
         *value = ComputedFilletCorner {
             id: corner,
             first: replacement.first,
@@ -721,7 +740,7 @@ impl ComputedFeatureDocument {
             endpoint_order: replacement.endpoint_order,
             sweep: replacement.sweep,
         };
-        self.revision = next_revision(self.revision)?;
+        self.revision = next_revision;
         Ok(())
     }
 
@@ -731,16 +750,22 @@ impl ComputedFeatureDocument {
         feature: ComputedFeatureId,
         suppressed: bool,
     ) -> Result<(), ComputedFeatureDocumentError> {
+        let current = self
+            .features
+            .iter()
+            .find(|value| value.id == feature)
+            .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
+        if current.suppressed == suppressed {
+            return Ok(());
+        }
+        let next_revision = next_revision(self.revision)?;
         let value = self
             .features
             .iter_mut()
             .find(|value| value.id == feature)
             .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
-        if value.suppressed == suppressed {
-            return Ok(());
-        }
         value.suppressed = suppressed;
-        self.revision = next_revision(self.revision)?;
+        self.revision = next_revision;
         Ok(())
     }
 
@@ -752,16 +777,22 @@ impl ComputedFeatureDocument {
     ) -> Result<(), ComputedFeatureDocumentError> {
         let label = label.into();
         validate_label(&label)?;
+        let current = self
+            .features
+            .iter()
+            .find(|value| value.id == feature)
+            .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
+        if current.label == label {
+            return Ok(());
+        }
+        let next_revision = next_revision(self.revision)?;
         let value = self
             .features
             .iter_mut()
             .find(|value| value.id == feature)
             .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
-        if value.label == label {
-            return Ok(());
-        }
         value.label = label;
-        self.revision = next_revision(self.revision)?;
+        self.revision = next_revision;
         Ok(())
     }
 
@@ -776,17 +807,19 @@ impl ComputedFeatureDocument {
             .iter()
             .position(|value| value.id == feature)
             .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
-        let ComputedFeatureDefinition::FilletSet(fillet) = &mut self.features[index].definition;
-        let before = fillet.corners.len();
-        fillet.corners.retain(|value| value.id != corner);
-        if fillet.corners.len() == before {
+        let ComputedFeatureDefinition::FilletSet(fillet) = &self.features[index].definition;
+        if !fillet.corners.iter().any(|value| value.id == corner) {
             return Err(ComputedFeatureDocumentError::UnknownCorner(corner));
         }
-        let removed_feature = fillet.corners.is_empty();
+        let removed_feature = fillet.corners.len() == 1;
+        let next_revision = next_revision(self.revision)?;
         if removed_feature {
             self.features.remove(index);
+        } else {
+            let ComputedFeatureDefinition::FilletSet(fillet) = &mut self.features[index].definition;
+            fillet.corners.retain(|value| value.id != corner);
         }
-        self.revision = next_revision(self.revision)?;
+        self.revision = next_revision;
         Ok(removed_feature)
     }
 
@@ -795,12 +828,14 @@ impl ComputedFeatureDocument {
         &mut self,
         feature: ComputedFeatureId,
     ) -> Result<(), ComputedFeatureDocumentError> {
-        let before = self.features.len();
-        self.features.retain(|value| value.id != feature);
-        if self.features.len() == before {
-            return Err(ComputedFeatureDocumentError::UnknownFeature(feature));
-        }
-        self.revision = next_revision(self.revision)?;
+        let index = self
+            .features
+            .iter()
+            .position(|value| value.id == feature)
+            .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
+        let next_revision = next_revision(self.revision)?;
+        self.features.remove(index);
+        self.revision = next_revision;
         Ok(())
     }
 
@@ -823,9 +858,10 @@ impl ComputedFeatureDocument {
         if next_feature == self.next_feature_id && next_corner == self.next_corner_id {
             return Ok(());
         }
+        let next_revision = next_revision(self.revision)?;
         self.next_feature_id = next_feature;
         self.next_corner_id = next_corner;
-        self.revision = next_revision(self.revision)?;
+        self.revision = next_revision;
         Ok(())
     }
 
@@ -842,15 +878,18 @@ impl ComputedFeatureDocument {
                 "allocator cursors must be nonzero",
             ));
         }
-        self.next_feature_id = self.next_feature_id.max(retained.allocator.next_feature_id);
-        self.next_corner_id = self.next_corner_id.max(retained.allocator.next_corner_id);
-        self.revision = ComputedFeatureRevision(
+        let next_feature_id = self.next_feature_id.max(retained.allocator.next_feature_id);
+        let next_corner_id = self.next_corner_id.max(retained.allocator.next_corner_id);
+        let revision = ComputedFeatureRevision(
             self.revision
                 .0
                 .max(retained.revision.0)
                 .checked_add(1)
                 .ok_or(ComputedFeatureDocumentError::RevisionExhausted)?,
         );
+        self.next_feature_id = next_feature_id;
+        self.next_corner_id = next_corner_id;
+        self.revision = revision;
         Ok(())
     }
 
@@ -986,6 +1025,11 @@ impl ComputedFeatureDocument {
         })
         .expect("computed-feature payload contains only infallibly serializable values")
     }
+
+    #[cfg(test)]
+    pub(crate) fn set_revision_for_test(&mut self, revision: ComputedFeatureRevision) {
+        self.revision = revision;
+    }
 }
 
 fn validate_new_corner(
@@ -1048,13 +1092,19 @@ fn validate_parent(parent: ComputedFilletParent) -> Result<(), ComputedFeatureDo
         return Err(invalid_field("picked_parameter", "must be finite"));
     }
     match parent.neighborhood {
-        ContactNeighborhood::Interior | ContactNeighborhood::Start | ContactNeighborhood::End => {}
+        ContactNeighborhood::Interior => {}
         ContactNeighborhood::Local { lower, upper }
             if lower.is_finite() && upper.is_finite() && lower < upper => {}
         ContactNeighborhood::Local { .. } => {
             return Err(invalid_field(
                 "neighborhood",
                 "local bounds must be finite and increasing",
+            ));
+        }
+        ContactNeighborhood::Start | ContactNeighborhood::End => {
+            return Err(invalid_field(
+                "neighborhood",
+                "Fillet parents cannot select support endpoints",
             ));
         }
     }

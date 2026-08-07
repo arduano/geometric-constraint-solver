@@ -14,14 +14,15 @@ use thiserror::Error;
 
 use crate::document::{
     ComputedFeature, ComputedFeatureCornerId, ComputedFeatureDefinition, ComputedFeatureDocument,
-    ComputedFeatureDocumentIdentity, ComputedFeatureId, ComputedFilletCorner, ComputedFilletParent,
-    NativeCurveSpanSource, NewComputedFilletCorner,
+    ComputedFeatureDocumentError, ComputedFeatureDocumentIdentity, ComputedFeatureId,
+    ComputedFilletCorner, ComputedFilletParent, NativeCurveSpanSource, NewComputedFilletCorner,
 };
 
 const PARAMETER_EPSILON_FACTOR: f64 = 1.0e-10;
 const GEOMETRY_TOLERANCE_FACTOR: f64 = 1.0e-8;
 const ROOT_DEDUPLICATION_FACTOR: f64 = 1.0e-7;
 const OFFSET_SINGULARITY_TOLERANCE: f64 = 1.0e-8;
+const PARENT_SINGULARITY_TOLERANCE: f64 = 1.0e-8;
 const TANGENCY_TOLERANCE: f64 = 2.0e-7;
 
 /// Bounded deterministic computed-feature evaluation policy.
@@ -121,6 +122,9 @@ impl ComputedFeatureEvaluationSnapshot {
         if features.sketch_document() != session.design_document().id() {
             return Err(ComputedFeatureSnapshotError::FeatureDocumentForDifferentSketch);
         }
+        features
+            .validate()
+            .map_err(ComputedFeatureSnapshotError::InvalidFeatureDocument)?;
         let sketch = session.prepared_input();
         if sketch.accepted_state_identity() != Some(accepted.identity())
             || accepted.input() != sketch.attempt_input()
@@ -231,18 +235,17 @@ impl ComputedFeatureAuthoringSnapshot {
         {
             return Ok(controller.outcome_unchecked());
         }
-        let resolved =
-            resolve_authoring_corner(&self.sketch, request, radius, policy, &mut controller);
-        if controller.is_stopped() {
-            return Ok(controller.outcome_unchecked());
+        match resolve_authoring_corner(&self.sketch, request, radius, policy, &mut controller)? {
+            AuthoringCornerResolution::Stopped => Ok(controller.outcome_unchecked()),
+            AuthoringCornerResolution::Completed(resolved) => {
+                Ok(controller.outcome(ResolvedComputedFilletCorner {
+                    sketch_input: self.sketch_input,
+                    accepted: self.accepted,
+                    corner: resolved.corner,
+                    arc: resolved.arc,
+                }))
+            }
         }
-        let (corner, arc) = resolved?;
-        Ok(controller.outcome(ResolvedComputedFilletCorner {
-            sketch_input: self.sketch_input,
-            accepted: self.accepted,
-            corner,
-            arc,
-        }))
     }
 }
 
@@ -321,7 +324,7 @@ impl PreparedComputedFeatureEvaluation {
 }
 
 /// Typed inability to capture coherent current accepted geometry.
-#[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
+#[derive(Debug, Error)]
 pub enum ComputedFeatureSnapshotError {
     #[error("computed features require the current independently accepted sketch state")]
     CurrentAcceptedStateRequired,
@@ -329,6 +332,8 @@ pub enum ComputedFeatureSnapshotError {
     FeatureDocumentForDifferentSketch,
     #[error("accepted sketch state does not match the complete prepared input")]
     AcceptedInputMismatch,
+    #[error("computed-feature sidecar is structurally invalid: {0}")]
+    InvalidFeatureDocument(#[source] ComputedFeatureDocumentError),
 }
 
 /// Evaluation setup failure. Individual feature geometry failures are result data.
@@ -348,6 +353,8 @@ pub enum ComputedFeatureEvaluationError {
     },
     #[error("computed-feature evaluation identity space is exhausted")]
     EvaluationIdentityExhausted,
+    #[error("computed-feature evaluator refused invalid generated {resource}")]
+    InvalidGeneratedTopology { resource: &'static str },
 }
 
 /// One accepted native curve pick at the authoring boundary.
@@ -609,6 +616,8 @@ pub enum ComputedFeatureFailure {
     AmbiguousLocalRoot { corner: ComputedFeatureCornerId },
     #[error("corner {corner:?} cannot certify its line/curve branch cell")]
     UncertifiedBranch { corner: ComputedFeatureCornerId },
+    #[error("corner {corner:?} has parallel or near-singular parents")]
+    SingularParents { corner: ComputedFeatureCornerId },
     #[error("corner {corner:?} reaches a singular parent offset")]
     OffsetSingularity { corner: ComputedFeatureCornerId },
     #[error("corner {corner:?} produced non-finite or invalid geometry")]
@@ -742,6 +751,47 @@ struct LocalFilletSolution {
     score: f64,
 }
 
+enum AuthoringCornerResolution {
+    Completed(Box<ResolvedAuthoringCorner>),
+    Stopped,
+}
+
+struct ResolvedAuthoringCorner {
+    corner: NewComputedFilletCorner,
+    arc: ComputedCircularArc,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RootSearchFailure {
+    NoLocalRoot,
+    SingularParents,
+    OffsetSingularity,
+}
+
+impl RootSearchFailure {
+    const fn merge(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::OffsetSingularity, _) | (_, Self::OffsetSingularity) => Self::OffsetSingularity,
+            (Self::SingularParents, _) | (_, Self::SingularParents) => Self::SingularParents,
+            (Self::NoLocalRoot, Self::NoLocalRoot) => Self::NoLocalRoot,
+        }
+    }
+}
+
+enum RootSearchResult {
+    Completed {
+        solutions: Vec<LocalFilletSolution>,
+        failure: RootSearchFailure,
+    },
+    Stopped,
+}
+
+enum RootAttempt {
+    Solution(LocalFilletSolution),
+    Failed(RootSearchFailure),
+    Stopped,
+}
+
 #[derive(Clone, Debug)]
 struct EvaluatedCorner {
     owner: ComputedCornerRef,
@@ -806,7 +856,7 @@ fn evaluate_snapshot(
         }
     }
 
-    let conflicts = composition_failures(&candidates, snapshot.sketch.model_scale());
+    let conflicts = composition_failures(&candidates);
     let failed_features = conflicts.keys().copied().collect::<BTreeSet<_>>();
     for (feature, failure) in conflicts {
         evaluations.push(ComputedFeatureEvaluation {
@@ -845,6 +895,11 @@ fn evaluate_snapshot(
                 .end
                 .map_or(composition.base_interval.end, |claim| claim.parameter),
         };
+        if !strict_finite_interval(interval) {
+            return Err(ComputedFeatureEvaluationError::InvalidGeneratedTopology {
+                resource: "source interval",
+            });
+        }
         let id = edge_id(evaluation, edges.len())?;
         edges.push(ComputedEdge {
             id,
@@ -976,18 +1031,30 @@ fn evaluate_persistent_corner(
     }
     let root_parents = certify_persistent_branch(sketch, root_parents, affine, corner.id)
         .map_err(EvaluateFeatureError::Failure)?;
-    let solutions = local_fillet_roots(
+    let (solutions, root_failure) = match local_fillet_roots(
         sketch,
         &root_parents,
         [corner.first.normal_side, corner.second.normal_side],
         radius,
         policy,
         controller,
-    )
-    .ok_or(EvaluateFeatureError::Stopped)?;
+    ) {
+        RootSearchResult::Completed { solutions, failure } => (solutions, failure),
+        RootSearchResult::Stopped => return Err(EvaluateFeatureError::Stopped),
+    };
     let solution = select_solution(sketch, &solutions).map_err(|kind| {
         EvaluateFeatureError::Failure(match kind {
-            RootSelectionFailure::None => ComputedFeatureFailure::NoLocalRoot { corner: corner.id },
+            RootSelectionFailure::None => match root_failure {
+                RootSearchFailure::NoLocalRoot => {
+                    ComputedFeatureFailure::NoLocalRoot { corner: corner.id }
+                }
+                RootSearchFailure::SingularParents => {
+                    ComputedFeatureFailure::SingularParents { corner: corner.id }
+                }
+                RootSearchFailure::OffsetSingularity => {
+                    ComputedFeatureFailure::OffsetSingularity { corner: corner.id }
+                }
+            },
             RootSelectionFailure::Ambiguous => {
                 ComputedFeatureFailure::AmbiguousLocalRoot { corner: corner.id }
             }
@@ -1005,6 +1072,9 @@ fn evaluate_persistent_corner(
         EvaluateFeatureError::Failure(match failure {
             ArcValidationFailure::OffsetSingularity => {
                 ComputedFeatureFailure::OffsetSingularity { corner: corner.id }
+            }
+            ArcValidationFailure::SingularParents => {
+                ComputedFeatureFailure::SingularParents { corner: corner.id }
             }
             ArcValidationFailure::Invalid => {
                 ComputedFeatureFailure::InvalidGeometry { corner: corner.id }
@@ -1032,7 +1102,6 @@ fn evaluate_persistent_corner(
 
 fn composition_failures(
     candidates: &[EvaluatedFeatureCandidate],
-    model_scale: f64,
 ) -> BTreeMap<ComputedFeatureId, ComputedFeatureFailure> {
     let mut claims = BTreeMap::<NativeCurveSpanSource, Vec<EndpointClaim>>::new();
     for corner in candidates
@@ -1046,6 +1115,21 @@ fn composition_failures(
     let mut failures = BTreeMap::new();
     for (source, mut source_claims) in claims {
         source_claims.sort_by_key(|claim| claim.owner);
+        source_claims.retain(|claim| {
+            let valid = strict_finite_interval(claim.base_interval)
+                && parameter_strictly_inside(claim.parameter, claim.base_interval);
+            if !valid {
+                failures.entry(claim.owner.feature).or_insert(
+                    ComputedFeatureFailure::InvalidParentState {
+                        corner: claim.owner.corner,
+                    },
+                );
+            }
+            valid
+        });
+        if source_claims.is_empty() {
+            continue;
+        }
         let starts = source_claims
             .iter()
             .copied()
@@ -1079,11 +1163,10 @@ fn composition_failures(
             );
         }
         if let ([start], [end]) = (starts.as_slice(), ends.as_slice()) {
-            let width = start.base_interval.end.max(end.base_interval.end)
-                - start.base_interval.start.min(end.base_interval.start);
-            let tolerance = (width.abs() * PARAMETER_EPSILON_FACTOR)
-                .max(model_scale.abs() * f64::EPSILON)
-                .max(1.0e-12);
+            let tolerance = parameter_tolerance(ComputedSourceInterval {
+                start: start.base_interval.start.min(end.base_interval.start),
+                end: start.base_interval.end.max(end.base_interval.end),
+            });
             if start.parameter + tolerance >= end.parameter {
                 let participants = vec![start.owner, end.owner];
                 insert_conflict_failures(
@@ -1209,7 +1292,7 @@ fn resolve_authoring_corner(
     radius: f64,
     policy: ComputedFeatureEvaluationPolicy,
     controller: &mut OperationController,
-) -> Result<(NewComputedFilletCorner, ComputedCircularArc), ComputedFeatureAuthoringError> {
+) -> Result<AuthoringCornerResolution, ComputedFeatureAuthoringError> {
     validate_authoring_pick(sketch, request.first)?;
     validate_authoring_pick(sketch, request.second)?;
     if request.first.source == request.second.source {
@@ -1237,6 +1320,7 @@ fn resolve_authoring_corner(
     ];
     let picks = [request.first, request.second];
     let mut solutions = Vec::new();
+    let mut root_failure = RootSearchFailure::NoLocalRoot;
     for first_side in [
         DocumentCurveNormalSide::Left,
         DocumentCurveNormalSide::Right,
@@ -1252,17 +1336,23 @@ fn resolve_authoring_corner(
                 [first_side, second_side],
                 affine,
             )?;
-            let Some(mut roots) = local_fillet_roots(
+            match local_fillet_roots(
                 sketch,
                 &parents,
                 [first_side, second_side],
                 radius,
                 policy,
                 controller,
-            ) else {
-                return Err(ComputedFeatureAuthoringError::NoLocalRoot);
-            };
-            solutions.append(&mut roots);
+            ) {
+                RootSearchResult::Completed {
+                    solutions: mut roots,
+                    failure,
+                } => {
+                    root_failure = root_failure.merge(failure);
+                    solutions.append(&mut roots);
+                }
+                RootSearchResult::Stopped => return Ok(AuthoringCornerResolution::Stopped),
+            }
         }
     }
     solutions.sort_by(|left, right| {
@@ -1271,7 +1361,13 @@ fn resolve_authoring_corner(
             .then_with(|| side_rank(left.sides).cmp(&side_rank(right.sides)))
     });
     let mut solution = select_solution(sketch, &solutions).map_err(|failure| match failure {
-        RootSelectionFailure::None => ComputedFeatureAuthoringError::NoLocalRoot,
+        RootSelectionFailure::None => match root_failure {
+            RootSearchFailure::NoLocalRoot => ComputedFeatureAuthoringError::NoLocalRoot,
+            RootSearchFailure::SingularParents => ComputedFeatureAuthoringError::SingularParents,
+            RootSearchFailure::OffsetSingularity => {
+                ComputedFeatureAuthoringError::OffsetSingularity
+            }
+        },
         RootSelectionFailure::Ambiguous => ComputedFeatureAuthoringError::AmbiguousLocalRoot,
     })?;
     if request.options.flip_first_side || request.options.flip_second_side {
@@ -1326,7 +1422,12 @@ fn resolve_authoring_corner(
         DocumentArcSweep::CounterClockwise,
     )
     .map_err(map_arc_authoring_failure)?;
-    Ok((corner.canonicalized(), arc))
+    Ok(AuthoringCornerResolution::Completed(Box::new(
+        ResolvedAuthoringCorner {
+            corner: corner.canonicalized(),
+            arc,
+        },
+    )))
 }
 
 fn validate_authoring_pick(
@@ -1353,7 +1454,9 @@ fn source_topology_for_authoring(
     source: NativeCurveSpanSource,
 ) -> Result<SourceTopology, ComputedFeatureAuthoringError> {
     source_topology(sketch, source).map_err(|failure| match failure {
-        SourceTopologyFailure::Missing => ComputedFeatureAuthoringError::StalePick,
+        SourceTopologyFailure::Missing | SourceTopologyFailure::InvalidDomain => {
+            ComputedFeatureAuthoringError::StalePick
+        }
         SourceTopologyFailure::AssociationOwned | SourceTopologyFailure::MultiInterval => {
             ComputedFeatureAuthoringError::UnsupportedSourceTopology
         }
@@ -1562,29 +1665,51 @@ fn prepare_root_parents(
                         span_source: parent.source,
                     }
                 }
+                SourceTopologyFailure::InvalidDomain => {
+                    ComputedFeatureFailure::InvalidParentState { corner }
+                }
             })?;
         let seed_total = total_parameter(topology.domain, parent.picked_parameter, parent.winding)
             .ok_or(ComputedFeatureFailure::InvalidParentState { corner })?;
-        if let SourceDomain::Periodic { period } = topology.domain {
-            let anchor = parent
-                .periodic_anchor
+        match topology.domain {
+            SourceDomain::Bounded { .. } => {
+                if parent.winding != 0
+                    || parent.periodic_anchor.is_some()
+                    || !parameter_strictly_inside(seed_total, topology.base_interval)
+                {
+                    return Err(ComputedFeatureFailure::InvalidParentState { corner });
+                }
+            }
+            SourceDomain::Periodic { period } => {
+                let visible_interval = topology.base_interval;
+                let anchor = parent
+                    .periodic_anchor
+                    .ok_or(ComputedFeatureFailure::InvalidParentState { corner })?;
+                let anchor_total =
+                    total_parameter(topology.domain, anchor.parameter, anchor.winding)
+                        .ok_or(ComputedFeatureFailure::InvalidParentState { corner })?;
+                let retained_interval = match parent.retained_endpoint {
+                    DocumentFilletTrimEndpoint::End => ComputedSourceInterval {
+                        start: anchor_total,
+                        end: anchor_total + period,
+                    },
+                    DocumentFilletTrimEndpoint::Start => ComputedSourceInterval {
+                        start: anchor_total - period,
+                        end: anchor_total,
+                    },
+                };
+                topology.base_interval = intersect_periodic_visible_interval(
+                    visible_interval,
+                    retained_interval,
+                    seed_total,
+                    period,
+                )
                 .ok_or(ComputedFeatureFailure::InvalidParentState { corner })?;
-            let anchor_total = total_parameter(topology.domain, anchor.parameter, anchor.winding)
-                .ok_or(ComputedFeatureFailure::InvalidParentState { corner })?;
-            topology.base_interval = match parent.retained_endpoint {
-                DocumentFilletTrimEndpoint::End => ComputedSourceInterval {
-                    start: anchor_total,
-                    end: anchor_total + period,
-                },
-                DocumentFilletTrimEndpoint::Start => ComputedSourceInterval {
-                    start: anchor_total - period,
-                    end: anchor_total,
-                },
-            };
-            if !(topology.base_interval.start < seed_total
-                && seed_total < topology.base_interval.end)
-            {
-                return Err(ComputedFeatureFailure::InvalidParentState { corner });
+                if !strict_finite_interval(topology.base_interval)
+                    || !parameter_strictly_inside(seed_total, topology.base_interval)
+                {
+                    return Err(ComputedFeatureFailure::InvalidParentState { corner });
+                }
             }
         }
         let bounds = persistent_parent_bounds(topology, parent, seed_total)
@@ -1663,6 +1788,7 @@ enum SourceTopologyFailure {
     Missing,
     AssociationOwned,
     MultiInterval,
+    InvalidDomain,
 }
 
 fn source_topology(
@@ -1696,12 +1822,16 @@ fn source_topology(
             ContactDomain::SupportingLine => None,
         })
         .ok_or(SourceTopologyFailure::Missing)?;
+    let base_interval = ComputedSourceInterval {
+        start: interval.start,
+        end: interval.end,
+    };
+    if !source_domain_and_interval_are_valid(domain, base_interval) {
+        return Err(SourceTopologyFailure::InvalidDomain);
+    }
     Ok(SourceTopology {
         domain,
-        base_interval: ComputedSourceInterval {
-            start: interval.start,
-            end: interval.end,
-        },
+        base_interval,
     })
 }
 
@@ -1734,6 +1864,8 @@ fn persistent_parent_bounds(
             if lower < seed_total
                 && seed_total < upper
                 && upper - lower <= period * (1.0 + 1.0e-10)
+                && topology.base_interval.start <= lower
+                && upper <= topology.base_interval.end
                 && parent.periodic_anchor.is_some() =>
         {
             interior_bounds(ComputedSourceInterval {
@@ -1746,11 +1878,10 @@ fn persistent_parent_bounds(
 }
 
 fn interior_bounds(interval: ComputedSourceInterval) -> Option<(f64, f64)> {
-    let width = interval.end - interval.start;
-    if !width.is_finite() || width <= 0.0 {
+    if !strict_finite_interval(interval) {
         return None;
     }
-    let epsilon = (width * PARAMETER_EPSILON_FACTOR).max(f64::EPSILON);
+    let epsilon = parameter_tolerance(interval);
     let lower = interval.start + epsilon;
     let upper = interval.end - epsilon;
     (lower < upper).then_some((lower, upper))
@@ -1761,15 +1892,110 @@ fn total_parameter(domain: SourceDomain, parameter: f64, winding: i32) -> Option
         return None;
     }
     let total = match domain {
-        SourceDomain::Bounded { .. } => {
-            if winding != 0 {
+        SourceDomain::Bounded { lower, upper } => {
+            if winding != 0 || parameter < lower || parameter > upper {
                 return None;
             }
             parameter
         }
-        SourceDomain::Periodic { period } => parameter + f64::from(winding) * period,
+        SourceDomain::Periodic { period }
+            if period.is_finite() && period > 0.0 && 0.0 <= parameter && parameter < period =>
+        {
+            parameter + f64::from(winding) * period
+        }
+        SourceDomain::Periodic { .. } => return None,
     };
     total.is_finite().then_some(total)
+}
+
+fn source_domain_and_interval_are_valid(
+    domain: SourceDomain,
+    interval: ComputedSourceInterval,
+) -> bool {
+    if !strict_finite_interval(interval) {
+        return false;
+    }
+    match domain {
+        SourceDomain::Bounded { lower, upper } => {
+            lower.is_finite()
+                && upper.is_finite()
+                && lower < upper
+                && lower <= interval.start
+                && interval.end <= upper
+        }
+        SourceDomain::Periodic { period } => {
+            period.is_finite()
+                && period > 0.0
+                && interval.end - interval.start
+                    <= period
+                        + parameter_tolerance(ComputedSourceInterval {
+                            start: 0.0,
+                            end: period,
+                        })
+        }
+    }
+}
+
+fn strict_finite_interval(interval: ComputedSourceInterval) -> bool {
+    interval.start.is_finite() && interval.end.is_finite() && interval.start < interval.end
+}
+
+fn parameter_strictly_inside(parameter: f64, interval: ComputedSourceInterval) -> bool {
+    parameter.is_finite()
+        && strict_finite_interval(interval)
+        && interval.start < parameter
+        && parameter < interval.end
+}
+
+fn parameter_tolerance(interval: ComputedSourceInterval) -> f64 {
+    let width = (interval.end - interval.start).abs();
+    let magnitude = interval.start.abs().max(interval.end.abs()).max(width);
+    (width * PARAMETER_EPSILON_FACTOR)
+        .max(magnitude * 32.0 * f64::EPSILON)
+        .max(f64::MIN_POSITIVE)
+}
+
+fn intersect_periodic_visible_interval(
+    visible: ComputedSourceInterval,
+    retained: ComputedSourceInterval,
+    seed_total: f64,
+    period: f64,
+) -> Option<ComputedSourceInterval> {
+    if !strict_finite_interval(visible)
+        || !strict_finite_interval(retained)
+        || !seed_total.is_finite()
+        || !period.is_finite()
+        || period <= 0.0
+    {
+        return None;
+    }
+    let full_period_tolerance = parameter_tolerance(ComputedSourceInterval {
+        start: 0.0,
+        end: period,
+    });
+    let visible_width = visible.end - visible.start;
+    let aligned_visible = if (visible_width - period).abs() <= full_period_tolerance {
+        retained
+    } else {
+        let midpoint = visible.start + 0.5 * visible_width;
+        let base_shift = ((seed_total - midpoint) / period).round();
+        [-1.0, 0.0, 1.0]
+            .into_iter()
+            .map(|offset| {
+                let shift = (base_shift + offset) * period;
+                ComputedSourceInterval {
+                    start: visible.start + shift,
+                    end: visible.end + shift,
+                }
+            })
+            .find(|candidate| parameter_strictly_inside(seed_total, *candidate))?
+    };
+    let intersection = ComputedSourceInterval {
+        start: aligned_visible.start.max(retained.start),
+        end: aligned_visible.end.min(retained.end),
+    };
+    (strict_finite_interval(intersection) && parameter_strictly_inside(seed_total, intersection))
+        .then_some(intersection)
 }
 
 fn normalize_parameter(domain: SourceDomain, total: f64) -> Option<(f64, i32)> {
@@ -1801,12 +2027,13 @@ fn local_fillet_roots(
     radius: f64,
     policy: ComputedFeatureEvaluationPolicy,
     controller: &mut OperationController,
-) -> Option<Vec<LocalFilletSolution>> {
+) -> RootSearchResult {
     let seeds = [
         parameter_seeds(&parents[0], policy.root_seed_grid),
         parameter_seeds(&parents[1], policy.root_seed_grid),
     ];
     let mut solutions = Vec::new();
+    let mut failure = RootSearchFailure::NoLocalRoot;
     for first in &seeds[0] {
         for second in &seeds[1] {
             if controller
@@ -1817,9 +2044,9 @@ fn local_fillet_roots(
                 )
                 .is_err()
             {
-                return None;
+                return RootSearchResult::Stopped;
             }
-            let Some(solution) = local_fillet_root_from_seed(
+            let solution = match local_fillet_root_from_seed(
                 sketch,
                 parents,
                 sides,
@@ -1827,11 +2054,13 @@ fn local_fillet_roots(
                 [*first, *second],
                 policy,
                 controller,
-            ) else {
-                if controller.is_stopped() {
-                    return None;
+            ) {
+                RootAttempt::Solution(solution) => solution,
+                RootAttempt::Failed(reason) => {
+                    failure = failure.merge(reason);
+                    continue;
                 }
-                continue;
+                RootAttempt::Stopped => return RootSearchResult::Stopped,
             };
             if solutions
                 .iter()
@@ -1841,7 +2070,7 @@ fn local_fillet_roots(
             }
         }
     }
-    Some(solutions)
+    RootSearchResult::Completed { solutions, failure }
 }
 
 fn parameter_seeds(parent: &RootParent, grid: usize) -> Vec<f64> {
@@ -1873,8 +2102,9 @@ fn local_fillet_root_from_seed(
     mut parameters: [f64; 2],
     policy: ComputedFeatureEvaluationPolicy,
     controller: &mut OperationController,
-) -> Option<LocalFilletSolution> {
+) -> RootAttempt {
     let tolerance = (sketch.model_scale() * GEOMETRY_TOLERANCE_FACTOR).max(1.0e-11);
+    let mut observed_failure = RootSearchFailure::NoLocalRoot;
     for _ in 0..policy.max_root_iterations {
         if controller
             .charge(
@@ -1884,28 +2114,47 @@ fn local_fillet_root_from_seed(
             )
             .is_err()
         {
-            return None;
+            return RootAttempt::Stopped;
         }
-        let first = offset_geometry(
+        let first = match offset_geometry(
             sketch,
             parents[0].parent.source.span,
             parameters[0],
             sides[0],
             radius,
-        )?;
-        let second = offset_geometry(
+        ) {
+            Ok(value) => value,
+            Err(OffsetGeometryFailure::OffsetSingularity) => {
+                return RootAttempt::Failed(RootSearchFailure::OffsetSingularity);
+            }
+            Err(OffsetGeometryFailure::Invalid) => {
+                return RootAttempt::Failed(RootSearchFailure::NoLocalRoot);
+            }
+        };
+        let second = match offset_geometry(
             sketch,
             parents[1].parent.source.span,
             parameters[1],
             sides[1],
             radius,
-        )?;
+        ) {
+            Ok(value) => value,
+            Err(OffsetGeometryFailure::OffsetSingularity) => {
+                return RootAttempt::Failed(RootSearchFailure::OffsetSingularity);
+            }
+            Err(OffsetGeometryFailure::Invalid) => {
+                return RootAttempt::Failed(RootSearchFailure::NoLocalRoot);
+            }
+        };
         let residual = [
             first.point[0] - second.point[0],
             first.point[1] - second.point[1],
         ];
         let norm = residual[0].hypot(residual[1]);
         if norm <= tolerance {
+            if !offset_derivatives_are_transverse(first.derivative, second.derivative) {
+                return RootAttempt::Failed(RootSearchFailure::SingularParents);
+            }
             let center = [
                 0.5 * (first.point[0] + second.point[0]),
                 0.5 * (first.point[1] + second.point[1]),
@@ -1918,7 +2167,7 @@ fn local_fillet_root_from_seed(
                         / (parent.bounds.1 - parent.bounds.0)
                 })
                 .sum();
-            return Some(LocalFilletSolution {
+            return RootAttempt::Solution(LocalFilletSolution {
                 parameters,
                 sides,
                 center,
@@ -1935,16 +2184,16 @@ fn local_fillet_root_from_seed(
         if !determinant.is_finite()
             || !scale.is_finite()
             || scale <= 0.0
-            || determinant.abs() <= 1.0e-10 * scale
+            || determinant.abs() <= PARENT_SINGULARITY_TOLERANCE * scale
         {
-            return None;
+            return RootAttempt::Failed(RootSearchFailure::SingularParents);
         }
         let step = [
             (-residual[0] * matrix[1][1] + matrix[0][1] * residual[1]) / determinant,
             (-matrix[0][0] * residual[1] + residual[0] * matrix[1][0]) / determinant,
         ];
         if !step.into_iter().all(f64::is_finite) {
-            return None;
+            return RootAttempt::Failed(RootSearchFailure::NoLocalRoot);
         }
         let mut factor = 1.0;
         let mut accepted = false;
@@ -1957,26 +2206,48 @@ fn local_fillet_root_from_seed(
                 )
                 .is_err()
             {
-                return None;
+                return RootAttempt::Stopped;
             }
             let candidate = [
                 (parameters[0] + factor * step[0]).clamp(parents[0].bounds.0, parents[0].bounds.1),
                 (parameters[1] + factor * step[1]).clamp(parents[1].bounds.0, parents[1].bounds.1),
             ];
-            let next_first = offset_geometry(
+            let next_first = match offset_geometry(
                 sketch,
                 parents[0].parent.source.span,
                 candidate[0],
                 sides[0],
                 radius,
-            )?;
-            let next_second = offset_geometry(
+            ) {
+                Ok(value) => value,
+                Err(OffsetGeometryFailure::OffsetSingularity) => {
+                    observed_failure = observed_failure.merge(RootSearchFailure::OffsetSingularity);
+                    factor *= 0.5;
+                    continue;
+                }
+                Err(OffsetGeometryFailure::Invalid) => {
+                    factor *= 0.5;
+                    continue;
+                }
+            };
+            let next_second = match offset_geometry(
                 sketch,
                 parents[1].parent.source.span,
                 candidate[1],
                 sides[1],
                 radius,
-            )?;
+            ) {
+                Ok(value) => value,
+                Err(OffsetGeometryFailure::OffsetSingularity) => {
+                    observed_failure = observed_failure.merge(RootSearchFailure::OffsetSingularity);
+                    factor *= 0.5;
+                    continue;
+                }
+                Err(OffsetGeometryFailure::Invalid) => {
+                    factor *= 0.5;
+                    continue;
+                }
+            };
             let next_norm = (next_first.point[0] - next_second.point[0])
                 .hypot(next_first.point[1] - next_second.point[1]);
             if next_norm < norm {
@@ -1987,10 +2258,10 @@ fn local_fillet_root_from_seed(
             factor *= 0.5;
         }
         if !accepted {
-            return None;
+            return RootAttempt::Failed(observed_failure);
         }
     }
-    None
+    RootAttempt::Failed(observed_failure)
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1999,19 +2270,29 @@ struct OffsetGeometry {
     derivative: [f64; 2],
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum OffsetGeometryFailure {
+    Invalid,
+    OffsetSingularity,
+}
+
 fn offset_geometry(
     sketch: &SketchDocument,
     span: CurveSpan,
     parameter: f64,
     side: DocumentCurveNormalSide,
     radius: f64,
-) -> Option<OffsetGeometry> {
-    let jet = sketch.evaluate_curve_jet(span, parameter).ok()?;
-    let differential = jet.differential().ok()?;
+) -> Result<OffsetGeometry, OffsetGeometryFailure> {
+    let jet = sketch
+        .evaluate_curve_jet(span, parameter)
+        .map_err(|_| OffsetGeometryFailure::Invalid)?;
+    let differential = jet
+        .differential()
+        .map_err(|_| OffsetGeometryFailure::Invalid)?;
     let sign = side_sign(side);
     let factor = 1.0 - sign * radius * differential.signed_curvature;
     if !factor.is_finite() || factor.abs() <= OFFSET_SINGULARITY_TOLERANCE {
-        return None;
+        return Err(OffsetGeometryFailure::OffsetSingularity);
     }
     let point = [
         jet.position.x + sign * radius * differential.left_normal.x,
@@ -2021,8 +2302,21 @@ fn offset_geometry(
         factor * jet.first_derivative.x,
         factor * jet.first_derivative.y,
     ];
-    (point.into_iter().chain(derivative).all(f64::is_finite))
+    point
+        .into_iter()
+        .chain(derivative)
+        .all(f64::is_finite)
         .then_some(OffsetGeometry { point, derivative })
+        .ok_or(OffsetGeometryFailure::Invalid)
+}
+
+fn offset_derivatives_are_transverse(first: [f64; 2], second: [f64; 2]) -> bool {
+    let determinant = first[0] * second[1] - first[1] * second[0];
+    let scale = first[0].hypot(first[1]) * second[0].hypot(second[1]);
+    determinant.is_finite()
+        && scale.is_finite()
+        && scale > 0.0
+        && determinant.abs() > PARENT_SINGULARITY_TOLERANCE * scale
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -2074,9 +2368,14 @@ fn solutions_materially_distinct(
 #[derive(Clone, Copy, Debug)]
 enum ArcValidationFailure {
     OffsetSingularity,
+    SingularParents,
     Invalid,
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "independent parent, contact, tangency and arc publication checks remain one fail-closed audit path"
+)]
 fn build_and_validate_arc(
     sketch: &SketchDocument,
     parents: [ComputedFilletParent; 2],
@@ -2088,8 +2387,40 @@ fn build_and_validate_arc(
     if !radius.is_finite() || radius <= 0.0 || !solution.center.into_iter().all(f64::is_finite) {
         return Err(ArcValidationFailure::Invalid);
     }
+    if solution.sides != parents.map(|parent| parent.normal_side) {
+        return Err(ArcValidationFailure::Invalid);
+    }
+    let affine = parents.map(|parent| is_affine_line_span(sketch, parent.source.span));
+    if affine == [false, false] {
+        return Err(ArcValidationFailure::Invalid);
+    }
+    let publication_parents = prepare_root_parents(sketch, parents, None)
+        .and_then(|prepared| {
+            certify_persistent_branch(
+                sketch,
+                prepared,
+                affine,
+                ComputedFeatureCornerId::from_raw(0),
+            )
+        })
+        .map_err(|_| ArcValidationFailure::Invalid)?;
+    if solution
+        .parameters
+        .iter()
+        .enumerate()
+        .any(|(index, parameter)| {
+            !parameter_strictly_inside(
+                *parameter,
+                publication_parents[index].topology.base_interval,
+            ) || *parameter < publication_parents[index].bounds.0
+                || *parameter > publication_parents[index].bounds.1
+        })
+    {
+        return Err(ArcValidationFailure::Invalid);
+    }
     let mut contacts = Vec::with_capacity(2);
     let mut angles = [0.0; 2];
+    let mut offset_derivatives = [[0.0; 2]; 2];
     let tolerance = (sketch.model_scale() * GEOMETRY_TOLERANCE_FACTOR).max(1.0e-10);
     for index in 0..2 {
         let span = parents[index].source.span;
@@ -2106,6 +2437,10 @@ fn build_and_validate_arc(
         if !regular.is_finite() || regular.abs() <= OFFSET_SINGULARITY_TOLERANCE {
             return Err(ArcValidationFailure::OffsetSingularity);
         }
+        offset_derivatives[index] = [
+            regular * jet.first_derivative.x,
+            regular * jet.first_derivative.y,
+        ];
         let expected_center = [
             jet.position.x + sign * radius * differential.left_normal.x,
             jet.position.y + sign * radius * differential.left_normal.y,
@@ -2143,6 +2478,9 @@ fn build_and_validate_arc(
             total_parameter: solution.parameters[index],
             position: [jet.position.x, jet.position.y],
         });
+    }
+    if !offset_derivatives_are_transverse(offset_derivatives[0], offset_derivatives[1]) {
+        return Err(ArcValidationFailure::SingularParents);
     }
     let [first, second]: [ComputedFilletContact; 2] = contacts
         .try_into()
@@ -2198,6 +2536,7 @@ fn contact_angles(
 const fn map_arc_authoring_failure(failure: ArcValidationFailure) -> ComputedFeatureAuthoringError {
     match failure {
         ArcValidationFailure::OffsetSingularity => ComputedFeatureAuthoringError::OffsetSingularity,
+        ArcValidationFailure::SingularParents => ComputedFeatureAuthoringError::SingularParents,
         ArcValidationFailure::Invalid => ComputedFeatureAuthoringError::InvalidResolvedGeometry,
     }
 }
@@ -2275,4 +2614,84 @@ fn same_open_polyline_adjacent_spans(
                 CurveDefinition::Polyline { closed: false, .. }
             )
         })
+}
+
+#[cfg(test)]
+mod publication_tests {
+    use super::*;
+    use geosolve_sketch::{DocumentId, PersistentId};
+
+    #[test]
+    fn independent_arc_publication_rejects_parallel_parent_tangents() {
+        let mut sketch =
+            SketchDocument::with_id(10.0, DocumentId(PersistentId::from_u128(0x5000))).unwrap();
+        let first_start = sketch.add_point("first start", [0.0, 0.0]).unwrap();
+        let first_end = sketch.add_point("first end", [4.0, 0.0]).unwrap();
+        let second_start = sketch.add_point("second start", [0.0, 1.0]).unwrap();
+        let second_end = sketch.add_point("second end", [4.0, 1.0]).unwrap();
+        let first = CurveSpan::line(
+            sketch
+                .add_curve(
+                    "first",
+                    CurveDefinition::Line {
+                        start: first_start,
+                        end: first_end,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .unwrap(),
+        );
+        let second = CurveSpan::line(
+            sketch
+                .add_curve(
+                    "second",
+                    CurveDefinition::Line {
+                        start: second_start,
+                        end: second_end,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .unwrap(),
+        );
+        let parents = [
+            ComputedFilletParent {
+                source: NativeCurveSpanSource { span: first },
+                picked_parameter: 0.5,
+                winding: 0,
+                neighborhood: ContactNeighborhood::Interior,
+                normal_side: DocumentCurveNormalSide::Left,
+                retained_endpoint: DocumentFilletTrimEndpoint::End,
+                periodic_anchor: None,
+            },
+            ComputedFilletParent {
+                source: NativeCurveSpanSource { span: second },
+                picked_parameter: 0.5,
+                winding: 0,
+                neighborhood: ContactNeighborhood::Interior,
+                normal_side: DocumentCurveNormalSide::Right,
+                retained_endpoint: DocumentFilletTrimEndpoint::Start,
+                periodic_anchor: None,
+            },
+        ];
+        let solution = LocalFilletSolution {
+            parameters: [0.5, 0.5],
+            sides: [
+                DocumentCurveNormalSide::Left,
+                DocumentCurveNormalSide::Right,
+            ],
+            center: [2.0, 0.5],
+            score: 0.0,
+        };
+        assert!(matches!(
+            build_and_validate_arc(
+                &sketch,
+                parents,
+                solution,
+                0.5,
+                DocumentFilletEndpointOrder::FirstThenSecond,
+                DocumentArcSweep::CounterClockwise,
+            ),
+            Err(ArcValidationFailure::SingularParents)
+        ));
+    }
 }
