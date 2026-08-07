@@ -10,6 +10,7 @@
 mod annotations;
 mod authoring;
 mod coordinator;
+mod feature_authoring;
 mod operation_authoring;
 mod qualification;
 
@@ -23,16 +24,37 @@ pub use authoring::{
 };
 pub use coordinator::{
     ActionAvailability, ActionState, AuditDto, AuditProvenance, AuthoringMutation, BranchAction,
-    ContactBranchAction, CoordinatorActionKind, CoordinatorError, DimensionTargetDisplayUnit,
-    DimensionTargetMetadata, DisabledReason, DisplayDimensionTarget, EditorMutation,
-    EditorProblemCategory, EditorProblemMetadata, EditorProblemScope, EditorProblemTarget,
-    LifecycleDto, LifecycleStatus, MeasurementPublication, MutationOutcome,
-    OperationAuthoringMutation, OperationAuthoringPreview, OperationAuthoringPreviewMetadata,
-    OperationAuthoringPreviewOutcome, OperationAuthoringPreviewToken, ProblemsDto,
-    ProjectedDragRejectionStage, ProjectedDragWorkEvidence, ReplayAction, RestoreCheckpoint,
-    RetainedEditorCoordinator, display_dimension_target,
+    ComputedFeatureMutation, ComputedFeatureProblemMetadata, ComputedProfileBoundary,
+    ComputedSceneState, ContactBranchAction, CoordinatorActionKind, CoordinatorError,
+    DimensionTargetDisplayUnit, DimensionTargetMetadata, DisabledReason, DisplayDimensionTarget,
+    EditorMutation, EditorProblemCategory, EditorProblemMetadata, EditorProblemScope,
+    EditorProblemTarget, FeatureAuthoringCornerBinding, FeatureAuthoringPreview,
+    FeatureAuthoringPreviewMetadata, FeatureAuthoringPreviewToken, LifecycleDto, LifecycleStatus,
+    MeasurementPublication, MutationOutcome, OperationAuthoringMutation, OperationAuthoringPreview,
+    OperationAuthoringPreviewMetadata, OperationAuthoringPreviewOutcome,
+    OperationAuthoringPreviewToken, ProblemsDto, ProjectedDragRejectionStage,
+    ProjectedDragWorkEvidence, ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator,
+    display_dimension_target,
+};
+pub use feature_authoring::{
+    FeatureAuthoringCandidate, FeatureAuthoringCornerPreview, FeatureAuthoringGuidance,
+    FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringPick, FeatureAuthoringStage,
+    FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringWarning,
+    FeatureAuthoringWarningKind,
 };
 pub use geosolve_sketch::SketchAcceptedDocumentRedundancy;
+pub use geosolve_sketch_features::{
+    ComputedCircularArc, ComputedCornerRef, ComputedEdge, ComputedEdgeGeometry, ComputedEdgeId,
+    ComputedEdgeProvenance, ComputedEvaluationAllocator, ComputedEvaluationAllocatorHighWater,
+    ComputedEvaluationRevision, ComputedFeature, ComputedFeatureAllocatorHighWater,
+    ComputedFeatureCornerId, ComputedFeatureDefinition, ComputedFeatureDocument,
+    ComputedFeatureDocumentDigest, ComputedFeatureDocumentError, ComputedFeatureDocumentId,
+    ComputedFeatureDocumentIdentity, ComputedFeatureEvaluation, ComputedFeatureEvaluationInput,
+    ComputedFeatureEvaluationPolicy, ComputedFeatureEvaluationState, ComputedFeatureFailure,
+    ComputedFeatureId, ComputedFeatureLifecycleHighWater, ComputedFeatureRevision,
+    ComputedFeatureSnapshot, ComputedFilletCorner, ComputedFilletSet, ComputedSourceInterval,
+    NativeCurveSpanSource, NewComputedFilletCorner,
+};
 pub use operation_authoring::{
     OperationAuthoringCandidate, OperationAuthoringGuidance, OperationAuthoringOperandKind,
     OperationAuthoringOptions, OperationAuthoringOutcome, OperationAuthoringPick,
@@ -53,8 +75,8 @@ use geosolve_sketch::{
     DocumentConstraintDefinition, DocumentConstraintId, DocumentCurveContinuity,
     DocumentCurveCurvatureRelation, DocumentCurveSpanRef, DocumentDimensionId,
     DocumentDimensionMode, DocumentEdit, DocumentHyperbolaBranch, DocumentObjectId,
-    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, ScalarDomain, ScalarUnit, SketchDesignIdentity,
-    SketchDocument, TangentOrientation,
+    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PreparedSketchInput, ScalarDomain, ScalarUnit,
+    SketchDesignIdentity, SketchDocument, TangentOrientation,
 };
 use thiserror::Error;
 
@@ -143,17 +165,22 @@ pub enum SelectionItem {
     Curve(CurveSpan),
     Constraint(DocumentConstraintId),
     Dimension(DocumentDimensionId),
+    /// One persistent computed feature outside the sketch constraint graph.
+    Feature(geosolve_sketch_features::ComputedFeatureId),
+    /// One persistent corner within a computed Fillet set.
+    FeatureCorner(geosolve_sketch_features::ComputedCornerRef),
 }
 
 impl SelectionItem {
-    /// Returns the owning persistent document object.
+    /// Returns the owning persistent sketch object, if this is native sketch state.
     #[must_use]
-    pub const fn object(self) -> DocumentObjectId {
+    pub const fn object(self) -> Option<DocumentObjectId> {
         match self {
-            Self::Point(id) => DocumentObjectId::Point(id),
-            Self::Curve(span) => DocumentObjectId::Curve(span.curve),
-            Self::Constraint(id) => DocumentObjectId::Constraint(id),
-            Self::Dimension(id) => DocumentObjectId::Dimension(id),
+            Self::Point(id) => Some(DocumentObjectId::Point(id)),
+            Self::Curve(span) => Some(DocumentObjectId::Curve(span.curve)),
+            Self::Constraint(id) => Some(DocumentObjectId::Constraint(id)),
+            Self::Dimension(id) => Some(DocumentObjectId::Dimension(id)),
+            Self::Feature(_) | Self::FeatureCorner(_) => None,
         }
     }
 }
@@ -180,6 +207,16 @@ pub struct SceneCurve {
     pub drag_handle_point: Option<DesignPointId>,
 }
 
+/// One evaluation-local computed curve with stable feature/corner selection.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SceneComputedCurve {
+    pub edge: geosolve_sketch_features::ComputedEdgeId,
+    pub owner: geosolve_sketch_features::ComputedCornerRef,
+    pub center: [f64; 2],
+    pub radius: f64,
+    pub screen_polyline: Vec<ScreenPoint>,
+}
+
 /// Deterministic presentation-neutral scene derived from one accepted revision.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EditorScene {
@@ -188,6 +225,11 @@ pub struct EditorScene {
     pub viewport: Viewport,
     pub points: Vec<ScenePoint>,
     pub curves: Vec<SceneCurve>,
+    /// Generated Fillet arcs. Source replacement fragments remain native
+    /// [`SceneCurve`] values so native span selection and dragging stay intact.
+    pub computed_curves: Vec<SceneComputedCurve>,
+    pub feature_identity: Option<geosolve_sketch_features::ComputedFeatureDocumentIdentity>,
+    pub computed_input: Option<geosolve_sketch_features::ComputedFeatureEvaluationInput>,
     /// Accepted, geometry-derived constraint and dimension presentation.
     pub annotations: Vec<SceneAnnotation>,
     construction_snap_points: Vec<ScenePoint>,
@@ -314,9 +356,101 @@ impl EditorScene {
             viewport,
             points,
             curves,
+            computed_curves: Vec::new(),
+            feature_identity: None,
+            computed_input: None,
             annotations,
             construction_snap_points,
         })
+    }
+
+    /// Builds one composite scene from exact-stamped accepted sketch and computed
+    /// output. Replaced native supports use evaluated source fragments, while
+    /// generated arcs retain stable feature/corner selection provenance.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale/mismatched provenance or non-finite generated geometry.
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_accepted_with_computed(
+        accepted_revision: u64,
+        design_identity: SketchDesignIdentity,
+        accepted_document: &SketchDocument,
+        design_document: &SketchDocument,
+        accepted_sketch_input: &PreparedSketchInput,
+        expected: &geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        computed: &geosolve_sketch_features::ComputedFeatureSnapshot,
+        viewport: Viewport,
+        chord_tolerance_pixels: f64,
+    ) -> Result<Self, EditorError> {
+        let mut scene = Self::from_accepted_for_design(
+            accepted_revision,
+            design_identity,
+            accepted_document,
+            design_document,
+            viewport,
+            chord_tolerance_pixels,
+        )?;
+        if computed.input() != *expected
+            || expected.sketch != *accepted_sketch_input
+            || expected.sketch.accepted_state_identity() != Some(expected.accepted)
+            || expected.accepted.revision().get() != accepted_revision
+            || expected.accepted.document() != accepted_document.id()
+            || expected.sketch.design_identity() != design_identity
+            || expected.features.sketch_document != accepted_document.id()
+        {
+            return Err(EditorError::StaleComputedFeatureSnapshot);
+        }
+        let replaced = computed
+            .replaced_sources()
+            .iter()
+            .map(|source| source.span)
+            .collect::<std::collections::BTreeSet<_>>();
+        scene.curves.retain(|curve| !replaced.contains(&curve.span));
+        for edge in computed.edges() {
+            match (&edge.geometry, &edge.provenance) {
+                (
+                    geosolve_sketch_features::ComputedEdgeGeometry::NativeSourceFragment {
+                        source,
+                        interval,
+                    },
+                    geosolve_sketch_features::ComputedEdgeProvenance::SourceFragment { .. },
+                ) => scene.curves.push(scene_curve_for_interval(
+                    accepted_document,
+                    viewport,
+                    source.span,
+                    interval.start,
+                    interval.end,
+                    chord_tolerance_pixels,
+                )?),
+                (
+                    geosolve_sketch_features::ComputedEdgeGeometry::CircularArc(arc),
+                    geosolve_sketch_features::ComputedEdgeProvenance::FilletArc { owner, .. },
+                ) => scene.computed_curves.push(SceneComputedCurve {
+                    edge: edge.id,
+                    owner: *owner,
+                    center: arc.center,
+                    radius: arc.radius,
+                    screen_polyline: tessellate_computed_arc(
+                        arc,
+                        viewport,
+                        chord_tolerance_pixels,
+                    )?,
+                }),
+                _ => {}
+            }
+        }
+        scene.curves.sort_by_key(|curve| curve.span);
+        scene.computed_curves.sort_by_key(|curve| curve.edge);
+        scene.feature_identity = Some(computed.input().features);
+        scene.computed_input = Some(computed.input());
+        scene.annotations = annotations::build_annotations(
+            accepted_document,
+            &scene.points,
+            &scene.curves,
+            viewport,
+        );
+        Ok(scene)
     }
 
     /// Returns the deterministic best hit. Points take priority over curves, then
@@ -334,10 +468,49 @@ impl EditorScene {
         if point_hit.is_some() {
             return point_hit;
         }
-        self.curves
+        let native = self
+            .curves
             .iter()
             .filter_map(|curve| curve_hit(curve, position, tolerance.curve_pixels))
+            .min_by(compare_hits);
+        let computed = self
+            .computed_curves
+            .iter()
+            .filter_map(|curve| computed_curve_hit(curve, position, tolerance.curve_pixels))
+            .min_by(compare_hits);
+        match (native, computed) {
+            (Some(first), Some(second)) => Some(if compare_hits(&first, &second).is_le() {
+                first
+            } else {
+                second
+            }),
+            (Some(hit), None) | (None, Some(hit)) => Some(hit),
+            (None, None) => None,
+        }
+    }
+
+    /// Native-only geometry hit for constraint and computed-feature authoring.
+    /// Generated arcs are deliberately ignored rather than becoming operands or
+    /// blocking their trimmed source fragments underneath.
+    #[must_use]
+    pub fn native_authoring_hit_test(
+        &self,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+    ) -> Option<Hit> {
+        if !position.is_finite() || !tolerance.is_valid() {
+            return None;
+        }
+        self.points
+            .iter()
+            .filter_map(|point| point_hit(point, position, tolerance.point_pixels))
             .min_by(compare_hits)
+            .or_else(|| {
+                self.curves
+                    .iter()
+                    .filter_map(|curve| curve_hit(curve, position, tolerance.curve_pixels))
+                    .min_by(compare_hits)
+            })
     }
 
     /// Returns the ordinary best visible geometry hit only when that exact
@@ -369,7 +542,10 @@ impl EditorScene {
                     && curve_hit(curve, position, tolerance.curve_pixels)
                         .is_some_and(|candidate| candidate.distance_pixels <= hit.distance_pixels)
             }),
-            SelectionItem::Constraint(_) | SelectionItem::Dimension(_) => true,
+            SelectionItem::Constraint(_)
+            | SelectionItem::Dimension(_)
+            | SelectionItem::Feature(_)
+            | SelectionItem::FeatureCorner(_) => true,
         };
         (!foreground_blocks).then_some(hit)
     }
@@ -382,8 +558,55 @@ impl EditorScene {
                 .iter()
                 .find(|curve| curve.span == span)
                 .and_then(|curve| curve.drag_handle_point),
-            SelectionItem::Constraint(_) | SelectionItem::Dimension(_) => None,
+            SelectionItem::Constraint(_)
+            | SelectionItem::Dimension(_)
+            | SelectionItem::Feature(_)
+            | SelectionItem::FeatureCorner(_) => None,
         }
+    }
+
+    fn feature_radius_handle(
+        &self,
+        item: SelectionItem,
+    ) -> Option<(geosolve_sketch_features::ComputedCornerRef, [f64; 2], f64)> {
+        let SelectionItem::FeatureCorner(owner) = item else {
+            return None;
+        };
+        self.computed_curves
+            .iter()
+            .find(|curve| curve.owner == owner)
+            .map(|curve| (owner, curve.center, curve.radius))
+    }
+
+    /// Composite model bounds used by camera-fit policy.
+    #[must_use]
+    pub fn model_bounds(&self) -> Option<([f64; 2], [f64; 2])> {
+        let mut points = self
+            .points
+            .iter()
+            .map(|point| point.model_position)
+            .chain(self.curves.iter().flat_map(|curve| {
+                curve
+                    .screen_polyline
+                    .iter()
+                    .map(|point| self.viewport.screen_to_model(*point))
+            }))
+            .chain(self.computed_curves.iter().flat_map(|curve| {
+                curve
+                    .screen_polyline
+                    .iter()
+                    .map(|point| self.viewport.screen_to_model(*point))
+            }));
+        let first = points.next()?;
+        Some(
+            points.fold((first, first), |(mut lower, mut upper), point| {
+                lower[0] = lower[0].min(point[0]);
+                lower[1] = lower[1].min(point[1]);
+                upper[0] = upper[0].max(point[0]);
+                upper[1] = upper[1].max(point[1]);
+                (lower, upper)
+            }),
+        )
     }
 
     /// Returns the nearest visible annotation hit, preserving persistent identity.
@@ -606,6 +829,27 @@ pub enum EditorEffect {
         model_position: [f64; 2],
     },
     ClearPointPreview,
+    /// Shared-radius preview for one computed Fillet set. Native sketch points
+    /// and equations are never part of this gesture.
+    PreviewComputedFeatureRadius {
+        expected: geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        feature: geosolve_sketch_features::ComputedFeatureId,
+        radius: f64,
+    },
+    CommitComputedFeatureRadius {
+        expected: geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        feature: geosolve_sketch_features::ComputedFeatureId,
+        radius: f64,
+    },
+    /// Restores the exact pointer-down radius after a cancelled gesture. A
+    /// grouped-authoring host must also restore its headless authoring state;
+    /// the coordinator restores its held whole-batch preview from saved state.
+    RestoreComputedFeatureRadius {
+        expected: geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        feature: geosolve_sketch_features::ComputedFeatureId,
+        radius: f64,
+    },
+    ClearComputedFeaturePreview,
     /// A complete construction proposal. Hosts apply this atomically with
     /// `SketchDocumentSession::transact`.
     CommitConstruction {
@@ -1273,6 +1517,19 @@ struct PointGesture {
     latest_request: Option<u64>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct FeatureRadiusGesture {
+    pointer_id: u64,
+    owner: geosolve_sketch_features::ComputedCornerRef,
+    expected: geosolve_sketch_features::ComputedFeatureEvaluationInput,
+    center: [f64; 2],
+    origin: ScreenPoint,
+    moved: bool,
+    origin_radius: f64,
+    last_radius: f64,
+    radius_offset: f64,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ProjectedDragRequestDisposition {
     Current { gesture_epoch: u64 },
@@ -1352,6 +1609,7 @@ pub struct ConstraintEditor {
     pick_tolerance: PickTolerance,
     drag_threshold_pixels: f64,
     point_gesture: Option<PointGesture>,
+    feature_radius_gesture: Option<FeatureRadiusGesture>,
     tool: EditorTool,
     snap_tolerance: SnapTolerance,
     conic_options: ConicConstructionOptions,
@@ -1373,6 +1631,7 @@ impl Default for ConstraintEditor {
             pick_tolerance: PickTolerance::default(),
             drag_threshold_pixels: 3.0,
             point_gesture: None,
+            feature_radius_gesture: None,
             tool: EditorTool::Select,
             snap_tolerance: SnapTolerance::default(),
             conic_options: ConicConstructionOptions::default(),
@@ -1417,6 +1676,7 @@ impl ConstraintEditor {
         self.tool = tool;
         let mut effects = self.cancel_draft();
         effects.extend(self.cancel_point_gesture());
+        effects.extend(self.cancel_feature_radius_gesture());
         effects
     }
 
@@ -1583,6 +1843,12 @@ impl ConstraintEditor {
         {
             effects.extend(self.cancel_point_gesture());
         }
+        if self
+            .feature_radius_gesture
+            .is_some_and(|gesture| gesture.pointer_id != input.pointer_id)
+        {
+            effects.extend(self.cancel_feature_radius_gesture());
+        }
         let geometry_hit = scene.hit_test(input.position, self.pick_tolerance);
         let annotation_hit = scene.annotation_hit_test(
             input.position,
@@ -1595,7 +1861,10 @@ impl ConstraintEditor {
         // Preserve direct manipulation at that exact overlap; offset labels and
         // annotations over non-draggable geometry retain their existing priority.
         let hit = geometry_hit
-            .filter(|hit| scene.drag_handle_point(hit.item).is_some())
+            .filter(|hit| {
+                scene.drag_handle_point(hit.item).is_some()
+                    || scene.feature_radius_handle(hit.item).is_some()
+            })
             .or(annotation_hit)
             .or(geometry_hit);
         let before = self.selection.clone();
@@ -1607,6 +1876,26 @@ impl ConstraintEditor {
                 if self.selection.contains(&hit.item) {
                     self.curve_pick_parameters.push((span, parameter));
                 }
+            }
+            if let Some((owner, center, radius)) = scene.feature_radius_handle(hit.item)
+                && self.selection.contains(&hit.item)
+                && let Some(expected) = scene.computed_input
+            {
+                let pointer = scene.viewport.screen_to_model(input.position);
+                let origin_distance = (pointer[0] - center[0]).hypot(pointer[1] - center[1]);
+                self.feature_radius_gesture = Some(FeatureRadiusGesture {
+                    pointer_id: input.pointer_id,
+                    owner,
+                    expected,
+                    center,
+                    origin: input.position,
+                    moved: false,
+                    origin_radius: radius,
+                    last_radius: radius,
+                    radius_offset: radius - origin_distance,
+                });
+                self.point_gesture = None;
+                self.last_valid_drag_preview = None;
             }
             if let Some(point) = scene.drag_handle_point(hit.item)
                 && self.selection.contains(&hit.item)
@@ -1650,6 +1939,29 @@ impl ConstraintEditor {
     pub fn pointer_move(&mut self, scene: &EditorScene, input: PointerInput) -> Vec<EditorEffect> {
         if self.tool != EditorTool::Select {
             return self.draft_move(scene, input);
+        }
+        if let Some(mut gesture) = self.feature_radius_gesture {
+            if gesture.pointer_id != input.pointer_id || !input.position.is_finite() {
+                return Vec::new();
+            }
+            gesture.moved |= gesture.origin.distance(input.position) >= self.drag_threshold_pixels;
+            if !gesture.moved {
+                self.feature_radius_gesture = Some(gesture);
+                return Vec::new();
+            }
+            let position = scene.viewport.screen_to_model(input.position);
+            let radius = gesture.radius_offset
+                + (position[0] - gesture.center[0]).hypot(position[1] - gesture.center[1]);
+            if !radius.is_finite() || radius <= 0.0 {
+                return Vec::new();
+            }
+            gesture.last_radius = radius;
+            self.feature_radius_gesture = Some(gesture);
+            return vec![EditorEffect::PreviewComputedFeatureRadius {
+                expected: gesture.expected,
+                feature: gesture.owner.feature,
+                radius,
+            }];
         }
         let Some(mut gesture) = self.point_gesture else {
             if !input.position.is_finite() {
@@ -1761,6 +2073,24 @@ impl ConstraintEditor {
         if self.tool != EditorTool::Select {
             return Vec::new();
         }
+        if let Some(gesture) = self.feature_radius_gesture {
+            if gesture.pointer_id != input.pointer_id || !input.position.is_finite() {
+                return Vec::new();
+            }
+            self.feature_radius_gesture = None;
+            return if gesture.moved {
+                vec![
+                    EditorEffect::CommitComputedFeatureRadius {
+                        expected: gesture.expected,
+                        feature: gesture.owner.feature,
+                        radius: gesture.last_radius,
+                    },
+                    EditorEffect::ClearComputedFeaturePreview,
+                ]
+            } else {
+                Vec::new()
+            };
+        }
         let Some(gesture) = self.point_gesture else {
             return Vec::new();
         };
@@ -1799,8 +2129,21 @@ impl ConstraintEditor {
     pub fn cancel(&mut self) -> Vec<EditorEffect> {
         let mut effects = self.cancel_draft();
         effects.extend(self.cancel_point_gesture());
+        effects.extend(self.cancel_feature_radius_gesture());
         effects.extend(self.set_hover_state(None, None));
         effects
+    }
+
+    fn cancel_feature_radius_gesture(&mut self) -> Vec<EditorEffect> {
+        self.feature_radius_gesture
+            .take()
+            .map_or_else(Vec::new, |gesture| {
+                vec![EditorEffect::RestoreComputedFeatureRadius {
+                    expected: gesture.expected,
+                    feature: gesture.owner.feature,
+                    radius: gesture.origin_radius,
+                }]
+            })
     }
 
     /// Supplies the result of a host-projected temporary drag request. Rejection
@@ -2233,10 +2576,104 @@ pub enum EditorError {
     InvalidConstructionOptions(&'static str),
     #[error("selected operands are incompatible with {0:?}")]
     IncompatibleConstraint(ConstraintKind),
+    #[error("computed-feature snapshot does not match the supplied accepted sketch")]
+    StaleComputedFeatureSnapshot,
     #[error(transparent)]
     Document(#[from] geosolve_sketch::DocumentError),
     #[error(transparent)]
     Curve(#[from] geosolve_sketch::DocumentCurveEvaluationError),
+}
+
+fn scene_curve_for_interval(
+    document: &SketchDocument,
+    viewport: Viewport,
+    span: CurveSpan,
+    start_parameter: f64,
+    end_parameter: f64,
+    tolerance: f64,
+) -> Result<SceneCurve, EditorError> {
+    if !start_parameter.is_finite()
+        || !end_parameter.is_finite()
+        || end_parameter <= start_parameter
+    {
+        return Err(EditorError::StaleComputedFeatureSnapshot);
+    }
+    let start = document.evaluate_curve_jet(span, start_parameter)?;
+    let end = document.evaluate_curve_jet(span, end_parameter)?;
+    let start = viewport.model_to_screen([start.position.x, start.position.y]);
+    let end = viewport.model_to_screen([end.position.x, end.position.y]);
+    let mut screen_polyline = vec![start];
+    let mut screen_parameters = vec![start_parameter];
+    tessellate(
+        document,
+        viewport,
+        span,
+        start_parameter,
+        start,
+        end_parameter,
+        end,
+        tolerance,
+        0,
+        &mut screen_polyline,
+        &mut screen_parameters,
+    )?;
+    let drag_handle_point = document
+        .curve(span.curve)
+        .and_then(|curve| match &curve.definition {
+            CurveDefinition::Circle { center, .. }
+            | CurveDefinition::CircularArc { center, .. } => Some(*center),
+            _ => None,
+        });
+    Ok(SceneCurve {
+        span,
+        screen_polyline,
+        screen_parameters,
+        drag_handle_point,
+    })
+}
+
+// The segment count is explicitly clamped to 4096 before allocation, and every
+// loop index is therefore exactly representable as `f64`.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss
+)]
+fn tessellate_computed_arc(
+    arc: &geosolve_sketch_features::ComputedCircularArc,
+    viewport: Viewport,
+    chord_tolerance_pixels: f64,
+) -> Result<Vec<ScreenPoint>, EditorError> {
+    if !arc.center.into_iter().all(f64::is_finite)
+        || !arc.radius.is_finite()
+        || arc.radius <= 0.0
+        || !arc.start_angle.is_finite()
+        || !arc.end_angle.is_finite()
+    {
+        return Err(EditorError::StaleComputedFeatureSnapshot);
+    }
+    let tau = std::f64::consts::TAU;
+    let delta = match arc.sweep {
+        DocumentArcSweep::CounterClockwise => (arc.end_angle - arc.start_angle).rem_euclid(tau),
+        DocumentArcSweep::Clockwise => -(arc.start_angle - arc.end_angle).rem_euclid(tau),
+    };
+    if !delta.is_finite() || delta.abs() <= f64::EPSILON {
+        return Err(EditorError::StaleComputedFeatureSnapshot);
+    }
+    let screen_radius = arc.radius * viewport.pixels_per_model_unit;
+    let cosine = (1.0 - chord_tolerance_pixels / screen_radius).clamp(-1.0, 1.0);
+    let max_step = (2.0 * cosine.acos()).clamp(1.0e-3, std::f64::consts::FRAC_PI_4);
+    let segments = ((delta.abs() / max_step).ceil() as usize).clamp(2, 4096);
+    Ok((0..=segments)
+        .map(|index| {
+            let fraction = index as f64 / segments as f64;
+            let angle = delta.mul_add(fraction, arc.start_angle);
+            viewport.model_to_screen([
+                arc.radius.mul_add(angle.cos(), arc.center[0]),
+                arc.radius.mul_add(angle.sin(), arc.center[1]),
+            ])
+        })
+        .collect())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2323,13 +2760,33 @@ fn curve_hit(curve: &SceneCurve, position: ScreenPoint, tolerance_pixels: f64) -
     })
 }
 
+fn computed_curve_hit(
+    curve: &SceneComputedCurve,
+    position: ScreenPoint,
+    tolerance_pixels: f64,
+) -> Option<Hit> {
+    let distance = curve
+        .screen_polyline
+        .windows(2)
+        .map(|segment| point_segment_projection(position, segment[0], segment[1]).0)
+        .min_by(f64::total_cmp)?;
+    (distance <= tolerance_pixels).then_some(Hit {
+        item: SelectionItem::FeatureCorner(curve.owner),
+        distance_pixels: distance,
+        curve_parameter: None,
+    })
+}
+
 fn document_contains_item(document: &SketchDocument, item: SelectionItem) -> bool {
     match item {
         SelectionItem::Point(point) => document.point(point).is_some(),
         SelectionItem::Curve(span) => document
             .curve_spans(span.curve)
             .is_ok_and(|spans| spans.contains(&span)),
-        SelectionItem::Constraint(_) | SelectionItem::Dimension(_) => false,
+        SelectionItem::Constraint(_)
+        | SelectionItem::Dimension(_)
+        | SelectionItem::Feature(_)
+        | SelectionItem::FeatureCorner(_) => false,
     }
 }
 

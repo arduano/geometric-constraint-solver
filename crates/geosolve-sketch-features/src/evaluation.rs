@@ -125,7 +125,9 @@ impl ComputedFeatureEvaluationSnapshot {
         features
             .validate()
             .map_err(ComputedFeatureSnapshotError::InvalidFeatureDocument)?;
-        let sketch = session.prepared_input();
+        let sketch = session
+            .accepted_prepared_input()
+            .ok_or(ComputedFeatureSnapshotError::AcceptedInputMismatch)?;
         if sketch.accepted_state_identity() != Some(accepted.identity())
             || accepted.input() != sketch.attempt_input()
         {
@@ -189,7 +191,9 @@ impl ComputedFeatureAuthoringSnapshot {
         let accepted = session
             .accepted_state_for_current_input()
             .ok_or(ComputedFeatureSnapshotError::CurrentAcceptedStateRequired)?;
-        let sketch_input = session.prepared_input();
+        let sketch_input = session
+            .accepted_prepared_input()
+            .ok_or(ComputedFeatureSnapshotError::AcceptedInputMismatch)?;
         if sketch_input.accepted_state_identity() != Some(accepted.identity())
             || accepted.input() != sketch_input.attempt_input()
         {
@@ -246,6 +250,54 @@ impl ComputedFeatureAuthoringSnapshot {
                 }))
             }
         }
+    }
+
+    /// Resolves one ordered corner batch under one aggregate bounded work
+    /// envelope. A stopped or failed later corner never publishes a partial
+    /// result vector.
+    pub fn resolve_fillet_corners(
+        &self,
+        requests: &[ComputedFilletCornerAuthoringRequest],
+        radius: f64,
+        policy: ComputedFeatureEvaluationPolicy,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<Vec<ResolvedComputedFilletCorner>>, ComputedFeatureAuthoringError>
+    {
+        policy.validate()?;
+        if !radius.is_finite() || radius <= 0.0 {
+            return Err(ComputedFeatureAuthoringError::InvalidRadius);
+        }
+        let mut controller = OperationController::new(control);
+        if controller
+            .charge(
+                OperationWorkCounter::DocumentValidationItems,
+                requests.len().saturating_mul(2),
+                OperationCheckpoint::DocumentValidation,
+            )
+            .is_err()
+        {
+            return Ok(controller.outcome_unchecked());
+        }
+        let mut values = Vec::with_capacity(requests.len());
+        for request in requests {
+            let resolved = match resolve_authoring_corner(
+                &self.sketch,
+                *request,
+                radius,
+                policy,
+                &mut controller,
+            )? {
+                AuthoringCornerResolution::Stopped => return Ok(controller.outcome_unchecked()),
+                AuthoringCornerResolution::Completed(resolved) => resolved,
+            };
+            values.push(ResolvedComputedFilletCorner {
+                sketch_input: self.sketch_input,
+                accepted: self.accepted,
+                corner: resolved.corner,
+                arc: resolved.arc,
+            });
+        }
+        Ok(controller.outcome(values))
     }
 }
 

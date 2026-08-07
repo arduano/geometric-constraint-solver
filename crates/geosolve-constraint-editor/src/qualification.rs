@@ -672,6 +672,8 @@ fn pick_matrix(input: &Value) -> Result<String, String> {
             SelectionItem::Curve(_) => "curve",
             SelectionItem::Constraint(_) => "constraint",
             SelectionItem::Dimension(_) => "dimension",
+            SelectionItem::Feature(_) => "feature",
+            SelectionItem::FeatureCorner(_) => "feature-corner",
         });
         trace.push(format!("{offset:.3}:{kind}"));
     }
@@ -1798,6 +1800,8 @@ fn seeded_model(input: &Value, mut state: u64) -> Result<String, String> {
             SelectionItem::Curve(_) => "curve",
             SelectionItem::Constraint(_) => "constraint",
             SelectionItem::Dimension(_) => "dimension",
+            SelectionItem::Feature(_) => "feature",
+            SelectionItem::FeatureCorner(_) => "feature-corner",
         })
         .collect::<Vec<_>>()
         .join(",");

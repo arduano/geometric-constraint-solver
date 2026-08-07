@@ -377,7 +377,10 @@ fn normalize_operands(tool: AuthoringTool, operands: &[AuthoringOperand]) -> Vec
             normalized.sort_by_key(|operand| match operand.item {
                 SelectionItem::Point(_) => 0,
                 SelectionItem::Curve(_) => 1,
-                SelectionItem::Constraint(_) | SelectionItem::Dimension(_) => 2,
+                SelectionItem::Constraint(_)
+                | SelectionItem::Dimension(_)
+                | SelectionItem::Feature(_)
+                | SelectionItem::FeatureCorner(_) => 2,
             });
         }
         _ => {}
@@ -609,7 +612,9 @@ mod tests {
             &[],
         );
         let _ = state.pick(&document, AuthoringOperand::selected(items[3]));
-        document.remove_with_owned_state(items[3].object()).unwrap();
+        document
+            .remove_with_owned_state(items[3].object().expect("native fixture item"))
+            .unwrap();
         assert!(matches!(
             state.reconcile(&document),
             AuthoringOutcome::Collecting { .. }

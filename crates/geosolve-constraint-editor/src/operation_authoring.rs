@@ -124,7 +124,9 @@ impl OperationAuthoringPick {
             SelectionItem::Curve(span) => Some(span),
             SelectionItem::Point(_)
             | SelectionItem::Constraint(_)
-            | SelectionItem::Dimension(_) => None,
+            | SelectionItem::Dimension(_)
+            | SelectionItem::Feature(_)
+            | SelectionItem::FeatureCorner(_) => None,
         }
     }
 
@@ -1019,9 +1021,11 @@ pub(crate) fn resolve_operation_item_picks(
         SelectionItem::Point(point) if tool == OperationAuthoringTool::Fillet => {
             resolve_fillet_corner_picks(document, point)
         }
-        SelectionItem::Point(_) | SelectionItem::Constraint(_) | SelectionItem::Dimension(_) => {
-            Err(OperationAuthoringWarningKind::WrongOperandKind)
-        }
+        SelectionItem::Point(_)
+        | SelectionItem::Constraint(_)
+        | SelectionItem::Dimension(_)
+        | SelectionItem::Feature(_)
+        | SelectionItem::FeatureCorner(_) => Err(OperationAuthoringWarningKind::WrongOperandKind),
     }
 }
 

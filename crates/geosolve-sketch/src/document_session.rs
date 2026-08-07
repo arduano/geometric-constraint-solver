@@ -1294,6 +1294,18 @@ impl SketchAttemptInput {
             && self.external_snapshot_set_revision == other.external_snapshot_set_revision
             && self.external_snapshot_set_digest == other.external_snapshot_set_digest
     }
+
+    fn differs_only_by_consumed_point_edit_guidance(self, current: Self) -> bool {
+        let candidate_without_drag = self.candidate_request.without_temporary_targets();
+        self.publication_compatible_with(current)
+            && self.candidate_request.drag.is_some()
+            && current.candidate_request.drag.is_none()
+            && (candidate_without_drag == current.candidate_request
+                || candidate_without_drag
+                    == current
+                        .candidate_request
+                        .without_previous_state_preferences())
+    }
 }
 
 /// Stage at which a retained-design attempt failed before producing a solve report.
@@ -2116,6 +2128,44 @@ mod exact_preview_release_tests {
                 stopping_reason: actual,
             } if actual == stopping_reason
         ));
+    }
+
+    #[test]
+    fn accepted_input_normalization_allows_only_consumed_point_edit_guidance() {
+        let mut document = SketchDocument::new(1.0).unwrap();
+        let point = document.add_point("point", [0.0, 0.0]).unwrap();
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .unwrap();
+        let current = session.prepared_input().attempt_input();
+        let mut exact_release = current;
+        exact_release.candidate_request = current.candidate_request.with_drag(point, [0.25, 0.5]);
+        assert!(exact_release.differs_only_by_consumed_point_edit_guidance(current));
+
+        let mut accepted = current;
+        accepted.candidate_request = effective_attempt_request(
+            current.candidate_request,
+            Some(DocumentDragTarget {
+                point,
+                target: [0.25, 0.5],
+            }),
+        );
+        assert!(accepted.differs_only_by_consumed_point_edit_guidance(current));
+
+        let mut unrelated_candidate = accepted;
+        unrelated_candidate.candidate_request = unrelated_candidate
+            .candidate_request
+            .without_temporary_targets();
+        assert!(!unrelated_candidate.differs_only_by_consumed_point_edit_guidance(current));
+
+        let mut unrelated_publication = accepted;
+        unrelated_publication.publication_request = unrelated_publication
+            .publication_request
+            .with_drag(point, [0.5, 0.75]);
+        assert!(!unrelated_publication.differs_only_by_consumed_point_edit_guidance(current));
     }
 }
 
@@ -4035,6 +4085,31 @@ impl RetainedSketchDocumentSession {
                 && accepted
                     .input()
                     .publication_compatible_with(current.attempt_input())
+        })
+    }
+
+    /// Returns the exact accepted-state input stamp for computed read-only
+    /// companions. Unlike [`Self::prepared_input`], this retains the accepted
+    /// attempt's consumed drag and its interaction-only preference suppression
+    /// as audit provenance while using the current latest-attempt and
+    /// accepted/high-water lifecycle identities.
+    ///
+    /// Any other candidate-input difference is never normalized through this seam.
+    #[must_use]
+    pub fn accepted_prepared_input(&self) -> Option<PreparedSketchInput> {
+        let current = self.current_prepared_input();
+        let accepted = self.accepted_state_for_current_input()?;
+        let accepted_input = accepted.input();
+        if accepted_input != current.attempt_input()
+            && !accepted_input.differs_only_by_consumed_point_edit_guidance(current.attempt_input())
+        {
+            return None;
+        }
+        Some(PreparedSketchInput {
+            input: accepted_input,
+            latest_attempt: current.latest_attempt,
+            accepted: current.accepted,
+            accepted_revision_high_water: current.accepted_revision_high_water,
         })
     }
 

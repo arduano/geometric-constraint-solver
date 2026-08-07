@@ -1030,6 +1030,21 @@ impl ComputedFeatureDocument {
     pub(crate) fn set_revision_for_test(&mut self, revision: ComputedFeatureRevision) {
         self.revision = revision;
     }
+
+    #[cfg(test)]
+    pub(crate) fn set_fillet_radius_unchecked_for_test(
+        &mut self,
+        feature: ComputedFeatureId,
+        radius: f64,
+    ) {
+        let value = self
+            .features
+            .iter_mut()
+            .find(|value| value.id == feature)
+            .expect("test feature exists");
+        let ComputedFeatureDefinition::FilletSet(fillet) = &mut value.definition;
+        fillet.radius = radius;
+    }
 }
 
 fn validate_new_corner(

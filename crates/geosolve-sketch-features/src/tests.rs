@@ -206,6 +206,97 @@ struct LineCircleFixture {
     request: ComputedFilletCornerAuthoringRequest,
 }
 
+struct TwoCircleFixture {
+    document: SketchDocument,
+    spans: [CurveSpan; 2],
+    request: ComputedFilletCornerAuthoringRequest,
+}
+
+fn two_circle_fixture() -> TwoCircleFixture {
+    let mut document = SketchDocument::with_id(
+        10.0,
+        geosolve_sketch::DocumentId(geosolve_sketch::PersistentId::from_u128(0x2100)),
+    )
+    .unwrap();
+    let centers = [
+        document.add_point("first center", [0.0, 0.0]).unwrap(),
+        document.add_point("second center", [4.0, 0.0]).unwrap(),
+    ];
+    let radii = [
+        document
+            .add_scalar(
+                "first radius",
+                1.0,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .unwrap(),
+        document
+            .add_scalar(
+                "second radius",
+                1.0,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .unwrap(),
+    ];
+    let spans = std::array::from_fn(|index| {
+        CurveSpan::line(
+            document
+                .add_curve(
+                    format!("circle {index}"),
+                    CurveDefinition::Circle {
+                        center: centers[index],
+                        radius: radii[index],
+                    },
+                )
+                .unwrap(),
+        )
+    });
+    let parameters = [std::f64::consts::PI, std::f64::consts::PI];
+    let picks: [ComputedFilletCurvePick; 2] = std::array::from_fn(|index| {
+        let jet = document
+            .evaluate_curve_jet(spans[index], parameters[index])
+            .unwrap();
+        ComputedFilletCurvePick {
+            source: source(spans[index]),
+            parameter: parameters[index],
+            model_position: [jet.position.x, jet.position.y],
+            retained_endpoint_hint: Some(DocumentFilletTrimEndpoint::End),
+        }
+    });
+    TwoCircleFixture {
+        document,
+        spans,
+        request: ComputedFilletCornerAuthoringRequest {
+            first: picks[0],
+            second: picks[1],
+            options: ComputedFilletAuthoringOptions::default(),
+        },
+    }
+}
+
+fn periodic_circle_parent(
+    span: CurveSpan,
+    normal_side: DocumentCurveNormalSide,
+) -> ComputedFilletParent {
+    ComputedFilletParent {
+        source: source(span),
+        picked_parameter: std::f64::consts::PI,
+        winding: 0,
+        neighborhood: geosolve_sketch::ContactNeighborhood::Local {
+            lower: std::f64::consts::PI - 0.5,
+            upper: std::f64::consts::PI + 0.5,
+        },
+        normal_side,
+        retained_endpoint: DocumentFilletTrimEndpoint::End,
+        periodic_anchor: Some(DocumentTrimParameter {
+            parameter: 0.0,
+            winding: 0,
+        }),
+    }
+}
+
 fn line_circle_fixture() -> LineCircleFixture {
     let mut document = SketchDocument::with_id(
         10.0,
@@ -517,6 +608,95 @@ fn every_revision_exhaustion_path_is_transactional() {
         Err(ComputedFeatureDocumentError::RevisionExhausted)
     ));
     assert_eq!(restored, before);
+}
+
+#[test]
+fn invalid_shared_radii_are_rejected_transactionally_by_persistence_and_evaluation() {
+    let fixture = polyline_fixture();
+    let invalid_radii = [0.0, -1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY];
+
+    for radius in invalid_radii {
+        let mut features = ComputedFeatureDocument::new(fixture.document.id());
+        let before = features.clone();
+        assert!(matches!(
+            features
+                .create_fillet_set("invalid radius", radius, vec![first_corner(fixture.spans)],),
+            Err(ComputedFeatureDocumentError::InvalidField {
+                field: "radius",
+                ..
+            })
+        ));
+        assert_eq!(features, before);
+    }
+
+    let mut features = ComputedFeatureDocument::new(fixture.document.id());
+    let feature = features
+        .create_fillet_set("valid", 0.5, vec![first_corner(fixture.spans)])
+        .unwrap();
+    for radius in invalid_radii {
+        let before = features.clone();
+        assert!(matches!(
+            features.set_fillet_radius(feature, radius),
+            Err(ComputedFeatureDocumentError::InvalidField {
+                field: "radius",
+                ..
+            })
+        ));
+        assert_eq!(features, before);
+    }
+
+    let session = retained(fixture.document.clone());
+    let before_input = session.prepared_input();
+    let before_document = session.design_document().clone();
+    let before_accepted = session
+        .accepted_state()
+        .map(geosolve_sketch::SketchAcceptedDocumentState::identity);
+    let authoring = crate::ComputedFeatureAuthoringSnapshot::capture(&session).unwrap();
+    let request = first_corner_authoring_request(&fixture.document, fixture.spans);
+    for radius in invalid_radii {
+        assert!(matches!(
+            authoring.resolve_fillet_corner(
+                request,
+                radius,
+                ComputedFeatureEvaluationPolicy::default(),
+                OperationControl::unlimited(),
+            ),
+            Err(ComputedFeatureAuthoringError::InvalidRadius)
+        ));
+        assert!(matches!(
+            authoring.resolve_fillet_corners(
+                &[request],
+                radius,
+                ComputedFeatureEvaluationPolicy::default(),
+                OperationControl::unlimited(),
+            ),
+            Err(ComputedFeatureAuthoringError::InvalidRadius)
+        ));
+
+        let mut invalid_features = features.clone();
+        invalid_features.set_fillet_radius_unchecked_for_test(feature, radius);
+        assert!(matches!(
+            ComputedFeatureEvaluationSnapshot::capture(
+                &session,
+                &invalid_features,
+                ComputedFeatureEvaluationPolicy::default(),
+            ),
+            Err(ComputedFeatureSnapshotError::InvalidFeatureDocument(
+                ComputedFeatureDocumentError::InvalidField {
+                    field: "radius",
+                    ..
+                }
+            ))
+        ));
+    }
+    assert_eq!(session.prepared_input(), before_input);
+    assert_eq!(session.design_document(), &before_document);
+    assert_eq!(
+        session
+            .accepted_state()
+            .map(geosolve_sketch::SketchAcceptedDocumentState::identity),
+        before_accepted
+    );
 }
 
 #[test]
@@ -1010,6 +1190,71 @@ fn affine_non_affine_authoring_certifies_and_persists_periodic_branch_state() {
         ComputedFeatureEvaluationState::Current { .. }
     ));
     assert_eq!(arc_centers(&snapshot).len(), 1);
+}
+
+#[test]
+fn two_non_affine_parents_are_typed_unsupported_without_sketch_mutation() {
+    let fixture = two_circle_fixture();
+    let session = retained(fixture.document.clone());
+    let before_input = session.prepared_input();
+    let before_document = session.design_document().clone();
+    let before_accepted = session
+        .accepted_state()
+        .map(geosolve_sketch::SketchAcceptedDocumentState::identity);
+
+    let authoring = crate::ComputedFeatureAuthoringSnapshot::capture(&session).unwrap();
+    assert!(matches!(
+        authoring.resolve_fillet_corner(
+            fixture.request,
+            0.5,
+            ComputedFeatureEvaluationPolicy::default(),
+            OperationControl::unlimited(),
+        ),
+        Err(ComputedFeatureAuthoringError::UnsupportedCurvedPair)
+    ));
+
+    let mut features = ComputedFeatureDocument::new(fixture.document.id());
+    let feature = features
+        .create_fillet_set(
+            "unsupported curved pair",
+            0.5,
+            vec![NewComputedFilletCorner {
+                first: periodic_circle_parent(fixture.spans[0], DocumentCurveNormalSide::Left),
+                second: periodic_circle_parent(fixture.spans[1], DocumentCurveNormalSide::Right),
+                endpoint_order: DocumentFilletEndpointOrder::FirstThenSecond,
+                sweep: DocumentArcSweep::CounterClockwise,
+            }],
+        )
+        .unwrap();
+    let feature_before = features.clone();
+    let corner = match &features.feature(feature).unwrap().definition {
+        ComputedFeatureDefinition::FilletSet(fillet) => fillet.corners[0].id,
+    };
+    let mut allocator = ComputedEvaluationAllocator::default();
+    let snapshot = evaluate(&session, &features, &mut allocator);
+    assert!(snapshot.edges().is_empty());
+    assert!(matches!(
+        snapshot
+            .feature_evaluations()
+            .iter()
+            .find(|value| value.feature == feature)
+            .unwrap()
+            .state,
+        ComputedFeatureEvaluationState::Failed {
+            failure: ComputedFeatureFailure::UnsupportedCurvedPair {
+                corner: failed_corner,
+            }
+        } if failed_corner == corner
+    ));
+    assert_eq!(features, feature_before);
+    assert_eq!(session.prepared_input(), before_input);
+    assert_eq!(session.design_document(), &before_document);
+    assert_eq!(
+        session
+            .accepted_state()
+            .map(geosolve_sketch::SketchAcceptedDocumentState::identity),
+        before_accepted
+    );
 }
 
 #[test]
