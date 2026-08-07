@@ -2,8 +2,8 @@
 
 # M66 implementation: computed 2D Fillet features
 
-Status: implementation and mechanical qualification complete on candidate source `941177c` after
-the 2026-08-07 ADR 0031 pivot. Supervising-human UAT remains open.
+Status: implementation and mechanical qualification complete on interaction-hardened candidate
+source `b53a451` after the 2026-08-07 ADR 0031 pivot. Supervising-human UAT remains open.
 
 The qualified but unapproved solver-owned ordinary-UI endpoint, commit `1034afc`, is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07`. The earlier three-tool experiment remains at
@@ -39,6 +39,13 @@ qualification evidence.
 - `RetainedEditorCoordinator` now owns the sketch session, feature document and current computed
   snapshot. Exact compare-and-swap includes complete sketch input/accepted identity, feature
   revision/digest and evaluator policy.
+- Coordinator-owned pick and option transactions clone the headless authoring state and commit it
+  only with a freshly `Current` whole-feature preview. Rejected local/global evaluation retains the
+  previous state and exact preview. Refresh and final Apply defensively enforce the same current-
+  evaluation invariant.
+- Native screen picks use a fixed 256-candidate limit before allocation/sorting and one bounded
+  corner-incidence index. Incomplete endpoints and duplicate pending supports may fall through;
+  true high-valence ambiguity never guesses an underlying curve.
 - Generated-arc selection resolves stable set/corner provenance. Arc/grip drag changes only feature
   radius; arc deletion removes its corner and final-corner deletion removes its set. Set suppression
   is separate from sketch source activation.
@@ -102,7 +109,7 @@ redesigning persistence. M66 implements no Offset.
 
 ## 3. Exact commands and outcomes
 
-Candidate source `941177c` passed the following commands on one implementation state:
+Candidate source `b53a451` passed the following commands on one implementation state:
 
 ```text
 nix-shell shell.nix --run 'cargo fmt --all -- --check'
@@ -117,7 +124,8 @@ git diff --check
 Outcomes:
 
 - `geosolve-sketch-features`: 21 tests passed;
-- `geosolve-constraint-editor`: 157 unit tests and 17 integration tests passed;
+- `geosolve-constraint-editor`: 173 unit tests and 45 integration tests passed, including 28
+  focused M66 interaction-engine tests;
 - `geosolve-demo-web`: 68 tests passed;
 - the complete locked all-feature workspace test suite passed;
 - warnings-denied workspace Clippy passed;
@@ -134,6 +142,11 @@ fail Clippy. The old `1034afc` qualification belongs solely to the archived arch
 Mechanical acceptance passed; supervising-human UAT remains open. Direct qualification covers:
 
 - four-point/three-span two-corner batch output and middle-span two-end composition;
+- blank/default radius, both line-pick orders, exact screen-hit progression, point-corner atomicity,
+  overlap fallthrough, high-valence ambiguity, bounded crowding and state-neutral stale/rejected
+  retries;
+- coordinator-transactional pick/options/preview publication, rejected refresh/apply defenses and
+  the complete first-set publication through adjacent second-set publication plus Undo/Redo;
 - reverse-selection canonicalization and sequential/batch visible parity;
 - atomic claim conflict plus recovery;
 - exact sketch-state/residual/rank/DOF invariance under shared-radius edits;
@@ -158,5 +171,5 @@ supervising human explicitly approves it.
 - Version-one computed features reference native constrained spans only.
 - Computed-on-computed chaining, Offset, Bake/Explode and cross-revision output topological naming
   are deferred.
-- The remaining blocker is supervising-human UAT approval of candidate source `941177c` at the
+- The remaining blocker is supervising-human UAT approval of candidate source `b53a451` at the
   verified Tailscale endpoint.

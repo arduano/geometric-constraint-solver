@@ -5,8 +5,8 @@
 Status: post-pivot implementation and mechanical qualification are Pass. Every human result is
 Pending; do not use the archived `1034afc` build for this scorecard.
 
-Candidate source: `941177c` (`Expose computed Fillets in the workbench`), with the prerequisite
-feature/editor integration at `6e710e8`.
+Candidate source: `b53a451` (`Harden computed Fillet interaction authoring`), superseding the
+initial post-pivot workbench candidate `941177c` after `M66-PF001`.
 
 Tailscale endpoint: `http://100.94.63.83:8080/` (service restarted and HTTP verified on
 2026-08-07).
@@ -120,8 +120,28 @@ Notes:
 
 ## Finding ledger
 
-No post-pivot UAT finding is recorded yet. Add each objective finding with a stable `M66-PFxxx`
-identifier, owning-layer regression and targeted human retest before approval.
+### M66-PF001 — second Fillet line appeared unselectable
+
+Observed: in ordinary Fillet mode, the first line entered pending state but clicking a distinct
+second line could appear to do nothing.
+
+Root cause: the workbench's blank optional radius value was translated to `None`, which erased the
+headless collector's initialized `0.1 * model_scale` radius before the second pick attempted to
+resolve a corner. The recovery audit also found that point corners could be flattened across a
+pending support, overlapping hits were not resolved through one bounded domain-aware transaction,
+and option/radius refresh rejection could advance state or retain a non-current preview.
+
+Disposition on `b53a451`: absence of an explicit radius now preserves the initialized/remembered
+value; point corners are atomic semantic targets; native hits are bounded and deterministic;
+high-valence ambiguity cannot fall through to an arbitrary line; and picks/options commit only with
+a freshly `Current` coordinator-held preview. Refresh and Apply defensively reject failed feature
+evaluations. The direct Rust suites `m66_feature_authoring.rs` (13 tests) and
+`m66_feature_authoring_matrix.rs` (15 tests) cover both pick orders, exact screen picks, shared
+endpoints, overlap/crowding, stale and rejected retry paths, preview lifetime, transactional option
+changes and full sequential adjacent-set publication with Undo/Redo.
+
+Status: mechanically resolved; focused human retest Pending. Recheck ordinary line-line selection,
+then M66-U1 and M66-U2 sequential/multi-corner authoring.
 
 The old `M66-F002` through `M66-F013` ledger belongs to the archived solver-owned UI architecture
 at `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`). Those regressions remain useful

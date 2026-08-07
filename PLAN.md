@@ -3018,7 +3018,8 @@ replacement candidate. M65 is closed; the historical candidate endpoint was
 ### M66: computed 2D Fillet features
 
 Status: active after the 2026-08-07 computed-feature pivot. Implementation and mechanical
-qualification are complete on candidate source `941177c`; supervising-human UAT remains open.
+qualification are complete on interaction-hardened candidate source `b53a451`;
+supervising-human UAT remains open.
 
 Goal: make ordinary CAD Fillet authoring a persistent computed feature outside the sketch
 constraint graph. Multi-corner batches, adjacent sequential Fillets, source editability and
@@ -3079,14 +3080,20 @@ advanced/backward-compatible APIs, and existing documents are not migrated.
   shared-radius edits, every source-point drag, missing-source/Undo recovery, independent
   delete/suppress, Undo/Redo/reload, stale CAS, cancellation, exhaustion, allocator non-reuse,
   revision-local output IDs and variable output count.
+- [x] Resolve post-pivot finding `M66-PF001` in the headless interaction engine: retain the
+  initialized radius when a host supplies no override; keep point corners atomic; bound and
+  deterministically fall through overlapping native hits without guessing at high-valence
+  junctions; and transactionally couple pick/option state to a freshly current whole-feature
+  preview. Directly cover both line orders, shared endpoints, overlap/crowding, stale/rejected
+  retries and two sequential adjacent publications.
 - [x] Keep existing M27/M28/M30/M58 compatibility suites green and prove that ordinary UI Fillet
   creates no solver-owned association, trim view, constraint or dimension.
 - [x] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature
   demo-web WASM check, release Trunk build and `git diff --check` on one post-pivot source.
 - [ ] Complete and explicitly approve the computed-Fillet `docs/M66_UAT.md`.
 
-Mechanical qualification record (2026-08-07): candidate source `941177c` passes 21
-`geosolve-sketch-features` tests, 157 `geosolve-constraint-editor` unit tests plus 17 integration
+Mechanical qualification record (2026-08-07): candidate source `b53a451` passes 21
+`geosolve-sketch-features` tests, 173 `geosolve-constraint-editor` unit tests plus 45 integration
 tests, 68 `geosolve-demo-web` tests, the complete locked all-feature workspace suite,
 warnings-denied workspace Clippy, the all-feature demo-web WASM check, formatting and
 `git diff --check`. The release Trunk build exits zero after applying the optimized distribution.
@@ -3094,7 +3101,7 @@ Fresh-process persistence regressions additionally prove that saving after Undo 
 computed preview captures the live sketch, feature/corner and computed-evaluation allocator
 high-water, so restoration cannot reuse any retired identity. Reviewed searches find no active
 Offset/Mirror helper UI, legacy operation harness or `/#/dev/lab` route. Human UAT is the only
-remaining M66 gate.
+remaining M66 gate; `M66-PF001` awaits its focused human retest there.
 
 Gate: one Apply creates one persistent multi-corner `FilletSet` with a shared editable radius;
 later Applies create separate sets whose opposite-end claims can compose on a shared source span.

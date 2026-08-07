@@ -992,7 +992,8 @@ in `docs/M65_UAT.md`; M65 is complete.
 ## M66 acceptance: computed 2D Fillet features
 
 Status: active after the 2026-08-07 computed-feature pivot. Post-pivot implementation and
-mechanical qualification pass on candidate source `941177c`; supervising-human UAT remains open.
+mechanical qualification pass on interaction-hardened candidate source `b53a451`;
+supervising-human UAT remains open.
 
 The superseded solver-owned ordinary-UI build is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`). ADR 0031 replaces only the
@@ -1026,6 +1027,10 @@ M66 is accepted only when all of the following are true:
 - Multi-corner preselection remains grouped, repeated picks accumulate corner targets and reverse
   selection canonicalizes deterministically. Numeric input or a preview arc/radius grip edits the
   shared radius. Apply/Enter commits without a final radius-confirmation click.
+- Blank optional host radius input retains the initialized or remembered positive radius. First and
+  second line picks, point corners, overlapping candidates and high-valence junctions resolve
+  deterministically under finite work. Pick and option transitions publish only together with a
+  freshly `Current` whole-feature preview; rejection preserves the prior state and preview.
 - A generated arc selects stable corner/set provenance. Dragging it changes only the shared feature
   radius; deleting it removes its corner, deleting the final corner removes the set and suppression
   is set-wide. Generated geometry is not a sketch-constraint operand. Every native source point
