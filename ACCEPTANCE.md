@@ -156,8 +156,8 @@ M8 is ready for review only when every item below is objectively present. These 
 The checked wording below is the preserved M8 completion record. Its then-current M8-M22
 allocations are historical; `PLAN.md` now governs completed work through the approved M61 gate,
 approved M62 authoring milestone, approved M63 canvas-constraint presentation, approved M64
-editable-sample cleanup and approved reduced-scope M65 predictable dragging, with focused M66
-associative-Fillet authoring active.
+editable-sample cleanup and approved reduced-scope M65 predictable dragging, with M66 computed-
+Fillet features active under ADR 0031.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -989,103 +989,85 @@ weighted-priority semantics, sample-specific motion policy, worker architecture 
 enumeration. Replacement mechanical qualification and focused U2/U3 human approval are recorded
 in `docs/M65_UAT.md`; M65 is complete.
 
-## M66 acceptance: polished associative 2D Fillet authoring
+## M66 acceptance: computed 2D Fillet features
 
-Status: active after the Fillet-only pivot. Replacement build-source commit `87e72b3` passes the
-complete mechanical gate including `M66-F013`; focused supervising-human UAT remains open.
+Status: active after the 2026-08-07 computed-feature pivot. No post-pivot implementation,
+mechanical qualification or human UAT is yet accepted.
 
-The unapproved three-tool candidate is preserved at
-`origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`). Active M66 removes only its
-Offset/Mirror authoring/UI/samples/tests and M66-only line-offset request APIs. The completed M25
-signed Offset constraints and M58 exact supported-family Mirror operation-companion API remain
-accepted baseline behavior.
+The superseded solver-owned ordinary-UI build is preserved at
+`origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`). ADR 0031 replaces only the
+ordinary workbench route. M27/M28 solver-owned Fillets,
+`SketchOperationRequest::AssociativeFillet`, M58 integration and existing documents remain
+accepted compatibility behavior and receive no automatic migration.
 
-- A separate public Fillet-only headless operation-authoring state owns operand progression,
-  finite model-space picks, explicit branch/radius options, warnings, collection mode,
-  Apply/Enter and candidate-first Escape without changing M62 constraint authoring semantics.
-- Compatible preselection seeds one candidate; empty selection enters collection mode. After
-  successful publication, the shared host completion adapter notifies the headless state, exits
-  collection and explicitly activates ordinary Select so the selected arc is immediately draggable
-  (`M66-F012`). A failed Apply attempt re-arms collection. An invalid unconfirmed radius hover
-  clears only its transient candidate/preview and retains both parents in radius-placement mode
-  (`M66-F008`).
-- Every preview comes from applying one prepared public Fillet proposal to scratch retained state
-  and independently accepting the eligible current publication. Apply retains strict exact
-  proposal compare-and-swap as one normal history edit; stale, cancelled, exhausted, incomplete or
-  rejected work mutates no live design, accepted scene, selection or history state. Transient
-  authoring state may clear or re-arm for recovery.
-- A domain-owned current-publication comparison ignores only a transient one-shot
-  `candidate_request` when determining operation eligibility after a successful point edit. It
-  still matches design, publication request, solver policy, activation, parameters, external
-  snapshots, accepted identity and attempt identity, and does not weaken proposal CAS
-  (`M66-F010`).
-- Fillet authoring records both spans, exact picked parameters, winding, normal sides, retained
-  trim endpoints, periodic anchors where required, endpoint order, sweep and a finite positive
-  radius with explicit Driving/Reference intent before publication. Local bounded synthesis
-  defaults to picked retained portions and the minor arc and performs no global root enumeration.
-- Line-line and line/polyline Fillet authoring persists `Interior` neighborhoods on both affine
-  spans. When exactly one parent is non-affine, the affine parent remains `Interior` and the
-  curved parent persists a strict `Local` cell containing the selected root. That cell is
-  certified over the curved span's complete bounded support or one explicit unwrapped period by
-  outward-rounded interval evaluation of
-  `cross(curve_tangent(t), fixed_line_direction)`: the enclosure is finite, excludes zero and
-  retains one sign throughout the cell, so it cannot cross a tangent-parallel barrier
-  (`M66-F011`).
-- Authoring between two non-affine parents returns a typed unsupported result until a bounded
-  pairwise-continuation contract exists. This is an editor-authoring limitation only: the M28
-  all-family generic Fillet document/API, residual and independent validation remain unchanged.
-- After two parent operands, the headless state enters pointer-radius placement. Its fallback is
-  only a finite seed, Reference is the default and Driving remains explicit. Pointer preview,
-  confirmation and Apply retain exact candidate binding.
-- Two adjacent spans of one open polyline are valid direct parents, and one unambiguous interior
-  point may expand atomically to that ordered pair with explicit `End`/`Start` trim ownership.
-  Endpoints, ambiguous corners, other same-support pairs, existing trim ownership, escaped
-  parameters, zero speed, cusp, pole, parallel offsets and offset singularities reject without
-  allocation (`M66-F002`).
-- A circular arc exposes its stored center as presentation-neutral drag metadata. Dragging a free
-  associated Fillet's body routes through ordinary projected point drag and updates radius,
-  contacts and visible trim intervals; deleting only its Reference dimension neither deletes nor
-  immobilizes the association (`M66-F003`).
-- Fillet endpoint-angle derivation cannot leave accepted geometry ahead of its retained numerical
-  state. Only active Fillet-owned Start/End coordinates may be exact-synchronized; core then
-  freshly certifies Hard residuals, rank, bounds, diagnostics, audit and complete Temporary and
-  Preference residual vectors before atomic commit. The packed problem state must equal
-  `SolveReport::accepted_state` bit-for-bit and the final domain pass must require no remaining
-  materialization (`M66-F013`).
-- The Fillet options panel is a viewport-clamped canvas overlay outside the scrolling palette, so
-  palette overflow cannot clip or break its controls. Pure placement tests cover each viewport
-  edge and resize (`M66-F007`).
-- Hover and click share the exact same headless, preview-aware nearest-geometry acquisition with an
-  inclusive 12-pixel boundary and stable persistent-identity ties. Preview-only foreground
-  geometry blocks hidden sources but is never hoverable or forwarded as a live operand
-  (`M66-F004`, `M66-F005`, `M66-F009`).
-- The sole workbench presents one text-free Fillet action, headless guidance/warnings/options,
-  accepted scratch preview and the editable **2D fillet workshop**. Pan/zoom remains usable, the
-  browser owns no applicability/branch/root formula, and no Offset/Mirror M66 action, option or
-  sample remains.
-- Direct sketch, operation, editor/coordinator and workbench tests cover F002-F005 and F007-F013,
-  including parent retention after invalid hover, overlay placement, exact hover/click boundaries,
-  point-edit publication eligibility, affine `Interior` neighborhoods, certified symmetric-cubic
-  and unwrapped-periodic line/curve branch cells, typed two-curved-parent refusal, exact request state,
-  preview/commit lifecycle, successful-mode exit, immediate default-Reference resizing before and
-  after dimension deletion, independent motion of every source-polyline point, exact retained
-  state/report equality, stale/rejected retention, Undo/Redo, workspace reload and sample
-  editability. Existing M27/M28 derivative and independent-validation corpora remain green; M66
-  adds no residual. M25/M58 regression coverage also confirms the pre-M66 APIs were not removed.
-- Formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature demo-web
-  WASM, release Trunk and `git diff --check` pass on nominated build-source commit `87e72b3`.
-- The supervising human explicitly approves `docs/M66_UAT.md`; no correctness, data-loss,
-  misleading-preview or basic Fillet-authoring blocker remains.
+M66 is accepted only when all of the following are true:
 
-M66 does not include Offset or Mirror authoring, an M66 line-offset operation request, general
-curve/profile offsets, global Fillet search, same-support Fillets other than one adjacent open-
-polyline pair, unsupported-family approximation, persistent CAD feature-tree objects, a schema
-freeze, new equations, browser E2E, `/#/dev/lab` or mobile behavior.
+- A separate `geosolve-sketch-features` crate owns a versioned `ComputedFeatureDocument` with
+  stable feature/corner IDs, allocator non-reuse, labels, suppression and persistent
+  `FilletSet` intent. Among workspace crates it depends only on `geosolve-sketch` and
+  `geosolve-geometry` and adds no
+  residual, solver variable, constraint or dimension.
+- One Apply persists one set of grouped corners and one shared finite positive radius. A later
+  Apply creates a separate set. Intent includes exact source spans, picked parameters,
+  neighborhoods/winding, normal sides, retained endpoints, endpoint order and sweep; generated
+  arcs/fragments are never persisted.
+- Evaluation consumes one exact independently accepted sketch snapshot and publishes an exact-
+  stamped computed snapshot. Output IDs are revision-local; stable provenance maps them to
+  persistent set/corner identity and source intervals. Result containers admit variable output
+  cardinality without implementing Offset.
+- Every published output independently validates finite geometry, tangency, radius, domains,
+  retained sides, branch/order/sweep state and offset regularity. M66 accepts affine/affine and
+  affine/non-affine corners and returns a typed unsupported failure for two non-affine parents
+  without narrowing M28.
+- Opposite endpoints of one shared span may be claimed by different sets. Duplicate, crossed or
+  consumed endpoint intervals fail every participating set deterministically. One invalid corner
+  fails its complete set; unrelated sets remain current. Evaluation never mutates
+  `DocumentCurveTrimView`.
+- Multi-corner preselection remains grouped, repeated picks accumulate corner targets and reverse
+  selection canonicalizes deterministically. Numeric input or a preview arc/radius grip edits the
+  shared radius. Apply/Enter commits without a final radius-confirmation click.
+- A generated arc selects stable corner/set provenance. Dragging it changes only the shared feature
+  radius; deleting it removes its corner, deleting the final corner removes the set and suppression
+  is set-wide. Generated geometry is not a sketch-constraint operand. Every native source point
+  remains selectable and draggable.
+- A valid sketch edit commits even when a feature becomes invalid. The failed set publishes no
+  stale output and emits feature/corner/source-attributed errors, using global scope only when
+  attribution is unsafe. Source motion may recover it; source deletion is a repairable failure and
+  Undo restores the same intent identities.
+- Shared-radius edits change no sketch input/accepted identity, accepted coordinate, residual,
+  numerical rank or reported DOF. Direct tests compare those facts, not only rendered geometry.
+- Exact CAS covers complete sketch input/accepted identity, feature revision/digest and evaluator
+  policy. Stale, cancelled or exhausted evaluation cannot publish. Undo/Redo/reload preserve
+  intent and stable IDs while regenerating fresh output IDs.
+- Application workspace v4 stores the separately versioned feature sidecar beside the unchanged
+  canonical-v4/draft-v5 sketch payload. Workspace v1-v3 migrate to an empty feature document and
+  do not reinterpret existing M28 Fillets.
+- The ordinary workbench route creates no M28 association, trim view, radius scalar, Driving/
+  Reference choice, radius dimension or sketch constraint. It presents a **Features** tree,
+  computed-arc/radius interaction and attributed failures from reusable metadata.
+- Base-only profile/fill output is withheld with a typed “computed geometry not yet included”
+  status when active computed geometry would make it misleading. M66 exposes no production or
+  visual-profile consumption of computed output.
+- Direct regressions cover the four-point/three-span two-corner batch; reverse selection;
+  sequential/batch visible parity; conflict and recovery; every source-point drag; source deletion
+  and Undo; independent deletion/suppression; Undo/Redo/reload; stale CAS; cancellation;
+  exhaustion; allocator non-reuse; output-ID invalidation; and variable output count.
+- M27/M28/M30/M58 compatibility remains green. Formatting, warnings-denied Clippy, locked
+  all-feature workspace tests, all-feature demo-web WASM, release Trunk and `git diff --check`
+  pass on one nominated post-pivot source.
+- The supervising human explicitly approves the rewritten `docs/M66_UAT.md`; no correctness,
+  data-loss, stale-output, source-editability or ordinary multi-corner Fillet blocker remains.
 
-Qualification record (2026-08-02): `cargo fmt --all -- --check`, warnings-denied locked workspace
-Clippy, locked all-feature workspace tests, the all-feature demo-web WASM check, release Trunk and
-`git diff --check` all pass for replacement build-source commit `87e72b3`. The focused human
-scorecard remains Pending, so this mechanical acceptance does not close M66.
+M66 explicitly excludes Offset implementation/UI/placeholders, computed-on-computed chaining,
+Bake/Explode, production/profile consumption, automatic M28 migration, a canonical sketch-schema
+change, global root enumeration, browser E2E, `/#/dev/lab` and mobile behavior.
+
+### Superseded M66 solver-owned Fillet acceptance record
+
+The mechanically qualified but unapproved ordinary-UI route through M28 is preserved with commit
+`1034afc` at `origin/archive/m66-associative-fillet-2026-08-07`. Its `M66-F002` through
+`M66-F013` tests remain compatibility evidence only. They do not satisfy active ADR 0031
+acceptance, and their former human scorecard was never approved.
 
 ### M54: stable diagnostics
 

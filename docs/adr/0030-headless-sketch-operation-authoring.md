@@ -2,7 +2,12 @@
 
 # ADR 0030: Headless sketch-operation authoring
 
-Status: accepted; amended 2026-08-02 for the Fillet-only M66 pivot
+Status: accepted; amended 2026-08-02 for the Fillet-only M66 pivot; ordinary workbench Fillet
+routing superseded by ADR 0031 on 2026-08-07
+
+ADR 0031 supersedes this ADR only for the ordinary workbench Fillet path. The contract below
+remains the historical decision for the archived build and remains compatible with deliberate
+advanced use of M28/M58 solver-owned associative Fillets.
 
 ## Context
 

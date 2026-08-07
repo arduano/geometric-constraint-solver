@@ -24,8 +24,8 @@ scorecard. The first M61 candidate was withdrawn for five interaction/coverage b
 remediated scope is now explicitly approved and closed. M62 subsequently completed and received
 supervising-human approval for CAD-style constraint and dimension authoring, M63 completed approved
 canvas constraint presentation, M64 completed the approved editable sample cleanup, and M65
-completed approved predictable bounded dragging. M66 is the active Fillet-only helper-authoring
-cut.
+completed approved predictable bounded dragging. M66 is the active computed-feature cut for
+ordinary multi-corner 2D Fillets outside the sketch constraint graph.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -37,7 +37,7 @@ support and physics remain outside future acceptance.
 4. `ACCEPTANCE.md`
 5. `docs/SCENARIOS.md`
 6. `REFERENCES.md`
-7. `docs/adr/0001-*.md` through `docs/adr/0030-*.md`
+7. `docs/adr/0001-*.md` through `docs/adr/0031-*.md`
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -104,24 +104,21 @@ Core publication must independently validate Hard rows and every attained Tempor
 or exhausted work retains the last valid preview. Replacement `b6433d1` fixes the UAT-discovered
 twin-roller annotation overlap and rank-one pantograph-guide cursor projection with direct
 regressions and strict certification. Fresh native/WASM/release qualification and focused U2/U3
-human approval completed on 2026-08-01. M66 is now the active focused cut for exceptionally
-polished associative 2D Fillet authoring. The superseded, unapproved three-tool candidate is
-preserved at `origin/archive/m66-three-helper-tools-2026-08-02`, commit `80d4939`. The active cut
-removes only its M66-specific Offset/Mirror authoring, UI, samples and offset-request APIs; the
-completed M25 signed-offset constraints and M58 exact Mirror operation-companion API remain part
-of the baseline. Build-source commit `c1b0336` replaces seed-centred Fillet contact windows with a
-closed branch-safe policy: affine line/polyline parents use full `Interior` support; a line/curved
-pair uses an outward-rounded certified curved `Local` cell over the complete bounded span or one
-explicit period; and two non-affine-parent authoring is typed unsupported until pairwise
-continuation exists. This does not narrow M28's underlying all-family generic Fillet API.
-Replacement build-source commit `ff15c78` additionally exits Fillet collection and restores Select
-after successful publication, making the new Reference arc immediately draggable. That source
-passes the full native/WASM/release gate. Replacement build-source commit `87e72b3` fixes the
-subsequent retained-state coherence finding: branch-safe Fillet endpoint derivation now exact-
-synchronizes only active Fillet-owned angle coordinates, freshly certifies the complete core
-acceptance surface and publishes only bit-identical problem/report/materialized state. The exact
-pointer-authored polyline/Fillet lifecycle keeps the arc and every parent point draggable before
-and after radius-dimension deletion. Focused human UAT remains open.
+human approval completed on 2026-08-01. M66 is now the active ADR 0031 cut for computed 2D Fillet
+features outside the sketch constraint graph. The qualified but unapproved solver-owned ordinary-
+UI build at `1034afc` is preserved at
+`origin/archive/m66-associative-fillet-2026-08-07`; its equations, branch-cell and accepted-state
+coherence work remain compatibility evidence, not active acceptance. The older unapproved three-
+tool candidate remains at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
+
+The active cut adds separately versioned persistent `FilletSet` intent with stable feature/corner
+IDs, evaluates revision-local generated topology from one exact accepted sketch snapshot and keeps
+ordinary source geometry fully editable when output fails. One Apply groups multiple corners under
+one shared radius; later sets may own opposite ends of the same span. Generated output is never
+persisted or admitted to the constraint graph. M27/M28 solver-owned Fillets and the M58
+`AssociativeFillet` operation remain advanced/backward-compatible APIs with no automatic
+migration. Workspace v4 adds the feature sidecar; v1-v3 migrate to an empty feature document. The
+post-pivot implementation, full mechanical gate and rewritten focused human UAT are open.
 M62 follow-up `M62-F001` corrects accepted-state line-angle seeding and exposes acute-degree
 presentation while retaining the explicit directed-radian solver branch.
 Follow-up `M62-F002` gives canvas pointer-down exclusive ownership of canvas authoring picks,
@@ -177,16 +174,13 @@ authoring, approved canvas constraint visualization and interaction, editable sa
 predictable bounded dragging. The previously forecast
 M62-M64 hardening sequence was withdrawn on 2026-07-29; M62-M64 were subsequently scoped,
 completed and approved. M65 subsequently completed and received focused supervising-human
-approval. M66 is active under amended ADR 0030: the headless editor owns reusable Fillet
-authoring, the operations companion remains the equation-free transaction producer, and the sole
-workbench is a thin presentation consumer. Current authoring supports affine/affine and
-affine/non-affine parents with explicit interval-certified branch retention; pairwise continuation
-for two non-affine parents is deferred without removing M28's generic API. Fillet-derived endpoint
-angles pass through a narrow core exact-state certification boundary rather than being rewritten
-after the retained report. The earlier
-Fillet/Offset/Mirror candidate is preserved
-at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`) rather than carried as active
-scope. M66 ends in its own Fillet-focused UAT.
+approval. M66 is active under ADR 0031: a new feature domain owns persistent FilletSet intent and
+revision-local computed output, the headless editor owns grouped feature authoring, the retained
+coordinator owns exact sketch/feature snapshot publication, and the sole workbench remains a thin
+presentation consumer. Ordinary Fillets add no sketch equation, constraint, dimension or trim
+view. Existing M27/M28/M58 capabilities remain supported below that route. Computed output is not
+yet consumed by profiles, and Offset is a future variable-topology use of the seam rather than an
+M66 implementation or UI placeholder. M66 ends in its own computed-Fillet UAT.
 
 Durable cleanup records:
 
@@ -219,8 +213,8 @@ Durable cleanup records:
 - `docs/M64_UAT.md` (approved M64 scorecard)
 - `docs/M65_IMPLEMENTATION.md` (approved predictable-dragging implementation record)
 - `docs/M65_UAT.md` (approved focused scorecard)
-- `docs/M66_IMPLEMENTATION.md` (active Fillet-only implementation record)
-- `docs/M66_UAT.md` (active Fillet-only scorecard)
+- `docs/M66_IMPLEMENTATION.md` (active computed-Fillet implementation record)
+- `docs/M66_UAT.md` (active computed-Fillet scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete
