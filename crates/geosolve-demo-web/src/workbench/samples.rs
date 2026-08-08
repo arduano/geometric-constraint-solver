@@ -239,7 +239,7 @@ const CURVES: [SampleDefinition; 4] = [
     ),
     SampleDefinition {
         id: SampleId::FilletWorkshop,
-        title: "2D fillet workshop",
+        title: "2D Fillet playground",
         source: SampleSource::FilletWorkshop,
     },
 ];
@@ -359,6 +359,10 @@ fn construction_reference_document()
     Ok((fixture.document, fixture.request))
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one spatially organized ordinary-document playground fixture"
+)]
 fn fillet_workshop_document()
 -> Result<(SketchDocument, geosolve_sketch::DocumentSolveRequest), String> {
     let mut document = workshop_document(0x6600_0000_0000_0000_0000_0000_0000_0001_u128)?;
@@ -376,6 +380,7 @@ fn fillet_workshop_document()
     )?;
     fix_curve_points(&mut document, line_line_horizontal, "Line-line horizontal")?;
     fix_curve_points(&mut document, line_line_vertical, "Line-line vertical")?;
+    add_fixed_high_valence_junction(&mut document)?;
     let circle_center = document
         .add_point("Line-circle center", [6.0, 4.0])
         .map_err(|error| error.to_string())?;
@@ -449,21 +454,77 @@ fn fillet_workshop_document()
         ("Line-Bezier line end", [6.0, 0.0]),
     )?;
     fix_curve_points(&mut document, line_bezier_line, "Line-Bezier line")?;
-    let polyline_corner = add_polyline(
+    add_polyline(
         &mut document,
-        "Open-polyline corner support",
+        "Editable batch and sequential polyline",
         &[
-            ("Polyline corner start", [-9.0, -2.0]),
-            ("Polyline corner join", [-5.0, -2.0]),
-            ("Polyline corner end", [-5.0, -7.0]),
+            ("Batch polyline start", [-10.0, -2.0]),
+            ("Batch polyline first corner", [-6.0, -2.0]),
+            ("Batch polyline second corner", [-6.0, -7.0]),
+            ("Batch polyline end", [-2.0, -7.0]),
         ],
     )?;
-    fix_curve_points(&mut document, polyline_corner, "Open-polyline corner")?;
+    add_polyline(
+        &mut document,
+        "Editable short-middle conflict polyline",
+        &[
+            ("Conflict polyline start", [11.0, -3.0]),
+            ("Conflict polyline first corner", [15.0, -3.0]),
+            ("Conflict polyline second corner", [15.0, -4.75]),
+            ("Conflict polyline end", [19.0, -4.75]),
+        ],
+    )?;
     Ok((document, geosolve_sketch::DocumentSolveRequest::default()))
 }
 
+fn add_fixed_high_valence_junction(document: &mut SketchDocument) -> Result<(), String> {
+    let center = document
+        .add_point("High-valence shared junction", [14.0, 6.0])
+        .map_err(|error| error.to_string())?;
+    let endpoints = [
+        ("High-valence upper endpoint", [14.0, 10.0]),
+        ("High-valence lower-left endpoint", [10.5, 3.5]),
+        ("High-valence lower-right endpoint", [17.5, 3.5]),
+    ]
+    .map(|(label, position)| document.add_point(label, position))
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|error| error.to_string())?;
+    for (index, endpoint) in endpoints.iter().copied().enumerate() {
+        let start = document
+            .point(center)
+            .ok_or_else(|| "high-valence center is missing".to_owned())?
+            .position;
+        let end = document
+            .point(endpoint)
+            .ok_or_else(|| "high-valence endpoint is missing".to_owned())?
+            .position;
+        let delta = [end[0] - start[0], end[1] - start[1]];
+        let norm = delta[0].hypot(delta[1]);
+        document
+            .add_curve(
+                format!("High-valence branch {}", index + 1),
+                CurveDefinition::Line {
+                    start: center,
+                    end: endpoint,
+                    branch_direction: [delta[0] / norm, delta[1] / norm],
+                },
+            )
+            .map_err(|error| error.to_string())?;
+    }
+    fix_point_at_current(document, center, "high-valence shared junction")?;
+    for (index, endpoint) in endpoints.into_iter().enumerate() {
+        fix_point_at_current(
+            document,
+            endpoint,
+            &format!("high-valence endpoint {}", index + 1),
+        )?;
+    }
+    Ok(())
+}
+
 fn workshop_document(id: u128) -> Result<SketchDocument, String> {
-    SketchDocument::with_id(8.0, DocumentId(PersistentId::from_u128(id)))
+    SketchDocument::with_id(5.0, DocumentId(PersistentId::from_u128(id)))
         .map_err(|error| error.to_string())
 }
 
@@ -686,17 +747,52 @@ mod tests {
     use std::collections::HashSet;
 
     use geosolve_constraint_editor::{
-        FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringState,
-        FeatureAuthoringTool, RetainedEditorCoordinator, SelectionItem,
+        CoordinatorError, EditorScene, FeatureAuthoringOptions, FeatureAuthoringOutcome,
+        FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringWarningKind, PickTolerance,
+        RetainedEditorCoordinator, SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
-        CurveDefinition, DocumentConstraintDefinition, DocumentDimensionDefinition,
+        CurveDefinition, CurveSpan, DocumentConstraintDefinition, DocumentDimensionDefinition,
         RetainedSketchDocumentSession,
     };
+    use geosolve_sketch_features::ComputedFeatureFailure;
 
     use super::super::persistence::WorkspaceSnapshot;
     use super::{GROUPS, SampleCatalogState, SampleId};
+
+    fn fillet_playground_scene(coordinator: &RetainedEditorCoordinator) -> EditorScene {
+        let accepted = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("current accepted playground state");
+        EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            accepted.design_identity(),
+            accepted.document(),
+            coordinator.session().design_document(),
+            Viewport::new([1000.0, 700.0], [4.0, 1.0], 25.0).expect("playground viewport"),
+            0.25,
+        )
+        .expect("playground editor scene")
+    }
+
+    fn activate_fillet_playground(
+        coordinator: &RetainedEditorCoordinator,
+    ) -> FeatureAuthoringState {
+        let snapshot = coordinator
+            .feature_authoring_snapshot()
+            .expect("current playground authoring snapshot");
+        let document = coordinator
+            .operation_authoring_document()
+            .expect("current accepted playground document");
+        let mut authoring = FeatureAuthoringState::default();
+        assert!(matches!(
+            authoring.activate(&snapshot, document, FeatureAuthoringTool::Fillet, &[]),
+            FeatureAuthoringOutcome::ModeEntered(_)
+        ));
+        authoring
+    }
 
     #[test]
     fn catalog_is_flat_by_purpose_with_unique_stable_keys() {
@@ -777,7 +873,7 @@ mod tests {
         let fillet = catalog
             .open_key(SampleId::FilletWorkshop.key())
             .expect("fillet workshop");
-        assert_eq!(fillet.session().design_document().curves().len(), 7);
+        assert_eq!(fillet.session().design_document().curves().len(), 11);
         assert!(
             fillet
                 .session()
@@ -794,24 +890,21 @@ mod tests {
                 .iter()
                 .any(|curve| matches!(curve.definition, CurveDefinition::QuadraticBezier { .. }))
         );
-        assert!(
-            fillet
-                .session()
-                .design_document()
-                .curves()
-                .iter()
-                .any(|curve| matches!(
-                    curve.definition,
-                    CurveDefinition::Polyline {
-                        closed: false,
-                        ref points,
-                        ..
-                    } if points.len() == 3
-                ))
-        );
-
         let fillet_document = fillet.session().design_document();
-        assert_eq!(fillet_document.constraints().len(), 15);
+        let editable_polylines = fillet_document
+            .curves()
+            .iter()
+            .filter_map(|curve| match &curve.definition {
+                CurveDefinition::Polyline {
+                    points,
+                    closed: false,
+                    ..
+                } if points.len() == 4 => Some(points),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(editable_polylines.len(), 2);
+        assert_eq!(fillet_document.constraints().len(), 16);
         assert!(
             fillet_document
                 .constraints()
@@ -821,12 +914,413 @@ mod tests {
                     DocumentConstraintDefinition::FixedPoint { .. }
                 ))
         );
+        let fixed_points = fillet_document
+            .constraints()
+            .iter()
+            .filter_map(|constraint| match constraint.definition {
+                DocumentConstraintDefinition::FixedPoint { point, .. } => Some(point),
+                _ => None,
+            })
+            .collect::<HashSet<_>>();
+        assert!(
+            editable_polylines
+                .iter()
+                .flat_map(|points| points.iter())
+                .all(|point| !fixed_points.contains(point)),
+            "playground polylines must be directly draggable without deleting setup constraints"
+        );
+        let shared_junction = fillet_document
+            .points()
+            .iter()
+            .find(|point| point.label == "High-valence shared junction")
+            .expect("high-valence playground point")
+            .id;
+        assert_eq!(
+            fillet_document
+                .curves()
+                .iter()
+                .filter(|curve| matches!(
+                    curve.definition,
+                    CurveDefinition::Line { start, end, .. }
+                        if start == shared_junction || end == shared_junction
+                ))
+                .count(),
+            3
+        );
         assert_eq!(fillet_document.dimensions().len(), 1);
         assert!(matches!(
             fillet_document.dimensions()[0].definition,
             DocumentDimensionDefinition::Radius { .. }
         ));
         assert!(fillet.session().accepted_state().is_some());
+    }
+
+    #[test]
+    fn fillet_playground_screen_picks_prepare_two_current_corner_arcs() {
+        let mut catalog = SampleCatalogState::default();
+        let mut coordinator = catalog
+            .open_key(SampleId::FilletWorkshop.key())
+            .expect("fillet playground");
+        let scene = fillet_playground_scene(&coordinator);
+        let mut authoring = activate_fillet_playground(&coordinator);
+        let first = coordinator
+            .transact_feature_authoring_pick_at(
+                &mut authoring,
+                &scene,
+                scene.viewport.model_to_screen([-6.0, -2.0]),
+                PickTolerance::default(),
+                "Playground batch Fillet",
+            )
+            .expect("first playground corner transaction");
+        assert!(matches!(
+            first.outcome,
+            FeatureAuthoringOutcome::PreviewRequested { ref guidance, .. }
+                if guidance.completed_corners == 1
+        ));
+        assert!(first.preview.is_some());
+        let second = coordinator
+            .transact_feature_authoring_pick_at(
+                &mut authoring,
+                &scene,
+                scene.viewport.model_to_screen([-6.0, -7.0]),
+                PickTolerance::default(),
+                "Playground batch Fillet",
+            )
+            .expect("second playground corner transaction");
+        assert!(matches!(
+            second.outcome,
+            FeatureAuthoringOutcome::PreviewRequested { ref guidance, .. }
+                if guidance.completed_corners == 2
+        ));
+        assert!(second.preview.is_some());
+        assert_eq!(
+            coordinator
+                .feature_authoring_preview()
+                .expect("held playground preview")
+                .snapshot()
+                .edges()
+                .iter()
+                .filter(|edge| matches!(
+                    edge.geometry,
+                    geosolve_sketch_features::ComputedEdgeGeometry::CircularArc(_)
+                ))
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    fn fillet_playground_crossing_and_high_valence_use_bounded_screen_pick_policy() {
+        let mut catalog = SampleCatalogState::default();
+        let mut coordinator = catalog
+            .open_key(SampleId::FilletWorkshop.key())
+            .expect("fillet playground");
+        let scene = fillet_playground_scene(&coordinator);
+        let mut authoring = activate_fillet_playground(&coordinator);
+        let first = coordinator
+            .transact_feature_authoring_pick_at(
+                &mut authoring,
+                &scene,
+                scene.viewport.model_to_screen([-6.0, 5.0]),
+                PickTolerance::default(),
+                "Playground crossing Fillet",
+            )
+            .expect("first overlapping-line transaction");
+        assert!(matches!(
+            first.outcome,
+            FeatureAuthoringOutcome::Collecting { ref pending, .. } if pending.len() == 1
+        ));
+        let second = coordinator
+            .transact_feature_authoring_pick_at(
+                &mut authoring,
+                &scene,
+                scene.viewport.model_to_screen([-3.0, 8.0]),
+                PickTolerance::default(),
+                "Playground crossing Fillet",
+            )
+            .expect("second overlapping-line transaction");
+        assert!(
+            matches!(
+            &second.outcome,
+            FeatureAuthoringOutcome::PreviewRequested { guidance, .. }
+                    if guidance.completed_corners == 1
+            ),
+            "second crossing click did not complete the corner: {:?}",
+            second.outcome
+        );
+        assert!(second.preview.is_some());
+
+        let mut coordinator = catalog
+            .open_key(SampleId::FilletWorkshop.key())
+            .expect("fresh fillet playground");
+        let scene = fillet_playground_scene(&coordinator);
+        let mut authoring = activate_fillet_playground(&coordinator);
+        let before = authoring.clone();
+        let ambiguous = coordinator
+            .transact_feature_authoring_pick_at(
+                &mut authoring,
+                &scene,
+                scene.viewport.model_to_screen([14.0, 6.0]),
+                PickTolerance::default(),
+                "Playground high-valence Fillet",
+            )
+            .expect("high-valence transaction");
+        assert!(matches!(
+            ambiguous.outcome,
+            FeatureAuthoringOutcome::Warning(ref warning)
+                if warning.kind == FeatureAuthoringWarningKind::AmbiguousTrimSide
+        ));
+        assert!(ambiguous.preview.is_none());
+        assert_eq!(authoring, before);
+
+        let first_branch = coordinator
+            .transact_feature_authoring_pick_at(
+                &mut authoring,
+                &scene,
+                scene.viewport.model_to_screen([14.0, 8.0]),
+                PickTolerance::default(),
+                "Playground high-valence recovery",
+            )
+            .expect("first unambiguous branch transaction");
+        assert!(matches!(
+            first_branch.outcome,
+            FeatureAuthoringOutcome::Collecting { ref pending, .. } if pending.len() == 1
+        ));
+        let second_branch = coordinator
+            .transact_feature_authoring_pick_at(
+                &mut authoring,
+                &scene,
+                scene.viewport.model_to_screen([12.25, 4.75]),
+                PickTolerance::default(),
+                "Playground high-valence recovery",
+            )
+            .expect("second unambiguous branch transaction");
+        assert!(matches!(
+            second_branch.outcome,
+            FeatureAuthoringOutcome::PreviewRequested { ref guidance, .. }
+                if guidance.completed_corners == 1
+        ));
+        assert!(second_branch.preview.is_some());
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one exact rejected-screen-pick and recovery transaction"
+    )]
+    fn fillet_playground_short_middle_span_rejects_and_recovers_transactionally() {
+        let mut catalog = SampleCatalogState::default();
+        let mut coordinator = catalog
+            .open_key(SampleId::FilletWorkshop.key())
+            .expect("fillet playground");
+        let scene = fillet_playground_scene(&coordinator);
+        let mut authoring = activate_fillet_playground(&coordinator);
+        let initial_options = FeatureAuthoringOptions {
+            fillet_radius: Some(1.0),
+            ..authoring.options()
+        };
+        coordinator
+            .transact_feature_authoring_options(
+                &mut authoring,
+                initial_options,
+                None,
+                "Oversized playground Fillet",
+            )
+            .expect("initialize oversized playground radius");
+        let first = coordinator
+            .transact_feature_authoring_pick_at(
+                &mut authoring,
+                &scene,
+                scene.viewport.model_to_screen([15.0, -3.0]),
+                PickTolerance::default(),
+                "Playground claim-conflict Fillet",
+            )
+            .expect("first short-middle corner transaction");
+        assert!(matches!(
+            first.outcome,
+            FeatureAuthoringOutcome::PreviewRequested { ref guidance, .. }
+                if guidance.completed_corners == 1
+        ));
+        let one_corner_state = authoring.clone();
+        let valid_preview = coordinator
+            .feature_authoring_preview()
+            .expect("valid one-corner short-middle preview")
+            .metadata()
+            .clone();
+
+        let error = coordinator
+            .transact_feature_authoring_pick_at(
+                &mut authoring,
+                &scene,
+                scene.viewport.model_to_screen([15.0, -4.75]),
+                PickTolerance::default(),
+                "Playground claim-conflict Fillet",
+            )
+            .expect_err("oversized second corner must reject");
+        assert!(matches!(
+            error,
+            CoordinatorError::FeatureAuthoringPreviewRejected(
+                ComputedFeatureFailure::ConsumedSourceInterval { .. }
+                    | ComputedFeatureFailure::EndpointClaimConflict { .. }
+            )
+        ));
+        assert_eq!(authoring, one_corner_state);
+        assert_eq!(
+            coordinator
+                .feature_authoring_preview()
+                .expect("valid preview retained after rejection")
+                .metadata(),
+            &valid_preview
+        );
+
+        let recovered_options = FeatureAuthoringOptions {
+            fillet_radius: Some(0.5),
+            ..authoring.options()
+        };
+        let resized = coordinator
+            .transact_feature_authoring_options(
+                &mut authoring,
+                recovered_options,
+                None,
+                "Recovered playground Fillet",
+            )
+            .expect("smaller shared-radius retry");
+        assert!(matches!(
+            resized.outcome,
+            FeatureAuthoringOutcome::PreviewRequested { ref guidance, .. }
+                if guidance.completed_corners == 1
+        ));
+        assert!(resized.preview.is_some());
+        let recovered = coordinator
+            .transact_feature_authoring_pick_at(
+                &mut authoring,
+                &scene,
+                scene.viewport.model_to_screen([15.0, -4.75]),
+                PickTolerance::default(),
+                "Recovered playground Fillet",
+            )
+            .expect("retry second short-middle corner");
+        assert!(matches!(
+            recovered.outcome,
+            FeatureAuthoringOutcome::PreviewRequested { ref guidance, .. }
+                if guidance.completed_corners == 2
+        ));
+        assert!(recovered.preview.is_some());
+        assert_eq!(
+            authoring.options().fillet_radius.map(f64::to_bits),
+            Some(0.5_f64.to_bits())
+        );
+        assert_eq!(
+            coordinator
+                .feature_authoring_preview()
+                .expect("recovered two-corner preview")
+                .snapshot()
+                .edges()
+                .iter()
+                .filter(|edge| matches!(
+                    edge.geometry,
+                    geosolve_sketch_features::ComputedEdgeGeometry::CircularArc(_)
+                ))
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    fn fillet_playground_curve_specimens_author_through_screen_transactions() {
+        let cases = [
+            (
+                "Line-circle linear support",
+                0.4,
+                "Line-circle circular support",
+                4.5,
+            ),
+            (
+                "Line-Bezier linear support",
+                0.44,
+                "Line-Bezier curved support",
+                0.74,
+            ),
+        ];
+        for (first_label, first_parameter, second_label, second_parameter) in cases {
+            let mut catalog = SampleCatalogState::default();
+            let mut coordinator = catalog
+                .open_key(SampleId::FilletWorkshop.key())
+                .expect("fillet playground");
+            let scene = fillet_playground_scene(&coordinator);
+            let mut authoring = activate_fillet_playground(&coordinator);
+            assert_eq!(
+                authoring.options().fillet_radius.map(f64::to_bits),
+                Some(0.5_f64.to_bits()),
+                "the playground should open with a useful curved-pair radius"
+            );
+            let (first_span, second_span, first_position, second_position) = {
+                let document = coordinator
+                    .operation_authoring_document()
+                    .expect("accepted playground document");
+                let span = |label| CurveSpan {
+                    curve: document
+                        .curves()
+                        .iter()
+                        .find(|curve| curve.label == label)
+                        .unwrap_or_else(|| panic!("missing playground curve `{label}`"))
+                        .id,
+                    segment: 0,
+                };
+                let first_span = span(first_label);
+                let second_span = span(second_label);
+                (
+                    first_span,
+                    second_span,
+                    document
+                        .evaluate_curve_jet(first_span, first_parameter)
+                        .expect("first playground pick position")
+                        .position,
+                    document
+                        .evaluate_curve_jet(second_span, second_parameter)
+                        .expect("second playground pick position")
+                        .position,
+                )
+            };
+            let first = coordinator
+                .transact_feature_authoring_pick_at(
+                    &mut authoring,
+                    &scene,
+                    scene.viewport.model_to_screen(first_position.into()),
+                    PickTolerance::default(),
+                    format!("{first_label} Fillet"),
+                )
+                .expect("first curve-family transaction");
+            assert!(matches!(
+                first.outcome,
+                FeatureAuthoringOutcome::Collecting { ref pending, .. }
+                    if pending.len() == 1
+            ));
+            let second = coordinator
+                .transact_feature_authoring_pick_at(
+                    &mut authoring,
+                    &scene,
+                    scene.viewport.model_to_screen(second_position.into()),
+                    PickTolerance::default(),
+                    format!("{first_label} / {second_label} Fillet"),
+                )
+                .expect("second curve-family transaction");
+            let FeatureAuthoringOutcome::PreviewRequested {
+                ref candidate,
+                ref guidance,
+            } = second.outcome
+            else {
+                panic!(
+                    "{first_label} / {second_label} did not produce a preview: {:?}",
+                    second.outcome
+                );
+            };
+            assert_eq!(guidance.completed_corners, 1);
+            let corner = &candidate.corners()[0].corner;
+            assert!([corner.first.source.span, corner.second.source.span].contains(&first_span));
+            assert!([corner.first.source.span, corner.second.source.span].contains(&second_span));
+            assert!(second.preview.is_some());
+        }
     }
 
     #[test]
@@ -844,7 +1338,7 @@ mod tests {
             let polyline = document
                 .curves()
                 .iter()
-                .find(|curve| curve.label == "Open-polyline corner support")
+                .find(|curve| curve.label == "Editable batch and sequential polyline")
                 .expect("workshop polyline corner");
             let CurveDefinition::Polyline { points, .. } = &polyline.definition else {
                 panic!("workshop corner support must remain a polyline");

@@ -417,6 +417,12 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   background-image: linear-gradient(#202627 1px, transparent 1px), linear-gradient(90deg, #202627 1px, transparent 1px);
   background-size: 25px 25px;
 }
+#wb-viewport,
+#wb-viewport * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
 #wb-viewport { width: 100%; height: 100%; touch-action: none; }
 .wb-canvas-feature-options {
   position: absolute;

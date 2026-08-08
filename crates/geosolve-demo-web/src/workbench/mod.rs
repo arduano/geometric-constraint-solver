@@ -21,6 +21,9 @@ mod scene;
 const WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS: f64 = 0.25;
 
 #[cfg(any(target_arch = "wasm32", test))]
+const CANVAS_BROWSER_DEFAULT_GUARD_EVENTS: [&str; 2] = ["selectstart", "dragstart"];
+
+#[cfg(any(target_arch = "wasm32", test))]
 #[derive(Default)]
 struct PointerMoveQueue {
     pending: Option<geosolve_constraint_editor::PointerInput>,
@@ -857,6 +860,7 @@ pub(crate) mod wasm {
     ) -> Result<(), JsValue> {
         let viewport = required(document, "wb-viewport")?;
         let pointer_moves = Rc::new(RefCell::new(super::PointerMoveQueue::default()));
+        install_canvas_browser_default_guards(&viewport)?;
         install_pan_listeners(document, workbench, &viewport)?;
         install_pointer_listener(
             document,
@@ -925,6 +929,17 @@ pub(crate) mod wasm {
         viewport.add_event_listener_with_callback("dblclick", double.as_ref().unchecked_ref())?;
         double.forget();
         install_wheel_zoom(document, workbench, &viewport)?;
+        Ok(())
+    }
+
+    fn install_canvas_browser_default_guards(viewport: &Element) -> Result<(), JsValue> {
+        for name in super::CANVAS_BROWSER_DEFAULT_GUARD_EVENTS {
+            let callback = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
+                event.prevent_default();
+            });
+            viewport.add_event_listener_with_callback(name, callback.as_ref().unchecked_ref())?;
+            callback.forget();
+        }
         Ok(())
     }
 
@@ -3459,14 +3474,62 @@ mod tests {
     };
 
     use super::{
-        AuthoringItemInput, FeatureAuthoringRadiusRefresh, OverlayRect, PointerMoveQueue,
-        canvas_overlay_position, change_owns_option_control_click,
+        AuthoringItemInput, CANVAS_BROWSER_DEFAULT_GUARD_EVENTS, FeatureAuthoringRadiusRefresh,
+        OverlayRect, PointerMoveQueue, canvas_overlay_position, change_owns_option_control_click,
         computed_profile_boundary_with_authoring, geometry_hover_selector,
         observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
         palette_details_overlay_reflow_listener, refresh_held_feature_authoring_radius,
         restore_held_feature_authoring_radius, revoke_held_feature_authoring_preview,
         selected_feature_authoring_corner_index,
     };
+
+    #[test]
+    fn canvas_browser_defaults_are_blocked_only_inside_the_svg_surface() {
+        assert_eq!(
+            CANVAS_BROWSER_DEFAULT_GUARD_EVENTS,
+            ["selectstart", "dragstart"]
+        );
+
+        let html = include_str!("../../index.html");
+        let viewport_start = html.find("<svg id=\"wb-viewport\"").expect("canvas SVG");
+        let viewport_end = viewport_start
+            + html[viewport_start..]
+                .find("</svg>")
+                .expect("canvas SVG boundary");
+        let viewport_tag_end = viewport_start
+            + html[viewport_start..]
+                .find('>')
+                .expect("canvas SVG opening tag");
+        assert!(
+            html[viewport_start..=viewport_tag_end].contains("draggable=\"false\""),
+            "the canvas must opt out of native element dragging"
+        );
+        let options_overlay = html
+            .find("id=\"wb-feature-options-overlay\"")
+            .expect("Fillet options overlay");
+        let radius_input = html
+            .find("id=\"wb-feature-fillet-radius\"")
+            .expect("Fillet radius input");
+        assert!(viewport_end < options_overlay && options_overlay < radius_input);
+
+        let css = include_str!("../../styles.css");
+        let guard_start = css
+            .find("#wb-viewport,\n#wb-viewport * {")
+            .expect("scoped canvas browser-default guard");
+        let guard_end = guard_start
+            + css[guard_start..]
+                .find('}')
+                .expect("canvas browser-default guard boundary");
+        let guard = &css[guard_start..=guard_end];
+        for declaration in [
+            "-webkit-user-select: none;",
+            "user-select: none;",
+            "-webkit-user-drag: none;",
+        ] {
+            assert!(guard.contains(declaration), "missing `{declaration}`");
+        }
+        assert!(!guard.contains("wb-feature-options"));
+    }
 
     fn grouped_fillet_fixture() -> (
         RetainedEditorCoordinator,
