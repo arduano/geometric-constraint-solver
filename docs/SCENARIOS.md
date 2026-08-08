@@ -2007,6 +2007,22 @@ while the sibling Fillet options and other HTML remain selectable/editable. Nati
 screen/coordinator and focused presentation tests qualify this checkpoint; it is not browser E2E
 evidence. `M66-PF003` is mechanically complete on `02649cc` and awaits human retest with M66 open.
 
+### M66-CF10 - PF004 preview-arc/native-support overlap
+
+In active Fillet authoring, collect a valid two-support corner and press the generated preview arc
+near either contact, where the arc's painted hit stroke and a native parent are both inside their
+respective tolerances. The painted `FeatureCorner` owns a radius gesture only after the coordinator
+matches the exact held candidate, accepted/computed scene provenance and an independent headless
+hit on that corner's generated curve. The native parent is not collected as a new pending support,
+the grouped candidate and preview remain unchanged, and move/release edit the shared radius.
+
+The direct regression also supplies a foreign corner owner, a second pointer during the live
+gesture and a Shift-modified press. Foreign/stale intent and the second press reject without
+mutating authoring, preview, selection or durable identities; the original gesture still
+moves/releases. Modifiers cannot toggle the explicit radius owner away, while ordinary selection
+modifier behavior remains unchanged. `M66-PF004` is mechanically complete on `ac31791`, is live
+and HTTP-verified at the Tailscale endpoint, and awaits human retest with M66 open.
+
 ### Archived solver-owned M66 scenario record
 
 The prior single-corner, M28-backed ordinary-UI scenarios and findings `M66-F002` through

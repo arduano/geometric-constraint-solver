@@ -5,11 +5,12 @@
 Status: post-pivot implementation and mechanical qualification are Pass. Every human result is
 Pending; do not use the archived `1034afc` build for this scorecard.
 
-Candidate source: `02649cc` (`Add editable Fillet authoring playground`), extending
-presentation-smoothed candidate `a34d137` and resolving `M66-PF003` after `M66-PF001`/`M66-PF002`.
+Candidate source: `ac31791` (`Keep Fillet preview drags out of support collection`), extending
+editable-playground candidate `02649cc` and resolving `M66-PF004` after
+`M66-PF001`/`M66-PF002`/`M66-PF003`.
 
-Tailscale endpoint: `http://100.94.63.83:8080/` (release service live-rebuilt and HTTP verified on
-2026-08-08; the served `02649cc` HTML contains the scoped non-draggable SVG marker).
+Tailscale endpoint: `http://100.94.63.83:8080/` (release service live-rebuilt from `ac31791` and
+HTTP verified on 2026-08-08; the served HTML contains the scoped non-draggable SVG marker).
 
 Use the ordinary GeoSolve Sketch Workbench only. This scorecard validates the normal computed
 Fillet route under ADR 0031. It does not ask the UI to create or edit advanced M28 solver-owned
@@ -28,7 +29,8 @@ away from their exact intersection so manual intent is unambiguous.
 
 1. Draw a four-point open polyline with three spans.
 2. Choose ordinary **Fillet**, select both interior corners and inspect preview before Apply.
-3. Change the shared radius numerically and by dragging a preview arc/radius grip.
+3. Change the shared radius numerically and by dragging a preview arc/radius grip, including near
+   each contact where the generated arc visually meets a parent span.
 4. Apply with Enter. Repeat with reverse corner selection and with repeated corner/curve-pair
    clicks instead of preselection.
 5. Select each generated arc and adjust the shared radius after publication.
@@ -142,7 +144,7 @@ Disposition on `b53a451`: absence of an explicit radius now preserves the initia
 value; point corners are atomic semantic targets; native hits are bounded and deterministic;
 high-valence ambiguity cannot fall through to an arbitrary line; and picks/options commit only with
 a freshly `Current` coordinator-held preview. Refresh and Apply defensively reject failed feature
-evaluations. The direct Rust suites `m66_feature_authoring.rs` (13 tests) and
+evaluations. The direct Rust suites `m66_feature_authoring.rs` (14 tests) and
 `m66_feature_authoring_matrix.rs` (15 tests) cover both pick orders, exact screen picks, shared
 endpoints, overlap/crowding, stale and rejected retry paths, preview lifetime, transactional option
 changes and full sequential adjacent-set publication with Undo/Redo.
@@ -189,6 +191,35 @@ Status: mechanically resolved; focused human retest Pending. Exercise each playg
 confirm canvas drags do not select page text, and confirm text plus the Fillet radius input still
 work normally outside the SVG.
 
+### M66-PF004 — preview-radius drag could consume a parent and strand authoring
+
+Observed: after two valid line selections produced a Fillet preview, pressing or beginning to drag
+the preview arc near a contact could deselect one parent and clear the preview. The consumed parent
+then became the first support of an unintended new corner; selecting it again reported duplicate
+support, so cancellation appeared to be the only recovery.
+
+Root cause: active Fillet pointer-down always ran the native authoring collector first. The
+generated arc's transparent painted hit stroke and its native parent intentionally overlap near a
+Fillet contact, so the native parent won semantic collection before the old radius fallback could
+run. Existing radius tests entered below this web/coordinator arbitration seam and did not exercise
+the overlap.
+
+Disposition on `ac31791`: the painted stable `FeatureCorner` now routes through one coordinator-
+owned pointer transaction before native collection. Painted identity is only a hint: the exact held
+candidate and current accepted/computed scene must match, and the headless editor independently
+hits that owner's generated curve. Stale/foreign owners and a second live radius press reject
+state-neutrally; the original gesture remains usable. Shift/Control/Command cannot toggle the
+explicit radius owner away, while ordinary selection keeps its prior modifier semantics. A direct
+screen/coordinator regression constructs a point where both arc and parent are in tolerance and
+covers pointer-down, move, release, invalid-owner rejection, second-pointer survival and modified
+press behavior. The full formatting, warnings-denied workspace Clippy/test, WASM and release Trunk
+gate passes.
+
+Status: mechanically resolved; focused human retest Pending. In the playground, select both
+parents of a corner, then drag the preview arc at its midpoint and near both contacts. Confirm the
+preview never turns back into a one-line pending selection and that radius dragging continues
+normally after a rerender.
+
 The old `M66-F002` through `M66-F013` ledger belongs to the archived solver-owned UI architecture
 at `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`). Those regressions remain useful
 compatibility evidence, but their mechanically qualified disposition does not qualify this UAT.
@@ -201,6 +232,6 @@ M66 closes only after:
 2. formatting, warnings-denied locked workspace Clippy, locked all-feature workspace tests,
    all-feature demo-web WASM, release Trunk and `git diff --check` pass on that source (satisfied);
 3. every scorecard item is Pass or an explicitly accepted scoped limitation;
-4. every post-pivot finding (`M66-PF001` through `M66-PF003`) has a direct tested disposition and
+4. every post-pivot finding (`M66-PF001` through `M66-PF004`) has a direct tested disposition and
    human retest; and
 5. the supervising human explicitly approves M66.

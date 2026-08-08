@@ -992,7 +992,7 @@ in `docs/M65_UAT.md`; M65 is complete.
 ## M66 acceptance: computed 2D Fillet features
 
 Status: active after the 2026-08-07 computed-feature pivot. Post-pivot implementation and
-mechanical qualification pass on editable-playground candidate source `02649cc`;
+mechanical qualification pass on painted-preview-routing candidate source `ac31791`;
 supervising-human UAT remains open.
 
 The superseded solver-owned ordinary-UI build is preserved at
@@ -1042,6 +1042,12 @@ M66 is accepted only when all of the following are true:
 - Native browser text-selection and element-drag defaults are suppressed only within the SVG
   canvas. Fillet option inputs and other HTML remain selectable/editable. This adapter contract is
   directly tested without restoring or claiming browser E2E qualification.
+- A painted computed-preview arc owns radius pointer-down even where its native parent support is
+  also within tolerance. Stable painted-item metadata is only a hint: the coordinator requires the
+  exact held whole-feature preview and current scene provenance, and the headless editor
+  independently hits the named owner. Stale/foreign owners and any second radius press reject
+  state-neutrally; the original gesture remains usable, and Shift/Control/Command cannot toggle its
+  owner away. Ordinary pointer selection keeps its existing modifier behavior.
 - A generated arc selects stable corner/set provenance. Dragging it changes only the shared feature
   radius; deleting it removes its corner, deleting the final corner removes the set and suppression
   is set-wide. Generated geometry is not a sketch-constraint operand. Every native source point

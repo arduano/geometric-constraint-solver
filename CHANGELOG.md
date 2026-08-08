@@ -218,6 +218,13 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   defaults without affecting the sibling Fillet options or other HTML. Direct Rust qualification
   and the full native, warnings-denied, workspace, WASM and release gate pass; no browser E2E is
   restored or claimed and human M66 UAT remains open.
+- Added `M66-PF004` on candidate `ac31791`: painted computed-preview arcs now own radius presses
+  ahead of overlapping native support collection through stable item metadata, exact held-preview
+  and scene-provenance validation, and an independent owner hit. Stale/foreign hints and a second
+  radius press reject state-neutrally, modifier keys cannot toggle the radius owner away, and a
+  direct overlap regression covers the surviving gesture through move/release. The full formatting,
+  warnings-denied workspace Clippy/test, WASM and release Trunk gates pass; the candidate is live
+  and HTTP-verified over Tailscale, while focused human M66 retest remains open.
 - Preserved the superseded Fillet/Offset/Mirror candidate for historical inspection at
   `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`). It is not an active or approved
   M66 candidate.

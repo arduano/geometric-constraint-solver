@@ -34,9 +34,9 @@ construction/NURBS UAT and certified all-family visual profiles.
   `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`). M27/M28 and M58 associative-
   Fillet APIs remain advanced/backward-compatible behavior with no automatic migration. M66 adds
   no Offset implementation or profile consumption. Implementation and mechanical qualification
-  pass on editable-playground candidate source `02649cc`, which extends the presentation-smoothed
-  `a34d137` boundary with focused ordinary-workspace UAT fixtures and SVG-scoped browser-default
-  guards. Focused supervising-human UAT remains open.
+  pass on painted-preview-routing candidate source `ac31791`, which extends editable-playground
+  source `02649cc` with explicit computed-preview pointer ownership and state-neutral invalid-
+  intent rejection. Focused supervising-human UAT remains open.
 - **Planned sequence:** no milestone is assigned after M66. Every newly scoped milestone ends in
   its own human UAT.
 
@@ -410,6 +410,18 @@ out of native text selection and element dragging, and the adapter prevents only
 and `dragstart` defaults at that boundary. The sibling Fillet options overlay, sidebar and other
 HTML retain normal selection and input behavior. Focused native presentation tests qualify this
 scoping; no browser E2E/CDP harness is restored or claimed.
+
+Follow-up `M66-PF004` makes painted computed-preview intent explicit across that adapter boundary.
+The workbench resolves the nearest stable `data-editor-item` owner from the painted DOM target and
+passes the resulting `SelectionItem` only as a hint; it owns no geometry fallback rule. The
+coordinator admits a `FeatureCorner` only when it belongs to the exact held whole-feature preview,
+the collector still represents that preview's complete candidate, and the scene matches current
+accepted and computed provenance. The headless editor then independently requires the pointer to
+hit that owner's computed curve. A stale or foreign owner is rejected without becoming a native
+support pick. While one radius gesture is active, any further radius press is rejected before
+mutation so the original gesture remains valid. The explicit radius path uses replace-selection
+semantics even when Shift, Control or Command is held; ordinary selection clicks retain their
+existing modifier behavior.
 
 Invalid computed output is withheld rather than drawn from an older snapshot. A valid sketch edit
 still publishes and may leave a repairable feature failure. Base-only profile/fill presentation is
@@ -827,7 +839,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
 - M65: completed and approved predictable, bounded projected dragging for the existing editable
   mechanism samples, including twin-roller hit routing and rank-one pantograph-guide projection.
 - M66: active computed-feature architecture and grouped authoring for ordinary multi-corner 2D
-  Fillets outside the constraint graph, with an ordinary editable Fillet playground and
-  SVG-scoped browser-default isolation on candidate `02649cc`, ending in its own focused UAT; the
-  superseded qualified solver-owned UI source remains archived at
+  Fillets outside the constraint graph, with an ordinary editable Fillet playground, SVG-scoped
+  browser-default isolation and explicit painted-preview radius routing on candidate `ac31791`,
+  ending in its own focused UAT; the superseded qualified solver-owned UI source remains archived at
   `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`).

@@ -2,8 +2,8 @@
 
 # M66 implementation: computed 2D Fillet features
 
-Status: implementation and mechanical qualification complete on editable-playground candidate
-source `02649cc` after the 2026-08-07 ADR 0031 pivot. Supervising-human UAT remains open.
+Status: implementation and mechanical qualification complete on painted-preview-routing candidate
+source `ac31791` after the 2026-08-07 ADR 0031 pivot. Supervising-human UAT remains open.
 
 The qualified but unapproved solver-owned ordinary-UI endpoint, commit `1034afc`, is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07`. The earlier three-tool experiment remains at
@@ -43,6 +43,13 @@ qualification evidence.
   only with a freshly `Current` whole-feature preview. Rejected local/global evaluation retains the
   previous state and exact preview. Refresh and final Apply defensively enforce the same current-
   evaluation invariant.
+- `RetainedEditorCoordinator::transact_feature_authoring_pointer_down(...)` arbitrates a painted
+  current-preview radius grip before ordinary native support collection. Painted identity is only
+  an intent hint: admission requires the exact held candidate, current accepted/computed scene
+  provenance and an independent headless hit on the named generated curve. Foreign/stale owners
+  and a second radius press reject before mutation; the original gesture remains valid. The
+  explicit grip path keeps its owner selected despite Shift/Control/Command without changing
+  ordinary modifier-selection behavior.
 - Native screen picks use a fixed 256-candidate limit before allocation/sorting and one bounded
   corner-incidence index. Incomplete endpoints and duplicate pending supports may fall through;
   true high-valence ambiguity never guesses an underlying curve.
@@ -84,6 +91,10 @@ qualification evidence.
   `selectstart`/`dragstart` guards prevent those browser defaults. The sibling Fillet options and
   other HTML retain normal selection/input behavior. This is directly tested adapter policy, not
   browser E2E evidence.
+- For active Fillet pointer-down, the web adapter resolves the closest stable
+  `[data-editor-item]` owner from the painted SVG target and forwards it to the coordinator. It no
+  longer attempts a native authoring pick before falling back to radius interaction, so a preview
+  arc overlapping its parent cannot consume that parent and strand the grouped candidate.
 
 The normal UI removes Driving/Reference radius choice and does not auto-create a radius scalar,
 dimension, constraint, M28 association or `DocumentCurveTrimView`. M27/M28 public Fillet types and
@@ -123,8 +134,9 @@ redesigning persistence. M66 implements no Offset.
 
 ## 3. Exact commands and outcomes
 
-Presentation-smoothed source `a34d137` passed the previously recorded full gate. Candidate source
-`02649cc` repeated the following commands successfully on one implementation state:
+Presentation-smoothed source `a34d137` passed the previously recorded full gate and editable-
+playground source `02649cc` added the focused UAT fixture. Candidate source `ac31791` repeated the
+following commands successfully on one implementation state:
 
 ```text
 nix-shell shell.nix --run 'cargo fmt --all -- --check'
@@ -139,8 +151,8 @@ git diff --check
 Outcomes:
 
 - `geosolve-sketch-features`: 21 tests passed;
-- `geosolve-constraint-editor`: 175 unit tests and 45 integration tests passed, including 28
-  focused M66 interaction-engine tests;
+- `geosolve-constraint-editor`: 175 unit tests and 46 integration tests passed, including 29
+  focused M66 interaction-engine tests (14 feature-authoring plus 15 matrix tests);
 - `geosolve-demo-web`: 73 tests passed, including playground screen/coordinator transactions and
   the focused SVG browser-default guard presentation contract;
 - the complete locked all-feature workspace test suite passed;
@@ -165,6 +177,10 @@ Mechanical acceptance passed; supervising-human UAT remains open. Direct qualifi
   retries;
 - coordinator-transactional pick/options/preview publication, rejected refresh/apply defenses and
   the complete first-set publication through adjacent second-set publication plus Undo/Redo;
+- painted preview-arc ownership where the same screen position also hits a native parent,
+  including exact preview/state preservation, complete radius move/release, state-neutral foreign
+  and second-pointer rejection, survival of the original gesture and modifier-safe owner
+  selection;
 - inflected cubic pickability, minimal straight-line sampling, computed Fillet minimum chord density
   and the denser advanced-drafting preview;
 - the ordinary editable playground's multi-corner batch, independent-line interior picks,
@@ -184,7 +200,7 @@ Mechanical acceptance passed; supervising-human UAT remains open. Direct qualifi
 - ordinary-UI absence of M28 associations, trim views, constraints and radius dimensions; and
 - M27/M28/M30/M58 backward compatibility.
 
-The Tailscale UAT service has live-rebuilt from `02649cc`; its served HTML was verified to contain
+The Tailscale UAT service has live-rebuilt from `ac31791`; its served HTML was verified to contain
 the scoped canvas marker (`draggable="false"`) and is
 reachable at `http://100.94.63.83:8080/`. Execute `docs/M66_UAT.md`; M66 stays open until the
 supervising human explicitly approves it.
@@ -197,5 +213,5 @@ supervising human explicitly approves it.
 - Version-one computed features reference native constrained spans only.
 - Computed-on-computed chaining, Offset, Bake/Explode and cross-revision output topological naming
   are deferred.
-- The remaining blocker is supervising-human UAT approval of candidate source `02649cc` at the
+- The remaining blocker is supervising-human UAT approval of candidate source `ac31791` at the
   verified Tailscale endpoint.

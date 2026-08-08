@@ -125,7 +125,7 @@ inflections that could disappear from both rendering and picking. Presentation-s
 `a34d137` preserves the initialized radius, keeps corners atomic, resolves bounded overlapping
 hits without guessing, and commits picks or option changes only together with an independently current
 whole-feature preview. The full mechanical gate passes; focused human retest and the rewritten UAT
-are the only open M66 gates. Checkpoint `M66-PF003` advances the nominated source to `02649cc` and
+are the only open M66 gates. Checkpoint `M66-PF003` advanced the source to `02649cc` and
 turns the stable `fillet-workshop` sample into an ordinary editable **2D Fillet playground** under
 **Samples → Curves & constructions**. It places independent line-line, line-circle,
 line-quadratic-Bezier and high-valence reference specimens beside unlocked batch/sequential and
@@ -133,8 +133,16 @@ short-middle conflict polylines. The workbench also suppresses native browser te
 element-drag defaults only inside the SVG canvas; the Fillet options overlay and other HTML remain
 normally selectable/editable. Direct Rust presentation and screen/coordinator transaction tests,
 not a restored browser E2E harness, own this checkpoint. The full mechanical gate passes on
-`02649cc`; focused human retest of `M66-PF001` through `M66-PF003` and the rewritten UAT remain the
-only open M66 gates.
+`02649cc`. Follow-up `M66-PF004` nominates `ac31791` and makes the painted computed-preview arc,
+rather than an overlapping native support hitbox, own radius pointer-down. The presentation passes
+stable painted-item metadata; the coordinator admits only an owner in the exact held preview and
+current scene; and the headless editor independently confirms the pointer hits that owner's arc.
+Stale or foreign owners and any second radius press reject without changing authoring, preview,
+selection or durable identity state. Selection-extension modifiers cannot toggle the owner away
+from this explicit gesture. A direct overlap regression covers the complete down/move/up lifecycle
+and proves the original gesture survives a rejected second press. The full mechanical gate passes
+on `ac31791`, now live and HTTP-verified at the Tailscale endpoint; focused human retest of
+`M66-PF001` through `M66-PF004` and the rewritten UAT remain the only open M66 gates.
 M62 follow-up `M62-F001` corrects accepted-state line-angle seeding and exposes acute-degree
 presentation while retaining the explicit directed-radian solver branch.
 Follow-up `M62-F002` gives canvas pointer-down exclusive ownership of canvas authoring picks,
