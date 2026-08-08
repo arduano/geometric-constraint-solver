@@ -73,6 +73,53 @@ fn proposed(
     *proposal
 }
 
+fn assert_control_stops_leave_session_unchanged(
+    proposal: &SketchOperationProposal,
+    session: &mut RetainedSketchDocumentSession,
+) {
+    let before_input = session.prepared_input();
+    let before_document = session.design_document().clone();
+    let before_accepted = session
+        .accepted_state()
+        .map(geosolve_sketch::SketchAcceptedDocumentState::identity);
+
+    let (handle, token) = cancellation_pair();
+    handle.cancel();
+    let cancelled = proposal
+        .apply_controlled(
+            session,
+            OperationControl::new(token, OperationLimits::unlimited()),
+        )
+        .unwrap();
+    assert!(matches!(cancelled, OperationOutcome::Cancelled { .. }));
+    assert_eq!(session.prepared_input(), before_input);
+    assert_eq!(session.design_document(), &before_document);
+    assert_eq!(
+        session
+            .accepted_state()
+            .map(geosolve_sketch::SketchAcceptedDocumentState::identity),
+        before_accepted
+    );
+
+    let mut limits = OperationLimits::unlimited();
+    limits.document_validation_items = 0;
+    let exhausted = proposal
+        .apply_controlled(
+            session,
+            OperationControl::new(CancellationToken::default(), limits),
+        )
+        .unwrap();
+    assert!(matches!(exhausted, OperationOutcome::WorkExhausted { .. }));
+    assert_eq!(session.prepared_input(), before_input);
+    assert_eq!(session.design_document(), &before_document);
+    assert_eq!(
+        session
+            .accepted_state()
+            .map(geosolve_sketch::SketchAcceptedDocumentState::identity),
+        before_accepted
+    );
+}
+
 #[test]
 fn split_break_and_trim_publish_ordered_multi_interval_visibility() {
     let mut document = SketchDocument::new(10.0).unwrap();
@@ -442,15 +489,16 @@ fn associative_fillet_is_only_a_public_sketch_transaction_wrapper() {
         radius: 1.0,
         radius_mode: DocumentDimensionMode::Driving,
     };
-    let outcome = proposed(
+    let proposal = proposed(
         &session,
         SketchOperationRequest::AssociativeFillet {
             label: "fillet".into(),
             request,
         },
-    )
-    .apply(&mut session)
-    .unwrap();
+    );
+    assert_control_stops_leave_session_unchanged(&proposal, &mut session);
+
+    let outcome = proposal.apply(&mut session).unwrap();
     assert!(outcome.published_accepted_identity().is_some());
     assert_eq!(session.design_document().constraints().len(), 1);
 }

@@ -216,6 +216,12 @@ impl ComputedFeatureAuthoringSnapshot {
         self.accepted
     }
 
+    /// Returns the exact accepted sketch document captured for authoring.
+    #[must_use]
+    pub const fn sketch_document(&self) -> &SketchDocument {
+        &self.sketch
+    }
+
     /// Resolves two ordered native picks into canonical branch-explicit Fillet intent.
     pub fn resolve_fillet_corner(
         &self,

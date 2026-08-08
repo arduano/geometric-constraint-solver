@@ -94,10 +94,7 @@ fn activate_authoring(
     let snapshot = coordinator
         .feature_authoring_snapshot()
         .expect("feature-authoring snapshot");
-    let document = coordinator
-        .operation_authoring_document()
-        .expect("current accepted authoring document")
-        .clone();
+    let document = snapshot.sketch_document().clone();
     let mut authoring = FeatureAuthoringState::default();
     assert!(matches!(
         authoring.activate(&snapshot, &document, FeatureAuthoringTool::Fillet, &[]),
@@ -165,11 +162,7 @@ fn exercise_blank_radius_two_line_chain(order: [usize; 2]) {
         .coordinator
         .feature_authoring_snapshot()
         .expect("feature-authoring snapshot");
-    let accepted_document = fixture
-        .coordinator
-        .operation_authoring_document()
-        .expect("current accepted authoring document")
-        .clone();
+    let accepted_document = snapshot.sketch_document().clone();
     let mut authoring = FeatureAuthoringState::default();
     assert!(matches!(
         authoring.activate(
@@ -574,10 +567,7 @@ fn published_feature_selection_does_not_poison_the_next_fillet_batch() {
         .coordinator
         .feature_authoring_snapshot()
         .expect("next authoring snapshot");
-    let next_document = fixture
-        .coordinator
-        .operation_authoring_document()
-        .expect("next accepted document");
+    let next_document = next_snapshot.sketch_document();
     let entered = authoring.activate(
         &next_snapshot,
         next_document,
@@ -628,10 +618,7 @@ fn adjacent_fillet_sets_publish_sequentially_through_screen_pick_transactions() 
     let snapshot = coordinator
         .feature_authoring_snapshot()
         .expect("authoring snapshot");
-    let accepted_document = coordinator
-        .operation_authoring_document()
-        .expect("accepted authoring document")
-        .clone();
+    let accepted_document = snapshot.sketch_document().clone();
     let mut authoring = FeatureAuthoringState::default();
     assert!(matches!(
         authoring.activate(
@@ -688,10 +675,7 @@ fn adjacent_fillet_sets_publish_sequentially_through_screen_pick_transactions() 
     let second_snapshot = coordinator
         .feature_authoring_snapshot()
         .expect("second authoring snapshot");
-    let second_document = coordinator
-        .operation_authoring_document()
-        .expect("second accepted authoring document")
-        .clone();
+    let second_document = second_snapshot.sketch_document().clone();
     assert!(matches!(
         authoring.activate(
             &second_snapshot,

@@ -3584,10 +3584,7 @@ mod tests {
         let snapshot = coordinator
             .feature_authoring_snapshot()
             .expect("current feature-authoring snapshot");
-        let document = coordinator
-            .operation_authoring_document()
-            .expect("accepted authoring document")
-            .clone();
+        let document = snapshot.sketch_document().clone();
         let mut picks = Vec::new();
         for corner in corners {
             picks.extend(
@@ -3914,10 +3911,7 @@ mod tests {
         let snapshot = coordinator
             .feature_authoring_snapshot()
             .expect("feature-authoring snapshot");
-        let document = coordinator
-            .operation_authoring_document()
-            .expect("accepted authoring document")
-            .clone();
+        let document = snapshot.sketch_document().clone();
         let mut restarted = FeatureAuthoringState::default();
         let entered = restarted.activate(&snapshot, &document, FeatureAuthoringTool::Fillet, &[]);
         assert!(matches!(entered, FeatureAuthoringOutcome::ModeEntered(_)));

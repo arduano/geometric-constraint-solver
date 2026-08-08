@@ -357,9 +357,7 @@ mod tests {
         let snapshot = coordinator
             .feature_authoring_snapshot()
             .expect("feature-authoring snapshot");
-        let document = coordinator
-            .operation_authoring_document()
-            .expect("accepted authoring document");
+        let document = snapshot.sketch_document();
         let mut authoring = FeatureAuthoringState::default();
         match authoring.activate(
             &snapshot,

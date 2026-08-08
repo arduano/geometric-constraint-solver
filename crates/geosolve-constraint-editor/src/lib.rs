@@ -11,7 +11,6 @@ mod annotations;
 mod authoring;
 mod coordinator;
 mod feature_authoring;
-mod operation_authoring;
 mod qualification;
 
 pub use annotations::{
@@ -31,11 +30,8 @@ pub use coordinator::{
     EditorProblemTarget, FeatureAuthoringCornerBinding, FeatureAuthoringPointerDownOutcome,
     FeatureAuthoringPreview, FeatureAuthoringPreviewMetadata, FeatureAuthoringPreviewToken,
     FeatureAuthoringTransaction, LifecycleDto, LifecycleStatus, MeasurementPublication,
-    MutationOutcome, OperationAuthoringMutation, OperationAuthoringPreview,
-    OperationAuthoringPreviewMetadata, OperationAuthoringPreviewOutcome,
-    OperationAuthoringPreviewToken, ProblemsDto, ProjectedDragRejectionStage,
-    ProjectedDragWorkEvidence, ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator,
-    display_dimension_target,
+    MutationOutcome, ProblemsDto, ProjectedDragRejectionStage, ProjectedDragWorkEvidence,
+    ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator, display_dimension_target,
 };
 pub use feature_authoring::{
     FeatureAuthoringCandidate, FeatureAuthoringCornerPreview, FeatureAuthoringGuidance,
@@ -55,12 +51,6 @@ pub use geosolve_sketch_features::{
     ComputedFeatureId, ComputedFeatureLifecycleHighWater, ComputedFeatureRevision,
     ComputedFeatureSnapshot, ComputedFilletCorner, ComputedFilletSet, ComputedSourceInterval,
     NativeCurveSpanSource, NewComputedFilletCorner,
-};
-pub use operation_authoring::{
-    OperationAuthoringCandidate, OperationAuthoringGuidance, OperationAuthoringOperandKind,
-    OperationAuthoringOptions, OperationAuthoringOutcome, OperationAuthoringPick,
-    OperationAuthoringStage, OperationAuthoringState, OperationAuthoringTool,
-    OperationAuthoringWarning, OperationAuthoringWarningKind,
 };
 #[doc(hidden)]
 pub use qualification::{

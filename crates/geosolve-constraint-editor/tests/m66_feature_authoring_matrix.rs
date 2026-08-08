@@ -55,10 +55,7 @@ fn activate(
         .coordinator
         .feature_authoring_snapshot()
         .expect("authoring snapshot");
-    let document = fixture
-        .coordinator
-        .operation_authoring_document()
-        .expect("accepted authoring document");
+    let document = snapshot.sketch_document();
     let mut state = FeatureAuthoringState::default();
     assert!(matches!(
         state.activate(&snapshot, document, FeatureAuthoringTool::Fillet, &[]),
@@ -308,14 +305,7 @@ fn oversized_semantic_preselection_stops_before_incidence_resolution_and_is_stat
     let before = state.clone();
     let oversized = vec![(SelectionItem::Point(fixture.points[1]), None); 16_385];
 
-    let outcome = state.pick_items(
-        &snapshot,
-        fixture
-            .coordinator
-            .operation_authoring_document()
-            .expect("accepted authoring document"),
-        &oversized,
-    );
+    let outcome = state.pick_items(&snapshot, snapshot.sketch_document(), &oversized);
 
     assert!(matches!(
         outcome,
@@ -473,10 +463,7 @@ fn pending_curve_and_its_incident_point_complete_exactly_one_corner() {
         authoring.pick_many(&snapshot, [pending]),
         FeatureAuthoringOutcome::Collecting { ref pending, .. } if pending.len() == 1
     ));
-    let document = fixture
-        .coordinator
-        .operation_authoring_document()
-        .expect("accepted authoring document");
+    let document = snapshot.sketch_document();
 
     let resolved = candidate(authoring.pick_items(
         &snapshot,
@@ -512,10 +499,7 @@ fn unrelated_atomic_corner_warns_without_consuming_the_pending_curve() {
     let pending = pick(&fixture, 0, 0.75);
     let _ = authoring.pick_many(&snapshot, [pending]);
     let before_unrelated = authoring.clone();
-    let document = fixture
-        .coordinator
-        .operation_authoring_document()
-        .expect("accepted authoring document");
+    let document = snapshot.sketch_document();
 
     let rejected = warning(authoring.pick_items(
         &snapshot,
@@ -594,10 +578,7 @@ fn activation_preserves_atomic_corner_meaning_across_preselection_shapes() {
         .coordinator
         .feature_authoring_snapshot()
         .expect("authoring snapshot");
-    let document = fixture
-        .coordinator
-        .operation_authoring_document()
-        .expect("accepted authoring document");
+    let document = snapshot.sketch_document();
 
     let cases = [
         vec![(SelectionItem::Point(fixture.points[1]), None)],
@@ -682,10 +663,7 @@ fn failed_second_operand_preserves_pending_and_completed_work_for_valid_retry() 
                 && guidance.stage == FeatureAuthoringStage::PickSecondFilletCurve
     ));
     let before_unrelated = authoring.clone();
-    let document = fixture
-        .coordinator
-        .operation_authoring_document()
-        .expect("accepted authoring document");
+    let document = snapshot.sketch_document();
     let rejected = warning(authoring.pick_items(
         &snapshot,
         document,

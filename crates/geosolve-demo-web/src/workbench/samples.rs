@@ -783,9 +783,7 @@ mod tests {
         let snapshot = coordinator
             .feature_authoring_snapshot()
             .expect("current playground authoring snapshot");
-        let document = coordinator
-            .operation_authoring_document()
-            .expect("current accepted playground document");
+        let document = snapshot.sketch_document();
         let mut authoring = FeatureAuthoringState::default();
         assert!(matches!(
             authoring.activate(&snapshot, document, FeatureAuthoringTool::Fillet, &[]),
@@ -1255,9 +1253,10 @@ mod tests {
                 "the playground should open with a useful curved-pair radius"
             );
             let (first_span, second_span, first_position, second_position) = {
-                let document = coordinator
-                    .operation_authoring_document()
-                    .expect("accepted playground document");
+                let snapshot = coordinator
+                    .feature_authoring_snapshot()
+                    .expect("accepted playground snapshot");
+                let document = snapshot.sketch_document();
                 let span = |label| CurveSpan {
                     curve: document
                         .curves()
@@ -1365,10 +1364,7 @@ mod tests {
         let authoring_snapshot = coordinator
             .feature_authoring_snapshot()
             .expect("current accepted feature-authoring snapshot");
-        let accepted_document = coordinator
-            .operation_authoring_document()
-            .expect("current accepted document")
-            .clone();
+        let accepted_document = authoring_snapshot.sketch_document().clone();
         let picks = coordinator
             .feature_authoring_picks_for_item(SelectionItem::Point(corner), None)
             .expect("unambiguous polyline corner picks");

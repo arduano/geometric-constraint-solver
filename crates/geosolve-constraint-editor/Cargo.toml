@@ -15,7 +15,6 @@ categories = ["algorithms", "graphics"]
 [dependencies]
 geosolve-sketch = { version = "0.2.0", path = "../geosolve-sketch" }
 geosolve-sketch-features = { version = "0.2.0", path = "../geosolve-sketch-features" }
-geosolve-sketch-ops = { version = "0.2.0", path = "../geosolve-sketch-ops" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
