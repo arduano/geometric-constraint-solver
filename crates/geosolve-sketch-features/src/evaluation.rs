@@ -20,9 +20,24 @@ use crate::document::{
 
 const PARAMETER_EPSILON_FACTOR: f64 = 1.0e-10;
 const GEOMETRY_TOLERANCE_FACTOR: f64 = 1.0e-8;
+// Newton roots are polished below the independent publication envelope so a
+// coalescing root does not appear as several materially different contacts
+// merely because each seed first entered the wider geometry tolerance at a
+// different point.
+const ROOT_POLISH_TOLERANCE_FACTOR: f64 = 1.0e-14;
 const ROOT_DEDUPLICATION_FACTOR: f64 = 1.0e-7;
 const OFFSET_SINGULARITY_TOLERANCE: f64 = 1.0e-8;
 const PARENT_SINGULARITY_TOLERANCE: f64 = 1.0e-8;
+// Root acceptance is position-scaled, so an exact fold can be represented by
+// a tiny but nonzero transverse angle. Keep the published rail comfortably
+// above that numerical root envelope; this dimensionless threshold still
+// admits ordinary acute corners while withholding explosive sensitivities.
+const RADIUS_SENSITIVITY_MIN_TRANSVERSE_QUALITY: f64 = 1.0e-3;
+const RADIUS_RAIL_MIN_NORM: f64 = 1.0e-10;
+const CONTINUATION_MAX_ATTEMPTS: usize = 128;
+const CONTINUATION_MAX_PARAMETER_FRACTION: f64 = 0.125;
+const CONTINUATION_MIN_BRACKET_FRACTION: f64 = 1.0e-6;
+const CONTINUATION_MAX_CORRECTION_FRACTION: f64 = 0.25;
 const TANGENCY_TOLERANCE: f64 = 2.0e-7;
 
 /// Bounded deterministic computed-feature evaluation policy.
@@ -305,6 +320,303 @@ impl ComputedFeatureAuthoringSnapshot {
         }
         Ok(controller.outcome(values))
     }
+
+    /// Continues one previously resolved corner at a new radius without
+    /// re-running coordinate-derived branch selection.
+    ///
+    /// `from_radius` must reproduce the prior contact seeds exactly. Source
+    /// identities, normal sides, retained endpoints, contact neighbourhoods,
+    /// endpoint order and sweep remain absolute. A bounded adaptive homotopy
+    /// advances from that exact root; a disconnected correction, fold or loss
+    /// of offset regularity rejects rather than selecting a remote root.
+    pub fn continue_fillet_corner(
+        &self,
+        prior: NewComputedFilletCorner,
+        from_radius: f64,
+        radius: f64,
+        policy: ComputedFeatureEvaluationPolicy,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<ContinuedComputedFilletCorner>, ComputedFeatureAuthoringError>
+    {
+        match self.continue_fillet_corners(&[prior], from_radius, radius, policy, control)? {
+            OperationOutcome::Completed { mut value, report } => value
+                .pop()
+                .map(|value| OperationOutcome::Completed { value, report })
+                .ok_or(ComputedFeatureAuthoringError::InvalidContinuationState),
+            OperationOutcome::Cancelled { report } => Ok(OperationOutcome::Cancelled { report }),
+            OperationOutcome::WorkExhausted { report } => {
+                Ok(OperationOutcome::WorkExhausted { report })
+            }
+            _ => Err(ComputedFeatureAuthoringError::InvalidContinuationState),
+        }
+    }
+
+    /// Continues an ordered corner batch under one aggregate bounded work
+    /// envelope from one explicit prior shared radius. Every corner preserves
+    /// its own absolute branch state; a stopped or failed later corner never
+    /// publishes a partial result vector.
+    pub fn continue_fillet_corners(
+        &self,
+        priors: &[NewComputedFilletCorner],
+        from_radius: f64,
+        radius: f64,
+        policy: ComputedFeatureEvaluationPolicy,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<Vec<ContinuedComputedFilletCorner>>, ComputedFeatureAuthoringError>
+    {
+        policy.validate()?;
+        validate_authoring_radius(from_radius)?;
+        validate_authoring_radius(radius)?;
+        let mut controller = OperationController::new(control);
+        if !charge_fillet_corner_validation(&mut controller, priors.len()) {
+            return Ok(controller.outcome_unchecked());
+        }
+        let mut values = Vec::with_capacity(priors.len());
+        for prior in priors {
+            let resolved = match continue_absolute_corner(
+                &self.sketch,
+                prior.canonicalized(),
+                from_radius,
+                radius,
+                policy,
+                &mut controller,
+            )? {
+                AbsoluteCornerResolution::Stopped => return Ok(controller.outcome_unchecked()),
+                AbsoluteCornerResolution::Completed(resolved) => resolved,
+            };
+            values.push(self.stamp_continuation(*resolved));
+        }
+        Ok(controller.outcome(values))
+    }
+
+    /// Applies an explicit numeric shared-radius edit to an ordered corner batch.
+    ///
+    /// Regular origins use the same adaptive continuation as pointer dragging.
+    /// An exact affine/non-affine origin whose radius rail is withheld at a fold
+    /// may instead depart through its already-persisted local branch cell. That
+    /// fallback remains bounded and rejects an absent, tied or remote target
+    /// root; it does not make the fold itself draggable or globally enumerate
+    /// alternatives.
+    pub fn continue_fillet_corners_numeric(
+        &self,
+        priors: &[NewComputedFilletCorner],
+        from_radius: f64,
+        radius: f64,
+        policy: ComputedFeatureEvaluationPolicy,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<Vec<ContinuedComputedFilletCorner>>, ComputedFeatureAuthoringError>
+    {
+        policy.validate()?;
+        validate_authoring_radius(from_radius)?;
+        validate_authoring_radius(radius)?;
+        let mut controller = OperationController::new(control);
+        if !charge_fillet_corner_validation(&mut controller, priors.len()) {
+            return Ok(controller.outcome_unchecked());
+        }
+        let mut values = Vec::with_capacity(priors.len());
+        for prior in priors {
+            let resolved = match continue_numeric_absolute_corner(
+                &self.sketch,
+                prior.canonicalized(),
+                from_radius,
+                radius,
+                policy,
+                &mut controller,
+            )? {
+                AbsoluteCornerResolution::Stopped => return Ok(controller.outcome_unchecked()),
+                AbsoluteCornerResolution::Completed(resolved) => resolved,
+            };
+            values.push(self.stamp_continuation(*resolved));
+        }
+        Ok(controller.outcome(values))
+    }
+
+    /// Reseeds one named parent from an exact native-source hit while retaining
+    /// the other parent and every explicit absolute branch choice.
+    ///
+    /// Periodic parameters are aligned to the winding nearest the prior contact.
+    /// Multiple materially distinct roots tied to the named hit are reported as
+    /// typed ambiguity rather than guessed.
+    pub fn reseed_fillet_contact(
+        &self,
+        request: ComputedFilletContactReseedRequest,
+        radius: f64,
+        policy: ComputedFeatureEvaluationPolicy,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<ContinuedComputedFilletCorner>, ComputedFeatureAuthoringError>
+    {
+        policy.validate()?;
+        validate_authoring_radius(radius)?;
+        let mut controller = OperationController::new(control);
+        if !charge_fillet_corner_validation(&mut controller, 1) {
+            return Ok(controller.outcome_unchecked());
+        }
+        if request.prior.first.source == request.prior.second.source {
+            return Err(ComputedFeatureAuthoringError::InvalidContinuationState);
+        }
+        let prior = request.prior.canonicalized();
+        let parent = if prior.first.source == request.prior.first.source {
+            request.parent
+        } else {
+            flip_parent_index(request.parent)
+        };
+        let prior = reseeded_absolute_corner(&self.sketch, prior, parent, request.parameter)?;
+        match resolve_explicit_absolute_corner(
+            &self.sketch,
+            prior,
+            radius,
+            policy,
+            &mut controller,
+            Some(parent),
+        )? {
+            AbsoluteCornerResolution::Stopped => Ok(controller.outcome_unchecked()),
+            AbsoluteCornerResolution::Completed(resolved) => {
+                Ok(controller.outcome(self.stamp_continuation(*resolved)))
+            }
+        }
+    }
+
+    /// Enumerates a small deterministic set of independently validated local
+    /// alternatives around one absolute corner.
+    ///
+    /// The closed set contains the current continuation, viable normal-side
+    /// pairs, each single-parent retained-direction reversal and the
+    /// complementary arc. There is no global root enumeration and no partial
+    /// result is published after cancellation or bounded-work exhaustion.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the fixed seven-action alternative catalog remains one auditable bounded order"
+    )]
+    pub fn local_fillet_corner_alternatives(
+        &self,
+        prior: NewComputedFilletCorner,
+        radius: f64,
+        policy: ComputedFeatureEvaluationPolicy,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<Vec<ComputedFilletCornerAlternative>>, ComputedFeatureAuthoringError>
+    {
+        policy.validate()?;
+        validate_authoring_radius(radius)?;
+        let mut controller = OperationController::new(control);
+        if !charge_fillet_corner_validation(&mut controller, 1) {
+            return Ok(controller.outcome_unchecked());
+        }
+        let prior = prior.canonicalized();
+        let base = match resolve_seed_connected_absolute_corner(
+            &self.sketch,
+            prior,
+            radius,
+            policy,
+            &mut controller,
+        )? {
+            AbsoluteCornerResolution::Completed(value) => *value,
+            AbsoluteCornerResolution::Stopped => return Ok(controller.outcome_unchecked()),
+        };
+        let mut alternatives = vec![ComputedFilletCornerAlternative {
+            kind: ComputedFilletCornerAlternativeKind::Current,
+            resolved: self.stamp_continuation(base.clone()),
+        }];
+
+        for first in [
+            DocumentCurveNormalSide::Left,
+            DocumentCurveNormalSide::Right,
+        ] {
+            for second in [
+                DocumentCurveNormalSide::Left,
+                DocumentCurveNormalSide::Right,
+            ] {
+                if [first, second] == [prior.first.normal_side, prior.second.normal_side] {
+                    continue;
+                }
+                let mut candidate = prior;
+                candidate.first.normal_side = first;
+                candidate.second.normal_side = second;
+                match resolve_explicit_absolute_corner(
+                    &self.sketch,
+                    candidate,
+                    radius,
+                    policy,
+                    &mut controller,
+                    None,
+                ) {
+                    Ok(AbsoluteCornerResolution::Completed(resolved)) => {
+                        alternatives.push(ComputedFilletCornerAlternative {
+                            kind: ComputedFilletCornerAlternativeKind::NormalSides {
+                                first,
+                                second,
+                            },
+                            resolved: self.stamp_continuation(*resolved),
+                        });
+                    }
+                    Ok(AbsoluteCornerResolution::Stopped) => {
+                        return Ok(controller.outcome_unchecked());
+                    }
+                    Err(error) if local_alternative_is_unavailable(&error) => {}
+                    Err(error) => return Err(error),
+                }
+            }
+        }
+
+        for parent in [
+            ComputedFilletParentIndex::First,
+            ComputedFilletParentIndex::Second,
+        ] {
+            let mut candidate = base.corner;
+            let endpoint = flip_trim_endpoint(match parent {
+                ComputedFilletParentIndex::First => candidate.first.retained_endpoint,
+                ComputedFilletParentIndex::Second => candidate.second.retained_endpoint,
+            });
+            if let Err(error) =
+                set_retained_endpoint(&self.sketch, &mut candidate, parent, endpoint)
+            {
+                if local_alternative_is_unavailable(&error) {
+                    continue;
+                }
+                return Err(error);
+            }
+            match resolve_exact_absolute_corner(&self.sketch, candidate, radius) {
+                Ok(resolved) => {
+                    alternatives.push(ComputedFilletCornerAlternative {
+                        kind: ComputedFilletCornerAlternativeKind::RetainedEndpoint {
+                            parent,
+                            endpoint,
+                        },
+                        resolved: self.stamp_continuation(resolved),
+                    });
+                }
+                Err(error) if local_alternative_is_unavailable(&error) => {}
+                Err(error) => return Err(error),
+            }
+        }
+
+        let mut complement = base.corner;
+        complement.endpoint_order = flip_endpoint_order(complement.endpoint_order);
+        match resolve_exact_absolute_corner(&self.sketch, complement, radius) {
+            Ok(resolved) => {
+                alternatives.push(ComputedFilletCornerAlternative {
+                    kind: ComputedFilletCornerAlternativeKind::ComplementaryArc,
+                    resolved: self.stamp_continuation(resolved),
+                });
+            }
+            Err(error) if local_alternative_is_unavailable(&error) => {}
+            Err(error) => return Err(error),
+        }
+        debug_assert!(alternatives.len() <= 7);
+        Ok(controller.outcome(alternatives))
+    }
+
+    fn stamp_continuation(
+        &self,
+        resolved: AbsoluteCornerContinuation,
+    ) -> ContinuedComputedFilletCorner {
+        ContinuedComputedFilletCorner {
+            sketch_input: self.sketch_input,
+            accepted: self.accepted,
+            corner: resolved.corner,
+            arc: resolved.arc,
+            sensitivity: resolved.sensitivity,
+        }
+    }
 }
 
 /// Worker-movable computed-feature evaluation.
@@ -449,6 +761,87 @@ pub struct ResolvedComputedFilletCorner {
     pub arc: ComputedCircularArc,
 }
 
+/// Finite first-order response of one absolute Fillet branch to its shared
+/// radius. Derivatives are with respect to one model-unit increase in radius;
+/// contact parameter derivatives use each source's total parameter, including
+/// winding for periodic curves.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ComputedFilletRadiusSensitivity {
+    pub center_derivative: [f64; 2],
+    pub contact_parameter_derivatives: [f64; 2],
+    pub contact_position_derivatives: [[f64; 2]; 2],
+    /// Scale-independent sine-like quality of the two offset tangents. Values
+    /// close to zero approach a branch fold and are not exposed as a drag rail.
+    pub transverse_quality: f64,
+}
+
+/// Same-branch continuation result for one previously resolved absolute corner.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ContinuedComputedFilletCorner {
+    pub sketch_input: PreparedSketchInput,
+    pub accepted: SketchAcceptedStateIdentity,
+    pub corner: NewComputedFilletCorner,
+    pub arc: ComputedCircularArc,
+    pub sensitivity: ComputedFilletRadiusSensitivity,
+}
+
+/// Stable semantic index of one Fillet parent.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ComputedFilletParentIndex {
+    First,
+    Second,
+}
+
+impl ComputedFilletParentIndex {
+    const fn index(self) -> usize {
+        match self {
+            Self::First => 0,
+            Self::Second => 1,
+        }
+    }
+}
+
+const fn flip_parent_index(parent: ComputedFilletParentIndex) -> ComputedFilletParentIndex {
+    match parent {
+        ComputedFilletParentIndex::First => ComputedFilletParentIndex::Second,
+        ComputedFilletParentIndex::Second => ComputedFilletParentIndex::First,
+    }
+}
+
+/// Exact accepted-source contact reseed. The source identity and every other
+/// absolute branch choice come from `prior`; presentation supplies only a
+/// finite parameter on the named source.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ComputedFilletContactReseedRequest {
+    pub prior: NewComputedFilletCorner,
+    pub parent: ComputedFilletParentIndex,
+    pub parameter: f64,
+}
+
+/// Closed local alternatives around one absolute corner. These are semantic
+/// actions rather than relative booleans; each result carries complete
+/// independently validated replacement intent.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ComputedFilletCornerAlternativeKind {
+    Current,
+    NormalSides {
+        first: DocumentCurveNormalSide,
+        second: DocumentCurveNormalSide,
+    },
+    RetainedEndpoint {
+        parent: ComputedFilletParentIndex,
+        endpoint: DocumentFilletTrimEndpoint,
+    },
+    ComplementaryArc,
+}
+
+/// One bounded local branch alternative and its finite radius rail.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ComputedFilletCornerAlternative {
+    pub kind: ComputedFilletCornerAlternativeKind,
+    pub resolved: ContinuedComputedFilletCorner,
+}
+
 /// Typed authoring/root-selection failure before persistent intent exists.
 #[derive(Clone, Debug, Error, PartialEq)]
 #[non_exhaustive]
@@ -485,6 +878,14 @@ pub enum ComputedFeatureAuthoringError {
     OffsetSingularity,
     #[error("resolved Fillet geometry failed independent validation")]
     InvalidResolvedGeometry,
+    #[error("the prior Fillet corner is not valid absolute continuation state")]
+    InvalidContinuationState,
+    #[error("the selected Fillet contact reseed is outside its native source domain")]
+    InvalidContactReseed,
+    #[error("the Fillet radius rail is ill-conditioned at a branch fold")]
+    IllConditionedRadiusSensitivity,
+    #[error("the Fillet radius sensitivity produced a non-finite result")]
+    NonFiniteRadiusSensitivity,
 }
 
 /// Evaluation-local identity. It is invalid after any regeneration.
@@ -819,6 +1220,22 @@ struct ResolvedAuthoringCorner {
     arc: ComputedCircularArc,
 }
 
+enum AbsoluteCornerResolution {
+    Completed(Box<AbsoluteCornerContinuation>),
+    Stopped,
+}
+
+#[derive(Clone)]
+struct AbsoluteCornerContinuation {
+    radius: f64,
+    corner: NewComputedFilletCorner,
+    arc: ComputedCircularArc,
+    sensitivity: ComputedFilletRadiusSensitivity,
+    signed_transverse_quality: f64,
+}
+
+type PreparedAbsoluteCorner = ([ComputedFilletParent; 2], [bool; 2], [RootParent; 2]);
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RootSearchFailure {
     NoLocalRoot,
@@ -1089,35 +1506,63 @@ fn evaluate_persistent_corner(
     }
     let root_parents = certify_persistent_branch(sketch, root_parents, affine, corner.id)
         .map_err(EvaluateFeatureError::Failure)?;
-    let (solutions, root_failure) = match local_fillet_roots(
-        sketch,
-        &root_parents,
-        [corner.first.normal_side, corner.second.normal_side],
-        radius,
-        policy,
-        controller,
-    ) {
-        RootSearchResult::Completed { solutions, failure } => (solutions, failure),
-        RootSearchResult::Stopped => return Err(EvaluateFeatureError::Stopped),
-    };
-    let solution = select_solution(sketch, &solutions).map_err(|kind| {
-        EvaluateFeatureError::Failure(match kind {
-            RootSelectionFailure::None => match root_failure {
-                RootSearchFailure::NoLocalRoot => {
-                    ComputedFeatureFailure::NoLocalRoot { corner: corner.id }
-                }
-                RootSearchFailure::SingularParents => {
-                    ComputedFeatureFailure::SingularParents { corner: corner.id }
-                }
-                RootSearchFailure::OffsetSingularity => {
-                    ComputedFeatureFailure::OffsetSingularity { corner: corner.id }
-                }
-            },
-            RootSelectionFailure::Ambiguous => {
-                ComputedFeatureFailure::AmbiguousLocalRoot { corner: corner.id }
+    let sides = [corner.first.normal_side, corner.second.normal_side];
+    let exact = exact_seed_solution(sketch, &root_parents, sides, radius).map_err(|failure| {
+        EvaluateFeatureError::Failure(match failure {
+            OffsetGeometryFailure::OffsetSingularity => {
+                ComputedFeatureFailure::OffsetSingularity { corner: corner.id }
+            }
+            OffsetGeometryFailure::Invalid => {
+                ComputedFeatureFailure::InvalidParentState { corner: corner.id }
             }
         })
     })?;
+    let (root_parents, solution) = if let Some(solution) = exact {
+        (root_parents, solution)
+    } else {
+        // A source-tangent branch cell can still contain an offset cusp where
+        // `1 - side * radius * curvature` changes sign. Correct non-affine
+        // persisted seeds only inside a bounded neighbourhood and reject
+        // multiple genuine roots; evaluation must never use a remote
+        // whole-cell root as a silent repair after a source edit or import.
+        let root_parents = if affine == [true, true] {
+            // Two transverse supporting lines have exactly one offset
+            // intersection for fixed sides and radius, so there is no remote
+            // root to hop to and the complete certified cells remain valid.
+            root_parents
+        } else {
+            seed_connected_root_parents(root_parents).ok_or({
+                EvaluateFeatureError::Failure(ComputedFeatureFailure::InvalidParentState {
+                    corner: corner.id,
+                })
+            })?
+        };
+        let (solutions, root_failure) =
+            match local_fillet_roots(sketch, &root_parents, sides, radius, policy, controller) {
+                RootSearchResult::Completed { solutions, failure } => (solutions, failure),
+                RootSearchResult::Stopped => return Err(EvaluateFeatureError::Stopped),
+            };
+        let solution =
+            select_seed_connected_solution(sketch, &root_parents, &solutions).map_err(|kind| {
+                EvaluateFeatureError::Failure(match kind {
+                    RootSelectionFailure::None => match root_failure {
+                        RootSearchFailure::NoLocalRoot => {
+                            ComputedFeatureFailure::NoLocalRoot { corner: corner.id }
+                        }
+                        RootSearchFailure::SingularParents => {
+                            ComputedFeatureFailure::SingularParents { corner: corner.id }
+                        }
+                        RootSearchFailure::OffsetSingularity => {
+                            ComputedFeatureFailure::OffsetSingularity { corner: corner.id }
+                        }
+                    },
+                    RootSelectionFailure::Ambiguous => {
+                        ComputedFeatureFailure::AmbiguousLocalRoot { corner: corner.id }
+                    }
+                })
+            })?;
+        (root_parents, solution)
+    };
     let arc = build_and_validate_arc(
         sketch,
         parents,
@@ -1418,16 +1863,20 @@ fn resolve_authoring_corner(
             .total_cmp(&right.score)
             .then_with(|| side_rank(left.sides).cmp(&side_rank(right.sides)))
     });
-    let mut solution = select_solution(sketch, &solutions).map_err(|failure| match failure {
-        RootSelectionFailure::None => match root_failure {
-            RootSearchFailure::NoLocalRoot => ComputedFeatureAuthoringError::NoLocalRoot,
-            RootSearchFailure::SingularParents => ComputedFeatureAuthoringError::SingularParents,
-            RootSearchFailure::OffsetSingularity => {
-                ComputedFeatureAuthoringError::OffsetSingularity
-            }
-        },
-        RootSelectionFailure::Ambiguous => ComputedFeatureAuthoringError::AmbiguousLocalRoot,
-    })?;
+    let source_spans = picks.map(|pick| pick.source.span);
+    let mut solution =
+        select_solution(sketch, source_spans, &solutions).map_err(|failure| match failure {
+            RootSelectionFailure::None => match root_failure {
+                RootSearchFailure::NoLocalRoot => ComputedFeatureAuthoringError::NoLocalRoot,
+                RootSearchFailure::SingularParents => {
+                    ComputedFeatureAuthoringError::SingularParents
+                }
+                RootSearchFailure::OffsetSingularity => {
+                    ComputedFeatureAuthoringError::OffsetSingularity
+                }
+            },
+            RootSelectionFailure::Ambiguous => ComputedFeatureAuthoringError::AmbiguousLocalRoot,
+        })?;
     if request.options.flip_first_side || request.options.flip_second_side {
         let desired = [
             if request.options.flip_first_side {
@@ -1446,7 +1895,7 @@ fn resolve_authoring_corner(
             .copied()
             .filter(|candidate| candidate.sides == desired)
             .collect::<Vec<_>>();
-        solution = select_solution(sketch, &corrected)
+        solution = select_solution(sketch, source_spans, &corrected)
             .map_err(|_| ComputedFeatureAuthoringError::SideCorrectionUnavailable)?;
     }
     let persistent_parents =
@@ -1486,6 +1935,931 @@ fn resolve_authoring_corner(
             arc,
         },
     )))
+}
+
+fn validate_authoring_radius(radius: f64) -> Result<(), ComputedFeatureAuthoringError> {
+    if !radius.is_finite() || radius <= 0.0 {
+        return Err(ComputedFeatureAuthoringError::InvalidRadius);
+    }
+    Ok(())
+}
+
+fn charge_fillet_corner_validation(
+    controller: &mut OperationController,
+    corner_count: usize,
+) -> bool {
+    controller
+        .charge(
+            OperationWorkCounter::DocumentValidationItems,
+            corner_count.saturating_mul(2),
+            OperationCheckpoint::DocumentValidation,
+        )
+        .is_ok()
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "absolute continuation, validation and sensitivity publication are one auditable path"
+)]
+fn continue_absolute_corner(
+    sketch: &SketchDocument,
+    prior: NewComputedFilletCorner,
+    from_radius: f64,
+    target_radius: f64,
+    policy: ComputedFeatureEvaluationPolicy,
+    controller: &mut OperationController,
+) -> Result<AbsoluteCornerResolution, ComputedFeatureAuthoringError> {
+    let mut current = match resolve_seed_connected_absolute_corner(
+        sketch,
+        prior,
+        from_radius,
+        policy,
+        controller,
+    )? {
+        AbsoluteCornerResolution::Completed(value) => *value,
+        AbsoluteCornerResolution::Stopped => return Ok(AbsoluteCornerResolution::Stopped),
+    };
+    if from_radius.to_bits() == target_radius.to_bits() {
+        return Ok(AbsoluteCornerResolution::Completed(Box::new(current)));
+    }
+
+    let mut step_fraction = 1.0;
+    let mut last_failure = ComputedFeatureAuthoringError::IllConditionedRadiusSensitivity;
+    for _ in 0..CONTINUATION_MAX_ATTEMPTS {
+        let remaining = target_radius - current.radius;
+        if !remaining.is_finite() {
+            return Err(ComputedFeatureAuthoringError::InvalidRadius);
+        }
+        if remaining == 0.0 {
+            return Ok(AbsoluteCornerResolution::Completed(Box::new(current)));
+        }
+        let step = remaining * step_fraction;
+        let next_radius = current.radius + step;
+        if !step.is_finite()
+            || !next_radius.is_finite()
+            || next_radius <= 0.0
+            || next_radius.to_bits() == current.radius.to_bits()
+        {
+            return Err(last_failure);
+        }
+        match continue_connected_radius_step(sketch, &current, next_radius, policy, controller) {
+            Ok(AbsoluteCornerResolution::Completed(next)) => {
+                current = *next;
+                if current.radius.to_bits() == target_radius.to_bits() {
+                    return Ok(AbsoluteCornerResolution::Completed(Box::new(current)));
+                }
+                step_fraction = (step_fraction * 2.0_f64).min(1.0);
+            }
+            Ok(AbsoluteCornerResolution::Stopped) => {
+                return Ok(AbsoluteCornerResolution::Stopped);
+            }
+            Err(error) if connected_step_can_subdivide(&error) => {
+                last_failure = error;
+                step_fraction *= 0.5;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(last_failure)
+}
+
+fn continue_numeric_absolute_corner(
+    sketch: &SketchDocument,
+    prior: NewComputedFilletCorner,
+    from_radius: f64,
+    target_radius: f64,
+    policy: ComputedFeatureEvaluationPolicy,
+    controller: &mut OperationController,
+) -> Result<AbsoluteCornerResolution, ComputedFeatureAuthoringError> {
+    match continue_absolute_corner(
+        sketch,
+        prior,
+        from_radius,
+        target_radius,
+        policy,
+        controller,
+    ) {
+        Ok(resolved) => return Ok(resolved),
+        Err(ComputedFeatureAuthoringError::IllConditionedRadiusSensitivity)
+            if from_radius.to_bits() != target_radius.to_bits() => {}
+        Err(error) => return Err(error),
+    }
+
+    validate_exact_numeric_fold_origin(sketch, prior, from_radius)?;
+    resolve_seed_connected_absolute_corner(sketch, prior, target_radius, policy, controller)
+}
+
+fn validate_exact_numeric_fold_origin(
+    sketch: &SketchDocument,
+    prior: NewComputedFilletCorner,
+    radius: f64,
+) -> Result<(), ComputedFeatureAuthoringError> {
+    let (parents, affine, root_parents) = prepare_absolute_corner(sketch, prior)?;
+    if affine == [true, true] {
+        return Err(ComputedFeatureAuthoringError::IllConditionedRadiusSensitivity);
+    }
+    let sides = parents.map(|parent| parent.normal_side);
+    let solution = exact_seed_solution(sketch, &root_parents, sides, radius)
+        .map_err(map_offset_continuation_failure)?
+        .ok_or(ComputedFeatureAuthoringError::InvalidContinuationState)?;
+    let (corner, _) =
+        complete_absolute_corner_geometry(sketch, parents, affine, solution, radius, prior)?;
+    let quality = raw_signed_radius_transverse_quality(
+        sketch,
+        [corner.first, corner.second],
+        solution,
+        radius,
+    )?;
+    if quality.abs() > RADIUS_SENSITIVITY_MIN_TRANSVERSE_QUALITY {
+        return Err(ComputedFeatureAuthoringError::IllConditionedRadiusSensitivity);
+    }
+    Ok(())
+}
+
+fn resolve_seed_connected_absolute_corner(
+    sketch: &SketchDocument,
+    prior: NewComputedFilletCorner,
+    radius: f64,
+    policy: ComputedFeatureEvaluationPolicy,
+    controller: &mut OperationController,
+) -> Result<AbsoluteCornerResolution, ComputedFeatureAuthoringError> {
+    match resolve_exact_absolute_corner(sketch, prior, radius) {
+        Ok(resolved) => {
+            return Ok(AbsoluteCornerResolution::Completed(Box::new(resolved)));
+        }
+        Err(ComputedFeatureAuthoringError::InvalidContinuationState) => {}
+        Err(error) => return Err(error),
+    }
+    let (parents, affine, root_parents) = prepare_absolute_corner(sketch, prior)?;
+    let root_parents = seed_connected_root_parents(root_parents)
+        .ok_or(ComputedFeatureAuthoringError::InvalidContinuationState)?;
+    let (solutions, root_failure) = match local_fillet_roots(
+        sketch,
+        &root_parents,
+        parents.map(|parent| parent.normal_side),
+        radius,
+        policy,
+        controller,
+    ) {
+        RootSearchResult::Completed { solutions, failure } => (solutions, failure),
+        RootSearchResult::Stopped => return Ok(AbsoluteCornerResolution::Stopped),
+    };
+    let solution = select_seed_connected_solution(sketch, &root_parents, &solutions).map_err(
+        |failure| match (failure, root_failure) {
+            (RootSelectionFailure::None, RootSearchFailure::OffsetSingularity) => {
+                ComputedFeatureAuthoringError::OffsetSingularity
+            }
+            (
+                RootSelectionFailure::None,
+                RootSearchFailure::NoLocalRoot | RootSearchFailure::SingularParents,
+            )
+            | (RootSelectionFailure::Ambiguous, _) => {
+                ComputedFeatureAuthoringError::IllConditionedRadiusSensitivity
+            }
+        },
+    )?;
+    let resolved = complete_absolute_corner(sketch, parents, affine, solution, radius, prior)?;
+    Ok(AbsoluteCornerResolution::Completed(Box::new(resolved)))
+}
+
+fn resolve_exact_absolute_corner(
+    sketch: &SketchDocument,
+    prior: NewComputedFilletCorner,
+    radius: f64,
+) -> Result<AbsoluteCornerContinuation, ComputedFeatureAuthoringError> {
+    let (parents, affine, root_parents) = prepare_absolute_corner(sketch, prior)?;
+    let sides = parents.map(|parent| parent.normal_side);
+    let solution = exact_seed_solution(sketch, &root_parents, sides, radius)
+        .map_err(map_offset_continuation_failure)?
+        .ok_or(ComputedFeatureAuthoringError::InvalidContinuationState)?;
+    complete_absolute_corner(sketch, parents, affine, solution, radius, prior)
+}
+
+fn exact_seed_solution(
+    sketch: &SketchDocument,
+    parents: &[RootParent; 2],
+    sides: [DocumentCurveNormalSide; 2],
+    radius: f64,
+) -> Result<Option<LocalFilletSolution>, OffsetGeometryFailure> {
+    let offsets = [0, 1].map(|index| {
+        offset_geometry(
+            sketch,
+            parents[index].parent.source.span,
+            parents[index].seed_total,
+            sides[index],
+            radius,
+        )
+    });
+    let [first, second] = [offsets[0]?, offsets[1]?];
+    let tolerance = (sketch.model_scale() * GEOMETRY_TOLERANCE_FACTOR).max(1.0e-11);
+    if (first.point[0] - second.point[0]).hypot(first.point[1] - second.point[1]) > tolerance {
+        return Ok(None);
+    }
+    Ok(Some(LocalFilletSolution {
+        parameters: parents.map(|parent| parent.seed_total),
+        sides,
+        center: [
+            0.5 * (first.point[0] + second.point[0]),
+            0.5 * (first.point[1] + second.point[1]),
+        ],
+        score: 0.0,
+    }))
+}
+
+fn continue_connected_radius_step(
+    sketch: &SketchDocument,
+    current: &AbsoluteCornerContinuation,
+    radius: f64,
+    policy: ComputedFeatureEvaluationPolicy,
+    controller: &mut OperationController,
+) -> Result<AbsoluteCornerResolution, ComputedFeatureAuthoringError> {
+    let prior = current.corner;
+    let (parents, affine, mut root_parents) = prepare_absolute_corner(sketch, prior)?;
+    let radius_step = radius - current.radius;
+    let current_parameters = current.arc.contacts.map(|contact| contact.total_parameter);
+    let mut predictors = [0.0; 2];
+    let mut widths = [0.0; 2];
+    for index in 0..2 {
+        let width = root_parents[index].bounds.1 - root_parents[index].bounds.0;
+        let predictor = current.sensitivity.contact_parameter_derivatives[index]
+            .mul_add(radius_step, current_parameters[index]);
+        if !width.is_finite() || width <= 0.0 || !predictor.is_finite() {
+            return Err(ComputedFeatureAuthoringError::NonFiniteRadiusSensitivity);
+        }
+        let predicted_motion = (predictor - current_parameters[index]).abs();
+        if predicted_motion > CONTINUATION_MAX_PARAMETER_FRACTION * width
+            || predictor <= root_parents[index].bounds.0
+            || predictor >= root_parents[index].bounds.1
+        {
+            return Err(ComputedFeatureAuthoringError::IllConditionedRadiusSensitivity);
+        }
+        let margin = (CONTINUATION_MIN_BRACKET_FRACTION * width)
+            .max(CONTINUATION_MAX_CORRECTION_FRACTION * predicted_motion);
+        let lower = root_parents[index]
+            .bounds
+            .0
+            .max(current_parameters[index].min(predictor) - margin);
+        let upper = root_parents[index]
+            .bounds
+            .1
+            .min(current_parameters[index].max(predictor) + margin);
+        if !lower.is_finite() || !upper.is_finite() || lower >= upper {
+            return Err(ComputedFeatureAuthoringError::IllConditionedRadiusSensitivity);
+        }
+        predictors[index] = predictor;
+        widths[index] = width;
+        root_parents[index].seed_total = predictor;
+        root_parents[index].bounds = (lower, upper);
+    }
+
+    let (solutions, root_failure) = match local_fillet_roots(
+        sketch,
+        &root_parents,
+        parents.map(|parent| parent.normal_side),
+        radius,
+        policy,
+        controller,
+    ) {
+        RootSearchResult::Completed { solutions, failure } => (solutions, failure),
+        RootSearchResult::Stopped => return Ok(AbsoluteCornerResolution::Stopped),
+    };
+    let solution = select_seed_connected_solution(sketch, &root_parents, &solutions).map_err(
+        |failure| match (failure, root_failure) {
+            (RootSelectionFailure::None, RootSearchFailure::OffsetSingularity) => {
+                ComputedFeatureAuthoringError::OffsetSingularity
+            }
+            (
+                RootSelectionFailure::None,
+                RootSearchFailure::NoLocalRoot | RootSearchFailure::SingularParents,
+            )
+            | (RootSelectionFailure::Ambiguous, _) => {
+                ComputedFeatureAuthoringError::IllConditionedRadiusSensitivity
+            }
+        },
+    )?;
+    for index in 0..2 {
+        let actual_motion = (solution.parameters[index] - current_parameters[index]).abs();
+        let correction = (solution.parameters[index] - predictors[index]).abs();
+        let correction_limit = (CONTINUATION_MIN_BRACKET_FRACTION * widths[index]).max(
+            CONTINUATION_MAX_CORRECTION_FRACTION
+                * (predictors[index] - current_parameters[index]).abs(),
+        );
+        if actual_motion > CONTINUATION_MAX_PARAMETER_FRACTION * widths[index]
+            || correction > correction_limit
+        {
+            return Err(ComputedFeatureAuthoringError::IllConditionedRadiusSensitivity);
+        }
+    }
+    let resolved = complete_absolute_corner(sketch, parents, affine, solution, radius, prior)?;
+    if current.signed_transverse_quality * resolved.signed_transverse_quality <= 0.0 {
+        return Err(ComputedFeatureAuthoringError::IllConditionedRadiusSensitivity);
+    }
+    for index in 0..2 {
+        let expected_motion = 0.5
+            * (current.sensitivity.contact_parameter_derivatives[index]
+                + resolved.sensitivity.contact_parameter_derivatives[index])
+            * radius_step;
+        let actual_motion =
+            resolved.arc.contacts[index].total_parameter - current_parameters[index];
+        let error_limit = CONTINUATION_MIN_BRACKET_FRACTION * widths[index]
+            + CONTINUATION_MAX_CORRECTION_FRACTION * expected_motion.abs().max(actual_motion.abs());
+        if (actual_motion - expected_motion).abs() > error_limit {
+            return Err(ComputedFeatureAuthoringError::IllConditionedRadiusSensitivity);
+        }
+    }
+    Ok(AbsoluteCornerResolution::Completed(Box::new(resolved)))
+}
+
+fn resolve_explicit_absolute_corner(
+    sketch: &SketchDocument,
+    prior: NewComputedFilletCorner,
+    radius: f64,
+    policy: ComputedFeatureEvaluationPolicy,
+    controller: &mut OperationController,
+    reseeded_parent: Option<ComputedFilletParentIndex>,
+) -> Result<AbsoluteCornerResolution, ComputedFeatureAuthoringError> {
+    let (parents, affine, root_parents) = prepare_absolute_corner(sketch, prior)?;
+    let (solutions, root_failure) = match local_fillet_roots(
+        sketch,
+        &root_parents,
+        parents.map(|parent| parent.normal_side),
+        radius,
+        policy,
+        controller,
+    ) {
+        RootSearchResult::Completed { solutions, failure } => (solutions, failure),
+        RootSearchResult::Stopped => return Ok(AbsoluteCornerResolution::Stopped),
+    };
+    let solution = match reseeded_parent {
+        Some(parent) => select_reseeded_solution(sketch, &root_parents, &solutions, parent),
+        None => select_solution(
+            sketch,
+            root_parents.map(|parent| parent.parent.source.span),
+            &solutions,
+        ),
+    }
+    .map_err(|failure| map_root_selection_failure(failure, root_failure))?;
+    let resolved = complete_absolute_corner(sketch, parents, affine, solution, radius, prior)?;
+    Ok(AbsoluteCornerResolution::Completed(Box::new(resolved)))
+}
+
+fn prepare_absolute_corner(
+    sketch: &SketchDocument,
+    prior: NewComputedFilletCorner,
+) -> Result<PreparedAbsoluteCorner, ComputedFeatureAuthoringError> {
+    if prior.first.source == prior.second.source {
+        return Err(ComputedFeatureAuthoringError::InvalidContinuationState);
+    }
+    let parents = [prior.first, prior.second];
+    let affine = parents.map(|parent| is_affine_line_span(sketch, parent.source.span));
+    if affine == [false, false] {
+        return Err(ComputedFeatureAuthoringError::UnsupportedCurvedPair);
+    }
+    let root_parents = prepare_root_parents(sketch, parents, None)
+        .and_then(|prepared| {
+            certify_persistent_branch(
+                sketch,
+                prepared,
+                affine,
+                ComputedFeatureCornerId::from_raw(0),
+            )
+        })
+        .map_err(|failure| map_continuation_failure(&failure))?;
+    Ok((parents, affine, root_parents))
+}
+
+fn complete_absolute_corner(
+    sketch: &SketchDocument,
+    parents: [ComputedFilletParent; 2],
+    affine: [bool; 2],
+    solution: LocalFilletSolution,
+    radius: f64,
+    prior: NewComputedFilletCorner,
+) -> Result<AbsoluteCornerContinuation, ComputedFeatureAuthoringError> {
+    let (corner, arc) =
+        complete_absolute_corner_geometry(sketch, parents, affine, solution, radius, prior)?;
+    let sensitivity =
+        fillet_radius_sensitivity(sketch, [corner.first, corner.second], solution, radius)?;
+    let signed_transverse_quality =
+        signed_radius_transverse_quality(sketch, [corner.first, corner.second], solution, radius)?;
+    Ok(AbsoluteCornerContinuation {
+        radius,
+        corner,
+        arc,
+        sensitivity,
+        signed_transverse_quality,
+    })
+}
+
+fn complete_absolute_corner_geometry(
+    sketch: &SketchDocument,
+    parents: [ComputedFilletParent; 2],
+    affine: [bool; 2],
+    solution: LocalFilletSolution,
+    radius: f64,
+    prior: NewComputedFilletCorner,
+) -> Result<(NewComputedFilletCorner, ComputedCircularArc), ComputedFeatureAuthoringError> {
+    let continued_parents = build_continued_parents(sketch, parents, affine, solution)?;
+    let corner = NewComputedFilletCorner {
+        first: continued_parents[0],
+        second: continued_parents[1],
+        endpoint_order: prior.endpoint_order,
+        sweep: prior.sweep,
+    }
+    .canonicalized();
+    let arc = build_and_validate_arc(
+        sketch,
+        [corner.first, corner.second],
+        solution,
+        radius,
+        corner.endpoint_order,
+        corner.sweep,
+    )
+    .map_err(map_arc_continuation_failure)?;
+    Ok((corner, arc))
+}
+
+const fn connected_step_can_subdivide(error: &ComputedFeatureAuthoringError) -> bool {
+    matches!(
+        error,
+        ComputedFeatureAuthoringError::NoLocalRoot
+            | ComputedFeatureAuthoringError::AmbiguousLocalRoot
+            | ComputedFeatureAuthoringError::OffsetSingularity
+            | ComputedFeatureAuthoringError::InvalidResolvedGeometry
+            | ComputedFeatureAuthoringError::IllConditionedRadiusSensitivity
+            | ComputedFeatureAuthoringError::NonFiniteRadiusSensitivity
+    )
+}
+
+fn select_seed_connected_solution(
+    sketch: &SketchDocument,
+    parents: &[RootParent; 2],
+    solutions: &[LocalFilletSolution],
+) -> Result<LocalFilletSolution, RootSelectionFailure> {
+    let Some(selected) = solutions
+        .iter()
+        .copied()
+        .min_by(|left, right| left.score.total_cmp(&right.score))
+    else {
+        return Err(RootSelectionFailure::None);
+    };
+    if solutions
+        .iter()
+        .copied()
+        .any(|candidate| !connected_solutions_share_geometry(sketch, parents, selected, candidate))
+    {
+        return Err(RootSelectionFailure::Ambiguous);
+    }
+    Ok(selected)
+}
+
+fn connected_solutions_share_geometry(
+    sketch: &SketchDocument,
+    parents: &[RootParent; 2],
+    first: LocalFilletSolution,
+    second: LocalFilletSolution,
+) -> bool {
+    let tolerance = (sketch.model_scale() * ROOT_DEDUPLICATION_FACTOR).max(1.0e-10);
+    if (first.center[0] - second.center[0]).hypot(first.center[1] - second.center[1]) > tolerance {
+        return false;
+    }
+    (0..2).all(|index| {
+        let Ok(first_contact) =
+            sketch.evaluate_curve_jet(parents[index].parent.source.span, first.parameters[index])
+        else {
+            return false;
+        };
+        let Ok(second_contact) =
+            sketch.evaluate_curve_jet(parents[index].parent.source.span, second.parameters[index])
+        else {
+            return false;
+        };
+        (first_contact.position.x - second_contact.position.x)
+            .hypot(first_contact.position.y - second_contact.position.y)
+            <= tolerance
+    })
+}
+
+const fn map_offset_continuation_failure(
+    failure: OffsetGeometryFailure,
+) -> ComputedFeatureAuthoringError {
+    match failure {
+        OffsetGeometryFailure::OffsetSingularity => {
+            ComputedFeatureAuthoringError::OffsetSingularity
+        }
+        OffsetGeometryFailure::Invalid => ComputedFeatureAuthoringError::NonFiniteRadiusSensitivity,
+    }
+}
+
+fn map_root_selection_failure(
+    failure: RootSelectionFailure,
+    root_failure: RootSearchFailure,
+) -> ComputedFeatureAuthoringError {
+    match failure {
+        RootSelectionFailure::None => match root_failure {
+            RootSearchFailure::NoLocalRoot => ComputedFeatureAuthoringError::NoLocalRoot,
+            // A previously valid absolute corner reaching a transverse offset
+            // singularity is a continuation limit, not a fresh-authoring
+            // diagnosis that its source parents are intrinsically singular.
+            RootSearchFailure::SingularParents => {
+                ComputedFeatureAuthoringError::IllConditionedRadiusSensitivity
+            }
+            RootSearchFailure::OffsetSingularity => {
+                ComputedFeatureAuthoringError::OffsetSingularity
+            }
+        },
+        RootSelectionFailure::Ambiguous => ComputedFeatureAuthoringError::AmbiguousLocalRoot,
+    }
+}
+
+fn map_continuation_failure(failure: &ComputedFeatureFailure) -> ComputedFeatureAuthoringError {
+    match failure {
+        ComputedFeatureFailure::MissingSource { .. } => ComputedFeatureAuthoringError::StalePick,
+        ComputedFeatureFailure::AssociationOwnedSource { .. }
+        | ComputedFeatureFailure::MultiIntervalSource { .. } => {
+            ComputedFeatureAuthoringError::UnsupportedSourceTopology
+        }
+        ComputedFeatureFailure::UnsupportedCurvedPair { .. } => {
+            ComputedFeatureAuthoringError::UnsupportedCurvedPair
+        }
+        ComputedFeatureFailure::NoLocalRoot { .. } => ComputedFeatureAuthoringError::NoLocalRoot,
+        ComputedFeatureFailure::AmbiguousLocalRoot { .. } => {
+            ComputedFeatureAuthoringError::AmbiguousLocalRoot
+        }
+        ComputedFeatureFailure::UncertifiedBranch { .. } => {
+            ComputedFeatureAuthoringError::UncertifiedCurvedBranch
+        }
+        ComputedFeatureFailure::SingularParents { .. } => {
+            ComputedFeatureAuthoringError::SingularParents
+        }
+        ComputedFeatureFailure::OffsetSingularity { .. } => {
+            ComputedFeatureAuthoringError::OffsetSingularity
+        }
+        ComputedFeatureFailure::InvalidParentState { .. }
+        | ComputedFeatureFailure::InvalidGeometry { .. }
+        | ComputedFeatureFailure::EndpointClaimConflict { .. }
+        | ComputedFeatureFailure::ConsumedSourceInterval { .. } => {
+            ComputedFeatureAuthoringError::InvalidContinuationState
+        }
+    }
+}
+
+fn build_continued_parents(
+    sketch: &SketchDocument,
+    prior: [ComputedFilletParent; 2],
+    affine: [bool; 2],
+    solution: LocalFilletSolution,
+) -> Result<[ComputedFilletParent; 2], ComputedFeatureAuthoringError> {
+    let mut continued = Vec::with_capacity(2);
+    for index in 0..2 {
+        let topology = source_topology_for_authoring(sketch, prior[index].source)?;
+        let total = solution.parameters[index];
+        let (parameter, winding) = normalize_parameter(topology.domain, total)
+            .ok_or(ComputedFeatureAuthoringError::InvalidResolvedGeometry)?;
+        let neighborhood = prior[index].neighborhood;
+        if affine[index] != matches!(neighborhood, ContactNeighborhood::Interior) {
+            return Err(ComputedFeatureAuthoringError::InvalidContinuationState);
+        }
+        let periodic_anchor =
+            periodic_anchor_for(topology.domain, total, prior[index].retained_endpoint)?;
+        continued.push(ComputedFilletParent {
+            source: prior[index].source,
+            picked_parameter: parameter,
+            winding,
+            neighborhood,
+            normal_side: solution.sides[index],
+            retained_endpoint: prior[index].retained_endpoint,
+            periodic_anchor,
+        });
+    }
+    continued
+        .try_into()
+        .map_err(|_| ComputedFeatureAuthoringError::InvalidResolvedGeometry)
+}
+
+fn periodic_anchor_for(
+    domain: SourceDomain,
+    contact_total: f64,
+    retained_endpoint: DocumentFilletTrimEndpoint,
+) -> Result<Option<DocumentTrimParameter>, ComputedFeatureAuthoringError> {
+    let SourceDomain::Periodic { period } = domain else {
+        return Ok(None);
+    };
+    let anchor_total = match retained_endpoint {
+        DocumentFilletTrimEndpoint::End => contact_total - 0.5 * period,
+        DocumentFilletTrimEndpoint::Start => contact_total + 0.5 * period,
+    };
+    let (parameter, winding) = normalize_parameter(domain, anchor_total)
+        .ok_or(ComputedFeatureAuthoringError::InvalidResolvedGeometry)?;
+    Ok(Some(DocumentTrimParameter { parameter, winding }))
+}
+
+fn reseeded_absolute_corner(
+    sketch: &SketchDocument,
+    mut prior: NewComputedFilletCorner,
+    selected: ComputedFilletParentIndex,
+    parameter: f64,
+) -> Result<NewComputedFilletCorner, ComputedFeatureAuthoringError> {
+    if !parameter.is_finite() {
+        return Err(ComputedFeatureAuthoringError::InvalidContactReseed);
+    }
+    let index = selected.index();
+    let mut parents = [prior.first, prior.second];
+    let topology = source_topology_for_authoring(sketch, parents[index].source)?;
+    let prior_total = total_parameter(
+        topology.domain,
+        parents[index].picked_parameter,
+        parents[index].winding,
+    )
+    .ok_or(ComputedFeatureAuthoringError::InvalidContinuationState)?;
+    let (parameter, winding, total) = align_reseed_parameter(topology, prior_total, parameter)?;
+    sketch
+        .evaluate_curve_jet(parents[index].source.span, total)
+        .map_err(|_| ComputedFeatureAuthoringError::InvalidContactReseed)?;
+    let affine = is_affine_line_span(sketch, parents[index].source.span);
+    let neighborhood = if affine {
+        ContactNeighborhood::Interior
+    } else {
+        let (support_lower, support_upper) = match topology.domain {
+            SourceDomain::Bounded { lower, upper } => (lower, upper),
+            SourceDomain::Periodic { period } => (total - 0.5 * period, total + 0.5 * period),
+        };
+        sketch
+            .certify_line_curve_fillet_branch_cell(
+                parents[1 - index].source.span,
+                parents[index].source.span,
+                total,
+                support_lower,
+                support_upper,
+            )
+            .map_err(|_| ComputedFeatureAuthoringError::InvalidContactReseed)?
+    };
+    parents[index].picked_parameter = parameter;
+    parents[index].winding = winding;
+    parents[index].neighborhood = neighborhood;
+    parents[index].periodic_anchor =
+        periodic_anchor_for(topology.domain, total, parents[index].retained_endpoint)?;
+    prior.first = parents[0];
+    prior.second = parents[1];
+    Ok(prior)
+}
+
+fn align_reseed_parameter(
+    topology: SourceTopology,
+    prior_total: f64,
+    parameter: f64,
+) -> Result<(f64, i32, f64), ComputedFeatureAuthoringError> {
+    match topology.domain {
+        SourceDomain::Bounded { lower, upper }
+            if lower <= parameter
+                && parameter <= upper
+                && parameter_strictly_inside(parameter, topology.base_interval) =>
+        {
+            Ok((parameter, 0, parameter))
+        }
+        SourceDomain::Periodic { period }
+            if 0.0 <= parameter && parameter < period && prior_total.is_finite() =>
+        {
+            let winding = ((prior_total - parameter) / period).round();
+            if winding < f64::from(i32::MIN) || winding > f64::from(i32::MAX) {
+                return Err(ComputedFeatureAuthoringError::InvalidContactReseed);
+            }
+            #[allow(clippy::cast_possible_truncation)]
+            let winding = winding as i32;
+            let total = parameter + f64::from(winding) * period;
+            total
+                .is_finite()
+                .then_some((parameter, winding, total))
+                .ok_or(ComputedFeatureAuthoringError::InvalidContactReseed)
+        }
+        SourceDomain::Bounded { .. } | SourceDomain::Periodic { .. } => {
+            Err(ComputedFeatureAuthoringError::InvalidContactReseed)
+        }
+    }
+}
+
+fn select_reseeded_solution(
+    sketch: &SketchDocument,
+    parents: &[RootParent; 2],
+    solutions: &[LocalFilletSolution],
+    selected: ComputedFilletParentIndex,
+) -> Result<LocalFilletSolution, RootSelectionFailure> {
+    let selected = selected.index();
+    let other = 1 - selected;
+    let normalized_distance = |solution: LocalFilletSolution, index: usize| {
+        (solution.parameters[index] - parents[index].seed_total).abs()
+            / (parents[index].bounds.1 - parents[index].bounds.0)
+    };
+    let Some(solution) = solutions.iter().copied().min_by(|left, right| {
+        normalized_distance(*left, selected)
+            .total_cmp(&normalized_distance(*right, selected))
+            .then_with(|| {
+                normalized_distance(*left, other).total_cmp(&normalized_distance(*right, other))
+            })
+            .then_with(|| side_rank(left.sides).cmp(&side_rank(right.sides)))
+    }) else {
+        return Err(RootSelectionFailure::None);
+    };
+    let primary = normalized_distance(solution, selected);
+    let secondary = normalized_distance(solution, other);
+    if solutions.iter().copied().any(|candidate| {
+        solutions_materially_distinct(
+            sketch,
+            parents.map(|parent| parent.parent.source.span),
+            solution,
+            candidate,
+        ) && scores_nearly_tied(primary, normalized_distance(candidate, selected))
+            && scores_nearly_tied(secondary, normalized_distance(candidate, other))
+    }) {
+        return Err(RootSelectionFailure::Ambiguous);
+    }
+    Ok(solution)
+}
+
+fn fillet_radius_sensitivity(
+    sketch: &SketchDocument,
+    parents: [ComputedFilletParent; 2],
+    solution: LocalFilletSolution,
+    radius: f64,
+) -> Result<ComputedFilletRadiusSensitivity, ComputedFeatureAuthoringError> {
+    let mut offset_derivatives = [[0.0; 2]; 2];
+    let mut normals = [[0.0; 2]; 2];
+    let mut source_derivatives = [[0.0; 2]; 2];
+    for index in 0..2 {
+        let offset = offset_geometry(
+            sketch,
+            parents[index].source.span,
+            solution.parameters[index],
+            parents[index].normal_side,
+            radius,
+        )
+        .map_err(|failure| match failure {
+            OffsetGeometryFailure::OffsetSingularity => {
+                ComputedFeatureAuthoringError::OffsetSingularity
+            }
+            OffsetGeometryFailure::Invalid => {
+                ComputedFeatureAuthoringError::NonFiniteRadiusSensitivity
+            }
+        })?;
+        let jet = sketch
+            .evaluate_curve_jet(parents[index].source.span, solution.parameters[index])
+            .map_err(|_| ComputedFeatureAuthoringError::NonFiniteRadiusSensitivity)?;
+        let differential = jet
+            .differential()
+            .map_err(|_| ComputedFeatureAuthoringError::NonFiniteRadiusSensitivity)?;
+        offset_derivatives[index] = offset.derivative;
+        normals[index] = [differential.left_normal.x, differential.left_normal.y];
+        source_derivatives[index] = [jet.first_derivative.x, jet.first_derivative.y];
+    }
+    let first = offset_derivatives[0];
+    let second = offset_derivatives[1];
+    let determinant = first[1].mul_add(second[0], -(first[0] * second[1]));
+    let scale = first[0].hypot(first[1]) * second[0].hypot(second[1]);
+    if !determinant.is_finite() || !scale.is_finite() || scale <= 0.0 {
+        return Err(ComputedFeatureAuthoringError::NonFiniteRadiusSensitivity);
+    }
+    let transverse_quality = determinant.abs() / scale;
+    if !transverse_quality.is_finite()
+        || transverse_quality <= RADIUS_SENSITIVITY_MIN_TRANSVERSE_QUALITY
+    {
+        return Err(ComputedFeatureAuthoringError::IllConditionedRadiusSensitivity);
+    }
+    let signs = parents.map(|parent| side_sign(parent.normal_side));
+    let rhs = [
+        signs[1].mul_add(normals[1][0], -(signs[0] * normals[0][0])),
+        signs[1].mul_add(normals[1][1], -(signs[0] * normals[0][1])),
+    ];
+    // [first, -second] * [dt1/dr, dt2/dr] = rhs.
+    let parameter_derivatives = [
+        (second[0] * rhs[1] - rhs[0] * second[1]) / determinant,
+        (first[0] * rhs[1] - rhs[0] * first[1]) / determinant,
+    ];
+    let center_from_first = [
+        first[0].mul_add(parameter_derivatives[0], signs[0] * normals[0][0]),
+        first[1].mul_add(parameter_derivatives[0], signs[0] * normals[0][1]),
+    ];
+    let center_from_second = [
+        second[0].mul_add(parameter_derivatives[1], signs[1] * normals[1][0]),
+        second[1].mul_add(parameter_derivatives[1], signs[1] * normals[1][1]),
+    ];
+    let center_derivative = [
+        0.5 * (center_from_first[0] + center_from_second[0]),
+        0.5 * (center_from_first[1] + center_from_second[1]),
+    ];
+    let contact_position_derivatives = [0, 1].map(|index| {
+        [
+            source_derivatives[index][0] * parameter_derivatives[index],
+            source_derivatives[index][1] * parameter_derivatives[index],
+        ]
+    });
+    let values_are_finite = parameter_derivatives
+        .into_iter()
+        .chain(center_derivative)
+        .chain(center_from_first)
+        .chain(center_from_second)
+        .chain(contact_position_derivatives.into_iter().flatten())
+        .all(f64::is_finite);
+    if !values_are_finite {
+        return Err(ComputedFeatureAuthoringError::NonFiniteRadiusSensitivity);
+    }
+    let center_scale = center_from_first
+        .into_iter()
+        .chain(center_from_second)
+        .map(f64::abs)
+        .fold(1.0, f64::max);
+    if (center_from_first[0] - center_from_second[0])
+        .hypot(center_from_first[1] - center_from_second[1])
+        > 1.0e-8 * center_scale
+        || center_derivative[0].hypot(center_derivative[1]) <= RADIUS_RAIL_MIN_NORM
+    {
+        return Err(ComputedFeatureAuthoringError::IllConditionedRadiusSensitivity);
+    }
+    Ok(ComputedFilletRadiusSensitivity {
+        center_derivative,
+        contact_parameter_derivatives: parameter_derivatives,
+        contact_position_derivatives,
+        transverse_quality,
+    })
+}
+
+fn signed_radius_transverse_quality(
+    sketch: &SketchDocument,
+    parents: [ComputedFilletParent; 2],
+    solution: LocalFilletSolution,
+    radius: f64,
+) -> Result<f64, ComputedFeatureAuthoringError> {
+    let quality = raw_signed_radius_transverse_quality(sketch, parents, solution, radius)?;
+    if quality.abs() <= RADIUS_SENSITIVITY_MIN_TRANSVERSE_QUALITY {
+        return Err(ComputedFeatureAuthoringError::IllConditionedRadiusSensitivity);
+    }
+    Ok(quality)
+}
+
+fn raw_signed_radius_transverse_quality(
+    sketch: &SketchDocument,
+    parents: [ComputedFilletParent; 2],
+    solution: LocalFilletSolution,
+    radius: f64,
+) -> Result<f64, ComputedFeatureAuthoringError> {
+    let mut derivatives = [[0.0; 2]; 2];
+    for index in 0..2 {
+        derivatives[index] = offset_geometry(
+            sketch,
+            parents[index].source.span,
+            solution.parameters[index],
+            parents[index].normal_side,
+            radius,
+        )
+        .map_err(map_offset_continuation_failure)?
+        .derivative;
+    }
+    let determinant =
+        derivatives[0][1].mul_add(derivatives[1][0], -(derivatives[0][0] * derivatives[1][1]));
+    let scale =
+        derivatives[0][0].hypot(derivatives[0][1]) * derivatives[1][0].hypot(derivatives[1][1]);
+    let quality = determinant / scale;
+    if !quality.is_finite() {
+        return Err(ComputedFeatureAuthoringError::NonFiniteRadiusSensitivity);
+    }
+    Ok(quality)
+}
+
+const fn flip_trim_endpoint(endpoint: DocumentFilletTrimEndpoint) -> DocumentFilletTrimEndpoint {
+    match endpoint {
+        DocumentFilletTrimEndpoint::Start => DocumentFilletTrimEndpoint::End,
+        DocumentFilletTrimEndpoint::End => DocumentFilletTrimEndpoint::Start,
+    }
+}
+
+fn set_retained_endpoint(
+    sketch: &SketchDocument,
+    corner: &mut NewComputedFilletCorner,
+    selected: ComputedFilletParentIndex,
+    endpoint: DocumentFilletTrimEndpoint,
+) -> Result<(), ComputedFeatureAuthoringError> {
+    let parent = match selected {
+        ComputedFilletParentIndex::First => &mut corner.first,
+        ComputedFilletParentIndex::Second => &mut corner.second,
+    };
+    let topology = source_topology_for_authoring(sketch, parent.source)?;
+    let total = total_parameter(topology.domain, parent.picked_parameter, parent.winding)
+        .ok_or(ComputedFeatureAuthoringError::InvalidContinuationState)?;
+    parent.retained_endpoint = endpoint;
+    parent.periodic_anchor = periodic_anchor_for(topology.domain, total, endpoint)?;
+    Ok(())
+}
+
+const fn local_alternative_is_unavailable(error: &ComputedFeatureAuthoringError) -> bool {
+    matches!(
+        error,
+        ComputedFeatureAuthoringError::NoLocalRoot
+            | ComputedFeatureAuthoringError::AmbiguousLocalRoot
+            | ComputedFeatureAuthoringError::SingularParents
+            | ComputedFeatureAuthoringError::OffsetSingularity
+            | ComputedFeatureAuthoringError::InvalidResolvedGeometry
+            | ComputedFeatureAuthoringError::IllConditionedRadiusSensitivity
+            | ComputedFeatureAuthoringError::NonFiniteRadiusSensitivity
+    )
 }
 
 fn validate_authoring_pick(
@@ -2078,6 +3452,23 @@ fn normalize_parameter(domain: SourceDomain, total: f64) -> Option<(f64, i32)> {
     }
 }
 
+fn seed_connected_root_parents(mut parents: [RootParent; 2]) -> Option<[RootParent; 2]> {
+    for parent in &mut parents {
+        let width = parent.bounds.1 - parent.bounds.0;
+        if !width.is_finite() || width <= 0.0 || !parent.seed_total.is_finite() {
+            return None;
+        }
+        let radius = CONTINUATION_MAX_PARAMETER_FRACTION * width;
+        let lower = parent.bounds.0.max(parent.seed_total - radius);
+        let upper = parent.bounds.1.min(parent.seed_total + radius);
+        if !lower.is_finite() || !upper.is_finite() || lower >= upper {
+            return None;
+        }
+        parent.bounds = (lower, upper);
+    }
+    Some(parents)
+}
+
 fn local_fillet_roots(
     sketch: &SketchDocument,
     parents: &[RootParent; 2],
@@ -2120,10 +3511,14 @@ fn local_fillet_roots(
                 }
                 RootAttempt::Stopped => return RootSearchResult::Stopped,
             };
-            if solutions
-                .iter()
-                .all(|existing| solutions_materially_distinct(sketch, *existing, solution))
-            {
+            if solutions.iter().all(|existing| {
+                solutions_materially_distinct(
+                    sketch,
+                    parents.map(|parent| parent.parent.source.span),
+                    *existing,
+                    solution,
+                )
+            }) {
                 solutions.push(solution);
             }
         }
@@ -2161,7 +3556,7 @@ fn local_fillet_root_from_seed(
     policy: ComputedFeatureEvaluationPolicy,
     controller: &mut OperationController,
 ) -> RootAttempt {
-    let tolerance = (sketch.model_scale() * GEOMETRY_TOLERANCE_FACTOR).max(1.0e-11);
+    let tolerance = (sketch.model_scale() * ROOT_POLISH_TOLERANCE_FACTOR).max(1.0e-15);
     let mut observed_failure = RootSearchFailure::NoLocalRoot;
     for _ in 0..policy.max_root_iterations {
         if controller
@@ -2385,6 +3780,7 @@ enum RootSelectionFailure {
 
 fn select_solution(
     sketch: &SketchDocument,
+    source_spans: [CurveSpan; 2],
     solutions: &[LocalFilletSolution],
 ) -> Result<LocalFilletSolution, RootSelectionFailure> {
     let Some(solution) = solutions
@@ -2396,7 +3792,7 @@ fn select_solution(
     };
     if solutions.iter().any(|other| {
         scores_nearly_tied(solution.score, other.score)
-            && solutions_materially_distinct(sketch, solution, *other)
+            && solutions_materially_distinct(sketch, source_spans, solution, *other)
     }) {
         return Err(RootSelectionFailure::Ambiguous);
     }
@@ -2410,17 +3806,31 @@ fn scores_nearly_tied(first: f64, second: f64) -> bool {
 
 fn solutions_materially_distinct(
     sketch: &SketchDocument,
+    source_spans: [CurveSpan; 2],
     first: LocalFilletSolution,
     second: LocalFilletSolution,
 ) -> bool {
     let position_tolerance = (sketch.model_scale() * ROOT_DEDUPLICATION_FACTOR).max(1.0e-10);
-    (first.center[0] - second.center[0]).hypot(first.center[1] - second.center[1])
+    if (first.center[0] - second.center[0]).hypot(first.center[1] - second.center[1])
         > position_tolerance
-        || first
-            .parameters
-            .into_iter()
-            .zip(second.parameters)
-            .any(|(left, right)| (left - right).abs() > 1.0e-8)
+    {
+        return true;
+    }
+    (0..2).any(|index| {
+        let Ok(first_contact) =
+            sketch.evaluate_curve_jet(source_spans[index], first.parameters[index])
+        else {
+            return true;
+        };
+        let Ok(second_contact) =
+            sketch.evaluate_curve_jet(source_spans[index], second.parameters[index])
+        else {
+            return true;
+        };
+        (first_contact.position.x - second_contact.position.x)
+            .hypot(first_contact.position.y - second_contact.position.y)
+            > position_tolerance
+    })
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -2595,6 +4005,18 @@ const fn map_arc_authoring_failure(failure: ArcValidationFailure) -> ComputedFea
     match failure {
         ArcValidationFailure::OffsetSingularity => ComputedFeatureAuthoringError::OffsetSingularity,
         ArcValidationFailure::SingularParents => ComputedFeatureAuthoringError::SingularParents,
+        ArcValidationFailure::Invalid => ComputedFeatureAuthoringError::InvalidResolvedGeometry,
+    }
+}
+
+const fn map_arc_continuation_failure(
+    failure: ArcValidationFailure,
+) -> ComputedFeatureAuthoringError {
+    match failure {
+        ArcValidationFailure::OffsetSingularity => ComputedFeatureAuthoringError::OffsetSingularity,
+        ArcValidationFailure::SingularParents => {
+            ComputedFeatureAuthoringError::IllConditionedRadiusSensitivity
+        }
         ArcValidationFailure::Invalid => ComputedFeatureAuthoringError::InvalidResolvedGeometry,
     }
 }

@@ -32,6 +32,9 @@ pub use evaluation::{
     ComputedFeatureEvaluationPolicy, ComputedFeatureEvaluationSnapshot,
     ComputedFeatureEvaluationState, ComputedFeatureFailure, ComputedFeatureSnapshot,
     ComputedFeatureSnapshotError, ComputedFilletAuthoringOptions, ComputedFilletContact,
-    ComputedFilletCornerAuthoringRequest, ComputedFilletCurvePick, ComputedSourceInterval,
-    PreparedComputedFeatureEvaluation, ResolvedComputedFilletCorner,
+    ComputedFilletContactReseedRequest, ComputedFilletCornerAlternative,
+    ComputedFilletCornerAlternativeKind, ComputedFilletCornerAuthoringRequest,
+    ComputedFilletCurvePick, ComputedFilletParentIndex, ComputedFilletRadiusSensitivity,
+    ComputedSourceInterval, ContinuedComputedFilletCorner, PreparedComputedFeatureEvaluation,
+    ResolvedComputedFilletCorner,
 };

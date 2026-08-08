@@ -744,6 +744,100 @@ impl ComputedFeatureDocument {
         Ok(())
     }
 
+    /// Atomically replaces one complete Fillet set while preserving its feature
+    /// and corner identities.
+    ///
+    /// `corners` must contain every current corner exactly once. Each tuple is a
+    /// complete absolute branch replacement; missing, duplicate or foreign IDs,
+    /// invalid intent and duplicate canonical source pairs reject before either
+    /// the radius or any corner is changed.
+    pub fn replace_fillet_set(
+        &mut self,
+        feature: ComputedFeatureId,
+        radius: f64,
+        corners: Vec<(ComputedFeatureCornerId, NewComputedFilletCorner)>,
+    ) -> Result<(), ComputedFeatureDocumentError> {
+        validate_radius(radius)?;
+        let current = self
+            .features
+            .iter()
+            .find(|value| value.id == feature)
+            .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
+        let ComputedFeatureDefinition::FilletSet(current_fillet) = &current.definition;
+        if corners.len() != current_fillet.corners.len() {
+            return Err(invalid_field(
+                "corners",
+                "a complete Fillet-set replacement must cover every current corner",
+            ));
+        }
+        let current_ids = current_fillet
+            .corners
+            .iter()
+            .map(|corner| corner.id)
+            .collect::<std::collections::BTreeSet<_>>();
+        let mut replacements = std::collections::BTreeMap::new();
+        for (id, corner) in corners {
+            if !current_ids.contains(&id) {
+                return Err(ComputedFeatureDocumentError::UnknownCorner(id));
+            }
+            let corner = corner.canonicalized();
+            validate_new_corner(corner)?;
+            if replacements.insert(id, corner).is_some() {
+                return Err(invalid_field(
+                    "corners",
+                    "a complete Fillet-set replacement contains a duplicate corner ID",
+                ));
+            }
+        }
+        if replacements.len() != current_ids.len() {
+            return Err(invalid_field(
+                "corners",
+                "a complete Fillet-set replacement is missing a current corner ID",
+            ));
+        }
+        let replacement_corners = current_fillet
+            .corners
+            .iter()
+            .map(|current| {
+                replacements
+                    .get(&current.id)
+                    .copied()
+                    .map(|replacement| ComputedFilletCorner {
+                        id: current.id,
+                        first: replacement.first,
+                        second: replacement.second,
+                        endpoint_order: replacement.endpoint_order,
+                        sweep: replacement.sweep,
+                    })
+            })
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| {
+                invalid_field(
+                    "corners",
+                    "a complete Fillet-set replacement is missing a current corner ID",
+                )
+            })?;
+        validate_unique_new_corner_pairs(
+            replacement_corners.iter().map(|corner| corner.without_id()),
+        )?;
+        if current_fillet.radius.to_bits() == radius.to_bits()
+            && current_fillet.corners == replacement_corners
+        {
+            return Ok(());
+        }
+        let next_revision = next_revision(self.revision)?;
+        let value = self
+            .features
+            .iter_mut()
+            .find(|value| value.id == feature)
+            .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
+        let ComputedFeatureDefinition::FilletSet(fillet) = &mut value.definition;
+        fillet.radius = radius;
+        fillet.corners = replacement_corners;
+        self.revision = next_revision;
+        Ok(())
+    }
+
     /// Changes one feature's suppression state.
     pub fn set_suppressed(
         &mut self,
