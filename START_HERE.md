@@ -121,11 +121,20 @@ migration. Workspace v4 adds the feature sidecar; v1-v3 migrate to an empty feat
 Post-pivot finding `M66-PF001` then hardened the Rust interaction boundary after a blank optional
 radius made the second line appear unselectable. `M66-PF002` subsequently smooths native and
 computed curves through one bounded headless tessellation policy and fixes midpoint-aliasing
-inflections that could disappear from both rendering and picking. Candidate source `a34d137`
-preserves the initialized radius, keeps corners atomic, resolves bounded overlapping hits without
-guessing, and commits picks or option changes only together with an independently current
+inflections that could disappear from both rendering and picking. Presentation-smoothed source
+`a34d137` preserves the initialized radius, keeps corners atomic, resolves bounded overlapping
+hits without guessing, and commits picks or option changes only together with an independently current
 whole-feature preview. The full mechanical gate passes; focused human retest and the rewritten UAT
-are the only open M66 gates.
+are the only open M66 gates. Checkpoint `M66-PF003` advances the nominated source to `02649cc` and
+turns the stable `fillet-workshop` sample into an ordinary editable **2D Fillet playground** under
+**Samples → Curves & constructions**. It places independent line-line, line-circle,
+line-quadratic-Bezier and high-valence reference specimens beside unlocked batch/sequential and
+short-middle conflict polylines. The workbench also suppresses native browser text-selection and
+element-drag defaults only inside the SVG canvas; the Fillet options overlay and other HTML remain
+normally selectable/editable. Direct Rust presentation and screen/coordinator transaction tests,
+not a restored browser E2E harness, own this checkpoint. The full mechanical gate passes on
+`02649cc`; focused human retest of `M66-PF001` through `M66-PF003` and the rewritten UAT remain the
+only open M66 gates.
 M62 follow-up `M62-F001` corrects accepted-state line-angle seeding and exposes acute-degree
 presentation while retaining the explicit directed-radian solver branch.
 Follow-up `M62-F002` gives canvas pointer-down exclusive ownership of canvas authoring picks,

@@ -5,15 +5,22 @@
 Status: post-pivot implementation and mechanical qualification are Pass. Every human result is
 Pending; do not use the archived `1034afc` build for this scorecard.
 
-Candidate source: `a34d137` (`Smooth headless curve presentation`), extending interaction-hardened
-candidate `b53a451` after `M66-PF001` and `M66-PF002`.
+Candidate source: `02649cc` (`Add editable Fillet authoring playground`), extending
+presentation-smoothed candidate `a34d137` and resolving `M66-PF003` after `M66-PF001`/`M66-PF002`.
 
 Tailscale endpoint: `http://100.94.63.83:8080/` (release service live-rebuilt and HTTP verified on
-2026-08-08).
+2026-08-08; the served `02649cc` HTML contains the scoped non-draggable SVG marker).
 
 Use the ordinary GeoSolve Sketch Workbench only. This scorecard validates the normal computed
 Fillet route under ADR 0031. It does not ask the UI to create or edit advanced M28 solver-owned
 associations.
+
+Recommended starting point: open **Samples → Curves & constructions → 2D Fillet
+playground**. Use the unlocked left polyline for U1/U2, the unlocked short-middle polyline for
+conflict/recovery, and the fixed line-circle and line-quadratic-Bezier islands for family checks.
+The upper-right three-line junction is intentionally ambiguous at its shared point; click two
+branch interiors to choose a pair. For the independent upper-left lines, click each line interior
+away from their exact intersection so manual intent is unambiguous.
 
 ## UAT scorecard
 
@@ -163,6 +170,25 @@ meets the intended baseline between vertices.
 Status: mechanically resolved; focused human visual retest Pending. Inspect ordinary Bézier/conic/
 NURBS curves and small/large Fillet previews at several zoom levels while continuing M66 UAT.
 
+### M66-PF003 — repetitive Fillet setup and canvas gestures obstructed focused UAT
+
+Observed: the former workshop already provided basic line-line, line-circle and line-Bezier
+references, but its only polyline was one fixed corner; it did not colocate editable
+batch/sequential, high-valence ambiguity and short-middle claim-conflict cases. Canvas gestures
+could also trigger native browser text selection or element dragging around the page.
+
+Disposition on `02649cc`: the stable sample key now opens the ordinary editable **2D Fillet
+playground** described above. Fixed reference islands and unlocked polylines remain normal save-like
+geometry with no guide or alternate coordinator. Only the SVG canvas boundary suppresses
+`selectstart`/`dragstart`, native user selection and element dragging; the Fillet radius input,
+sidebar and other HTML remain selectable/editable. Direct Rust tests cover the real
+screen/coordinator fixture transactions and focused presentation scoping. No browser E2E claim is
+made. The full native/Clippy/workspace/WASM/release gate and 73/73 demo-web tests pass.
+
+Status: mechanically resolved; focused human retest Pending. Exercise each playground region,
+confirm canvas drags do not select page text, and confirm text plus the Fillet radius input still
+work normally outside the SVG.
+
 The old `M66-F002` through `M66-F013` ledger belongs to the archived solver-owned UI architecture
 at `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`). Those regressions remain useful
 compatibility evidence, but their mechanically qualified disposition does not qualify this UAT.
@@ -175,5 +201,6 @@ M66 closes only after:
 2. formatting, warnings-denied locked workspace Clippy, locked all-feature workspace tests,
    all-feature demo-web WASM, release Trunk and `git diff --check` pass on that source (satisfied);
 3. every scorecard item is Pass or an explicitly accepted scoped limitation;
-4. every post-pivot finding has a direct tested disposition and human retest; and
+4. every post-pivot finding (`M66-PF001` through `M66-PF003`) has a direct tested disposition and
+   human retest; and
 5. the supervising human explicitly approves M66.

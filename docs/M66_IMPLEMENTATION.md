@@ -2,8 +2,8 @@
 
 # M66 implementation: computed 2D Fillet features
 
-Status: implementation and mechanical qualification complete on presentation-smoothed candidate
-source `a34d137` after the 2026-08-07 ADR 0031 pivot. Supervising-human UAT remains open.
+Status: implementation and mechanical qualification complete on editable-playground candidate
+source `02649cc` after the 2026-08-07 ADR 0031 pivot. Supervising-human UAT remains open.
 
 The qualified but unapproved solver-owned ordinary-UI endpoint, commit `1034afc`, is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07`. The earlier three-tool experiment remains at
@@ -75,6 +75,15 @@ qualification evidence.
 - `WorkspaceSnapshot::from_coordinator()` is the sole live save/sample capture path. When active
   computed output would make base-only profiles/fills misleading, the workbench withholds them
   with a typed “computed geometry not yet included” status.
+- `M66-PF003` keeps the stable `fillet-workshop` key and presents an ordinary editable **2D Fillet
+  playground** under **Samples → Curves & constructions**. Fixed line-line, line-circle,
+  line-quadratic-Bezier and high-valence specimens sit beside unlocked batch/sequential and
+  short-middle conflict polylines. Native screen/coordinator regressions exercise the fixture; it
+  adds no guide, protected authoring state or alternate coordinator.
+- The SVG and its descendants opt out of native text selection and element dragging; scoped
+  `selectstart`/`dragstart` guards prevent those browser defaults. The sibling Fillet options and
+  other HTML retain normal selection/input behavior. This is directly tested adapter policy, not
+  browser E2E evidence.
 
 The normal UI removes Driving/Reference radius choice and does not auto-create a radius scalar,
 dimension, constraint, M28 association or `DocumentCurveTrimView`. M27/M28 public Fillet types and
@@ -114,7 +123,8 @@ redesigning persistence. M66 implements no Offset.
 
 ## 3. Exact commands and outcomes
 
-Candidate source `a34d137` passed the following commands on one implementation state:
+Presentation-smoothed source `a34d137` passed the previously recorded full gate. Candidate source
+`02649cc` repeated the following commands successfully on one implementation state:
 
 ```text
 nix-shell shell.nix --run 'cargo fmt --all -- --check'
@@ -131,13 +141,16 @@ Outcomes:
 - `geosolve-sketch-features`: 21 tests passed;
 - `geosolve-constraint-editor`: 175 unit tests and 45 integration tests passed, including 28
   focused M66 interaction-engine tests;
-- `geosolve-demo-web`: 68 tests passed;
+- `geosolve-demo-web`: 73 tests passed, including playground screen/coordinator transactions and
+  the focused SVG browser-default guard presentation contract;
 - the complete locked all-feature workspace test suite passed;
 - warnings-denied workspace Clippy passed;
 - the all-feature demo-web WASM check passed;
 - formatting and `git diff --check` passed; and
 - the release Trunk command exited zero with `INFO applying new distribution` and
   `INFO ✅ success`.
+
+No browser E2E/CDP suite was run or restored.
 
 The standard Cargo duplicate `license`/`license-file` warnings remain pre-existing and did not
 fail Clippy. The old `1034afc` qualification belongs solely to the archived architecture.
@@ -154,6 +167,11 @@ Mechanical acceptance passed; supervising-human UAT remains open. Direct qualifi
   the complete first-set publication through adjacent second-set publication plus Undo/Redo;
 - inflected cubic pickability, minimal straight-line sampling, computed Fillet minimum chord density
   and the denser advanced-drafting preview;
+- the ordinary editable playground's multi-corner batch, independent-line interior picks,
+  high-valence ambiguity/explicit recovery, rejected short-middle second pick/retry and supported
+  line-circle/line-quadratic-Bezier authoring;
+- SVG-scoped suppression of native browser selection/drag defaults without suppressing the Fillet
+  options or other HTML;
 - reverse-selection canonicalization and sequential/batch visible parity;
 - atomic claim conflict plus recovery;
 - exact sketch-state/residual/rank/DOF invariance under shared-radius edits;
@@ -166,7 +184,8 @@ Mechanical acceptance passed; supervising-human UAT remains open. Direct qualifi
 - ordinary-UI absence of M28 associations, trim views, constraints and radius dimensions; and
 - M27/M28/M30/M58 backward compatibility.
 
-The Tailscale UAT service has been rebuilt/restarted from the nominated implementation and is
+The Tailscale UAT service has live-rebuilt from `02649cc`; its served HTML was verified to contain
+the scoped canvas marker (`draggable="false"`) and is
 reachable at `http://100.94.63.83:8080/`. Execute `docs/M66_UAT.md`; M66 stays open until the
 supervising human explicitly approves it.
 
@@ -178,5 +197,5 @@ supervising human explicitly approves it.
 - Version-one computed features reference native constrained spans only.
 - Computed-on-computed chaining, Offset, Bake/Explode and cross-revision output topological naming
   are deferred.
-- The remaining blocker is supervising-human UAT approval of candidate source `a34d137` at the
+- The remaining blocker is supervising-human UAT approval of candidate source `02649cc` at the
   verified Tailscale endpoint.

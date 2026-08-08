@@ -34,8 +34,9 @@ construction/NURBS UAT and certified all-family visual profiles.
   `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`). M27/M28 and M58 associative-
   Fillet APIs remain advanced/backward-compatible behavior with no automatic migration. M66 adds
   no Offset implementation or profile consumption. Implementation and mechanical qualification
-  pass on presentation-smoothed candidate source `a34d137`; focused supervising-human UAT remains
-  open.
+  pass on editable-playground candidate source `02649cc`, which extends the presentation-smoothed
+  `a34d137` boundary with focused ordinary-workspace UAT fixtures and SVG-scoped browser-default
+  guards. Focused supervising-human UAT remains open.
 - **Planned sequence:** no milestone is assigned after M66. Every newly scoped milestone ends in
   its own human UAT.
 
@@ -395,6 +396,20 @@ The workbench renders grouped corner candidates, shared-radius preview, stable f
 selection, a **Features** tree and attributed feature issues. It never creates M28 contacts,
 dimensions or trim views and never composes endpoint claims itself. Generated arcs are not sketch-
 constraint operands; native source points and spans retain ordinary selection and drag behavior.
+
+Checkpoint `M66-PF003` keeps the stable `fillet-workshop` sample key but presents it as the
+ordinary editable **2D Fillet playground** under **Samples → Curves & constructions**. Its fixed
+reference islands cover independent intersecting lines, a line/circle pair, a
+line/quadratic-Bezier pair and a true three-line shared junction. Two unlocked four-point
+polylines cover multi-corner/sequential composition and a deliberately short middle span for
+claim-conflict recovery. Opening the leaf still creates the sole ordinary coordinator and adds no
+guide, scripted action, read-only state, alternate route or sample-owned authoring rule.
+
+Canvas platform policy remains local to the web adapter. The SVG canvas and its descendants opt
+out of native text selection and element dragging, and the adapter prevents only `selectstart`
+and `dragstart` defaults at that boundary. The sibling Fillet options overlay, sidebar and other
+HTML retain normal selection and input behavior. Focused native presentation tests qualify this
+scoping; no browser E2E/CDP harness is restored or claimed.
 
 Invalid computed output is withheld rather than drawn from an older snapshot. A valid sketch edit
 still publishes and may leave a repairable feature failure. Base-only profile/fill presentation is
@@ -812,6 +827,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
 - M65: completed and approved predictable, bounded projected dragging for the existing editable
   mechanism samples, including twin-roller hit routing and rank-one pantograph-guide projection.
 - M66: active computed-feature architecture and grouped authoring for ordinary multi-corner 2D
-  Fillets outside the constraint graph, ending in its own focused UAT; the superseded qualified
-  solver-owned UI source remains archived at
+  Fillets outside the constraint graph, with an ordinary editable Fillet playground and
+  SVG-scoped browser-default isolation on candidate `02649cc`, ending in its own focused UAT; the
+  superseded qualified solver-owned UI source remains archived at
   `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`).

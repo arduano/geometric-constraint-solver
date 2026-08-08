@@ -1990,6 +1990,23 @@ The snapshot/provenance container demonstrates variable output cardinality and e
 interval provenance for future topology-changing features. No Offset definition, implementation,
 workbench action, placeholder, sample or UAT claim exists in M66.
 
+### M66-CF9 - PF003 editable Fillet playground checkpoint
+
+This M66-only leaf extends rather than rewrites the frozen M64 22-leaf record; the current catalog
+therefore has 23 stable leaves. Open **Samples → Curves & constructions → 2D Fillet
+playground**. The ordinary editable leaf contains an upper-left independent-line pair,
+upper-right three-line high-valence junction,
+line-circle and line-quadratic-Bezier pairs, an unlocked long-middle polyline for batch/sequential
+Fillets and an unlocked short-middle polyline for claim-conflict recovery. For predictable manual
+line-line UAT, click each line's interior away from their exact intersection; use the junction
+itself only to verify typed ambiguity, then choose two branch interiors explicitly.
+
+The leaf has no guide, special coordinator or protected geometry beyond its fixed reference
+islands. SVG canvas gestures suppress native browser text-selection and element-drag defaults,
+while the sibling Fillet options and other HTML remain selectable/editable. Native
+screen/coordinator and focused presentation tests qualify this checkpoint; it is not browser E2E
+evidence. `M66-PF003` is mechanically complete on `02649cc` and awaits human retest with M66 open.
+
 ### Archived solver-owned M66 scenario record
 
 The prior single-corner, M28-backed ordinary-UI scenarios and findings `M66-F002` through

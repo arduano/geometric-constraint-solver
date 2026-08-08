@@ -992,7 +992,7 @@ in `docs/M65_UAT.md`; M65 is complete.
 ## M66 acceptance: computed 2D Fillet features
 
 Status: active after the 2026-08-07 computed-feature pivot. Post-pivot implementation and
-mechanical qualification pass on presentation-smoothed candidate source `a34d137`;
+mechanical qualification pass on editable-playground candidate source `02649cc`;
 supervising-human UAT remains open.
 
 The superseded solver-owned ordinary-UI build is preserved at
@@ -1034,6 +1034,14 @@ M66 is accepted only when all of the following are true:
 - Native curves, computed source fragments and generated Fillet arcs use bounded headless
   tessellation with a smooth curved baseline. Inflected curves remain rendered and pickable even
   when their parameter midpoint lies exactly on the endpoint chord; straight spans remain minimal.
+- The stable ordinary sample leaf **Samples → Curves & constructions → 2D Fillet playground**
+  provides editable multi-corner/sequential and short-middle conflict polylines beside fixed
+  line-line, line-circle, line-quadratic-Bezier and high-valence reference specimens. Direct
+  screen/coordinator tests cover their intended authoring, ambiguity and rejected-pick recovery;
+  the sample owns no guide, read-only state or alternate coordinator.
+- Native browser text-selection and element-drag defaults are suppressed only within the SVG
+  canvas. Fillet option inputs and other HTML remain selectable/editable. This adapter contract is
+  directly tested without restoring or claiming browser E2E qualification.
 - A generated arc selects stable corner/set provenance. Dragging it changes only the shared feature
   radius; deleting it removes its corner, deleting the final corner removes the set and suppression
   is set-wide. Generated geometry is not a sketch-constraint operand. Every native source point

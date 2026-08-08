@@ -76,7 +76,8 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - Reusable headless associative-2D-Fillet authoring with exact accepted-geometry picks, explicit
   branch/radius options, independently accepted scratch previews, recoverable radius hover and
   token/candidate-bound publication through one normal history edit.
-- One ordinary editable **2D fillet workshop** for local line/curve and open-polyline-corner
+- One ordinary editable **2D Fillet playground** for independent lines, line-circle,
+  line-quadratic-Bezier, high-valence, multi-corner/sequential and short-middle conflict
   authoring, with no guide, protected state or alternate coordinator.
 
 ### Changed
@@ -212,6 +213,11 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   state before publication. Independent Fillet tangency validation now scales by model scale rather
   than radius. Replacement build-source commit `87e72b3` passes the complete native,
   warnings-denied, WASM and release gate plus the exact pointer-authored UI lifecycle.
+- Added `M66-PF003` on candidate `02649cc`: the stable Fillet sample is now a focused editable
+  playground, and SVG canvas interaction suppresses native browser text-selection/element-drag
+  defaults without affecting the sibling Fillet options or other HTML. Direct Rust qualification
+  and the full native, warnings-denied, workspace, WASM and release gate pass; no browser E2E is
+  restored or claimed and human M66 UAT remains open.
 - Preserved the superseded Fillet/Offset/Mirror candidate for historical inspection at
   `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`). It is not an active or approved
   M66 candidate.

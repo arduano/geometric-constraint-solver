@@ -3018,7 +3018,7 @@ replacement candidate. M65 is closed; the historical candidate endpoint was
 ### M66: computed 2D Fillet features
 
 Status: active after the 2026-08-07 computed-feature pivot. Implementation and mechanical
-qualification are complete on presentation-smoothed candidate source `a34d137`;
+qualification are complete on editable-playground candidate source `02649cc`;
 supervising-human UAT remains open.
 
 Goal: make ordinary CAD Fillet authoring a persistent computed feature outside the sketch
@@ -3089,22 +3089,33 @@ advanced/backward-compatible APIs, and existing documents are not migrated.
 - [x] Resolve `M66-PF002` by using one finer workbench chord-error policy, seeding every non-linear
   headless span before adaptive refinement, increasing bounded generated-arc and advanced-draft
   subdivision, and directly proving an inflected cubic remains pickable while lines remain minimal.
+- [x] Resolve `M66-PF003` by expanding the stable ordinary `fillet-workshop` leaf into an editable
+  **2D Fillet playground** under **Samples → Curves & constructions**. Provide fixed line-line,
+  line-circle, line-quadratic-Bezier and high-valence reference specimens plus unlocked
+  batch/sequential and short-middle conflict polylines; directly exercise them through real
+  screen/coordinator authoring transactions. Suppress native text-selection and element-drag
+  defaults only within the SVG canvas while keeping the Fillet options overlay and other HTML
+  selectable/editable. Add no guide, special coordinator, browser E2E or sample-owned geometry
+  rule.
 - [x] Keep existing M27/M28/M30/M58 compatibility suites green and prove that ordinary UI Fillet
   creates no solver-owned association, trim view, constraint or dimension.
 - [x] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature
   demo-web WASM check, release Trunk build and `git diff --check` on one post-pivot source.
 - [ ] Complete and explicitly approve the computed-Fillet `docs/M66_UAT.md`.
 
-Mechanical qualification record (2026-08-08): candidate source `a34d137` passes 21
+Mechanical qualification record (2026-08-08): presentation-smoothed source `a34d137` established
+the prior full gate. Nominated candidate source `02649cc` repeats formatting, warnings-denied
+locked workspace/all-target/all-feature Clippy, the locked all-feature workspace test suite, the
+all-feature demo-web WASM check and the release Trunk build successfully. The demo-web test crate
+passes 73/73 tests. No browser E2E was run or restored. The retained lower-layer counts are 21
 `geosolve-sketch-features` tests, 175 `geosolve-constraint-editor` unit tests plus 45 integration
-tests, 68 `geosolve-demo-web` tests, the complete locked all-feature workspace suite,
-warnings-denied workspace Clippy, the all-feature demo-web WASM check, formatting and
-`git diff --check`. The release Trunk build exits zero after applying the optimized distribution.
+tests; the expanded demo-web count is 73. `git diff --check` passes on the documented source.
+The release Trunk build exits zero after applying the optimized distribution.
 Fresh-process persistence regressions additionally prove that saving after Undo or a cancelled
 computed preview captures the live sketch, feature/corner and computed-evaluation allocator
 high-water, so restoration cannot reuse any retired identity. Reviewed searches find no active
 Offset/Mirror helper UI, legacy operation harness or `/#/dev/lab` route. Human UAT is the only
-remaining M66 gate; `M66-PF001` and `M66-PF002` await focused human retest there.
+remaining M66 gate; `M66-PF001`, `M66-PF002` and `M66-PF003` await focused human retest there.
 
 Gate: one Apply creates one persistent multi-corner `FilletSet` with a shared editable radius;
 later Applies create separate sets whose opposite-end claims can compose on a shared source span.
