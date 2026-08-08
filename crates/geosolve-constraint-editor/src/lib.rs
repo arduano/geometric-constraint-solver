@@ -11,7 +11,6 @@ mod annotations;
 mod authoring;
 mod coordinator;
 mod feature_authoring;
-mod qualification;
 
 pub use annotations::{
     SceneAnnotation, SceneAnnotationGeometry, SceneAnnotationKind, SceneAnnotationVisibility,
@@ -52,12 +51,6 @@ pub use geosolve_sketch_features::{
     ComputedFeatureSnapshot, ComputedFilletCorner, ComputedFilletSet, ComputedSourceInterval,
     NativeCurveSpanSource, NewComputedFilletCorner,
 };
-#[doc(hidden)]
-pub use qualification::{
-    M40QualificationCaseResult, M40QualificationReport, m40_qualification_corpus,
-    run_m40_qualification, validate_m40_qualification_matrix,
-};
-
 use std::cmp::Ordering;
 
 use geosolve_sketch::{
@@ -4584,6 +4577,20 @@ mod tests {
                 curve_parameter: None,
             })
         );
+        for offset in [7.999, 8.0, 8.001] {
+            assert_eq!(
+                scene
+                    .hit_test(
+                        ScreenPoint {
+                            x: endpoint.x + offset,
+                            y: endpoint.y,
+                        },
+                        PickTolerance::default(),
+                    )
+                    .is_some_and(|hit| hit.item == SelectionItem::Point(points[0])),
+                offset <= 8.0,
+            );
+        }
     }
 
     #[test]
@@ -5319,6 +5326,21 @@ mod tests {
             ConstraintEditor::new(PickTolerance::default(), f64::NAN),
             Err(EditorError::InvalidTolerance)
         ));
+
+        for scale in [1.0e-6, 1.0, 1.0e6] {
+            for center in [[0.0, 0.0], [1.0e6, -1.0e6]] {
+                let viewport =
+                    Viewport::new([1000.0, 700.0], center, scale).expect("scaled viewport");
+                let model = [center[0] + 2.0 / scale, center[1] - 3.0 / scale];
+                let round_trip = viewport.screen_to_model(viewport.model_to_screen(model));
+                assert!(
+                    round_trip
+                        .into_iter()
+                        .zip(model)
+                        .all(|(actual, expected)| (actual - expected).abs() <= 1.0e-12)
+                );
+            }
+        }
     }
 
     #[test]
@@ -5408,22 +5430,43 @@ mod tests {
     fn snapping_is_identity_ordered_and_exactly_inclusive_at_tolerance() {
         let (document, _, points) = line_document();
         let scene = scene(&document);
+        let endpoint = scene.viewport.model_to_screen([-4.0, 1.0]);
+        let target = scene.viewport.model_to_screen([0.0, 0.0]);
+        for offset in [7.999, 8.0, 8.001] {
+            let mut editor = ConstraintEditor::default();
+            editor
+                .set_snap_tolerance(SnapTolerance { point_pixels: 8.0 })
+                .expect("tolerance");
+            editor.activate_tool(EditorTool::Line);
+            editor.pointer_down(
+                &scene,
+                pointer(1, endpoint.x + offset, endpoint.y, Modifiers::default()),
+            );
+            let effects =
+                editor.pointer_down(&scene, pointer(1, target.x, target.y, Modifiers::default()));
+            assert_eq!(
+                matches!(effects.as_slice(), [EditorEffect::CommitConstruction { proposal: ConstructionProposal::Line { start: ConstructionPoint::Existing { id, .. }, .. }, .. }, EditorEffect::ClearConstructionPreview] if *id == points[0]),
+                offset <= 8.0,
+            );
+        }
+
+        let midpoint = scene.viewport.model_to_screen([-4.0, 0.0]);
         let mut editor = ConstraintEditor::default();
         editor
-            .set_snap_tolerance(SnapTolerance { point_pixels: 8.0 })
-            .expect("tolerance");
+            .set_snap_tolerance(SnapTolerance { point_pixels: 51.0 })
+            .expect("tie tolerance");
         editor.activate_tool(EditorTool::Line);
-        let endpoint = scene.viewport.model_to_screen([-4.0, 1.0]);
         editor.pointer_down(
             &scene,
-            pointer(1, endpoint.x + 8.0, endpoint.y, Modifiers::default()),
+            pointer(2, midpoint.x, midpoint.y, Modifiers::default()),
         );
-        let target = scene.viewport.model_to_screen([0.0, 0.0]);
         let effects =
-            editor.pointer_down(&scene, pointer(1, target.x, target.y, Modifiers::default()));
+            editor.pointer_down(&scene, pointer(2, target.x, target.y, Modifiers::default()));
+        let winner = points[0].min(points[2]);
         assert!(
-            matches!(effects.as_slice(), [EditorEffect::CommitConstruction { proposal: ConstructionProposal::Line { start: ConstructionPoint::Existing { id, .. }, .. }, .. }, EditorEffect::ClearConstructionPreview] if *id == points[0])
+            matches!(effects.as_slice(), [EditorEffect::CommitConstruction { proposal: ConstructionProposal::Line { start: ConstructionPoint::Existing { id, .. }, .. }, .. }, EditorEffect::ClearConstructionPreview] if *id == winner)
         );
+
         assert!(ConstraintEditor::new(PickTolerance::default(), -0.0).is_ok());
         assert!(
             editor

@@ -6399,9 +6399,9 @@ fn source_availability(
 mod tests {
     use super::*;
     use crate::{
-        AuthoringOutcome, AuthoringState, EditorScene, EditorTool, FeatureAuthoringOutcome,
-        FeatureAuthoringStage, FeatureAuthoringState, Modifiers, PickTolerance, PointerInput,
-        ScreenPoint, Viewport,
+        AuthoringOutcome, AuthoringState, ConstructionPoint, EditorScene, EditorTool,
+        FeatureAuthoringOutcome, FeatureAuthoringStage, FeatureAuthoringState, Modifiers,
+        PickTolerance, PointerInput, ScreenPoint, Viewport,
     };
     use geosolve_sketch::{
         AlphaScenarioIds, AlphaScenarioKind, DocumentConstraintDefinition,
@@ -7369,6 +7369,69 @@ mod tests {
     }
 
     #[test]
+    fn rejected_dimension_suppression_repairs_and_publishes_a_new_accepted_state() {
+        let (session, points, _, target) = fixed_line_session();
+        let retained = session.accepted_state().expect("accepted").identity();
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let outcome = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::CreateDimension {
+                    label: "conflict".into(),
+                    definition: DocumentDimensionDefinition::PointDistance {
+                        first: points[0],
+                        second: points[1],
+                        target,
+                    },
+                    mode: DocumentDimensionMode::Driving,
+                },
+            )
+            .expect("retained conflicting dimension");
+        let DocumentCommandEffect::CreatedDimension(dimension) = outcome.value else {
+            panic!("conflicting dimension returned the wrong effect");
+        };
+        assert!(outcome.published_accepted.is_none());
+        assert_eq!(
+            coordinator.lifecycle().status,
+            LifecycleStatus::RejectedAttempt
+        );
+        assert_eq!(
+            coordinator
+                .session()
+                .accepted_state()
+                .expect("retained accepted state")
+                .identity(),
+            retained
+        );
+
+        coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::Dimension(dimension)]);
+        let repair = coordinator
+            .set_selected_suppressed(coordinator.session().design_identity(), true)
+            .expect("suppression repair");
+        assert!(repair.published_accepted.is_some());
+        assert_eq!(coordinator.lifecycle().status, LifecycleStatus::Accepted);
+        assert_ne!(
+            coordinator
+                .session()
+                .accepted_state()
+                .expect("repaired accepted state")
+                .identity(),
+            retained
+        );
+        assert_eq!(repair.value.len(), 1);
+        assert!(
+            coordinator
+                .session()
+                .design_document()
+                .source(repair.value[0])
+                .expect("repaired source")
+                .suppressed
+        );
+    }
+
+    #[test]
     fn stale_edit_is_history_and_selection_neutral_and_new_edit_truncates_redo() {
         let (session, points, _, _) = fixed_line_session();
         let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
@@ -7627,6 +7690,60 @@ mod tests {
             ),
             state: ActionState::Enabled,
         }));
+    }
+
+    #[test]
+    fn ordinary_construction_proposals_publish_and_reload_through_the_coordinator() {
+        let session = RetainedSketchDocumentSession::new(
+            SketchDocument::new(4.0).expect("document"),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("empty accepted session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let proposals = [
+            ConstructionProposal::Point {
+                position: [-8.0, -8.0],
+            },
+            ConstructionProposal::Line {
+                start: ConstructionPoint::New([-6.0, -6.0]),
+                end: ConstructionPoint::New([-4.0, -6.0]),
+            },
+            ConstructionProposal::Polyline {
+                points: vec![
+                    ConstructionPoint::New([-2.0, -6.0]),
+                    ConstructionPoint::New([0.0, -6.0]),
+                    ConstructionPoint::New([0.0, -4.0]),
+                ],
+            },
+            ConstructionProposal::Rectangle {
+                first: [2.0, -6.0],
+                second: [4.0, -4.0],
+            },
+            ConstructionProposal::Circle {
+                center: ConstructionPoint::New([6.0, -5.0]),
+                radius: 1.0,
+            },
+            ConstructionProposal::CounterClockwiseArc {
+                center: ConstructionPoint::New([8.0, -5.0]),
+                start: [9.0, -5.0],
+                end: [8.0, -4.0],
+            },
+        ];
+
+        for proposal in proposals {
+            let outcome = coordinator
+                .apply_construction(coordinator.session().design_identity(), &proposal)
+                .expect("ordinary construction");
+            assert!(outcome.published_accepted.is_some());
+            assert_eq!(coordinator.lifecycle().status, LifecycleStatus::Accepted);
+        }
+
+        let saved = coordinator.checkpoint().clone();
+        let canonical_design = saved.design_json().to_owned();
+        coordinator.reload(&saved).expect("checkpoint reload");
+        assert_eq!(coordinator.checkpoint().design_json(), canonical_design);
+        assert_eq!(coordinator.lifecycle().status, LifecycleStatus::Accepted);
     }
 
     #[test]
@@ -8520,6 +8637,34 @@ mod tests {
         assert_eq!(coordinator.lifecycle().preview_accepted, None);
         coordinator.clear_transient();
         assert_eq!(coordinator.lifecycle().preview_attempt, None);
+    }
+
+    #[test]
+    fn initial_conflict_projects_design_unsolved_without_accepted_provenance() {
+        let mut document = SketchDocument::new(4.0).expect("document");
+        let point = document.add_point("conflicted", [0.0, 0.0]).expect("point");
+        for target in [[0.0, 0.0], [1.0, 0.0]] {
+            document
+                .add_constraint(
+                    "conflicting fixed point",
+                    DocumentConstraintDefinition::FixedPoint { point, target },
+                )
+                .expect("constraint");
+        }
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("retained unsolved design");
+        let coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+
+        let lifecycle = coordinator.lifecycle();
+        assert_eq!(lifecycle.status, LifecycleStatus::DesignUnsolved);
+        assert!(lifecycle.accepted.is_none());
+        assert!(lifecycle.parent_accepted.is_none());
+        assert!(lifecycle.preview_attempt.is_none());
+        assert!(lifecycle.preview_accepted.is_none());
     }
 
     #[test]

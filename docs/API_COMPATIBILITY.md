@@ -52,6 +52,14 @@ sample-agnostic locality contract; neither API was part of the published `0.2.0`
 draft-v5 representation remains explicitly unsupported until a future schema-freeze milestone is
 deliberately scoped, qualified and approved, and must not be treated as a released wire language.
 
+M67 removes the doc-hidden `M40QualificationCaseResult`, `M40QualificationReport`,
+`m40_qualification_corpus`, `run_m40_qualification` and
+`validate_m40_qualification_matrix` evidence API after replacing every retained claim with direct
+owning-layer tests. That frozen browser-evidence surface was introduced after published `0.2.0`,
+had no runtime consumer and was explicitly not a product API. M67 does not remove any supported
+domain API or v1-v4 persistence reader. Removing raw topology/lifecycle/redundancy cards from the
+non-published demo does not narrow the corresponding reusable domain contracts.
+
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.
 
@@ -154,13 +162,12 @@ The publishable crates are released in dependency order:
 2. `geosolve-core` after the matching geometry version is visible;
 3. `geosolve-sketch` and `geosolve-linkage` after the matching core version is
    visible;
-4. `geosolve-sketch-ops` and `geosolve-sketch-topology` after the matching sketch version is
-   visible;
-5. `geosolve-constraint-editor` after the matching sketch and sketch-operations versions are
-   visible.
+4. `geosolve-sketch-ops`, `geosolve-sketch-topology` and `geosolve-sketch-features` after the
+   matching sketch version is visible;
+5. `geosolve-constraint-editor` after the matching sketch and sketch-features versions are visible.
 
 Cargo cannot create a registry-ready dependent archive before its path dependency
 version exists in the registry. The pre-publication gate therefore checks the exact
-archive file list for all seven crates and builds every workspace target from path
+archive file list for all eight crates and builds every workspace target from path
 dependencies. Each package includes `LICENSE` and `README.md`. Registry publication
 itself remains a maintainer action after a repository URL and release tag exist.

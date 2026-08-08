@@ -1,0 +1,27 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+
+# M67 ownership of the retired M40 transition corpus
+
+M67 removes the post-release qualification runner, frozen evidence matrix and digest fixtures.
+The runner duplicated ordinary editor, coordinator and sketch behavior behind JSON operations and
+an exact report checksum. The named tests below are the direct owning-layer regressions that remain.
+
+| Retired corpus case | Direct behavioral owners |
+| --- | --- |
+| `m40.viewport.scale-letterbox` | Editor `viewport_round_trip_and_invalid_inputs_are_explicit` covers the three historical scales, both centers, round trips and rejected viewport inputs. |
+| `m40.draft.all-tools-routes-cancel` | Editor `every_core_draft_has_exact_completion_and_cancellation` and `draft_transition_matrix_covers_tools_stages_modifiers_and_interruption`; coordinator `ordinary_construction_proposals_publish_and_reload_through_the_coordinator` and `invalid_drafts_and_cancellation_dispatch_no_retained_mutation`. |
+| `m40.snap.inside-equal-outside-tie` | Editor `snapping_is_identity_ordered_and_exactly_inclusive_at_tolerance` covers the inside/equal/outside boundary and persistent-ID tie break. |
+| `m40.pick.boundary-overlap-ties` | Editor `line_is_selected_from_screen_space_without_dom_hit_targets`, `point_has_priority_at_a_line_endpoint` and `dense_parallel_line_picks_use_distance_then_persistent_identity`. |
+| `m40.selection.point-curve-modifiers` | Editor `ordered_mixed_selection_replaces_extends_and_toggles_by_persistent_identity` and `extended_line_selection_exposes_and_builds_parallel_relation`. Tree and inspector event delivery was never executed by this headless case. |
+| `m40.constraints.seven-valid-invalid` | Editor `relation_applicability_matrix_builds_only_valid_public_edits`; coordinator integration test `every_required_relation_executes_through_the_typed_coordinator_action` in `tests/m55.rs`. |
+| `m40.dimensions.families-modes-replay` | Coordinator `selected_dimension_routes_points_and_linear_spans_without_adapter_policy`, `dimension_mode_transition_replays_and_undoes_without_stale_mutation`, `reload_uses_checkpoint_bytes_without_reusing_revisions` and `action_matrix_dimensions_and_replay_are_deterministic`. |
+| `m40.drag.order-last-valid-release-cancel` | Editor `point_click_never_emits_drag_work_but_threshold_crossing_does`, `projected_drag_retains_last_valid_preview_and_requires_matching_pointer`, `tool_switch_interrupts_drag_and_closes_continuation_state` and `foreign_pointer_down_interrupts_drag_without_an_old_release_commit`; coordinator `issued_projection_results_ignore_out_of_order_duplicate_and_late_delivery` and `constrained_release_preserves_exact_preview_seed_branch_and_one_step_undo`. |
+| `m40.history.delete-suppress-undo-redo-reload` | Coordinator `suppression_delete_and_selection_reconciliation_use_persistent_ids`, `delete_selected_uses_domain_dependency_cleanup_and_undo_restores_ids`, `dimension_mode_transition_replays_and_undoes_without_stale_mutation` and `reload_uses_checkpoint_bytes_without_reusing_revisions`; sketch `accepted_only_history_round_trips_create_edit_suppress_and_delete` in `tests/m11.rs`. |
+| `m40.redundancy.accepted-dto` | Coordinator `accepted_redundancy_is_a_verbatim_sketch_dto`; sketch `accepted_redundancy_is_persistent_provenance_and_survives_rejected_attempt` in `tests/m34_lifecycle.rs`. |
+| `m40.conflict.problems-retained-accepted` | Coordinator `rejected_dimension_is_retained_and_undo_restores_with_fresh_revisions`, `rejected_dimension_suppression_repairs_and_publishes_a_new_accepted_state` and `current_problem_metadata_uses_attempted_owner_dependencies_and_clears_on_recovery`; editor `accepted_geometry_remains_pickable_but_removed_design_ids_are_not_snappable`; sketch `topology_changing_conflict_preserves_old_accepted_view_by_identity` in `tests/m34_lifecycle.rs`. |
+| `m40.lifecycle.all-states` | Coordinator `initial_conflict_projects_design_unsolved_without_accepted_provenance`, `accepted_preview_session_has_coherent_distinct_provenance`, `rejected_dimension_is_retained_and_undo_restores_with_fresh_revisions`, `mismatched_preview_commit_retains_preview_for_a_correct_retry` and the stale/foreign/rejected preview tests. |
+| `m40.malformed.nonfinite-cancellation-storage` | Editor `viewport_round_trip_and_invalid_inputs_are_explicit`, `nonfinite_inputs_and_modifiers_do_not_disturb_normalized_state` and the draft cancellation tests; sketch `malformed_json_variants_domains_finiteness_and_references_reject` and `malformed_imports_and_invalid_edits_leave_session_exactly_unchanged` in `tests/m11.rs`. The old corpus labelled malformed browser storage as adapter-owned and did not execute it. |
+| `m40.model.seeded-bounded-replay` | This case called the other corpus operations verbatim, including the rejected-dimension suppression repair now owned by `rejected_dimension_suppression_repairs_and_publishes_a_new_accepted_state`, then repeated selection replacement/toggle and cancellation transitions. Those transitions are owned directly by the selection, drafting, coordinator replay, history, conflict and lifecycle tests named above. The seeded schedule and digest add no separate product contract and are intentionally not replaced with another runner. |
+
+The deleted report schema, checksum, JSON operation vocabulary and cross-channel evidence IDs were
+qualification-harness formats, not editor or sketch product behavior.

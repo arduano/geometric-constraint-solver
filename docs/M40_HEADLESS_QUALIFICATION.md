@@ -11,6 +11,11 @@ The dated completion result at the end records the implemented M40 boundary. M48
 replaced durable browser claims with direct Rust/WASM owners and removed the browser
 harness. Current qualification and human review are owned by M52-M53.
 
+M67 subsequently retires the evidence-only M40 matrix, JSON transition runner and golden digest
+after mapping all fourteen retained behaviors to current direct tests. See
+`docs/M67_M40_OWNERSHIP.md`; the file paths and runner commands below remain historical evidence,
+not live repository instructions.
+
 ## M40.4 lifecycle and action contract
 
 ### Requirements
