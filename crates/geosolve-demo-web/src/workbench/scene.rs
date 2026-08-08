@@ -116,7 +116,7 @@ pub(crate) fn viewport() -> Viewport {
 }
 
 #[allow(clippy::too_many_lines)]
-#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+#[cfg(test)]
 pub(crate) fn svg_markup(
     scene: Option<&EditorScene>,
     accepted: Option<&SketchAcceptedDocumentState>,
@@ -137,6 +137,7 @@ pub(crate) fn svg_markup(
 }
 
 #[allow(clippy::too_many_lines)]
+#[cfg(test)]
 pub(crate) fn svg_markup_with_pending(
     scene: Option<&EditorScene>,
     accepted: Option<&SketchAcceptedDocumentState>,
@@ -159,6 +160,7 @@ pub(crate) fn svg_markup_with_pending(
 }
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+#[cfg(test)]
 pub(crate) fn svg_markup_with_context(
     scene: Option<&EditorScene>,
     accepted: Option<&SketchAcceptedDocumentState>,
@@ -1264,9 +1266,7 @@ mod tests {
         CanvasCamera, constraint_glyph, construction_geometry_markup, dimension_kind, svg_markup,
         svg_markup_with_computed_context, svg_markup_with_context, viewport,
     };
-    use crate::workbench::panels::{
-        accepted_redundancy_markup, host_state_markup, lifecycle_presentation, problem_markup,
-    };
+    use crate::workbench::panels::{lifecycle_presentation, problem_markup};
 
     fn arc_geometry(large_arc: bool, sweep_radians: f64) -> ConstructionPreviewGeometry {
         ConstructionPreviewGeometry::CounterClockwiseArc {
@@ -1973,21 +1973,7 @@ mod tests {
                 DocumentSolveRequest::default(),
             )
             .unwrap();
-        let lifecycle = host_state_markup(coordinator.session());
         let attempt = coordinator.session().last_attempt().identity();
-        assert!(lifecycle.contains(&format!(
-            "data-design-revision=\"{}\"",
-            coordinator.session().design_identity().revision().get()
-        )));
-        assert!(lifecycle.contains(&format!(
-            "data-attempt-revision=\"{}\"",
-            attempt.revision().get()
-        )));
-        assert!(lifecycle.contains(&format!(
-            "data-accepted-revision=\"{}\"",
-            accepted_before.revision().get()
-        )));
-        assert!(lifecycle.contains("data-attempt-status=\"failed\""));
         assert_ne!(attempt.revision().get(), accepted_before.revision().get());
 
         let accepted = coordinator.session().accepted_state().unwrap();
@@ -2032,10 +2018,6 @@ mod tests {
         assert!(problems.failure.is_some() || problems.rejection.is_some());
         let problem = problem_markup("Rejected attempt: parameter value has the wrong kind");
         assert!(problem.contains("Rejected attempt"));
-        let unavailable = accepted_redundancy_markup(None);
-        assert!(unavailable.contains("unavailable"));
-        assert!(!unavailable.contains("rank zero"));
-        assert!(!unavailable.contains("No sources published"));
 
         let expected = coordinator.session().design_identity();
         coordinator

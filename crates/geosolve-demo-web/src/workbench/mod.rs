@@ -353,28 +353,6 @@ fn observe_feature_authoring_preview_lifecycle(
     }
 }
 
-/// Extends the coordinator's persistent-feature profile boundary with the
-/// typed temporary authoring owner currently visible on the canvas.
-#[cfg(any(target_arch = "wasm32", test))]
-fn computed_profile_boundary_with_authoring(
-    coordinator: &geosolve_constraint_editor::RetainedEditorCoordinator,
-) -> geosolve_constraint_editor::ComputedProfileBoundary {
-    let boundary = coordinator.computed_profile_boundary();
-    if coordinator.feature_authoring_preview().is_none() {
-        return boundary;
-    }
-    match boundary {
-        geosolve_constraint_editor::ComputedProfileBoundary::BaseOnly => {
-            geosolve_constraint_editor::ComputedProfileBoundary::Withheld { active_features: 1 }
-        }
-        geosolve_constraint_editor::ComputedProfileBoundary::Withheld { active_features } => {
-            geosolve_constraint_editor::ComputedProfileBoundary::Withheld {
-                active_features: active_features.saturating_add(1),
-            }
-        }
-    }
-}
-
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod wasm {
     use std::cell::RefCell;
@@ -2541,17 +2519,6 @@ pub(crate) mod wasm {
         let problem = problem_text(coordinator, &computed_problems);
         required(document, "wb-problem-text")?
             .set_inner_html(&super::panels::problem_markup(&problem));
-        required(document, "wb-redundancy")?.set_inner_html(
-            &super::panels::accepted_redundancy_markup(coordinator.accepted_redundancy()),
-        );
-        required(document, "wb-host-state")?
-            .set_inner_html(&super::panels::host_state_markup(coordinator.session()));
-        required(document, "wb-production-topology")?.set_inner_html(
-            &super::panels::production_topology_markup(
-                coordinator.session(),
-                super::computed_profile_boundary_with_authoring(coordinator),
-            ),
-        );
         render_sample_ui(document, &wb.samples)?;
         let problems = required(document, "wb-problems")?;
         if wb.problems_open
@@ -3471,8 +3438,8 @@ pub(crate) mod wasm {
 #[cfg(test)]
 mod tests {
     use geosolve_constraint_editor::{
-        AuthoringOperand, AuthoringOutcome, AuthoringState, AuthoringTool, ComputedProfileBoundary,
-        ConstraintIntent, EditorHoverState, FeatureAuthoringCandidate, FeatureAuthoringOptions,
+        AuthoringOperand, AuthoringOutcome, AuthoringState, AuthoringTool, ConstraintIntent,
+        EditorHoverState, FeatureAuthoringCandidate, FeatureAuthoringOptions,
         FeatureAuthoringOutcome, FeatureAuthoringPreviewMetadata, FeatureAuthoringState,
         FeatureAuthoringTool, Modifiers, PickTolerance, PointerInput, RetainedEditorCoordinator,
         ScreenPoint, SelectionItem, Viewport,
@@ -3486,8 +3453,7 @@ mod tests {
     use super::{
         AuthoringItemInput, CANVAS_BROWSER_DEFAULT_GUARD_EVENTS, FeatureAuthoringRadiusRefresh,
         OverlayRect, PointerMoveQueue, canvas_overlay_position, change_owns_option_control_click,
-        computed_profile_boundary_with_authoring, geometry_hover_selector,
-        observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
+        geometry_hover_selector, observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
         palette_details_overlay_reflow_listener, refresh_held_feature_authoring_radius,
         restore_held_feature_authoring_radius, revoke_held_feature_authoring_preview,
         selected_feature_authoring_corner_index,
@@ -3988,29 +3954,9 @@ mod tests {
     }
 
     #[test]
-    fn active_fillet_preview_withholds_base_only_production_topology() {
-        let (mut coordinator, _, points) = grouped_fillet_fixture();
-        let mut state = FeatureAuthoringState::default();
-        let _ = prepare_grouped_fillet(&mut coordinator, &mut state, [points[1], points[2]]);
-        assert_eq!(
-            coordinator.computed_profile_boundary(),
-            ComputedProfileBoundary::BaseOnly
-        );
-        let boundary = computed_profile_boundary_with_authoring(&coordinator);
-        assert_eq!(
-            boundary,
-            ComputedProfileBoundary::Withheld { active_features: 1 }
-        );
-        let markup = super::panels::production_topology_markup(coordinator.session(), boundary);
-        assert!(markup.contains("data-topology-status=\"computed-geometry-not-included\""));
-        assert!(markup.contains("data-computed-active-features=\"1\""));
-        assert!(!markup.contains("data-production-regions=\"true\""));
-    }
-
-    #[test]
     #[allow(
         clippy::too_many_lines,
-        reason = "one end-to-end assertion binds exact Apply, sketch non-mutation, problem attribution and topology withholding"
+        reason = "one end-to-end assertion binds exact Apply, sketch non-mutation and problem attribution"
     )]
     fn grouped_computed_fillet_apply_requires_the_exact_latest_held_preview() {
         let (mut coordinator, _, points) = grouped_fillet_fixture();
@@ -4134,13 +4080,6 @@ mod tests {
                 fillet.corners[1].id
             ))
             .contains("has-problem")
-        );
-        assert!(
-            super::panels::production_topology_markup(
-                coordinator.session(),
-                coordinator.computed_profile_boundary(),
-            )
-            .contains("data-topology-status=\"computed-geometry-not-included\"")
         );
     }
 

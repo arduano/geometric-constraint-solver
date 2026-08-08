@@ -18,7 +18,6 @@ geosolve-constraint-editor = { version = "0.2.0", path = "../geosolve-constraint
 geosolve-core = { version = "0.2.0", path = "../geosolve-core" }
 geosolve-sketch = { version = "0.2.0", path = "../geosolve-sketch" }
 geosolve-sketch-features = { version = "0.2.0", path = "../geosolve-sketch-features" }
-geosolve-sketch-topology = { version = "0.2.0", path = "../geosolve-sketch-topology" }
 serde.workspace = true
 serde_json.workspace = true
 

@@ -14,7 +14,7 @@
   <body>
     <main class="workbench" id="workbench-root" aria-label="GeoSolve desktop sketch workbench">
       <header class="wb-command-bar">
-        <a class="wb-brand" href="#/">GeoSolve <span>Sketch</span></a>
+        <div class="wb-brand">GeoSolve <span>Sketch</span></div>
         <div class="wb-command-group" aria-label="File commands">
           <button type="button" data-wb-action="new">New</button>
           <button type="button" data-wb-action="undo">Undo</button>
@@ -145,7 +145,7 @@
           <strong id="wb-selection">0 selected</strong>
           <button type="button" class="wb-danger" data-wb-action="delete">Delete selected</button>
         </section>
-        <section id="wb-advanced-construction-options" class="wb-inspector-section wb-construction-options">
+        <section class="wb-inspector-section wb-construction-options">
           <span class="wb-field-label">Advanced curve authoring</span>
           <p>Values are explicit authoring state. Choose a curve tool, then place its labelled controls on the canvas.</p>
           <details>
@@ -192,9 +192,6 @@
           <button id="wb-feature-suppression" type="button" data-wb-action="feature-suppression">Suppress feature</button>
           <p>Generated arcs remain outside the sketch constraint graph. Drag an arc to resize the complete set.</p>
         </section>
-        <section id="wb-production-topology" class="wb-inspector-section wb-production-topology" aria-live="polite" aria-label="Production topology"></section>
-        <section id="wb-host-state" class="wb-inspector-section wb-host-state" aria-live="polite" aria-label="Host-state evidence"></section>
-        <section id="wb-redundancy" class="wb-inspector-section wb-redundancy" aria-live="polite" aria-label="Accepted redundancy"></section>
         <p class="wb-inspector-note">Constraint glyphs and dimensions are persistent selectable objects. Values and equations come from the sketch domain.</p>
       </aside>
 

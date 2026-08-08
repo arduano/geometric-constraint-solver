@@ -1534,49 +1534,21 @@ mod tests {
     }
 
     #[test]
-    fn menu_contains_only_sample_navigation_without_guided_controls() {
+    fn menu_contains_every_sample_once() {
         let markup = SampleCatalogState::default().menu_markup();
         assert_eq!(
             markup.matches("data-sample-id=").count(),
             SampleId::ALL.len()
         );
-        for retired in [
-            "scenario",
-            "guide",
-            "verification",
-            "transcript",
-            "evidence",
-            "data-sample-action",
-            "data-sample-control",
-        ] {
-            assert!(
-                !markup.contains(retired),
-                "{retired} leaked into sample menu"
+        for sample in SampleId::ALL {
+            assert_eq!(
+                markup
+                    .matches(&format!("data-sample-id=\"{}\"", sample.key()))
+                    .count(),
+                1,
+                "{} must have exactly one menu leaf",
+                sample.key()
             );
-        }
-        for retired in ["line-offset-workshop", "mirror-workshop"] {
-            assert!(SampleId::from_key(retired).is_none());
-            assert!(
-                !markup.contains(retired),
-                "{retired} remains in sample menu"
-            );
-        }
-    }
-
-    #[test]
-    fn browser_shell_contains_no_retired_guided_harness_surface() {
-        let html = include_str!("../../index.html");
-        let css = include_str!("../../styles.css");
-        for retired in [
-            "wb-scenario",
-            "data-scenario",
-            "scenario-guide",
-            "scenario-transcript",
-            "scenario-evidence",
-            "review scenario",
-        ] {
-            assert!(!html.contains(retired), "{retired} remains in index.html");
-            assert!(!css.contains(retired), "{retired} remains in styles.css");
         }
     }
 }

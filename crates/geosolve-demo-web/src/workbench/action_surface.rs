@@ -178,7 +178,7 @@ mod tests {
     }
 
     #[test]
-    fn m66_modify_action_identity_catalog_is_closed_unique_and_headless() {
+    fn feature_action_identity_catalog_is_closed_unique_and_headless() {
         assert_eq!(
             FEATURE_ACTIONS.map(|(_, _, tool)| tool),
             [FeatureAuthoringTool::Fillet]
@@ -195,15 +195,11 @@ mod tests {
             assert!(!label.is_empty());
             assert_eq!(feature_tool_from_key(key), Some(tool));
         }
-        assert_eq!(feature_tool_from_key("split"), None);
-        assert_eq!(feature_tool_from_key("line-offset"), None);
-        assert_eq!(feature_tool_from_key("mirror"), None);
-        assert_eq!(feature_tool_from_key("curve-offset"), None);
-        assert_eq!(feature_tool_from_key("multi-mirror"), None);
+        assert_eq!(feature_tool_from_key("unknown"), None);
     }
 
     #[test]
-    fn m62_palette_replaces_inspector_creation_without_restoring_a_harness() {
+    fn palette_exposes_constraint_dimension_and_geometry_actions() {
         let html = include_str!("../../index.html");
         for (key, _, _) in CONSTRAINT_ACTIONS {
             assert!(
@@ -251,22 +247,10 @@ mod tests {
         assert!(html.contains("title=\"Perpendicular / normal\""));
         assert!(html.contains("id=\"wb-dimension-target-editor\""));
         assert!(html.contains("class=\"wb-palette-flyout\""));
-        for retired in [
-            "wb-constraint-kind",
-            "wb-dimension-kind",
-            "data-wb-action=\"constraint\"",
-            "data-wb-action=\"dimension\"",
-            "/#/dev/lab",
-        ] {
-            assert!(
-                !html.contains(retired),
-                "{retired} must not survive in the M62 workbench"
-            );
-        }
     }
 
     #[test]
-    fn m66_modify_palette_is_present_without_operation_semantics_in_markup() {
+    fn modify_palette_exposes_fillet_authoring_controls() {
         let html = include_str!("../../index.html");
         for (key, _, _) in FEATURE_ACTIONS {
             assert!(
@@ -283,19 +267,5 @@ mod tests {
         assert!(html.contains("id=\"wb-feature-branch-scope\""));
         assert!(html.contains("Branch choices set defaults for the next corner"));
         assert!(html.contains("Select a preview arc to edit one completed corner"));
-        for forbidden in [
-            "data-wb-feature=\"line-offset\"",
-            "data-wb-feature=\"mirror\"",
-            "wb-operation-offset-distance",
-            "wb-operation-offset-mode",
-            "wb-operation-offset-semantics",
-            "operation-split",
-            "operation-pattern",
-            "curve-offset",
-            "multi-source-mirror",
-            "/#/dev/lab",
-        ] {
-            assert!(!html.contains(forbidden), "{forbidden} leaked into M66 UI");
-        }
     }
 }
