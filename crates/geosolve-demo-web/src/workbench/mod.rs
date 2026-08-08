@@ -17,6 +17,9 @@ mod samples;
 #[cfg(any(target_arch = "wasm32", test))]
 mod scene;
 
+#[cfg(target_arch = "wasm32")]
+const WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS: f64 = 0.25;
+
 #[cfg(any(target_arch = "wasm32", test))]
 #[derive(Default)]
 struct PointerMoveQueue {
@@ -2403,7 +2406,7 @@ pub(crate) mod wasm {
                     expected,
                     snapshot,
                     wb.camera.viewport(),
-                    0.8,
+                    super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
                 )
                 .ok()
             }
@@ -2414,7 +2417,7 @@ pub(crate) mod wasm {
                     accepted.document(),
                     coordinator.session().design_document(),
                     wb.camera.viewport(),
-                    0.8,
+                    super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
                 )
                 .ok()
             }

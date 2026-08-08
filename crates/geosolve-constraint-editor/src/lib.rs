@@ -81,6 +81,13 @@ use geosolve_sketch::{
 use thiserror::Error;
 
 const MAX_TESSELLATION_DEPTH: u8 = 16;
+// Seed non-linear spans before adaptive refinement so an inflection whose midpoint
+// lies on its endpoint chord cannot disappear from rendering or hit testing.
+const MIN_CURVED_TESSELLATION_DEPTH: u8 = 3;
+// Small Fillet sweeps still need enough chords to read as arcs at ordinary zoom.
+const MIN_COMPUTED_ARC_SEGMENTS: u16 = 8;
+// Construction previews use model-space sampling before a viewport is available.
+const ADVANCED_CURVE_PREVIEW_SUBDIVISIONS: u16 = 64;
 
 /// A finite position in presentation pixels.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -2752,7 +2759,8 @@ fn tessellate_computed_arc(
     let screen_radius = arc.radius * viewport.pixels_per_model_unit;
     let cosine = (1.0 - chord_tolerance_pixels / screen_radius).clamp(-1.0, 1.0);
     let max_step = (2.0 * cosine.acos()).clamp(1.0e-3, std::f64::consts::FRAC_PI_4);
-    let segments = ((delta.abs() / max_step).ceil() as usize).clamp(2, 4096);
+    let segments = ((delta.abs() / max_step).ceil() as usize)
+        .clamp(usize::from(MIN_COMPUTED_ARC_SEGMENTS), 4096);
     Ok((0..=segments)
         .map(|index| {
             let fraction = index as f64 / segments as f64;
@@ -2786,7 +2794,11 @@ fn tessellate(
         x: (start.x + end.x) * 0.5,
         y: (start.y + end.y) * 0.5,
     };
-    if depth < MAX_TESSELLATION_DEPTH && middle.distance(chord_middle) > tolerance {
+    let needs_curved_baseline =
+        !is_linear_span(document, span) && depth < MIN_CURVED_TESSELLATION_DEPTH;
+    if depth < MAX_TESSELLATION_DEPTH
+        && (needs_curved_baseline || middle.distance(chord_middle) > tolerance)
+    {
         tessellate(
             document,
             viewport,
@@ -3263,8 +3275,8 @@ fn advanced_curve_preview(
     let mut curve_points = Vec::new();
     for span in document.curve_spans(curve).ok()? {
         for interval in document.visible_intervals(span).ok()? {
-            for step in 0..=24 {
-                let ratio = f64::from(step) / 24.0;
+            for step in 0..=ADVANCED_CURVE_PREVIEW_SUBDIVISIONS {
+                let ratio = f64::from(step) / f64::from(ADVANCED_CURVE_PREVIEW_SUBDIVISIONS);
                 let parameter = (interval.end - interval.start).mul_add(ratio, interval.start);
                 let jet = document.evaluate_curve_jet(span, parameter).ok()?;
                 curve_points.push([jet.position.x, jet.position.y]);
@@ -3733,6 +3745,84 @@ mod tests {
             0.5,
         )
         .expect("scene")
+    }
+
+    #[test]
+    fn curved_scene_tessellation_has_a_dense_baseline_without_subdividing_lines() {
+        let (mut document, lines, _) = line_document();
+        let controls = [[-3.0, 0.0], [-3.0, 3.0], [3.0, -3.0], [3.0, 0.0]].map(|position| {
+            document
+                .add_point("Bezier control", position)
+                .expect("point")
+        });
+        let bezier = document
+            .add_curve(
+                "inflected Bezier",
+                CurveDefinition::CubicBezier { controls },
+            )
+            .expect("Bezier");
+
+        let scene = scene(&document);
+        let line = scene
+            .curves
+            .iter()
+            .find(|curve| curve.span == lines[0])
+            .expect("line scene curve");
+        assert_eq!(line.screen_polyline.len(), 2);
+
+        let bezier = scene
+            .curves
+            .iter()
+            .find(|curve| curve.span == CurveSpan::line(bezier))
+            .expect("Bezier scene curve");
+        let quarter = document
+            .evaluate_curve_jet(bezier.span, 0.25)
+            .expect("analytic Bezier quarter point");
+        let quarter = scene
+            .viewport
+            .model_to_screen([quarter.position.x, quarter.position.y]);
+        assert!(
+            curve_hit(bezier, quarter, 0.5).is_some(),
+            "an inflected curve whose parameter midpoint lies on its chord must remain pickable at its analytic quarter point"
+        );
+        assert_eq!(bezier.screen_polyline.len(), bezier.screen_parameters.len());
+    }
+
+    #[test]
+    fn computed_fillet_arcs_keep_a_smooth_minimum_at_loose_tolerance() {
+        let (_document, lines, _) = line_document();
+        let source = geosolve_sketch_features::NativeCurveSpanSource { span: lines[0] };
+        let contact = geosolve_sketch_features::ComputedFilletContact {
+            source,
+            parameter: 0.5,
+            winding: 0,
+            total_parameter: 0.5,
+            position: [1.0, 0.0],
+        };
+        let arc = geosolve_sketch_features::ComputedCircularArc {
+            center: [0.0, 0.0],
+            radius: 1.0,
+            start_angle: 0.0,
+            end_angle: std::f64::consts::FRAC_PI_2,
+            sweep: DocumentArcSweep::CounterClockwise,
+            contacts: [contact, contact],
+        };
+        let viewport = Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport");
+        let points = tessellate_computed_arc(&arc, viewport, 1.0e6).expect("computed arc");
+
+        assert_eq!(points.len(), usize::from(MIN_COMPUTED_ARC_SEGMENTS) + 1);
+        let half_step_angle =
+            std::f64::consts::FRAC_PI_2 / (2.0 * f64::from(MIN_COMPUTED_ARC_SEGMENTS));
+        let analytic_between_vertices =
+            viewport.model_to_screen([half_step_angle.cos(), half_step_angle.sin()]);
+        let distance = points
+            .windows(2)
+            .map(|segment| {
+                point_segment_projection(analytic_between_vertices, segment[0], segment[1]).0
+            })
+            .min_by(f64::total_cmp)
+            .expect("computed arc segments");
+        assert!(distance <= 0.25, "computed arc chord error was {distance}");
     }
 
     fn pointer(pointer_id: u64, x: f64, y: f64, modifiers: Modifiers) -> PointerInput {
@@ -5865,6 +5955,8 @@ mod tests {
                 ..
             })] if curve_points.first() == Some(&[start.x, start.y])
                 && curve_points.last() == Some(&[end.x, end.y])
+                && curve_points.len()
+                    == usize::from(ADVANCED_CURVE_PREVIEW_SUBDIVISIONS) + 1
                 && curve_points.iter().flatten().all(|value| value.is_finite())
         ));
 
