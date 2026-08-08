@@ -48,8 +48,9 @@ pub use geosolve_sketch_features::{
     ComputedFeatureDocumentIdentity, ComputedFeatureEvaluation, ComputedFeatureEvaluationInput,
     ComputedFeatureEvaluationPolicy, ComputedFeatureEvaluationState, ComputedFeatureFailure,
     ComputedFeatureId, ComputedFeatureLifecycleHighWater, ComputedFeatureRevision,
-    ComputedFeatureSnapshot, ComputedFilletCorner, ComputedFilletSet, ComputedSourceInterval,
-    NativeCurveSpanSource, NewComputedFilletCorner,
+    ComputedFeatureSnapshot, ComputedFilletContact, ComputedFilletCorner,
+    ComputedFilletParentIndex, ComputedFilletSet, ComputedSourceInterval, NativeCurveSpanSource,
+    NewComputedFilletCorner,
 };
 use std::cmp::Ordering;
 
@@ -57,10 +58,10 @@ use geosolve_sketch::{
     ContactDomain, ContactNeighborhood, CurveDefinition, CurveId, CurveSpan, DesignPointId,
     DesignScalarId, DocumentAngleOrientation, DocumentArcSweep, DocumentBSplineForm,
     DocumentConstraintDefinition, DocumentConstraintId, DocumentCurveContinuity,
-    DocumentCurveCurvatureRelation, DocumentCurveSpanRef, DocumentDimensionId,
-    DocumentDimensionMode, DocumentEdit, DocumentHyperbolaBranch, DocumentObjectId,
-    MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PreparedSketchInput, ScalarDomain, ScalarUnit,
-    SketchDesignIdentity, SketchDocument, TangentOrientation,
+    DocumentCurveCurvatureRelation, DocumentCurveNormalSide, DocumentCurveSpanRef,
+    DocumentDimensionId, DocumentDimensionMode, DocumentEdit, DocumentHyperbolaBranch,
+    DocumentObjectId, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PreparedSketchInput, ScalarDomain,
+    ScalarUnit, SketchDesignIdentity, SketchDocument, TangentOrientation,
 };
 use thiserror::Error;
 
@@ -205,7 +206,354 @@ pub struct SceneComputedCurve {
     pub owner: geosolve_sketch_features::ComputedCornerRef,
     pub center: [f64; 2],
     pub radius: f64,
+    pub start_angle: f64,
+    pub end_angle: f64,
+    pub sweep: DocumentArcSweep,
+    pub contacts: [geosolve_sketch_features::ComputedFilletContact; 2],
     pub screen_polyline: Vec<ScreenPoint>,
+    /// Optional headless radius continuation rail for direct manipulation.
+    ///
+    /// The rail is frozen at pointer down. Presentation code may draw it, but
+    /// the editor remains the sole owner of projecting pointer motion onto it.
+    pub radius_rail: Option<SceneFilletRadiusRail>,
+}
+
+/// One finite one-dimensional Fillet-radius continuation rail.
+///
+/// `model_derivative` is `d(center) / d(radius)` on the selected absolute
+/// branch. Pointer motion is projected onto this vector, so motion orthogonal
+/// to the rail cannot change radius.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SceneFilletRadiusRail {
+    pub owner: geosolve_sketch_features::ComputedCornerRef,
+    pub model_center: [f64; 2],
+    pub model_grip: [f64; 2],
+    pub model_derivative: [f64; 2],
+    pub screen_center: ScreenPoint,
+    pub screen_grip: ScreenPoint,
+    pub screen_rail_start: ScreenPoint,
+    pub screen_rail_end: ScreenPoint,
+}
+
+impl SceneFilletRadiusRail {
+    fn is_valid(self) -> bool {
+        let derivative_norm_squared = self.model_derivative[0]
+            .mul_add(self.model_derivative[0], self.model_derivative[1].powi(2));
+        self.model_center.into_iter().all(f64::is_finite)
+            && self.model_grip.into_iter().all(f64::is_finite)
+            && self.model_derivative.into_iter().all(f64::is_finite)
+            && self.screen_center.is_finite()
+            && self.screen_grip.is_finite()
+            && self.screen_rail_start.is_finite()
+            && self.screen_rail_end.is_finite()
+            && derivative_norm_squared.is_finite()
+            && derivative_norm_squared > 0.0
+    }
+}
+
+/// One named contact handle for a computed Fillet corner.
+///
+/// The handle identifies only an already-evaluated parent and contact. It does
+/// not select a different root or infer any feature-domain branch state.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SceneFilletContactHandle {
+    pub owner: geosolve_sketch_features::ComputedCornerRef,
+    pub parent: ComputedFilletParentIndex,
+    pub source: NativeCurveSpanSource,
+    pub parameter: f64,
+    pub model_position: [f64; 2],
+    pub screen_position: ScreenPoint,
+}
+
+impl SceneFilletContactHandle {
+    fn is_valid(self) -> bool {
+        self.parameter.is_finite()
+            && self.model_position.into_iter().all(f64::is_finite)
+            && self.screen_position.is_finite()
+    }
+}
+
+/// Stable geometric reason that a Fillet continuation sample could not advance.
+///
+/// This classifies an already-typed feature/coordinator failure; presentation
+/// code never infers the category by parsing [`ComputedFilletContinuationLimit::message`].
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ComputedFilletContinuationLimitKind {
+    BranchFold,
+    DomainBoundary,
+    OffsetSingularity,
+    LossOfRegularity,
+    AmbiguousLocalRoot,
+    WorkStopped,
+}
+
+/// Human-readable metadata paired with one typed Fillet continuation limit.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ComputedFilletContinuationLimit {
+    pub kind: ComputedFilletContinuationLimitKind,
+    pub message: String,
+}
+
+impl ComputedFilletContinuationLimit {
+    fn is_valid(&self) -> bool {
+        !self.message.trim().is_empty()
+    }
+}
+
+/// Exact rejected radius/contact sample associated with a continuation limit.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ComputedFilletInteractionSample {
+    Radius(f64),
+    Contact {
+        parent: ComputedFilletParentIndex,
+        source: NativeCurveSpanSource,
+        parameter: f64,
+    },
+}
+
+impl ComputedFilletInteractionSample {
+    fn is_valid(self) -> bool {
+        match self {
+            Self::Radius(radius) => radius.is_finite() && radius > 0.0,
+            Self::Contact { parameter, .. } => parameter.is_finite(),
+        }
+    }
+}
+
+/// Exact active-gesture status for a rejected Fillet continuation sample.
+///
+/// The previously accepted `Current` preview remains separate scene geometry;
+/// this DTO describes why only the newer requested sample was rejected.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ComputedFilletContinuationStatus {
+    pub expected: geosolve_sketch_features::ComputedFeatureEvaluationInput,
+    pub owner: geosolve_sketch_features::ComputedCornerRef,
+    pub sample: ComputedFilletInteractionSample,
+    pub limit: ComputedFilletContinuationLimit,
+}
+
+impl ComputedFilletContinuationStatus {
+    fn is_valid(&self) -> bool {
+        self.sample.is_valid() && self.limit.is_valid()
+    }
+}
+
+/// Stable presentation-neutral identity for one explicit Fillet action.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SceneFilletActionId {
+    ReverseFirstRetainedDirection,
+    ReverseSecondRetainedDirection,
+    ComplementaryArc,
+    /// Selects an independently validated normal-side pair. The semantic pair
+    /// remains stable when a different local alternative becomes unavailable;
+    /// it is never an ordinal in the currently visible list.
+    LocalAlternative {
+        first: DocumentCurveNormalSide,
+        second: DocumentCurveNormalSide,
+    },
+}
+
+/// Applicability supplied by the coordinator for one Fillet action.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SceneFilletActionAvailability {
+    Applicable,
+    Disabled { reason: String },
+}
+
+/// Finite presentation geometry for one directional Fillet action.
+///
+/// `model_anchor` and `model_direction` retain presentation-independent
+/// geometry for non-browser consumers. `screen_start` and `screen_end` are the
+/// exact scene projection used by the workbench, so presentation adapters do
+/// not need to reconstruct tangent or retained-direction policy.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SceneFilletActionControlGeometry {
+    pub model_anchor: [f64; 2],
+    pub model_direction: [f64; 2],
+    pub screen_start: ScreenPoint,
+    pub screen_end: ScreenPoint,
+}
+
+impl SceneFilletActionControlGeometry {
+    fn is_valid(self, viewport: Viewport) -> bool {
+        let model_norm_squared = self.model_direction[0]
+            .mul_add(self.model_direction[0], self.model_direction[1].powi(2));
+        let screen_length = self.screen_start.distance(self.screen_end);
+        if !(self.model_anchor.into_iter().all(f64::is_finite)
+            && self.model_direction.into_iter().all(f64::is_finite)
+            && model_norm_squared.is_finite()
+            && model_norm_squared > 0.0
+            && self.screen_start.is_finite()
+            && self.screen_end.is_finite()
+            && screen_length.is_finite()
+            && screen_length > 0.0)
+        {
+            return false;
+        }
+        let projected_anchor = viewport.model_to_screen(self.model_anchor);
+        if !screen_points_match(projected_anchor, self.screen_start) {
+            return false;
+        }
+        let model_end = viewport.screen_to_model(self.screen_end);
+        let model_delta = [
+            model_end[0] - self.model_anchor[0],
+            model_end[1] - self.model_anchor[1],
+        ];
+        let model_length = model_delta[0].hypot(model_delta[1]);
+        if !model_length.is_finite() || model_length <= 0.0 {
+            return false;
+        }
+        let direction_length = model_norm_squared.sqrt();
+        let alignment = (model_delta[0] / model_length).mul_add(
+            self.model_direction[0] / direction_length,
+            (model_delta[1] / model_length) * (self.model_direction[1] / direction_length),
+        );
+        alignment.is_finite() && (1.0 - alignment).abs() <= 1.0e-10
+    }
+}
+
+/// Paired model-space and exact scene-projected geometry for one non-authoritative
+/// Fillet branch alternative.
+///
+/// Presentation adapters render `screen_polyline`; the editor independently uses
+/// `model_polyline` for hit validation. Both arrays describe the same ordered
+/// samples and are checked against the scene viewport before admission.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SceneFilletAlternativeGeometry {
+    pub model_polyline: Vec<[f64; 2]>,
+    pub screen_polyline: Vec<ScreenPoint>,
+}
+
+impl SceneFilletAlternativeGeometry {
+    fn is_valid(&self, viewport: Viewport) -> bool {
+        self.model_polyline.len() >= 2
+            && self.model_polyline.len() == self.screen_polyline.len()
+            && self
+                .model_polyline
+                .iter()
+                .zip(&self.screen_polyline)
+                .all(|(model, screen)| {
+                    model.iter().copied().all(f64::is_finite)
+                        && screen.is_finite()
+                        && screen_points_match(viewport.model_to_screen(*model), *screen)
+                })
+    }
+}
+
+/// Exact scene-stamped identity for one explicit Fillet action.
+///
+/// Owner/action pairs alone are not actionable: the complete computed input
+/// prevents a stale canvas or accessibility control from targeting a newer
+/// feature configuration that happens to reuse the same persistent IDs.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SceneFilletActionTarget {
+    pub expected: geosolve_sketch_features::ComputedFeatureEvaluationInput,
+    pub owner: geosolve_sketch_features::ComputedCornerRef,
+    pub action: SceneFilletActionId,
+}
+
+/// Presentation-neutral source for Fillet branch preview and activation.
+///
+/// A painted canvas target is only a hint and must independently agree with a
+/// model-space proximity hit. An accessible target has no pointer proximity,
+/// but must carry the exact current scene stamp and resolve to the same
+/// applicable action through the shared validator.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SceneFilletActionInput {
+    Canvas {
+        position: ScreenPoint,
+        painted: Option<SceneFilletActionTarget>,
+    },
+    Accessible(SceneFilletActionTarget),
+}
+
+/// One stable Fillet action and optional non-authoritative alternative arc.
+///
+/// The editor validates owner identity and finite presentation geometry only.
+/// The coordinator remains responsible for semantic applicability and for the
+/// complete absolute replacement-corner intent behind the action ID.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SceneFilletAction {
+    pub id: SceneFilletActionId,
+    pub owner: geosolve_sketch_features::ComputedCornerRef,
+    pub label: String,
+    pub availability: SceneFilletActionAvailability,
+    /// Optional headless control geometry, such as a retained-direction arrow.
+    pub control_geometry: Option<SceneFilletActionControlGeometry>,
+    pub dashed_alternative_arc: Option<SceneFilletAlternativeGeometry>,
+}
+
+impl SceneFilletAction {
+    fn is_valid(
+        &self,
+        owner: geosolve_sketch_features::ComputedCornerRef,
+        viewport: Viewport,
+    ) -> bool {
+        if self.owner != owner || self.label.trim().is_empty() {
+            return false;
+        }
+        if matches!(
+            &self.availability,
+            SceneFilletActionAvailability::Disabled { reason } if reason.trim().is_empty()
+        ) {
+            return false;
+        }
+        if self
+            .control_geometry
+            .is_some_and(|geometry| !geometry.is_valid(viewport))
+        {
+            return false;
+        }
+        self.dashed_alternative_arc
+            .as_ref()
+            .is_none_or(|geometry| geometry.is_valid(viewport))
+    }
+}
+
+/// Complete visible direct-manipulation affordances for one Fillet corner.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SceneFilletCornerAffordances {
+    pub owner: geosolve_sketch_features::ComputedCornerRef,
+    /// Sorted unique corner owners changed by this shared-radius rail.
+    ///
+    /// The list always contains `owner`; presentation adapters may therefore
+    /// highlight every arc in the `FilletSet` without reconstructing ownership.
+    pub affected_owners: Vec<geosolve_sketch_features::ComputedCornerRef>,
+    pub radius_rail: SceneFilletRadiusRail,
+    pub contacts: [SceneFilletContactHandle; 2],
+    pub actions: Vec<SceneFilletAction>,
+    /// Typed limit for the exact active gesture sample, while the last current
+    /// radius/contact preview remains solid.
+    pub continuation_status: Option<ComputedFilletContinuationStatus>,
+}
+
+/// One deterministic Fillet-aware hit.
+///
+/// The variant order is semantic priority: contact handles win over the
+/// radius grip/spoke/rail/arc, which wins over native accepted geometry.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SceneFilletHit {
+    Contact {
+        handle: SceneFilletContactHandle,
+        distance_pixels: f64,
+    },
+    Radius {
+        owner: geosolve_sketch_features::ComputedCornerRef,
+        distance_pixels: f64,
+    },
+    Native(Hit),
+}
+
+impl SceneFilletHit {
+    /// Persistent selection item represented by this hit.
+    #[must_use]
+    pub const fn item(self) -> SelectionItem {
+        match self {
+            Self::Contact { handle, .. } => SelectionItem::FeatureCorner(handle.owner),
+            Self::Radius { owner, .. } => SelectionItem::FeatureCorner(owner),
+            Self::Native(hit) => hit.item,
+        }
+    }
 }
 
 /// Deterministic presentation-neutral scene derived from one accepted revision.
@@ -221,6 +569,12 @@ pub struct EditorScene {
     pub computed_curves: Vec<SceneComputedCurve>,
     pub feature_identity: Option<geosolve_sketch_features::ComputedFeatureDocumentIdentity>,
     pub computed_input: Option<geosolve_sketch_features::ComputedFeatureEvaluationInput>,
+    fillet_interaction_origin: Option<geosolve_sketch_features::ComputedFeatureEvaluationInput>,
+    /// Explicit direct-manipulation affordances supplied for current Fillet corners.
+    pub fillet_affordances: Vec<SceneFilletCornerAffordances>,
+    /// Typed per-corner continuation limits. These remain available even when a
+    /// fold/singularity prevents construction of a radius rail affordance.
+    pub computed_fillet_continuation_statuses: Vec<ComputedFilletContinuationStatus>,
     /// Accepted, geometry-derived constraint and dimension presentation.
     pub annotations: Vec<SceneAnnotation>,
     construction_snap_points: Vec<ScenePoint>,
@@ -350,6 +704,9 @@ impl EditorScene {
             computed_curves: Vec::new(),
             feature_identity: None,
             computed_input: None,
+            fillet_interaction_origin: None,
+            fillet_affordances: Vec::new(),
+            computed_fillet_continuation_statuses: Vec::new(),
             annotations,
             construction_snap_points,
         })
@@ -422,11 +779,16 @@ impl EditorScene {
                     owner: *owner,
                     center: arc.center,
                     radius: arc.radius,
+                    start_angle: arc.start_angle,
+                    end_angle: arc.end_angle,
+                    sweep: arc.sweep,
+                    contacts: arc.contacts,
                     screen_polyline: tessellate_computed_arc(
                         arc,
                         viewport,
                         chord_tolerance_pixels,
                     )?,
+                    radius_rail: None,
                 }),
                 _ => {}
             }
@@ -435,6 +797,7 @@ impl EditorScene {
         scene.computed_curves.sort_by_key(|curve| curve.edge);
         scene.feature_identity = Some(computed.input().features);
         scene.computed_input = Some(computed.input());
+        scene.fillet_affordances.clear();
         scene.annotations = annotations::build_annotations(
             accepted_document,
             &scene.points,
@@ -442,6 +805,518 @@ impl EditorScene {
             viewport,
         );
         Ok(scene)
+    }
+
+    /// Retains the exact pointer-down input while presenting a newer current
+    /// computed-feature preview scene for the same sketch and feature sidecar.
+    ///
+    /// This stamp admits later samples only for the already-live gesture. It
+    /// does not make the origin current or authorize a feature mutation.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a scene without current computed output or an origin from a
+    /// different sketch input, accepted state, feature document, or policy.
+    pub fn set_computed_fillet_interaction_origin(
+        &mut self,
+        origin: geosolve_sketch_features::ComputedFeatureEvaluationInput,
+    ) -> Result<(), EditorError> {
+        let Some(current) = self.computed_input else {
+            return Err(EditorError::StaleComputedFeatureSnapshot);
+        };
+        if self.feature_identity != Some(current.features)
+            || current.sketch.design_identity() != self.design_identity
+            || origin.sketch != current.sketch
+            || origin.accepted != current.accepted
+            || origin.policy != current.policy
+            || origin.features.document != current.features.document
+            || origin.features.sketch_document != current.features.sketch_document
+        {
+            return Err(EditorError::StaleComputedFeatureSnapshot);
+        }
+        self.fillet_interaction_origin = Some(origin);
+        Ok(())
+    }
+
+    fn accepts_fillet_gesture(
+        &self,
+        expected: &geosolve_sketch_features::ComputedFeatureEvaluationInput,
+    ) -> bool {
+        self.computed_input.as_ref() == Some(expected)
+            || self.fillet_interaction_origin.as_ref() == Some(expected)
+    }
+
+    /// Attaches one independently derived Fillet-radius continuation rail.
+    ///
+    /// The supplied derivative is model-space `d(center) / d(radius)` for the
+    /// curve owner's current absolute branch. This method derives only finite
+    /// display geometry; it does not resolve or select a Fillet root. The
+    /// affected-owner list must be sorted, unique and contain the grip owner.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a missing owner, malformed affected-owner list or a
+    /// non-finite/degenerate derivative.
+    pub fn attach_computed_fillet_radius_rail(
+        &mut self,
+        owner: geosolve_sketch_features::ComputedCornerRef,
+        model_derivative: [f64; 2],
+        affected_owners: Vec<geosolve_sketch_features::ComputedCornerRef>,
+    ) -> Result<(), EditorError> {
+        if affected_owners.binary_search(&owner).is_err()
+            || affected_owners.windows(2).any(|pair| pair[0] >= pair[1])
+        {
+            return Err(EditorError::InvalidComputedFeatureAffordance);
+        }
+        let curve_index = self
+            .computed_curves
+            .iter()
+            .position(|curve| curve.owner == owner)
+            .ok_or(EditorError::StaleComputedFeatureSnapshot)?;
+        let (rail, contacts) = Self::derive_computed_fillet_radius_affordances(
+            &self.computed_curves[curve_index],
+            self.viewport,
+            owner,
+            model_derivative,
+        )?;
+        self.computed_curves[curve_index].radius_rail = Some(rail);
+        if let Some(affordances) = self
+            .fillet_affordances
+            .iter_mut()
+            .find(|candidate| candidate.owner == owner)
+        {
+            affordances.affected_owners = affected_owners;
+            affordances.radius_rail = rail;
+            affordances.contacts = contacts;
+        } else {
+            self.fillet_affordances.push(SceneFilletCornerAffordances {
+                owner,
+                affected_owners,
+                radius_rail: rail,
+                contacts,
+                actions: Vec::new(),
+                continuation_status: None,
+            });
+            self.fillet_affordances
+                .sort_by_key(|affordances| affordances.owner);
+        }
+        Ok(())
+    }
+
+    fn derive_computed_fillet_radius_affordances(
+        curve: &SceneComputedCurve,
+        viewport: Viewport,
+        owner: geosolve_sketch_features::ComputedCornerRef,
+        model_derivative: [f64; 2],
+    ) -> Result<(SceneFilletRadiusRail, [SceneFilletContactHandle; 2]), EditorError> {
+        const HALF_RAIL_PIXELS: f64 = 44.0;
+
+        let tau = std::f64::consts::TAU;
+        let delta = match curve.sweep {
+            DocumentArcSweep::CounterClockwise => {
+                (curve.end_angle - curve.start_angle).rem_euclid(tau)
+            }
+            DocumentArcSweep::Clockwise => -(curve.start_angle - curve.end_angle).rem_euclid(tau),
+        };
+        let middle_angle = (0.5 * delta).mul_add(1.0, curve.start_angle);
+        let model_grip = [
+            curve.radius.mul_add(middle_angle.cos(), curve.center[0]),
+            curve.radius.mul_add(middle_angle.sin(), curve.center[1]),
+        ];
+        let screen_center = viewport.model_to_screen(curve.center);
+        let screen_grip = viewport.model_to_screen(model_grip);
+        let derivative_tip = viewport.model_to_screen([
+            curve.center[0] + model_derivative[0],
+            curve.center[1] + model_derivative[1],
+        ]);
+        let screen_derivative = [
+            derivative_tip.x - screen_center.x,
+            derivative_tip.y - screen_center.y,
+        ];
+        let screen_norm = screen_derivative[0].hypot(screen_derivative[1]);
+        if !screen_norm.is_finite() || screen_norm <= 0.0 {
+            return Err(EditorError::StaleComputedFeatureSnapshot);
+        }
+        let unit = [
+            screen_derivative[0] / screen_norm,
+            screen_derivative[1] / screen_norm,
+        ];
+        let rail = SceneFilletRadiusRail {
+            owner,
+            model_center: curve.center,
+            model_grip,
+            model_derivative,
+            screen_center,
+            screen_grip,
+            screen_rail_start: ScreenPoint {
+                x: (-HALF_RAIL_PIXELS).mul_add(unit[0], screen_grip.x),
+                y: (-HALF_RAIL_PIXELS).mul_add(unit[1], screen_grip.y),
+            },
+            screen_rail_end: ScreenPoint {
+                x: HALF_RAIL_PIXELS.mul_add(unit[0], screen_grip.x),
+                y: HALF_RAIL_PIXELS.mul_add(unit[1], screen_grip.y),
+            },
+        };
+        if !rail.is_valid() {
+            return Err(EditorError::StaleComputedFeatureSnapshot);
+        }
+        let contacts = [
+            SceneFilletContactHandle {
+                owner,
+                parent: ComputedFilletParentIndex::First,
+                source: curve.contacts[0].source,
+                parameter: curve.contacts[0].parameter,
+                model_position: curve.contacts[0].position,
+                screen_position: viewport.model_to_screen(curve.contacts[0].position),
+            },
+            SceneFilletContactHandle {
+                owner,
+                parent: ComputedFilletParentIndex::Second,
+                source: curve.contacts[1].source,
+                parameter: curve.contacts[1].parameter,
+                model_position: curve.contacts[1].position,
+                screen_position: viewport.model_to_screen(curve.contacts[1].position),
+            },
+        ];
+        if !contacts
+            .iter()
+            .copied()
+            .all(SceneFilletContactHandle::is_valid)
+        {
+            return Err(EditorError::InvalidComputedFeatureAffordance);
+        }
+        Ok((rail, contacts))
+    }
+
+    /// Replaces coordinator-supplied actions for one current Fillet corner.
+    ///
+    /// This validates stable owner identity, unique action IDs, non-empty
+    /// accessibility text and finite optional preview polylines. It does not
+    /// reinterpret applicability or generate branch alternatives.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a missing owner or malformed presentation data.
+    pub fn set_fillet_corner_actions(
+        &mut self,
+        owner: geosolve_sketch_features::ComputedCornerRef,
+        actions: Vec<SceneFilletAction>,
+    ) -> Result<(), EditorError> {
+        let affordances = self
+            .fillet_affordances
+            .iter_mut()
+            .find(|candidate| candidate.owner == owner)
+            .ok_or(EditorError::InvalidComputedFeatureAffordance)?;
+        let mut ids = Vec::with_capacity(actions.len());
+        if actions.iter().any(|action| {
+            let duplicate = ids.contains(&action.id);
+            ids.push(action.id);
+            !action.is_valid(owner, self.viewport) || duplicate
+        }) {
+            return Err(EditorError::InvalidComputedFeatureAffordance);
+        }
+        affordances.actions = actions;
+        Ok(())
+    }
+
+    /// Attaches the active gesture's typed continuation limit to one exact corner.
+    ///
+    /// The status may refer to the retained pointer-down input while the scene
+    /// presents a newer last-current preview, but owner and named contact source
+    /// must still match this scene's independently derived affordances.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a missing/foreign owner, stale input, malformed message/sample or
+    /// a contact status attributed to the wrong named parent.
+    pub fn set_computed_fillet_continuation_status(
+        &mut self,
+        owner: geosolve_sketch_features::ComputedCornerRef,
+        status: Option<ComputedFilletContinuationStatus>,
+    ) -> Result<(), EditorError> {
+        let curve_index = self
+            .computed_curves
+            .iter()
+            .position(|candidate| candidate.owner == owner)
+            .ok_or(EditorError::InvalidComputedFeatureAffordance)?;
+        if let Some(status) = status.as_ref() {
+            if status.owner != owner
+                || !status.is_valid()
+                || !self.accepts_fillet_gesture(&status.expected)
+            {
+                return Err(EditorError::InvalidComputedFeatureAffordance);
+            }
+            if let ComputedFilletInteractionSample::Contact { parent, source, .. } = status.sample {
+                let expected_contact = match parent {
+                    ComputedFilletParentIndex::First => {
+                        self.computed_curves[curve_index].contacts[0]
+                    }
+                    ComputedFilletParentIndex::Second => {
+                        self.computed_curves[curve_index].contacts[1]
+                    }
+                };
+                if expected_contact.source != source {
+                    return Err(EditorError::InvalidComputedFeatureAffordance);
+                }
+            }
+        }
+        self.computed_fillet_continuation_statuses
+            .retain(|candidate| candidate.owner != owner);
+        if let Some(status) = status.clone() {
+            self.computed_fillet_continuation_statuses.push(status);
+            self.computed_fillet_continuation_statuses
+                .sort_by_key(|candidate| candidate.owner);
+        }
+        if let Some(affordances) = self
+            .fillet_affordances
+            .iter_mut()
+            .find(|candidate| candidate.owner == owner)
+        {
+            affordances.continuation_status = status;
+        }
+        Ok(())
+    }
+
+    /// Tessellates one independently validated alternative Fillet arc for presentation.
+    ///
+    /// The caller supplies the semantic alternative and pixel tolerance; this
+    /// method applies the same bounded computed-arc sampling used by the current
+    /// scene without resolving or accepting a branch.
+    ///
+    /// # Errors
+    ///
+    /// Rejects non-finite geometry or a non-positive/non-finite tolerance.
+    pub fn tessellate_computed_fillet_arc(
+        &self,
+        arc: &ComputedCircularArc,
+        chord_tolerance_pixels: f64,
+    ) -> Result<SceneFilletAlternativeGeometry, EditorError> {
+        if !chord_tolerance_pixels.is_finite() || chord_tolerance_pixels <= 0.0 {
+            return Err(EditorError::InvalidTolerance);
+        }
+        tessellate_computed_arc_geometry(arc, self.viewport, chord_tolerance_pixels)
+    }
+
+    /// Returns the exact scene-stamped target for one advertised Fillet action.
+    ///
+    /// Disabled actions still have targets so presentation can retain stable
+    /// focus metadata; the shared resolver rejects them for preview/activation.
+    #[must_use]
+    pub fn fillet_action_target(
+        &self,
+        owner: geosolve_sketch_features::ComputedCornerRef,
+        action: SceneFilletActionId,
+    ) -> Option<SceneFilletActionTarget> {
+        let expected = self.computed_input?;
+        self.fillet_affordances
+            .iter()
+            .find(|affordances| affordances.owner == owner)?
+            .actions
+            .iter()
+            .any(|candidate| candidate.owner == owner && candidate.id == action)
+            .then_some(SceneFilletActionTarget {
+                expected,
+                owner,
+                action,
+            })
+    }
+
+    /// Resolves canvas and accessible Fillet actions through one exact validator.
+    ///
+    /// Canvas painted identity is a non-authoritative hint. Contact and radius
+    /// affordances keep their higher hit priority, then branch controls are
+    /// independently tested against their paired model-space geometry. An
+    /// accessible target skips pointer proximity but retains identical scene,
+    /// owner, action and applicability checks.
+    #[must_use]
+    pub fn resolve_fillet_action(
+        &self,
+        input: SceneFilletActionInput,
+        tolerance: PickTolerance,
+    ) -> Option<SceneFilletActionTarget> {
+        if !tolerance.is_valid() {
+            return None;
+        }
+        match input {
+            SceneFilletActionInput::Accessible(target) => {
+                self.validated_fillet_action(&target).map(|_| target)
+            }
+            SceneFilletActionInput::Canvas { position, painted } => {
+                if !position.is_finite()
+                    || matches!(
+                        self.resolve_fillet_hit(position, tolerance),
+                        Some(SceneFilletHit::Contact { .. } | SceneFilletHit::Radius { .. })
+                    )
+                {
+                    return None;
+                }
+                let expected = self.computed_input?;
+                let model_position = self.viewport.screen_to_model(position);
+                let (resolved, _) = self
+                    .fillet_affordances
+                    .iter()
+                    .flat_map(|affordances| &affordances.actions)
+                    .filter(|action| {
+                        matches!(
+                            action.availability,
+                            SceneFilletActionAvailability::Applicable
+                        )
+                    })
+                    .filter_map(|action| {
+                        let target = SceneFilletActionTarget {
+                            expected,
+                            owner: action.owner,
+                            action: action.id,
+                        };
+                        action_model_hit_distance(action, model_position, self.viewport, tolerance)
+                            .map(|distance| (target, distance))
+                    })
+                    .min_by(|first, second| {
+                        first
+                            .1
+                            .total_cmp(&second.1)
+                            .then_with(|| first.0.owner.cmp(&second.0.owner))
+                            .then_with(|| {
+                                fillet_action_order_key(first.0.action)
+                                    .cmp(&fillet_action_order_key(second.0.action))
+                            })
+                    })?;
+                if painted.is_some_and(|hint| hint != resolved) {
+                    return None;
+                }
+                self.validated_fillet_action(&resolved).map(|_| resolved)
+            }
+        }
+    }
+
+    fn validated_fillet_action(
+        &self,
+        target: &SceneFilletActionTarget,
+    ) -> Option<&SceneFilletAction> {
+        if self.computed_input != Some(target.expected)
+            || self.feature_identity != Some(target.expected.features)
+        {
+            return None;
+        }
+        self.fillet_affordances
+            .iter()
+            .find(|affordances| affordances.owner == target.owner)?
+            .actions
+            .iter()
+            .find(|action| {
+                action.owner == target.owner
+                    && action.id == target.action
+                    && matches!(
+                        action.availability,
+                        SceneFilletActionAvailability::Applicable
+                    )
+                    && action.is_valid(target.owner, self.viewport)
+            })
+    }
+
+    /// Resolves one Fillet-aware hit through the shared headless priority.
+    ///
+    /// Contact handles win over radius grip/spoke/rail/arc hits. Those explicit
+    /// Fillet affordances win over native accepted points and curves. Constraint
+    /// and dimension annotations remain a separate presentation layer.
+    #[must_use]
+    pub fn resolve_fillet_hit(
+        &self,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+    ) -> Option<SceneFilletHit> {
+        if !position.is_finite() || !tolerance.is_valid() {
+            return None;
+        }
+        if let Some((handle, distance_pixels)) = self
+            .fillet_affordances
+            .iter()
+            .flat_map(|affordances| affordances.contacts)
+            .filter_map(|handle| {
+                let distance = position.distance(handle.screen_position);
+                (distance <= tolerance.point_pixels).then_some((handle, distance))
+            })
+            .min_by(|first, second| {
+                first
+                    .1
+                    .total_cmp(&second.1)
+                    .then_with(|| first.0.owner.cmp(&second.0.owner))
+                    .then_with(|| {
+                        fillet_parent_order(first.0.parent)
+                            .cmp(&fillet_parent_order(second.0.parent))
+                    })
+            })
+        {
+            return Some(SceneFilletHit::Contact {
+                handle,
+                distance_pixels,
+            });
+        }
+        if let Some((owner, distance_pixels)) = self
+            .fillet_affordances
+            .iter()
+            .filter_map(|affordances| {
+                self.fillet_radius_hit_distance(affordances, position, tolerance)
+                    .map(|distance| (affordances.owner, distance))
+            })
+            .min_by(|first, second| {
+                first
+                    .1
+                    .total_cmp(&second.1)
+                    .then_with(|| first.0.cmp(&second.0))
+            })
+        {
+            return Some(SceneFilletHit::Radius {
+                owner,
+                distance_pixels,
+            });
+        }
+        self.native_authoring_hit_test(position, tolerance)
+            .map(SceneFilletHit::Native)
+    }
+
+    fn fillet_radius_hit_distance(
+        &self,
+        affordances: &SceneFilletCornerAffordances,
+        position: ScreenPoint,
+        tolerance: PickTolerance,
+    ) -> Option<f64> {
+        let rail = affordances.radius_rail;
+        let grip = position.distance(rail.screen_grip);
+        let spoke = point_segment_projection(position, rail.screen_center, rail.screen_grip).0;
+        let continuation =
+            point_segment_projection(position, rail.screen_rail_start, rail.screen_rail_end).0;
+        let arc = self
+            .computed_curves
+            .iter()
+            .find(|curve| curve.owner == affordances.owner)
+            .and_then(|curve| computed_curve_hit(curve, position, tolerance.curve_pixels))
+            .map(|hit| hit.distance_pixels);
+        [
+            (grip <= tolerance.point_pixels).then_some(grip),
+            (spoke <= tolerance.curve_pixels).then_some(spoke),
+            (continuation <= tolerance.curve_pixels).then_some(continuation),
+            arc,
+        ]
+        .into_iter()
+        .flatten()
+        .min_by(f64::total_cmp)
+    }
+
+    fn project_to_native_source(
+        &self,
+        source: NativeCurveSpanSource,
+        position: ScreenPoint,
+    ) -> Option<(f64, f64)> {
+        self.curves
+            .iter()
+            .filter(|curve| curve.span == source.span)
+            .filter_map(|curve| curve_hit(curve, position, f64::MAX))
+            .filter_map(|hit| {
+                hit.curve_parameter
+                    .map(|parameter| (parameter, hit.distance_pixels))
+            })
+            .min_by(|first, second| first.1.total_cmp(&second.1))
     }
 
     /// Returns the deterministic best hit. Points take priority over curves, then
@@ -613,14 +1488,18 @@ impl EditorScene {
     fn feature_radius_handle(
         &self,
         item: SelectionItem,
-    ) -> Option<(geosolve_sketch_features::ComputedCornerRef, [f64; 2], f64)> {
+    ) -> Option<(
+        geosolve_sketch_features::ComputedCornerRef,
+        f64,
+        SceneFilletRadiusRail,
+    )> {
         let SelectionItem::FeatureCorner(owner) = item else {
             return None;
         };
         self.computed_curves
             .iter()
             .find(|curve| curve.owner == owner)
-            .map(|curve| (owner, curve.center, curve.radius))
+            .and_then(|curve| curve.radius_rail.map(|rail| (owner, curve.radius, rail)))
     }
 
     /// Composite model bounds used by camera-fit policy.
@@ -858,6 +1737,21 @@ pub struct PointerInput {
     pub modifiers: Modifiers,
 }
 
+/// Kind of presentation pointer currently owned by the headless editor.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ActivePointerGestureKind {
+    Point,
+    FilletRadius,
+    FilletContact,
+}
+
+/// Minimal pointer-capture signal for a presentation adapter.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ActivePointerGesture {
+    pub pointer_id: u64,
+    pub kind: ActivePointerGestureKind,
+}
+
 /// Host work requested by one state transition.
 #[derive(Clone, Debug, PartialEq)]
 pub enum EditorEffect {
@@ -902,6 +1796,40 @@ pub enum EditorEffect {
         radius: f64,
     },
     ClearComputedFeaturePreview,
+    /// Preview of one explicit contact reseed along its named native parent.
+    PreviewComputedFeatureContact {
+        expected: geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        owner: geosolve_sketch_features::ComputedCornerRef,
+        parent: ComputedFilletParentIndex,
+        source: NativeCurveSpanSource,
+        parameter: f64,
+    },
+    CommitComputedFeatureContact {
+        expected: geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        owner: geosolve_sketch_features::ComputedCornerRef,
+        parent: ComputedFilletParentIndex,
+        source: NativeCurveSpanSource,
+        parameter: f64,
+    },
+    RestoreComputedFeatureContact {
+        expected: geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        owner: geosolve_sketch_features::ComputedCornerRef,
+        parent: ComputedFilletParentIndex,
+        source: NativeCurveSpanSource,
+        parameter: f64,
+    },
+    ClearComputedFeatureContactPreview,
+    /// The exact applicable branch alternative currently previewed by canvas
+    /// hover or accessible focus. This is presentation state only; it carries
+    /// no authority to mutate feature intent.
+    FilletBranchPreviewChanged {
+        target: Option<SceneFilletActionTarget>,
+    },
+    /// Requests one exact branch action that was already previewed and then
+    /// revalidated through the same scene resolver used by hover/focus.
+    CommitComputedFilletAction {
+        target: SceneFilletActionTarget,
+    },
     /// A complete construction proposal. Hosts apply this atomically with
     /// `SketchDocumentSession::transact`.
     CommitConstruction {
@@ -1574,12 +2502,33 @@ struct FeatureRadiusGesture {
     pointer_id: u64,
     owner: geosolve_sketch_features::ComputedCornerRef,
     expected: geosolve_sketch_features::ComputedFeatureEvaluationInput,
-    center: [f64; 2],
     origin: ScreenPoint,
+    origin_model: [f64; 2],
+    model_derivative: [f64; 2],
+    viewport: Viewport,
     moved: bool,
     origin_radius: f64,
-    last_radius: f64,
-    radius_offset: f64,
+    last_sampled_radius: Option<f64>,
+    last_sampled_position: Option<ScreenPoint>,
+    last_requested_radius: Option<f64>,
+    last_accepted_radius: Option<f64>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct FeatureContactGesture {
+    pointer_id: u64,
+    owner: geosolve_sketch_features::ComputedCornerRef,
+    parent: ComputedFilletParentIndex,
+    source: NativeCurveSpanSource,
+    expected: geosolve_sketch_features::ComputedFeatureEvaluationInput,
+    viewport: Viewport,
+    origin: ScreenPoint,
+    moved: bool,
+    origin_parameter: f64,
+    last_sampled_parameter: Option<f64>,
+    last_sampled_position: Option<ScreenPoint>,
+    last_requested_parameter: Option<f64>,
+    last_accepted_parameter: Option<f64>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1662,6 +2611,9 @@ pub struct ConstraintEditor {
     drag_threshold_pixels: f64,
     point_gesture: Option<PointGesture>,
     feature_radius_gesture: Option<FeatureRadiusGesture>,
+    feature_contact_gesture: Option<FeatureContactGesture>,
+    computed_fillet_continuation_status: Option<ComputedFilletContinuationStatus>,
+    fillet_branch_preview: Option<SceneFilletActionTarget>,
     tool: EditorTool,
     snap_tolerance: SnapTolerance,
     conic_options: ConicConstructionOptions,
@@ -1684,6 +2636,9 @@ impl Default for ConstraintEditor {
             drag_threshold_pixels: 3.0,
             point_gesture: None,
             feature_radius_gesture: None,
+            feature_contact_gesture: None,
+            computed_fillet_continuation_status: None,
+            fillet_branch_preview: None,
             tool: EditorTool::Select,
             snap_tolerance: SnapTolerance::default(),
             conic_options: ConicConstructionOptions::default(),
@@ -1729,6 +2684,8 @@ impl ConstraintEditor {
         let mut effects = self.cancel_draft();
         effects.extend(self.cancel_point_gesture());
         effects.extend(self.cancel_feature_radius_gesture());
+        effects.extend(self.cancel_feature_contact_gesture());
+        effects.extend(self.clear_fillet_branch_preview());
         effects
     }
 
@@ -1811,6 +2768,120 @@ impl ConstraintEditor {
         &self.selection
     }
 
+    /// Returns the exact pointer currently owned by an editor gesture.
+    ///
+    /// Presentation adapters use this only to mirror platform pointer capture;
+    /// the editor's own pointer-ID checks remain authoritative.
+    #[must_use]
+    pub const fn active_pointer_gesture(&self) -> Option<ActivePointerGesture> {
+        if let Some(gesture) = self.feature_contact_gesture {
+            return Some(ActivePointerGesture {
+                pointer_id: gesture.pointer_id,
+                kind: ActivePointerGestureKind::FilletContact,
+            });
+        }
+        if let Some(gesture) = self.feature_radius_gesture {
+            return Some(ActivePointerGesture {
+                pointer_id: gesture.pointer_id,
+                kind: ActivePointerGestureKind::FilletRadius,
+            });
+        }
+        if let Some(gesture) = self.point_gesture {
+            return Some(ActivePointerGesture {
+                pointer_id: gesture.pointer_id,
+                kind: ActivePointerGestureKind::Point,
+            });
+        }
+        None
+    }
+
+    /// Returns the typed limit for the active Fillet gesture's exact rejected
+    /// sample. The last accepted current preview remains owned by the coordinator.
+    #[must_use]
+    pub fn computed_fillet_continuation_status(&self) -> Option<&ComputedFilletContinuationStatus> {
+        self.computed_fillet_continuation_status.as_ref()
+    }
+
+    /// Returns the exact scene-stamped Fillet branch alternative currently
+    /// previewed by canvas hover or accessible focus.
+    #[must_use]
+    pub const fn fillet_branch_preview(&self) -> Option<SceneFilletActionTarget> {
+        self.fillet_branch_preview
+    }
+
+    /// Enters or updates Fillet branch preview through the shared action resolver.
+    ///
+    /// Invalid, disabled, stale, spoofed or occluded canvas input clears an old
+    /// preview and never emits a feature mutation.
+    pub fn preview_fillet_action(
+        &mut self,
+        scene: &EditorScene,
+        input: SceneFilletActionInput,
+    ) -> Vec<EditorEffect> {
+        let target = (self.tool == EditorTool::Select && self.active_pointer_gesture().is_none())
+            .then(|| scene.resolve_fillet_action(input, self.pick_tolerance))
+            .flatten();
+        self.set_fillet_branch_preview(target.as_ref())
+    }
+
+    /// Activates an explicitly previewed Fillet branch alternative.
+    ///
+    /// Activation reuses the hover/focus resolver and succeeds only when the
+    /// resulting exact target is already the active preview. A direct click,
+    /// stale DOM target, proximity spoof or focus race therefore cannot commit
+    /// an alternative that the user was not just shown.
+    pub fn activate_fillet_action(
+        &mut self,
+        scene: &EditorScene,
+        input: SceneFilletActionInput,
+    ) -> Vec<EditorEffect> {
+        if self.tool != EditorTool::Select || self.active_pointer_gesture().is_some() {
+            return Vec::new();
+        }
+        let Some(target) = scene.resolve_fillet_action(input, self.pick_tolerance) else {
+            return Vec::new();
+        };
+        if self.fillet_branch_preview != Some(target) {
+            return Vec::new();
+        }
+        self.fillet_branch_preview = None;
+        vec![
+            EditorEffect::CommitComputedFilletAction { target },
+            EditorEffect::FilletBranchPreviewChanged { target: None },
+        ]
+    }
+
+    /// Clears any active Fillet branch preview without changing feature intent.
+    pub fn clear_fillet_branch_preview(&mut self) -> Vec<EditorEffect> {
+        self.set_fillet_branch_preview(None)
+    }
+
+    /// Drops a preview whose exact stamp/action is no longer present and applicable.
+    ///
+    /// Presentation adapters call this after constructing a replacement scene;
+    /// ordinary pointer/focus transitions also reconcile through their resolver.
+    pub fn reconcile_fillet_branch_preview(&mut self, scene: &EditorScene) -> Vec<EditorEffect> {
+        let retained = self.fillet_branch_preview.filter(|target| {
+            scene.resolve_fillet_action(
+                SceneFilletActionInput::Accessible(*target),
+                self.pick_tolerance,
+            ) == Some(*target)
+        });
+        self.set_fillet_branch_preview(retained.as_ref())
+    }
+
+    fn set_fillet_branch_preview(
+        &mut self,
+        target: Option<&SceneFilletActionTarget>,
+    ) -> Vec<EditorEffect> {
+        let target = target.copied();
+        if self.fillet_branch_preview == target {
+            return Vec::new();
+        }
+        self.fillet_branch_preview = target;
+        vec![EditorEffect::FilletBranchPreviewChanged { target }]
+    }
+
     /// Returns the persistent item currently under the pointer.
     #[must_use]
     pub const fn hovered(&self) -> Option<SelectionItem> {
@@ -1842,6 +2913,7 @@ impl ConstraintEditor {
 
     /// Replaces ordered persistent selection, removing later duplicates.
     pub fn set_selection(&mut self, selection: impl IntoIterator<Item = SelectionItem>) {
+        self.fillet_branch_preview = None;
         self.selection.clear();
         self.curve_pick_parameters.clear();
         for item in selection {
@@ -1855,6 +2927,19 @@ impl ConstraintEditor {
         &mut self,
         feature: geosolve_sketch_features::ComputedFeatureId,
     ) {
+        if self
+            .fillet_branch_preview
+            .is_some_and(|target| target.owner.feature == feature)
+        {
+            self.fillet_branch_preview = None;
+        }
+        if self
+            .computed_fillet_continuation_status
+            .as_ref()
+            .is_some_and(|status| status.owner.feature == feature)
+        {
+            self.computed_fillet_continuation_status = None;
+        }
         self.selection
             .retain(|item| !item_belongs_to_computed_feature(*item, feature));
         self.curve_pick_parameters
@@ -1877,10 +2962,17 @@ impl ConstraintEditor {
         {
             self.feature_radius_gesture = None;
         }
+        if self
+            .feature_contact_gesture
+            .is_some_and(|gesture| gesture.owner.feature == feature)
+        {
+            self.feature_contact_gesture = None;
+        }
     }
 
     /// Applies one toolkit-independent selection click.
     pub fn select_item(&mut self, item: SelectionItem, modifiers: Modifiers) {
+        self.fillet_branch_preview = None;
         if modifiers.extends_selection() {
             if let Some(index) = self.selection.iter().position(|selected| *selected == item) {
                 self.selection.remove(index);
@@ -1913,10 +3005,43 @@ impl ConstraintEditor {
         if !input.position.is_finite() {
             return Vec::new();
         }
+        let mut effects = self.clear_fillet_branch_preview();
         if self.tool != EditorTool::Select {
-            return self.draft_down(scene, input);
+            effects.extend(self.draft_down(scene, input));
+            return effects;
         }
-        let geometry_hit = scene.hit_test(input.position, self.pick_tolerance);
+        if self.feature_radius_gesture.is_some() || self.feature_contact_gesture.is_some() {
+            return effects;
+        }
+        let fillet_hit = scene.resolve_fillet_hit(input.position, self.pick_tolerance);
+        if let Some(SceneFilletHit::Contact { handle, .. }) = fillet_hit {
+            effects.extend(self.pointer_down_feature_contact_handle(scene, input, handle));
+            return effects;
+        }
+        if let Some(SceneFilletHit::Radius {
+            owner,
+            distance_pixels,
+        }) = fillet_hit
+        {
+            effects.extend(self.pointer_down_resolved_hit(
+                scene,
+                PointerInput {
+                    modifiers: Modifiers::default(),
+                    ..input
+                },
+                Some(Hit {
+                    item: SelectionItem::FeatureCorner(owner),
+                    distance_pixels,
+                    curve_parameter: None,
+                }),
+            ));
+            return effects;
+        }
+        let geometry_hit = match fillet_hit {
+            Some(SceneFilletHit::Native(hit)) => Some(hit),
+            Some(SceneFilletHit::Contact { .. } | SceneFilletHit::Radius { .. }) => unreachable!(),
+            None => scene.hit_test(input.position, self.pick_tolerance),
+        };
         let annotation_hit = scene.annotation_hit_test(
             input.position,
             self.pick_tolerance,
@@ -1934,15 +3059,18 @@ impl ConstraintEditor {
             })
             .or(annotation_hit)
             .or(geometry_hit);
-        self.pointer_down_resolved_hit(scene, input, hit)
+        effects.extend(self.pointer_down_resolved_hit(scene, input, hit));
+        effects
     }
 
-    /// Starts a computed-radius gesture for one explicitly painted preview arc.
+    /// Starts a computed-Fillet gesture for one explicitly painted preview arc.
     ///
     /// The coordinator validates current preview ownership and scene provenance
     /// before calling this path. This final editor-side check still requires the
-    /// pointer to hit that exact computed curve, so a presentation target is an
-    /// intent hint rather than a geometry oracle.
+    /// pointer to hit that exact owner's contact/radius affordance or, for an
+    /// older scene without affordances, its computed curve. Contact wins over
+    /// radius. A presentation target is an intent hint rather than a geometry
+    /// oracle.
     pub(crate) fn pointer_down_feature_radius(
         &mut self,
         scene: &EditorScene,
@@ -1951,22 +3079,88 @@ impl ConstraintEditor {
         tolerance: PickTolerance,
     ) -> Option<Vec<EditorEffect>> {
         if self.feature_radius_gesture.is_some()
+            || self.feature_contact_gesture.is_some()
             || !input.position.is_finite()
             || self.tool != EditorTool::Select
             || !tolerance.is_valid()
         {
             return None;
         }
-        let hit = scene
-            .computed_curves
-            .iter()
-            .find(|curve| curve.owner == owner)
-            .and_then(|curve| computed_curve_hit(curve, input.position, tolerance.curve_pixels))?;
         let direct_input = PointerInput {
             modifiers: Modifiers::default(),
             ..input
         };
-        Some(self.pointer_down_resolved_hit(scene, direct_input, Some(hit)))
+        let mut effects = match scene.resolve_fillet_hit(input.position, tolerance) {
+            Some(SceneFilletHit::Contact { handle, .. }) if handle.owner == owner => {
+                self.pointer_down_feature_contact_handle(scene, direct_input, handle)
+            }
+            Some(SceneFilletHit::Radius {
+                owner: resolved,
+                distance_pixels,
+            }) if resolved == owner => self.pointer_down_resolved_hit(
+                scene,
+                direct_input,
+                Some(Hit {
+                    item: SelectionItem::FeatureCorner(owner),
+                    distance_pixels,
+                    curve_parameter: None,
+                }),
+            ),
+            Some(SceneFilletHit::Contact { .. } | SceneFilletHit::Radius { .. }) => return None,
+            Some(SceneFilletHit::Native(_)) | None => {
+                let hit = scene
+                    .computed_curves
+                    .iter()
+                    .find(|curve| curve.owner == owner)
+                    .and_then(|curve| {
+                        computed_curve_hit(curve, input.position, tolerance.curve_pixels)
+                    })?;
+                self.pointer_down_resolved_hit(scene, direct_input, Some(hit))
+            }
+        };
+        let mut combined = self.clear_fillet_branch_preview();
+        combined.append(&mut effects);
+        Some(combined)
+    }
+
+    fn pointer_down_feature_contact_handle(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        handle: SceneFilletContactHandle,
+    ) -> Vec<EditorEffect> {
+        let Some(expected) = scene.computed_input else {
+            return Vec::new();
+        };
+        let mut effects = self.cancel_point_gesture();
+        let before = self.selection.clone();
+        self.select_item(
+            SelectionItem::FeatureCorner(handle.owner),
+            Modifiers::default(),
+        );
+        effects.extend(
+            (before != self.selection)
+                .then(|| EditorEffect::SelectionChanged(self.selection.clone())),
+        );
+        self.feature_radius_gesture = None;
+        self.computed_fillet_continuation_status = None;
+        self.feature_contact_gesture = Some(FeatureContactGesture {
+            pointer_id: input.pointer_id,
+            owner: handle.owner,
+            parent: handle.parent,
+            source: handle.source,
+            expected,
+            viewport: scene.viewport,
+            origin: input.position,
+            moved: false,
+            origin_parameter: handle.parameter,
+            last_sampled_parameter: Some(handle.parameter),
+            last_sampled_position: Some(input.position),
+            last_requested_parameter: None,
+            last_accepted_parameter: None,
+        });
+        self.last_valid_drag_preview = None;
+        effects
     }
 
     fn pointer_down_resolved_hit(
@@ -1998,23 +3192,27 @@ impl ConstraintEditor {
                     self.curve_pick_parameters.push((span, parameter));
                 }
             }
-            if let Some((owner, center, radius)) = scene.feature_radius_handle(hit.item)
+            if let Some((owner, radius, rail)) = scene.feature_radius_handle(hit.item)
                 && self.selection.contains(&hit.item)
                 && let Some(expected) = scene.computed_input
             {
                 let pointer = scene.viewport.screen_to_model(input.position);
-                let origin_distance = (pointer[0] - center[0]).hypot(pointer[1] - center[1]);
                 self.feature_radius_gesture = Some(FeatureRadiusGesture {
                     pointer_id: input.pointer_id,
                     owner,
                     expected,
-                    center,
                     origin: input.position,
+                    origin_model: pointer,
+                    model_derivative: rail.model_derivative,
+                    viewport: scene.viewport,
                     moved: false,
                     origin_radius: radius,
-                    last_radius: radius,
-                    radius_offset: radius - origin_distance,
+                    last_sampled_radius: Some(radius),
+                    last_sampled_position: Some(input.position),
+                    last_requested_radius: None,
+                    last_accepted_radius: None,
                 });
+                self.computed_fillet_continuation_status = None;
                 self.point_gesture = None;
                 self.last_valid_drag_preview = None;
             }
@@ -2058,74 +3256,227 @@ impl ConstraintEditor {
     /// Advances an active point gesture and emits projected-preview work only after
     /// the configured screen-space movement threshold.
     pub fn pointer_move(&mut self, scene: &EditorScene, input: PointerInput) -> Vec<EditorEffect> {
+        let mut effects = self.clear_fillet_branch_preview();
         if self.tool != EditorTool::Select {
-            return self.draft_move(scene, input);
+            effects.extend(self.draft_move(scene, input));
+            return effects;
         }
-        if let Some(mut gesture) = self.feature_radius_gesture {
-            if gesture.pointer_id != input.pointer_id || !input.position.is_finite() {
-                return Vec::new();
-            }
-            gesture.moved |= gesture.origin.distance(input.position) >= self.drag_threshold_pixels;
-            if !gesture.moved {
-                self.feature_radius_gesture = Some(gesture);
-                return Vec::new();
-            }
-            let position = scene.viewport.screen_to_model(input.position);
-            let radius = gesture.radius_offset
-                + (position[0] - gesture.center[0]).hypot(position[1] - gesture.center[1]);
-            if !radius.is_finite() || radius <= 0.0 {
-                return Vec::new();
-            }
-            gesture.last_radius = radius;
+        if self.feature_contact_gesture.is_some() {
+            effects.extend(self.move_feature_contact_gesture(scene, input));
+            return effects;
+        }
+        if self.feature_radius_gesture.is_some() {
+            effects.extend(self.move_feature_radius_gesture(scene, input));
+            return effects;
+        }
+        if self.point_gesture.is_none() {
+            effects.extend(self.move_hover(scene, input));
+            return effects;
+        }
+        effects.extend(self.move_point_gesture(scene, input));
+        effects
+    }
+
+    fn move_feature_contact_gesture(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+    ) -> Vec<EditorEffect> {
+        let Some(mut gesture) = self.feature_contact_gesture else {
+            return Vec::new();
+        };
+        if gesture.pointer_id != input.pointer_id || !input.position.is_finite() {
+            return Vec::new();
+        }
+        gesture.moved |= gesture.origin.distance(input.position) >= self.drag_threshold_pixels;
+        if !gesture.moved {
+            self.feature_contact_gesture = Some(gesture);
+            return Vec::new();
+        }
+        let Some(parameter) = Self::feature_contact_sample(scene, &gesture, input.position) else {
+            gesture.last_sampled_parameter = None;
+            gesture.last_sampled_position = None;
+            gesture.last_requested_parameter = None;
+            gesture.last_accepted_parameter = None;
+            self.feature_contact_gesture = Some(gesture);
+            return Vec::new();
+        };
+        if gesture
+            .last_sampled_parameter
+            .is_some_and(|sampled| sampled.to_bits() == parameter.to_bits())
+        {
+            gesture.last_sampled_position = Some(input.position);
+            self.feature_contact_gesture = Some(gesture);
+            return Vec::new();
+        }
+        gesture.last_sampled_parameter = Some(parameter);
+        gesture.last_sampled_position = Some(input.position);
+        gesture.last_requested_parameter = Some(parameter);
+        gesture.last_accepted_parameter = None;
+        self.computed_fillet_continuation_status = None;
+        self.feature_contact_gesture = Some(gesture);
+        vec![EditorEffect::PreviewComputedFeatureContact {
+            expected: gesture.expected,
+            owner: gesture.owner,
+            parent: gesture.parent,
+            source: gesture.source,
+            parameter,
+        }]
+    }
+
+    fn move_feature_radius_gesture(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+    ) -> Vec<EditorEffect> {
+        let Some(mut gesture) = self.feature_radius_gesture else {
+            return Vec::new();
+        };
+        if gesture.pointer_id != input.pointer_id || !input.position.is_finite() {
+            return Vec::new();
+        }
+        gesture.moved |= gesture.origin.distance(input.position) >= self.drag_threshold_pixels;
+        if !gesture.moved {
             self.feature_radius_gesture = Some(gesture);
-            return vec![EditorEffect::PreviewComputedFeatureRadius {
-                expected: gesture.expected,
-                feature: gesture.owner.feature,
-                radius,
-            }];
+            return Vec::new();
         }
-        let Some(mut gesture) = self.point_gesture else {
-            if !input.position.is_finite() {
-                return Vec::new();
-            }
-            let annotation_hit = scene.annotation_occurrence_hit_test(
-                input.position,
-                self.pick_tolerance,
-                &self.selection,
-                self.visibility_context(),
-                &[],
+        let Some(radius) = Self::feature_radius_sample(scene, &gesture, input.position) else {
+            gesture.last_sampled_radius = None;
+            gesture.last_sampled_position = None;
+            gesture.last_requested_radius = None;
+            gesture.last_accepted_radius = None;
+            self.feature_radius_gesture = Some(gesture);
+            return Vec::new();
+        };
+        if gesture
+            .last_sampled_radius
+            .is_some_and(|sampled| sampled.to_bits() == radius.to_bits())
+        {
+            gesture.last_sampled_position = Some(input.position);
+            self.feature_radius_gesture = Some(gesture);
+            return Vec::new();
+        }
+        gesture.last_sampled_radius = Some(radius);
+        gesture.last_sampled_position = Some(input.position);
+        gesture.last_requested_radius = Some(radius);
+        gesture.last_accepted_radius = None;
+        self.computed_fillet_continuation_status = None;
+        self.feature_radius_gesture = Some(gesture);
+        vec![EditorEffect::PreviewComputedFeatureRadius {
+            expected: gesture.expected,
+            feature: gesture.owner.feature,
+            radius,
+        }]
+    }
+
+    fn feature_contact_sample(
+        scene: &EditorScene,
+        gesture: &FeatureContactGesture,
+        position: ScreenPoint,
+    ) -> Option<f64> {
+        (position.is_finite()
+            && scene.viewport == gesture.viewport
+            && scene.accepts_fillet_gesture(&gesture.expected))
+        .then(|| scene.project_to_native_source(gesture.source, position))
+        .flatten()
+        .map(|(parameter, _)| parameter)
+        .filter(|parameter| parameter.is_finite())
+    }
+
+    fn feature_radius_sample(
+        scene: &EditorScene,
+        gesture: &FeatureRadiusGesture,
+        position: ScreenPoint,
+    ) -> Option<f64> {
+        if !position.is_finite()
+            || scene.viewport != gesture.viewport
+            || !scene.accepts_fillet_gesture(&gesture.expected)
+        {
+            return None;
+        }
+        let position = scene.viewport.screen_to_model(position);
+        let pointer_delta = [
+            position[0] - gesture.origin_model[0],
+            position[1] - gesture.origin_model[1],
+        ];
+        let derivative_norm_squared = gesture.model_derivative[0].mul_add(
+            gesture.model_derivative[0],
+            gesture.model_derivative[1].powi(2),
+        );
+        if !derivative_norm_squared.is_finite() || derivative_norm_squared <= 0.0 {
+            return None;
+        }
+        let radius_delta = pointer_delta[0].mul_add(
+            gesture.model_derivative[0],
+            pointer_delta[1] * gesture.model_derivative[1],
+        ) / derivative_norm_squared;
+        let radius = gesture.origin_radius + radius_delta;
+        (radius.is_finite() && radius > 0.0).then_some(radius)
+    }
+
+    fn move_hover(&mut self, scene: &EditorScene, input: PointerInput) -> Vec<EditorEffect> {
+        if !input.position.is_finite() {
+            return Vec::new();
+        }
+        if let Some(hit @ (SceneFilletHit::Contact { .. } | SceneFilletHit::Radius { .. })) =
+            scene.resolve_fillet_hit(input.position, self.pick_tolerance)
+        {
+            let item = hit.item();
+            return self.set_hover_state(
+                Some(EditorHoverTarget::Geometry(item)),
+                Some(AnnotationHoverContext {
+                    owner: item,
+                    origin: input.position,
+                }),
             );
-            let geometry_hit = scene.hit_test(input.position, self.pick_tolerance);
-            let (target, context) = if let Some((occurrence, _)) = annotation_hit {
-                let context = self.hover_context.filter(|context| {
-                    scene.annotations.iter().any(|annotation| {
-                        annotation.item == occurrence.item
-                            && annotation.operands.contains(&context.owner)
-                    })
-                });
-                (Some(EditorHoverTarget::Annotation(occurrence)), context)
-            } else if let Some(hit) = geometry_hit {
-                (
-                    Some(EditorHoverTarget::Geometry(hit.item)),
-                    Some(AnnotationHoverContext {
-                        owner: hit.item,
-                        origin: input.position,
-                    }),
+        }
+        let annotation_hit = scene.annotation_occurrence_hit_test(
+            input.position,
+            self.pick_tolerance,
+            &self.selection,
+            self.visibility_context(),
+            &[],
+        );
+        let geometry_hit = scene.hit_test(input.position, self.pick_tolerance);
+        let (target, context) = if let Some((occurrence, _)) = annotation_hit {
+            let context = self.hover_context.filter(|context| {
+                scene.annotations.iter().any(|annotation| {
+                    annotation.item == occurrence.item
+                        && annotation.operands.contains(&context.owner)
+                })
+            });
+            (Some(EditorHoverTarget::Annotation(occurrence)), context)
+        } else if let Some(hit) = geometry_hit {
+            (
+                Some(EditorHoverTarget::Geometry(hit.item)),
+                Some(AnnotationHoverContext {
+                    owner: hit.item,
+                    origin: input.position,
+                }),
+            )
+        } else {
+            let context = self.hover_context.filter(|context| {
+                scene.contextual_annotation_transit(
+                    input.position,
+                    self.pick_tolerance,
+                    &self.selection,
+                    context.owner,
+                    context.origin,
+                    &[],
                 )
-            } else {
-                let context = self.hover_context.filter(|context| {
-                    scene.contextual_annotation_transit(
-                        input.position,
-                        self.pick_tolerance,
-                        &self.selection,
-                        context.owner,
-                        context.origin,
-                        &[],
-                    )
-                });
-                (None, context)
-            };
-            return self.set_hover_state(target, context);
+            });
+            (None, context)
+        };
+        self.set_hover_state(target, context)
+    }
+
+    fn move_point_gesture(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+    ) -> Vec<EditorEffect> {
+        let Some(mut gesture) = self.point_gesture else {
+            return Vec::new();
         };
         if gesture.pointer_id != input.pointer_id || !input.position.is_finite() {
             return Vec::new();
@@ -2156,7 +3507,9 @@ impl ConstraintEditor {
 
     /// Clears pointer hover when a presentation surface is left.
     pub fn pointer_leave(&mut self) -> Vec<EditorEffect> {
-        self.set_hover_state(None, None)
+        let mut effects = self.clear_fillet_branch_preview();
+        effects.extend(self.set_hover_state(None, None));
+        effects
     }
 
     const fn visibility_context(&self) -> Option<SelectionItem> {
@@ -2184,32 +3537,213 @@ impl ConstraintEditor {
         vec![EditorEffect::HoverChanged(after)]
     }
 
+    /// Records that the exact requested Fillet-radius sample produced a
+    /// complete current preview.
+    ///
+    /// Rejected, stale, or out-of-order samples leave the prior accepted sample
+    /// untouched. Pointer release can therefore publish only geometry that a
+    /// coordinator independently accepted.
+    pub(crate) fn accept_computed_feature_radius_preview(
+        &mut self,
+        expected: &geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        feature: geosolve_sketch_features::ComputedFeatureId,
+        radius: f64,
+    ) -> bool {
+        let Some(mut gesture) = self.feature_radius_gesture else {
+            return false;
+        };
+        if gesture.expected != *expected
+            || gesture.owner.feature != feature
+            || gesture
+                .last_requested_radius
+                .is_none_or(|requested| requested.to_bits() != radius.to_bits())
+        {
+            return false;
+        }
+        gesture.last_requested_radius = None;
+        gesture.last_accepted_radius = Some(radius);
+        self.feature_radius_gesture = Some(gesture);
+        self.computed_fillet_continuation_status = None;
+        true
+    }
+
+    /// Records a typed failure for the exact latest radius sample while retaining
+    /// the coordinator's previous last-current preview.
+    ///
+    /// Stale, foreign and out-of-order rejection acknowledgements are ignored.
+    pub(crate) fn reject_computed_feature_radius_preview(
+        &mut self,
+        expected: &geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        feature: geosolve_sketch_features::ComputedFeatureId,
+        radius: f64,
+        limit: ComputedFilletContinuationLimit,
+    ) -> bool {
+        let Some(mut gesture) = self.feature_radius_gesture else {
+            return false;
+        };
+        if gesture.expected != *expected
+            || gesture.owner.feature != feature
+            || gesture
+                .last_requested_radius
+                .is_none_or(|requested| requested.to_bits() != radius.to_bits())
+            || !radius.is_finite()
+            || radius <= 0.0
+            || !limit.is_valid()
+        {
+            return false;
+        }
+        gesture.last_sampled_radius = None;
+        gesture.last_sampled_position = None;
+        gesture.last_requested_radius = None;
+        gesture.last_accepted_radius = None;
+        self.feature_radius_gesture = Some(gesture);
+        self.computed_fillet_continuation_status = Some(ComputedFilletContinuationStatus {
+            expected: *expected,
+            owner: gesture.owner,
+            sample: ComputedFilletInteractionSample::Radius(radius),
+            limit,
+        });
+        true
+    }
+
+    /// Records that the exact requested contact sample produced a complete
+    /// current Fillet preview.
+    ///
+    /// Stale, foreign and out-of-order acknowledgements are state-neutral.
+    pub(crate) fn accept_computed_feature_contact_preview(
+        &mut self,
+        expected: &geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        owner: geosolve_sketch_features::ComputedCornerRef,
+        parent: ComputedFilletParentIndex,
+        source: NativeCurveSpanSource,
+        parameter: f64,
+    ) -> bool {
+        let Some(mut gesture) = self.feature_contact_gesture else {
+            return false;
+        };
+        if gesture.expected != *expected
+            || gesture.owner != owner
+            || gesture.parent != parent
+            || gesture.source != source
+            || gesture
+                .last_requested_parameter
+                .is_none_or(|requested| requested.to_bits() != parameter.to_bits())
+        {
+            return false;
+        }
+        gesture.last_requested_parameter = None;
+        gesture.last_accepted_parameter = Some(parameter);
+        self.feature_contact_gesture = Some(gesture);
+        self.computed_fillet_continuation_status = None;
+        true
+    }
+
+    /// Records a typed failure for the exact latest named-parent contact sample
+    /// while retaining the coordinator's previous last-current preview.
+    pub(crate) fn reject_computed_feature_contact_preview(
+        &mut self,
+        expected: &geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        owner: geosolve_sketch_features::ComputedCornerRef,
+        parent: ComputedFilletParentIndex,
+        source: NativeCurveSpanSource,
+        parameter: f64,
+        limit: ComputedFilletContinuationLimit,
+    ) -> bool {
+        let Some(mut gesture) = self.feature_contact_gesture else {
+            return false;
+        };
+        if gesture.expected != *expected
+            || gesture.owner != owner
+            || gesture.parent != parent
+            || gesture.source != source
+            || gesture
+                .last_requested_parameter
+                .is_none_or(|requested| requested.to_bits() != parameter.to_bits())
+            || !parameter.is_finite()
+            || !limit.is_valid()
+        {
+            return false;
+        }
+        gesture.last_sampled_parameter = None;
+        gesture.last_sampled_position = None;
+        gesture.last_requested_parameter = None;
+        gesture.last_accepted_parameter = None;
+        self.feature_contact_gesture = Some(gesture);
+        self.computed_fillet_continuation_status = Some(ComputedFilletContinuationStatus {
+            expected: *expected,
+            owner,
+            sample: ComputedFilletInteractionSample::Contact {
+                parent,
+                source,
+                parameter,
+            },
+            limit,
+        });
+        true
+    }
+
     /// Completes an active point gesture. A click emits no geometry edit.
     pub fn pointer_up(
         &mut self,
-        _scene: &EditorScene,
+        scene: &EditorScene,
         expected: SketchDesignIdentity,
         input: PointerInput,
     ) -> Vec<EditorEffect> {
         if self.tool != EditorTool::Select {
             return Vec::new();
         }
+        if let Some(gesture) = self.feature_contact_gesture {
+            if gesture.pointer_id != input.pointer_id || !input.position.is_finite() {
+                return Vec::new();
+            }
+            let current_parameter = (scene.viewport == gesture.viewport
+                && scene.accepts_fillet_gesture(&gesture.expected)
+                && gesture.last_sampled_position == Some(input.position))
+            .then_some(gesture.last_accepted_parameter)
+            .flatten();
+            self.feature_contact_gesture = None;
+            self.computed_fillet_continuation_status = None;
+            return if !gesture.moved {
+                Vec::new()
+            } else if let Some(parameter) = current_parameter {
+                vec![
+                    EditorEffect::CommitComputedFeatureContact {
+                        expected: gesture.expected,
+                        owner: gesture.owner,
+                        parent: gesture.parent,
+                        source: gesture.source,
+                        parameter,
+                    },
+                    EditorEffect::ClearComputedFeatureContactPreview,
+                ]
+            } else {
+                vec![EditorEffect::ClearComputedFeatureContactPreview]
+            };
+        }
         if let Some(gesture) = self.feature_radius_gesture {
             if gesture.pointer_id != input.pointer_id || !input.position.is_finite() {
                 return Vec::new();
             }
+            let current_radius = (scene.viewport == gesture.viewport
+                && scene.accepts_fillet_gesture(&gesture.expected)
+                && gesture.last_sampled_position == Some(input.position))
+            .then_some(gesture.last_accepted_radius)
+            .flatten();
             self.feature_radius_gesture = None;
-            return if gesture.moved {
+            self.computed_fillet_continuation_status = None;
+            return if !gesture.moved {
+                Vec::new()
+            } else if let Some(radius) = current_radius {
                 vec![
                     EditorEffect::CommitComputedFeatureRadius {
                         expected: gesture.expected,
                         feature: gesture.owner.feature,
-                        radius: gesture.last_radius,
+                        radius,
                     },
                     EditorEffect::ClearComputedFeaturePreview,
                 ]
             } else {
-                Vec::new()
+                vec![EditorEffect::ClearComputedFeaturePreview]
             };
         }
         let Some(gesture) = self.point_gesture else {
@@ -2251,20 +3785,40 @@ impl ConstraintEditor {
         let mut effects = self.cancel_draft();
         effects.extend(self.cancel_point_gesture());
         effects.extend(self.cancel_feature_radius_gesture());
+        effects.extend(self.cancel_feature_contact_gesture());
+        effects.extend(self.clear_fillet_branch_preview());
         effects.extend(self.set_hover_state(None, None));
         effects
     }
 
     fn cancel_feature_radius_gesture(&mut self) -> Vec<EditorEffect> {
-        self.feature_radius_gesture
-            .take()
-            .map_or_else(Vec::new, |gesture| {
-                vec![EditorEffect::RestoreComputedFeatureRadius {
-                    expected: gesture.expected,
-                    feature: gesture.owner.feature,
-                    radius: gesture.origin_radius,
-                }]
-            })
+        let gesture = self.feature_radius_gesture.take();
+        if gesture.is_some() {
+            self.computed_fillet_continuation_status = None;
+        }
+        gesture.map_or_else(Vec::new, |gesture| {
+            vec![EditorEffect::RestoreComputedFeatureRadius {
+                expected: gesture.expected,
+                feature: gesture.owner.feature,
+                radius: gesture.origin_radius,
+            }]
+        })
+    }
+
+    fn cancel_feature_contact_gesture(&mut self) -> Vec<EditorEffect> {
+        let gesture = self.feature_contact_gesture.take();
+        if gesture.is_some() {
+            self.computed_fillet_continuation_status = None;
+        }
+        gesture.map_or_else(Vec::new, |gesture| {
+            vec![EditorEffect::RestoreComputedFeatureContact {
+                expected: gesture.expected,
+                owner: gesture.owner,
+                parent: gesture.parent,
+                source: gesture.source,
+                parameter: gesture.origin_parameter,
+            }]
+        })
     }
 
     /// Supplies the result of a host-projected temporary drag request. Rejection
@@ -2699,6 +4253,8 @@ pub enum EditorError {
     IncompatibleConstraint(ConstraintKind),
     #[error("computed-feature snapshot does not match the supplied accepted sketch")]
     StaleComputedFeatureSnapshot,
+    #[error("computed-feature interaction affordance is missing, stale, or malformed")]
+    InvalidComputedFeatureAffordance,
     #[error(transparent)]
     Document(#[from] geosolve_sketch::DocumentError),
     #[error(transparent)]
@@ -2765,6 +4321,19 @@ fn tessellate_computed_arc(
     viewport: Viewport,
     chord_tolerance_pixels: f64,
 ) -> Result<Vec<ScreenPoint>, EditorError> {
+    Ok(tessellate_computed_arc_geometry(arc, viewport, chord_tolerance_pixels)?.screen_polyline)
+}
+
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss
+)]
+fn tessellate_computed_arc_geometry(
+    arc: &geosolve_sketch_features::ComputedCircularArc,
+    viewport: Viewport,
+    chord_tolerance_pixels: f64,
+) -> Result<SceneFilletAlternativeGeometry, EditorError> {
     if !arc.center.into_iter().all(f64::is_finite)
         || !arc.radius.is_finite()
         || arc.radius <= 0.0
@@ -2786,16 +4355,29 @@ fn tessellate_computed_arc(
     let max_step = (2.0 * cosine.acos()).clamp(1.0e-3, std::f64::consts::FRAC_PI_4);
     let segments = ((delta.abs() / max_step).ceil() as usize)
         .clamp(usize::from(MIN_COMPUTED_ARC_SEGMENTS), 4096);
-    Ok((0..=segments)
+    let model_polyline = (0..=segments)
         .map(|index| {
             let fraction = index as f64 / segments as f64;
             let angle = delta.mul_add(fraction, arc.start_angle);
-            viewport.model_to_screen([
+            [
                 arc.radius.mul_add(angle.cos(), arc.center[0]),
                 arc.radius.mul_add(angle.sin(), arc.center[1]),
-            ])
+            ]
         })
-        .collect())
+        .collect::<Vec<_>>();
+    let screen_polyline = model_polyline
+        .iter()
+        .copied()
+        .map(|point| viewport.model_to_screen(point))
+        .collect();
+    let geometry = SceneFilletAlternativeGeometry {
+        model_polyline,
+        screen_polyline,
+    };
+    if !geometry.is_valid(viewport) {
+        return Err(EditorError::StaleComputedFeatureSnapshot);
+    }
+    Ok(geometry)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2923,6 +4505,13 @@ fn compare_hits(first: &Hit, second: &Hit) -> Ordering {
         .then_with(|| first.item.cmp(&second.item))
 }
 
+const fn fillet_parent_order(parent: ComputedFilletParentIndex) -> u8 {
+    match parent {
+        ComputedFilletParentIndex::First => 0,
+        ComputedFilletParentIndex::Second => 1,
+    }
+}
+
 const fn native_hit_priority(item: SelectionItem) -> u8 {
     match item {
         SelectionItem::Point(_) => 0,
@@ -2968,6 +4557,103 @@ fn point_segment_projection(
         }),
         projection,
     )
+}
+
+fn screen_points_match(first: ScreenPoint, second: ScreenPoint) -> bool {
+    let scale = first
+        .x
+        .abs()
+        .max(first.y.abs())
+        .max(second.x.abs())
+        .max(second.y.abs())
+        .max(1.0);
+    first.distance(second) <= 1.0e-10 * scale
+}
+
+fn model_point_segment_distance(point: [f64; 2], start: [f64; 2], end: [f64; 2]) -> f64 {
+    let delta = [end[0] - start[0], end[1] - start[1]];
+    let length_squared = delta[0].mul_add(delta[0], delta[1].powi(2));
+    if !length_squared.is_finite() || length_squared <= 0.0 {
+        return (point[0] - start[0]).hypot(point[1] - start[1]);
+    }
+    let projection = ((point[0] - start[0]).mul_add(delta[0], (point[1] - start[1]) * delta[1])
+        / length_squared)
+        .clamp(0.0, 1.0);
+    let projected = [
+        delta[0].mul_add(projection, start[0]),
+        delta[1].mul_add(projection, start[1]),
+    ];
+    (point[0] - projected[0]).hypot(point[1] - projected[1])
+}
+
+fn action_model_hit_distance(
+    action: &SceneFilletAction,
+    model_position: [f64; 2],
+    viewport: Viewport,
+    tolerance: PickTolerance,
+) -> Option<f64> {
+    let mut best = None::<f64>;
+    if let Some(control) = action.control_geometry {
+        let direction_length = control.model_direction[0].hypot(control.model_direction[1]);
+        let model_length =
+            control.screen_start.distance(control.screen_end) / viewport.pixels_per_model_unit;
+        if direction_length.is_finite()
+            && direction_length > 0.0
+            && model_length.is_finite()
+            && model_length > 0.0
+        {
+            let model_end = [
+                (model_length * control.model_direction[0] / direction_length)
+                    .mul_add(1.0, control.model_anchor[0]),
+                (model_length * control.model_direction[1] / direction_length)
+                    .mul_add(1.0, control.model_anchor[1]),
+            ];
+            let segment_pixels =
+                model_point_segment_distance(model_position, control.model_anchor, model_end)
+                    * viewport.pixels_per_model_unit;
+            let endpoint_pixels = (model_position[0] - model_end[0])
+                .hypot(model_position[1] - model_end[1])
+                * viewport.pixels_per_model_unit;
+            if segment_pixels <= tolerance.curve_pixels {
+                best = Some(segment_pixels);
+            }
+            if endpoint_pixels <= tolerance.point_pixels {
+                best = Some(best.map_or(endpoint_pixels, |current| current.min(endpoint_pixels)));
+            }
+        }
+    }
+    if let Some(geometry) = &action.dashed_alternative_arc {
+        let distance = geometry
+            .model_polyline
+            .windows(2)
+            .map(|pair| model_point_segment_distance(model_position, pair[0], pair[1]))
+            .min_by(f64::total_cmp)?
+            * viewport.pixels_per_model_unit;
+        if distance <= tolerance.curve_pixels {
+            best = Some(best.map_or(distance, |current| current.min(distance)));
+        }
+    }
+    best
+}
+
+const fn fillet_action_order_key(action: SceneFilletActionId) -> (u8, u8, u8) {
+    match action {
+        SceneFilletActionId::ReverseFirstRetainedDirection => (0, 0, 0),
+        SceneFilletActionId::ReverseSecondRetainedDirection => (1, 0, 0),
+        SceneFilletActionId::ComplementaryArc => (2, 0, 0),
+        SceneFilletActionId::LocalAlternative { first, second } => (
+            3,
+            fillet_normal_side_order(first),
+            fillet_normal_side_order(second),
+        ),
+    }
+}
+
+const fn fillet_normal_side_order(side: DocumentCurveNormalSide) -> u8 {
+    match side {
+        DocumentCurveNormalSide::Left => 0,
+        DocumentCurveNormalSide::Right => 1,
+    }
 }
 
 fn snap_point(
@@ -3848,6 +5534,1369 @@ mod tests {
             .min_by(f64::total_cmp)
             .expect("computed arc segments");
         assert!(distance <= 0.25, "computed arc chord error was {distance}");
+    }
+
+    struct FilletInteractionFixture {
+        scene: EditorScene,
+        owner: ComputedCornerRef,
+        input: ComputedFeatureEvaluationInput,
+        sources: [NativeCurveSpanSource; 2],
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn fillet_interaction_fixture(
+        pixels_per_model_unit: f64,
+        derivative: [f64; 2],
+    ) -> FilletInteractionFixture {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let first_start = document
+            .add_point("first start", [2.0, -4.0])
+            .expect("point");
+        let first_end = document.add_point("first end", [2.0, 4.0]).expect("point");
+        let second_start = document
+            .add_point("second start", [-4.0, 2.0])
+            .expect("point");
+        let second_end = document.add_point("second end", [4.0, 2.0]).expect("point");
+        let first = document
+            .add_curve(
+                "first parent",
+                CurveDefinition::Line {
+                    start: first_start,
+                    end: first_end,
+                    branch_direction: [0.0, 1.0],
+                },
+            )
+            .expect("curve");
+        let second = document
+            .add_curve(
+                "second parent",
+                CurveDefinition::Line {
+                    start: second_start,
+                    end: second_end,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .expect("curve");
+        let sources = [
+            NativeCurveSpanSource {
+                span: CurveSpan::line(first),
+            },
+            NativeCurveSpanSource {
+                span: CurveSpan::line(second),
+            },
+        ];
+        let session = geosolve_sketch::RetainedSketchDocumentSession::new(
+            document,
+            geosolve_sketch::DocumentSolveRequest::default(),
+            geosolve_sketch::SolverConfig::default(),
+        )
+        .expect("accepted session");
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("accepted state");
+        let features = ComputedFeatureDocument::new(session.design_document().id());
+        let snapshot = geosolve_sketch_features::ComputedFeatureEvaluationSnapshot::capture(
+            &session,
+            &features,
+            ComputedFeatureEvaluationPolicy::default(),
+        )
+        .expect("feature snapshot");
+        let input = snapshot.input();
+        let viewport =
+            Viewport::new([1000.0, 700.0], [0.0, 0.0], pixels_per_model_unit).expect("viewport");
+        let mut scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            accepted.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            viewport,
+            0.25,
+        )
+        .expect("scene");
+        let owner = ComputedCornerRef {
+            feature: ComputedFeatureId::from_raw(7),
+            corner: ComputedFeatureCornerId::from_raw(11),
+        };
+        let contacts = [
+            ComputedFilletContact {
+                source: sources[0],
+                parameter: 0.5,
+                winding: 0,
+                total_parameter: 0.5,
+                position: [2.0, 0.0],
+            },
+            ComputedFilletContact {
+                source: sources[1],
+                parameter: 0.5,
+                winding: 0,
+                total_parameter: 0.5,
+                position: [0.0, 2.0],
+            },
+        ];
+        let arc = ComputedCircularArc {
+            center: [0.0, 0.0],
+            radius: 2.0,
+            start_angle: 0.0,
+            end_angle: std::f64::consts::FRAC_PI_2,
+            sweep: DocumentArcSweep::CounterClockwise,
+            contacts,
+        };
+        scene.computed_curves.push(SceneComputedCurve {
+            edge: ComputedEdgeId {
+                evaluation: ComputedEvaluationRevision::from_raw(1),
+                ordinal: 0,
+            },
+            owner,
+            center: arc.center,
+            radius: arc.radius,
+            start_angle: arc.start_angle,
+            end_angle: arc.end_angle,
+            sweep: arc.sweep,
+            contacts,
+            screen_polyline: tessellate_computed_arc(&arc, viewport, 0.25).expect("arc"),
+            radius_rail: None,
+        });
+        scene.feature_identity = Some(input.features);
+        scene.computed_input = Some(input);
+        scene
+            .attach_computed_fillet_radius_rail(owner, derivative, vec![owner])
+            .expect("radius rail");
+        FilletInteractionFixture {
+            scene,
+            owner,
+            input,
+            sources,
+        }
+    }
+
+    fn preview_radius(effects: &[EditorEffect]) -> f64 {
+        let [EditorEffect::PreviewComputedFeatureRadius { radius, .. }] = effects else {
+            panic!("one radius preview expected, got {effects:?}");
+        };
+        *radius
+    }
+
+    fn preview_contact_parameter(effects: &[EditorEffect]) -> f64 {
+        let [EditorEffect::PreviewComputedFeatureContact { parameter, .. }] = effects else {
+            panic!("one contact preview expected, got {effects:?}");
+        };
+        *parameter
+    }
+
+    fn rebuilt_fillet_candidate_scene(fixture: &FilletInteractionFixture) -> EditorScene {
+        let mut scene = fixture.scene.clone();
+        let mut candidate = fixture.input;
+        candidate.features.revision = ComputedFeatureRevision::from_raw(
+            candidate
+                .features
+                .revision
+                .raw()
+                .checked_add(1)
+                .expect("feature revision"),
+        );
+        scene.feature_identity = Some(candidate.features);
+        scene.computed_input = Some(candidate);
+        scene
+    }
+
+    fn install_test_fillet_actions(
+        fixture: &mut FilletInteractionFixture,
+    ) -> (SceneFilletActionTarget, SceneFilletActionTarget) {
+        let viewport = fixture.scene.viewport;
+        let control_start = [2.0, 0.0];
+        let control_end = [2.0, -0.75];
+        let alternative_model_polyline = vec![[-3.0, -3.0], [-2.5, -3.25], [-2.0, -3.0]];
+        fixture
+            .scene
+            .set_fillet_corner_actions(
+                fixture.owner,
+                vec![
+                    SceneFilletAction {
+                        id: SceneFilletActionId::ReverseFirstRetainedDirection,
+                        owner: fixture.owner,
+                        label: "Reverse first retained direction".into(),
+                        availability: SceneFilletActionAvailability::Applicable,
+                        control_geometry: Some(SceneFilletActionControlGeometry {
+                            model_anchor: control_start,
+                            model_direction: [0.0, -1.0],
+                            screen_start: viewport.model_to_screen(control_start),
+                            screen_end: viewport.model_to_screen(control_end),
+                        }),
+                        dashed_alternative_arc: None,
+                    },
+                    SceneFilletAction {
+                        id: SceneFilletActionId::LocalAlternative {
+                            first: DocumentCurveNormalSide::Left,
+                            second: DocumentCurveNormalSide::Right,
+                        },
+                        owner: fixture.owner,
+                        label: "Use local side branch 1".into(),
+                        availability: SceneFilletActionAvailability::Applicable,
+                        control_geometry: None,
+                        dashed_alternative_arc: Some(SceneFilletAlternativeGeometry {
+                            screen_polyline: alternative_model_polyline
+                                .iter()
+                                .copied()
+                                .map(|point| viewport.model_to_screen(point))
+                                .collect(),
+                            model_polyline: alternative_model_polyline,
+                        }),
+                    },
+                    SceneFilletAction {
+                        id: SceneFilletActionId::ComplementaryArc,
+                        owner: fixture.owner,
+                        label: "Use complementary arc".into(),
+                        availability: SceneFilletActionAvailability::Disabled {
+                            reason: "Unavailable on the current branch".into(),
+                        },
+                        control_geometry: None,
+                        dashed_alternative_arc: None,
+                    },
+                ],
+            )
+            .expect("test Fillet actions");
+        (
+            fixture
+                .scene
+                .fillet_action_target(
+                    fixture.owner,
+                    SceneFilletActionId::ReverseFirstRetainedDirection,
+                )
+                .expect("retained target"),
+            fixture
+                .scene
+                .fillet_action_target(
+                    fixture.owner,
+                    SceneFilletActionId::LocalAlternative {
+                        first: DocumentCurveNormalSide::Left,
+                        second: DocumentCurveNormalSide::Right,
+                    },
+                )
+                .expect("local target"),
+        )
+    }
+
+    #[test]
+    fn fillet_branch_canvas_and_accessible_inputs_share_preview_and_activation_authority() {
+        let mut fixture = fillet_interaction_fixture(50.0, [2.0, 0.0]);
+        let (retained, local) = install_test_fillet_actions(&mut fixture);
+        let retained_position = fixture.scene.viewport.model_to_screen([2.0, -0.75]);
+        let canvas = SceneFilletActionInput::Canvas {
+            position: retained_position,
+            painted: Some(retained),
+        };
+        let accessible = SceneFilletActionInput::Accessible(retained);
+        assert_eq!(
+            fixture
+                .scene
+                .resolve_fillet_action(canvas, PickTolerance::default()),
+            Some(retained)
+        );
+        assert_eq!(
+            fixture
+                .scene
+                .resolve_fillet_action(accessible, PickTolerance::default()),
+            Some(retained)
+        );
+
+        let mut editor = ConstraintEditor::default();
+        assert!(
+            editor
+                .activate_fillet_action(&fixture.scene, accessible)
+                .is_empty()
+        );
+        assert_eq!(
+            editor.preview_fillet_action(&fixture.scene, accessible),
+            vec![EditorEffect::FilletBranchPreviewChanged {
+                target: Some(retained),
+            }]
+        );
+        assert_eq!(editor.fillet_branch_preview(), Some(retained));
+        assert_eq!(
+            editor.activate_fillet_action(&fixture.scene, accessible),
+            vec![
+                EditorEffect::CommitComputedFilletAction { target: retained },
+                EditorEffect::FilletBranchPreviewChanged { target: None },
+            ]
+        );
+        assert_eq!(editor.fillet_branch_preview(), None);
+
+        assert_eq!(
+            editor.preview_fillet_action(&fixture.scene, canvas),
+            vec![EditorEffect::FilletBranchPreviewChanged {
+                target: Some(retained),
+            }]
+        );
+        assert_eq!(
+            editor.activate_fillet_action(&fixture.scene, canvas),
+            vec![
+                EditorEffect::CommitComputedFilletAction { target: retained },
+                EditorEffect::FilletBranchPreviewChanged { target: None },
+            ]
+        );
+
+        let local_position = fixture.scene.viewport.model_to_screen([-2.5, -3.25]);
+        assert_eq!(
+            fixture.scene.resolve_fillet_action(
+                SceneFilletActionInput::Canvas {
+                    position: local_position,
+                    painted: Some(local),
+                },
+                PickTolerance::default(),
+            ),
+            Some(local),
+            "alternative ghosts use their paired model-space polyline"
+        );
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn fillet_branch_resolution_rejects_spoofs_disabled_actions_and_higher_priority_hits() {
+        let mut fixture = fillet_interaction_fixture(50.0, [2.0, 0.0]);
+        let (retained, _) = install_test_fillet_actions(&mut fixture);
+        let retained_position = fixture.scene.viewport.model_to_screen([2.0, -0.75]);
+        let far = fixture.scene.viewport.model_to_screen([-8.0, -8.0]);
+        assert_eq!(
+            fixture.scene.resolve_fillet_action(
+                SceneFilletActionInput::Canvas {
+                    position: far,
+                    painted: Some(retained),
+                },
+                PickTolerance::default(),
+            ),
+            None,
+            "a DOM target cannot replace independent proximity"
+        );
+        let foreign = SceneFilletActionTarget {
+            owner: ComputedCornerRef {
+                feature: retained.owner.feature,
+                corner: ComputedFeatureCornerId::from_raw(retained.owner.corner.raw() + 1),
+            },
+            ..retained
+        };
+        assert_eq!(
+            fixture.scene.resolve_fillet_action(
+                SceneFilletActionInput::Canvas {
+                    position: retained_position,
+                    painted: Some(foreign),
+                },
+                PickTolerance::default(),
+            ),
+            None,
+            "painted and independently resolved owners must agree"
+        );
+        let contact = fixture.scene.fillet_affordances[0].contacts[0].screen_position;
+        assert_eq!(
+            fixture.scene.resolve_fillet_action(
+                SceneFilletActionInput::Canvas {
+                    position: contact,
+                    painted: Some(retained),
+                },
+                PickTolerance::default(),
+            ),
+            None,
+            "contact handles retain priority over branch controls"
+        );
+        let radius = fixture.scene.fillet_affordances[0].radius_rail.screen_grip;
+        assert_eq!(
+            fixture.scene.resolve_fillet_action(
+                SceneFilletActionInput::Canvas {
+                    position: radius,
+                    painted: Some(retained),
+                },
+                PickTolerance::default(),
+            ),
+            None,
+            "radius affordances retain priority over branch controls"
+        );
+
+        let disabled = fixture
+            .scene
+            .fillet_action_target(fixture.owner, SceneFilletActionId::ComplementaryArc)
+            .expect("disabled action metadata remains stable");
+        assert_eq!(
+            fixture.scene.resolve_fillet_action(
+                SceneFilletActionInput::Accessible(disabled),
+                PickTolerance::default(),
+            ),
+            None
+        );
+        let mut stale = retained;
+        stale.expected.features.revision =
+            ComputedFeatureRevision::from_raw(stale.expected.features.revision.raw() + 1);
+        assert_eq!(
+            fixture.scene.resolve_fillet_action(
+                SceneFilletActionInput::Accessible(stale),
+                PickTolerance::default(),
+            ),
+            None
+        );
+
+        let mut editor = ConstraintEditor::default();
+        editor.preview_fillet_action(&fixture.scene, SceneFilletActionInput::Accessible(retained));
+        assert!(
+            editor
+                .activate_fillet_action(
+                    &fixture.scene,
+                    SceneFilletActionInput::Canvas {
+                        position: retained_position,
+                        painted: Some(foreign),
+                    },
+                )
+                .is_empty()
+        );
+        assert_eq!(editor.fillet_branch_preview(), Some(retained));
+    }
+
+    #[test]
+    fn fillet_branch_preview_clears_on_cancel_pointer_transition_and_stale_scene() {
+        let mut fixture = fillet_interaction_fixture(50.0, [2.0, 0.0]);
+        let (retained, _) = install_test_fillet_actions(&mut fixture);
+        let accessible = SceneFilletActionInput::Accessible(retained);
+        let mut editor = ConstraintEditor::default();
+
+        editor.preview_fillet_action(&fixture.scene, accessible);
+        assert_eq!(
+            editor.cancel(),
+            vec![EditorEffect::FilletBranchPreviewChanged { target: None }]
+        );
+        editor.preview_fillet_action(&fixture.scene, accessible);
+        let ordinary = fixture.scene.viewport.model_to_screen([-8.0, -8.0]);
+        assert_eq!(
+            editor.pointer_down(
+                &fixture.scene,
+                pointer(91, ordinary.x, ordinary.y, Modifiers::default()),
+            ),
+            vec![EditorEffect::FilletBranchPreviewChanged { target: None }]
+        );
+
+        editor.preview_fillet_action(&fixture.scene, accessible);
+        let stale = rebuilt_fillet_candidate_scene(&fixture);
+        assert_eq!(
+            editor.reconcile_fillet_branch_preview(&stale),
+            vec![EditorEffect::FilletBranchPreviewChanged { target: None }]
+        );
+        assert_eq!(editor.fillet_branch_preview(), None);
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn fillet_affordances_validate_actions_and_share_contact_radius_native_priority() {
+        let mut fixture = fillet_interaction_fixture(50.0, [2.0, 0.0]);
+        let affordances = fixture
+            .scene
+            .fillet_affordances
+            .first()
+            .expect("affordances")
+            .clone();
+        assert_eq!(affordances.owner, fixture.owner);
+        assert_eq!(affordances.affected_owners, vec![fixture.owner]);
+        assert_eq!(affordances.contacts[0].source, fixture.sources[0]);
+        assert_eq!(affordances.contacts[1].source, fixture.sources[1]);
+        assert!(matches!(
+            fixture.scene.resolve_fillet_hit(
+                affordances.contacts[0].screen_position,
+                PickTolerance::default()
+            ),
+            Some(SceneFilletHit::Contact { handle, .. })
+                if handle.parent == ComputedFilletParentIndex::First
+                    && handle.owner == fixture.owner
+        ));
+        assert!(matches!(
+            fixture.scene.resolve_fillet_hit(
+                affordances.radius_rail.screen_rail_start,
+                PickTolerance::default()
+            ),
+            Some(SceneFilletHit::Radius { owner, .. }) if owner == fixture.owner
+        ));
+        let native = fixture.scene.viewport.model_to_screen([2.0, -2.0]);
+        assert!(matches!(
+            fixture
+                .scene
+                .resolve_fillet_hit(native, PickTolerance::default()),
+            Some(SceneFilletHit::Native(Hit {
+                item: SelectionItem::Curve(span),
+                ..
+            })) if span == fixture.sources[0].span
+        ));
+
+        let retained_direction_geometry = SceneFilletActionControlGeometry {
+            model_anchor: [2.0, 0.0],
+            model_direction: [0.0, 1.0],
+            screen_start: ScreenPoint { x: 600.0, y: 350.0 },
+            screen_end: ScreenPoint { x: 600.0, y: 330.0 },
+        };
+        let alternative_model_polyline = vec![[-8.0, 6.0], [-4.0, 5.0]];
+        let alternative_geometry = SceneFilletAlternativeGeometry {
+            screen_polyline: alternative_model_polyline
+                .iter()
+                .copied()
+                .map(|point| fixture.scene.viewport.model_to_screen(point))
+                .collect(),
+            model_polyline: alternative_model_polyline,
+        };
+        let actions = vec![
+            SceneFilletAction {
+                id: SceneFilletActionId::ReverseFirstRetainedDirection,
+                owner: fixture.owner,
+                label: "Reverse first retained direction".into(),
+                availability: SceneFilletActionAvailability::Applicable,
+                control_geometry: Some(retained_direction_geometry),
+                dashed_alternative_arc: None,
+            },
+            SceneFilletAction {
+                id: SceneFilletActionId::ComplementaryArc,
+                owner: fixture.owner,
+                label: "Use complementary arc".into(),
+                availability: SceneFilletActionAvailability::Disabled {
+                    reason: "No current local alternative".into(),
+                },
+                control_geometry: None,
+                dashed_alternative_arc: Some(alternative_geometry),
+            },
+        ];
+        fixture
+            .scene
+            .set_fillet_corner_actions(fixture.owner, actions.clone())
+            .expect("valid actions");
+        assert_eq!(fixture.scene.fillet_affordances[0].actions, actions);
+        assert_eq!(
+            fixture.scene.fillet_affordances[0].actions[0].control_geometry,
+            Some(retained_direction_geometry)
+        );
+        let mut invalid_control = actions.clone();
+        invalid_control[0].control_geometry = Some(SceneFilletActionControlGeometry {
+            model_direction: [0.0, 0.0],
+            ..retained_direction_geometry
+        });
+        assert!(matches!(
+            fixture
+                .scene
+                .set_fillet_corner_actions(fixture.owner, invalid_control),
+            Err(EditorError::InvalidComputedFeatureAffordance)
+        ));
+        assert_eq!(fixture.scene.fillet_affordances[0].actions, actions);
+        let mut mismatched_alternative = actions.clone();
+        mismatched_alternative[1]
+            .dashed_alternative_arc
+            .as_mut()
+            .expect("alternative geometry")
+            .screen_polyline[0]
+            .x += 1.0;
+        assert!(matches!(
+            fixture
+                .scene
+                .set_fillet_corner_actions(fixture.owner, mismatched_alternative),
+            Err(EditorError::InvalidComputedFeatureAffordance)
+        ));
+        assert_eq!(fixture.scene.fillet_affordances[0].actions, actions);
+        let duplicate = vec![
+            SceneFilletAction {
+                id: SceneFilletActionId::LocalAlternative {
+                    first: DocumentCurveNormalSide::Left,
+                    second: DocumentCurveNormalSide::Right,
+                },
+                owner: fixture.owner,
+                label: "First".into(),
+                availability: SceneFilletActionAvailability::Applicable,
+                control_geometry: None,
+                dashed_alternative_arc: None,
+            },
+            SceneFilletAction {
+                id: SceneFilletActionId::LocalAlternative {
+                    first: DocumentCurveNormalSide::Left,
+                    second: DocumentCurveNormalSide::Right,
+                },
+                owner: fixture.owner,
+                label: "Duplicate".into(),
+                availability: SceneFilletActionAvailability::Applicable,
+                control_geometry: None,
+                dashed_alternative_arc: None,
+            },
+        ];
+        assert!(matches!(
+            fixture
+                .scene
+                .set_fillet_corner_actions(fixture.owner, duplicate),
+            Err(EditorError::InvalidComputedFeatureAffordance)
+        ));
+        assert_eq!(fixture.scene.fillet_affordances[0].actions, actions);
+        let later_owner = ComputedCornerRef {
+            feature: fixture.owner.feature,
+            corner: ComputedFeatureCornerId::from_raw(fixture.owner.corner.raw() + 1),
+        };
+        for malformed_owners in [
+            Vec::new(),
+            vec![fixture.owner, fixture.owner],
+            vec![later_owner, fixture.owner],
+            vec![later_owner],
+        ] {
+            assert!(matches!(
+                fixture.scene.attach_computed_fillet_radius_rail(
+                    fixture.owner,
+                    [2.0, 0.0],
+                    malformed_owners
+                ),
+                Err(EditorError::InvalidComputedFeatureAffordance)
+            ));
+        }
+        assert_eq!(
+            fixture.scene.fillet_affordances[0].affected_owners,
+            vec![fixture.owner]
+        );
+        assert!(matches!(
+            fixture.scene.attach_computed_fillet_radius_rail(
+                fixture.owner,
+                [0.0, 0.0],
+                vec![fixture.owner]
+            ),
+            Err(EditorError::StaleComputedFeatureSnapshot)
+        ));
+        let curve = &fixture.scene.computed_curves[0];
+        let alternative = ComputedCircularArc {
+            center: curve.center,
+            radius: curve.radius,
+            start_angle: curve.start_angle,
+            end_angle: curve.end_angle,
+            sweep: curve.sweep,
+            contacts: curve.contacts,
+        };
+        assert!(
+            fixture
+                .scene
+                .tessellate_computed_fillet_arc(&alternative, 0.25)
+                .is_ok_and(|geometry| {
+                    geometry.model_polyline.len() >= 2
+                        && geometry.model_polyline.len() == geometry.screen_polyline.len()
+                })
+        );
+        assert!(matches!(
+            fixture
+                .scene
+                .tessellate_computed_fillet_arc(&alternative, 0.0),
+            Err(EditorError::InvalidTolerance)
+        ));
+        let overflowing = ComputedCircularArc {
+            center: [f64::MAX, 0.0],
+            radius: f64::MAX,
+            start_angle: 0.0,
+            end_angle: std::f64::consts::FRAC_PI_2,
+            ..alternative
+        };
+        assert!(matches!(
+            fixture
+                .scene
+                .tessellate_computed_fillet_arc(&overflowing, 0.25),
+            Err(EditorError::StaleComputedFeatureSnapshot)
+        ));
+    }
+
+    #[test]
+    fn radius_rail_maps_radial_motion_ignores_tangential_motion_and_keeps_exact_ack() {
+        let fixture = fillet_interaction_fixture(50.0, [2.0, 0.0]);
+        let rail = fixture.scene.fillet_affordances[0].radius_rail;
+        let mut editor = ConstraintEditor::default();
+        let down = editor.pointer_down(
+            &fixture.scene,
+            pointer(
+                17,
+                rail.screen_grip.x,
+                rail.screen_grip.y,
+                Modifiers {
+                    shift: true,
+                    ..Modifiers::default()
+                },
+            ),
+        );
+        assert!(matches!(
+            down.as_slice(),
+            [EditorEffect::SelectionChanged(selection)]
+                if selection == &[SelectionItem::FeatureCorner(fixture.owner)]
+        ));
+        assert_eq!(
+            editor.active_pointer_gesture(),
+            Some(ActivePointerGesture {
+                pointer_id: 17,
+                kind: ActivePointerGestureKind::FilletRadius,
+            })
+        );
+        assert!(
+            editor
+                .pointer_move(
+                    &fixture.scene,
+                    pointer(
+                        17,
+                        rail.screen_grip.x,
+                        rail.screen_grip.y + 20.0,
+                        Modifiers::default(),
+                    ),
+                )
+                .is_empty(),
+            "motion perpendicular to dC/dr must not change radius"
+        );
+        let moved = pointer(
+            17,
+            rail.screen_grip.x + 100.0,
+            rail.screen_grip.y,
+            Modifiers::default(),
+        );
+        let radius = preview_radius(&editor.pointer_move(&fixture.scene, moved));
+        assert!((radius - 3.0).abs() < 1.0e-12);
+        assert!(editor.accept_computed_feature_radius_preview(
+            &fixture.input,
+            fixture.owner.feature,
+            radius
+        ));
+        assert!(editor.pointer_move(&fixture.scene, moved).is_empty());
+        assert!(matches!(
+            editor
+                .pointer_up(&fixture.scene, fixture.scene.design_identity, moved)
+                .as_slice(),
+            [
+                EditorEffect::CommitComputedFeatureRadius { radius: committed, .. },
+                EditorEffect::ClearComputedFeaturePreview,
+            ] if committed.to_bits() == radius.to_bits()
+        ));
+        assert_eq!(editor.active_pointer_gesture(), None);
+    }
+
+    #[test]
+    fn fillet_hover_and_pointer_down_resolve_the_same_contact_and_radius_owner() {
+        let fixture = fillet_interaction_fixture(50.0, [2.0, 0.0]);
+        let affordances = &fixture.scene.fillet_affordances[0];
+        let mut editor = ConstraintEditor::default();
+        let contact = affordances.contacts[0].screen_position;
+        assert!(matches!(
+            editor
+                .pointer_move(
+                    &fixture.scene,
+                    pointer(61, contact.x, contact.y, Modifiers::default())
+                )
+                .as_slice(),
+            [EditorEffect::HoverChanged(EditorHoverState {
+                target: Some(EditorHoverTarget::Geometry(SelectionItem::FeatureCorner(owner))),
+                ..
+            })] if *owner == fixture.owner
+        ));
+        editor.pointer_down(
+            &fixture.scene,
+            pointer(61, contact.x, contact.y, Modifiers::default()),
+        );
+        assert_eq!(
+            editor.active_pointer_gesture(),
+            Some(ActivePointerGesture {
+                pointer_id: 61,
+                kind: ActivePointerGestureKind::FilletContact,
+            })
+        );
+        editor.cancel();
+
+        let radius = affordances.radius_rail.screen_rail_start;
+        assert!(matches!(
+            editor
+                .pointer_move(
+                    &fixture.scene,
+                    pointer(62, radius.x, radius.y, Modifiers::default())
+                )
+                .as_slice(),
+            [EditorEffect::HoverChanged(EditorHoverState {
+                target: Some(EditorHoverTarget::Geometry(SelectionItem::FeatureCorner(owner))),
+                ..
+            })] if *owner == fixture.owner
+        ));
+        editor.pointer_down(
+            &fixture.scene,
+            pointer(62, radius.x, radius.y, Modifiers::default()),
+        );
+        assert_eq!(
+            editor.active_pointer_gesture(),
+            Some(ActivePointerGesture {
+                pointer_id: 62,
+                kind: ActivePointerGestureKind::FilletRadius,
+            })
+        );
+    }
+
+    #[test]
+    fn radius_release_requires_latest_current_sample_and_rejects_foreign_pointer_or_owner() {
+        let fixture = fillet_interaction_fixture(50.0, [2.0, 0.0]);
+        let rail = fixture.scene.fillet_affordances[0].radius_rail;
+        let down = pointer(
+            23,
+            rail.screen_grip.x,
+            rail.screen_grip.y,
+            Modifiers::default(),
+        );
+        let mut editor = ConstraintEditor::default();
+        editor.pointer_down(&fixture.scene, down);
+        let first_move = pointer(
+            23,
+            rail.screen_grip.x + 50.0,
+            rail.screen_grip.y,
+            Modifiers::default(),
+        );
+        let accepted = preview_radius(&editor.pointer_move(&fixture.scene, first_move));
+        assert!(editor.accept_computed_feature_radius_preview(
+            &fixture.input,
+            fixture.owner.feature,
+            accepted
+        ));
+        assert!(
+            editor
+                .pointer_down(
+                    &fixture.scene,
+                    pointer(
+                        24,
+                        rail.screen_grip.x,
+                        rail.screen_grip.y,
+                        Modifiers::default(),
+                    )
+                )
+                .is_empty()
+        );
+        assert!(
+            editor
+                .pointer_move(&fixture.scene, pointer(24, 0.0, 0.0, Modifiers::default()))
+                .is_empty()
+        );
+        assert!(
+            editor
+                .pointer_up(
+                    &fixture.scene,
+                    fixture.scene.design_identity,
+                    pointer(24, 0.0, 0.0, Modifiers::default())
+                )
+                .is_empty()
+        );
+        assert_eq!(
+            editor
+                .active_pointer_gesture()
+                .map(|gesture| gesture.pointer_id),
+            Some(23)
+        );
+
+        let invalid = pointer(
+            23,
+            rail.screen_grip.x - 300.0,
+            rail.screen_grip.y,
+            Modifiers::default(),
+        );
+        assert!(editor.pointer_move(&fixture.scene, invalid).is_empty());
+        assert_eq!(
+            editor.pointer_up(&fixture.scene, fixture.scene.design_identity, invalid),
+            vec![EditorEffect::ClearComputedFeaturePreview],
+            "an earlier accepted sample must not publish after a later invalid sample"
+        );
+
+        let foreign = ComputedCornerRef {
+            feature: fixture.owner.feature,
+            corner: ComputedFeatureCornerId::from_raw(fixture.owner.corner.raw() + 1),
+        };
+        assert!(
+            editor
+                .pointer_down_feature_radius(
+                    &fixture.scene,
+                    down,
+                    foreign,
+                    PickTolerance::default()
+                )
+                .is_none()
+        );
+        editor.pointer_down(&fixture.scene, down);
+        let moved = preview_radius(&editor.pointer_move(&fixture.scene, first_move));
+        assert!(!editor.accept_computed_feature_radius_preview(
+            &fixture.input,
+            ComputedFeatureId::from_raw(fixture.owner.feature.raw() + 1),
+            moved
+        ));
+        assert_eq!(
+            editor.cancel(),
+            vec![EditorEffect::RestoreComputedFeatureRadius {
+                expected: fixture.input,
+                feature: fixture.owner.feature,
+                radius: 2.0,
+            }]
+        );
+    }
+
+    #[test]
+    fn typed_radius_limit_is_exact_clears_on_recovery_and_cannot_publish_on_release() {
+        let fixture = fillet_interaction_fixture(50.0, [2.0, 0.0]);
+        let rail = fixture.scene.fillet_affordances[0].radius_rail;
+        let mut editor = ConstraintEditor::default();
+        let down = pointer(
+            81,
+            rail.screen_grip.x,
+            rail.screen_grip.y,
+            Modifiers::default(),
+        );
+        editor.pointer_down(&fixture.scene, down);
+        let first = pointer(
+            81,
+            rail.screen_grip.x + 50.0,
+            rail.screen_grip.y,
+            Modifiers::default(),
+        );
+        let first_radius = preview_radius(&editor.pointer_move(&fixture.scene, first));
+        let fold = ComputedFilletContinuationLimit {
+            kind: ComputedFilletContinuationLimitKind::BranchFold,
+            message: "The selected local root ends at this fold".into(),
+        };
+        assert!(editor.reject_computed_feature_radius_preview(
+            &fixture.input,
+            fixture.owner.feature,
+            first_radius,
+            fold.clone(),
+        ));
+        assert_eq!(
+            editor.computed_fillet_continuation_status(),
+            Some(&ComputedFilletContinuationStatus {
+                expected: fixture.input,
+                owner: fixture.owner,
+                sample: ComputedFilletInteractionSample::Radius(first_radius),
+                limit: fold.clone(),
+            })
+        );
+        assert!(!editor.reject_computed_feature_radius_preview(
+            &fixture.input,
+            fixture.owner.feature,
+            first_radius + 1.0,
+            fold.clone(),
+        ));
+        assert!(
+            !editor.accept_computed_feature_radius_preview(
+                &fixture.input,
+                fixture.owner.feature,
+                first_radius,
+            ),
+            "a rejected sample consumes its acknowledgement token"
+        );
+        let retried_radius = preview_radius(&editor.pointer_move(&fixture.scene, first));
+        assert_eq!(retried_radius.to_bits(), first_radius.to_bits());
+        assert!(editor.accept_computed_feature_radius_preview(
+            &fixture.input,
+            fixture.owner.feature,
+            retried_radius,
+        ));
+        assert_eq!(editor.computed_fillet_continuation_status(), None);
+
+        let second = pointer(
+            81,
+            rail.screen_grip.x + 100.0,
+            rail.screen_grip.y,
+            Modifiers::default(),
+        );
+        let second_radius = preview_radius(&editor.pointer_move(&fixture.scene, second));
+        assert!(editor.reject_computed_feature_radius_preview(
+            &fixture.input,
+            fixture.owner.feature,
+            second_radius,
+            fold,
+        ));
+        assert_eq!(
+            editor.pointer_up(&fixture.scene, fixture.scene.design_identity, second),
+            vec![EditorEffect::ClearComputedFeaturePreview],
+        );
+        assert_eq!(editor.computed_fillet_continuation_status(), None);
+    }
+
+    #[test]
+    fn scene_exposes_typed_fold_status_without_inventing_a_radius_rail() {
+        let fixture = fillet_interaction_fixture(50.0, [2.0, 0.0]);
+        let status = ComputedFilletContinuationStatus {
+            expected: fixture.input,
+            owner: fixture.owner,
+            sample: ComputedFilletInteractionSample::Radius(0.5),
+            limit: ComputedFilletContinuationLimit {
+                kind: ComputedFilletContinuationLimitKind::BranchFold,
+                message: "Radius rail is ill-conditioned at the current fold".into(),
+            },
+        };
+        let mut scene = fixture.scene.clone();
+        scene.fillet_affordances.clear();
+        scene
+            .set_computed_fillet_continuation_status(fixture.owner, Some(status.clone()))
+            .expect("top-level fold status without rail");
+        assert!(scene.fillet_affordances.is_empty());
+        assert_eq!(scene.computed_fillet_continuation_statuses, vec![status]);
+    }
+
+    #[test]
+    fn radius_projection_is_zoom_and_sample_count_invariant() {
+        fn requested_radius(pixels_per_model_unit: f64, intermediate_samples: usize) -> f64 {
+            let fixture = fillet_interaction_fixture(pixels_per_model_unit, [2.0, 0.0]);
+            let rail = fixture.scene.fillet_affordances[0].radius_rail;
+            let mut editor = ConstraintEditor::default();
+            editor.pointer_down(
+                &fixture.scene,
+                pointer(
+                    31,
+                    rail.screen_grip.x,
+                    rail.screen_grip.y,
+                    Modifiers::default(),
+                ),
+            );
+            let sample_denominator = f64::from(
+                u32::try_from(intermediate_samples + 1).expect("bounded test sample count"),
+            );
+            for sample in 1..=intermediate_samples {
+                let fraction = f64::from(u32::try_from(sample).expect("bounded test sample"))
+                    / sample_denominator;
+                let position = fixture
+                    .scene
+                    .viewport
+                    .model_to_screen([rail.model_grip[0] + 2.0 * fraction, rail.model_grip[1]]);
+                assert!(matches!(
+                    editor
+                        .pointer_move(
+                            &fixture.scene,
+                            pointer(31, position.x, position.y, Modifiers::default())
+                        )
+                        .as_slice(),
+                    [EditorEffect::PreviewComputedFeatureRadius { .. }]
+                ));
+            }
+            let final_position = fixture
+                .scene
+                .viewport
+                .model_to_screen([rail.model_grip[0] + 2.0, rail.model_grip[1]]);
+            preview_radius(&editor.pointer_move(
+                &fixture.scene,
+                pointer(31, final_position.x, final_position.y, Modifiers::default()),
+            ))
+        }
+
+        let coarse = requested_radius(25.0, 0);
+        let fine = requested_radius(25.0, 7);
+        let zoomed = requested_radius(125.0, 3);
+        assert!((coarse - 3.0).abs() < 1.0e-12);
+        assert_eq!(coarse.to_bits(), fine.to_bits());
+        assert!((coarse - zoomed).abs() < 1.0e-12);
+    }
+
+    #[test]
+    fn rebuilt_current_scene_keeps_the_exact_radius_gesture_origin() {
+        let fixture = fillet_interaction_fixture(50.0, [2.0, 0.0]);
+        let rail = fixture.scene.fillet_affordances[0].radius_rail;
+        let mut editor = ConstraintEditor::default();
+        editor.pointer_down(
+            &fixture.scene,
+            pointer(
+                71,
+                rail.screen_grip.x,
+                rail.screen_grip.y,
+                Modifiers::default(),
+            ),
+        );
+        let first = pointer(
+            71,
+            rail.screen_grip.x + 50.0,
+            rail.screen_grip.y,
+            Modifiers::default(),
+        );
+        let first_radius = preview_radius(&editor.pointer_move(&fixture.scene, first));
+        assert!(editor.accept_computed_feature_radius_preview(
+            &fixture.input,
+            fixture.owner.feature,
+            first_radius
+        ));
+
+        let mut rebuilt = rebuilt_fillet_candidate_scene(&fixture);
+        let mut foreign_origin = fixture.input;
+        foreign_origin.features.document =
+            ComputedFeatureDocumentId::from_raw(foreign_origin.features.document.raw() + 1);
+        assert!(matches!(
+            rebuilt.set_computed_fillet_interaction_origin(foreign_origin),
+            Err(EditorError::StaleComputedFeatureSnapshot)
+        ));
+        rebuilt
+            .set_computed_fillet_interaction_origin(fixture.input)
+            .expect("matching interaction origin");
+        let second = pointer(
+            71,
+            rail.screen_grip.x + 100.0,
+            rail.screen_grip.y,
+            Modifiers::default(),
+        );
+        let second_radius = preview_radius(&editor.pointer_move(&rebuilt, second));
+        assert!((second_radius - 3.0).abs() < 1.0e-12);
+        assert!(editor.accept_computed_feature_radius_preview(
+            &fixture.input,
+            fixture.owner.feature,
+            second_radius
+        ));
+        assert!(matches!(
+            editor
+                .pointer_up(&rebuilt, rebuilt.design_identity, second)
+                .as_slice(),
+            [EditorEffect::CommitComputedFeatureRadius { expected, radius, .. }, EditorEffect::ClearComputedFeaturePreview]
+                if *expected == fixture.input && radius.to_bits() == second_radius.to_bits()
+        ));
+    }
+
+    #[test]
+    fn rebuilt_current_scene_keeps_the_exact_contact_gesture_origin() {
+        let fixture = fillet_interaction_fixture(50.0, [2.0, 0.0]);
+        let handle = fixture.scene.fillet_affordances[0].contacts[0];
+        let mut editor = ConstraintEditor::default();
+        editor.pointer_down(
+            &fixture.scene,
+            pointer(
+                72,
+                handle.screen_position.x,
+                handle.screen_position.y,
+                Modifiers::default(),
+            ),
+        );
+        let first_target = fixture.scene.viewport.model_to_screen([2.0, 1.0]);
+        let first = pointer(72, first_target.x, first_target.y, Modifiers::default());
+        let first_parameter =
+            preview_contact_parameter(&editor.pointer_move(&fixture.scene, first));
+        assert!(editor.accept_computed_feature_contact_preview(
+            &fixture.input,
+            fixture.owner,
+            ComputedFilletParentIndex::First,
+            fixture.sources[0],
+            first_parameter,
+        ));
+
+        let mut rebuilt = rebuilt_fillet_candidate_scene(&fixture);
+        rebuilt
+            .set_computed_fillet_interaction_origin(fixture.input)
+            .expect("matching interaction origin");
+        let second_target = fixture.scene.viewport.model_to_screen([2.0, 2.0]);
+        let second = pointer(72, second_target.x, second_target.y, Modifiers::default());
+        let second_parameter = preview_contact_parameter(&editor.pointer_move(&rebuilt, second));
+        assert!((second_parameter - 0.75).abs() < 1.0e-12);
+        assert!(editor.accept_computed_feature_contact_preview(
+            &fixture.input,
+            fixture.owner,
+            ComputedFilletParentIndex::First,
+            fixture.sources[0],
+            second_parameter,
+        ));
+        assert!(matches!(
+            editor
+                .pointer_up(&rebuilt, rebuilt.design_identity, second)
+                .as_slice(),
+            [EditorEffect::CommitComputedFeatureContact { expected, parameter, .. }, EditorEffect::ClearComputedFeatureContactPreview]
+                if *expected == fixture.input && parameter.to_bits() == second_parameter.to_bits()
+        ));
+    }
+
+    #[test]
+    fn contact_gesture_projects_only_named_parent_and_requires_exact_ack() {
+        let fixture = fillet_interaction_fixture(50.0, [2.0, 0.0]);
+        let handle = fixture.scene.fillet_affordances[0].contacts[0];
+        let mut editor = ConstraintEditor::default();
+        assert!(matches!(
+            editor
+                .pointer_down(
+                    &fixture.scene,
+                    pointer(
+                        41,
+                        handle.screen_position.x,
+                        handle.screen_position.y,
+                        Modifiers::default(),
+                    )
+                )
+                .as_slice(),
+            [EditorEffect::SelectionChanged(selection)]
+                if selection == &[SelectionItem::FeatureCorner(fixture.owner)]
+        ));
+        assert_eq!(
+            editor.active_pointer_gesture(),
+            Some(ActivePointerGesture {
+                pointer_id: 41,
+                kind: ActivePointerGestureKind::FilletContact,
+            })
+        );
+        let target = fixture.scene.viewport.model_to_screen([2.0, 2.0]);
+        let moved = pointer(41, target.x, target.y, Modifiers::default());
+        let parameter = preview_contact_parameter(&editor.pointer_move(&fixture.scene, moved));
+        assert!((parameter - 0.75).abs() < 1.0e-12);
+        assert!(!editor.accept_computed_feature_contact_preview(
+            &fixture.input,
+            fixture.owner,
+            ComputedFilletParentIndex::Second,
+            fixture.sources[0],
+            parameter,
+        ));
+        assert!(editor.accept_computed_feature_contact_preview(
+            &fixture.input,
+            fixture.owner,
+            ComputedFilletParentIndex::First,
+            fixture.sources[0],
+            parameter,
+        ));
+        assert!(matches!(
+            editor
+                .pointer_up(&fixture.scene, fixture.scene.design_identity, moved)
+                .as_slice(),
+            [
+                EditorEffect::CommitComputedFeatureContact {
+                    owner,
+                    parent: ComputedFilletParentIndex::First,
+                    source,
+                    parameter: committed,
+                    ..
+                },
+                EditorEffect::ClearComputedFeatureContactPreview,
+            ] if *owner == fixture.owner
+                && *source == fixture.sources[0]
+                && committed.to_bits() == parameter.to_bits()
+        ));
+    }
+
+    #[test]
+    fn typed_contact_limit_requires_the_exact_named_parent_sample() {
+        let fixture = fillet_interaction_fixture(50.0, [2.0, 0.0]);
+        let handle = fixture.scene.fillet_affordances[0].contacts[0];
+        let mut editor = ConstraintEditor::default();
+        editor.pointer_down(
+            &fixture.scene,
+            pointer(
+                82,
+                handle.screen_position.x,
+                handle.screen_position.y,
+                Modifiers::default(),
+            ),
+        );
+        let target = fixture.scene.viewport.model_to_screen([2.0, 2.0]);
+        let moved = pointer(82, target.x, target.y, Modifiers::default());
+        let parameter = preview_contact_parameter(&editor.pointer_move(&fixture.scene, moved));
+        let domain = ComputedFilletContinuationLimit {
+            kind: ComputedFilletContinuationLimitKind::DomainBoundary,
+            message: "The named parent contact reached its retained domain".into(),
+        };
+        assert!(!editor.reject_computed_feature_contact_preview(
+            &fixture.input,
+            fixture.owner,
+            ComputedFilletParentIndex::Second,
+            fixture.sources[0],
+            parameter,
+            domain.clone(),
+        ));
+        assert_eq!(editor.computed_fillet_continuation_status(), None);
+        assert!(editor.reject_computed_feature_contact_preview(
+            &fixture.input,
+            fixture.owner,
+            ComputedFilletParentIndex::First,
+            fixture.sources[0],
+            parameter,
+            domain.clone(),
+        ));
+        assert_eq!(
+            editor.computed_fillet_continuation_status(),
+            Some(&ComputedFilletContinuationStatus {
+                expected: fixture.input,
+                owner: fixture.owner,
+                sample: ComputedFilletInteractionSample::Contact {
+                    parent: ComputedFilletParentIndex::First,
+                    source: fixture.sources[0],
+                    parameter,
+                },
+                limit: domain,
+            })
+        );
+        assert!(
+            !editor.accept_computed_feature_contact_preview(
+                &fixture.input,
+                fixture.owner,
+                ComputedFilletParentIndex::First,
+                fixture.sources[0],
+                parameter,
+            ),
+            "a rejected contact sample consumes its acknowledgement token"
+        );
+        let retried_parameter =
+            preview_contact_parameter(&editor.pointer_move(&fixture.scene, moved));
+        assert_eq!(retried_parameter.to_bits(), parameter.to_bits());
+        assert!(editor.accept_computed_feature_contact_preview(
+            &fixture.input,
+            fixture.owner,
+            ComputedFilletParentIndex::First,
+            fixture.sources[0],
+            retried_parameter,
+        ));
+        assert_eq!(editor.computed_fillet_continuation_status(), None);
+    }
+
+    #[test]
+    fn contact_cancel_second_pointer_and_invalid_release_are_state_neutral() {
+        let fixture = fillet_interaction_fixture(50.0, [2.0, 0.0]);
+        let handle = fixture.scene.fillet_affordances[0].contacts[1];
+        let down = pointer(
+            51,
+            handle.screen_position.x,
+            handle.screen_position.y,
+            Modifiers::default(),
+        );
+        let mut editor = ConstraintEditor::default();
+        editor.pointer_down(&fixture.scene, down);
+        assert!(
+            editor
+                .pointer_down(
+                    &fixture.scene,
+                    pointer(
+                        52,
+                        handle.screen_position.x,
+                        handle.screen_position.y,
+                        Modifiers::default(),
+                    )
+                )
+                .is_empty()
+        );
+        let target = fixture.scene.viewport.model_to_screen([2.0, 2.0]);
+        let moved = pointer(51, target.x, target.y, Modifiers::default());
+        let parameter = preview_contact_parameter(&editor.pointer_move(&fixture.scene, moved));
+        assert!(editor.accept_computed_feature_contact_preview(
+            &fixture.input,
+            fixture.owner,
+            ComputedFilletParentIndex::Second,
+            fixture.sources[1],
+            parameter,
+        ));
+        let mut stale = fixture.scene.clone();
+        stale.computed_input = None;
+        assert!(editor.pointer_move(&stale, moved).is_empty());
+        assert_eq!(
+            editor.pointer_up(&fixture.scene, fixture.scene.design_identity, moved),
+            vec![EditorEffect::ClearComputedFeatureContactPreview]
+        );
+
+        editor.pointer_down(&fixture.scene, down);
+        let parameter = preview_contact_parameter(&editor.pointer_move(&fixture.scene, moved));
+        assert!(editor.accept_computed_feature_contact_preview(
+            &fixture.input,
+            fixture.owner,
+            ComputedFilletParentIndex::Second,
+            fixture.sources[1],
+            parameter,
+        ));
+        let unsampled = fixture.scene.viewport.model_to_screen([3.0, 2.0]);
+        assert_eq!(
+            editor.pointer_up(
+                &fixture.scene,
+                fixture.scene.design_identity,
+                pointer(51, unsampled.x, unsampled.y, Modifiers::default())
+            ),
+            vec![EditorEffect::ClearComputedFeatureContactPreview],
+            "release must match the exact acknowledged contact sample"
+        );
+
+        editor.pointer_down(&fixture.scene, down);
+        assert_eq!(
+            editor.cancel(),
+            vec![EditorEffect::RestoreComputedFeatureContact {
+                expected: fixture.input,
+                owner: fixture.owner,
+                parent: ComputedFilletParentIndex::Second,
+                source: fixture.sources[1],
+                parameter: 0.5,
+            }]
+        );
+        assert_eq!(editor.active_pointer_gesture(), None);
     }
 
     fn pointer(pointer_id: u64, x: f64, y: f64, modifiers: Modifiers) -> PointerInput {
@@ -5030,6 +8079,13 @@ mod tests {
             &scene,
             pointer(9, endpoint.x, endpoint.y, Modifiers::default()),
         );
+        assert_eq!(
+            editor.active_pointer_gesture(),
+            Some(ActivePointerGesture {
+                pointer_id: 9,
+                kind: ActivePointerGestureKind::Point,
+            })
+        );
         assert!(
             editor
                 .pointer_move(
@@ -5047,6 +8103,7 @@ mod tests {
                 )
                 .is_empty()
         );
+        assert_eq!(editor.active_pointer_gesture(), None);
 
         editor.pointer_down(
             &scene,

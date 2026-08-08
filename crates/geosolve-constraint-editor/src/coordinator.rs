@@ -10,12 +10,12 @@ use geosolve_sketch::{
     DocumentConstraintDefinition, DocumentCurveContinuity, DocumentCurveCurvatureRelation,
     DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode,
     DocumentDragLocalityPlan, DocumentEdit, DocumentElementId, DocumentExternalBindingId,
-    DocumentMeasurementCatalog, DocumentMeasurementProvenance, DocumentMeasurementValue,
-    DocumentObjectId, DocumentRuntimeMap, DocumentSessionError, DocumentSolveRequest,
-    DocumentSourceId, DocumentSourceOwner, ExternalFeatureKindV1, ExternalSnapshotSet,
-    ExternalTopologyDigest, GeometryRole, OperationControl, OperationController, OperationLimits,
-    OperationOutcome, OperationReport, OperationWork, ParameterBatch,
-    RetainedSketchDocumentSession, RuntimeCurve, ScalarDomain, ScalarUnit,
+    DocumentFilletTrimEndpoint, DocumentMeasurementCatalog, DocumentMeasurementProvenance,
+    DocumentMeasurementValue, DocumentObjectId, DocumentRuntimeMap, DocumentSessionError,
+    DocumentSolveRequest, DocumentSourceId, DocumentSourceOwner, ExternalFeatureKindV1,
+    ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole, OperationControl,
+    OperationController, OperationLimits, OperationOutcome, OperationReport, OperationWork,
+    ParameterBatch, RetainedSketchDocumentSession, RuntimeCurve, ScalarDomain, ScalarUnit,
     SketchAcceptedDocumentRedundancy, SketchAcceptedStateIdentity, SketchAttemptFailure,
     SketchAttemptFailureKind, SketchAttemptIdentity, SketchBound, SketchDesignIdentity,
     SketchDocument, SketchLifecycleRevisionHighWater, SketchSolveResult, SketchSource,
@@ -23,25 +23,31 @@ use geosolve_sketch::{
 };
 use geosolve_sketch_features::{
     ComputedCornerRef, ComputedEdgeId, ComputedEdgeProvenance, ComputedEvaluationAllocator,
-    ComputedEvaluationAllocatorHighWater, ComputedFeatureAuthoringSnapshot,
-    ComputedFeatureCornerId, ComputedFeatureDocument, ComputedFeatureDocumentError,
-    ComputedFeatureDocumentIdentity, ComputedFeatureEvaluationError,
+    ComputedEvaluationAllocatorHighWater, ComputedFeatureAuthoringError,
+    ComputedFeatureAuthoringSnapshot, ComputedFeatureCornerId, ComputedFeatureDocument,
+    ComputedFeatureDocumentError, ComputedFeatureDocumentIdentity, ComputedFeatureEvaluationError,
     ComputedFeatureEvaluationPolicy, ComputedFeatureEvaluationSnapshot,
     ComputedFeatureEvaluationState, ComputedFeatureFailure, ComputedFeatureId,
     ComputedFeatureLifecycleHighWater, ComputedFeatureSnapshot, ComputedFeatureSnapshotError,
-    NativeCurveSpanSource,
+    ComputedFilletContactReseedRequest, ComputedFilletCornerAlternative,
+    ComputedFilletCornerAlternativeKind, ComputedFilletParentIndex, ContinuedComputedFilletCorner,
+    NativeCurveSpanSource, NewComputedFilletCorner,
 };
 use thiserror::Error;
 
 use crate::feature_authoring::resolve_feature_item_picks;
 use crate::{
     ActionChoice, AuthoringApplication, AuthoringOperand, AuthoringOptions, AuthoringTool,
-    ConstraintActionRequest, ConstraintEditor, ConstraintIntent, ConstraintKind,
-    ConstraintRelationChoice, ConstructionProposal, ConstructionResult, DimensionActionRequest,
-    DimensionKind, EditorEffect, EditorScene, FeatureAuthoringCandidate, FeatureAuthoringOptions,
-    FeatureAuthoringOutcome, FeatureAuthoringPick, FeatureAuthoringState, FeatureAuthoringTool,
+    ComputedFilletContinuationLimit, ComputedFilletContinuationLimitKind,
+    ComputedFilletContinuationStatus, ComputedFilletInteractionSample, ConstraintActionRequest,
+    ConstraintEditor, ConstraintIntent, ConstraintKind, ConstraintRelationChoice,
+    ConstructionProposal, ConstructionResult, DimensionActionRequest, DimensionKind, EditorEffect,
+    EditorScene, FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
+    FeatureAuthoringPick, FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringWarningKind,
     PickTolerance, PointGestureSnapshot, PointerInput, ProjectedDragRequestDisposition,
-    ProvisionalInferenceCandidate, ResolvedConstraintKind, ScreenPoint, SelectionItem,
+    ProvisionalInferenceCandidate, ResolvedConstraintKind, SceneFilletAction,
+    SceneFilletActionAvailability, SceneFilletActionControlGeometry, SceneFilletActionId,
+    ScreenPoint, SelectionItem,
 };
 
 const PROJECTED_DRAG_MAX_DOCUMENT_ITEMS: usize = 16_384;
@@ -65,6 +71,7 @@ const BOUNDED_GEOMETRY_MAX_DIAGNOSTIC_CANDIDATES: usize = 512;
 const BOUNDED_GEOMETRY_MAX_DIAGNOSTIC_TRIALS: usize = 1_024;
 const BOUNDED_GEOMETRY_MAX_PROFILE_WORK: usize = 16_384;
 const BOUNDED_GEOMETRY_MAX_MEASUREMENT_WORK: usize = 16_384;
+const FILLET_RETAINED_ARROW_LENGTH_PIXELS: f64 = 22.0;
 
 /// Shared finite work envelope for accepted preview and computed-feature
 /// geometry. The callers own distinct domain semantics; only their bounded work
@@ -160,6 +167,256 @@ fn require_current_feature_authoring_evaluation(
             Err(CoordinatorError::ComputedFeatureWorkStopped)
         }
     }
+}
+
+fn computed_fillet_limit(
+    kind: ComputedFilletContinuationLimitKind,
+    message: impl Into<String>,
+) -> ComputedFilletContinuationLimit {
+    ComputedFilletContinuationLimit {
+        kind,
+        message: message.into(),
+    }
+}
+
+fn computed_fillet_authoring_limit(
+    error: &ComputedFeatureAuthoringError,
+) -> ComputedFilletContinuationLimit {
+    let kind = match error {
+        ComputedFeatureAuthoringError::SingularParents
+        | ComputedFeatureAuthoringError::IllConditionedRadiusSensitivity => {
+            ComputedFilletContinuationLimitKind::BranchFold
+        }
+        ComputedFeatureAuthoringError::InvalidRadius
+        | ComputedFeatureAuthoringError::NoLocalRoot
+        | ComputedFeatureAuthoringError::SideCorrectionUnavailable
+        | ComputedFeatureAuthoringError::AmbiguousRetainedEndpoint
+        | ComputedFeatureAuthoringError::InvalidContactReseed => {
+            ComputedFilletContinuationLimitKind::DomainBoundary
+        }
+        ComputedFeatureAuthoringError::OffsetSingularity => {
+            ComputedFilletContinuationLimitKind::OffsetSingularity
+        }
+        ComputedFeatureAuthoringError::AmbiguousLocalRoot => {
+            ComputedFilletContinuationLimitKind::AmbiguousLocalRoot
+        }
+        ComputedFeatureAuthoringError::Evaluation(_) => {
+            ComputedFilletContinuationLimitKind::WorkStopped
+        }
+        ComputedFeatureAuthoringError::NonFinitePick
+        | ComputedFeatureAuthoringError::StalePick
+        | ComputedFeatureAuthoringError::DuplicateSource
+        | ComputedFeatureAuthoringError::UnsupportedSameCurvePair
+        | ComputedFeatureAuthoringError::UnsupportedCurvedPair
+        | ComputedFeatureAuthoringError::UnsupportedSourceTopology
+        | ComputedFeatureAuthoringError::UncertifiedCurvedBranch
+        | ComputedFeatureAuthoringError::InvalidResolvedGeometry
+        | ComputedFeatureAuthoringError::InvalidContinuationState
+        | ComputedFeatureAuthoringError::NonFiniteRadiusSensitivity => {
+            ComputedFilletContinuationLimitKind::LossOfRegularity
+        }
+        _ => ComputedFilletContinuationLimitKind::LossOfRegularity,
+    };
+    computed_fillet_limit(kind, error.to_string())
+}
+
+fn computed_fillet_failure_limit(
+    failure: &ComputedFeatureFailure,
+) -> ComputedFilletContinuationLimit {
+    let kind = match failure {
+        ComputedFeatureFailure::NoLocalRoot { .. }
+        | ComputedFeatureFailure::ConsumedSourceInterval { .. } => {
+            ComputedFilletContinuationLimitKind::DomainBoundary
+        }
+        ComputedFeatureFailure::AmbiguousLocalRoot { .. } => {
+            ComputedFilletContinuationLimitKind::AmbiguousLocalRoot
+        }
+        ComputedFeatureFailure::SingularParents { .. }
+        | ComputedFeatureFailure::UncertifiedBranch { .. } => {
+            ComputedFilletContinuationLimitKind::BranchFold
+        }
+        ComputedFeatureFailure::OffsetSingularity { .. } => {
+            ComputedFilletContinuationLimitKind::OffsetSingularity
+        }
+        ComputedFeatureFailure::MissingSource { .. }
+        | ComputedFeatureFailure::AssociationOwnedSource { .. }
+        | ComputedFeatureFailure::MultiIntervalSource { .. }
+        | ComputedFeatureFailure::InvalidParentState { .. }
+        | ComputedFeatureFailure::UnsupportedCurvedPair { .. }
+        | ComputedFeatureFailure::InvalidGeometry { .. }
+        | ComputedFeatureFailure::EndpointClaimConflict { .. } => {
+            ComputedFilletContinuationLimitKind::LossOfRegularity
+        }
+        _ => ComputedFilletContinuationLimitKind::LossOfRegularity,
+    };
+    computed_fillet_limit(kind, failure.to_string())
+}
+
+fn feature_authoring_warning_limit(
+    kind: FeatureAuthoringWarningKind,
+    message: &str,
+) -> Option<ComputedFilletContinuationLimit> {
+    let limit = match kind {
+        FeatureAuthoringWarningKind::StalePick | FeatureAuthoringWarningKind::MissingObject => {
+            return None;
+        }
+        FeatureAuthoringWarningKind::InvalidRadius
+        | FeatureAuthoringWarningKind::AmbiguousTrimSide => {
+            ComputedFilletContinuationLimitKind::DomainBoundary
+        }
+        FeatureAuthoringWarningKind::SingularFillet => {
+            ComputedFilletContinuationLimitKind::BranchFold
+        }
+        FeatureAuthoringWarningKind::AmbiguousFilletRoot => {
+            ComputedFilletContinuationLimitKind::AmbiguousLocalRoot
+        }
+        FeatureAuthoringWarningKind::WorkStopped => {
+            ComputedFilletContinuationLimitKind::WorkStopped
+        }
+        FeatureAuthoringWarningKind::WrongOperandKind
+        | FeatureAuthoringWarningKind::NonFinitePick
+        | FeatureAuthoringWarningKind::DuplicateSupport
+        | FeatureAuthoringWarningKind::IncompleteCorner
+        | FeatureAuthoringWarningKind::UnsupportedCurveFamily
+        | FeatureAuthoringWarningKind::UnsupportedFilletPair => {
+            ComputedFilletContinuationLimitKind::LossOfRegularity
+        }
+    };
+    Some(computed_fillet_limit(limit, message))
+}
+
+fn coordinator_computed_fillet_limit(
+    error: &CoordinatorError,
+) -> Option<ComputedFilletContinuationLimit> {
+    match error {
+        CoordinatorError::ComputedFeatureAuthoring(error) => {
+            Some(computed_fillet_authoring_limit(error))
+        }
+        CoordinatorError::FeatureAuthoringPreviewRejected(failure) => {
+            Some(computed_fillet_failure_limit(failure))
+        }
+        CoordinatorError::ComputedFeatureWorkStopped
+        | CoordinatorError::ComputedFeatureEvaluation(_) => Some(computed_fillet_limit(
+            ComputedFilletContinuationLimitKind::WorkStopped,
+            error.to_string(),
+        )),
+        _ => None,
+    }
+}
+
+fn computed_fillet_alternative_action_id(
+    kind: ComputedFilletCornerAlternativeKind,
+) -> Option<SceneFilletActionId> {
+    match kind {
+        ComputedFilletCornerAlternativeKind::Current => None,
+        ComputedFilletCornerAlternativeKind::NormalSides { first, second } => {
+            Some(SceneFilletActionId::LocalAlternative { first, second })
+        }
+        ComputedFilletCornerAlternativeKind::RetainedEndpoint { parent, .. } => {
+            Some(match parent {
+                ComputedFilletParentIndex::First => {
+                    SceneFilletActionId::ReverseFirstRetainedDirection
+                }
+                ComputedFilletParentIndex::Second => {
+                    SceneFilletActionId::ReverseSecondRetainedDirection
+                }
+            })
+        }
+        ComputedFilletCornerAlternativeKind::ComplementaryArc => {
+            Some(SceneFilletActionId::ComplementaryArc)
+        }
+    }
+}
+
+fn select_computed_fillet_alternative(
+    alternatives: &[ComputedFilletCornerAlternative],
+    requested: SceneFilletActionId,
+) -> Option<&ComputedFilletCornerAlternative> {
+    alternatives.iter().find(|alternative| {
+        computed_fillet_alternative_action_id(alternative.kind) == Some(requested)
+    })
+}
+
+fn computed_fillet_retained_control_geometry(
+    scene: &EditorScene,
+    snapshot: &ComputedFeatureAuthoringSnapshot,
+    continued: &ContinuedComputedFilletCorner,
+    parent: ComputedFilletParentIndex,
+) -> Option<SceneFilletActionControlGeometry> {
+    let (intent, contact) = match parent {
+        ComputedFilletParentIndex::First => (continued.corner.first, continued.arc.contacts[0]),
+        ComputedFilletParentIndex::Second => (continued.corner.second, continued.arc.contacts[1]),
+    };
+    let jet = snapshot
+        .sketch_document()
+        .evaluate_curve_jet(intent.source.span, contact.total_parameter)
+        .ok()?;
+    let tangent = [jet.first_derivative.x, jet.first_derivative.y];
+    let tangent_norm = tangent[0].hypot(tangent[1]);
+    if !tangent_norm.is_finite() || tangent_norm <= 0.0 {
+        return None;
+    }
+    let sign = match intent.retained_endpoint {
+        DocumentFilletTrimEndpoint::Start => -1.0,
+        DocumentFilletTrimEndpoint::End => 1.0,
+    };
+    let model_direction = [
+        sign * tangent[0] / tangent_norm,
+        sign * tangent[1] / tangent_norm,
+    ];
+    let model_length = FILLET_RETAINED_ARROW_LENGTH_PIXELS / scene.viewport.pixels_per_model_unit;
+    let model_end = [
+        model_length.mul_add(model_direction[0], contact.position[0]),
+        model_length.mul_add(model_direction[1], contact.position[1]),
+    ];
+    Some(SceneFilletActionControlGeometry {
+        model_anchor: contact.position,
+        model_direction,
+        screen_start: scene.viewport.model_to_screen(contact.position),
+        screen_end: scene.viewport.model_to_screen(model_end),
+    })
+}
+
+fn computed_fillet_alternative_control_geometry(
+    scene: &EditorScene,
+    arc: &geosolve_sketch_features::ComputedCircularArc,
+) -> Option<SceneFilletActionControlGeometry> {
+    const CONTROL_LENGTH_PIXELS: f64 = 22.0;
+
+    let tau = std::f64::consts::TAU;
+    let delta = match arc.sweep {
+        geosolve_sketch::DocumentArcSweep::CounterClockwise => {
+            (arc.end_angle - arc.start_angle).rem_euclid(tau)
+        }
+        geosolve_sketch::DocumentArcSweep::Clockwise => {
+            -(arc.start_angle - arc.end_angle).rem_euclid(tau)
+        }
+    };
+    if !arc.center.into_iter().all(f64::is_finite)
+        || !arc.radius.is_finite()
+        || arc.radius <= 0.0
+        || !delta.is_finite()
+        || delta.abs() <= f64::EPSILON
+    {
+        return None;
+    }
+    let middle_angle = (0.5 * delta).mul_add(1.0, arc.start_angle);
+    let model_direction = [middle_angle.cos(), middle_angle.sin()];
+    let model_anchor = [
+        arc.radius.mul_add(model_direction[0], arc.center[0]),
+        arc.radius.mul_add(model_direction[1], arc.center[1]),
+    ];
+    let model_length = CONTROL_LENGTH_PIXELS / scene.viewport.pixels_per_model_unit;
+    let model_end = [
+        model_length.mul_add(model_direction[0], model_anchor[0]),
+        model_length.mul_add(model_direction[1], model_anchor[1]),
+    ];
+    Some(SceneFilletActionControlGeometry {
+        model_anchor,
+        model_direction,
+        screen_start: scene.viewport.model_to_screen(model_anchor),
+        screen_end: scene.viewport.model_to_screen(model_end),
+    })
 }
 
 const fn merge_feature_lifecycle_high_water(
@@ -697,6 +954,10 @@ pub struct FeatureAuthoringPreview {
     /// Exact pointer-down state retained for transactional gesture cancellation.
     /// This is one boxed checkpoint, not an unbounded preview history.
     radius_origin: Box<FeatureAuthoringRadiusOrigin>,
+    /// Collector state paired with `radius_origin` only while a pointer owns a
+    /// live authoring-radius gesture.
+    radius_origin_state: Option<Box<FeatureAuthoringState>>,
+    accepted_contact_sample: Option<ComputedFilletEditSample>,
 }
 
 #[derive(Clone, Debug)]
@@ -851,6 +1112,14 @@ pub enum ReplayAction {
         feature: ComputedFeatureId,
         radius: f64,
     },
+    /// Absolute branch-preserving whole-set replacement. This is the durable
+    /// replay form for radius, contact and explicit branch manipulation.
+    SetComputedFilletConfiguration {
+        expected: ComputedFeatureDocumentIdentity,
+        feature: ComputedFeatureId,
+        radius: f64,
+        corners: Vec<(ComputedFeatureCornerId, NewComputedFilletCorner)>,
+    },
     RemoveComputedFeature {
         expected: ComputedFeatureDocumentIdentity,
         feature: ComputedFeatureId,
@@ -946,6 +1215,8 @@ pub enum CoordinatorError {
     ComputedFeatureEvaluation(#[from] ComputedFeatureEvaluationError),
     #[error(transparent)]
     ComputedFeatureSnapshot(#[from] ComputedFeatureSnapshotError),
+    #[error(transparent)]
+    ComputedFeatureAuthoring(#[from] ComputedFeatureAuthoringError),
     #[error("selected operands cannot construct the requested dimension")]
     IncompatibleDimension,
     #[error("invalid typed action input: {0}")]
@@ -982,6 +1253,10 @@ pub enum CoordinatorError {
     FeatureAuthoringPreviewMismatch,
     #[error("computed-feature authoring preview identity space is exhausted")]
     FeatureAuthoringPreviewTokenExhausted,
+    #[error("computed-feature authoring transition was rejected: {0}")]
+    FeatureAuthoringTransitionRejected(String),
+    #[error("computed Fillet action is unavailable: {0}")]
+    ComputedFilletActionUnavailable(String),
 }
 
 /// Owner of retained lifecycle, interaction selection, restore history, and transcript.
@@ -993,6 +1268,7 @@ pub struct RetainedEditorCoordinator {
     computed_input: Option<geosolve_sketch_features::ComputedFeatureEvaluationInput>,
     computed_preview_snapshot: Option<ComputedFeatureSnapshot>,
     computed_preview_input: Option<geosolve_sketch_features::ComputedFeatureEvaluationInput>,
+    computed_fillet_preview: Option<ComputedFilletEditPreview>,
     computed_evaluation_allocator: ComputedEvaluationAllocator,
     computed_evaluation_problem: Option<String>,
     computed_preview_evaluation_problem: Option<String>,
@@ -1006,6 +1282,37 @@ pub struct RetainedEditorCoordinator {
     projected_drag_work: Option<ProjectedDragWorkEvidence>,
     feature_authoring_preview: Option<FeatureAuthoringPreview>,
     next_feature_authoring_preview_token: u64,
+}
+
+/// Exact non-persistent whole-feature candidate accepted during one published
+/// Fillet manipulation. Publication consumes this value; requested-but-invalid
+/// pointer samples can never be reconstructed at release time.
+#[derive(Clone, Debug)]
+struct ComputedFilletEditPreview {
+    origin: geosolve_sketch_features::ComputedFeatureEvaluationInput,
+    feature: ComputedFeatureId,
+    radius: f64,
+    sample: ComputedFilletEditSample,
+    corners: Vec<(ComputedFeatureCornerId, NewComputedFilletCorner)>,
+    features: ComputedFeatureDocument,
+    snapshot: ComputedFeatureSnapshot,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ComputedFilletEditSample {
+    Radius(f64),
+    Contact {
+        owner: ComputedCornerRef,
+        parent: ComputedFilletParentIndex,
+        source: NativeCurveSpanSource,
+        parameter: f64,
+    },
+}
+
+struct ComputedFilletAlternatives {
+    radius: f64,
+    corners: Vec<(ComputedFeatureCornerId, NewComputedFilletCorner)>,
+    values: Vec<ComputedFilletCornerAlternative>,
 }
 
 #[derive(Clone, Debug)]
@@ -1096,6 +1403,7 @@ impl RetainedEditorCoordinator {
             computed_input: None,
             computed_preview_snapshot: None,
             computed_preview_input: None,
+            computed_fillet_preview: None,
             computed_evaluation_allocator,
             computed_evaluation_problem: None,
             computed_preview_evaluation_problem: None,
@@ -1180,6 +1488,268 @@ impl RetainedEditorCoordinator {
             (None, Some(_)) => ComputedSceneState::Withheld,
             (None | Some(_), None) => ComputedSceneState::Absent,
         }
+    }
+
+    /// Adds exact branch-preserving Fillet manipulation affordances to an
+    /// already constructed composite scene.
+    ///
+    /// Radius sensitivity and all local action applicability come from the
+    /// feature domain. The scene derives only screen-space rails, handles and
+    /// dashed arc polylines. Corners near a fold remain renderable, but no
+    /// unvalidated radius rail is invented for them.
+    ///
+    /// `action_items` controls the comparatively expensive bounded continuation
+    /// and alternative enumeration. Radius/contact handles, actions and ghosts
+    /// are attached only for selected corners, selected feature sets or the
+    /// current grouped-authoring candidate.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale scene provenance or malformed presentation geometry.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one auditable scene boundary joins exact feature intent, validated rails and action DTOs"
+    )]
+    pub fn populate_computed_fillet_affordances(
+        &self,
+        scene: &mut EditorScene,
+        action_items: &[SelectionItem],
+        chord_tolerance_pixels: f64,
+    ) -> Result<(), CoordinatorError> {
+        let expected = scene
+            .computed_input
+            .ok_or(CoordinatorError::StaleComputedFeatureCandidate)?;
+        if matches!(
+            self.editor.active_pointer_gesture(),
+            Some(crate::ActivePointerGesture {
+                kind: crate::ActivePointerGestureKind::FilletRadius
+                    | crate::ActivePointerGestureKind::FilletContact,
+                ..
+            })
+        ) {
+            let interaction_origin = self
+                .computed_fillet_preview
+                .as_ref()
+                .map(|preview| preview.origin)
+                .or_else(|| {
+                    self.feature_authoring_preview
+                        .as_ref()
+                        .filter(|preview| preview.radius_origin_state.is_some())
+                        .map(|preview| preview.radius_origin.metadata.input)
+                });
+            if let Some(origin) = interaction_origin
+                && origin != expected
+            {
+                scene.set_computed_fillet_interaction_origin(origin)?;
+            }
+        }
+        let features = self
+            .computed_feature_document_for_input(&expected)
+            .ok_or(CoordinatorError::StaleComputedFeatureCandidate)?;
+        let source = self.visible_preview_session().unwrap_or(&self.session);
+        let snapshot = ComputedFeatureAuthoringSnapshot::capture(source)?;
+        let active_continuation_status = self.editor.computed_fillet_continuation_status().cloned();
+        let owners = scene
+            .computed_curves
+            .iter()
+            .map(|curve| curve.owner)
+            .collect::<Vec<_>>();
+        for owner in owners {
+            let selected = action_items.iter().any(|item| {
+                matches!(item, SelectionItem::FeatureCorner(current) if *current == owner)
+                    || matches!(item, SelectionItem::Feature(current) if *current == owner.feature)
+            });
+            let authoring = self
+                .feature_authoring_preview
+                .as_ref()
+                .is_some_and(|preview| {
+                    preview.snapshot.input() == expected && preview.corner_index(owner).is_some()
+                });
+            if !selected && !authoring {
+                continue;
+            }
+            let Some(feature) = features.feature(owner.feature) else {
+                return Err(CoordinatorError::StaleComputedFeatureCandidate);
+            };
+            let geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) =
+                &feature.definition;
+            let Some(corner) = fillet
+                .corners
+                .iter()
+                .find(|corner| corner.id == owner.corner)
+            else {
+                return Err(CoordinatorError::StaleComputedFeatureCandidate);
+            };
+            let continuation = match snapshot.continue_fillet_corner(
+                corner.without_id(),
+                fillet.radius,
+                fillet.radius,
+                ComputedFeatureEvaluationPolicy::default(),
+                bounded_geometry_control(),
+            ) {
+                Ok(OperationOutcome::Completed { value, .. }) => value,
+                Ok(stopped) => {
+                    let status = active_continuation_status
+                        .as_ref()
+                        .filter(|status| status.owner == owner)
+                        .cloned()
+                        .unwrap_or_else(|| ComputedFilletContinuationStatus {
+                            expected,
+                            owner,
+                            sample: ComputedFilletInteractionSample::Radius(fillet.radius),
+                            limit: computed_fillet_limit(
+                                ComputedFilletContinuationLimitKind::WorkStopped,
+                                format!(
+                                    "Fillet continuation stopped before a current rail: {:?}",
+                                    stopped.report().stopping_reason
+                                ),
+                            ),
+                        });
+                    scene.set_computed_fillet_continuation_status(owner, Some(status))?;
+                    continue;
+                }
+                Err(error) => {
+                    let status = active_continuation_status
+                        .as_ref()
+                        .filter(|status| status.owner == owner)
+                        .cloned()
+                        .unwrap_or_else(|| ComputedFilletContinuationStatus {
+                            expected,
+                            owner,
+                            sample: ComputedFilletInteractionSample::Radius(fillet.radius),
+                            limit: computed_fillet_authoring_limit(&error),
+                        });
+                    scene.set_computed_fillet_continuation_status(owner, Some(status))?;
+                    continue;
+                }
+            };
+            let mut affected_owners = fillet
+                .corners
+                .iter()
+                .map(|corner| ComputedCornerRef {
+                    feature: owner.feature,
+                    corner: corner.id,
+                })
+                .collect::<Vec<_>>();
+            affected_owners.sort_unstable();
+            scene.attach_computed_fillet_radius_rail(
+                owner,
+                continuation.sensitivity.center_derivative,
+                affected_owners,
+            )?;
+            if let Some(status) = active_continuation_status
+                .as_ref()
+                .filter(|status| status.owner == owner)
+                .cloned()
+            {
+                scene.set_computed_fillet_continuation_status(owner, Some(status))?;
+            }
+            let actions_requested = selected || authoring;
+            if !actions_requested {
+                continue;
+            }
+            let alternatives = match snapshot.local_fillet_corner_alternatives(
+                corner.without_id(),
+                fillet.radius,
+                ComputedFeatureEvaluationPolicy::default(),
+                computed_feature_authoring_control(),
+            ) {
+                Ok(OperationOutcome::Completed { value, .. }) => value,
+                Ok(_) | Err(_) => Vec::new(),
+            };
+            let unavailable = SceneFilletActionAvailability::Disabled {
+                reason: "Unavailable on the current absolute branch".into(),
+            };
+            let first_retained_control = computed_fillet_retained_control_geometry(
+                scene,
+                &snapshot,
+                &continuation,
+                ComputedFilletParentIndex::First,
+            );
+            let second_retained_control = computed_fillet_retained_control_geometry(
+                scene,
+                &snapshot,
+                &continuation,
+                ComputedFilletParentIndex::Second,
+            );
+            let mut actions = vec![
+                SceneFilletAction {
+                    id: SceneFilletActionId::ReverseFirstRetainedDirection,
+                    owner,
+                    label: "Reverse first retained direction".into(),
+                    availability: unavailable.clone(),
+                    control_geometry: first_retained_control,
+                    dashed_alternative_arc: None,
+                },
+                SceneFilletAction {
+                    id: SceneFilletActionId::ReverseSecondRetainedDirection,
+                    owner,
+                    label: "Reverse second retained direction".into(),
+                    availability: unavailable.clone(),
+                    control_geometry: second_retained_control,
+                    dashed_alternative_arc: None,
+                },
+                SceneFilletAction {
+                    id: SceneFilletActionId::ComplementaryArc,
+                    owner,
+                    label: "Use complementary arc".into(),
+                    availability: unavailable,
+                    control_geometry: None,
+                    dashed_alternative_arc: None,
+                },
+            ];
+            for alternative in alternatives {
+                let Some(id) = computed_fillet_alternative_action_id(alternative.kind) else {
+                    continue;
+                };
+                let control_geometry =
+                    computed_fillet_alternative_control_geometry(scene, &alternative.resolved.arc);
+                let polyline = scene.tessellate_computed_fillet_arc(
+                    &alternative.resolved.arc,
+                    chord_tolerance_pixels,
+                )?;
+                if let Some(action) = actions.iter_mut().find(|action| action.id == id) {
+                    action.availability = SceneFilletActionAvailability::Applicable;
+                    if action.control_geometry.is_none() {
+                        action.control_geometry = control_geometry;
+                    }
+                    action.dashed_alternative_arc = Some(polyline);
+                } else {
+                    let SceneFilletActionId::LocalAlternative { first, second } = id else {
+                        return Err(CoordinatorError::StaleComputedFeatureCandidate);
+                    };
+                    actions.push(SceneFilletAction {
+                        id,
+                        owner,
+                        label: format!("Use local side branch {first:?}/{second:?}"),
+                        availability: SceneFilletActionAvailability::Applicable,
+                        control_geometry,
+                        dashed_alternative_arc: Some(polyline),
+                    });
+                }
+            }
+            scene.set_fillet_corner_actions(owner, actions)?;
+        }
+        Ok(())
+    }
+
+    fn computed_feature_document_for_input(
+        &self,
+        input: &geosolve_sketch_features::ComputedFeatureEvaluationInput,
+    ) -> Option<&ComputedFeatureDocument> {
+        if let Some(preview) = self.feature_authoring_preview.as_ref()
+            && preview.snapshot.input() == *input
+            && preview.features.identity() == input.features
+        {
+            return Some(&preview.features);
+        }
+        if let Some(preview) = self.computed_fillet_preview.as_ref()
+            && preview.snapshot.input() == *input
+            && preview.features.identity() == input.features
+        {
+            return Some(&preview.features);
+        }
+        (self.features.identity() == input.features).then_some(&self.features)
     }
 
     /// Fail-closed production/profile presentation boundary for M66.
@@ -1421,10 +1991,27 @@ impl RetainedEditorCoordinator {
             {
                 return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
             }
+            if self.editor.active_pointer_gesture().is_some() {
+                return Ok(FeatureAuthoringPointerDownOutcome::RadiusGesture {
+                    effects: Vec::new(),
+                });
+            }
             let effects = self
                 .editor
                 .pointer_down_feature_radius(scene, input, owner, tolerance)
                 .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
+            let preview = self
+                .feature_authoring_preview
+                .as_mut()
+                .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
+            *preview.radius_origin = FeatureAuthoringRadiusOrigin {
+                candidate: preview.candidate.clone(),
+                features: preview.features.clone(),
+                snapshot: preview.snapshot.clone(),
+                metadata: preview.metadata.clone(),
+            };
+            preview.radius_origin_state = Some(Box::new(state.clone()));
+            preview.accepted_contact_sample = None;
             return Ok(FeatureAuthoringPointerDownOutcome::RadiusGesture { effects });
         }
 
@@ -1476,6 +2063,38 @@ impl RetainedEditorCoordinator {
         let snapshot = self.feature_authoring_snapshot()?;
         let mut trial = state.clone();
         let outcome = trial.set_options_with_corner(&snapshot, options, selected_corner);
+        self.finish_feature_authoring_transaction(state, trial, outcome, label.into())
+    }
+
+    /// Applies only the shared numeric Fillet radius through absolute
+    /// same-branch continuation. A missing host value retains the collector's
+    /// initialized/remembered radius.
+    ///
+    /// This is the M68 numeric counterpart to radius dragging. It deliberately
+    /// bypasses relative flip booleans so an explicit branch action cannot be
+    /// undone by reconstructing completed corners from their old picks.
+    ///
+    /// # Errors
+    ///
+    /// Rejects an invalid radius, stale accepted input, stopped absolute
+    /// continuation or non-current whole-feature preview state-neutrally.
+    pub fn transact_feature_authoring_radius(
+        &mut self,
+        state: &mut FeatureAuthoringState,
+        radius: Option<f64>,
+        label: impl Into<String>,
+    ) -> Result<FeatureAuthoringTransaction, CoordinatorError> {
+        let radius = radius
+            .or(state.options().fillet_radius)
+            .filter(|value| value.is_finite() && *value > 0.0)
+            .ok_or_else(|| {
+                CoordinatorError::FeatureAuthoringTransitionRejected(
+                    "Fillet radius must be finite and positive".into(),
+                )
+            })?;
+        let snapshot = self.feature_authoring_snapshot()?;
+        let mut trial = state.clone();
+        let outcome = trial.continue_radius_absolute(&snapshot, radius);
         self.finish_feature_authoring_transaction(state, trial, outcome, label.into())
     }
 
@@ -1598,6 +2217,8 @@ impl RetainedEditorCoordinator {
             metadata: metadata.clone(),
             label,
             radius_origin,
+            radius_origin_state: None,
+            accepted_contact_sample: None,
         });
         Ok(metadata)
     }
@@ -1641,6 +2262,8 @@ impl RetainedEditorCoordinator {
         }
         let expected = current.expected;
         let radius_origin = current.radius_origin.clone();
+        let radius_origin_state = current.radius_origin_state.clone();
+        let accepted_contact_sample = current.accepted_contact_sample;
         let previous_feature = current.metadata.feature;
         let label = current.label.clone();
         let mut features = self.features.clone();
@@ -1690,6 +2313,8 @@ impl RetainedEditorCoordinator {
             metadata: metadata.clone(),
             label,
             radius_origin,
+            radius_origin_state,
+            accepted_contact_sample,
         });
         Ok(metadata)
     }
@@ -1746,6 +2371,345 @@ impl RetainedEditorCoordinator {
         Ok(())
     }
 
+    /// Applies one editor-emitted radius effect to the active grouped Fillet
+    /// collector and its exact whole-feature preview as one headless
+    /// transaction.
+    ///
+    /// Presentation adapters must not synchronize authoring options or rebuild
+    /// corners themselves. A preview effect advances completed corners by
+    /// absolute same-branch continuation, evaluates the whole temporary set,
+    /// and acknowledges the exact sample to the pointer state only after both
+    /// layers are current. Commit merely accepts that already-held sample;
+    /// restore reinstates the exact pointer-down collector and preview.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale ownership, invalid/folded continuation, bounded work or a
+    /// non-current whole-feature preview without changing the supplied state or
+    /// the previously held exact preview.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the closed authoring interaction transition table keeps preview, ack, commit and rollback auditable together"
+    )]
+    pub fn apply_feature_authoring_editor_effect(
+        &mut self,
+        state: &mut FeatureAuthoringState,
+        effect: &EditorEffect,
+    ) -> Result<(), CoordinatorError> {
+        match effect {
+            EditorEffect::PreviewComputedFeatureRadius {
+                expected,
+                feature,
+                radius,
+            } => {
+                let held = self
+                    .feature_authoring_preview
+                    .as_ref()
+                    .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
+                if held.metadata.feature != *feature || !held.accepts_radius_input(expected) {
+                    return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+                }
+                let mut trial = held
+                    .radius_origin_state
+                    .as_deref()
+                    .cloned()
+                    .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
+                let snapshot = self.feature_authoring_snapshot()?;
+                let outcome = trial.continue_radius_absolute(&snapshot, *radius);
+                let candidate = match outcome {
+                    FeatureAuthoringOutcome::PreviewRequested { candidate, .. } => candidate,
+                    FeatureAuthoringOutcome::Warning(warning) => {
+                        if let Some(limit) =
+                            feature_authoring_warning_limit(warning.kind, &warning.message)
+                        {
+                            self.editor.reject_computed_feature_radius_preview(
+                                expected, *feature, *radius, limit,
+                            );
+                        }
+                        return Err(CoordinatorError::FeatureAuthoringTransitionRejected(
+                            warning.message,
+                        ));
+                    }
+                    FeatureAuthoringOutcome::ModeEntered(_)
+                    | FeatureAuthoringOutcome::NoNativeHit(_)
+                    | FeatureAuthoringOutcome::Collecting { .. }
+                    | FeatureAuthoringOutcome::Apply(_)
+                    | FeatureAuthoringOutcome::CandidateCleared(_)
+                    | FeatureAuthoringOutcome::ModeExited
+                    | FeatureAuthoringOutcome::Inactive => {
+                        return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+                    }
+                };
+                let prior_preview = self.feature_authoring_preview.clone();
+                if let Err(error) = self.refresh_feature_authoring_preview(*expected, &candidate) {
+                    if let Some(limit) = coordinator_computed_fillet_limit(&error) {
+                        self.editor.reject_computed_feature_radius_preview(
+                            expected, *feature, *radius, limit,
+                        );
+                    }
+                    return Err(error);
+                }
+                if let Some(preview) = self.feature_authoring_preview.as_mut() {
+                    preview.accepted_contact_sample = None;
+                }
+                if !self
+                    .editor
+                    .accept_computed_feature_radius_preview(expected, *feature, *radius)
+                {
+                    self.feature_authoring_preview = prior_preview;
+                    return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+                }
+                *state = trial;
+                Ok(())
+            }
+            EditorEffect::CommitComputedFeatureRadius {
+                expected,
+                feature,
+                radius,
+            } => {
+                let preview = self
+                    .feature_authoring_preview
+                    .as_ref()
+                    .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
+                if preview.metadata.feature != *feature
+                    || !preview.accepts_radius_input(expected)
+                    || preview.candidate.radius().to_bits() != radius.to_bits()
+                {
+                    return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+                }
+                self.accept_feature_authoring_radius_preview(*expected, *feature)?;
+                if let Some(preview) = self.feature_authoring_preview.as_mut() {
+                    preview.radius_origin_state = None;
+                }
+                Ok(())
+            }
+            EditorEffect::RestoreComputedFeatureRadius {
+                expected, feature, ..
+            } => {
+                let origin_state = self
+                    .feature_authoring_preview
+                    .as_ref()
+                    .and_then(|preview| preview.radius_origin_state.clone())
+                    .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
+                self.restore_feature_authoring_radius_preview(*expected, *feature)?;
+                *state = *origin_state;
+                if let Some(preview) = self.feature_authoring_preview.as_mut() {
+                    preview.radius_origin_state = None;
+                }
+                Ok(())
+            }
+            EditorEffect::ClearComputedFeaturePreview => {
+                if let Some(preview) = self.feature_authoring_preview.as_mut() {
+                    preview.radius_origin_state = None;
+                }
+                Ok(())
+            }
+            EditorEffect::PreviewComputedFeatureContact {
+                expected,
+                owner,
+                parent,
+                source,
+                parameter,
+            } => {
+                let (corner_index, prior, radius, mut trial) = {
+                    let held = self
+                        .feature_authoring_preview
+                        .as_ref()
+                        .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
+                    if held.metadata.feature != owner.feature
+                        || !held.accepts_radius_input(expected)
+                    {
+                        return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+                    }
+                    let corner_index = held
+                        .corner_index(*owner)
+                        .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
+                    let prior = held
+                        .radius_origin
+                        .candidate
+                        .corners()
+                        .get(corner_index)
+                        .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?
+                        .corner;
+                    let radius = held.radius_origin.candidate.radius();
+                    let trial = held
+                        .radius_origin_state
+                        .as_deref()
+                        .cloned()
+                        .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
+                    (corner_index, prior, radius, trial)
+                };
+                let parent_source = match parent {
+                    ComputedFilletParentIndex::First => prior.first.source,
+                    ComputedFilletParentIndex::Second => prior.second.source,
+                };
+                if parent_source != *source || !parameter.is_finite() {
+                    return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+                }
+                let snapshot = self.feature_authoring_snapshot()?;
+                let outcome = match snapshot.reseed_fillet_contact(
+                    ComputedFilletContactReseedRequest {
+                        prior,
+                        parent: *parent,
+                        parameter: *parameter,
+                    },
+                    radius,
+                    ComputedFeatureEvaluationPolicy::default(),
+                    computed_feature_authoring_control(),
+                ) {
+                    Ok(outcome) => outcome,
+                    Err(error) => {
+                        self.editor.reject_computed_feature_contact_preview(
+                            expected,
+                            *owner,
+                            *parent,
+                            *source,
+                            *parameter,
+                            computed_fillet_authoring_limit(&error),
+                        );
+                        return Err(error.into());
+                    }
+                };
+                let OperationOutcome::Completed {
+                    value: continued, ..
+                } = outcome
+                else {
+                    self.editor.reject_computed_feature_contact_preview(
+                        expected,
+                        *owner,
+                        *parent,
+                        *source,
+                        *parameter,
+                        computed_fillet_limit(
+                            ComputedFilletContinuationLimitKind::WorkStopped,
+                            "Fillet contact continuation exhausted its bounded work envelope",
+                        ),
+                    );
+                    return Err(CoordinatorError::ComputedFeatureWorkStopped);
+                };
+                let outcome = trial.replace_corner_absolute(&snapshot, corner_index, continued);
+                let candidate = match outcome {
+                    FeatureAuthoringOutcome::PreviewRequested { candidate, .. } => candidate,
+                    FeatureAuthoringOutcome::Warning(warning) => {
+                        if let Some(limit) =
+                            feature_authoring_warning_limit(warning.kind, &warning.message)
+                        {
+                            self.editor.reject_computed_feature_contact_preview(
+                                expected, *owner, *parent, *source, *parameter, limit,
+                            );
+                        }
+                        return Err(CoordinatorError::FeatureAuthoringTransitionRejected(
+                            warning.message,
+                        ));
+                    }
+                    FeatureAuthoringOutcome::ModeEntered(_)
+                    | FeatureAuthoringOutcome::NoNativeHit(_)
+                    | FeatureAuthoringOutcome::Collecting { .. }
+                    | FeatureAuthoringOutcome::Apply(_)
+                    | FeatureAuthoringOutcome::CandidateCleared(_)
+                    | FeatureAuthoringOutcome::ModeExited
+                    | FeatureAuthoringOutcome::Inactive => {
+                        return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+                    }
+                };
+                let prior_preview = self.feature_authoring_preview.clone();
+                if let Err(error) = self.refresh_feature_authoring_preview(*expected, &candidate) {
+                    if let Some(limit) = coordinator_computed_fillet_limit(&error) {
+                        self.editor.reject_computed_feature_contact_preview(
+                            expected, *owner, *parent, *source, *parameter, limit,
+                        );
+                    }
+                    return Err(error);
+                }
+                let sample = ComputedFilletEditSample::Contact {
+                    owner: *owner,
+                    parent: *parent,
+                    source: *source,
+                    parameter: *parameter,
+                };
+                if let Some(preview) = self.feature_authoring_preview.as_mut() {
+                    preview.accepted_contact_sample = Some(sample);
+                }
+                if !self.editor.accept_computed_feature_contact_preview(
+                    expected, *owner, *parent, *source, *parameter,
+                ) {
+                    self.feature_authoring_preview = prior_preview;
+                    return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+                }
+                *state = trial;
+                Ok(())
+            }
+            EditorEffect::CommitComputedFeatureContact {
+                expected,
+                owner,
+                parent,
+                source,
+                parameter,
+            } => {
+                let sample = ComputedFilletEditSample::Contact {
+                    owner: *owner,
+                    parent: *parent,
+                    source: *source,
+                    parameter: *parameter,
+                };
+                let preview = self
+                    .feature_authoring_preview
+                    .as_ref()
+                    .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
+                if preview.metadata.feature != owner.feature
+                    || !preview.accepts_radius_input(expected)
+                    || preview.accepted_contact_sample != Some(sample)
+                {
+                    return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+                }
+                if let Some(preview) = self.feature_authoring_preview.as_mut() {
+                    *preview.radius_origin = FeatureAuthoringRadiusOrigin {
+                        candidate: preview.candidate.clone(),
+                        features: preview.features.clone(),
+                        snapshot: preview.snapshot.clone(),
+                        metadata: preview.metadata.clone(),
+                    };
+                    preview.radius_origin_state = None;
+                    preview.accepted_contact_sample = None;
+                }
+                Ok(())
+            }
+            EditorEffect::RestoreComputedFeatureContact {
+                expected, owner, ..
+            } => {
+                let origin_state = self
+                    .feature_authoring_preview
+                    .as_ref()
+                    .and_then(|preview| preview.radius_origin_state.clone())
+                    .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
+                self.restore_feature_authoring_radius_preview(*expected, owner.feature)?;
+                *state = *origin_state;
+                if let Some(preview) = self.feature_authoring_preview.as_mut() {
+                    preview.radius_origin_state = None;
+                    preview.accepted_contact_sample = None;
+                }
+                Ok(())
+            }
+            EditorEffect::ClearComputedFeatureContactPreview => {
+                if let Some(preview) = self.feature_authoring_preview.as_mut() {
+                    preview.radius_origin_state = None;
+                    preview.accepted_contact_sample = None;
+                }
+                Ok(())
+            }
+            EditorEffect::CommitComputedFilletAction { target } => self
+                .apply_feature_authoring_fillet_action(
+                    state,
+                    target.expected,
+                    target.owner,
+                    target.action,
+                )
+                .map(|_| ()),
+            EditorEffect::FilletBranchPreviewChanged { .. } => Ok(()),
+            _ => Err(CoordinatorError::FeatureAuthoringPreviewMismatch),
+        }
+    }
+
     /// Publishes only the exact coordinator-held whole-batch preview.
     ///
     /// # Errors
@@ -1773,6 +2737,13 @@ impl RetainedEditorCoordinator {
             return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
         }
         require_current_feature_authoring_evaluation(&preview.snapshot, preview.metadata.feature)?;
+        let next = self.stage_feature_mutation_checkpoint(&preview.features)?;
+        let replay = ReplayAction::CreateComputedFillet {
+            expected: preview.expected,
+            label: preview.label.clone(),
+            radius: preview.candidate.radius(),
+            corners: preview.candidate.persistent_corners(),
+        };
         let preview = self
             .feature_authoring_preview
             .take()
@@ -1784,12 +2755,7 @@ impl RetainedEditorCoordinator {
         self.computed_input = Some(preview.snapshot.input());
         self.computed_snapshot = Some(preview.snapshot);
         self.computed_evaluation_problem = None;
-        self.record_feature_mutation(ReplayAction::CreateComputedFillet {
-            expected: preview.expected,
-            label: preview.label,
-            radius: preview.candidate.radius(),
-            corners: preview.candidate.persistent_corners(),
-        })?;
+        self.record_feature_mutation(next, replay);
         Ok(ComputedFeatureMutation {
             value: feature,
             before,
@@ -1848,7 +2814,8 @@ impl RetainedEditorCoordinator {
         )
     }
 
-    /// Changes only one Fillet set's shared computed radius.
+    /// Changes one Fillet set's shared radius by absolute same-branch
+    /// continuation of every completed corner.
     ///
     /// # Errors
     ///
@@ -1859,15 +2826,12 @@ impl RetainedEditorCoordinator {
         feature: ComputedFeatureId,
         radius: f64,
     ) -> Result<ComputedFeatureMutation<()>, CoordinatorError> {
-        self.mutate_features(
-            expected,
-            |features| features.set_fillet_radius(feature, radius),
-            ReplayAction::SetComputedFilletRadius {
-                expected,
-                feature,
-                radius,
-            },
-        )
+        if self.features.identity() != expected {
+            return Err(CoordinatorError::StaleComputedFeatureCandidate);
+        }
+        let origin = self.computed_evaluation_input()?;
+        self.prepare_computed_fillet_numeric_radius_preview(&origin, feature, radius)?;
+        self.publish_computed_fillet_preview(&origin, feature, radius)
     }
 
     /// Full composite-CAS radius edit used by canvas gestures.
@@ -1884,7 +2848,238 @@ impl RetainedEditorCoordinator {
         if self.computed_evaluation_input()? != expected {
             return Err(CoordinatorError::StaleComputedFeatureCandidate);
         }
-        self.set_computed_fillet_radius(expected.features, feature, radius)
+        let matches_held = self
+            .computed_fillet_preview
+            .as_ref()
+            .is_some_and(|preview| {
+                preview.origin == expected
+                    && preview.feature == feature
+                    && preview.radius.to_bits() == radius.to_bits()
+            });
+        if !matches_held {
+            self.prepare_computed_fillet_radius_preview(&expected, feature, radius)?;
+        }
+        self.publish_computed_fillet_preview(&expected, feature, radius)
+    }
+
+    fn apply_computed_fillet_configuration(
+        &mut self,
+        expected: ComputedFeatureDocumentIdentity,
+        feature: ComputedFeatureId,
+        radius: f64,
+        corners: Vec<(ComputedFeatureCornerId, NewComputedFilletCorner)>,
+        replay: ReplayAction,
+    ) -> Result<ComputedFeatureMutation<()>, CoordinatorError> {
+        let before = self.features.identity();
+        if before != expected {
+            return Err(CoordinatorError::StaleComputedFeatureCandidate);
+        }
+        let sketch_input = self
+            .session
+            .accepted_prepared_input()
+            .ok_or(ComputedFeatureSnapshotError::CurrentAcceptedStateRequired)?;
+        let mut candidate = self.features.clone();
+        candidate.replace_fillet_set(feature, radius, corners)?;
+        let outcome = evaluate_computed_features(
+            &self.session,
+            &candidate,
+            &mut self.computed_evaluation_allocator,
+            bounded_geometry_control(),
+        )?;
+        let OperationOutcome::Completed {
+            value: snapshot, ..
+        } = outcome
+        else {
+            return Err(CoordinatorError::ComputedFeatureWorkStopped);
+        };
+        if self.features.identity() != before
+            || self.session.accepted_prepared_input() != Some(sketch_input)
+            || snapshot.input().features != candidate.identity()
+            || snapshot.input().sketch != sketch_input
+        {
+            return Err(CoordinatorError::StaleComputedFeatureCandidate);
+        }
+        require_current_feature_authoring_evaluation(&snapshot, feature)?;
+        let after = candidate.identity();
+        let next = self.stage_feature_mutation_checkpoint(&candidate)?;
+        self.features = candidate;
+        self.computed_input = Some(snapshot.input());
+        self.computed_snapshot = Some(snapshot);
+        self.computed_preview_snapshot = None;
+        self.computed_preview_input = None;
+        self.computed_fillet_preview = None;
+        self.computed_evaluation_problem = None;
+        self.computed_preview_evaluation_problem = None;
+        self.record_feature_mutation(next, replay);
+        Ok(ComputedFeatureMutation {
+            value: (),
+            before,
+            after,
+        })
+    }
+
+    /// Applies one explicit, bounded local branch/retention action to a
+    /// published Fillet corner as one absolute configuration/history change.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale input, a missing/disabled action or any non-current whole-
+    /// feature result without changing durable feature intent.
+    pub fn apply_computed_fillet_action(
+        &mut self,
+        expected: geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        owner: ComputedCornerRef,
+        action: SceneFilletActionId,
+    ) -> Result<ComputedFeatureMutation<()>, CoordinatorError> {
+        if self.computed_evaluation_input()? != expected
+            || self.features.identity() != expected.features
+        {
+            return Err(CoordinatorError::StaleComputedFeatureCandidate);
+        }
+        if !self.editor.selection().iter().any(|item| {
+            matches!(item, SelectionItem::FeatureCorner(selected) if *selected == owner)
+                || matches!(item, SelectionItem::Feature(feature) if *feature == owner.feature)
+        }) {
+            return Err(CoordinatorError::ComputedFilletActionUnavailable(
+                "the Fillet corner or its owning feature is not selected".into(),
+            ));
+        }
+        let alternatives = self.computed_fillet_alternatives(&self.features, owner)?;
+        let replacement = select_computed_fillet_alternative(&alternatives.values, action)
+            .ok_or_else(|| {
+                CoordinatorError::ComputedFilletActionUnavailable(
+                    "the selected local branch is not available from this exact corner".into(),
+                )
+            })?
+            .resolved
+            .corner;
+        let corners = alternatives
+            .corners
+            .into_iter()
+            .map(|(id, corner)| {
+                (
+                    id,
+                    if id == owner.corner {
+                        replacement
+                    } else {
+                        corner
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+        self.apply_computed_fillet_configuration(
+            expected.features,
+            owner.feature,
+            alternatives.radius,
+            corners.clone(),
+            ReplayAction::SetComputedFilletConfiguration {
+                expected: expected.features,
+                feature: owner.feature,
+                radius: alternatives.radius,
+                corners,
+            },
+        )
+    }
+
+    /// Applies the same explicit local action to a held grouped-authoring
+    /// candidate. The temporary feature and collector advance atomically, but
+    /// no durable history entry exists until ordinary feature Apply succeeds.
+    ///
+    /// # Errors
+    ///
+    /// Rejects stale preview ownership, unavailable branch identity, bounded
+    /// feature work or a non-current replacement without changing the state.
+    pub fn apply_feature_authoring_fillet_action(
+        &mut self,
+        state: &mut FeatureAuthoringState,
+        expected: geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        owner: ComputedCornerRef,
+        action: SceneFilletActionId,
+    ) -> Result<FeatureAuthoringPreviewMetadata, CoordinatorError> {
+        let preview = self
+            .feature_authoring_preview
+            .as_ref()
+            .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
+        if preview.metadata.feature != owner.feature || !preview.accepts_radius_input(&expected) {
+            return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+        }
+        let corner_index = preview
+            .corner_index(owner)
+            .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
+        let alternatives = self.computed_fillet_alternatives(&preview.features, owner)?;
+        let replacement = select_computed_fillet_alternative(&alternatives.values, action)
+            .ok_or_else(|| {
+                CoordinatorError::ComputedFilletActionUnavailable(
+                    "the selected local branch is not available from this exact corner".into(),
+                )
+            })?
+            .resolved
+            .clone();
+        let snapshot = self.feature_authoring_snapshot()?;
+        let mut trial = state.clone();
+        let outcome = trial.replace_corner_absolute(&snapshot, corner_index, replacement);
+        let candidate = match outcome {
+            FeatureAuthoringOutcome::PreviewRequested { candidate, .. } => candidate,
+            FeatureAuthoringOutcome::Warning(warning) => {
+                return Err(CoordinatorError::FeatureAuthoringTransitionRejected(
+                    warning.message,
+                ));
+            }
+            FeatureAuthoringOutcome::ModeEntered(_)
+            | FeatureAuthoringOutcome::NoNativeHit(_)
+            | FeatureAuthoringOutcome::Collecting { .. }
+            | FeatureAuthoringOutcome::Apply(_)
+            | FeatureAuthoringOutcome::CandidateCleared(_)
+            | FeatureAuthoringOutcome::ModeExited
+            | FeatureAuthoringOutcome::Inactive => {
+                return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+            }
+        };
+        let metadata = self.refresh_feature_authoring_preview(expected, &candidate)?;
+        *state = trial;
+        Ok(metadata)
+    }
+
+    fn computed_fillet_alternatives(
+        &self,
+        features: &ComputedFeatureDocument,
+        owner: ComputedCornerRef,
+    ) -> Result<ComputedFilletAlternatives, CoordinatorError> {
+        let feature = features
+            .feature(owner.feature)
+            .ok_or(ComputedFeatureDocumentError::UnknownFeature(owner.feature))?;
+        let geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) =
+            &feature.definition;
+        let prior = fillet
+            .corners
+            .iter()
+            .find(|corner| corner.id == owner.corner)
+            .copied()
+            .ok_or(ComputedFeatureDocumentError::UnknownCorner(owner.corner))?;
+        let current_corners = fillet
+            .corners
+            .iter()
+            .map(|corner| (corner.id, corner.without_id()))
+            .collect::<Vec<_>>();
+        let snapshot = self.feature_authoring_snapshot()?;
+        let outcome = snapshot.local_fillet_corner_alternatives(
+            prior.without_id(),
+            fillet.radius,
+            ComputedFeatureEvaluationPolicy::default(),
+            computed_feature_authoring_control(),
+        )?;
+        let OperationOutcome::Completed {
+            value: alternatives,
+            ..
+        } = outcome
+        else {
+            return Err(CoordinatorError::ComputedFeatureWorkStopped);
+        };
+        Ok(ComputedFilletAlternatives {
+            radius: fillet.radius,
+            corners: current_corners,
+            values: alternatives,
+        })
     }
 
     /// Evaluates a non-persistent shared-radius preview against the exact current
@@ -1902,33 +3097,8 @@ impl RetainedEditorCoordinator {
         if self.features.identity() != expected {
             return Err(CoordinatorError::StaleComputedFeatureCandidate);
         }
-        let sketch_input = self
-            .session
-            .accepted_prepared_input()
-            .ok_or(ComputedFeatureSnapshotError::CurrentAcceptedStateRequired)?;
-        let mut candidate = self.features.clone();
-        candidate.set_fillet_radius(feature, radius)?;
-        let outcome = evaluate_computed_features(
-            &self.session,
-            &candidate,
-            &mut self.computed_evaluation_allocator,
-            bounded_geometry_control(),
-        )?;
-        let OperationOutcome::Completed {
-            value: snapshot, ..
-        } = outcome
-        else {
-            return Err(CoordinatorError::ComputedFeatureWorkStopped);
-        };
-        if self.features.identity() != expected
-            || self.session.accepted_prepared_input() != Some(sketch_input)
-            || snapshot.input().sketch != sketch_input
-            || snapshot.input().features != candidate.identity()
-        {
-            return Err(CoordinatorError::StaleComputedFeatureCandidate);
-        }
-        self.computed_preview_input = Some(snapshot.input());
-        self.computed_preview_snapshot = Some(snapshot);
+        let origin = self.computed_evaluation_input()?;
+        self.prepare_computed_fillet_radius_preview(&origin, feature, radius)?;
         self.computed_preview_snapshot
             .as_ref()
             .ok_or(CoordinatorError::ComputedFeatureWorkStopped)
@@ -1948,13 +3118,328 @@ impl RetainedEditorCoordinator {
         if self.computed_evaluation_input()? != expected {
             return Err(CoordinatorError::StaleComputedFeatureCandidate);
         }
-        self.preview_computed_fillet_radius(expected.features, feature, radius)
+        self.prepare_computed_fillet_radius_preview(&expected, feature, radius)?;
+        self.computed_preview_snapshot
+            .as_ref()
+            .ok_or(CoordinatorError::ComputedFeatureWorkStopped)
     }
 
     pub fn clear_computed_feature_preview(&mut self) {
         self.computed_preview_snapshot = None;
         self.computed_preview_input = None;
+        self.computed_fillet_preview = None;
         self.computed_preview_evaluation_problem = None;
+    }
+
+    fn prepare_computed_fillet_radius_preview(
+        &mut self,
+        origin: &geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        feature: ComputedFeatureId,
+        radius: f64,
+    ) -> Result<(), CoordinatorError> {
+        self.prepare_computed_fillet_radius_preview_with_mode(origin, feature, radius, false)
+    }
+
+    fn prepare_computed_fillet_numeric_radius_preview(
+        &mut self,
+        origin: &geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        feature: ComputedFeatureId,
+        radius: f64,
+    ) -> Result<(), CoordinatorError> {
+        self.prepare_computed_fillet_radius_preview_with_mode(origin, feature, radius, true)
+    }
+
+    fn prepare_computed_fillet_radius_preview_with_mode(
+        &mut self,
+        origin: &geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        feature: ComputedFeatureId,
+        radius: f64,
+        explicit_numeric_edit: bool,
+    ) -> Result<(), CoordinatorError> {
+        if self.computed_evaluation_input()? != *origin {
+            return Err(CoordinatorError::StaleComputedFeatureCandidate);
+        }
+        let current_snapshot = self
+            .computed_snapshot
+            .as_ref()
+            .ok_or(CoordinatorError::ComputedFeatureWorkStopped)?;
+        if current_snapshot.input() != *origin {
+            return Err(CoordinatorError::StaleComputedFeatureCandidate);
+        }
+        require_current_feature_authoring_evaluation(current_snapshot, feature)?;
+        let feature_value = self
+            .features
+            .feature(feature)
+            .ok_or(ComputedFeatureDocumentError::UnknownFeature(feature))?;
+        let geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) =
+            &feature_value.definition;
+        let corner_ids = fillet
+            .corners
+            .iter()
+            .map(|corner| corner.id)
+            .collect::<Vec<_>>();
+        let priors = fillet
+            .corners
+            .iter()
+            .copied()
+            .map(geosolve_sketch_features::ComputedFilletCorner::without_id)
+            .collect::<Vec<_>>();
+        let authoring = self.feature_authoring_snapshot()?;
+        let outcome = if explicit_numeric_edit {
+            authoring.continue_fillet_corners_numeric(
+                &priors,
+                fillet.radius,
+                radius,
+                ComputedFeatureEvaluationPolicy::default(),
+                computed_feature_authoring_control(),
+            )?
+        } else {
+            authoring.continue_fillet_corners(
+                &priors,
+                fillet.radius,
+                radius,
+                ComputedFeatureEvaluationPolicy::default(),
+                computed_feature_authoring_control(),
+            )?
+        };
+        let OperationOutcome::Completed {
+            value: continued, ..
+        } = outcome
+        else {
+            return Err(CoordinatorError::ComputedFeatureWorkStopped);
+        };
+        if continued.len() != corner_ids.len()
+            || continued.iter().any(|value| {
+                value.sketch_input != origin.sketch
+                    || value.accepted != origin.accepted
+                    || value.arc.radius.to_bits() != radius.to_bits()
+            })
+        {
+            return Err(CoordinatorError::StaleComputedFeatureCandidate);
+        }
+        let corners = corner_ids
+            .into_iter()
+            .zip(continued.into_iter().map(|value| value.corner))
+            .collect::<Vec<_>>();
+        self.install_computed_fillet_preview(
+            origin,
+            feature,
+            radius,
+            corners,
+            ComputedFilletEditSample::Radius(radius),
+        )
+    }
+
+    fn install_computed_fillet_preview(
+        &mut self,
+        origin: &geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        feature: ComputedFeatureId,
+        radius: f64,
+        corners: Vec<(ComputedFeatureCornerId, NewComputedFilletCorner)>,
+        sample: ComputedFilletEditSample,
+    ) -> Result<(), CoordinatorError> {
+        let mut candidate = self.features.clone();
+        candidate.replace_fillet_set(feature, radius, corners.clone())?;
+        let outcome = evaluate_computed_features(
+            &self.session,
+            &candidate,
+            &mut self.computed_evaluation_allocator,
+            bounded_geometry_control(),
+        )?;
+        let OperationOutcome::Completed {
+            value: snapshot, ..
+        } = outcome
+        else {
+            return Err(CoordinatorError::ComputedFeatureWorkStopped);
+        };
+        if self.computed_evaluation_input()? != *origin
+            || snapshot.input().sketch != origin.sketch
+            || snapshot.input().features != candidate.identity()
+        {
+            return Err(CoordinatorError::StaleComputedFeatureCandidate);
+        }
+        require_current_feature_authoring_evaluation(&snapshot, feature)?;
+        self.computed_preview_input = Some(snapshot.input());
+        self.computed_preview_snapshot = Some(snapshot.clone());
+        self.computed_preview_evaluation_problem = None;
+        self.computed_fillet_preview = Some(ComputedFilletEditPreview {
+            origin: *origin,
+            feature,
+            radius,
+            sample,
+            corners,
+            features: candidate,
+            snapshot,
+        });
+        Ok(())
+    }
+
+    fn prepare_computed_fillet_contact_preview(
+        &mut self,
+        origin: &geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        owner: ComputedCornerRef,
+        parent: ComputedFilletParentIndex,
+        source: NativeCurveSpanSource,
+        parameter: f64,
+    ) -> Result<(), CoordinatorError> {
+        if self.computed_evaluation_input()? != *origin || owner.feature.raw() == 0 {
+            return Err(CoordinatorError::StaleComputedFeatureCandidate);
+        }
+        let feature_value = self
+            .features
+            .feature(owner.feature)
+            .ok_or(ComputedFeatureDocumentError::UnknownFeature(owner.feature))?;
+        let geosolve_sketch_features::ComputedFeatureDefinition::FilletSet(fillet) =
+            &feature_value.definition;
+        let current = fillet
+            .corners
+            .iter()
+            .find(|corner| corner.id == owner.corner)
+            .copied()
+            .ok_or(ComputedFeatureDocumentError::UnknownCorner(owner.corner))?;
+        let parent_source = match parent {
+            ComputedFilletParentIndex::First => current.first.source,
+            ComputedFilletParentIndex::Second => current.second.source,
+        };
+        if parent_source != source || !parameter.is_finite() {
+            return Err(CoordinatorError::StaleComputedFeatureCandidate);
+        }
+        let authoring = self.feature_authoring_snapshot()?;
+        let outcome = authoring.reseed_fillet_contact(
+            ComputedFilletContactReseedRequest {
+                prior: current.without_id(),
+                parent,
+                parameter,
+            },
+            fillet.radius,
+            ComputedFeatureEvaluationPolicy::default(),
+            computed_feature_authoring_control(),
+        )?;
+        let OperationOutcome::Completed {
+            value: continued, ..
+        } = outcome
+        else {
+            return Err(CoordinatorError::ComputedFeatureWorkStopped);
+        };
+        if continued.sketch_input != origin.sketch
+            || continued.accepted != origin.accepted
+            || continued.arc.radius.to_bits() != fillet.radius.to_bits()
+        {
+            return Err(CoordinatorError::StaleComputedFeatureCandidate);
+        }
+        let radius = fillet.radius;
+        let corners = fillet
+            .corners
+            .iter()
+            .map(|corner| {
+                (
+                    corner.id,
+                    if corner.id == owner.corner {
+                        continued.corner
+                    } else {
+                        corner.without_id()
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
+        self.install_computed_fillet_preview(
+            origin,
+            owner.feature,
+            radius,
+            corners,
+            ComputedFilletEditSample::Contact {
+                owner,
+                parent,
+                source,
+                parameter,
+            },
+        )
+    }
+
+    fn publish_computed_fillet_contact_preview(
+        &mut self,
+        origin: &geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        owner: ComputedCornerRef,
+        parent: ComputedFilletParentIndex,
+        source: NativeCurveSpanSource,
+        parameter: f64,
+    ) -> Result<ComputedFeatureMutation<()>, CoordinatorError> {
+        self.publish_held_computed_fillet_preview(
+            origin,
+            owner.feature,
+            ComputedFilletEditSample::Contact {
+                owner,
+                parent,
+                source,
+                parameter,
+            },
+        )
+    }
+
+    fn publish_computed_fillet_preview(
+        &mut self,
+        origin: &geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        feature: ComputedFeatureId,
+        radius: f64,
+    ) -> Result<ComputedFeatureMutation<()>, CoordinatorError> {
+        self.publish_held_computed_fillet_preview(
+            origin,
+            feature,
+            ComputedFilletEditSample::Radius(radius),
+        )
+    }
+
+    fn publish_held_computed_fillet_preview(
+        &mut self,
+        origin: &geosolve_sketch_features::ComputedFeatureEvaluationInput,
+        feature: ComputedFeatureId,
+        sample: ComputedFilletEditSample,
+    ) -> Result<ComputedFeatureMutation<()>, CoordinatorError> {
+        if self.computed_evaluation_input()? != *origin {
+            return Err(CoordinatorError::StaleComputedFeatureCandidate);
+        }
+        let preview = self
+            .computed_fillet_preview
+            .as_ref()
+            .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
+        if preview.origin != *origin
+            || preview.feature != feature
+            || preview.sample != sample
+            || preview.features.identity() != preview.snapshot.input().features
+        {
+            return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+        }
+        require_current_feature_authoring_evaluation(&preview.snapshot, feature)?;
+        let next = self.stage_feature_mutation_checkpoint(&preview.features)?;
+        let preview = self
+            .computed_fillet_preview
+            .take()
+            .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
+        let before = self.features.identity();
+        let after = preview.features.identity();
+        let radius = preview.radius;
+        let corners = preview.corners.clone();
+        self.features = preview.features;
+        self.computed_input = Some(preview.snapshot.input());
+        self.computed_snapshot = Some(preview.snapshot);
+        self.computed_preview_snapshot = None;
+        self.computed_preview_input = None;
+        self.computed_evaluation_problem = None;
+        self.computed_preview_evaluation_problem = None;
+        self.record_feature_mutation(
+            next,
+            ReplayAction::SetComputedFilletConfiguration {
+                expected: origin.features,
+                feature,
+                radius,
+                corners,
+            },
+        );
+        Ok(ComputedFeatureMutation {
+            value: (),
+            before,
+            after,
+        })
     }
 
     /// Captures the complete exact input expected for computed output from the
@@ -2523,6 +4008,7 @@ impl RetainedEditorCoordinator {
         self.clear_feature_authoring_preview();
         self.computed_preview_snapshot = None;
         self.computed_preview_input = None;
+        self.computed_fillet_preview = None;
         self.computed_preview_evaluation_problem = None;
     }
 
@@ -2725,12 +4211,27 @@ impl RetainedEditorCoordinator {
     /// Replaces this lifecycle from an opaque checkpoint and starts fresh editor history.
     ///
     /// Current and checkpoint high-water metadata are merged, so reload cannot reuse
-    /// any revision already observed by either lifecycle.
+    /// any revision already observed by either lifecycle. When the checkpoint's
+    /// native design and accepted payload are byte-identical to the current
+    /// retained session, only the feature sidecar is restored; this preserves the
+    /// exact accepted sketch identity, audit rows and rank/DOF across feature-only
+    /// save/reload without weakening ordinary changed-sketch reload semantics.
     ///
     /// # Errors
     ///
     /// Returns JSON, foreign-document, accepted-snapshot, solve-setup, or revision errors.
     pub fn reload(&mut self, saved_checkpoint: &RestoreCheckpoint) -> Result<(), CoordinatorError> {
+        let current_checkpoint = checkpoint(
+            &self.session,
+            &self.features,
+            &self.computed_evaluation_allocator,
+        )?;
+        let sketch_unchanged = saved_checkpoint.design_json == current_checkpoint.design_json
+            && saved_checkpoint.design_is_draft_v5 == current_checkpoint.design_is_draft_v5
+            && saved_checkpoint.accepted_json == current_checkpoint.accepted_json
+            && saved_checkpoint.accepted_is_draft_v5 == current_checkpoint.accepted_is_draft_v5
+            && saved_checkpoint.accepted_belongs_to_current_design
+                == current_checkpoint.accepted_belongs_to_current_design;
         let current = self.session.revision_high_water();
         let saved = saved_checkpoint.revisions;
         let accepted = match (current.accepted(), saved.accepted()) {
@@ -2743,42 +4244,46 @@ impl RetainedEditorCoordinator {
             current.attempt().get().max(saved.attempt().get()),
             accepted,
         );
-        let design = checkpoint_document_from_json(
-            &saved_checkpoint.design_json,
-            saved_checkpoint.design_is_draft_v5,
-        )?;
-        let input = self.session.last_attempt().input();
-        let request = input
-            .candidate_request()
-            .without_temporary_targets()
-            .without_previous_state_preferences();
-        let restored = if let Some(json) = &saved_checkpoint.accepted_json {
-            let accepted =
-                checkpoint_document_from_json(json, saved_checkpoint.accepted_is_draft_v5)?;
-            if saved_checkpoint.accepted_belongs_to_current_design {
-                RetainedSketchDocumentSession::restore_current_design_with_accepted(
-                    design,
-                    accepted,
-                    revisions,
-                    request,
-                    input.solver_config(),
-                )?
-            } else {
-                RetainedSketchDocumentSession::restore_design_with_accepted(
-                    design,
-                    accepted,
-                    revisions,
-                    request,
-                    input.solver_config(),
-                )?
-            }
+        let restored = if sketch_unchanged {
+            None
         } else {
-            RetainedSketchDocumentSession::restore_design(
-                design,
-                revisions,
-                request,
-                input.solver_config(),
-            )?
+            let design = checkpoint_document_from_json(
+                &saved_checkpoint.design_json,
+                saved_checkpoint.design_is_draft_v5,
+            )?;
+            let input = self.session.last_attempt().input();
+            let request = input
+                .candidate_request()
+                .without_temporary_targets()
+                .without_previous_state_preferences();
+            Some(if let Some(json) = &saved_checkpoint.accepted_json {
+                let accepted =
+                    checkpoint_document_from_json(json, saved_checkpoint.accepted_is_draft_v5)?;
+                if saved_checkpoint.accepted_belongs_to_current_design {
+                    RetainedSketchDocumentSession::restore_current_design_with_accepted(
+                        design,
+                        accepted,
+                        revisions,
+                        request,
+                        input.solver_config(),
+                    )?
+                } else {
+                    RetainedSketchDocumentSession::restore_design_with_accepted(
+                        design,
+                        accepted,
+                        revisions,
+                        request,
+                        input.solver_config(),
+                    )?
+                }
+            } else {
+                RetainedSketchDocumentSession::restore_design(
+                    design,
+                    revisions,
+                    request,
+                    input.solver_config(),
+                )?
+            })
         };
         let retained_features = merge_feature_lifecycle_high_water(
             self.features.lifecycle_high_water(),
@@ -2786,13 +4291,19 @@ impl RetainedEditorCoordinator {
         );
         let mut restored_features =
             ComputedFeatureDocument::from_json(&saved_checkpoint.feature_json)?;
-        if restored_features.sketch_document() != restored.design_document().id() {
+        let restored_sketch = restored.as_ref().map_or_else(
+            || self.session.design_document().id(),
+            |session| session.design_document().id(),
+        );
+        if restored_features.sketch_document() != restored_sketch {
             return Err(ComputedFeatureSnapshotError::FeatureDocumentForDifferentSketch.into());
         }
         restored_features.rebase_after_restore(retained_features)?;
         self.computed_evaluation_allocator
             .retain_high_water(saved_checkpoint.evaluation_allocator);
-        self.session = restored;
+        if let Some(restored) = restored {
+            self.session = restored;
+        }
         self.features = restored_features;
         self.clear_transient();
         self.refresh_computed_features();
@@ -4272,6 +5783,10 @@ impl RetainedEditorCoordinator {
         })
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one closed effect dispatcher keeps all editor preview/commit/rollback variants exhaustive"
+    )]
     fn apply_editor_effect_with_projected_release_control(
         &mut self,
         effect: &EditorEffect,
@@ -4300,7 +5815,28 @@ impl RetainedEditorCoordinator {
                 {
                     return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
                 }
-                self.preview_computed_fillet_radius_exact(*expected, *feature, *radius)?;
+                let prior_snapshot = self.computed_preview_snapshot.clone();
+                let prior_input = self.computed_preview_input;
+                let prior_preview = self.computed_fillet_preview.clone();
+                if let Err(error) =
+                    self.preview_computed_fillet_radius_exact(*expected, *feature, *radius)
+                {
+                    if let Some(limit) = coordinator_computed_fillet_limit(&error) {
+                        self.editor.reject_computed_feature_radius_preview(
+                            expected, *feature, *radius, limit,
+                        );
+                    }
+                    return Err(error);
+                }
+                if !self
+                    .editor
+                    .accept_computed_feature_radius_preview(expected, *feature, *radius)
+                {
+                    self.computed_preview_snapshot = prior_snapshot;
+                    self.computed_preview_input = prior_input;
+                    self.computed_fillet_preview = prior_preview;
+                    return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+                }
                 Ok(None)
             }
             EditorEffect::CommitComputedFeatureRadius {
@@ -4318,7 +5854,7 @@ impl RetainedEditorCoordinator {
                 {
                     return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
                 }
-                self.set_computed_fillet_radius_exact(*expected, *feature, *radius)?;
+                self.publish_computed_fillet_preview(expected, *feature, *radius)?;
                 Ok(None)
             }
             EditorEffect::RestoreComputedFeatureRadius {
@@ -4336,8 +5872,73 @@ impl RetainedEditorCoordinator {
                 }
                 Ok(None)
             }
-            EditorEffect::ClearComputedFeaturePreview => {
+            EditorEffect::PreviewComputedFeatureContact {
+                expected,
+                owner,
+                parent,
+                source,
+                parameter,
+            } => {
+                if self.feature_authoring_preview.is_some() {
+                    return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+                }
+                let prior_snapshot = self.computed_preview_snapshot.clone();
+                let prior_input = self.computed_preview_input;
+                let prior_preview = self.computed_fillet_preview.clone();
+                if let Err(error) = self.prepare_computed_fillet_contact_preview(
+                    expected, *owner, *parent, *source, *parameter,
+                ) {
+                    if let Some(limit) = coordinator_computed_fillet_limit(&error) {
+                        self.editor.reject_computed_feature_contact_preview(
+                            expected, *owner, *parent, *source, *parameter, limit,
+                        );
+                    }
+                    return Err(error);
+                }
+                if !self.editor.accept_computed_feature_contact_preview(
+                    expected, *owner, *parent, *source, *parameter,
+                ) {
+                    self.computed_preview_snapshot = prior_snapshot;
+                    self.computed_preview_input = prior_input;
+                    self.computed_fillet_preview = prior_preview;
+                    return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+                }
+                Ok(None)
+            }
+            EditorEffect::CommitComputedFeatureContact {
+                expected,
+                owner,
+                parent,
+                source,
+                parameter,
+            } => {
+                if self.feature_authoring_preview.is_some() {
+                    return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+                }
+                self.publish_computed_fillet_contact_preview(
+                    expected, *owner, *parent, *source, *parameter,
+                )?;
+                Ok(None)
+            }
+            EditorEffect::RestoreComputedFeatureContact { expected, .. } => {
+                if self.feature_authoring_preview.is_some()
+                    || self.computed_evaluation_input()? != *expected
+                {
+                    return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+                }
                 self.clear_computed_feature_preview();
+                Ok(None)
+            }
+            EditorEffect::ClearComputedFeaturePreview
+            | EditorEffect::ClearComputedFeatureContactPreview => {
+                self.clear_computed_feature_preview();
+                Ok(None)
+            }
+            EditorEffect::CommitComputedFilletAction { target } => {
+                if self.feature_authoring_preview.is_some() {
+                    return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+                }
+                self.apply_computed_fillet_action(target.expected, target.owner, target.action)?;
                 Ok(None)
             }
             EditorEffect::CommitConstruction { expected, proposal } => {
@@ -4363,6 +5964,7 @@ impl RetainedEditorCoordinator {
             }
             EditorEffect::SelectionChanged(_)
             | EditorEffect::HoverChanged(_)
+            | EditorEffect::FilletBranchPreviewChanged { .. }
             | EditorEffect::PreviewPointMove { .. }
             | EditorEffect::RequestProjectedPointMove { .. }
             | EditorEffect::ClearPointPreview
@@ -4409,6 +6011,20 @@ impl RetainedEditorCoordinator {
                 radius,
             } => {
                 self.set_computed_fillet_radius(*expected, *feature, *radius)?;
+            }
+            ReplayAction::SetComputedFilletConfiguration {
+                expected,
+                feature,
+                radius,
+                corners,
+            } => {
+                self.apply_computed_fillet_configuration(
+                    *expected,
+                    *feature,
+                    *radius,
+                    corners.clone(),
+                    action.clone(),
+                )?;
             }
             ReplayAction::RemoveComputedFeature { expected, feature } => {
                 self.remove_computed_feature(*expected, *feature)?;
@@ -4690,13 +6306,15 @@ impl RetainedEditorCoordinator {
             return Err(CoordinatorError::StaleComputedFeatureCandidate);
         }
         let after = candidate.identity();
+        let next = self.stage_feature_mutation_checkpoint(&candidate)?;
         self.features = candidate;
         self.computed_input = Some(snapshot.input());
         self.computed_snapshot = Some(snapshot);
         self.computed_preview_snapshot = None;
         self.computed_preview_input = None;
+        self.computed_fillet_preview = None;
         self.computed_evaluation_problem = None;
-        self.record_feature_mutation(replay)?;
+        self.record_feature_mutation(next, replay);
         Ok(ComputedFeatureMutation {
             value,
             before,
@@ -4704,24 +6322,26 @@ impl RetainedEditorCoordinator {
         })
     }
 
-    fn record_feature_mutation(&mut self, replay: ReplayAction) -> Result<(), CoordinatorError> {
-        let next = checkpoint(
-            &self.session,
-            &self.features,
-            &self.computed_evaluation_allocator,
-        )?;
+    fn stage_feature_mutation_checkpoint(
+        &self,
+        features: &ComputedFeatureDocument,
+    ) -> Result<RestoreCheckpoint, CoordinatorError> {
+        checkpoint(&self.session, features, &self.computed_evaluation_allocator)
+    }
+
+    fn record_feature_mutation(&mut self, next: RestoreCheckpoint, replay: ReplayAction) {
         self.history.truncate(self.history_cursor + 1);
         self.history.push(next);
         self.history_cursor += 1;
         self.transcript.push(replay);
         self.clear_transient();
         self.reconcile_selection();
-        Ok(())
     }
 
     fn refresh_computed_features(&mut self) {
         self.computed_preview_snapshot = None;
         self.computed_preview_input = None;
+        self.computed_fillet_preview = None;
         self.computed_preview_evaluation_problem = None;
         match evaluate_computed_features(
             &self.session,
@@ -5149,6 +6769,7 @@ impl ReplayAction {
             | Self::Reattempt { expected } => Some(*expected),
             Self::CreateComputedFillet { .. }
             | Self::SetComputedFilletRadius { .. }
+            | Self::SetComputedFilletConfiguration { .. }
             | Self::RemoveComputedFeature { .. }
             | Self::RemoveComputedCorner { .. }
             | Self::SetComputedFeatureSuppressed { .. }
@@ -6412,7 +8033,10 @@ mod tests {
         OperationWorkCounter, ParameterBatch, ParameterBatchEntry, ParameterValue, PersistentId,
         SolverConfig, alpha_scenario, cancellation_pair,
     };
-    use geosolve_sketch_features::ComputedFeatureDefinition;
+    use geosolve_sketch_features::{
+        ComputedFeatureDefinition, ComputedFilletAuthoringOptions,
+        ComputedFilletCornerAuthoringRequest, ComputedFilletCurvePick,
+    };
 
     #[test]
     fn projected_drag_envelope_pins_every_m65_limit() {
@@ -11282,7 +12906,7 @@ mod tests {
         let expected = coordinator
             .computed_evaluation_input()
             .expect("exact computed input");
-        EditorScene::from_accepted_with_computed(
+        let mut scene = EditorScene::from_accepted_with_computed(
             accepted.identity().revision().get(),
             accepted.design_identity(),
             accepted.document(),
@@ -11298,7 +12922,41 @@ mod tests {
             Viewport::new([900.0, 700.0], [1.0, 1.0], 50.0).expect("viewport"),
             0.5,
         )
-        .expect("current composite scene")
+        .expect("current composite scene");
+        coordinator
+            .populate_computed_fillet_affordances(&mut scene, coordinator.editor().selection(), 0.5)
+            .expect("current Fillet affordances");
+        scene
+    }
+
+    fn visible_computed_scene(coordinator: &RetainedEditorCoordinator) -> EditorScene {
+        let accepted = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted visible computed scene");
+        let (expected, snapshot) = match coordinator.computed_scene_state() {
+            ComputedSceneState::Current { expected, snapshot } => (*expected, snapshot),
+            state => panic!("visible computed scene is not Current: {state:?}"),
+        };
+        let mut scene = EditorScene::from_accepted_with_computed(
+            accepted.identity().revision().get(),
+            accepted.design_identity(),
+            accepted.document(),
+            coordinator.session().design_document(),
+            &coordinator
+                .session()
+                .accepted_prepared_input()
+                .expect("current accepted visible input"),
+            &expected,
+            snapshot,
+            Viewport::new([900.0, 700.0], [1.0, 1.0], 50.0).expect("viewport"),
+            0.5,
+        )
+        .expect("visible composite scene");
+        coordinator
+            .populate_computed_fillet_affordances(&mut scene, coordinator.editor().selection(), 0.5)
+            .expect("visible Fillet affordances");
+        scene
     }
 
     #[test]
@@ -11607,6 +13265,263 @@ mod tests {
         );
         assert_eq!(coordinator.history_len(), 1);
         assert_eq!(coordinator.history_cursor(), 0);
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the exact-fold regression keeps branch, scene, history and native-sketch invariants in one transaction fixture"
+    )]
+    fn explicit_numeric_radius_can_depart_a_rail_less_fold_on_its_persisted_branch() {
+        let mut document = SketchDocument::new(10.0).expect("fold document");
+        let line_start = document.add_point("line start", [-5.0, 0.0]).unwrap();
+        let line_end = document.add_point("line end", [5.0, 0.0]).unwrap();
+        let line = CurveSpan::line(
+            document
+                .add_curve(
+                    "line",
+                    CurveDefinition::Line {
+                        start: line_start,
+                        end: line_end,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .unwrap(),
+        );
+        let circle_center = document.add_point("circle center", [0.0, 2.0]).unwrap();
+        let circle_radius = document
+            .add_scalar(
+                "circle radius",
+                1.0,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .unwrap();
+        let circle = CurveSpan::line(
+            document
+                .add_curve(
+                    "circle",
+                    CurveDefinition::Circle {
+                        center: circle_center,
+                        radius: circle_radius,
+                    },
+                )
+                .unwrap(),
+        );
+        let document_id = document.id();
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("accepted fold session");
+        let authoring =
+            ComputedFeatureAuthoringSnapshot::capture(&session).expect("fold authoring snapshot");
+        let branch_center_x = -1.5_f64.sqrt();
+        let line_parameter = (branch_center_x + 5.0) / 10.0;
+        let circle_parameter = (-1.25_f64)
+            .atan2(branch_center_x)
+            .rem_euclid(std::f64::consts::TAU);
+        let line_jet = authoring
+            .sketch_document()
+            .evaluate_curve_jet(line, line_parameter)
+            .unwrap();
+        let circle_jet = authoring
+            .sketch_document()
+            .evaluate_curve_jet(circle, circle_parameter)
+            .unwrap();
+        let fold_outcome = authoring
+            .resolve_fillet_corner(
+                ComputedFilletCornerAuthoringRequest {
+                    first: ComputedFilletCurvePick {
+                        source: NativeCurveSpanSource { span: line },
+                        parameter: line_parameter,
+                        model_position: [line_jet.position.x, line_jet.position.y],
+                        retained_endpoint_hint: Some(DocumentFilletTrimEndpoint::End),
+                    },
+                    second: ComputedFilletCurvePick {
+                        source: NativeCurveSpanSource { span: circle },
+                        parameter: circle_parameter,
+                        model_position: [circle_jet.position.x, circle_jet.position.y],
+                        retained_endpoint_hint: Some(DocumentFilletTrimEndpoint::End),
+                    },
+                    options: ComputedFilletAuthoringOptions::default(),
+                },
+                0.5,
+                ComputedFeatureEvaluationPolicy::default(),
+                OperationControl::unlimited(),
+            )
+            .expect("fold authoring");
+        let OperationOutcome::Completed { value: fold, .. } = fold_outcome else {
+            panic!("bounded fold authoring did not complete: {fold_outcome:?}");
+        };
+        assert!(fold.arc.center[0].abs() <= 1.0e-6);
+
+        let mut features = ComputedFeatureDocument::new(document_id);
+        let feature = features
+            .create_fillet_set("persisted fold branch", 0.5, vec![fold.corner])
+            .expect("fold feature");
+        let corner = match &features.feature(feature).unwrap().definition {
+            ComputedFeatureDefinition::FilletSet(fillet) => fillet.corners[0].id,
+        };
+        let owner = ComputedCornerRef { feature, corner };
+        let mut coordinator =
+            RetainedEditorCoordinator::with_features(session, features).expect("fold coordinator");
+        coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::FeatureCorner(owner)]);
+        let design_identity = coordinator.session().design_identity();
+        let accepted_identity = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted fold sketch")
+            .identity();
+        let sketch_equations = accepted_sketch_equation_invariants(&coordinator);
+        let history_before = coordinator.history_len();
+        let fold_feature_identity = coordinator.feature_document().identity();
+
+        let fold_scene = current_computed_scene(&coordinator);
+        assert!(
+            fold_scene
+                .fillet_affordances
+                .iter()
+                .all(|affordance| affordance.owner != owner),
+            "an exact fold must not invent a finite radius rail"
+        );
+        assert!(matches!(
+            fold_scene.computed_fillet_continuation_statuses.as_slice(),
+            [ComputedFilletContinuationStatus {
+                owner: current,
+                limit: ComputedFilletContinuationLimit {
+                    kind: ComputedFilletContinuationLimitKind::BranchFold,
+                    ..
+                },
+                ..
+            }] if *current == owner
+        ));
+
+        coordinator
+            .set_computed_fillet_radius(fold_feature_identity, feature, 0.55)
+            .expect("explicit numeric edit departs the persisted fold branch");
+        assert_eq!(coordinator.history_len(), history_before + 1);
+        assert_eq!(
+            fillet_radius(&coordinator, feature).to_bits(),
+            0.55_f64.to_bits()
+        );
+        let regular_corner = match &coordinator
+            .feature_document()
+            .feature(feature)
+            .expect("regular feature")
+            .definition
+        {
+            ComputedFeatureDefinition::FilletSet(fillet) => {
+                assert_eq!(fillet.corners[0].id, corner);
+                fillet.corners[0].without_id()
+            }
+        };
+        assert_eq!(regular_corner.first.source, fold.corner.first.source);
+        assert_eq!(regular_corner.second.source, fold.corner.second.source);
+        assert_eq!(
+            regular_corner.first.normal_side,
+            fold.corner.first.normal_side
+        );
+        assert_eq!(
+            regular_corner.second.normal_side,
+            fold.corner.second.normal_side
+        );
+        let regular_center_x = coordinator
+            .computed_snapshot()
+            .expect("regular computed snapshot")
+            .edges()
+            .iter()
+            .find_map(|edge| match (&edge.provenance, &edge.geometry) {
+                (
+                    ComputedEdgeProvenance::FilletArc { owner: current, .. },
+                    geosolve_sketch_features::ComputedEdgeGeometry::CircularArc(arc),
+                ) if *current == owner => Some(arc.center[0]),
+                _ => None,
+            })
+            .expect("regular persisted-root arc");
+        assert!(
+            regular_center_x < 0.0,
+            "numeric edit hopped to the other root"
+        );
+        let regular_scene = current_computed_scene(&coordinator);
+        assert!(
+            regular_scene
+                .fillet_affordances
+                .iter()
+                .any(|affordance| affordance.owner == owner),
+            "the regular branch must expose a finite rail"
+        );
+        assert!(
+            regular_scene
+                .computed_fillet_continuation_statuses
+                .is_empty()
+        );
+        assert_eq!(coordinator.session().design_identity(), design_identity);
+        assert_eq!(
+            coordinator.session().accepted_state().unwrap().identity(),
+            accepted_identity
+        );
+        assert_eq!(
+            accepted_sketch_equation_invariants(&coordinator),
+            sketch_equations
+        );
+
+        coordinator.undo().expect("undo numeric fold departure");
+        assert_eq!(
+            fillet_radius(&coordinator, feature).to_bits(),
+            0.5_f64.to_bits()
+        );
+        let restored_corner = match &coordinator
+            .feature_document()
+            .feature(feature)
+            .expect("restored fold feature")
+            .definition
+        {
+            ComputedFeatureDefinition::FilletSet(fillet) => {
+                assert_eq!(fillet.corners[0].id, corner);
+                fillet.corners[0].without_id()
+            }
+        };
+        assert_eq!(restored_corner, fold.corner);
+        let restored_scene = current_computed_scene(&coordinator);
+        assert!(restored_scene.fillet_affordances.is_empty());
+        assert!(matches!(
+            restored_scene
+                .computed_fillet_continuation_statuses
+                .as_slice(),
+            [ComputedFilletContinuationStatus {
+                limit: ComputedFilletContinuationLimit {
+                    kind: ComputedFilletContinuationLimitKind::BranchFold,
+                    ..
+                },
+                ..
+            }]
+        ));
+
+        coordinator.redo().expect("redo numeric fold departure");
+        assert_eq!(
+            fillet_radius(&coordinator, feature).to_bits(),
+            0.55_f64.to_bits()
+        );
+        let redo_feature = coordinator
+            .feature_document()
+            .feature(feature)
+            .expect("redone regular feature");
+        let ComputedFeatureDefinition::FilletSet(redo_fillet) = &redo_feature.definition;
+        assert_eq!(redo_fillet.corners[0].id, corner);
+        assert_eq!(redo_fillet.corners[0].without_id(), regular_corner);
+        assert_eq!(coordinator.session().design_identity(), design_identity);
+        assert_eq!(
+            coordinator.session().accepted_state().unwrap().identity(),
+            accepted_identity
+        );
+        assert_eq!(
+            accepted_sketch_equation_invariants(&coordinator),
+            sketch_equations
+        );
     }
 
     #[test]
@@ -11979,7 +13894,7 @@ mod tests {
                 .coordinator
                 .feature_authoring_preview()
                 .expect("held preview");
-            EditorScene::from_accepted_with_computed(
+            let mut scene = EditorScene::from_accepted_with_computed(
                 accepted.identity().revision().get(),
                 accepted.design_identity(),
                 accepted.document(),
@@ -11994,7 +13909,12 @@ mod tests {
                 Viewport::new([900.0, 700.0], [1.0, 1.0], 50.0).expect("viewport"),
                 0.5,
             )
-            .expect("composite preview scene")
+            .expect("composite preview scene");
+            fixture
+                .coordinator
+                .populate_computed_fillet_affordances(&mut scene, &[], 0.5)
+                .expect("temporary Fillet affordances");
+            scene
         };
         let arc = scene
             .computed_curves
@@ -12003,15 +13923,12 @@ mod tests {
             .expect("temporary arc")
             .clone();
         let owner = SelectionItem::FeatureCorner(arc.owner);
-        let press = arc.screen_polyline[arc.screen_polyline.len() / 2];
+        let rail = arc.radius_rail.expect("validated temporary radius rail");
+        let press = rail.screen_grip;
         let press_model = scene.viewport.screen_to_model(press);
-        let direction = [
-            (press_model[0] - arc.center[0]) / arc.radius,
-            (press_model[1] - arc.center[1]) / arc.radius,
-        ];
         let moved = scene.viewport.model_to_screen([
-            0.2_f64.mul_add(direction[0], press_model[0]),
-            0.2_f64.mul_add(direction[1], press_model[1]),
+            0.2_f64.mul_add(rail.model_derivative[0], press_model[0]),
+            0.2_f64.mul_add(rail.model_derivative[1], press_model[1]),
         ]);
         let pointer = |position| PointerInput {
             pointer_id: 1_337,
@@ -13135,53 +15052,31 @@ mod tests {
     }
 
     #[test]
-    fn computed_radius_drag_preserves_the_pointer_offset_on_first_move() {
+    fn computed_radius_drag_projects_onto_the_frozen_branch_rail() {
         let mut fixture = computed_fillet_editor_fixture();
         let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
-        apply_grouped_fillet(&mut fixture.coordinator, &candidate);
-        let accepted = fixture
+        let feature = apply_grouped_fillet(&mut fixture.coordinator, &candidate);
+        let ComputedFeatureDefinition::FilletSet(fillet) = &fixture
             .coordinator
-            .session()
-            .accepted_state()
-            .expect("accepted sketch");
-        let viewport = Viewport::new([900.0, 700.0], [1.0, 1.0], 50.0).expect("viewport");
-        let scene = EditorScene::from_accepted_with_computed(
-            accepted.identity().revision().get(),
-            accepted.design_identity(),
-            accepted.document(),
-            fixture.coordinator.session().design_document(),
-            &fixture
-                .coordinator
-                .session()
-                .accepted_prepared_input()
-                .expect("current accepted computed input"),
-            &fixture
-                .coordinator
-                .computed_evaluation_input()
-                .expect("exact computed input"),
-            fixture
-                .coordinator
-                .computed_snapshot()
-                .expect("computed output"),
-            viewport,
-            0.5,
-        )
-        .expect("scene");
+            .feature_document()
+            .feature(feature)
+            .expect("published Fillet")
+            .definition;
+        let owner = ComputedCornerRef {
+            feature,
+            corner: fillet.corners[0].id,
+        };
+        fixture
+            .coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::FeatureCorner(owner)]);
+        let scene = current_computed_scene(&fixture.coordinator);
         let arc = &scene.computed_curves[0];
-        let sample = scene
-            .viewport
-            .screen_to_model(arc.screen_polyline[arc.screen_polyline.len() / 2]);
-        let direction = [
-            (sample[0] - arc.center[0]) / arc.radius,
-            (sample[1] - arc.center[1]) / arc.radius,
-        ];
-        let press_model = [
-            (arc.radius - 0.05).mul_add(direction[0], arc.center[0]),
-            (arc.radius - 0.05).mul_add(direction[1], arc.center[1]),
-        ];
+        let rail = arc.radius_rail.expect("validated radius rail");
+        let press_model = rail.model_grip;
         let move_model = [
-            0.2_f64.mul_add(direction[0], press_model[0]),
-            0.2_f64.mul_add(direction[1], press_model[1]),
+            0.2_f64.mul_add(rail.model_derivative[0], press_model[0]),
+            0.2_f64.mul_add(rail.model_derivative[1], press_model[1]),
         ];
         let pointer = |position| PointerInput {
             pointer_id: 741,
@@ -13223,6 +15118,20 @@ mod tests {
         let mut fixture = computed_fillet_editor_fixture();
         let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
         let feature = apply_grouped_fillet(&mut fixture.coordinator, &candidate);
+        let ComputedFeatureDefinition::FilletSet(fillet) = &fixture
+            .coordinator
+            .feature_document()
+            .feature(feature)
+            .expect("published Fillet")
+            .definition;
+        let owner = ComputedCornerRef {
+            feature,
+            corner: fillet.corners[0].id,
+        };
+        fixture
+            .coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::FeatureCorner(owner)]);
         let initial_radius = fillet_radius(&fixture.coordinator, feature);
         let initial_history = fixture.coordinator.history_len();
         let initial_edges = fixture
@@ -13235,20 +15144,11 @@ mod tests {
             .collect::<Vec<_>>();
         let scene = current_computed_scene(&fixture.coordinator);
         let arc = scene.computed_curves[0].clone();
-        let sample = scene
-            .viewport
-            .screen_to_model(arc.screen_polyline[arc.screen_polyline.len() / 2]);
-        let direction = [
-            (sample[0] - arc.center[0]) / arc.radius,
-            (sample[1] - arc.center[1]) / arc.radius,
-        ];
-        let press_model = [
-            (arc.radius - 0.05).mul_add(direction[0], arc.center[0]),
-            (arc.radius - 0.05).mul_add(direction[1], arc.center[1]),
-        ];
+        let rail = arc.radius_rail.expect("validated radius rail");
+        let press_model = rail.model_grip;
         let move_model = [
-            0.2_f64.mul_add(direction[0], press_model[0]),
-            0.2_f64.mul_add(direction[1], press_model[1]),
+            0.2_f64.mul_add(rail.model_derivative[0], press_model[0]),
+            0.2_f64.mul_add(rail.model_derivative[1], press_model[1]),
         ];
         let pointer = |position| PointerInput {
             pointer_id: 991,
@@ -13336,7 +15236,11 @@ mod tests {
             .coordinator
             .computed_snapshot()
             .expect("committed computed output");
-        assert!(committed.evaluation_revision().raw() > preview_evaluation.raw());
+        assert_eq!(
+            committed.evaluation_revision(),
+            preview_evaluation,
+            "release must publish the exact last Current preview rather than re-evaluate a request"
+        );
         assert!(matches!(
             computed_feature_state(committed, feature),
             ComputedFeatureEvaluationState::Current { .. }
@@ -13371,6 +15275,2850 @@ mod tests {
             committed_edges
                 .iter()
                 .all(|old| restored.edge(*old).is_none())
+        );
+    }
+
+    #[derive(Debug, PartialEq)]
+    struct NativeSketchInvariants {
+        design_identity: SketchDesignIdentity,
+        accepted_identity: SketchAcceptedStateIdentity,
+        design_json: String,
+        accepted_json: Option<String>,
+        point_position_bits: Vec<[u64; 2]>,
+        equations: AcceptedSketchEquationInvariants,
+    }
+
+    fn native_sketch_invariants(
+        coordinator: &RetainedEditorCoordinator,
+        points: &[DesignPointId],
+    ) -> NativeSketchInvariants {
+        let accepted = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted native sketch");
+        NativeSketchInvariants {
+            design_identity: coordinator.session().design_identity(),
+            accepted_identity: accepted.identity(),
+            design_json: coordinator
+                .session()
+                .export_design_json()
+                .expect("native design JSON"),
+            accepted_json: coordinator
+                .session()
+                .export_accepted_json()
+                .expect("native accepted JSON"),
+            point_position_bits: points
+                .iter()
+                .map(|point| {
+                    let position = accepted
+                        .document()
+                        .point(*point)
+                        .expect("accepted native point")
+                        .position;
+                    [position[0].to_bits(), position[1].to_bits()]
+                })
+                .collect(),
+            equations: accepted_sketch_equation_invariants(coordinator),
+        }
+    }
+
+    fn computed_feature_semantics(
+        coordinator: &RetainedEditorCoordinator,
+        feature: ComputedFeatureId,
+    ) -> (String, bool, ComputedFeatureDefinition) {
+        let feature = coordinator
+            .feature_document()
+            .feature(feature)
+            .expect("computed feature semantics");
+        (
+            feature.label.clone(),
+            feature.suppressed,
+            feature.definition.clone(),
+        )
+    }
+
+    fn authoring_line_circle_contact_path(
+        session: RetainedSketchDocumentSession,
+        line_span: CurveSpan,
+        circle_span: CurveSpan,
+        parameters: &[f64],
+    ) -> FeatureAuthoringCandidate {
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let snapshot = coordinator
+            .feature_authoring_snapshot()
+            .expect("line-circle authoring snapshot");
+        let mut authoring = FeatureAuthoringState::default();
+        let candidate = feature_candidate(authoring.activate(
+            &snapshot,
+            coordinator.session().design_document(),
+            FeatureAuthoringTool::Fillet,
+            &[
+                (SelectionItem::Curve(line_span), Some(0.4)),
+                (SelectionItem::Curve(circle_span), Some(4.0)),
+            ],
+        ));
+        coordinator
+            .prepare_feature_authoring_preview(
+                coordinator.feature_document().identity(),
+                &candidate,
+                "line-circle authoring path",
+            )
+            .expect("initial line-circle preview");
+        let owner = coordinator
+            .feature_authoring_preview()
+            .expect("held line-circle preview")
+            .corner_bindings()[0]
+            .owner;
+        let mut scene = visible_computed_scene(&coordinator);
+        let handle = scene
+            .fillet_affordances
+            .iter()
+            .find(|candidate| candidate.owner == owner)
+            .expect("line-circle affordances")
+            .contacts
+            .into_iter()
+            .find(|candidate| candidate.source.span == circle_span)
+            .expect("circular contact handle");
+        coordinator
+            .transact_feature_authoring_pointer_down(
+                &mut authoring,
+                &scene,
+                PointerInput {
+                    pointer_id: 904,
+                    position: handle.screen_position,
+                    modifiers: Modifiers::default(),
+                },
+                Some(SelectionItem::FeatureCorner(owner)),
+                PickTolerance::default(),
+                "line-circle contact press",
+            )
+            .expect("start authoring contact gesture");
+        for parameter in parameters {
+            let jet = snapshot
+                .sketch_document()
+                .evaluate_curve_jet(circle_span, *parameter)
+                .expect("contact target jet");
+            let position = scene
+                .viewport
+                .model_to_screen([jet.position.x, jet.position.y]);
+            let effects = coordinator.editor_mut().pointer_move(
+                &scene,
+                PointerInput {
+                    pointer_id: 904,
+                    position,
+                    modifiers: Modifiers::default(),
+                },
+            );
+            assert!(matches!(
+                effects.as_slice(),
+                [EditorEffect::PreviewComputedFeatureContact { .. }]
+            ));
+            coordinator
+                .apply_feature_authoring_editor_effect(&mut authoring, &effects[0])
+                .expect("accept authoring contact sample");
+            scene = visible_computed_scene(&coordinator);
+        }
+        coordinator
+            .feature_authoring_preview()
+            .expect("final authoring contact preview")
+            .candidate()
+            .clone()
+    }
+
+    fn authoring_radius_path(
+        session: RetainedSketchDocumentSession,
+        corner: DesignPointId,
+        deltas: &[f64],
+    ) -> FeatureAuthoringCandidate {
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let snapshot = coordinator
+            .feature_authoring_snapshot()
+            .expect("authoring snapshot");
+        let mut authoring = FeatureAuthoringState::default();
+        let candidate = feature_candidate(authoring.activate(
+            &snapshot,
+            coordinator.session().design_document(),
+            FeatureAuthoringTool::Fillet,
+            &[(SelectionItem::Point(corner), None)],
+        ));
+        coordinator
+            .prepare_feature_authoring_preview(
+                coordinator.feature_document().identity(),
+                &candidate,
+                "authoring radius path",
+            )
+            .expect("initial authoring radius preview");
+        let owner = coordinator
+            .feature_authoring_preview()
+            .expect("held authoring radius preview")
+            .corner_bindings()[0]
+            .owner;
+        let mut scene = visible_computed_scene(&coordinator);
+        let rail = scene
+            .fillet_affordances
+            .iter()
+            .find(|candidate| candidate.owner == owner)
+            .expect("authoring radius affordances")
+            .radius_rail;
+        coordinator
+            .transact_feature_authoring_pointer_down(
+                &mut authoring,
+                &scene,
+                PointerInput {
+                    pointer_id: 905,
+                    position: rail.screen_grip,
+                    modifiers: Modifiers::default(),
+                },
+                Some(SelectionItem::FeatureCorner(owner)),
+                PickTolerance::default(),
+                "authoring radius press",
+            )
+            .expect("start authoring radius path");
+        for delta in deltas {
+            let model_position = [
+                delta.mul_add(rail.model_derivative[0], rail.model_grip[0]),
+                delta.mul_add(rail.model_derivative[1], rail.model_grip[1]),
+            ];
+            let effects = coordinator.editor_mut().pointer_move(
+                &scene,
+                PointerInput {
+                    pointer_id: 905,
+                    position: scene.viewport.model_to_screen(model_position),
+                    modifiers: Modifiers::default(),
+                },
+            );
+            assert!(matches!(
+                effects.as_slice(),
+                [EditorEffect::PreviewComputedFeatureRadius { .. }]
+            ));
+            coordinator
+                .apply_feature_authoring_editor_effect(&mut authoring, &effects[0])
+                .expect("accept authoring radius sample");
+            scene = visible_computed_scene(&coordinator);
+        }
+        coordinator
+            .feature_authoring_preview()
+            .expect("final authoring radius preview")
+            .candidate()
+            .clone()
+    }
+
+    fn assert_fillet_candidates_near(
+        first: &FeatureAuthoringCandidate,
+        second: &FeatureAuthoringCandidate,
+        tolerance: f64,
+    ) {
+        assert_eq!(first.tool(), second.tool());
+        assert_eq!(first.radius().to_bits(), second.radius().to_bits());
+        assert_eq!(first.sketch_input(), second.sketch_input());
+        assert_eq!(
+            first.accepted_state_identity(),
+            second.accepted_state_identity()
+        );
+        assert_eq!(first.corners().len(), second.corners().len());
+        let near = |left: f64, right: f64| {
+            assert!(
+                (left - right).abs() <= tolerance,
+                "{left} and {right} differ beyond {tolerance}"
+            );
+        };
+        for (first, second) in first.corners().iter().zip(second.corners()) {
+            for (first_parent, second_parent) in [
+                (first.corner.first, second.corner.first),
+                (first.corner.second, second.corner.second),
+            ] {
+                assert_eq!(first_parent.source, second_parent.source);
+                near(
+                    first_parent.picked_parameter,
+                    second_parent.picked_parameter,
+                );
+                assert_eq!(first_parent.winding, second_parent.winding);
+                assert_eq!(first_parent.neighborhood, second_parent.neighborhood);
+                assert_eq!(first_parent.normal_side, second_parent.normal_side);
+                assert_eq!(
+                    first_parent.retained_endpoint,
+                    second_parent.retained_endpoint
+                );
+                match (first_parent.periodic_anchor, second_parent.periodic_anchor) {
+                    (Some(first), Some(second)) => {
+                        near(first.parameter, second.parameter);
+                        assert_eq!(first.winding, second.winding);
+                    }
+                    (None, None) => {}
+                    anchors => panic!("periodic anchors differ: {anchors:?}"),
+                }
+            }
+            assert_eq!(first.corner.endpoint_order, second.corner.endpoint_order);
+            assert_eq!(first.corner.sweep, second.corner.sweep);
+            for (left, right) in first.arc.center.into_iter().zip(second.arc.center) {
+                near(left, right);
+            }
+            near(first.arc.radius, second.arc.radius);
+            near(first.arc.start_angle, second.arc.start_angle);
+            near(first.arc.end_angle, second.arc.end_angle);
+            assert_eq!(first.arc.sweep, second.arc.sweep);
+            for (first, second) in first.arc.contacts.iter().zip(second.arc.contacts) {
+                assert_eq!(first.source, second.source);
+                near(first.parameter, second.parameter);
+                assert_eq!(first.winding, second.winding);
+                near(first.total_parameter, second.total_parameter);
+                for (left, right) in first.position.into_iter().zip(second.position) {
+                    near(left, right);
+                }
+            }
+            assert_eq!(first.options, second.options);
+        }
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn published_radius_transition_model_publishes_only_the_acknowledged_current_sample() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        let feature = apply_grouped_fillet(&mut fixture.coordinator, &candidate);
+        let ComputedFeatureDefinition::FilletSet(fillet) = &fixture
+            .coordinator
+            .feature_document()
+            .feature(feature)
+            .expect("published Fillet")
+            .definition;
+        let owner = ComputedCornerRef {
+            feature,
+            corner: fillet.corners[0].id,
+        };
+        fixture
+            .coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::FeatureCorner(owner)]);
+        let native_before = native_sketch_invariants(&fixture.coordinator, &fixture.points);
+        let feature_json_before = fixture
+            .coordinator
+            .feature_document()
+            .to_json()
+            .expect("feature JSON");
+        let radius_before = fillet_radius(&fixture.coordinator, feature);
+        let history_before = fixture.coordinator.history_len();
+        let scene = current_computed_scene(&fixture.coordinator);
+        let arc = scene
+            .computed_curves
+            .iter()
+            .find(|curve| curve.owner == owner)
+            .expect("selected computed arc");
+        let rail = arc.radius_rail.expect("validated radius rail");
+        let valid_model = [
+            0.2_f64.mul_add(rail.model_derivative[0], rail.model_grip[0]),
+            0.2_f64.mul_add(rail.model_derivative[1], rail.model_grip[1]),
+        ];
+        let invalid_distance = -(radius_before + 1.0);
+        let invalid_model = [
+            invalid_distance.mul_add(rail.model_derivative[0], rail.model_grip[0]),
+            invalid_distance.mul_add(rail.model_derivative[1], rail.model_grip[1]),
+        ];
+        let pointer = |pointer_id, model_position| PointerInput {
+            pointer_id,
+            position: scene.viewport.model_to_screen(model_position),
+            modifiers: Modifiers::default(),
+        };
+        let expected_design = fixture.coordinator.session().design_identity();
+
+        // A requested sample that the coordinator never validates cannot publish.
+        let _ = fixture
+            .coordinator
+            .pointer_down(&scene, pointer(701, rail.model_grip));
+        assert!(matches!(
+            fixture
+                .coordinator
+                .editor_mut()
+                .pointer_move(&scene, pointer(701, valid_model))
+                .as_slice(),
+            [EditorEffect::PreviewComputedFeatureRadius { .. }]
+        ));
+        let unacknowledged_release = fixture.coordinator.editor_mut().pointer_up(
+            &scene,
+            expected_design,
+            pointer(701, valid_model),
+        );
+        assert_eq!(
+            unacknowledged_release,
+            vec![EditorEffect::ClearComputedFeaturePreview]
+        );
+        fixture
+            .coordinator
+            .apply_editor_effect(&unacknowledged_release[0])
+            .expect("clear unacknowledged preview");
+        assert_eq!(
+            fixture
+                .coordinator
+                .feature_document()
+                .to_json()
+                .expect("unchanged feature JSON"),
+            feature_json_before
+        );
+        assert_eq!(fixture.coordinator.history_len(), history_before);
+
+        // A later invalid sample revokes acknowledgement of an earlier Current sample.
+        let _ = fixture
+            .coordinator
+            .pointer_down(&scene, pointer(702, rail.model_grip));
+        let preview = fixture
+            .coordinator
+            .editor_mut()
+            .pointer_move(&scene, pointer(702, valid_model));
+        let preview_radius = match preview.as_slice() {
+            [EditorEffect::PreviewComputedFeatureRadius { radius, .. }] => *radius,
+            effects => panic!("expected one radius preview, got {effects:?}"),
+        };
+        fixture
+            .coordinator
+            .apply_editor_effect(&preview[0])
+            .expect("acknowledge Current radius preview");
+        assert!(matches!(
+            fixture.coordinator.computed_scene_state(),
+            ComputedSceneState::Current { .. }
+        ));
+        assert!(
+            fixture
+                .coordinator
+                .editor_mut()
+                .pointer_move(&scene, pointer(702, invalid_model))
+                .is_empty()
+        );
+        let invalid_release = fixture.coordinator.editor_mut().pointer_up(
+            &scene,
+            expected_design,
+            pointer(702, invalid_model),
+        );
+        assert_eq!(
+            invalid_release,
+            vec![EditorEffect::ClearComputedFeaturePreview]
+        );
+        fixture
+            .coordinator
+            .apply_editor_effect(&invalid_release[0])
+            .expect("clear invalid final sample");
+        assert_eq!(
+            fillet_radius(&fixture.coordinator, feature).to_bits(),
+            radius_before.to_bits()
+        );
+        assert_eq!(fixture.coordinator.history_len(), history_before);
+        assert_eq!(
+            native_sketch_invariants(&fixture.coordinator, &fixture.points),
+            native_before
+        );
+
+        // Cancellation restores the exact durable origin and creates no history.
+        let _ = fixture
+            .coordinator
+            .pointer_down(&scene, pointer(703, rail.model_grip));
+        let preview = fixture
+            .coordinator
+            .editor_mut()
+            .pointer_move(&scene, pointer(703, valid_model));
+        fixture
+            .coordinator
+            .apply_editor_effect(&preview[0])
+            .expect("acknowledge preview before cancel");
+        let cancelled = fixture.coordinator.editor_mut().cancel();
+        assert!(matches!(
+            cancelled.as_slice(),
+            [EditorEffect::RestoreComputedFeatureRadius { radius, .. }]
+                if radius.to_bits() == radius_before.to_bits()
+        ));
+        fixture
+            .coordinator
+            .apply_editor_effect(&cancelled[0])
+            .expect("restore cancelled preview");
+        assert_eq!(fixture.coordinator.history_len(), history_before);
+        assert_eq!(
+            fixture
+                .coordinator
+                .feature_document()
+                .to_json()
+                .expect("cancelled feature JSON"),
+            feature_json_before
+        );
+
+        // Only the final acknowledged Current candidate enters durable history.
+        let _ = fixture
+            .coordinator
+            .pointer_down(&scene, pointer(704, rail.model_grip));
+        let preview = fixture
+            .coordinator
+            .editor_mut()
+            .pointer_move(&scene, pointer(704, valid_model));
+        fixture
+            .coordinator
+            .apply_editor_effect(&preview[0])
+            .expect("acknowledge committable preview");
+        let preview_revision = match fixture.coordinator.computed_scene_state() {
+            ComputedSceneState::Current { snapshot, .. } => snapshot.evaluation_revision(),
+            state => panic!("expected Current radius preview, got {state:?}"),
+        };
+        let release = fixture.coordinator.editor_mut().pointer_up(
+            &scene,
+            expected_design,
+            pointer(704, valid_model),
+        );
+        assert!(matches!(
+            release.as_slice(),
+            [
+                EditorEffect::CommitComputedFeatureRadius { radius, .. },
+                EditorEffect::ClearComputedFeaturePreview,
+            ] if radius.to_bits() == preview_radius.to_bits()
+        ));
+        for effect in &release {
+            fixture
+                .coordinator
+                .apply_editor_effect(effect)
+                .expect("publish acknowledged radius effect");
+        }
+        assert_eq!(fixture.coordinator.history_len(), history_before + 1);
+        assert_eq!(
+            fillet_radius(&fixture.coordinator, feature).to_bits(),
+            preview_radius.to_bits()
+        );
+        assert_eq!(
+            fixture
+                .coordinator
+                .computed_snapshot()
+                .expect("published exact preview")
+                .evaluation_revision(),
+            preview_revision
+        );
+        assert_eq!(
+            native_sketch_invariants(&fixture.coordinator, &fixture.points),
+            native_before
+        );
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+    enum RadiusModelSample {
+        A,
+        B,
+    }
+
+    impl RadiusModelSample {
+        const fn index(self) -> usize {
+            match self {
+                Self::A => 0,
+                Self::B => 1,
+            }
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+    enum RadiusModelPointerSample {
+        Origin,
+        Valid(RadiusModelSample),
+        Invalid,
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+    enum RadiusModelPhase {
+        Idle,
+        Live,
+        Cancelled,
+        Released,
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+    struct RadiusReferenceState {
+        phase: RadiusModelPhase,
+        moved: bool,
+        pointer_sample: RadiusModelPointerSample,
+        last_sampled: Option<RadiusModelSample>,
+        pending: Option<RadiusModelSample>,
+        current: Option<RadiusModelSample>,
+        held_preview: Option<RadiusModelSample>,
+        emitted: [bool; 2],
+        durable: Option<RadiusModelSample>,
+    }
+
+    impl RadiusReferenceState {
+        const fn idle() -> Self {
+            Self {
+                phase: RadiusModelPhase::Idle,
+                moved: false,
+                pointer_sample: RadiusModelPointerSample::Origin,
+                last_sampled: None,
+                pending: None,
+                current: None,
+                held_preview: None,
+                emitted: [false; 2],
+                durable: None,
+            }
+        }
+
+        const fn terminal(phase: RadiusModelPhase, durable: Option<RadiusModelSample>) -> Self {
+            Self {
+                phase,
+                durable,
+                ..Self::idle()
+            }
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    enum RadiusModelEvent {
+        OwnerDown,
+        ForeignDown,
+        OwnerMoveA,
+        OwnerMoveB,
+        ForeignMove,
+        OwnerMoveInvalid,
+        AcknowledgeA,
+        AcknowledgeB,
+        OwnerReleaseLatest,
+        OwnerReleaseInvalid,
+        ForeignRelease,
+        Cancel,
+    }
+
+    const RADIUS_MODEL_EVENTS: [RadiusModelEvent; 12] = [
+        RadiusModelEvent::OwnerDown,
+        RadiusModelEvent::ForeignDown,
+        RadiusModelEvent::OwnerMoveA,
+        RadiusModelEvent::OwnerMoveB,
+        RadiusModelEvent::ForeignMove,
+        RadiusModelEvent::OwnerMoveInvalid,
+        RadiusModelEvent::AcknowledgeA,
+        RadiusModelEvent::AcknowledgeB,
+        RadiusModelEvent::OwnerReleaseLatest,
+        RadiusModelEvent::OwnerReleaseInvalid,
+        RadiusModelEvent::ForeignRelease,
+        RadiusModelEvent::Cancel,
+    ];
+
+    fn radius_reference_transition(
+        state: RadiusReferenceState,
+        event: RadiusModelEvent,
+    ) -> Option<RadiusReferenceState> {
+        if event == RadiusModelEvent::OwnerDown {
+            return (state.phase == RadiusModelPhase::Idle).then_some(RadiusReferenceState {
+                phase: RadiusModelPhase::Live,
+                ..state
+            });
+        }
+        if state.phase != RadiusModelPhase::Live {
+            return None;
+        }
+        let mut next = state;
+        match event {
+            RadiusModelEvent::OwnerDown => unreachable!(),
+            RadiusModelEvent::ForeignDown
+            | RadiusModelEvent::ForeignMove
+            | RadiusModelEvent::ForeignRelease => {}
+            RadiusModelEvent::OwnerMoveA | RadiusModelEvent::OwnerMoveB => {
+                let sample = if event == RadiusModelEvent::OwnerMoveA {
+                    RadiusModelSample::A
+                } else {
+                    RadiusModelSample::B
+                };
+                next.moved = true;
+                next.pointer_sample = RadiusModelPointerSample::Valid(sample);
+                if next.last_sampled != Some(sample) {
+                    next.last_sampled = Some(sample);
+                    next.pending = Some(sample);
+                    next.current = None;
+                    next.emitted[sample.index()] = true;
+                }
+            }
+            RadiusModelEvent::OwnerMoveInvalid => {
+                next.moved = true;
+                next.pointer_sample = RadiusModelPointerSample::Invalid;
+                next.last_sampled = None;
+                next.pending = None;
+                next.current = None;
+            }
+            RadiusModelEvent::AcknowledgeA | RadiusModelEvent::AcknowledgeB => {
+                let sample = if event == RadiusModelEvent::AcknowledgeA {
+                    RadiusModelSample::A
+                } else {
+                    RadiusModelSample::B
+                };
+                if !next.emitted[sample.index()] {
+                    return None;
+                }
+                if next.pending == Some(sample) {
+                    next.pending = None;
+                    next.current = Some(sample);
+                    next.held_preview = Some(sample);
+                }
+            }
+            RadiusModelEvent::OwnerReleaseLatest => {
+                let durable = next.current.filter(|sample| {
+                    next.pointer_sample == RadiusModelPointerSample::Valid(*sample)
+                });
+                return Some(RadiusReferenceState::terminal(
+                    RadiusModelPhase::Released,
+                    durable,
+                ));
+            }
+            RadiusModelEvent::OwnerReleaseInvalid => {
+                return Some(RadiusReferenceState::terminal(
+                    RadiusModelPhase::Released,
+                    None,
+                ));
+            }
+            RadiusModelEvent::Cancel => {
+                return Some(RadiusReferenceState::terminal(
+                    RadiusModelPhase::Cancelled,
+                    None,
+                ));
+            }
+        }
+        Some(next)
+    }
+
+    fn bounded_radius_model_transitions() -> Vec<(
+        Vec<RadiusModelEvent>,
+        RadiusModelEvent,
+        RadiusReferenceState,
+    )> {
+        let initial = RadiusReferenceState::idle();
+        let mut paths = std::collections::BTreeMap::from([(initial, Vec::new())]);
+        let mut queue = std::collections::VecDeque::from([initial]);
+        let mut transitions = Vec::new();
+        while let Some(state) = queue.pop_front() {
+            if !matches!(state.phase, RadiusModelPhase::Idle | RadiusModelPhase::Live) {
+                continue;
+            }
+            let prefix = paths.get(&state).expect("known model state").clone();
+            for event in RADIUS_MODEL_EVENTS {
+                let Some(next) = radius_reference_transition(state, event) else {
+                    continue;
+                };
+                transitions.push((prefix.clone(), event, next));
+                if let std::collections::btree_map::Entry::Vacant(entry) = paths.entry(next) {
+                    let mut next_prefix = prefix.clone();
+                    next_prefix.push(event);
+                    entry.insert(next_prefix);
+                    queue.push_back(next);
+                }
+            }
+        }
+        let phase_count = |phase| paths.keys().filter(|state| state.phase == phase).count();
+        assert_eq!(paths.len(), 28, "bounded model state count changed");
+        assert_eq!(phase_count(RadiusModelPhase::Idle), 1);
+        assert_eq!(phase_count(RadiusModelPhase::Live), 23);
+        assert_eq!(phase_count(RadiusModelPhase::Cancelled), 1);
+        assert_eq!(phase_count(RadiusModelPhase::Released), 3);
+        assert_eq!(transitions.len(), 240, "bounded transition count changed");
+        assert!(
+            paths.values().all(|path| path.len() <= 5),
+            "canonical model prefix escaped its fixed bound"
+        );
+        transitions
+    }
+
+    #[derive(Clone, Debug)]
+    struct RadiusCurrentEvidence {
+        radius_bits: u64,
+        feature_json: String,
+        evaluation_revision: u64,
+    }
+
+    struct RadiusTransitionHarness {
+        fixture: ComputedFilletEditorFixture,
+        feature: ComputedFeatureId,
+        scene: EditorScene,
+        grip: ScreenPoint,
+        valid_positions: [ScreenPoint; 2],
+        invalid_position: ScreenPoint,
+        expected_design: SketchDesignIdentity,
+        model: RadiusReferenceState,
+        emitted_effects: [Option<EditorEffect>; 2],
+        current_evidence: [Option<RadiusCurrentEvidence>; 2],
+        owner_position: ScreenPoint,
+        origin_feature_json: String,
+        origin_radius_bits: u64,
+        origin_evaluation_revision: u64,
+        origin_history_len: usize,
+        origin_history_cursor: usize,
+        origin_corner_ids: Vec<ComputedFeatureCornerId>,
+        native_before: NativeSketchInvariants,
+    }
+
+    impl RadiusTransitionHarness {
+        const OWNER_POINTER: u64 = 9_701;
+        const FOREIGN_POINTER: u64 = 9_702;
+
+        fn new() -> Self {
+            let mut fixture = computed_fillet_editor_fixture();
+            let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+            let feature = apply_grouped_fillet(&mut fixture.coordinator, &candidate);
+            let (owner, origin_corner_ids) = {
+                let ComputedFeatureDefinition::FilletSet(fillet) = &fixture
+                    .coordinator
+                    .feature_document()
+                    .feature(feature)
+                    .expect("published model Fillet")
+                    .definition;
+                (
+                    ComputedCornerRef {
+                        feature,
+                        corner: fillet.corners[0].id,
+                    },
+                    fillet.corners.iter().map(|corner| corner.id).collect(),
+                )
+            };
+            fixture
+                .coordinator
+                .editor_mut()
+                .set_selection([SelectionItem::FeatureCorner(owner)]);
+            let native_before = native_sketch_invariants(&fixture.coordinator, &fixture.points);
+            let origin_feature_json = fixture
+                .coordinator
+                .feature_document()
+                .to_json()
+                .expect("model origin feature JSON");
+            let origin_radius = fillet_radius(&fixture.coordinator, feature);
+            let origin_evaluation_revision = fixture
+                .coordinator
+                .computed_snapshot()
+                .expect("model origin computed snapshot")
+                .evaluation_revision()
+                .raw();
+            let scene = current_computed_scene(&fixture.coordinator);
+            let rail = scene
+                .computed_curves
+                .iter()
+                .find(|curve| curve.owner == owner)
+                .and_then(|curve| curve.radius_rail)
+                .expect("model radius rail");
+            let model_position = |delta: f64| {
+                [
+                    delta.mul_add(rail.model_derivative[0], rail.model_grip[0]),
+                    delta.mul_add(rail.model_derivative[1], rail.model_grip[1]),
+                ]
+            };
+            let valid_positions =
+                [0.2, 0.35].map(|delta| scene.viewport.model_to_screen(model_position(delta)));
+            let invalid_position = scene
+                .viewport
+                .model_to_screen(model_position(-(origin_radius + 1.0)));
+            let grip = rail.screen_grip;
+            let expected_design = fixture.coordinator.session().design_identity();
+            let origin_history_len = fixture.coordinator.history_len();
+            let origin_history_cursor = fixture.coordinator.history_cursor();
+            Self {
+                fixture,
+                feature,
+                scene,
+                grip,
+                valid_positions,
+                invalid_position,
+                expected_design,
+                model: RadiusReferenceState::idle(),
+                emitted_effects: [None, None],
+                current_evidence: [None, None],
+                owner_position: grip,
+                origin_feature_json,
+                origin_radius_bits: origin_radius.to_bits(),
+                origin_evaluation_revision,
+                origin_history_len,
+                origin_history_cursor,
+                origin_corner_ids,
+                native_before,
+            }
+        }
+
+        fn pointer(pointer_id: u64, position: ScreenPoint) -> PointerInput {
+            PointerInput {
+                pointer_id,
+                position,
+                modifiers: Modifiers::default(),
+            }
+        }
+
+        fn sample_position(&self, sample: RadiusModelSample) -> ScreenPoint {
+            self.valid_positions[sample.index()]
+        }
+
+        fn sample_effect_radius_bits(&self, sample: RadiusModelSample) -> u64 {
+            match self.emitted_effects[sample.index()]
+                .as_ref()
+                .expect("model sample effect")
+            {
+                EditorEffect::PreviewComputedFeatureRadius { radius, .. } => radius.to_bits(),
+                effect => panic!("unexpected model sample effect: {effect:?}"),
+            }
+        }
+
+        #[allow(clippy::too_many_lines)]
+        fn execute(&mut self, event: RadiusModelEvent) {
+            let before = self.model;
+            let next = radius_reference_transition(before, event)
+                .expect("transition graph supplied an applicable event");
+            match event {
+                RadiusModelEvent::OwnerDown => {
+                    let effects = self
+                        .fixture
+                        .coordinator
+                        .pointer_down(&self.scene, Self::pointer(Self::OWNER_POINTER, self.grip));
+                    assert!(effects.is_empty(), "owner down effects: {effects:?}");
+                }
+                RadiusModelEvent::ForeignDown => {
+                    let effects = self
+                        .fixture
+                        .coordinator
+                        .pointer_down(&self.scene, Self::pointer(Self::FOREIGN_POINTER, self.grip));
+                    assert!(effects.is_empty(), "foreign down effects: {effects:?}");
+                }
+                RadiusModelEvent::OwnerMoveA | RadiusModelEvent::OwnerMoveB => {
+                    let sample = if event == RadiusModelEvent::OwnerMoveA {
+                        RadiusModelSample::A
+                    } else {
+                        RadiusModelSample::B
+                    };
+                    let position = self.sample_position(sample);
+                    self.owner_position = position;
+                    let input = Self::pointer(Self::OWNER_POINTER, position);
+                    let effects = self
+                        .fixture
+                        .coordinator
+                        .editor_mut()
+                        .pointer_move(&self.scene, input);
+                    if before.last_sampled == Some(sample) {
+                        assert!(effects.is_empty(), "duplicate sample effects: {effects:?}");
+                    } else {
+                        assert!(matches!(
+                            effects.as_slice(),
+                            [EditorEffect::PreviewComputedFeatureRadius {
+                                feature,
+                                ..
+                            }] if *feature == self.feature
+                        ));
+                        self.emitted_effects[sample.index()] = Some(effects[0].clone());
+                    }
+                }
+                RadiusModelEvent::ForeignMove => {
+                    let input = Self::pointer(Self::FOREIGN_POINTER, self.valid_positions[0]);
+                    let effects = self
+                        .fixture
+                        .coordinator
+                        .editor_mut()
+                        .pointer_move(&self.scene, input);
+                    assert!(effects.is_empty(), "foreign move effects: {effects:?}");
+                }
+                RadiusModelEvent::OwnerMoveInvalid => {
+                    self.owner_position = self.invalid_position;
+                    let input = Self::pointer(Self::OWNER_POINTER, self.invalid_position);
+                    let effects = self
+                        .fixture
+                        .coordinator
+                        .editor_mut()
+                        .pointer_move(&self.scene, input);
+                    assert!(effects.is_empty(), "invalid move effects: {effects:?}");
+                }
+                RadiusModelEvent::AcknowledgeA | RadiusModelEvent::AcknowledgeB => {
+                    let sample = if event == RadiusModelEvent::AcknowledgeA {
+                        RadiusModelSample::A
+                    } else {
+                        RadiusModelSample::B
+                    };
+                    let effect = self.emitted_effects[sample.index()]
+                        .as_ref()
+                        .expect("emitted acknowledgement effect")
+                        .clone();
+                    let result = self.fixture.coordinator.apply_editor_effect(&effect);
+                    if before.pending == Some(sample) {
+                        result.expect("exact Current acknowledgement");
+                        let preview = self
+                            .fixture
+                            .coordinator
+                            .computed_fillet_preview
+                            .as_ref()
+                            .expect("acknowledged held preview");
+                        self.current_evidence[sample.index()] = Some(RadiusCurrentEvidence {
+                            radius_bits: preview.radius.to_bits(),
+                            feature_json: preview
+                                .features
+                                .to_json()
+                                .expect("acknowledged feature JSON"),
+                            evaluation_revision: preview.snapshot.evaluation_revision().raw(),
+                        });
+                    } else {
+                        assert!(
+                            result.is_err(),
+                            "stale/duplicate acknowledgement unexpectedly succeeded"
+                        );
+                    }
+                }
+                RadiusModelEvent::OwnerReleaseLatest | RadiusModelEvent::OwnerReleaseInvalid => {
+                    let release_position = if event == RadiusModelEvent::OwnerReleaseLatest {
+                        self.owner_position
+                    } else {
+                        self.invalid_position
+                    };
+                    let input = Self::pointer(Self::OWNER_POINTER, release_position);
+                    let effects = self.fixture.coordinator.editor_mut().pointer_up(
+                        &self.scene,
+                        self.expected_design,
+                        input,
+                    );
+                    let expected_commit = next.durable;
+                    match expected_commit {
+                        Some(sample) => assert!(matches!(
+                            effects.as_slice(),
+                            [
+                                EditorEffect::CommitComputedFeatureRadius { radius, .. },
+                                EditorEffect::ClearComputedFeaturePreview,
+                            ] if radius.to_bits() == self.sample_effect_radius_bits(sample)
+                        )),
+                        None if before.moved => {
+                            assert_eq!(effects, vec![EditorEffect::ClearComputedFeaturePreview]);
+                        }
+                        None => assert!(effects.is_empty(), "click release effects: {effects:?}"),
+                    }
+                    for effect in &effects {
+                        self.fixture
+                            .coordinator
+                            .apply_editor_effect(effect)
+                            .expect("model release effect");
+                    }
+                    self.emitted_effects = [None, None];
+                }
+                RadiusModelEvent::ForeignRelease => {
+                    let input = Self::pointer(Self::FOREIGN_POINTER, self.valid_positions[0]);
+                    let effects = self.fixture.coordinator.editor_mut().pointer_up(
+                        &self.scene,
+                        self.expected_design,
+                        input,
+                    );
+                    assert!(effects.is_empty(), "foreign release effects: {effects:?}");
+                }
+                RadiusModelEvent::Cancel => {
+                    let effects = self.fixture.coordinator.editor_mut().cancel();
+                    assert!(matches!(
+                        effects.as_slice(),
+                        [EditorEffect::RestoreComputedFeatureRadius {
+                            feature,
+                            radius,
+                            ..
+                        }] if *feature == self.feature
+                            && radius.to_bits() == self.origin_radius_bits
+                    ));
+                    for effect in &effects {
+                        self.fixture
+                            .coordinator
+                            .apply_editor_effect(effect)
+                            .expect("model cancellation effect");
+                    }
+                    self.emitted_effects = [None, None];
+                }
+            }
+            self.model = next;
+            self.assert_observation();
+        }
+
+        #[allow(clippy::too_many_lines)]
+        fn assert_observation(&self) {
+            let coordinator = &self.fixture.coordinator;
+            let expected_durable = self.model.durable.map(|sample| {
+                self.current_evidence[sample.index()]
+                    .as_ref()
+                    .expect("durable Current evidence")
+            });
+            let expected_feature_json = expected_durable
+                .map_or(self.origin_feature_json.as_str(), |evidence| {
+                    evidence.feature_json.as_str()
+                });
+            assert_eq!(
+                coordinator
+                    .feature_document()
+                    .to_json()
+                    .expect("observed feature JSON"),
+                expected_feature_json
+            );
+            let expected_radius_bits =
+                expected_durable.map_or(self.origin_radius_bits, |evidence| evidence.radius_bits);
+            assert_eq!(
+                fillet_radius(coordinator, self.feature).to_bits(),
+                expected_radius_bits
+            );
+            let ComputedFeatureDefinition::FilletSet(fillet) = &coordinator
+                .feature_document()
+                .feature(self.feature)
+                .expect("stable model feature")
+                .definition;
+            assert_eq!(
+                fillet
+                    .corners
+                    .iter()
+                    .map(|corner| corner.id)
+                    .collect::<Vec<_>>(),
+                self.origin_corner_ids
+            );
+            let history_delta = usize::from(self.model.durable.is_some());
+            assert_eq!(
+                coordinator.history_len(),
+                self.origin_history_len + history_delta
+            );
+            assert_eq!(
+                coordinator.history_cursor(),
+                self.origin_history_cursor + history_delta
+            );
+            assert_eq!(
+                native_sketch_invariants(coordinator, &self.fixture.points),
+                self.native_before
+            );
+
+            if let Some(sample) = self.model.held_preview {
+                let expected = self.current_evidence[sample.index()]
+                    .as_ref()
+                    .expect("held Current evidence");
+                let held = coordinator
+                    .computed_fillet_preview
+                    .as_ref()
+                    .expect("held coordinator preview");
+                assert_eq!(held.radius.to_bits(), expected.radius_bits);
+                assert_eq!(
+                    held.features.to_json().expect("held feature JSON"),
+                    expected.feature_json
+                );
+                assert_eq!(
+                    held.snapshot.evaluation_revision().raw(),
+                    expected.evaluation_revision
+                );
+                assert_eq!(
+                    coordinator
+                        .computed_preview_snapshot
+                        .as_ref()
+                        .expect("held preview snapshot")
+                        .evaluation_revision()
+                        .raw(),
+                    expected.evaluation_revision
+                );
+                assert_eq!(
+                    coordinator.computed_preview_input,
+                    Some(held.snapshot.input())
+                );
+            } else {
+                assert!(coordinator.computed_fillet_preview.is_none());
+                assert!(coordinator.computed_preview_snapshot.is_none());
+                assert!(coordinator.computed_preview_input.is_none());
+            }
+
+            let expected_visible_revision = self
+                .model
+                .held_preview
+                .and_then(|sample| self.current_evidence[sample.index()].as_ref())
+                .or(expected_durable)
+                .map_or(self.origin_evaluation_revision, |evidence| {
+                    evidence.evaluation_revision
+                });
+            assert_eq!(
+                coordinator
+                    .computed_snapshot()
+                    .expect("model visible computed snapshot")
+                    .evaluation_revision()
+                    .raw(),
+                expected_visible_revision
+            );
+            assert!(matches!(
+                coordinator.computed_scene_state(),
+                ComputedSceneState::Current { .. }
+            ));
+            if self.model.phase == RadiusModelPhase::Live {
+                assert_eq!(
+                    coordinator.editor().active_pointer_gesture(),
+                    Some(crate::ActivePointerGesture {
+                        pointer_id: Self::OWNER_POINTER,
+                        kind: crate::ActivePointerGestureKind::FilletRadius,
+                    })
+                );
+            } else {
+                assert_eq!(coordinator.editor().active_pointer_gesture(), None);
+            }
+        }
+    }
+
+    #[test]
+    fn bounded_radius_transition_model_matches_every_reachable_state_event_pair() {
+        let transitions = bounded_radius_model_transitions();
+        for (prefix, event, expected) in transitions {
+            let mut harness = RadiusTransitionHarness::new();
+            harness.assert_observation();
+            for prefix_event in prefix {
+                harness.execute(prefix_event);
+            }
+            harness.execute(event);
+            assert_eq!(harness.model, expected);
+        }
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn authoring_and_published_radius_transactions_share_one_atomic_absolute_configuration() {
+        let mut authoring_fixture = computed_fillet_editor_fixture();
+        let native_authoring_before =
+            native_sketch_invariants(&authoring_fixture.coordinator, &authoring_fixture.points);
+        let snapshot = authoring_fixture
+            .coordinator
+            .feature_authoring_snapshot()
+            .expect("authoring snapshot");
+        let selection = authoring_fixture.points[1..=2]
+            .iter()
+            .copied()
+            .map(|point| (SelectionItem::Point(point), None))
+            .collect::<Vec<_>>();
+        let mut authoring = FeatureAuthoringState::default();
+        let initial = feature_candidate(authoring.activate(
+            &snapshot,
+            authoring_fixture.coordinator.session().design_document(),
+            FeatureAuthoringTool::Fillet,
+            &selection,
+        ));
+        assert_eq!(initial.corners().len(), 2);
+        let history_before = authoring_fixture.coordinator.history_len();
+
+        let transaction = authoring_fixture
+            .coordinator
+            .transact_feature_authoring_radius(&mut authoring, Some(0.75), "numeric batch")
+            .expect("Current-only authoring radius transaction");
+        let resized = match transaction.outcome {
+            FeatureAuthoringOutcome::PreviewRequested { candidate, .. } => candidate,
+            other => panic!("expected resized authoring preview, got {other:?}"),
+        };
+        let metadata = transaction.preview.expect("exact resized preview metadata");
+        assert_eq!(resized.radius().to_bits(), 0.75_f64.to_bits());
+        assert_eq!(resized.corners().len(), 2);
+        assert!(
+            authoring_fixture
+                .coordinator
+                .feature_document()
+                .features()
+                .is_empty()
+        );
+        assert_eq!(authoring_fixture.coordinator.history_len(), history_before);
+        let held_before_invalid = authoring_fixture
+            .coordinator
+            .feature_authoring_preview()
+            .expect("held Current preview")
+            .candidate()
+            .clone();
+        assert_eq!(held_before_invalid, resized);
+        assert!(matches!(
+            computed_feature_state(
+                authoring_fixture
+                    .coordinator
+                    .feature_authoring_preview()
+                    .expect("Current whole-set preview")
+                    .snapshot(),
+                metadata.feature,
+            ),
+            ComputedFeatureEvaluationState::Current { corner_edges }
+                if corner_edges.len() == 2
+        ));
+
+        let state_before_invalid = authoring.clone();
+        let invalid = authoring_fixture
+            .coordinator
+            .transact_feature_authoring_radius(&mut authoring, Some(3.0), "crossed shared span");
+        match invalid {
+            Err(_)
+            | Ok(FeatureAuthoringTransaction {
+                outcome: FeatureAuthoringOutcome::Warning(_),
+                ..
+            }) => {}
+            other => panic!("invalid whole-set radius unexpectedly advanced: {other:?}"),
+        }
+        assert_eq!(authoring, state_before_invalid);
+        let held_after_invalid = authoring_fixture
+            .coordinator
+            .feature_authoring_preview()
+            .expect("last Current preview retained");
+        assert_eq!(held_after_invalid.metadata(), &metadata);
+        assert_eq!(held_after_invalid.candidate(), &held_before_invalid);
+        assert_eq!(authoring_fixture.coordinator.history_len(), history_before);
+        assert_eq!(
+            native_sketch_invariants(&authoring_fixture.coordinator, &authoring_fixture.points),
+            native_authoring_before
+        );
+
+        let created = authoring_fixture
+            .coordinator
+            .apply_feature_authoring_preview(metadata.token, &resized)
+            .expect("publish exact authoring preview")
+            .value;
+        assert_eq!(
+            authoring_fixture.coordinator.history_len(),
+            history_before + 1
+        );
+        let (created_ids, created_corners) = {
+            let ComputedFeatureDefinition::FilletSet(fillet) = &authoring_fixture
+                .coordinator
+                .feature_document()
+                .feature(created)
+                .expect("published grouped Fillet")
+                .definition;
+            (
+                fillet
+                    .corners
+                    .iter()
+                    .map(|corner| corner.id)
+                    .collect::<Vec<_>>(),
+                fillet
+                    .corners
+                    .iter()
+                    .map(|corner| corner.without_id())
+                    .collect::<Vec<_>>(),
+            )
+        };
+        assert_eq!(created_ids.len(), 2);
+        let created_snapshot = authoring_fixture
+            .coordinator
+            .computed_snapshot()
+            .expect("published grouped output");
+        assert!(matches!(
+            computed_feature_state(created_snapshot, created),
+            ComputedFeatureEvaluationState::Current { corner_edges }
+                if corner_edges.len() == 2
+        ));
+        let created_arc_radii = created_snapshot
+            .edges()
+            .iter()
+            .filter_map(|edge| match (&edge.geometry, &edge.provenance) {
+                (
+                    geosolve_sketch_features::ComputedEdgeGeometry::CircularArc(arc),
+                    ComputedEdgeProvenance::FilletArc { owner, .. },
+                ) if owner.feature == created => Some(arc.radius.to_bits()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(created_arc_radii, vec![0.75_f64.to_bits(); 2]);
+        assert_eq!(
+            native_sketch_invariants(&authoring_fixture.coordinator, &authoring_fixture.points),
+            native_authoring_before
+        );
+
+        // A feature created at the initial radius and then edited numerically
+        // must land on the same absolute corners as the authoring transaction.
+        let mut published_fixture = ComputedFilletEditorFixture {
+            coordinator: RetainedEditorCoordinator::new(
+                authoring_fixture.coordinator.session().clone(),
+            )
+            .expect("parallel published coordinator"),
+            points: authoring_fixture.points,
+            spans: authoring_fixture.spans,
+        };
+        let native_published_before =
+            native_sketch_invariants(&published_fixture.coordinator, &published_fixture.points);
+        let initial = grouped_fillet_candidate(
+            &published_fixture.coordinator,
+            published_fixture.points[1..=2].iter().copied(),
+        );
+        let published = apply_grouped_fillet(&mut published_fixture.coordinator, &initial);
+        let ids_before = {
+            let ComputedFeatureDefinition::FilletSet(fillet) = &published_fixture
+                .coordinator
+                .feature_document()
+                .feature(published)
+                .expect("initial published grouped Fillet")
+                .definition;
+            fillet
+                .corners
+                .iter()
+                .map(|corner| corner.id)
+                .collect::<Vec<_>>()
+        };
+        let published_history_before = published_fixture.coordinator.history_len();
+        let exact = published_fixture
+            .coordinator
+            .computed_evaluation_input()
+            .expect("exact published input");
+        published_fixture
+            .coordinator
+            .set_computed_fillet_radius_exact(exact, published, 0.75)
+            .expect("Current-only published numeric radius");
+        assert_eq!(
+            published_fixture.coordinator.history_len(),
+            published_history_before + 1
+        );
+        let (ids_after, published_corners) = {
+            let ComputedFeatureDefinition::FilletSet(fillet) = &published_fixture
+                .coordinator
+                .feature_document()
+                .feature(published)
+                .expect("resized published grouped Fillet")
+                .definition;
+            (
+                fillet
+                    .corners
+                    .iter()
+                    .map(|corner| corner.id)
+                    .collect::<Vec<_>>(),
+                fillet
+                    .corners
+                    .iter()
+                    .map(|corner| corner.without_id())
+                    .collect::<Vec<_>>(),
+            )
+        };
+        assert_eq!(ids_after, ids_before);
+        assert_eq!(published_corners, created_corners);
+        assert_eq!(
+            native_sketch_invariants(&published_fixture.coordinator, &published_fixture.points),
+            native_published_before
+        );
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn published_contact_gesture_previews_cancels_commits_and_replays_one_exact_history_step() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        let feature = apply_grouped_fillet(&mut fixture.coordinator, &candidate);
+        let (owner, corner_ids_before) = {
+            let ComputedFeatureDefinition::FilletSet(fillet) = &fixture
+                .coordinator
+                .feature_document()
+                .feature(feature)
+                .expect("published Fillet")
+                .definition;
+            (
+                ComputedCornerRef {
+                    feature,
+                    corner: fillet.corners[0].id,
+                },
+                fillet
+                    .corners
+                    .iter()
+                    .map(|corner| corner.id)
+                    .collect::<Vec<_>>(),
+            )
+        };
+        fixture
+            .coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::FeatureCorner(owner)]);
+        let native_before = native_sketch_invariants(&fixture.coordinator, &fixture.points);
+        let feature_json_before = fixture
+            .coordinator
+            .feature_document()
+            .to_json()
+            .expect("feature JSON before contact gesture");
+        let feature_semantics_before = computed_feature_semantics(&fixture.coordinator, feature);
+        let history_before = fixture.coordinator.history_len();
+        let scene = current_computed_scene(&fixture.coordinator);
+        let affordances = scene
+            .fillet_affordances
+            .iter()
+            .find(|candidate| candidate.owner == owner)
+            .expect("selected Fillet affordances");
+        let handle = affordances.contacts[0];
+        let source_curve = scene
+            .curves
+            .iter()
+            .find(|curve| curve.span == handle.source.span)
+            .expect("named native parent");
+        let far_endpoint = [
+            source_curve.screen_polyline[0],
+            *source_curve
+                .screen_polyline
+                .last()
+                .expect("source polyline endpoint"),
+        ]
+        .into_iter()
+        .max_by(|first, second| {
+            first
+                .distance(handle.screen_position)
+                .total_cmp(&second.distance(handle.screen_position))
+        })
+        .expect("far source endpoint");
+        let target = ScreenPoint {
+            x: 0.15_f64.mul_add(
+                far_endpoint.x - handle.screen_position.x,
+                handle.screen_position.x,
+            ),
+            y: 0.15_f64.mul_add(
+                far_endpoint.y - handle.screen_position.y,
+                handle.screen_position.y,
+            ),
+        };
+        let pointer = |pointer_id, position| PointerInput {
+            pointer_id,
+            position,
+            modifiers: Modifiers::default(),
+        };
+        let expected_design = fixture.coordinator.session().design_identity();
+
+        // A Current contact preview remains feature-only and cancellation
+        // restores the exact durable origin.
+        let _ = fixture
+            .coordinator
+            .pointer_down(&scene, pointer(801, handle.screen_position));
+        let preview = fixture
+            .coordinator
+            .editor_mut()
+            .pointer_move(&scene, pointer(801, target));
+        let parameter = match preview.as_slice() {
+            [
+                EditorEffect::PreviewComputedFeatureContact {
+                    owner: preview_owner,
+                    parent,
+                    source,
+                    parameter,
+                    ..
+                },
+            ] => {
+                assert_eq!(*preview_owner, owner);
+                assert_eq!(*parent, handle.parent);
+                assert_eq!(*source, handle.source);
+                *parameter
+            }
+            effects => panic!("expected one contact preview, got {effects:?}"),
+        };
+        fixture
+            .coordinator
+            .apply_editor_effect(&preview[0])
+            .expect("accept Current contact preview");
+        assert!(matches!(
+            fixture.coordinator.computed_scene_state(),
+            ComputedSceneState::Current { .. }
+        ));
+        assert_eq!(
+            fixture
+                .coordinator
+                .feature_document()
+                .to_json()
+                .expect("durable feature JSON during preview"),
+            feature_json_before
+        );
+        let cancelled = fixture.coordinator.editor_mut().cancel();
+        assert!(matches!(
+            cancelled.as_slice(),
+            [EditorEffect::RestoreComputedFeatureContact {
+                owner: restored,
+                parent,
+                source,
+                ..
+            }] if *restored == owner && *parent == handle.parent && *source == handle.source
+        ));
+        fixture
+            .coordinator
+            .apply_editor_effect(&cancelled[0])
+            .expect("restore cancelled contact preview");
+        assert_eq!(fixture.coordinator.history_len(), history_before);
+        assert_eq!(
+            fixture
+                .coordinator
+                .feature_document()
+                .to_json()
+                .expect("cancelled feature JSON"),
+            feature_json_before
+        );
+        assert_eq!(
+            native_sketch_invariants(&fixture.coordinator, &fixture.points),
+            native_before
+        );
+
+        // Repeating the same sample and releasing publishes the exact held
+        // evaluation as one history entry.
+        let _ = fixture
+            .coordinator
+            .pointer_down(&scene, pointer(802, handle.screen_position));
+        let preview = fixture
+            .coordinator
+            .editor_mut()
+            .pointer_move(&scene, pointer(802, target));
+        fixture
+            .coordinator
+            .apply_editor_effect(&preview[0])
+            .expect("accept committable contact preview");
+        let preview_revision = match fixture.coordinator.computed_scene_state() {
+            ComputedSceneState::Current { snapshot, .. } => snapshot.evaluation_revision(),
+            state => panic!("expected Current contact preview, got {state:?}"),
+        };
+        let release = fixture.coordinator.editor_mut().pointer_up(
+            &scene,
+            expected_design,
+            pointer(802, target),
+        );
+        assert!(matches!(
+            release.as_slice(),
+            [
+                EditorEffect::CommitComputedFeatureContact {
+                    owner: committed,
+                    parameter: committed_parameter,
+                    ..
+                },
+                EditorEffect::ClearComputedFeatureContactPreview,
+            ] if *committed == owner && committed_parameter.to_bits() == parameter.to_bits()
+        ));
+        for effect in &release {
+            fixture
+                .coordinator
+                .apply_editor_effect(effect)
+                .expect("publish contact effect");
+        }
+        assert_eq!(fixture.coordinator.history_len(), history_before + 1);
+        assert_eq!(
+            fixture
+                .coordinator
+                .computed_snapshot()
+                .expect("published contact snapshot")
+                .evaluation_revision(),
+            preview_revision
+        );
+        let feature_json_after = fixture
+            .coordinator
+            .feature_document()
+            .to_json()
+            .expect("feature JSON after contact commit");
+        assert_eq!(feature_json_after, feature_json_before);
+        let feature_semantics_after = computed_feature_semantics(&fixture.coordinator, feature);
+        assert_eq!(
+            feature_semantics_after, feature_semantics_before,
+            "re-seeding this bounded line-line branch resolves back to the same absolute corner"
+        );
+        let corner_ids_after = {
+            let ComputedFeatureDefinition::FilletSet(fillet) = &fixture
+                .coordinator
+                .feature_document()
+                .feature(feature)
+                .expect("contact-edited Fillet")
+                .definition;
+            fillet
+                .corners
+                .iter()
+                .map(|corner| corner.id)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(corner_ids_after, corner_ids_before);
+        assert_eq!(
+            native_sketch_invariants(&fixture.coordinator, &fixture.points),
+            native_before
+        );
+
+        let saved = fixture
+            .coordinator
+            .persistence_checkpoint()
+            .expect("contact checkpoint");
+        fixture.coordinator.undo().expect("Undo contact action");
+        assert_eq!(
+            computed_feature_semantics(&fixture.coordinator, feature),
+            feature_semantics_before
+        );
+        fixture.coordinator.redo().expect("Redo contact action");
+        assert_eq!(
+            computed_feature_semantics(&fixture.coordinator, feature),
+            feature_semantics_after
+        );
+        fixture.coordinator.undo().expect("Undo before reload");
+        fixture
+            .coordinator
+            .reload(&saved)
+            .expect("reload contact state");
+        assert_eq!(
+            computed_feature_semantics(&fixture.coordinator, feature),
+            feature_semantics_after
+        );
+        assert_eq!(fixture.coordinator.history_len(), 1);
+        assert_eq!(fixture.coordinator.history_cursor(), 0);
+        assert_eq!(
+            native_sketch_invariants(&fixture.coordinator, &fixture.points),
+            native_before
+        );
+
+        // The old composite input/effect is stale after publication/reload.
+        let history_after_reload = fixture.coordinator.history_len();
+        assert!(matches!(
+            fixture
+                .coordinator
+                .apply_editor_effect(&EditorEffect::PreviewComputedFeatureContact {
+                    expected: scene.computed_input.expect("origin input"),
+                    owner,
+                    parent: handle.parent,
+                    source: handle.source,
+                    parameter,
+                }),
+            Err(CoordinatorError::StaleComputedFeatureCandidate)
+        ));
+        assert_eq!(fixture.coordinator.history_len(), history_after_reload);
+        assert_eq!(
+            native_sketch_invariants(&fixture.coordinator, &fixture.points),
+            native_before
+        );
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn published_radius_gesture_survives_current_rerenders_and_recovers_after_an_invalid_sample() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        let feature = apply_grouped_fillet(&mut fixture.coordinator, &candidate);
+        let owner = {
+            let ComputedFeatureDefinition::FilletSet(fillet) = &fixture
+                .coordinator
+                .feature_document()
+                .feature(feature)
+                .expect("published Fillet")
+                .definition;
+            ComputedCornerRef {
+                feature,
+                corner: fillet.corners[0].id,
+            }
+        };
+        fixture
+            .coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::FeatureCorner(owner)]);
+        let native_before = native_sketch_invariants(&fixture.coordinator, &fixture.points);
+        let history_before = fixture.coordinator.history_len();
+        let origin_scene = current_computed_scene(&fixture.coordinator);
+        let origin_input = origin_scene.computed_input.expect("origin computed input");
+        let rail = origin_scene
+            .fillet_affordances
+            .iter()
+            .find(|candidate| candidate.owner == owner)
+            .expect("selected Fillet affordances")
+            .radius_rail;
+        let origin_radius = fillet_radius(&fixture.coordinator, feature);
+        let sample_model = |delta: f64| {
+            [
+                delta.mul_add(rail.model_derivative[0], rail.model_grip[0]),
+                delta.mul_add(rail.model_derivative[1], rail.model_grip[1]),
+            ]
+        };
+        let pointer = |model_position| PointerInput {
+            pointer_id: 901,
+            position: origin_scene.viewport.model_to_screen(model_position),
+            modifiers: Modifiers::default(),
+        };
+        let expected_design = fixture.coordinator.session().design_identity();
+
+        let _ = fixture
+            .coordinator
+            .pointer_down(&origin_scene, pointer(rail.model_grip));
+        let first = fixture
+            .coordinator
+            .editor_mut()
+            .pointer_move(&origin_scene, pointer(sample_model(0.1)));
+        assert!(matches!(
+            first.as_slice(),
+            [EditorEffect::PreviewComputedFeatureRadius { radius, .. }]
+                if (*radius - (origin_radius + 0.1)).abs() <= 1.0e-10
+        ));
+        fixture
+            .coordinator
+            .apply_editor_effect(&first[0])
+            .expect("accept first Current sample");
+        let first_scene = visible_computed_scene(&fixture.coordinator);
+        assert_ne!(first_scene.computed_input, Some(origin_input));
+
+        let invalid_delta = -(origin_radius + 1.0);
+        assert!(
+            fixture
+                .coordinator
+                .editor_mut()
+                .pointer_move(&first_scene, pointer(sample_model(invalid_delta)))
+                .is_empty(),
+            "an invalid sample must revoke acknowledgement without replacing the Current scene"
+        );
+        let recovered = fixture
+            .coordinator
+            .editor_mut()
+            .pointer_move(&first_scene, pointer(sample_model(0.25)));
+        let recovered_radius = match recovered.as_slice() {
+            [
+                EditorEffect::PreviewComputedFeatureRadius {
+                    radius, expected, ..
+                },
+            ] => {
+                assert_eq!(*expected, origin_input);
+                *radius
+            }
+            effects => panic!("rerendered scene did not recover radius gesture: {effects:?}"),
+        };
+        assert!((recovered_radius - (origin_radius + 0.25)).abs() <= 1.0e-10);
+        fixture
+            .coordinator
+            .apply_editor_effect(&recovered[0])
+            .expect("accept recovered Current sample");
+        let recovered_scene = visible_computed_scene(&fixture.coordinator);
+        assert_ne!(recovered_scene.computed_input, Some(origin_input));
+        let preview_revision = match fixture.coordinator.computed_scene_state() {
+            ComputedSceneState::Current { snapshot, .. } => snapshot.evaluation_revision(),
+            state => panic!("recovered preview was not Current: {state:?}"),
+        };
+
+        let release = fixture.coordinator.editor_mut().pointer_up(
+            &recovered_scene,
+            expected_design,
+            pointer(sample_model(0.25)),
+        );
+        assert!(matches!(
+            release.as_slice(),
+            [
+                EditorEffect::CommitComputedFeatureRadius {
+                    expected,
+                    feature: committed,
+                    radius,
+                },
+                EditorEffect::ClearComputedFeaturePreview,
+            ] if *expected == origin_input
+                && *committed == feature
+                && radius.to_bits() == recovered_radius.to_bits()
+        ));
+        for effect in &release {
+            fixture
+                .coordinator
+                .apply_editor_effect(effect)
+                .expect("publish recovered radius gesture");
+        }
+        assert_eq!(fixture.coordinator.history_len(), history_before + 1);
+        assert_eq!(
+            fillet_radius(&fixture.coordinator, feature).to_bits(),
+            recovered_radius.to_bits()
+        );
+        assert_eq!(
+            fixture
+                .coordinator
+                .computed_snapshot()
+                .expect("exact recovered publication")
+                .evaluation_revision(),
+            preview_revision
+        );
+        assert_eq!(
+            native_sketch_invariants(&fixture.coordinator, &fixture.points),
+            native_before
+        );
+    }
+
+    #[test]
+    fn valid_authoring_owner_with_a_far_non_hit_is_exactly_state_neutral() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let snapshot = fixture
+            .coordinator
+            .feature_authoring_snapshot()
+            .expect("authoring snapshot");
+        let mut authoring = FeatureAuthoringState::default();
+        let candidate = feature_candidate(authoring.activate(
+            &snapshot,
+            fixture.coordinator.session().design_document(),
+            FeatureAuthoringTool::Fillet,
+            &[(SelectionItem::Point(fixture.points[1]), None)],
+        ));
+        let metadata = fixture
+            .coordinator
+            .prepare_feature_authoring_preview(
+                fixture.coordinator.feature_document().identity(),
+                &candidate,
+                "far authoring press",
+            )
+            .expect("held authoring preview");
+        let owner = fixture
+            .coordinator
+            .feature_authoring_preview()
+            .expect("authoring preview")
+            .corner_bindings()[0]
+            .owner;
+        let scene = visible_computed_scene(&fixture.coordinator);
+        let authoring_before = authoring.clone();
+        let feature_identity_before = fixture.coordinator.feature_document().identity();
+        let history_before = fixture.coordinator.history_len();
+        {
+            let preview = fixture
+                .coordinator
+                .feature_authoring_preview()
+                .expect("origin preview");
+            assert!(preview.radius_origin_state.is_none());
+            assert!(preview.accepted_contact_sample.is_none());
+            assert_eq!(preview.radius_origin.metadata, metadata);
+        }
+
+        let rejected = fixture.coordinator.transact_feature_authoring_pointer_down(
+            &mut authoring,
+            &scene,
+            PointerInput {
+                pointer_id: 9_007,
+                position: ScreenPoint {
+                    x: -1_000_000.0,
+                    y: -1_000_000.0,
+                },
+                modifiers: Modifiers::default(),
+            },
+            Some(SelectionItem::FeatureCorner(owner)),
+            PickTolerance::default(),
+            "rejected far authoring press",
+        );
+        assert!(matches!(
+            rejected,
+            Err(CoordinatorError::FeatureAuthoringPreviewMismatch)
+        ));
+        assert_eq!(authoring, authoring_before);
+        assert_eq!(fixture.coordinator.history_len(), history_before);
+        assert_eq!(
+            fixture.coordinator.feature_document().identity(),
+            feature_identity_before
+        );
+        assert_eq!(fixture.coordinator.editor().active_pointer_gesture(), None);
+        let preview = fixture
+            .coordinator
+            .feature_authoring_preview()
+            .expect("rejected press retained exact preview");
+        assert_eq!(preview.metadata, metadata);
+        assert_eq!(preview.candidate, candidate);
+        assert!(preview.radius_origin_state.is_none());
+        assert!(preview.accepted_contact_sample.is_none());
+        assert_eq!(preview.radius_origin.metadata, metadata);
+        assert_eq!(preview.radius_origin.candidate, candidate);
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn authoring_radius_gesture_survives_current_rerenders_before_one_atomic_apply() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let dense = authoring_radius_path(
+            fixture.coordinator.session().clone(),
+            fixture.points[1],
+            &[0.1, 0.25],
+        );
+        let direct = authoring_radius_path(
+            fixture.coordinator.session().clone(),
+            fixture.points[1],
+            &[0.25],
+        );
+        assert_eq!(
+            dense, direct,
+            "absolute authoring radius samples must be invariant to intermediate rerenders"
+        );
+        let native_before = native_sketch_invariants(&fixture.coordinator, &fixture.points);
+        let snapshot = fixture
+            .coordinator
+            .feature_authoring_snapshot()
+            .expect("authoring snapshot");
+        let mut authoring = FeatureAuthoringState::default();
+        let candidate = feature_candidate(authoring.activate(
+            &snapshot,
+            fixture.coordinator.session().design_document(),
+            FeatureAuthoringTool::Fillet,
+            &[(SelectionItem::Point(fixture.points[1]), None)],
+        ));
+        let metadata = fixture
+            .coordinator
+            .prepare_feature_authoring_preview(
+                fixture.coordinator.feature_document().identity(),
+                &candidate,
+                "authoring rerender",
+            )
+            .expect("initial authoring preview");
+        let owner = fixture
+            .coordinator
+            .feature_authoring_preview()
+            .expect("held authoring preview")
+            .corner_bindings()[0]
+            .owner;
+        let history_before = fixture.coordinator.history_len();
+        let origin_scene = visible_computed_scene(&fixture.coordinator);
+        let rail = origin_scene
+            .fillet_affordances
+            .iter()
+            .find(|candidate| candidate.owner == owner)
+            .expect("authoring Fillet affordances")
+            .radius_rail;
+        let initial_radius = candidate.radius();
+        let sample_model = |delta: f64| {
+            [
+                delta.mul_add(rail.model_derivative[0], rail.model_grip[0]),
+                delta.mul_add(rail.model_derivative[1], rail.model_grip[1]),
+            ]
+        };
+        let pointer = |model_position| PointerInput {
+            pointer_id: 902,
+            position: origin_scene.viewport.model_to_screen(model_position),
+            modifiers: Modifiers::default(),
+        };
+        let expected_design = fixture.coordinator.session().design_identity();
+        let down = fixture
+            .coordinator
+            .transact_feature_authoring_pointer_down(
+                &mut authoring,
+                &origin_scene,
+                pointer(rail.model_grip),
+                Some(SelectionItem::FeatureCorner(owner)),
+                PickTolerance::default(),
+                "authoring radius press",
+            )
+            .expect("start authoring radius gesture");
+        assert!(matches!(
+            down,
+            FeatureAuthoringPointerDownOutcome::RadiusGesture { .. }
+        ));
+
+        let first = fixture
+            .coordinator
+            .editor_mut()
+            .pointer_move(&origin_scene, pointer(sample_model(0.1)));
+        assert!(matches!(
+            first.as_slice(),
+            [EditorEffect::PreviewComputedFeatureRadius { expected, radius, .. }]
+                if *expected == metadata.input
+                    && (*radius - (initial_radius + 0.1)).abs() <= 1.0e-10
+        ));
+        fixture
+            .coordinator
+            .apply_feature_authoring_editor_effect(&mut authoring, &first[0])
+            .expect("accept first authoring Current sample");
+        let first_scene = visible_computed_scene(&fixture.coordinator);
+        assert_ne!(first_scene.computed_input, Some(metadata.input));
+
+        let second = fixture
+            .coordinator
+            .editor_mut()
+            .pointer_move(&first_scene, pointer(sample_model(0.25)));
+        let final_radius = match second.as_slice() {
+            [
+                EditorEffect::PreviewComputedFeatureRadius {
+                    expected, radius, ..
+                },
+            ] => {
+                assert_eq!(*expected, metadata.input);
+                *radius
+            }
+            effects => panic!("authoring rerender stranded radius gesture: {effects:?}"),
+        };
+        assert!((final_radius - (initial_radius + 0.25)).abs() <= 1.0e-10);
+        fixture
+            .coordinator
+            .apply_feature_authoring_editor_effect(&mut authoring, &second[0])
+            .expect("accept second authoring Current sample");
+        let final_scene = visible_computed_scene(&fixture.coordinator);
+        let release = fixture.coordinator.editor_mut().pointer_up(
+            &final_scene,
+            expected_design,
+            pointer(sample_model(0.25)),
+        );
+        assert!(matches!(
+            release.as_slice(),
+            [
+                EditorEffect::CommitComputedFeatureRadius { expected, radius, .. },
+                EditorEffect::ClearComputedFeaturePreview,
+            ] if *expected == metadata.input && radius.to_bits() == final_radius.to_bits()
+        ));
+        for effect in &release {
+            fixture
+                .coordinator
+                .apply_feature_authoring_editor_effect(&mut authoring, effect)
+                .expect("finish authoring radius gesture");
+        }
+        assert!(fixture.coordinator.feature_document().features().is_empty());
+        assert_eq!(fixture.coordinator.history_len(), history_before);
+        let (final_metadata, final_candidate) = {
+            let preview = fixture
+                .coordinator
+                .feature_authoring_preview()
+                .expect("held final authoring preview");
+            (preview.metadata().clone(), preview.candidate().clone())
+        };
+        assert_eq!(final_candidate.radius().to_bits(), final_radius.to_bits());
+        assert!(matches!(
+            computed_feature_state(
+                fixture
+                    .coordinator
+                    .feature_authoring_preview()
+                    .expect("Current final authoring preview")
+                    .snapshot(),
+                owner.feature,
+            ),
+            ComputedFeatureEvaluationState::Current { .. }
+        ));
+
+        let published = fixture
+            .coordinator
+            .apply_feature_authoring_preview(final_metadata.token, &final_candidate)
+            .expect("publish exact final authoring preview")
+            .value;
+        assert_eq!(published, owner.feature);
+        assert_eq!(fixture.coordinator.history_len(), history_before + 1);
+        assert_eq!(
+            fillet_radius(&fixture.coordinator, published).to_bits(),
+            final_radius.to_bits()
+        );
+        assert_eq!(
+            native_sketch_invariants(&fixture.coordinator, &fixture.points),
+            native_before
+        );
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn line_circle_contact_gesture_keeps_its_origin_across_current_branch_rerenders() {
+        let mut document = SketchDocument::new(5.0).expect("line-circle document");
+        let line_start = document.add_point("line start", [1.0, 2.5]).unwrap();
+        let line_end = document.add_point("line end", [11.0, 2.5]).unwrap();
+        let line = document
+            .add_curve(
+                "linear parent",
+                CurveDefinition::Line {
+                    start: line_start,
+                    end: line_end,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .unwrap();
+        let center = document.add_point("circle center", [6.0, 4.0]).unwrap();
+        let source_radius = document
+            .add_scalar(
+                "source radius",
+                1.0,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .unwrap();
+        let circle = document
+            .add_curve(
+                "circular parent",
+                CurveDefinition::Circle {
+                    center,
+                    radius: source_radius,
+                },
+            )
+            .unwrap();
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("accepted line-circle session");
+        let dense_authoring = authoring_line_circle_contact_path(
+            session.clone(),
+            CurveSpan::line(line),
+            CurveSpan::line(circle),
+            &[5.3, 5.5],
+        );
+        let direct_authoring = authoring_line_circle_contact_path(
+            session.clone(),
+            CurveSpan::line(line),
+            CurveSpan::line(circle),
+            &[5.5],
+        );
+        assert_fillet_candidates_near(&dense_authoring, &direct_authoring, 1.0e-9);
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let native_points = [line_start, line_end, center];
+        let native_before = native_sketch_invariants(&coordinator, &native_points);
+        let snapshot = coordinator
+            .feature_authoring_snapshot()
+            .expect("line-circle authoring snapshot");
+        let line_span = CurveSpan::line(line);
+        let circle_span = CurveSpan::line(circle);
+        let mut authoring = FeatureAuthoringState::default();
+        let candidate = feature_candidate(authoring.activate(
+            &snapshot,
+            coordinator.session().design_document(),
+            FeatureAuthoringTool::Fillet,
+            &[
+                (SelectionItem::Curve(line_span), Some(0.4)),
+                (SelectionItem::Curve(circle_span), Some(4.0)),
+            ],
+        ));
+        let feature = apply_grouped_fillet(&mut coordinator, &candidate);
+        let owner = {
+            let ComputedFeatureDefinition::FilletSet(fillet) = &coordinator
+                .feature_document()
+                .feature(feature)
+                .expect("line-circle Fillet")
+                .definition;
+            ComputedCornerRef {
+                feature,
+                corner: fillet.corners[0].id,
+            }
+        };
+        coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::FeatureCorner(owner)]);
+        let history_before = coordinator.history_len();
+        let origin_semantics = computed_feature_semantics(&coordinator, feature);
+        let origin_scene = current_computed_scene(&coordinator);
+        let origin_input = origin_scene
+            .computed_input
+            .expect("line-circle origin input");
+        let handle = origin_scene
+            .fillet_affordances
+            .iter()
+            .find(|candidate| candidate.owner == owner)
+            .expect("line-circle affordances")
+            .contacts
+            .into_iter()
+            .find(|candidate| candidate.source.span == circle_span)
+            .expect("circular contact handle");
+        let target = |parameter: f64| {
+            let jet = snapshot
+                .sketch_document()
+                .evaluate_curve_jet(circle_span, parameter)
+                .expect("circle target jet");
+            origin_scene
+                .viewport
+                .model_to_screen([jet.position.x, jet.position.y])
+        };
+        let pointer = |position| PointerInput {
+            pointer_id: 903,
+            position,
+            modifiers: Modifiers::default(),
+        };
+        let expected_design = coordinator.session().design_identity();
+
+        let _ = coordinator.pointer_down(&origin_scene, pointer(handle.screen_position));
+        let first = coordinator
+            .editor_mut()
+            .pointer_move(&origin_scene, pointer(target(5.3)));
+        assert!(matches!(
+            first.as_slice(),
+            [EditorEffect::PreviewComputedFeatureContact {
+                expected,
+                owner: preview_owner,
+                source,
+                ..
+            }] if *expected == origin_input
+                && *preview_owner == owner
+                && source.span == circle_span
+        ));
+        coordinator
+            .apply_editor_effect(&first[0])
+            .expect("accept first line-circle contact branch");
+        let first_scene = visible_computed_scene(&coordinator);
+        assert_ne!(first_scene.computed_input, Some(origin_input));
+
+        let second = coordinator
+            .editor_mut()
+            .pointer_move(&first_scene, pointer(target(5.5)));
+        let final_parameter = match second.as_slice() {
+            [
+                EditorEffect::PreviewComputedFeatureContact {
+                    expected,
+                    owner: preview_owner,
+                    source,
+                    parameter,
+                    ..
+                },
+            ] => {
+                assert_eq!(*expected, origin_input);
+                assert_eq!(*preview_owner, owner);
+                assert_eq!(source.span, circle_span);
+                *parameter
+            }
+            effects => panic!("contact gesture was stranded after rerender: {effects:?}"),
+        };
+        coordinator
+            .apply_editor_effect(&second[0])
+            .expect("accept second line-circle contact sample");
+        let final_scene = visible_computed_scene(&coordinator);
+        let preview_revision = match coordinator.computed_scene_state() {
+            ComputedSceneState::Current { snapshot, .. } => snapshot.evaluation_revision(),
+            state => panic!("line-circle contact preview was not Current: {state:?}"),
+        };
+        let release = coordinator.editor_mut().pointer_up(
+            &final_scene,
+            expected_design,
+            pointer(target(5.5)),
+        );
+        assert!(matches!(
+            release.as_slice(),
+            [
+                EditorEffect::CommitComputedFeatureContact {
+                    expected,
+                    owner: committed,
+                    parameter,
+                    ..
+                },
+                EditorEffect::ClearComputedFeatureContactPreview,
+            ] if *expected == origin_input
+                && *committed == owner
+                && parameter.to_bits() == final_parameter.to_bits()
+        ));
+        for effect in &release {
+            coordinator
+                .apply_editor_effect(effect)
+                .expect("publish rerendered line-circle contact gesture");
+        }
+        assert_eq!(coordinator.history_len(), history_before + 1);
+        assert_ne!(
+            computed_feature_semantics(&coordinator, feature),
+            origin_semantics
+        );
+        assert_eq!(
+            coordinator
+                .computed_snapshot()
+                .expect("published line-circle contact output")
+                .evaluation_revision(),
+            preview_revision
+        );
+        assert_eq!(
+            native_sketch_invariants(&coordinator, &native_points),
+            native_before
+        );
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn published_radius_release_never_recreates_a_missing_or_replaced_current_preview() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        let feature = apply_grouped_fillet(&mut fixture.coordinator, &candidate);
+        let owner = {
+            let ComputedFeatureDefinition::FilletSet(fillet) = &fixture
+                .coordinator
+                .feature_document()
+                .feature(feature)
+                .expect("published Fillet")
+                .definition;
+            ComputedCornerRef {
+                feature,
+                corner: fillet.corners[0].id,
+            }
+        };
+        fixture
+            .coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::FeatureCorner(owner)]);
+        let scene = current_computed_scene(&fixture.coordinator);
+        let origin_input = scene.computed_input.expect("origin input");
+        let rail = scene
+            .fillet_affordances
+            .iter()
+            .find(|candidate| candidate.owner == owner)
+            .expect("Fillet affordances")
+            .radius_rail;
+        let origin_radius = fillet_radius(&fixture.coordinator, feature);
+        let sample_model = |delta: f64| {
+            [
+                delta.mul_add(rail.model_derivative[0], rail.model_grip[0]),
+                delta.mul_add(rail.model_derivative[1], rail.model_grip[1]),
+            ]
+        };
+        let pointer = |pointer_id, delta| PointerInput {
+            pointer_id,
+            position: scene.viewport.model_to_screen(sample_model(delta)),
+            modifiers: Modifiers::default(),
+        };
+        let expected_design = fixture.coordinator.session().design_identity();
+        let feature_json_before = fixture
+            .coordinator
+            .feature_document()
+            .to_json()
+            .expect("origin feature JSON");
+        let history_before = fixture.coordinator.history_len();
+        let native_before = native_sketch_invariants(&fixture.coordinator, &fixture.points);
+
+        for (case, replace_with) in [None, Some(origin_radius + 0.3)].into_iter().enumerate() {
+            let pointer_id = 910 + u64::try_from(case).expect("small case index");
+            let _ = fixture.coordinator.pointer_down(
+                &scene,
+                PointerInput {
+                    pointer_id,
+                    position: rail.screen_grip,
+                    modifiers: Modifiers::default(),
+                },
+            );
+            let preview = fixture
+                .coordinator
+                .editor_mut()
+                .pointer_move(&scene, pointer(pointer_id, 0.2));
+            let acknowledged_radius = match preview.as_slice() {
+                [EditorEffect::PreviewComputedFeatureRadius { radius, .. }] => *radius,
+                effects => panic!("expected acknowledged radius request, got {effects:?}"),
+            };
+            fixture
+                .coordinator
+                .apply_editor_effect(&preview[0])
+                .expect("acknowledge exact Current preview");
+            if let Some(replacement) = replace_with {
+                fixture
+                    .coordinator
+                    .preview_computed_fillet_radius_exact(origin_input, feature, replacement)
+                    .expect("replace held preview without acknowledging it");
+            } else {
+                fixture.coordinator.clear_computed_feature_preview();
+            }
+            let release = fixture.coordinator.editor_mut().pointer_up(
+                &scene,
+                expected_design,
+                pointer(pointer_id, 0.2),
+            );
+            assert!(matches!(
+                release.as_slice(),
+                [
+                    EditorEffect::CommitComputedFeatureRadius { radius, .. },
+                    EditorEffect::ClearComputedFeaturePreview,
+                ] if radius.to_bits() == acknowledged_radius.to_bits()
+            ));
+            assert!(matches!(
+                fixture.coordinator.apply_editor_effect(&release[0]),
+                Err(CoordinatorError::FeatureAuthoringPreviewMismatch)
+            ));
+            fixture
+                .coordinator
+                .apply_editor_effect(&release[1])
+                .expect("clear rejected release preview");
+            assert_eq!(
+                fixture
+                    .coordinator
+                    .feature_document()
+                    .to_json()
+                    .expect("unchanged feature JSON"),
+                feature_json_before
+            );
+            assert_eq!(fixture.coordinator.history_len(), history_before);
+            assert_eq!(
+                fillet_radius(&fixture.coordinator, feature).to_bits(),
+                origin_radius.to_bits()
+            );
+            assert_eq!(
+                native_sketch_invariants(&fixture.coordinator, &fixture.points),
+                native_before
+            );
+        }
+    }
+
+    #[test]
+    fn computed_fillet_affordances_are_selection_gated_and_keep_shared_ownership() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate =
+            grouped_fillet_candidate(&fixture.coordinator, fixture.points[1..=2].iter().copied());
+        let feature = apply_grouped_fillet(&mut fixture.coordinator, &candidate);
+        let ComputedFeatureDefinition::FilletSet(fillet) = &fixture
+            .coordinator
+            .feature_document()
+            .feature(feature)
+            .expect("published grouped Fillet")
+            .definition;
+        let mut owners = fillet
+            .corners
+            .iter()
+            .map(|corner| ComputedCornerRef {
+                feature,
+                corner: corner.id,
+            })
+            .collect::<Vec<_>>();
+        owners.sort_unstable();
+
+        fixture
+            .coordinator
+            .editor_mut()
+            .set_selection(std::iter::empty());
+        assert!(
+            current_computed_scene(&fixture.coordinator)
+                .fillet_affordances
+                .is_empty(),
+            "ordinary unselected computed geometry must not advertise edit handles"
+        );
+
+        fixture
+            .coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::FeatureCorner(owners[0])]);
+        let corner_scene = current_computed_scene(&fixture.coordinator);
+        let [corner_affordances] = corner_scene.fillet_affordances.as_slice() else {
+            panic!("one selected corner must own exactly one affordance bundle");
+        };
+        assert_eq!(corner_affordances.owner, owners[0]);
+        assert_eq!(corner_affordances.affected_owners, owners);
+        assert_eq!(
+            corner_affordances.contacts.map(|contact| contact.owner),
+            [owners[0]; 2]
+        );
+        assert!(!corner_affordances.actions.is_empty());
+        assert!(corner_affordances.actions.iter().all(|action| {
+            action.owner == owners[0]
+                && !action.label.trim().is_empty()
+                && corner_scene
+                    .fillet_action_target(owners[0], action.id)
+                    .is_some_and(|target| {
+                        target.expected == corner_scene.computed_input.expect("computed input")
+                            && target.owner == owners[0]
+                    })
+        }));
+        let stable_action_ids = corner_affordances
+            .actions
+            .iter()
+            .map(|action| action.id)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            current_computed_scene(&fixture.coordinator).fillet_affordances[0]
+                .actions
+                .iter()
+                .map(|action| action.id)
+                .collect::<Vec<_>>(),
+            stable_action_ids,
+            "an unchanged scene must retain exact semantic action identities"
+        );
+
+        fixture
+            .coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::Feature(feature)]);
+        let feature_scene = current_computed_scene(&fixture.coordinator);
+        assert_eq!(
+            feature_scene
+                .fillet_affordances
+                .iter()
+                .map(|affordances| affordances.owner)
+                .collect::<Vec<_>>(),
+            owners
+        );
+        assert!(
+            feature_scene
+                .fillet_affordances
+                .iter()
+                .all(|affordances| affordances.affected_owners == owners),
+            "every shared-radius rail must disclose every corner it changes"
+        );
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn rejected_radius_sample_exposes_typed_limit_and_retains_last_current_scene() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        let feature = apply_grouped_fillet(&mut fixture.coordinator, &candidate);
+        let ComputedFeatureDefinition::FilletSet(fillet) = &fixture
+            .coordinator
+            .feature_document()
+            .feature(feature)
+            .expect("published Fillet")
+            .definition;
+        let owner = ComputedCornerRef {
+            feature,
+            corner: fillet.corners[0].id,
+        };
+        fixture
+            .coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::FeatureCorner(owner)]);
+        let scene = current_computed_scene(&fixture.coordinator);
+        let origin_input = scene.computed_input.expect("origin computed input");
+        let rail = scene.fillet_affordances[0].radius_rail;
+        let origin_radius = fillet_radius(&fixture.coordinator, feature);
+        let rejected_radius = 5.0;
+        let rejected_delta = rejected_radius - origin_radius;
+        let rejected_model = [
+            rejected_delta.mul_add(rail.model_derivative[0], rail.model_grip[0]),
+            rejected_delta.mul_add(rail.model_derivative[1], rail.model_grip[1]),
+        ];
+        let pointer = |model_position| PointerInput {
+            pointer_id: 920,
+            position: scene.viewport.model_to_screen(model_position),
+            modifiers: Modifiers::default(),
+        };
+        let native_before = native_sketch_invariants(&fixture.coordinator, &fixture.points);
+        let feature_before = fixture
+            .coordinator
+            .feature_document()
+            .to_json()
+            .expect("origin feature JSON");
+        let history_before = fixture.coordinator.history_len();
+
+        let _ = fixture
+            .coordinator
+            .pointer_down(&scene, pointer(rail.model_grip));
+        let request = fixture
+            .coordinator
+            .editor_mut()
+            .pointer_move(&scene, pointer(rejected_model));
+        let requested_radius = match request.as_slice() {
+            [
+                EditorEffect::PreviewComputedFeatureRadius {
+                    expected,
+                    feature: requested_feature,
+                    radius,
+                },
+            ] => {
+                assert_eq!(*expected, origin_input);
+                assert_eq!(*requested_feature, feature);
+                assert!((*radius - rejected_radius).abs() <= 1.0e-10);
+                *radius
+            }
+            effects => panic!("expected one rejected radius request, got {effects:?}"),
+        };
+        assert!(
+            fixture
+                .coordinator
+                .apply_editor_effect(&request[0])
+                .is_err()
+        );
+        let status = fixture
+            .coordinator
+            .editor()
+            .computed_fillet_continuation_status()
+            .expect("typed rejected-sample status")
+            .clone();
+        assert_eq!(status.expected, origin_input);
+        assert_eq!(status.owner, owner);
+        assert!(matches!(
+            status.sample,
+            ComputedFilletInteractionSample::Radius(radius)
+                if radius.to_bits() == requested_radius.to_bits()
+        ));
+        assert_eq!(
+            status.limit.kind,
+            ComputedFilletContinuationLimitKind::BranchFold
+        );
+        assert!(!status.limit.message.trim().is_empty());
+
+        let retained_scene = visible_computed_scene(&fixture.coordinator);
+        assert_eq!(retained_scene.computed_input, Some(origin_input));
+        assert_eq!(
+            retained_scene.computed_fillet_continuation_statuses,
+            vec![status.clone()]
+        );
+        assert_eq!(
+            retained_scene.fillet_affordances[0].continuation_status,
+            Some(status)
+        );
+        assert_eq!(
+            fixture
+                .coordinator
+                .feature_document()
+                .to_json()
+                .expect("retained feature JSON"),
+            feature_before
+        );
+        assert_eq!(fixture.coordinator.history_len(), history_before);
+        assert_eq!(
+            native_sketch_invariants(&fixture.coordinator, &fixture.points),
+            native_before
+        );
+
+        let recovered_delta = 0.2_f64;
+        let recovered_model = [
+            recovered_delta.mul_add(rail.model_derivative[0], rail.model_grip[0]),
+            recovered_delta.mul_add(rail.model_derivative[1], rail.model_grip[1]),
+        ];
+        let recovered = fixture
+            .coordinator
+            .editor_mut()
+            .pointer_move(&retained_scene, pointer(recovered_model));
+        assert!(matches!(
+            recovered.as_slice(),
+            [EditorEffect::PreviewComputedFeatureRadius { .. }]
+        ));
+        fixture
+            .coordinator
+            .apply_editor_effect(&recovered[0])
+            .expect("recover with a Current radius sample");
+        assert!(
+            fixture
+                .coordinator
+                .editor()
+                .computed_fillet_continuation_status()
+                .is_none()
+        );
+        assert!(
+            visible_computed_scene(&fixture.coordinator)
+                .computed_fillet_continuation_statuses
+                .is_empty()
+        );
+        for effect in fixture.coordinator.editor_mut().cancel() {
+            fixture
+                .coordinator
+                .apply_editor_effect(&effect)
+                .expect("cancel recovered preview");
+        }
+        assert_eq!(fixture.coordinator.history_len(), history_before);
+        assert_eq!(
+            fixture
+                .coordinator
+                .feature_document()
+                .to_json()
+                .expect("cancelled feature JSON"),
+            feature_before
+        );
+        assert_eq!(
+            native_sketch_invariants(&fixture.coordinator, &fixture.points),
+            native_before
+        );
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn computed_fillet_action_effect_is_exact_atomic_and_sketch_invariant() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        let feature = apply_grouped_fillet(&mut fixture.coordinator, &candidate);
+        let ComputedFeatureDefinition::FilletSet(fillet) = &fixture
+            .coordinator
+            .feature_document()
+            .feature(feature)
+            .expect("published Fillet")
+            .definition;
+        let owner = ComputedCornerRef {
+            feature,
+            corner: fillet.corners[0].id,
+        };
+        fixture
+            .coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::FeatureCorner(owner)]);
+        let scene = current_computed_scene(&fixture.coordinator);
+        let action = scene.fillet_affordances[0]
+            .actions
+            .iter()
+            .find(|action| {
+                matches!(
+                    action.availability,
+                    SceneFilletActionAvailability::Applicable
+                )
+            })
+            .expect("at least one independently current branch action");
+        let target = scene
+            .fillet_action_target(owner, action.id)
+            .expect("exact scene-stamped target");
+        let history_before = fixture.coordinator.history_len();
+        let native_before = native_sketch_invariants(&fixture.coordinator, &fixture.points);
+        let feature_before = computed_feature_semantics(&fixture.coordinator, feature);
+        let feature_json_before = fixture
+            .coordinator
+            .feature_document()
+            .to_json()
+            .expect("origin feature JSON");
+
+        let preview_effects = fixture
+            .coordinator
+            .editor_mut()
+            .preview_fillet_action(&scene, crate::SceneFilletActionInput::Accessible(target));
+        assert_eq!(
+            preview_effects,
+            vec![EditorEffect::FilletBranchPreviewChanged {
+                target: Some(target)
+            }]
+        );
+        for effect in &preview_effects {
+            assert!(
+                fixture
+                    .coordinator
+                    .apply_editor_effect(effect)
+                    .expect("branch preview is coordinator-neutral")
+                    .is_none()
+            );
+        }
+        assert_eq!(fixture.coordinator.history_len(), history_before);
+        assert_eq!(
+            fixture
+                .coordinator
+                .feature_document()
+                .to_json()
+                .expect("preview feature JSON"),
+            feature_json_before
+        );
+
+        let mut stale = target;
+        stale.expected.policy.max_root_iterations += 1;
+        assert!(matches!(
+            fixture
+                .coordinator
+                .apply_editor_effect(&EditorEffect::CommitComputedFilletAction { target: stale }),
+            Err(CoordinatorError::StaleComputedFeatureCandidate)
+        ));
+        assert_eq!(fixture.coordinator.history_len(), history_before);
+        assert_eq!(
+            fixture
+                .coordinator
+                .feature_document()
+                .to_json()
+                .expect("stale target retained feature JSON"),
+            feature_json_before
+        );
+
+        let activation = fixture
+            .coordinator
+            .editor_mut()
+            .activate_fillet_action(&scene, crate::SceneFilletActionInput::Accessible(target));
+        assert!(matches!(
+            activation.as_slice(),
+            [
+                EditorEffect::CommitComputedFilletAction { target: committed },
+                EditorEffect::FilletBranchPreviewChanged { target: None },
+            ] if *committed == target
+        ));
+        for effect in &activation {
+            assert!(
+                fixture
+                    .coordinator
+                    .apply_editor_effect(effect)
+                    .expect("exact branch activation")
+                    .is_none()
+            );
+        }
+        assert_eq!(fixture.coordinator.history_len(), history_before + 1);
+        let feature_after = computed_feature_semantics(&fixture.coordinator, feature);
+        assert_ne!(feature_after, feature_before);
+        assert_eq!(
+            native_sketch_invariants(&fixture.coordinator, &fixture.points),
+            native_before
+        );
+
+        assert!(matches!(
+            fixture
+                .coordinator
+                .apply_editor_effect(&EditorEffect::CommitComputedFilletAction { target }),
+            Err(CoordinatorError::StaleComputedFeatureCandidate)
+        ));
+        assert_eq!(fixture.coordinator.history_len(), history_before + 1);
+        assert_eq!(
+            computed_feature_semantics(&fixture.coordinator, feature),
+            feature_after
+        );
+
+        fixture.coordinator.undo().expect("Undo branch action");
+        assert_eq!(
+            computed_feature_semantics(&fixture.coordinator, feature),
+            feature_before
+        );
+        fixture.coordinator.redo().expect("Redo branch action");
+        assert_eq!(
+            computed_feature_semantics(&fixture.coordinator, feature),
+            feature_after
+        );
+        let saved = fixture.coordinator.checkpoint().clone();
+        fixture.coordinator.undo().expect("Undo before reload");
+        fixture
+            .coordinator
+            .reload(&saved)
+            .expect("reload branch action");
+        assert_eq!(
+            computed_feature_semantics(&fixture.coordinator, feature),
+            feature_after
+        );
+        assert_eq!(
+            native_sketch_invariants(&fixture.coordinator, &fixture.points),
+            native_before
+        );
+
+        let history_after_reload = fixture.coordinator.history_len();
+        let current_scene = current_computed_scene(&fixture.coordinator);
+        let current_target = current_scene.fillet_affordances[0]
+            .actions
+            .iter()
+            .find(|action| {
+                matches!(
+                    action.availability,
+                    SceneFilletActionAvailability::Applicable
+                )
+            })
+            .and_then(|action| current_scene.fillet_action_target(owner, action.id))
+            .expect("current target before selection removal");
+        fixture
+            .coordinator
+            .editor_mut()
+            .set_selection(std::iter::empty());
+        assert!(matches!(
+            fixture
+                .coordinator
+                .apply_editor_effect(&EditorEffect::CommitComputedFilletAction {
+                    target: current_target
+                }),
+            Err(CoordinatorError::ComputedFilletActionUnavailable(_))
+        ));
+        assert_eq!(fixture.coordinator.history_len(), history_after_reload);
+        assert_eq!(
+            computed_feature_semantics(&fixture.coordinator, feature),
+            feature_after
+        );
+        assert_eq!(
+            native_sketch_invariants(&fixture.coordinator, &fixture.points),
+            native_before
         );
     }
 }

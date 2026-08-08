@@ -9,8 +9,8 @@ use geosolve_sketch::{
 use geosolve_sketch_features::{
     ComputedCircularArc, ComputedFeatureAuthoringError, ComputedFeatureAuthoringSnapshot,
     ComputedFeatureEvaluationPolicy, ComputedFilletAuthoringOptions,
-    ComputedFilletCornerAuthoringRequest, ComputedFilletCurvePick, NativeCurveSpanSource,
-    NewComputedFilletCorner,
+    ComputedFilletCornerAuthoringRequest, ComputedFilletCurvePick, ContinuedComputedFilletCorner,
+    NativeCurveSpanSource, NewComputedFilletCorner,
 };
 
 use crate::coordinator::computed_feature_authoring_control;
@@ -652,6 +652,145 @@ impl FeatureAuthoringState {
         options: ComputedFilletAuthoringOptions,
     ) -> FeatureAuthoringOutcome {
         self.update_options_once(snapshot, self.options, Some((index, options)))
+    }
+
+    /// Continues every completed corner from its exact absolute branch intent
+    /// to one new shared radius.
+    ///
+    /// Unlike [`Self::set_options`], this path never reconstructs a completed
+    /// corner from its original screen picks or relative flip booleans. The
+    /// feature-domain continuation must complete for the whole batch before
+    /// this state changes. An explicit numeric edit may depart a rail-less fold
+    /// only through its persisted local branch cell; invalid radius, ambiguous
+    /// branch, cancellation or exhausted work retains the exact prior candidate.
+    #[must_use]
+    pub fn continue_radius_absolute(
+        &mut self,
+        snapshot: &ComputedFeatureAuthoringSnapshot,
+        radius: f64,
+    ) -> FeatureAuthoringOutcome {
+        if self.active.is_none() {
+            return FeatureAuthoringOutcome::Inactive;
+        }
+        if !self.matches_snapshot(snapshot) {
+            return self.warning(
+                FeatureAuthoringWarningKind::StalePick,
+                "the active Fillet batch belongs to an older accepted sketch input",
+            );
+        }
+        if !radius.is_finite() || radius <= 0.0 {
+            return self.warning(
+                FeatureAuthoringWarningKind::InvalidRadius,
+                "Fillet radius must be finite and positive",
+            );
+        }
+        if self.corners.is_empty() {
+            let mut next = self.clone();
+            next.options.fillet_radius = Some(radius);
+            *self = next;
+            return self.current_outcome();
+        }
+        let Some(from_radius) = self
+            .options
+            .fillet_radius
+            .filter(|value| value.is_finite() && *value > 0.0)
+        else {
+            return self.warning(
+                FeatureAuthoringWarningKind::InvalidRadius,
+                "the current Fillet radius is not valid continuation state",
+            );
+        };
+        let priors = self
+            .corners
+            .iter()
+            .map(|draft| draft.preview.corner)
+            .collect::<Vec<_>>();
+        let outcome = match snapshot.continue_fillet_corners_numeric(
+            &priors,
+            from_radius,
+            radius,
+            ComputedFeatureEvaluationPolicy::default(),
+            computed_feature_authoring_control(),
+        ) {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                return self.warning(
+                    map_authoring_error(&error),
+                    format!("Fillet radius continuation was rejected: {error}"),
+                );
+            }
+        };
+        let OperationOutcome::Completed {
+            value: continued, ..
+        } = outcome
+        else {
+            return self.warning(
+                FeatureAuthoringWarningKind::WorkStopped,
+                "Fillet radius continuation exhausted its bounded work envelope",
+            );
+        };
+        if continued.len() != self.corners.len()
+            || continued.iter().any(|value| {
+                value.sketch_input != snapshot.sketch_input()
+                    || value.accepted != snapshot.accepted_state_identity()
+                    || value.arc.radius.to_bits() != radius.to_bits()
+            })
+        {
+            return self.warning(
+                FeatureAuthoringWarningKind::StalePick,
+                "Fillet radius continuation returned mismatched accepted input",
+            );
+        }
+        let mut next = self.clone();
+        next.options.fillet_radius = Some(radius);
+        for (draft, value) in next.corners.iter_mut().zip(continued) {
+            draft.preview.corner = value.corner;
+            draft.preview.arc = value.arc;
+        }
+        *self = next;
+        self.current_outcome()
+    }
+
+    /// Replaces one completed corner with an independently validated absolute
+    /// continuation while retaining the original semantic picks needed to add
+    /// further corners to the same authoring batch.
+    pub(crate) fn replace_corner_absolute(
+        &mut self,
+        snapshot: &ComputedFeatureAuthoringSnapshot,
+        index: usize,
+        continued: ContinuedComputedFilletCorner,
+    ) -> FeatureAuthoringOutcome {
+        if self.active.is_none() {
+            return FeatureAuthoringOutcome::Inactive;
+        }
+        if !self.matches_snapshot(snapshot)
+            || continued.sketch_input != snapshot.sketch_input()
+            || continued.accepted != snapshot.accepted_state_identity()
+        {
+            return self.warning(
+                FeatureAuthoringWarningKind::StalePick,
+                "the replacement Fillet corner belongs to an older accepted sketch input",
+            );
+        }
+        let Some(_) = self.corners.get(index) else {
+            return self.warning(
+                FeatureAuthoringWarningKind::MissingObject,
+                "the replacement Fillet corner no longer exists",
+            );
+        };
+        let radius = continued.arc.radius;
+        if !radius.is_finite() || radius <= 0.0 {
+            return self.warning(
+                FeatureAuthoringWarningKind::InvalidRadius,
+                "the replacement Fillet corner has an invalid radius",
+            );
+        }
+        let mut next = self.clone();
+        next.options.fillet_radius = Some(radius);
+        next.corners[index].preview.corner = continued.corner;
+        next.corners[index].preview.arc = continued.arc;
+        *self = next;
+        self.current_outcome()
     }
 
     /// Applies the complete batch immediately; no final canvas radius click exists.
@@ -1307,6 +1446,50 @@ mod tests {
         }
     }
 
+    fn completed_continuation(
+        snapshot: &ComputedFeatureAuthoringSnapshot,
+        prior: NewComputedFilletCorner,
+        from_radius: f64,
+        radius: f64,
+    ) -> ContinuedComputedFilletCorner {
+        match snapshot
+            .continue_fillet_corner(
+                prior,
+                from_radius,
+                radius,
+                ComputedFeatureEvaluationPolicy::default(),
+                computed_feature_authoring_control(),
+            )
+            .expect("continuation request")
+        {
+            OperationOutcome::Completed { value, .. } => value,
+            stopped => panic!(
+                "expected completed continuation, got {:?}",
+                stopped.report().stopping_reason
+            ),
+        }
+    }
+
+    fn assert_absolute_branch_preserved(
+        expected: NewComputedFilletCorner,
+        actual: NewComputedFilletCorner,
+    ) {
+        assert_eq!(actual.first.source, expected.first.source);
+        assert_eq!(actual.second.source, expected.second.source);
+        assert_eq!(actual.first.normal_side, expected.first.normal_side);
+        assert_eq!(actual.second.normal_side, expected.second.normal_side);
+        assert_eq!(
+            actual.first.retained_endpoint,
+            expected.first.retained_endpoint
+        );
+        assert_eq!(
+            actual.second.retained_endpoint,
+            expected.second.retained_endpoint
+        );
+        assert_eq!(actual.endpoint_order, expected.endpoint_order);
+        assert_eq!(actual.sweep, expected.sweep);
+    }
+
     #[test]
     fn grouped_adjacent_authoring_is_canonical_and_keeps_corner_branches_on_radius_edit() {
         let fixture = adjacent_corner_fixture();
@@ -1381,6 +1564,168 @@ mod tests {
             fixture.spans[1],
             resized.corners()[1].corner.first.source.span
         );
+    }
+
+    #[test]
+    fn absolute_radius_travel_preserves_completed_branches_and_batch_order() {
+        let fixture = adjacent_corner_fixture();
+        let snapshot = ComputedFeatureAuthoringSnapshot::capture(&fixture.session)
+            .expect("authoring snapshot");
+        let document = fixture.session.design_document();
+        let selection =
+            [fixture.points[1], fixture.points[2]].map(|point| (SelectionItem::Point(point), None));
+        let mut state = FeatureAuthoringState::default();
+        let initial = candidate(state.activate(
+            &snapshot,
+            document,
+            FeatureAuthoringTool::Fillet,
+            &selection,
+        ));
+        let initial_radius = initial.radius();
+        let initial_corners = initial.persistent_corners();
+
+        let relative_history = ComputedFilletAuthoringOptions {
+            flip_first_side: true,
+            flip_second_side: true,
+            alternate_arc: true,
+        };
+        for draft in &mut state.corners {
+            draft.preview.options = relative_history;
+        }
+
+        let forward = candidate(state.continue_radius_absolute(&snapshot, 0.75));
+        assert_eq!(forward.radius().to_bits(), 0.75_f64.to_bits());
+        assert_eq!(forward.corners().len(), initial_corners.len());
+        for (index, (expected, actual)) in initial_corners
+            .iter()
+            .copied()
+            .zip(forward.corners())
+            .enumerate()
+        {
+            assert_absolute_branch_preserved(expected, actual.corner);
+            assert_eq!(actual.options, relative_history);
+            assert_eq!(
+                actual.corner.first.source, initial_corners[index].first.source,
+                "aggregate continuation must retain input order"
+            );
+        }
+
+        let reversed = candidate(state.continue_radius_absolute(&snapshot, initial_radius));
+        assert_eq!(reversed.radius().to_bits(), initial_radius.to_bits());
+        for (expected, actual) in initial_corners.iter().copied().zip(reversed.corners()) {
+            assert_absolute_branch_preserved(expected, actual.corner);
+            assert_eq!(actual.options, relative_history);
+        }
+        assert!(matches!(
+            state.current_outcome(),
+            FeatureAuthoringOutcome::PreviewRequested {
+                ref candidate,
+                ref guidance,
+            } if candidate.corners().len() == 2
+                && guidance.completed_corners == 2
+                && guidance.stage == FeatureAuthoringStage::PreviewReady
+        ));
+    }
+
+    #[test]
+    fn stopped_and_invalid_absolute_radius_continuation_are_state_neutral() {
+        let fixture = adjacent_corner_fixture();
+        let snapshot = ComputedFeatureAuthoringSnapshot::capture(&fixture.session)
+            .expect("authoring snapshot");
+        let document = fixture.session.design_document();
+        let mut state = FeatureAuthoringState::default();
+        candidate(state.activate(
+            &snapshot,
+            document,
+            FeatureAuthoringTool::Fillet,
+            &[(SelectionItem::Point(fixture.points[1]), None)],
+        ));
+
+        let before_invalid_radius = state.clone();
+        assert!(matches!(
+            state.continue_radius_absolute(&snapshot, f64::NAN),
+            FeatureAuthoringOutcome::Warning(FeatureAuthoringWarning {
+                kind: FeatureAuthoringWarningKind::InvalidRadius,
+                ..
+            })
+        ));
+        assert_eq!(state, before_invalid_radius);
+
+        let mut invalid_branch = state.clone();
+        invalid_branch.corners[0].preview.corner.second.source =
+            invalid_branch.corners[0].preview.corner.first.source;
+        let before_invalid_branch = invalid_branch.clone();
+        assert!(matches!(
+            invalid_branch.continue_radius_absolute(&snapshot, 0.75),
+            FeatureAuthoringOutcome::Warning(_)
+        ));
+        assert_eq!(invalid_branch, before_invalid_branch);
+
+        let mut stopped = state;
+        stopped.corners = std::iter::repeat_n(
+            stopped.corners[0].clone(),
+            MAX_GROUPED_FILLET_CORNERS / 2 + 1,
+        )
+        .collect();
+        let before_stopped = stopped.clone();
+        assert!(matches!(
+            stopped.continue_radius_absolute(&snapshot, 0.75),
+            FeatureAuthoringOutcome::Warning(FeatureAuthoringWarning {
+                kind: FeatureAuthoringWarningKind::WorkStopped,
+                ..
+            })
+        ));
+        assert_eq!(stopped, before_stopped);
+    }
+
+    #[test]
+    fn absolute_corner_replacement_keeps_pending_semantic_pick_capability() {
+        let fixture = adjacent_corner_fixture();
+        let snapshot = ComputedFeatureAuthoringSnapshot::capture(&fixture.session)
+            .expect("authoring snapshot");
+        let document = fixture.session.design_document();
+        let first_corner = resolve_feature_corner_point(&snapshot, document, fixture.points[1])
+            .expect("first corner picks");
+        let second_corner = resolve_feature_corner_point(&snapshot, document, fixture.points[2])
+            .expect("second corner picks");
+        let mut state = FeatureAuthoringState::default();
+        candidate(state.activate_picks(
+            &snapshot,
+            document,
+            FeatureAuthoringTool::Fillet,
+            first_corner,
+        ));
+        let original_absolute = state.corners[0].preview.corner;
+        let original_radius = state.options().fillet_radius.expect("active Fillet radius");
+        let mut pending = second_corner.into_iter();
+        assert!(matches!(
+            state.pick_many(&snapshot, std::iter::once(pending.next().expect("first pick"))),
+            FeatureAuthoringOutcome::Collecting { ref pending, .. } if pending.len() == 1
+        ));
+        let held_pending = state.pending.clone();
+        let held_corner_picks = state.corners[0].picks.clone();
+
+        let replacement =
+            completed_continuation(&snapshot, original_absolute, original_radius, 0.75);
+        assert!(matches!(
+            state.replace_corner_absolute(&snapshot, 0, replacement),
+            FeatureAuthoringOutcome::Collecting {
+                ref pending,
+                ref guidance,
+            } if pending == &held_pending
+                && guidance.completed_corners == 1
+                && guidance.stage == FeatureAuthoringStage::PickSecondFilletCurve
+        ));
+        assert_eq!(state.options().fillet_radius, Some(0.75));
+        assert_eq!(state.corners[0].picks, held_corner_picks);
+
+        let completed = candidate(state.pick_many(
+            &snapshot,
+            std::iter::once(pending.next().expect("second pick")),
+        ));
+        assert_eq!(completed.radius().to_bits(), 0.75_f64.to_bits());
+        assert_eq!(completed.corners().len(), 2);
+        assert_absolute_branch_preserved(original_absolute, completed.corners()[0].corner);
     }
 
     #[test]
