@@ -709,6 +709,22 @@ pub struct FeatureAuthoringTransaction {
     pub preview: Option<FeatureAuthoringPreviewMetadata>,
 }
 
+/// Coordinator-owned result of one pointer press while computed-feature
+/// authoring is active.
+///
+/// A rendered current preview arc may explicitly own a radius gesture even
+/// where its native parent is also inside the authoring hit tolerance. Every
+/// other painted target retains the existing bounded native-pick transaction.
+#[derive(Clone, Debug, PartialEq)]
+pub enum FeatureAuthoringPointerDownOutcome {
+    RadiusGesture {
+        effects: Vec<EditorEffect>,
+    },
+    NativePick {
+        transaction: Box<FeatureAuthoringTransaction>,
+    },
+}
+
 /// Stable temporary owner mapped to its grouped candidate occurrence.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct FeatureAuthoringCornerBinding {
@@ -1506,6 +1522,79 @@ impl RetainedEditorCoordinator {
         let mut trial = state.clone();
         let outcome = trial.pick_items(&snapshot, &document, items);
         self.finish_feature_authoring_transaction(state, trial, outcome, label.into())
+    }
+
+    /// Arbitrates one pointer press between a painted current-preview radius
+    /// grip and the ordinary bounded native Fillet collector.
+    ///
+    /// `painted_item` is only an interaction-intent hint. A computed corner is
+    /// admitted only when it belongs to the exact held preview, the collector's
+    /// complete candidate still matches that preview, the scene has current
+    /// accepted/computed provenance, and the pointer independently hits that
+    /// owner's computed curve. Invalid computed-corner hints are rejected
+    /// state-neutrally rather than being reinterpreted as native picks.
+    ///
+    /// # Errors
+    ///
+    /// Returns a snapshot, document, evaluation, provisional-feature, or exact
+    /// preview mismatch without changing `state` or replacing a held preview.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "one atomic pointer transaction carries exact scene, hit, policy and label inputs"
+    )]
+    pub fn transact_feature_authoring_pointer_down(
+        &mut self,
+        state: &mut FeatureAuthoringState,
+        scene: &EditorScene,
+        input: PointerInput,
+        painted_item: Option<SelectionItem>,
+        tolerance: PickTolerance,
+        label: impl Into<String>,
+    ) -> Result<FeatureAuthoringPointerDownOutcome, CoordinatorError> {
+        if let Some(SelectionItem::FeatureCorner(owner)) = painted_item {
+            let candidate = match state.apply() {
+                FeatureAuthoringOutcome::Apply(candidate) => candidate,
+                FeatureAuthoringOutcome::ModeEntered(_)
+                | FeatureAuthoringOutcome::NoNativeHit(_)
+                | FeatureAuthoringOutcome::Collecting { .. }
+                | FeatureAuthoringOutcome::PreviewRequested { .. }
+                | FeatureAuthoringOutcome::Warning(_)
+                | FeatureAuthoringOutcome::CandidateCleared(_)
+                | FeatureAuthoringOutcome::ModeExited
+                | FeatureAuthoringOutcome::Inactive => {
+                    return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+                }
+            };
+            let preview = self
+                .feature_authoring_preview
+                .as_ref()
+                .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
+            let accepted = self
+                .session
+                .accepted_state_for_current_input()
+                .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
+            if preview.metadata.feature != owner.feature
+                || preview.corner_index(owner).is_none()
+                || preview.candidate() != &candidate
+                || scene.accepted_revision != accepted.identity().revision().get()
+                || scene.design_identity != accepted.design_identity()
+                || scene.computed_input != Some(preview.snapshot().input())
+            {
+                return Err(CoordinatorError::FeatureAuthoringPreviewMismatch);
+            }
+            let effects = self
+                .editor
+                .pointer_down_feature_radius(scene, input, owner, tolerance)
+                .ok_or(CoordinatorError::FeatureAuthoringPreviewMismatch)?;
+            return Ok(FeatureAuthoringPointerDownOutcome::RadiusGesture { effects });
+        }
+
+        self.transact_feature_authoring_pick_at(state, scene, input.position, tolerance, label)
+            .map(
+                |transaction| FeatureAuthoringPointerDownOutcome::NativePick {
+                    transaction: Box::new(transaction),
+                },
+            )
     }
 
     /// Resolves one native screen click against a trial authoring state and

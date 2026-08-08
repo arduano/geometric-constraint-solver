@@ -28,13 +28,14 @@ pub use coordinator::{
     ComputedSceneState, ContactBranchAction, CoordinatorActionKind, CoordinatorError,
     DimensionTargetDisplayUnit, DimensionTargetMetadata, DisabledReason, DisplayDimensionTarget,
     EditorMutation, EditorProblemCategory, EditorProblemMetadata, EditorProblemScope,
-    EditorProblemTarget, FeatureAuthoringCornerBinding, FeatureAuthoringPreview,
-    FeatureAuthoringPreviewMetadata, FeatureAuthoringPreviewToken, FeatureAuthoringTransaction,
-    LifecycleDto, LifecycleStatus, MeasurementPublication, MutationOutcome,
-    OperationAuthoringMutation, OperationAuthoringPreview, OperationAuthoringPreviewMetadata,
-    OperationAuthoringPreviewOutcome, OperationAuthoringPreviewToken, ProblemsDto,
-    ProjectedDragRejectionStage, ProjectedDragWorkEvidence, ReplayAction, RestoreCheckpoint,
-    RetainedEditorCoordinator, display_dimension_target,
+    EditorProblemTarget, FeatureAuthoringCornerBinding, FeatureAuthoringPointerDownOutcome,
+    FeatureAuthoringPreview, FeatureAuthoringPreviewMetadata, FeatureAuthoringPreviewToken,
+    FeatureAuthoringTransaction, LifecycleDto, LifecycleStatus, MeasurementPublication,
+    MutationOutcome, OperationAuthoringMutation, OperationAuthoringPreview,
+    OperationAuthoringPreviewMetadata, OperationAuthoringPreviewOutcome,
+    OperationAuthoringPreviewToken, ProblemsDto, ProjectedDragRejectionStage,
+    ProjectedDragWorkEvidence, ReplayAction, RestoreCheckpoint, RetainedEditorCoordinator,
+    display_dimension_target,
 };
 pub use feature_authoring::{
     FeatureAuthoringCandidate, FeatureAuthoringCornerPreview, FeatureAuthoringGuidance,
@@ -1932,19 +1933,6 @@ impl ConstraintEditor {
         if self.tool != EditorTool::Select {
             return self.draft_down(scene, input);
         }
-        let mut effects = Vec::new();
-        if self
-            .point_gesture
-            .is_some_and(|gesture| gesture.pointer_id != input.pointer_id)
-        {
-            effects.extend(self.cancel_point_gesture());
-        }
-        if self
-            .feature_radius_gesture
-            .is_some_and(|gesture| gesture.pointer_id != input.pointer_id)
-        {
-            effects.extend(self.cancel_feature_radius_gesture());
-        }
         let geometry_hit = scene.hit_test(input.position, self.pick_tolerance);
         let annotation_hit = scene.annotation_hit_test(
             input.position,
@@ -1963,6 +1951,60 @@ impl ConstraintEditor {
             })
             .or(annotation_hit)
             .or(geometry_hit);
+        self.pointer_down_resolved_hit(scene, input, hit)
+    }
+
+    /// Starts a computed-radius gesture for one explicitly painted preview arc.
+    ///
+    /// The coordinator validates current preview ownership and scene provenance
+    /// before calling this path. This final editor-side check still requires the
+    /// pointer to hit that exact computed curve, so a presentation target is an
+    /// intent hint rather than a geometry oracle.
+    pub(crate) fn pointer_down_feature_radius(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        owner: geosolve_sketch_features::ComputedCornerRef,
+        tolerance: PickTolerance,
+    ) -> Option<Vec<EditorEffect>> {
+        if self.feature_radius_gesture.is_some()
+            || !input.position.is_finite()
+            || self.tool != EditorTool::Select
+            || !tolerance.is_valid()
+        {
+            return None;
+        }
+        let hit = scene
+            .computed_curves
+            .iter()
+            .find(|curve| curve.owner == owner)
+            .and_then(|curve| computed_curve_hit(curve, input.position, tolerance.curve_pixels))?;
+        let direct_input = PointerInput {
+            modifiers: Modifiers::default(),
+            ..input
+        };
+        Some(self.pointer_down_resolved_hit(scene, direct_input, Some(hit)))
+    }
+
+    fn pointer_down_resolved_hit(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        hit: Option<Hit>,
+    ) -> Vec<EditorEffect> {
+        let mut effects = Vec::new();
+        if self
+            .point_gesture
+            .is_some_and(|gesture| gesture.pointer_id != input.pointer_id)
+        {
+            effects.extend(self.cancel_point_gesture());
+        }
+        if self
+            .feature_radius_gesture
+            .is_some_and(|gesture| gesture.pointer_id != input.pointer_id)
+        {
+            effects.extend(self.cancel_feature_radius_gesture());
+        }
         let before = self.selection.clone();
         if let Some(hit) = hit {
             self.select_item(hit.item, input.modifiers);

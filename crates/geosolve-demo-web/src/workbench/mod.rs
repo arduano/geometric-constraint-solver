@@ -388,9 +388,10 @@ pub(crate) mod wasm {
         ConstructionPreview, CoordinatorActionKind, DimensionTargetDisplayUnit, DisabledReason,
         EditorEffect, EditorHoverTarget, EditorScene, EditorTool, FeatureAuthoringCandidate,
         FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringPick,
-        FeatureAuthoringStage, FeatureAuthoringState, FeatureAuthoringTool,
-        FeatureAuthoringTransaction, Modifiers, NurbsConstructionOptions, PickTolerance,
-        PointerInput, ProvisionalInferenceCandidate, RetainedEditorCoordinator, SelectionItem,
+        FeatureAuthoringPointerDownOutcome, FeatureAuthoringStage, FeatureAuthoringState,
+        FeatureAuthoringTool, FeatureAuthoringTransaction, Modifiers, NurbsConstructionOptions,
+        PickTolerance, PointerInput, ProvisionalInferenceCandidate, RetainedEditorCoordinator,
+        SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -1059,6 +1060,15 @@ pub(crate) mod wasm {
             .is_some()
     }
 
+    /// Returns the stable identity painted directly under this pointer sample.
+    /// The coordinator treats it only as an intent hint and independently
+    /// validates current preview ownership, scene provenance and arc proximity.
+    fn pointer_event_selection_item(event: &PointerEvent) -> Option<SelectionItem> {
+        let origin = event.target()?.dyn_into::<Element>().ok()?;
+        let target = origin.closest("[data-editor-item]").ok().flatten()?;
+        selection_item(&target)
+    }
+
     fn install_pan_listeners(
         document: &Document,
         workbench: &Rc<RefCell<Workbench>>,
@@ -1197,29 +1207,27 @@ pub(crate) mod wasm {
                 if event.button() != 0 {
                     return;
                 }
-                if let Some(transaction) = feature_canvas_pick(&mut wb, &scene, input.position) {
-                    if matches!(
-                        &transaction.outcome,
-                        FeatureAuthoringOutcome::NoNativeHit(_)
-                    ) {
-                        if let Some(hit) = scene.hit_test(input.position, PickTolerance::default())
-                            && matches!(hit.item, SelectionItem::FeatureCorner(owner)
-                                if wb
-                                    .coordinator
-                                    .feature_authoring_preview()
-                                    .is_some_and(|preview| preview.metadata().feature == owner.feature))
-                        {
-                            // Generated preview arcs are radius grips only after one
-                            // bounded transactional native-hit transition found no
-                            // native operand. They can never mask a source span.
-                            let effects = transition(&mut wb.coordinator, &scene, input, &[]);
+                if let Some(outcome) = feature_canvas_pointer_down(
+                    &mut wb,
+                    &scene,
+                    input,
+                    pointer_event_selection_item(&event),
+                ) {
+                    match outcome {
+                        FeatureAuthoringPointerDownOutcome::RadiusGesture { effects } => {
                             dispatch_effects(&mut wb, effects);
-                        } else {
-                            wb.notice =
-                                "Pick a native span or an unambiguous polyline corner".into();
                         }
-                    } else {
-                        handle_feature_transaction(&mut wb, transaction);
+                        FeatureAuthoringPointerDownOutcome::NativePick { transaction } => {
+                            if matches!(
+                                &transaction.outcome,
+                                FeatureAuthoringOutcome::NoNativeHit(_)
+                            ) {
+                                wb.notice =
+                                    "Pick a native span or an unambiguous polyline corner".into();
+                            } else {
+                                handle_feature_transaction(&mut wb, *transaction);
+                            }
+                        }
                     }
                 }
                 save(&wb);
@@ -1950,20 +1958,22 @@ pub(crate) mod wasm {
         }
     }
 
-    fn feature_canvas_pick(
+    fn feature_canvas_pointer_down(
         wb: &mut Workbench,
         scene: &EditorScene,
-        position: geosolve_constraint_editor::ScreenPoint,
-    ) -> Option<FeatureAuthoringTransaction> {
+        input: PointerInput,
+        painted_item: Option<SelectionItem>,
+    ) -> Option<FeatureAuthoringPointerDownOutcome> {
         let label = next_feature_authoring_label(wb);
-        match wb.coordinator.transact_feature_authoring_pick_at(
+        match wb.coordinator.transact_feature_authoring_pointer_down(
             &mut wb.feature_authoring,
             scene,
-            position,
+            input,
+            painted_item,
             PickTolerance::default(),
             label,
         ) {
-            Ok(transaction) => Some(transaction),
+            Ok(outcome) => Some(outcome),
             Err(error) => {
                 wb.notice = format!("Fillet preview is unavailable: {error}");
                 None

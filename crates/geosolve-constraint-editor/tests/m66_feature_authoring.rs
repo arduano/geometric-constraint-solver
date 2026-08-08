@@ -1,17 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use geosolve_constraint_editor::{
-    EditorScene, FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
-    FeatureAuthoringPick, FeatureAuthoringStage, FeatureAuthoringState, FeatureAuthoringTool,
-    FeatureAuthoringWarningKind, PickTolerance, RetainedEditorCoordinator, SelectionItem, Viewport,
+    CoordinatorError, EditorEffect, EditorScene, FeatureAuthoringCandidate,
+    FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringPick,
+    FeatureAuthoringPointerDownOutcome, FeatureAuthoringStage, FeatureAuthoringState,
+    FeatureAuthoringTool, FeatureAuthoringWarningKind, Modifiers, PickTolerance, PointerInput,
+    RetainedEditorCoordinator, ScreenPoint, SelectionItem, Viewport,
 };
 use geosolve_sketch::{
     CurveDefinition, CurveSpan, DocumentFilletTrimEndpoint, DocumentSolveRequest,
     RetainedSketchDocumentSession, SketchDocument, SolverConfig,
 };
 use geosolve_sketch_features::{
-    ComputedCornerRef, ComputedFeatureAuthoringSnapshot, ComputedFeatureDefinition,
-    ComputedFeatureEvaluationState,
+    ComputedCornerRef, ComputedFeatureAuthoringSnapshot, ComputedFeatureCornerId,
+    ComputedFeatureDefinition, ComputedFeatureEvaluationState,
 };
 
 const DEFAULT_RADIUS: f64 = 1.0;
@@ -885,6 +887,333 @@ fn empty_canvas_pick_is_distinct_from_a_native_warning_and_state_neutral() {
             if guidance.stage == FeatureAuthoringStage::PickFirstFilletCurve
     ));
     assert_eq!(authoring, before);
+}
+
+#[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one regression composes overlapping painted intent, authoring state and the complete radius pointer lifecycle"
+)]
+fn painted_preview_arc_owns_radius_drag_without_collecting_its_native_parent() {
+    let mut fixture = two_line_interaction_fixture();
+    let (mut authoring, _, _) = activate_authoring(&fixture.coordinator);
+    let first = fixture
+        .coordinator
+        .transact_feature_authoring_pointer_down(
+            &mut authoring,
+            &fixture.scene,
+            PointerInput {
+                pointer_id: 38,
+                position: fixture
+                    .scene
+                    .viewport
+                    .model_to_screen(fixture.pick_positions[0]),
+                modifiers: Modifiers::default(),
+            },
+            Some(SelectionItem::Curve(fixture.spans[0])),
+            PickTolerance::default(),
+            "overlapping radius gesture",
+        )
+        .expect("first support transaction");
+    let FeatureAuthoringPointerDownOutcome::NativePick { transaction: first } = first else {
+        panic!("painted native first support did not reach bounded Fillet collection");
+    };
+    assert!(matches!(
+        first.outcome,
+        FeatureAuthoringOutcome::Collecting { ref pending, .. } if pending.len() == 1
+    ));
+    let second = fixture
+        .coordinator
+        .transact_feature_authoring_pointer_down(
+            &mut authoring,
+            &fixture.scene,
+            PointerInput {
+                pointer_id: 39,
+                position: fixture
+                    .scene
+                    .viewport
+                    .model_to_screen(fixture.pick_positions[1]),
+                modifiers: Modifiers::default(),
+            },
+            Some(SelectionItem::Curve(fixture.spans[1])),
+            PickTolerance::default(),
+            "overlapping radius gesture",
+        )
+        .expect("second support transaction");
+    let FeatureAuthoringPointerDownOutcome::NativePick {
+        transaction: second,
+    } = second
+    else {
+        panic!("painted native second support did not reach bounded Fillet collection");
+    };
+    assert!(matches!(
+        second.outcome,
+        FeatureAuthoringOutcome::PreviewRequested { .. }
+    ));
+    let preview_metadata = second.preview.expect("held Fillet preview metadata");
+    let preview_snapshot = fixture
+        .coordinator
+        .feature_authoring_preview()
+        .expect("held Fillet preview")
+        .snapshot()
+        .clone();
+    let accepted = fixture
+        .coordinator
+        .session()
+        .accepted_state_for_current_input()
+        .expect("current accepted source");
+    let scene = EditorScene::from_accepted_with_computed(
+        accepted.identity().revision().get(),
+        accepted.design_identity(),
+        accepted.document(),
+        fixture.coordinator.session().design_document(),
+        &fixture
+            .coordinator
+            .session()
+            .accepted_prepared_input()
+            .expect("accepted prepared input"),
+        &preview_metadata.input,
+        &preview_snapshot,
+        fixture.scene.viewport,
+        0.5,
+    )
+    .expect("current computed preview scene");
+    let curve = scene
+        .computed_curves
+        .first()
+        .expect("generated Fillet arc")
+        .clone();
+    let overlap = curve
+        .screen_polyline
+        .iter()
+        .copied()
+        .find(|position| {
+            scene
+                .native_authoring_hit_test(*position, PickTolerance::default())
+                .is_some()
+        })
+        .expect("Fillet contact corridor overlapping a native parent");
+    let native = scene
+        .native_authoring_hit_test(overlap, PickTolerance::default())
+        .expect("native parent is also in tolerance");
+    assert!(fixture.spans.contains(&match native.item {
+        SelectionItem::Curve(span) => span,
+        other => panic!("expected overlapping native curve, got {other:?}"),
+    }));
+
+    let before_authoring = authoring.clone();
+    let before_feature_identity = fixture.coordinator.feature_document().identity();
+    let before_design = fixture.coordinator.session().design_identity();
+    let foreign = ComputedCornerRef {
+        feature: curve.owner.feature,
+        corner: ComputedFeatureCornerId::from_raw(curve.owner.corner.raw() + 1),
+    };
+    let rejected = fixture.coordinator.transact_feature_authoring_pointer_down(
+        &mut authoring,
+        &scene,
+        PointerInput {
+            pointer_id: 40,
+            position: overlap,
+            modifiers: Modifiers::default(),
+        },
+        Some(SelectionItem::FeatureCorner(foreign)),
+        PickTolerance::default(),
+        "must not collect through a stale painted corner",
+    );
+    assert!(matches!(
+        rejected,
+        Err(CoordinatorError::FeatureAuthoringPreviewMismatch)
+    ));
+    assert_eq!(authoring, before_authoring);
+    assert_eq!(
+        fixture
+            .coordinator
+            .feature_authoring_preview()
+            .expect("foreign hint retains preview")
+            .metadata(),
+        &preview_metadata
+    );
+
+    let pointer_id = 41;
+    let routed = fixture
+        .coordinator
+        .transact_feature_authoring_pointer_down(
+            &mut authoring,
+            &scene,
+            PointerInput {
+                pointer_id,
+                position: overlap,
+                modifiers: Modifiers::default(),
+            },
+            Some(SelectionItem::FeatureCorner(curve.owner)),
+            PickTolerance::default(),
+            "radius gesture must not become a native pick",
+        )
+        .expect("current painted preview owns pointer down");
+    let FeatureAuthoringPointerDownOutcome::RadiusGesture { effects } = routed else {
+        panic!("painted preview arc was reinterpreted as a native Fillet pick");
+    };
+    assert_eq!(
+        effects,
+        vec![EditorEffect::SelectionChanged(vec![
+            SelectionItem::FeatureCorner(curve.owner)
+        ])]
+    );
+    assert_eq!(authoring, before_authoring);
+    assert_eq!(
+        fixture
+            .coordinator
+            .feature_authoring_preview()
+            .expect("radius pointer down retains preview")
+            .metadata(),
+        &preview_metadata
+    );
+    assert_eq!(
+        fixture.coordinator.feature_document().identity(),
+        before_feature_identity
+    );
+    assert_eq!(
+        fixture.coordinator.session().design_identity(),
+        before_design
+    );
+
+    let before_second_press_authoring = authoring.clone();
+    let before_second_press_preview = fixture
+        .coordinator
+        .feature_authoring_preview()
+        .expect("active radius gesture retains preview")
+        .metadata()
+        .clone();
+    let before_second_press_selection = fixture.coordinator.editor().selection().to_vec();
+    let before_second_press_feature_identity = fixture.coordinator.feature_document().identity();
+    let before_second_press_design = fixture.coordinator.session().design_identity();
+    let second_press = fixture.coordinator.transact_feature_authoring_pointer_down(
+        &mut authoring,
+        &scene,
+        PointerInput {
+            pointer_id: pointer_id + 1,
+            position: overlap,
+            modifiers: Modifiers::default(),
+        },
+        Some(SelectionItem::FeatureCorner(curve.owner)),
+        PickTolerance::default(),
+        "second radius press must not replace the active gesture",
+    );
+    assert!(matches!(
+        second_press,
+        Err(CoordinatorError::FeatureAuthoringPreviewMismatch)
+    ));
+    assert_eq!(authoring, before_second_press_authoring);
+    assert_eq!(
+        fixture
+            .coordinator
+            .feature_authoring_preview()
+            .expect("second press retains preview")
+            .metadata(),
+        &before_second_press_preview
+    );
+    assert_eq!(
+        fixture.coordinator.editor().selection(),
+        before_second_press_selection
+    );
+    assert_eq!(
+        fixture.coordinator.feature_document().identity(),
+        before_second_press_feature_identity
+    );
+    assert_eq!(
+        fixture.coordinator.session().design_identity(),
+        before_second_press_design
+    );
+
+    let center = scene.viewport.model_to_screen(curve.center);
+    let radial = [overlap.x - center.x, overlap.y - center.y];
+    let radial_length = radial[0].hypot(radial[1]);
+    assert!(radial_length > 0.0);
+    let moved = ScreenPoint {
+        x: overlap.x + 20.0 * radial[0] / radial_length,
+        y: overlap.y + 20.0 * radial[1] / radial_length,
+    };
+    let move_input = PointerInput {
+        pointer_id,
+        position: moved,
+        modifiers: Modifiers::default(),
+    };
+    let move_effects = fixture
+        .coordinator
+        .editor_mut()
+        .pointer_move(&scene, move_input);
+    assert!(matches!(
+        move_effects.as_slice(),
+        [EditorEffect::PreviewComputedFeatureRadius { feature, radius, .. }]
+            if *feature == curve.owner.feature && radius.is_finite() && *radius > 0.0
+    ));
+    let expected = fixture.coordinator.session().design_identity();
+    let release_effects = fixture
+        .coordinator
+        .editor_mut()
+        .pointer_up(&scene, expected, move_input);
+    assert!(matches!(
+        release_effects.as_slice(),
+        [
+            EditorEffect::CommitComputedFeatureRadius { feature, radius, .. },
+            EditorEffect::ClearComputedFeaturePreview,
+        ] if *feature == curve.owner.feature && radius.is_finite() && *radius > 0.0
+    ));
+    assert_eq!(authoring, before_authoring);
+
+    let modifier_pointer_id = 43;
+    let modifier_routed = fixture
+        .coordinator
+        .transact_feature_authoring_pointer_down(
+            &mut authoring,
+            &scene,
+            PointerInput {
+                pointer_id: modifier_pointer_id,
+                position: overlap,
+                modifiers: Modifiers {
+                    shift: true,
+                    ..Modifiers::default()
+                },
+            },
+            Some(SelectionItem::FeatureCorner(curve.owner)),
+            PickTolerance::default(),
+            "modifier must not toggle the radius owner away",
+        )
+        .expect("modifier press starts the explicit radius gesture");
+    let FeatureAuthoringPointerDownOutcome::RadiusGesture { effects } = modifier_routed else {
+        panic!("modifier press on painted preview did not start a radius gesture");
+    };
+    assert!(effects.is_empty());
+    assert_eq!(
+        fixture.coordinator.editor().selection(),
+        &[SelectionItem::FeatureCorner(curve.owner)]
+    );
+    let modifier_move = PointerInput {
+        pointer_id: modifier_pointer_id,
+        position: moved,
+        modifiers: Modifiers::default(),
+    };
+    let modifier_move_effects = fixture
+        .coordinator
+        .editor_mut()
+        .pointer_move(&scene, modifier_move);
+    assert!(matches!(
+        modifier_move_effects.as_slice(),
+        [EditorEffect::PreviewComputedFeatureRadius { feature, radius, .. }]
+            if *feature == curve.owner.feature && radius.is_finite() && *radius > 0.0
+    ));
+    let modifier_release_effects =
+        fixture
+            .coordinator
+            .editor_mut()
+            .pointer_up(&scene, expected, modifier_move);
+    assert!(matches!(
+        modifier_release_effects.as_slice(),
+        [
+            EditorEffect::CommitComputedFeatureRadius { feature, radius, .. },
+            EditorEffect::ClearComputedFeaturePreview,
+        ] if *feature == curve.owner.feature && radius.is_finite() && *radius > 0.0
+    ));
 }
 
 #[test]
