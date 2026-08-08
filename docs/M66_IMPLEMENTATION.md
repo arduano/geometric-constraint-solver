@@ -2,8 +2,8 @@
 
 # M66 implementation: computed 2D Fillet features
 
-Status: implementation and mechanical qualification complete on interaction-hardened candidate
-source `b53a451` after the 2026-08-07 ADR 0031 pivot. Supervising-human UAT remains open.
+Status: implementation and mechanical qualification complete on presentation-smoothed candidate
+source `a34d137` after the 2026-08-07 ADR 0031 pivot. Supervising-human UAT remains open.
 
 The qualified but unapproved solver-owned ordinary-UI endpoint, commit `1034afc`, is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07`. The earlier three-tool experiment remains at
@@ -46,6 +46,11 @@ qualification evidence.
 - Native screen picks use a fixed 256-candidate limit before allocation/sorting and one bounded
   corner-incidence index. Incomplete endpoints and duplicate pending supports may fall through;
   true high-valence ambiguity never guesses an underlying curve.
+- Native curves and computed source fragments receive eight seed subdivisions per non-linear span
+  before the existing bounded chord-error refinement. Generated Fillet arcs receive at least eight
+  bounded angular segments, advanced drafting previews use 64 subdivisions per semantic span, and
+  the workbench applies one 0.25 px chord-error policy to native and computed scenes. Straight
+  spans retain their two-point representation.
 - Generated-arc selection resolves stable set/corner provenance. Arc/grip drag changes only feature
   radius; arc deletion removes its corner and final-corner deletion removes its set. Set suppression
   is separate from sketch source activation.
@@ -109,7 +114,7 @@ redesigning persistence. M66 implements no Offset.
 
 ## 3. Exact commands and outcomes
 
-Candidate source `b53a451` passed the following commands on one implementation state:
+Candidate source `a34d137` passed the following commands on one implementation state:
 
 ```text
 nix-shell shell.nix --run 'cargo fmt --all -- --check'
@@ -124,7 +129,7 @@ git diff --check
 Outcomes:
 
 - `geosolve-sketch-features`: 21 tests passed;
-- `geosolve-constraint-editor`: 173 unit tests and 45 integration tests passed, including 28
+- `geosolve-constraint-editor`: 175 unit tests and 45 integration tests passed, including 28
   focused M66 interaction-engine tests;
 - `geosolve-demo-web`: 68 tests passed;
 - the complete locked all-feature workspace test suite passed;
@@ -147,6 +152,8 @@ Mechanical acceptance passed; supervising-human UAT remains open. Direct qualifi
   retries;
 - coordinator-transactional pick/options/preview publication, rejected refresh/apply defenses and
   the complete first-set publication through adjacent second-set publication plus Undo/Redo;
+- inflected cubic pickability, minimal straight-line sampling, computed Fillet minimum chord density
+  and the denser advanced-drafting preview;
 - reverse-selection canonicalization and sequential/batch visible parity;
 - atomic claim conflict plus recovery;
 - exact sketch-state/residual/rank/DOF invariance under shared-radius edits;
@@ -171,5 +178,5 @@ supervising human explicitly approves it.
 - Version-one computed features reference native constrained spans only.
 - Computed-on-computed chaining, Offset, Bake/Explode and cross-revision output topological naming
   are deferred.
-- The remaining blocker is supervising-human UAT approval of candidate source `b53a451` at the
+- The remaining blocker is supervising-human UAT approval of candidate source `a34d137` at the
   verified Tailscale endpoint.

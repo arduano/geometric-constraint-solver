@@ -34,7 +34,7 @@ construction/NURBS UAT and certified all-family visual profiles.
   `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`). M27/M28 and M58 associative-
   Fillet APIs remain advanced/backward-compatible behavior with no automatic migration. M66 adds
   no Offset implementation or profile consumption. Implementation and mechanical qualification
-  pass on interaction-hardened candidate source `b53a451`; focused supervising-human UAT remains
+  pass on presentation-smoothed candidate source `a34d137`; focused supervising-human UAT remains
   open.
 - **Planned sequence:** no milestone is assigned after M66. Every newly scoped milestone ends in
   its own human UAT.
@@ -202,6 +202,12 @@ authoring state and exact held preview. Screen picking examines a bounded determ
 set, builds corner incidence once, permits fallthrough only for an incomplete single-span endpoint
 or duplicate pending support, and reports a high-valence junction as ambiguous rather than choosing
 an underlying curve.
+
+The same headless scene boundary tessellates native curves, computed source fragments and generated
+Fillet arcs for both presentation and picking. Non-linear spans receive a bounded seed subdivision
+before chord-error refinement so an inflection cannot alias to its endpoint chord. The workbench
+selects one finer pixel-error policy for native and computed scenes; SVG code only serializes the
+resulting polylines.
 
 The archived ADR 0030 advanced path remains implemented compatibility behavior below the ordinary
 UI. In that path, the sketch domain exposes the small, non-mutating

@@ -119,10 +119,13 @@ persisted or admitted to the constraint graph. M27/M28 solver-owned Fillets and 
 `AssociativeFillet` operation remain advanced/backward-compatible APIs with no automatic
 migration. Workspace v4 adds the feature sidecar; v1-v3 migrate to an empty feature document.
 Post-pivot finding `M66-PF001` then hardened the Rust interaction boundary after a blank optional
-radius made the second line appear unselectable. Candidate source `b53a451` preserves the initialized
-radius, keeps corners atomic, resolves bounded overlapping hits without guessing, and commits picks
-or option changes only together with an independently current whole-feature preview. The full
-mechanical gate passes; focused human retest and the rewritten UAT are the only open M66 gates.
+radius made the second line appear unselectable. `M66-PF002` subsequently smooths native and
+computed curves through one bounded headless tessellation policy and fixes midpoint-aliasing
+inflections that could disappear from both rendering and picking. Candidate source `a34d137`
+preserves the initialized radius, keeps corners atomic, resolves bounded overlapping hits without
+guessing, and commits picks or option changes only together with an independently current
+whole-feature preview. The full mechanical gate passes; focused human retest and the rewritten UAT
+are the only open M66 gates.
 M62 follow-up `M62-F001` corrects accepted-state line-angle seeding and exposes acute-degree
 presentation while retaining the explicit directed-radian solver branch.
 Follow-up `M62-F002` gives canvas pointer-down exclusive ownership of canvas authoring picks,

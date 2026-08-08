@@ -5,11 +5,11 @@
 Status: post-pivot implementation and mechanical qualification are Pass. Every human result is
 Pending; do not use the archived `1034afc` build for this scorecard.
 
-Candidate source: `b53a451` (`Harden computed Fillet interaction authoring`), superseding the
-initial post-pivot workbench candidate `941177c` after `M66-PF001`.
+Candidate source: `a34d137` (`Smooth headless curve presentation`), extending interaction-hardened
+candidate `b53a451` after `M66-PF001` and `M66-PF002`.
 
-Tailscale endpoint: `http://100.94.63.83:8080/` (service restarted and HTTP verified on
-2026-08-07).
+Tailscale endpoint: `http://100.94.63.83:8080/` (release service live-rebuilt and HTTP verified on
+2026-08-08).
 
 Use the ordinary GeoSolve Sketch Workbench only. This scorecard validates the normal computed
 Fillet route under ADR 0031. It does not ask the UI to create or edit advanced M28 solver-owned
@@ -142,6 +142,26 @@ changes and full sequential adjacent-set publication with Undo/Redo.
 
 Status: mechanically resolved; focused human retest Pending. Recheck ordinary line-line selection,
 then M66-U1 and M66-U2 sequential/multi-corner authoring.
+
+### M66-PF002 — curves and generated Fillets appeared visibly faceted
+
+Observed: native curves, construction previews and especially small generated Fillet arcs used too
+few visible subdivisions for comfortable close inspection.
+
+Root cause: the workbench requested a relatively loose 0.8 px chord tolerance. Native curve
+tessellation also relied only on midpoint-to-chord deviation, so an inflected cubic whose parameter
+midpoint landed on its endpoint chord could collapse to one rendered and pickable segment even when
+its quarter points departed materially from that chord.
+
+Disposition on `a34d137`: both workbench scene branches use one 0.25 px policy; every non-linear
+native/source-fragment span receives eight seed segments before bounded adaptive refinement;
+generated Fillet arcs retain at least eight segments; and advanced drafting previews use 64 samples
+per semantic span. Straight spans remain two-point polylines. Direct headless regressions prove the
+analytic quarter point of the midpoint-aliasing cubic remains pickable and a small computed arc
+meets the intended baseline between vertices.
+
+Status: mechanically resolved; focused human visual retest Pending. Inspect ordinary Bézier/conic/
+NURBS curves and small/large Fillet previews at several zoom levels while continuing M66 UAT.
 
 The old `M66-F002` through `M66-F013` ledger belongs to the archived solver-owned UI architecture
 at `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`). Those regressions remain useful

@@ -992,7 +992,7 @@ in `docs/M65_UAT.md`; M65 is complete.
 ## M66 acceptance: computed 2D Fillet features
 
 Status: active after the 2026-08-07 computed-feature pivot. Post-pivot implementation and
-mechanical qualification pass on interaction-hardened candidate source `b53a451`;
+mechanical qualification pass on presentation-smoothed candidate source `a34d137`;
 supervising-human UAT remains open.
 
 The superseded solver-owned ordinary-UI build is preserved at
@@ -1031,6 +1031,9 @@ M66 is accepted only when all of the following are true:
   second line picks, point corners, overlapping candidates and high-valence junctions resolve
   deterministically under finite work. Pick and option transitions publish only together with a
   freshly `Current` whole-feature preview; rejection preserves the prior state and preview.
+- Native curves, computed source fragments and generated Fillet arcs use bounded headless
+  tessellation with a smooth curved baseline. Inflected curves remain rendered and pickable even
+  when their parameter midpoint lies exactly on the endpoint chord; straight spans remain minimal.
 - A generated arc selects stable corner/set provenance. Dragging it changes only the shared feature
   radius; deleting it removes its corner, deleting the final corner removes the set and suppression
   is set-wide. Generated geometry is not a sketch-constraint operand. Every native source point
