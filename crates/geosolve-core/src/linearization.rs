@@ -5,7 +5,7 @@ use nalgebra::{DMatrix, DVector};
 
 use crate::analysis::{EliminationPlan, SolveComponent, calculate_sparsity_signature};
 use crate::problem::VariableState;
-use crate::residual::{JacobianCoordinates, LinearizationStorage, LocalJacobianStorage};
+use crate::residual::{LinearizationStorage, LocalJacobianStorage};
 use crate::solver::{RankDiagnostics, rank_diagnostics};
 use crate::{
     ComponentSolveReport, ContinuationError, ContinuationTangent, ContinuationTangentOrientation,
@@ -1764,7 +1764,7 @@ fn evaluate_block(
         })
         .collect::<Result<Vec<_>, CoreError>>()?;
 
-    let (fused_result, jacobian_coordinates) = {
+    let fused_result = {
         let mut storage_blocks = residual
             .incident_variables()
             .iter()
@@ -1783,8 +1783,7 @@ fn evaluate_block(
             })
             .collect::<Result<Vec<_>, CoreError>>()?;
         let mut storage = LinearizationStorage::new(&mut raw_residuals, &mut storage_blocks);
-        let result = residual.evaluator().linearize(variables, &mut storage);
-        (result, storage.jacobian_coordinates())
+        residual.evaluator().linearize(variables, &mut storage)
     };
 
     match fused_result {
@@ -1818,14 +1817,8 @@ fn evaluate_block(
             let mut normalized_values = Vec::with_capacity(raw_values.len());
             for row in 0..residual.output_dimension() {
                 for column in 0..columns {
-                    let variable_normalized = match jacobian_coordinates {
-                        JacobianCoordinates::RawTangent => {
-                            raw_values[row * columns + column] * variable.step_scales()[column]
-                        }
-                        JacobianCoordinates::NormalizedTangent => {
-                            raw_values[row * columns + column]
-                        }
-                    };
+                    let variable_normalized =
+                        raw_values[row * columns + column] * variable.step_scales()[column];
                     let normalized = variable_normalized / residual.scales()[row];
                     if !normalized.is_finite() {
                         return Err(CoreError::NonFiniteValue {

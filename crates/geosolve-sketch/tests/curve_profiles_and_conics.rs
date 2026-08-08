@@ -462,7 +462,7 @@ fn assert_conic_gallery_lifecycle() {
 }
 
 #[test]
-fn five_conic_lifecycle_and_legacy_signatures_preserve_typed_state_and_validation() {
+fn conic_lifecycle_and_public_scenarios_preserve_typed_state_and_validation() {
     assert_conic_scenarios_are_independently_valid();
     assert_conic_gallery_lifecycle();
 }

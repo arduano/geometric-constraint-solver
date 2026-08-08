@@ -261,13 +261,6 @@ impl<'a> LocalJacobianStorage<'a> {
 pub struct LinearizationStorage<'a, 'b> {
     residuals: &'a mut [f64],
     jacobian_blocks: &'b mut [LocalJacobianStorage<'a>],
-    jacobian_coordinates: JacobianCoordinates,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum JacobianCoordinates {
-    RawTangent,
-    NormalizedTangent,
 }
 
 impl<'a, 'b> LinearizationStorage<'a, 'b> {
@@ -278,7 +271,6 @@ impl<'a, 'b> LinearizationStorage<'a, 'b> {
         Self {
             residuals,
             jacobian_blocks,
-            jacobian_coordinates: JacobianCoordinates::RawTangent,
         }
     }
 
@@ -308,14 +300,6 @@ impl<'a, 'b> LinearizationStorage<'a, 'b> {
     /// Returns one mutable incident raw-tangent Jacobian block in declaration order.
     pub fn jacobian_block_mut(&mut self, index: usize) -> Option<&mut LocalJacobianStorage<'a>> {
         self.jacobian_blocks.get_mut(index)
-    }
-
-    pub(crate) const fn jacobian_coordinates(&self) -> JacobianCoordinates {
-        self.jacobian_coordinates
-    }
-
-    pub(crate) fn mark_normalized_tangent_jacobians(&mut self) {
-        self.jacobian_coordinates = JacobianCoordinates::NormalizedTangent;
     }
 }
 

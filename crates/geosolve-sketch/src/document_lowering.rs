@@ -7,14 +7,13 @@ use crate::document::{
     ContactDomain, ContactId, CurveDefinition, CurveId, CurveSpan, DesignPointId, DesignScalarId,
     DocumentAngleOrientation, DocumentArcSweep, DocumentArcTangencySide, DocumentBSplineForm,
     DocumentCircleContainment, DocumentCircleTangencyMode, DocumentConstraint,
-    DocumentConstraintDefinition, DocumentConstraintId, DocumentCoordinateAxis,
-    DocumentCurveContinuity, DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation,
-    DocumentCurveNormalSide, DocumentDimension, DocumentDimensionDefinition, DocumentDimensionId,
-    DocumentDimensionMode, DocumentError, DocumentFilletEndpointOrder,
-    DocumentLineOffsetOrientation, DocumentLineSide, DocumentParameterId, DocumentParameterTarget,
-    DocumentSourceId, EffectiveActivity, FeatureEndpoint, PersistentId, SketchDocument,
-    TangentOrientation, canonical_parameter_target_key, document_arc_signed_sweep,
-    document_hyperbola_branch,
+    DocumentConstraintDefinition, DocumentCoordinateAxis, DocumentCurveContinuity,
+    DocumentCurveCurvatureRelation, DocumentCurveDirectionRelation, DocumentCurveNormalSide,
+    DocumentDimension, DocumentDimensionDefinition, DocumentDimensionId, DocumentDimensionMode,
+    DocumentError, DocumentFilletEndpointOrder, DocumentLineOffsetOrientation, DocumentLineSide,
+    DocumentParameterId, DocumentParameterTarget, DocumentSourceId, EffectiveActivity,
+    FeatureEndpoint, PersistentId, SketchDocument, TangentOrientation,
+    canonical_parameter_target_key, document_arc_signed_sweep, document_hyperbola_branch,
 };
 use crate::document_session::{ExternalSnapshotEntry, ExternalSnapshotSetDigest, ParameterDigest};
 
@@ -2149,14 +2148,4 @@ fn invalid_runtime<T>(message: impl Into<String>) -> Result<T, DocumentError> {
         field: "runtime mapping",
         message: message.into(),
     })
-}
-
-#[allow(dead_code)]
-const fn persistent_constraint(id: DocumentConstraintId) -> PersistentId {
-    id.0
-}
-
-#[allow(dead_code)]
-const fn persistent_dimension(id: DocumentDimensionId) -> PersistentId {
-    id.0
 }

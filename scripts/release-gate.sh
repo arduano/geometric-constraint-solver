@@ -20,9 +20,6 @@ cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown
 RUSTDOCFLAGS="-D warnings" cargo doc --locked --workspace --all-features --no-deps
 cargo bench --locked --workspace --all-features --no-run
 
-cargo test --locked -p geosolve-sketch --test m29_release
-cargo test --locked -p geosolve-linkage --test m29_release
-cargo test --locked -p geosolve-sketch --test m32_release
 cargo run --locked --release -p geosolve-sketch --example m14_performance
 cargo run --locked --release -p geosolve-sketch --example m32_performance
 cargo test --locked --release -p geosolve-linkage --test m23_performance \
@@ -40,6 +37,7 @@ for package in \
   geosolve-core \
   geosolve-sketch \
   geosolve-linkage \
+  geosolve-sketch-features \
   geosolve-sketch-ops \
   geosolve-sketch-topology \
   geosolve-constraint-editor

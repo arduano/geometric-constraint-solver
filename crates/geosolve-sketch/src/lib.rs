@@ -5,7 +5,7 @@
 //! [`RetainedSketchDocumentSession`] is the production lifecycle entry point for
 //! separate retained design intent, non-authoritative attempts and independently
 //! accepted solved state. [`SketchDocumentSession`] remains the accepted-only
-//! command/history workflow used by the preview playground and compatibility clients.
+//! command/history workflow used by embedders, sample builders and compatibility clients.
 //!
 //! The supported curve surface includes lines, circles/arcs, conics, Beziers,
 //! clamped/periodic B-splines and NURBS. Generic contact, tangency, curvature,

@@ -85,9 +85,9 @@ fn construction_workload() {
         CONSTRUCTION_LOAD_BUDGET,
     );
 
-    let initial_start = accepted
+    let initial_end = accepted
         .document()
-        .point(ids.target_points[0])
+        .point(ids.target_points[1])
         .unwrap()
         .position;
     let edit = measure(
@@ -108,14 +108,14 @@ fn construction_workload() {
         |session| {
             validate_session(session);
             assert_eq!(session.history_len(), 1);
-            let moved_start = session
+            let moved_end = session
                 .document()
-                .point(ids.target_points[0])
+                .point(ids.target_points[1])
                 .unwrap()
                 .position;
             assert!(
-                (moved_start[0] - initial_start[0]).hypot(moved_start[1] - initial_start[1]) > 0.1,
-                "supporting-offset edit did not move associated geometry"
+                (moved_end[0] - initial_end[0]).hypot(moved_end[1] - initial_end[1]) > 0.1,
+                "supporting-offset edit did not move the edited endpoint"
             );
             validate_canonical(&session.export_json().unwrap());
         },

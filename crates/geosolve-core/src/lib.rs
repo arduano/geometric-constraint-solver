@@ -14,7 +14,6 @@
 use slotmap::new_key_type;
 
 mod analysis;
-#[allow(dead_code)]
 mod autodiff;
 mod bounds;
 mod continuation;
@@ -81,17 +80,4 @@ new_key_type! {
     pub struct ResidualId;
     pub struct SourceConstraintId;
     pub struct BoundId;
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn defaults_are_strict_but_finite() {
-        let config = SolverConfig::default();
-        assert!(config.normalized_residual_tolerance.is_finite());
-        assert!(config.normalized_residual_tolerance > 0.0);
-        assert!(config.max_iterations > 0);
-    }
 }

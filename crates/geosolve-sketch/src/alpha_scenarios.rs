@@ -14,7 +14,7 @@ use crate::{
 };
 use crate::{CurveCurveFilletIds, CurveCurveFilletRequest, CurveFilletParentRequest};
 
-/// Canonical playground-alpha scenarios shared by native tests and browser examples.
+/// Canonical alpha-era scenarios shared by native tests and public sample consumers.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AlphaScenarioKind {
     A1,
@@ -71,7 +71,7 @@ pub enum AlphaPerformanceSize {
     Medium,
 }
 
-/// Concise interaction contract shown by the browser for one focused UAT lab.
+/// Concise interaction contract retained for focused scenario consumers.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AlphaScenarioUat {
     pub title: &'static str,
@@ -133,7 +133,7 @@ impl AlphaScenarioKind {
         }
     }
 
-    /// Returns the focused UAT contract for interactive M25-M28 and NURBS labs.
+    /// Returns the focused interaction contract for M25-M28 and NURBS fixtures.
     #[must_use]
     pub const fn uat(self) -> Option<AlphaScenarioUat> {
         let uat = match self {

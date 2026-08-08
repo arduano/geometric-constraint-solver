@@ -379,7 +379,7 @@ fn assert_block_base_invalid_combined_edit_rolls_back(
 }
 
 #[test]
-fn legacy_shaft_bearing_consumer_signature_preserves_scale_report_and_continuation_state() {
+fn shaft_bearing_workflow_preserves_scale_report_and_continuation_state() {
     for scale in [1.0e-6, 1.0, 1.0e6] {
         let fixture = spatial_example(SpatialExampleKind::ShaftBearing, scale).unwrap();
         let SpatialExampleIds::ShaftBearing(ids) = fixture.ids else {
@@ -481,7 +481,7 @@ fn legacy_shaft_bearing_consumer_signature_preserves_scale_report_and_continuati
 }
 
 #[test]
-fn legacy_block_base_consumer_signature_commits_once_and_rolls_back_combined_invalid_edit() {
+fn block_base_workflow_commits_once_and_rolls_back_combined_invalid_edit() {
     for scale in [1.0e-6, 1.0, 1.0e6] {
         let fixture = spatial_example(SpatialExampleKind::BlockBase, scale).unwrap();
         let SpatialExampleIds::BlockBase(ids) = fixture.ids else {
