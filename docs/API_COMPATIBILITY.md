@@ -52,11 +52,11 @@ sample-agnostic locality contract; neither API was part of the published `0.2.0`
 draft-v5 representation remains explicitly unsupported until a future schema-freeze milestone is
 deliberately scoped, qualified and approved, and must not be treated as a released wire language.
 
-M67 removes the doc-hidden `M40QualificationCaseResult`, `M40QualificationReport`,
+M67 removed the doc-hidden `M40QualificationCaseResult`, `M40QualificationReport`,
 `m40_qualification_corpus`, `run_m40_qualification` and
 `validate_m40_qualification_matrix` evidence API after replacing every retained claim with direct
 owning-layer tests. That frozen browser-evidence surface was introduced after published `0.2.0`,
-had no runtime consumer and was explicitly not a product API. M67 does not remove any supported
+had no runtime consumer and was explicitly not a product API. M67 did not remove any supported
 domain API or v1-v4 persistence reader. Removing raw topology/lifecycle/redundancy cards from the
 non-published demo does not narrow the corresponding reusable domain contracts.
 

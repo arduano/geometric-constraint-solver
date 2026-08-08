@@ -8,7 +8,7 @@ Complete (2026-07-28). This document preserves the contract/retirement ledger an
 the passing direct qualification and deletion boundary. `PLAN.md` remains authoritative for
 milestone order; M49-M52 subsequently completed.
 
-M67 later maps the fourteen retained transition behaviors to named current tests and removes the
+M67 later mapped the fourteen retained transition behaviors to named current tests and removed the
 now-unconsumed JSON/golden qualification runner. The M48 requirement and source paths below record
 the checkpoint that existed at M48; `docs/M67_M40_OWNERSHIP.md` owns the current disposition.
 

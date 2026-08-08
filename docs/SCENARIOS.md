@@ -1273,9 +1273,9 @@ M62 completes approved CAD-style constraint/dimension authoring, and M63 complet
 geometry-anchored canvas constraint/dimension presentation, M64 completes the approved editable
 purpose-based sample library and M65 completes approved predictable, bounded projected dragging.
 M66 completes the explicitly approved computed-feature cut for ordinary multi-corner 2D Fillets;
-M67 is the active cleanup cut and adds no new scenario fixture. Its focused UAT uses the ordinary
-editable Samples catalog to prove the surviving workbench after removal of developer-only cards
-and frozen harnesses.
+M67 completed the approved cleanup cut and added no new scenario fixture. Its focused UAT used the
+ordinary editable Samples catalog to prove the surviving workbench after removal of developer-only
+cards and frozen harnesses. M68 is empty and has no assigned scenario.
 Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -1284,7 +1284,7 @@ required.
 Objective geometry, residual, derivative, rank, branch, persistence, migration, resource,
 cancellation, presentation-adapter and topology assertions are directly automated at their
 owning Rust/WASM layer. Old browser E2E is not a qualification path. Human review is
-recorded at completed M40.7, M53 and M61-M66. Every newly scoped milestone from M67 onward ends in
+recorded at completed M40.7, M53 and M61-M67. Every newly scoped milestone from M68 onward ends in
 its own UAT after direct automated qualification.
 
 ### M40-ES1 - Headless persistent line selection and relation action
@@ -1429,7 +1429,7 @@ hover/focus tooltips and the canonical Problems panel.
 
 At the M55 checkpoint, the now-retired headless qualification corpus and reusable workbench
 scenario catalog jointly covered every preserved M13-M14 constraint, dimension and explicit branch
-action without restoring the old application. M67 maps the retained corpus claims to current
+action without restoring the old application. M67 mapped the retained corpus claims to current
 direct tests in `docs/M67_M40_OWNERSHIP.md`. The historical matrix includes:
 
 - one-point, two-point, point-curve, line-line, circle/arc and generic curve-pair applicability;

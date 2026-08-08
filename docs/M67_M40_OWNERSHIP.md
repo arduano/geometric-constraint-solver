@@ -2,7 +2,7 @@
 
 # M67 ownership of the retired M40 transition corpus
 
-M67 removes the post-release qualification runner, frozen evidence matrix and digest fixtures.
+M67 removed the post-release qualification runner, frozen evidence matrix and digest fixtures.
 The runner duplicated ordinary editor, coordinator and sketch behavior behind JSON operations and
 an exact report checksum. The named tests below are the direct owning-layer regressions that remain.
 

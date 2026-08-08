@@ -82,10 +82,12 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 
 ### Changed
 
-- Scoped M67 as a source-cleanup milestone. The non-published workbench drops its raw Production
-  topology, Host-state evidence and Accepted redundancy developer cards while retaining Problems,
+- Completed and received supervising-human approval for M67 on 2026-08-08. The non-published
+  workbench dropped its raw Production topology, Host-state evidence and Accepted redundancy
+  developer cards while retaining Problems,
   canvas attribution and the reusable domain APIs/tests beneath those views. M50 had already
-  removed the separately routed `/#/dev/lab` application.
+  removed the separately routed `/#/dev/lab` application. M68 remains an empty placeholder awaiting
+  supervising-user scope.
 - Retired the unreleased, doc-hidden M40 browser-evidence qualification API and frozen JSON
   matrix/corpus/golden harness after moving every retained transition claim to a direct current
   test owner. This evidence-only surface postdated `0.2.0` and had no runtime consumer.

@@ -2,18 +2,18 @@
 
 # M67 focused UAT — cleaned workbench
 
-Status: mechanically qualified candidate serving; supervising-human review pending.
+Status: closed with explicit supervising-human approval on 2026-08-08.
 
 Candidate source: `3d52b29fc11f5cef572fe86f58a95897ec8c8214` on `main`.
 
-Temporary Tailscale endpoint: `http://100.94.63.83:8080/`
+Historical Tailscale endpoint: `http://100.94.63.83:8080/`
 
 Release distribution manifest: `e9d410c71290e7200595aaf9be6327523a812a1fa7d23abfa9d12c8279c176ac`
 
-The clean release gate built the seven-file distribution. A non-watching static server exposes
+The clean release gate built the seven-file distribution. A non-watching static server exposed
 only those completed files on the Tailscale address, and all seven HTTP responses matched their
-local SHA-256 values before handoff. This is one focused human checkpoint; direct Rust/WASM tests
-remain the correctness authority.
+local SHA-256 values before handoff. The endpoint is not a continuing post-close requirement.
+Direct Rust/WASM tests remain the correctness authority.
 
 ## M67-U1 — one surviving application
 
@@ -24,7 +24,7 @@ remain the correctness authority.
 Expected: there is one application only. No playground root, legacy controls, guided harness,
 scenario transcript/evidence UI or browser-only qualification surface appears.
 
-Result: Pending.
+Result: Accepted under the explicit M67 close decision.
 
 ## M67-U2 — cleaned inspector and trustworthy errors
 
@@ -39,7 +39,7 @@ Expected: Production topology, Host-state evidence and Accepted redundancy cards
 Selection, advanced-curve options, branch/dimension/feature editing and Problems remain coherent.
 Attributed errors still highlight their owners and an unattributable failure remains global.
 
-Result: Pending.
+Result: Accepted under the explicit M67 close decision.
 
 ## M67-U3 — ordinary CAD workflow
 
@@ -53,7 +53,7 @@ Expected: authoring applicability, contextual glyphs, dimension editing, history
 workspace persistence behave as before the cleanup. The canvas does not select surrounding HTML
 text during interaction.
 
-Result: Pending.
+Result: Accepted under the explicit M67 close decision.
 
 ## M67-U4 — editable Samples and computed Fillets
 
@@ -67,10 +67,11 @@ Expected: Samples remain ordinary editable save-like workspaces. Computed output
 source editability and recoverable failures remain usable; no read-only or guided mode returns.
 `M66-KL001` remains an accepted known limitation rather than an M67 regression.
 
-Result: Pending.
+Result: Accepted under the explicit M67 close decision.
 
 ## Approval
 
-M67 closes only after all four areas are reviewed and the supervising human explicitly approves
-this cleanup scope. Record findings as `M67-Fnnn` with exact actions, observed state and expected
-state; objective failures require an owning-layer regression before retest.
+On 2026-08-08, the supervising human explicitly approved the focused cleanup scope and requested
+M67 closure. M67-U1 through M67-U4 are accepted under that close decision with no new finding
+recorded. This approval does not replace the direct qualification recorded above or invent a
+separate per-step replay beyond the supervising-human close decision.

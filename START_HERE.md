@@ -26,9 +26,10 @@ supervising-human approval for CAD-style constraint and dimension authoring, M63
 canvas constraint presentation, M64 completed the approved editable sample cleanup, M65
 completed approved predictable bounded dragging, and M66 completed the explicitly approved
 computed-feature cut for ordinary multi-corner 2D Fillets outside the sketch constraint graph.
-M67 is the active cleanup cut: it removes the three remaining developer-oriented inspector cards,
-frozen browser-evidence/transition harnesses and audited dead code while preserving direct domain
-ownership and the ordinary workbench. Its focused human UAT is pending.
+M67 completed and received supervising-human approval for removal of the three remaining
+developer-oriented inspector cards, frozen browser-evidence/transition harnesses and audited dead
+code while preserving direct domain ownership and the ordinary workbench. M68 is an empty
+placeholder awaiting supervising-user scope.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -96,7 +97,7 @@ explicit relation choice at the headless boundary, and retains picked curve para
 seeding. M61 remediation added ten movable nonzero-DOF mechanism leaves, full
 Bezier/conic/NURBS authoring and an inspectable canvas camera. Follow-up `M61-F005` makes compact
 circle Tangent contact-bearing and circle/arc Normal explicitly radial while retaining the public
-direction-at-contact domain API. M61-M66 are complete and approved. M64 supersedes active-scenario
+direction-at-contact domain API. M61-M67 are complete and approved. M64 supersedes active-scenario
 routing and sample-specific passive-driver metadata with one ordinary workspace coordinator.
 M65 completed the reduced-scope predictable-dragging cut for those existing editable mechanisms. It
 replaces retry-based stabilization with one gesture-start accepted-nullspace locality plan,
@@ -207,7 +208,7 @@ are complete, growing the catalog to eight scenarios. The complete clean release
 build-source commit `f72116b`; `docs/M53_UAT.md` records the frozen M53-S5 manifest and temporary
 human endpoint. The targeted attribution review passed as part of final M53-S5 approval.
 
-The completed M54-M66 sequence covers stable diagnostics, alpha
+The completed M54-M67 sequence covers stable diagnostics, alpha
 constraint/dimension/branch-action parity, prepared jobs, incremental scale, operations,
 production topology, the advanced workbench, approved advanced UAT and approved CAD-style
 authoring, approved canvas constraint visualization and interaction, editable samples and
@@ -220,9 +221,10 @@ coordinator owns exact sketch/feature snapshot publication, and the sole workben
 presentation consumer. Ordinary Fillets add no sketch equation, constraint, dimension or trim
 view. Existing M27/M28/M58 capabilities remain supported below that route. Computed output is not
 yet consumed by profiles, and Offset is a future variable-topology use of the seam rather than an
-M66 implementation or UI placeholder. M66 ended in its own scoped computed-Fillet UAT. M67 is the
-active legacy-surface and qualification-harness cleanup described in `PLAN.md`; it changes no
-computed-feature behavior and ends in its own UAT.
+M66 implementation or UI placeholder. M66 ended in its own scoped computed-Fillet UAT. M67
+completed the legacy-surface and qualification-harness cleanup described in `PLAN.md`, changed no
+computed-feature behavior and received focused supervising-human approval. M68 remains empty and
+unscoped.
 
 Durable cleanup records:
 
@@ -258,8 +260,8 @@ Durable cleanup records:
 - `docs/M66_IMPLEMENTATION.md` (completed computed-Fillet implementation record)
 - `docs/M66_UAT.md` (approved scoped computed-Fillet scorecard and known limitation)
 - `docs/M67_M40_OWNERSHIP.md` (direct owners for the retired transition corpus)
-- `docs/M67_IMPLEMENTATION.md` (active legacy-surface and harness cleanup record)
-- `docs/M67_UAT.md` (pending focused cleanup scorecard)
+- `docs/M67_IMPLEMENTATION.md` (completed legacy-surface and harness cleanup record)
+- `docs/M67_UAT.md` (approved focused cleanup scorecard)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

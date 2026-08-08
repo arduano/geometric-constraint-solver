@@ -8,9 +8,9 @@ Complete as of 2026-07-28. Exactly one non-authoritative workbench remains, with
 Rust/WASM qualification and no cleanup-era compatibility shim or dead fixture. M52
 subsequently prepared the disposable candidate; M53 human review later passed.
 
-M67 subsequently retires the editor's frozen M40 corpus/golden runner, removes the workbench's raw
-Host-state evidence and Accepted redundancy cards, drops its direct topology dependency and
-replaces the `href="#/"` brand anchor. The M51 source paths and “Keep” dispositions below preserve
+M67 subsequently retired the editor's frozen M40 corpus/golden runner, removed the workbench's raw
+Host-state evidence and Accepted redundancy cards, dropped its direct topology dependency and
+replaced the `href="#/"` brand anchor. The M51 source paths and “Keep” dispositions below preserve
 the historical checkpoint; `docs/M67_M40_OWNERSHIP.md` and `docs/M67_IMPLEMENTATION.md` own their
 current disposition.
 

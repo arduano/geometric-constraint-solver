@@ -2,7 +2,7 @@
 
 # M67 implementation — legacy surface and harness cleanup
 
-Status: mechanically qualified on candidate `3d52b29`; supervising-human UAT is not yet approved.
+Status: complete and explicitly approved by the supervising human on 2026-08-08.
 
 ## 1. Files and APIs
 
@@ -96,12 +96,13 @@ Mechanically passed:
 - canonical sketch v1-v4 and workspace v1-v4 migration behavior to remain unchanged; and
 - the full locked release gate.
 
-Still pending: focused supervising-human approval of all four areas in `docs/M67_UAT.md`.
+The supervising human explicitly approved all four focused areas in `docs/M67_UAT.md` on
+2026-08-08 and requested M67 closure.
 
 ## 5. Known limitations or next blocker
 
 M67 intentionally does not address `M66-KL001`, add Offset/Mirror, redesign computed-feature
 branches, add topology presentation elsewhere, or harden new solver behavior. Cargo continues to
 emit its pre-existing advisory that workspace packages specify both `license` and `license-file`;
-licence validation and all package-content gates pass. Until the focused human scorecard is
-explicitly approved, M67 remains open.
+licence validation and all package-content gates pass. No blocker remains within the approved M67
+scope. M68 is an empty placeholder awaiting supervising-user scope.

@@ -40,16 +40,15 @@ predictable bounded dragging. M66 completes the explicitly approved computed-2D-
 authoring cut, with radius-drag/branch-choice interaction retained as known limitation
 `M66-KL001`. Its earlier unapproved Fillet/Offset/Mirror candidate is archived at
 `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`); the completed M25 offset constraints
-and M58 Mirror companion remain available. M67 is the active legacy UI, qualification-harness and
-dead-code cleanup and awaits its focused UAT. Physics, collision and a production rendering system
-remain out of scope.
+and M58 Mirror companion remain available. M67 completed the approved legacy UI,
+qualification-harness and dead-code cleanup. M68 is an empty placeholder awaiting supervising-user
+scope. Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and next milestone.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — active roadmap: completed and approved through scoped M66, with M67 cleanup in
-   progress and awaiting its own UAT.
+3. `PLAN.md` — active roadmap: completed and approved through M67, with M68 awaiting scope.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -67,7 +66,7 @@ remain out of scope.
 - `geosolve-demo-web` — separate desktop WASM/SVG consumer without equations or authoritative
   document semantics; M50 removed its old playground, M51 consolidated the one directly tested
   workbench, M60 added public advanced-operation/topology presentation plus the versioned workspace
-  envelope, and M67 removes its raw developer evidence/topology cards while preserving the domain
+  envelope, and M67 removed its raw developer evidence/topology cards while preserving the domain
   APIs beneath them.
 
 The critical design rule is: **share numerical machinery and feature evaluation, not one undifferentiated sketch/mechanism entity model.**
@@ -76,8 +75,8 @@ The post-M32 sketch north star is a Rust/WASM embeddable planar engine with reta
 unsolved design intent, ordinary CAD constraints/dimensions, immutable host inputs,
 cancellation, stable diagnostics and separate sketch-operation/production-topology
 companions. The host continues to own expressions, B-rep projection, feature history
-and application undo. Human UAT is complete at M40.7, M53 and M61-M66; every newly scoped
-milestone from M67 onward ends in its own UAT and all objective behavior is directly automated
+and application undo. Human UAT is complete at M40.7, M53 and M61-M67; every newly scoped
+milestone from M68 onward ends in its own UAT and all objective behavior is directly automated
 first. The desktop demo has no future mobile support requirement.
 
 ## Pre-1.0 API policy

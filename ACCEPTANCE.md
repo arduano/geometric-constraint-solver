@@ -157,7 +157,8 @@ The checked wording below is the preserved M8 completion record. Its then-curren
 allocations are historical; `PLAN.md` now governs completed work through the approved M61 gate,
 approved M62 authoring milestone, approved M63 canvas-constraint presentation, approved M64
 editable-sample cleanup, approved reduced-scope M65 predictable dragging and approved scoped M66
-computed-Fillet features under ADR 0031.
+computed-Fillet features under ADR 0031, followed by the approved M67 legacy-surface and harness
+cleanup.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -937,12 +938,13 @@ finding dispositions and approval record are retained in `docs/M53_UAT.md`.
   regression/requalification plus human retest; deferred future scope retains an explicit roadmap
   owner.
 
-## M54-M66 acceptance
+## M54-M67 acceptance
 
-M54-M66 are the completed post-M53 sequence. M62 received explicit supervising-human approval on
+M54-M67 are the completed post-M53 sequence. M62 received explicit supervising-human approval on
 2026-07-29, M63 and M64 received explicit supervising-human approval on 2026-07-30, and M65
 received focused supervising-human approval on 2026-08-01. M66 received explicit scoped
-supervising-human approval on 2026-08-08. No old browser E2E qualification may return.
+supervising-human approval on 2026-08-08. M67 received explicit supervising-human approval on
+2026-08-08. No old browser E2E qualification may return.
 
 ## M65 acceptance: predictable bounded projected dragging
 
@@ -1100,8 +1102,7 @@ change, global root enumeration, browser E2E, `/#/dev/lab` and mobile behavior.
 
 ## M67 acceptance: legacy surface and harness cleanup
 
-Status: mechanically qualified on candidate `3d52b29`; supervising-human UAT is required before
-closure.
+Status: complete and explicitly approved by the supervising human on 2026-08-08.
 
 M67 is accepted only when all of the following are true:
 
@@ -1129,6 +1130,10 @@ M67 is accepted only when all of the following are true:
   all-feature WASM, rustdoc, benchmark compilation, licence/package checks, release Trunk and Git
   hygiene pass on one nominated source.
 - The supervising human explicitly approves all four areas in `docs/M67_UAT.md`.
+
+The 2026-08-08 close decision accepts all four focused UAT areas with no new M67 finding recorded.
+M68 remains an empty placeholder without acceptance criteria until the supervising user supplies
+its scope.
 
 M67 changes no residual family, branch/orientation choice, tolerance, persistence language,
 computed-Fillet behavior, Offset/Mirror capability or mobile support claim. Historical milestone

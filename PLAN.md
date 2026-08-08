@@ -141,8 +141,8 @@ engine that a real CAD host can use. The accepted personality is:
   geometry enter one attempt as immutable revisioned values.
 - Keep cross-system expressions, B-rep projection, topological naming, feature
   history and application undo outside the sketch solver contract.
-- Keep human acceptance records explicit: M40.7, M53 and M61-M66 are complete and approved, and
-  every newly scoped milestone from M67 onward ends in its own supervising-human UAT. Every
+- Keep human acceptance records explicit: M40.7, M53 and M61-M67 are complete and approved, and
+  every newly scoped milestone from M68 onward ends in its own supervising-human UAT. Every
   objective correctness, persistence, compatibility and presentation-adapter assertion must pass
   through direct unit or integration tests at its owning layer before a human checkpoint begins;
   old CDP E2E suites are not a qualification path.
@@ -3158,8 +3158,7 @@ recorded above.
 
 ### M67
 
-Status: mechanically qualified on candidate `3d52b29`; supervising-human UAT is required before
-closure.
+Status: complete and explicitly approved by the supervising human on 2026-08-08.
 
 Goal: remove obsolete developer presentation, frozen qualification harnesses and demonstrably
 unused implementation without weakening direct domain ownership, accepted-state validation,
@@ -3192,7 +3191,13 @@ redundancy, diagnostic and audit APIs remain domain-owned and directly tested.
 - [x] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, forced dead-code
   review, all-feature WASM check, rustdoc, benchmark compilation, licence/package checks, release
   Trunk build, static single-workbench inventory and Git hygiene on one nominated source.
-- [ ] Complete and explicitly approve `docs/M67_UAT.md` over the release Tailscale candidate.
+- [x] Complete and explicitly approve `docs/M67_UAT.md` over the release Tailscale candidate.
+
+Completion record (2026-08-08): the supervising human explicitly approved the focused M67 cleanup
+UAT and requested closure. M67-U1 through M67-U4 are accepted under that close decision with no
+new finding recorded. The mechanically qualified candidate remains `3d52b29`; the later
+documentation checkpoint changes no served implementation. The temporary Tailscale endpoint is
+historical and is not a continuing post-close requirement.
 
 Gate: there is one ordinary workbench and no separately routed lab, developer inspector card,
 browser evidence runner, frozen transition corpus, orphan selector or dead-code allowance whose
@@ -3202,7 +3207,13 @@ surface, ordinary CAD authoring, editable Samples, camera, computed Fillets, wor
 v1-v3 workspace migration remain usable. Domain topology/diagnostic APIs and canonical sketch
 v1-v4 readers remain supported. M67 changes no residual equation, priority semantics, branch
 state, solver success validation or M66 known limitation, and closes only after explicit human
-UAT approval.
+UAT approval. That approval is recorded above and M67 is closed.
+
+### M68
+
+Status: empty placeholder awaiting supervising-user scope.
+
+No goal, theme, checklist, acceptance gate, scenarios or implementation is assigned yet.
 
 ## Explicit non-goals
 
