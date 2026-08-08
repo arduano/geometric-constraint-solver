@@ -191,6 +191,16 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   transient one-shot `candidate_request` after a successful point edit while matching publication
   policy, inputs and attempt/accepted identity; genuinely stale/rejected work and exact proposal
   compare-and-swap remain strict.
+- Closed M66 on 2026-08-08 with explicit supervising-human approval of its mechanically qualified
+  computed-Fillet scope. U1-U5 are accepted under that scoped close decision, while
+  `M66-PF001` through `M66-PF004` are mechanically closed by direct regressions rather than claimed
+  as individually repeated human tests. Accepted limitation `M66-KL001` records that radius drag
+  measures from the held/old arc center while evaluation moves center/contacts and that
+  post-placement contact/root, retained-parent direction and alternate-arc controls remain
+  unintuitive, especially near the line-circle playground's radius-`0.5` branch fold. Numeric
+  editing, explicit persisted branch state, independent validation, rollback and sketch-state
+  invariance remain correct. Potential grip-rail/derivative and explicit branch-control work is
+  unassigned and is not M67 scope.
 - Narrowed M66 from the unapproved three-tool candidate to exceptionally polished associative 2D
   Fillet authoring. Fillet interaction policy remains headless, local synthesis remains bounded
   and branch-explicit, invalid exploratory hover retains both parents, hover/click share one
@@ -199,8 +209,8 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   cell that cannot cross a tangent-parallel barrier over the complete bounded span or one explicit
   period. Two non-affine-parent authoring is typed unsupported pending pairwise continuation, while
   M28's underlying all-family generic Fillet API remains unchanged. Build-source commit `c1b0336`
-  passes the full native, warnings-denied, WASM and release qualification gate; human M66 UAT
-  remains open.
+  passed the full native, warnings-denied, WASM and release qualification gate; human M66 UAT was
+  still open at that checkpoint.
 - Corrected the M66 post-Apply lifecycle with one tested host completion handoff: successful Fillet
   publication exits the headless collector and explicitly restores ordinary Select, while a failed
   Apply attempt re-arms collection. A default Reference Fillet is immediately draggable through
@@ -217,14 +227,14 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   playground, and SVG canvas interaction suppresses native browser text-selection/element-drag
   defaults without affecting the sibling Fillet options or other HTML. Direct Rust qualification
   and the full native, warnings-denied, workspace, WASM and release gate pass; no browser E2E is
-  restored or claimed and human M66 UAT remains open.
+  restored or claimed. Human M66 UAT was still open at that checkpoint.
 - Added `M66-PF004` on candidate `ac31791`: painted computed-preview arcs now own radius presses
   ahead of overlapping native support collection through stable item metadata, exact held-preview
   and scene-provenance validation, and an independent owner hit. Stale/foreign hints and a second
   radius press reject state-neutrally, modifier keys cannot toggle the radius owner away, and a
   direct overlap regression covers the surviving gesture through move/release. The full formatting,
-  warnings-denied workspace Clippy/test, WASM and release Trunk gates pass; the candidate is live
-  and HTTP-verified over Tailscale, while focused human M66 retest remains open.
+  warnings-denied workspace Clippy/test, WASM and release Trunk gates pass; the candidate was
+  HTTP-verified over Tailscale before the scoped close decision above.
 - Preserved the superseded Fillet/Offset/Mirror candidate for historical inspection at
   `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`). It is not an active or approved
   M66 candidate.
@@ -242,6 +252,13 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   authoring-only tests, plus the M66-only single-span/joined-chain line-offset request APIs. The
   completed M25 signed Offset constraints and M58 exact supported-family Mirror
   operation-companion API/history are intentionally preserved.
+- Removed the unreleased, superseded ADR 0030 editor `OperationAuthoring*` facade, its coordinator
+  operation-preview/replay/DTO/state slice, `ReplayAction::Operation`, editor-side
+  `operation_authoring_input()` and the editor's now-exclusive direct `geosolve-sketch-ops`
+  dependency. This source-breaking cleanup removes no published `0.2.0` API and preserves M27/M28
+  Fillet equations/associations/trim views/persistence/migrations, M58
+  `SketchOperationRequest::AssociativeFillet`, M25 Offset, M58 Mirror, the branch-cell certificate,
+  M62 constraint authoring and all ADR 0031 computed-feature behavior.
 
 ## [0.2.0] - 2026-07-22
 

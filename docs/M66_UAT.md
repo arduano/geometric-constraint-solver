@@ -2,15 +2,18 @@
 
 # M66 focused UAT: computed 2D Fillet features
 
-Status: post-pivot implementation and mechanical qualification are Pass. Every human result is
-Pending; do not use the archived `1034afc` build for this scorecard.
+Status: closed with explicit scoped supervising-human approval on 2026-08-08. The implementation
+and mechanical qualification are Pass. U1-U5 are accepted under the scoped close decision below;
+this record does not claim a complete post-PF004 replay of every scripted step. Do not use the
+archived `1034afc` build for this scorecard.
 
 Candidate source: `ac31791` (`Keep Fillet preview drags out of support collection`), extending
 editable-playground candidate `02649cc` and resolving `M66-PF004` after
 `M66-PF001`/`M66-PF002`/`M66-PF003`.
 
-Tailscale endpoint: `http://100.94.63.83:8080/` (release service live-rebuilt from `ac31791` and
-HTTP verified on 2026-08-08; the served HTML contains the scoped non-draggable SVG marker).
+Historical Tailscale endpoint: `http://100.94.63.83:8080/` (release service was live-rebuilt from
+`ac31791` and HTTP verified on 2026-08-08; the served HTML contained the scoped non-draggable SVG
+marker). The service is not a continuing post-close requirement.
 
 Use the ordinary GeoSolve Sketch Workbench only. This scorecard validates the normal computed
 Fillet route under ADR 0031. It does not ask the UI to create or edit advanced M28 solver-owned
@@ -41,7 +44,7 @@ intervals. Reverse selection is visually equivalent. There is no final radius-co
 click, Driving/Reference choice or radius dimension. Generated-arc/grip drag changes feature radius
 without moving the underlying sketch or changing its DOF.
 
-Result: Pending.
+Result: Accepted under the explicit scoped M66 close decision.
 
 Notes:
 
@@ -59,7 +62,7 @@ keep separate radii and identities. Deleting/suppressing one does not damage the
 multi-corner arc removes only that corner; deleting the final corner removes the set. History
 restores stable feature/corner identities.
 
-Result: Pending.
+Result: Accepted under the explicit scoped M66 close decision.
 
 Notes:
 
@@ -80,7 +83,7 @@ attributed errors where safe. Unrelated valid sets remain visible. Source motion
 the same feature intent. Claim conflicts fail all participants deterministically and recover without
 silent branch changes.
 
-Result: Pending.
+Result: Accepted under the explicit scoped M66 close decision.
 
 Notes:
 
@@ -99,7 +102,7 @@ two non-affine parents fail with a clear typed limitation without changing the s
 profile/fill is withheld with “computed geometry not yet included” rather than presenting a
 misleading result.
 
-Result: Pending.
+Result: Accepted under the explicit scoped M66 close decision.
 
 Notes:
 
@@ -123,7 +126,7 @@ retain their old meaning and are not migrated. Stale/cancelled/exhausted output 
 current snapshot. Ordinary UI Fillet creates computed features only and leaves the advanced
 M27/M28/M58 compatibility surface intact.
 
-Result: Pending.
+Result: Accepted under the explicit scoped M66 close decision.
 
 Notes:
 
@@ -149,8 +152,8 @@ evaluations. The direct Rust suites `m66_feature_authoring.rs` (14 tests) and
 endpoints, overlap/crowding, stale and rejected retry paths, preview lifetime, transactional option
 changes and full sequential adjacent-set publication with Undo/Redo.
 
-Status: mechanically resolved; focused human retest Pending. Recheck ordinary line-line selection,
-then M66-U1 and M66-U2 sequential/multi-corner authoring.
+Status: mechanically closed by the direct regressions above; no separate human retest is claimed.
+Ordinary line-line selection and M66-U1/U2 remain useful future exploratory checks.
 
 ### M66-PF002 — curves and generated Fillets appeared visibly faceted
 
@@ -169,8 +172,8 @@ per semantic span. Straight spans remain two-point polylines. Direct headless re
 analytic quarter point of the midpoint-aliasing cubic remains pickable and a small computed arc
 meets the intended baseline between vertices.
 
-Status: mechanically resolved; focused human visual retest Pending. Inspect ordinary Bézier/conic/
-NURBS curves and small/large Fillet previews at several zoom levels while continuing M66 UAT.
+Status: mechanically closed by the direct regressions above; no separate human visual retest is
+claimed. Bézier/conic/NURBS curves and small/large Fillet previews remain useful exploratory checks.
 
 ### M66-PF003 — repetitive Fillet setup and canvas gestures obstructed focused UAT
 
@@ -187,9 +190,8 @@ sidebar and other HTML remain selectable/editable. Direct Rust tests cover the r
 screen/coordinator fixture transactions and focused presentation scoping. No browser E2E claim is
 made. The full native/Clippy/workspace/WASM/release gate and 73/73 demo-web tests pass.
 
-Status: mechanically resolved; focused human retest Pending. Exercise each playground region,
-confirm canvas drags do not select page text, and confirm text plus the Fillet radius input still
-work normally outside the SVG.
+Status: mechanically closed by the direct regressions above; no separate human retest is claimed.
+Each playground region and the SVG-versus-HTML selection boundary remain useful exploratory checks.
 
 ### M66-PF004 — preview-radius drag could consume a parent and strand authoring
 
@@ -215,10 +217,24 @@ covers pointer-down, move, release, invalid-owner rejection, second-pointer surv
 press behavior. The full formatting, warnings-denied workspace Clippy/test, WASM and release Trunk
 gate passes.
 
-Status: mechanically resolved; focused human retest Pending. In the playground, select both
-parents of a corner, then drag the preview arc at its midpoint and near both contacts. Confirm the
-preview never turns back into a one-line pending selection and that radius dragging continues
-normally after a rerender.
+Status: mechanically closed by the direct regression above; no separate human retest is claimed.
+Midpoint/contact preview drags remain useful exploratory checks subject to `M66-KL001` below.
+
+### M66-KL001 — radius-drag and branch-choice interaction
+
+Accepted limitation: radius dragging currently measures pointer distance from the held/old arc
+center while the evaluated center and contacts move. Tracking can therefore drift or feel inverted
+rather than behaving like a stable one-dimensional CAD grip. Post-placement contact/root,
+retained-parent direction and alternate-arc choices also lack intuitive controls, especially for
+line-circle Fillets. The playground line-circle specimen begins at radius `0.5`, near a branch
+fold, which makes this limitation unusually visible.
+
+This is an interaction limitation, not a relaxation of computed-feature correctness. Numeric
+radius editing, explicit persisted branch state, independent validation, transactional rollback
+and sketch-state invariance remain correct. Future, unassigned work may provide a headless
+one-dimensional grip derivative/rail, frozen absolute branch intent, contact/retention handles,
+continuation arrows, alternate-arc previews and a friendlier sample while retaining the fold as a
+regression fixture. This work is not assigned to M67.
 
 The old `M66-F002` through `M66-F013` ledger belongs to the archived solver-owned UI architecture
 at `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`). Those regressions remain useful
@@ -226,12 +242,12 @@ compatibility evidence, but their mechanically qualified disposition does not qu
 
 ## Approval
 
-M66 closes only after:
+On 2026-08-08, the supervising human explicitly approved and closed M66 for its mechanically
+qualified computed-Fillet scope, accepting `M66-KL001` as a deferred interaction limitation. This
+does not claim a complete post-PF004 replay of every scripted UAT step.
 
-1. one exact ADR 0031 candidate source and verified Tailscale endpoint are recorded above;
-2. formatting, warnings-denied locked workspace Clippy, locked all-feature workspace tests,
-   all-feature demo-web WASM, release Trunk and `git diff --check` pass on that source (satisfied);
-3. every scorecard item is Pass or an explicitly accepted scoped limitation;
-4. every post-pivot finding (`M66-PF001` through `M66-PF004`) has a direct tested disposition and
-   human retest; and
-5. the supervising human explicitly approves M66.
+U1-U5 are accepted under this explicit scoped close decision. `M66-PF001` through `M66-PF004` are
+mechanically closed by the direct regressions recorded above; this document does not claim that the
+human individually repeated each finding or every scorecard step after PF004. The exact ADR 0031
+candidate, historical verified endpoint and complete mechanical gate remain recorded as objective
+evidence.

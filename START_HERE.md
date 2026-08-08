@@ -23,9 +23,10 @@ topology companion, and M60 completed the directly qualified advanced workbench 
 scorecard. The first M61 candidate was withdrawn for five interaction/coverage blockers; the
 remediated scope is now explicitly approved and closed. M62 subsequently completed and received
 supervising-human approval for CAD-style constraint and dimension authoring, M63 completed approved
-canvas constraint presentation, M64 completed the approved editable sample cleanup, and M65
-completed approved predictable bounded dragging. M66 is the active computed-feature cut for
-ordinary multi-corner 2D Fillets outside the sketch constraint graph.
+canvas constraint presentation, M64 completed the approved editable sample cleanup, M65
+completed approved predictable bounded dragging, and M66 completed the explicitly approved
+computed-feature cut for ordinary multi-corner 2D Fillets outside the sketch constraint graph.
+M67 is an empty placeholder awaiting supervising-user scope; no implementation is assigned.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -93,7 +94,7 @@ explicit relation choice at the headless boundary, and retains picked curve para
 seeding. M61 remediation added ten movable nonzero-DOF mechanism leaves, full
 Bezier/conic/NURBS authoring and an inspectable canvas camera. Follow-up `M61-F005` makes compact
 circle Tangent contact-bearing and circle/arc Normal explicitly radial while retaining the public
-direction-at-contact domain API. M61-M65 are complete and approved. M64 supersedes active-scenario
+direction-at-contact domain API. M61-M66 are complete and approved. M64 supersedes active-scenario
 routing and sample-specific passive-driver metadata with one ordinary workspace coordinator.
 M65 completed the reduced-scope predictable-dragging cut for those existing editable mechanisms. It
 replaces retry-based stabilization with one gesture-start accepted-nullspace locality plan,
@@ -104,14 +105,14 @@ Core publication must independently validate Hard rows and every attained Tempor
 or exhausted work retains the last valid preview. Replacement `b6433d1` fixes the UAT-discovered
 twin-roller annotation overlap and rank-one pantograph-guide cursor projection with direct
 regressions and strict certification. Fresh native/WASM/release qualification and focused U2/U3
-human approval completed on 2026-08-01. M66 is now the active ADR 0031 cut for computed 2D Fillet
+human approval completed on 2026-08-01. M66 completed the ADR 0031 cut for computed 2D Fillet
 features outside the sketch constraint graph. The qualified but unapproved solver-owned ordinary-
 UI build at `1034afc` is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07`; its equations, branch-cell and accepted-state
 coherence work remain compatibility evidence, not active acceptance. The older unapproved three-
 tool candidate remains at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
 
-The active cut adds separately versioned persistent `FilletSet` intent with stable feature/corner
+The completed cut adds separately versioned persistent `FilletSet` intent with stable feature/corner
 IDs, evaluates revision-local generated topology from one exact accepted sketch snapshot and keeps
 ordinary source geometry fully editable when output fails. One Apply groups multiple corners under
 one shared radius; later sets may own opposite ends of the same span. Generated output is never
@@ -124,8 +125,7 @@ computed curves through one bounded headless tessellation policy and fixes midpo
 inflections that could disappear from both rendering and picking. Presentation-smoothed source
 `a34d137` preserves the initialized radius, keeps corners atomic, resolves bounded overlapping
 hits without guessing, and commits picks or option changes only together with an independently current
-whole-feature preview. The full mechanical gate passes; focused human retest and the rewritten UAT
-are the only open M66 gates. Checkpoint `M66-PF003` advanced the source to `02649cc` and
+whole-feature preview. The full mechanical gate passes. Checkpoint `M66-PF003` advanced the source to `02649cc` and
 turns the stable `fillet-workshop` sample into an ordinary editable **2D Fillet playground** under
 **Samples → Curves & constructions**. It places independent line-line, line-circle,
 line-quadratic-Bezier and high-valence reference specimens beside unlocked batch/sequential and
@@ -141,8 +141,22 @@ Stale or foreign owners and any second radius press reject without changing auth
 selection or durable identity state. Selection-extension modifiers cannot toggle the owner away
 from this explicit gesture. A direct overlap regression covers the complete down/move/up lifecycle
 and proves the original gesture survives a rejected second press. The full mechanical gate passes
-on `ac31791`, now live and HTTP-verified at the Tailscale endpoint; focused human retest of
-`M66-PF001` through `M66-PF004` and the rewritten UAT remain the only open M66 gates.
+on `ac31791`; its historical Tailscale endpoint was HTTP-verified. `M66-PF001` through
+`M66-PF004` are mechanically closed by direct regressions. On 2026-08-08, the
+supervising human explicitly approved and closed M66 for its mechanically qualified computed-
+Fillet scope, accepting `M66-KL001` as a deferred interaction limitation. This does not claim a
+complete post-PF004 replay of every scripted UAT step; U1-U5 are accepted under that explicit
+scoped close decision rather than represented as individually repeated human tests.
+
+`M66-KL001` records that radius drag measures pointer distance from the held/old arc center while
+evaluation moves the center and contacts, so tracking may drift or feel inverted. Post-placement
+contact/root, retained-parent direction and alternate-arc choices lack intuitive controls,
+especially for line-circle Fillets; the playground specimen starts at radius `0.5` near a branch
+fold. Numeric radius editing, explicit persisted branch state, independent validation, rollback
+and sketch-state invariance remain correct. A future, unassigned cut may add a headless one-
+dimensional grip derivative/rail, frozen absolute branch intent, contact/retention handles,
+continuation arrows, alternate-arc previews and a friendlier sample while retaining the fold as a
+regression fixture. This work is not assigned to M67.
 M62 follow-up `M62-F001` corrects accepted-state line-angle seeding and exposes acute-degree
 presentation while retaining the explicit directed-radian solver branch.
 Follow-up `M62-F002` gives canvas pointer-down exclusive ownership of canvas authoring picks,
@@ -191,20 +205,21 @@ are complete, growing the catalog to eight scenarios. The complete clean release
 build-source commit `f72116b`; `docs/M53_UAT.md` records the frozen M53-S5 manifest and temporary
 human endpoint. The targeted attribution review passed as part of final M53-S5 approval.
 
-The completed M54-M65 sequence covers stable diagnostics, alpha
+The completed M54-M66 sequence covers stable diagnostics, alpha
 constraint/dimension/branch-action parity, prepared jobs, incremental scale, operations,
 production topology, the advanced workbench, approved advanced UAT and approved CAD-style
 authoring, approved canvas constraint visualization and interaction, editable samples and
 predictable bounded dragging. The previously forecast
 M62-M64 hardening sequence was withdrawn on 2026-07-29; M62-M64 were subsequently scoped,
 completed and approved. M65 subsequently completed and received focused supervising-human
-approval. M66 is active under ADR 0031: a new feature domain owns persistent FilletSet intent and
+approval. M66 is complete under ADR 0031: a new feature domain owns persistent FilletSet intent and
 revision-local computed output, the headless editor owns grouped feature authoring, the retained
 coordinator owns exact sketch/feature snapshot publication, and the sole workbench remains a thin
 presentation consumer. Ordinary Fillets add no sketch equation, constraint, dimension or trim
 view. Existing M27/M28/M58 capabilities remain supported below that route. Computed output is not
 yet consumed by profiles, and Offset is a future variable-topology use of the seam rather than an
-M66 implementation or UI placeholder. M66 ends in its own computed-Fillet UAT.
+M66 implementation or UI placeholder. M66 ended in its own scoped computed-Fillet UAT. M67 is only
+an empty cleanup-themed placeholder awaiting supervising-user scope.
 
 Durable cleanup records:
 
@@ -237,8 +252,8 @@ Durable cleanup records:
 - `docs/M64_UAT.md` (approved M64 scorecard)
 - `docs/M65_IMPLEMENTATION.md` (approved predictable-dragging implementation record)
 - `docs/M65_UAT.md` (approved focused scorecard)
-- `docs/M66_IMPLEMENTATION.md` (active computed-Fillet implementation record)
-- `docs/M66_UAT.md` (active computed-Fillet scorecard)
+- `docs/M66_IMPLEMENTATION.md` (completed computed-Fillet implementation record)
+- `docs/M66_UAT.md` (approved scoped computed-Fillet scorecard and known limitation)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

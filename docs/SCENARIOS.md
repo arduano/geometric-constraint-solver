@@ -1272,8 +1272,8 @@ companions; M60 completes the advanced workbench and M61 completes its approved 
 M62 completes approved CAD-style constraint/dimension authoring, and M63 completes approved
 geometry-anchored canvas constraint/dimension presentation, M64 completes the approved editable
 purpose-based sample library and M65 completes approved predictable, bounded projected dragging.
-M66 is the active computed-feature cut for ordinary multi-corner 2D Fillets rather than a
-scheduled release sequence.
+M66 completes the explicitly approved computed-feature cut for ordinary multi-corner 2D Fillets;
+M67 is only an empty placeholder awaiting supervising-user scope.
 Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -1282,7 +1282,7 @@ required.
 Objective geometry, residual, derivative, rank, branch, persistence, migration, resource,
 cancellation, presentation-adapter and topology assertions are directly automated at their
 owning Rust/WASM layer. Old browser E2E is not a qualification path. Human review is
-recorded at completed M40.7, M53 and M61-M65. Every newly scoped milestone from M66 onward ends in
+recorded at completed M40.7, M53 and M61-M66. Every newly scoped milestone from M67 onward ends in
 its own UAT after direct automated qualification.
 
 ### M40-ES1 - Headless persistent line selection and relation action
@@ -1954,7 +1954,8 @@ canvas radius-confirmation click.
 Selecting a generated arc resolves stable set/corner provenance. Dragging the arc or grip changes
 only the set radius, never sketch coordinates. Computed arcs are unavailable as constraint
 operands. The **Features** tree, canvas selection and Problems presentation resolve the same stable
-intent identities.
+intent identities. Known limitation `M66-KL001` qualifies the interaction feel of that drag, not
+its transaction boundary or mathematical validation.
 
 ### M66-CF6 - Persistence, exact CAS and revision-local output
 
@@ -2005,7 +2006,8 @@ The leaf has no guide, special coordinator or protected geometry beyond its fixe
 islands. SVG canvas gestures suppress native browser text-selection and element-drag defaults,
 while the sibling Fillet options and other HTML remain selectable/editable. Native
 screen/coordinator and focused presentation tests qualify this checkpoint; it is not browser E2E
-evidence. `M66-PF003` is mechanically complete on `02649cc` and awaits human retest with M66 open.
+evidence. `M66-PF003` is mechanically closed by direct regressions on `02649cc`; no separate human
+retest is claimed by the scoped M66 close decision.
 
 ### M66-CF10 - PF004 preview-arc/native-support overlap
 
@@ -2020,8 +2022,25 @@ The direct regression also supplies a foreign corner owner, a second pointer dur
 gesture and a Shift-modified press. Foreign/stale intent and the second press reject without
 mutating authoring, preview, selection or durable identities; the original gesture still
 moves/releases. Modifiers cannot toggle the explicit radius owner away, while ordinary selection
-modifier behavior remains unchanged. `M66-PF004` is mechanically complete on `ac31791`, is live
-and HTTP-verified at the Tailscale endpoint, and awaits human retest with M66 open.
+modifier behavior remains unchanged. `M66-PF004` is mechanically closed by direct regressions on
+`ac31791`; the historical Tailscale candidate was HTTP-verified, but no separate human retest is
+claimed by the scoped M66 close decision.
+
+### M66-KL001 - Radius-drag and branch-choice interaction
+
+Radius drag currently measures pointer distance from the held/old arc center while evaluated
+center and contacts move, so tracking can drift or feel inverted. Post-placement contact/root,
+retained-parent direction and alternate-arc choices lack intuitive controls, especially for
+line-circle Fillets. Numeric radius editing, explicit persisted branch state, independent
+validation, rollback and sketch-state invariance remain correct. The playground line-circle
+specimen starts at radius `0.5`, near a branch fold.
+
+Potential follow-up is deliberately unassigned: a headless one-dimensional grip derivative/rail,
+frozen absolute branch intent, contact/retention handles, continuation arrows, alternate-arc
+previews and a friendlier sample while retaining the fold as a regression fixture. None of it is
+assigned to M67. The supervising human accepted this limitation when explicitly closing M66's
+mechanically qualified computed-Fillet scope on 2026-08-08; that close does not claim a complete
+post-PF004 replay of every scripted UAT step.
 
 ### Archived solver-owned M66 scenario record
 

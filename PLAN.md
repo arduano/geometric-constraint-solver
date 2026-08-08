@@ -38,8 +38,8 @@ host-semantics UAT; M54-M62 complete the subsequent functional work, approved ad
 approved CAD-style authoring, and M63 completes approved geometry-anchored canvas constraint and
 dimension presentation. M64 completes the approved editable-sample cleanup and focused UAT cut;
 M65 completes approved predictable, bounded projected dragging for those ordinary editable
-samples; M66 is the active computed-feature cut for ordinary multi-corner 2D Fillets outside the
-constraint graph. Its superseded solver-owned ordinary-UI source is preserved at
+samples; M66 completes the approved computed-feature cut for ordinary multi-corner 2D Fillets
+outside the constraint graph. Its superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
 This deliverable does not include a solid B-rep kernel, meshing or 3D sketch curves.
@@ -141,8 +141,8 @@ engine that a real CAD host can use. The accepted personality is:
   geometry enter one attempt as immutable revisioned values.
 - Keep cross-system expressions, B-rep projection, topological naming, feature
   history and application undo outside the sketch solver contract.
-- Keep human acceptance records explicit: M40.7, M53 and M61-M65 are complete and approved, and
-  every newly scoped milestone from M66 onward ends in its own supervising-human UAT. Every
+- Keep human acceptance records explicit: M40.7, M53 and M61-M66 are complete and approved, and
+  every newly scoped milestone from M67 onward ends in its own supervising-human UAT. Every
   objective correctness, persistence, compatibility and presentation-adapter assertion must pass
   through direct unit or integration tests at its owning layer before a human checkpoint begins;
   old CDP E2E suites are not a qualification path.
@@ -3017,9 +3017,9 @@ replacement candidate. M65 is closed; the historical candidate endpoint was
 
 ### M66: computed 2D Fillet features
 
-Status: active after the 2026-08-07 computed-feature pivot. Implementation and mechanical
-qualification are complete on painted-preview-routing candidate source `ac31791`;
-supervising-human UAT remains open.
+Status: complete. On 2026-08-08, the supervising human explicitly approved and closed M66 for its
+mechanically qualified computed-Fillet scope, accepting `M66-KL001` as a deferred interaction
+limitation. This does not claim a complete post-PF004 replay of every scripted UAT step.
 
 Goal: make ordinary CAD Fillet authoring a persistent computed feature outside the sketch
 constraint graph. Multi-corner batches, adjacent sequential Fillets, source editability and
@@ -3108,7 +3108,8 @@ advanced/backward-compatible APIs, and existing documents are not migrated.
   creates no solver-owned association, trim view, constraint or dimension.
 - [x] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature
   demo-web WASM check, release Trunk build and `git diff --check` on one post-pivot source.
-- [ ] Complete and explicitly approve the computed-Fillet `docs/M66_UAT.md`.
+- [x] Complete and explicitly approve the computed-Fillet `docs/M66_UAT.md` under the scoped close
+  decision recorded there.
 
 Mechanical qualification record (2026-08-08): presentation-smoothed source `a34d137` established
 the prior full gate and editable-playground source `02649cc` added the focused UAT fixture.
@@ -3120,12 +3121,26 @@ passes 73/73 tests. No browser E2E was run or restored. The retained lower-layer
 tests; the focused M66 interaction suites contain 14 `m66_feature_authoring` and 15 matrix tests,
 and the expanded demo-web count is 73. `git diff --check` passes on the documented source.
 The release Trunk build exits zero after applying the optimized distribution.
+Close-off cleanup source `f133ad1` removes the superseded ADR 0030 editor facade and repeats the
+same complete gate successfully. Its post-cleanup counts are 138 editor unit tests plus the same
+46 integration tests, 21 computed-feature tests, 20 M58 operations tests and 73 demo-web tests.
 Fresh-process persistence regressions additionally prove that saving after Undo or a cancelled
 computed preview captures the live sketch, feature/corner and computed-evaluation allocator
 high-water, so restoration cannot reuse any retired identity. Reviewed searches find no active
-Offset/Mirror helper UI, legacy operation harness or `/#/dev/lab` route. Human UAT is the only
-remaining M66 gate; `M66-PF001` through `M66-PF004` await focused human retest there. Candidate
-`ac31791` is live and HTTP-verified at the Tailscale endpoint.
+Offset/Mirror helper UI, legacy operation harness or `/#/dev/lab` route. Direct regressions close
+`M66-PF001` through `M66-PF004` mechanically; they are not represented as four separately repeated
+human tests. The scoped 2026-08-08 human close accepts U1-U5 under the explicit decision above.
+
+Known limitation `M66-KL001` — radius-drag and branch-choice interaction: radius drag currently
+measures pointer distance from the held/old arc center while evaluation moves the center and
+contacts, so tracking can drift or feel inverted. Post-placement contact/root, retained-parent
+direction and alternate-arc choices lack intuitive controls, especially for line-circle Fillets.
+Numeric radius editing, explicit persisted branch state, independent validation, rollback and
+sketch-state invariance remain correct. The playground's line-circle specimen starts at radius
+`0.5`, near a branch fold. Future, unassigned work may add a headless one-dimensional grip
+derivative/rail, frozen absolute branch intent, contact/retention handles, continuation arrows,
+alternate-arc previews and a friendlier sample while retaining the fold as a regression fixture.
+None of that work is assigned to M67.
 
 Gate: one Apply creates one persistent multi-corner `FilletSet` with a shared editable radius;
 later Applies create separate sets whose opposite-end claims can compose on a shared source span.
@@ -3138,8 +3153,15 @@ documents remain compatible.
 
 M66 adds no Offset implementation/UI/placeholder, computed-on-computed chaining, Bake/Explode,
 profile/topology consumption, canonical sketch-schema migration, global root enumeration, legacy
-harness, `/#/dev/lab`, browser E2E or mobile claim. It closes only after fresh mechanical
-qualification and explicit supervising-human UAT approval.
+harness, `/#/dev/lab`, browser E2E or mobile claim. It is closed under the explicit scoped approval
+recorded above.
+
+### M67
+
+Status: empty placeholder awaiting supervising-user scope.
+
+Theme: cleanup, including removal of the retained old development UI. No goal, checklist,
+acceptance gate, scenarios, or implementation is assigned yet.
 
 ## Explicit non-goals
 

@@ -2,8 +2,9 @@
 
 # M66 implementation: computed 2D Fillet features
 
-Status: implementation and mechanical qualification complete on painted-preview-routing candidate
-source `ac31791` after the 2026-08-07 ADR 0031 pivot. Supervising-human UAT remains open.
+Status: complete. On 2026-08-08, the supervising human explicitly approved and closed M66 for its
+mechanically qualified computed-Fillet scope, accepting `M66-KL001` as a deferred interaction
+limitation. This does not claim a complete post-PF004 replay of every scripted UAT step.
 
 The qualified but unapproved solver-owned ordinary-UI endpoint, commit `1034afc`, is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07`. The earlier three-tool experiment remains at
@@ -30,9 +31,14 @@ qualification evidence.
 
 ### Editor and coordinator
 
-- Replaced ordinary Fillet use of fixed two-pick `OperationAuthoringState` with reusable
+- Replaced ordinary Fillet use of the superseded fixed two-pick operation collector with reusable
   `FeatureAuthoringState` grouped authoring. Interior polyline points remain corner targets;
   repeated corner or curve-pair picks accumulate a batch.
+- Close-off removes the unreleased ADR 0030 editor `OperationAuthoring*` facade, coordinator
+  operation-preview/replay DTOs/state and the editor's now-exclusive direct
+  `geosolve-sketch-ops` dependency. Current feature authoring reads its sketch document through the
+  computed-feature snapshot. M27/M28/M58 operation/domain APIs and ADR 0031 feature authoring are
+  unchanged.
 - Shared-radius preview starts from remembered state or `0.1 * model_scale`. Numeric editing and a
   preview arc/radius grip edit that same value. Apply/Enter persists one FilletSet without a final
   canvas radius-confirmation click.
@@ -162,6 +168,16 @@ Outcomes:
 - the release Trunk command exited zero with `INFO applying new distribution` and
   `INFO ✅ success`.
 
+Close-off cleanup source `f133ad1` then removed the superseded ADR 0030 editor facade and repeated
+the same complete gate successfully. The first close-off Clippy pass identified that the relocated
+M58 rollback regression had made one test 104 lines long; extracting the control-stop invariant
+into a focused helper resolved that warning before `f133ad1`. On the committed cleanup source,
+`geosolve-constraint-editor` passes 138 unit tests and the same 46 integration tests, including all
+29 focused M66 interaction tests; `geosolve-sketch-features` passes 21 tests;
+`geosolve-sketch-ops --test m58` passes 20 tests; and `geosolve-demo-web` passes 73 tests. The
+locked all-feature workspace suite, warnings-denied Clippy, all-feature demo-web WASM check,
+formatting, release Trunk build and `git diff --check` all pass.
+
 No browser E2E/CDP suite was run or restored.
 
 The standard Cargo duplicate `license`/`license-file` warnings remain pre-existing and did not
@@ -169,7 +185,10 @@ fail Clippy. The old `1034afc` qualification belongs solely to the archived arch
 
 ## 4. Acceptance status
 
-Mechanical acceptance passed; supervising-human UAT remains open. Direct qualification covers:
+Mechanical acceptance passed. U1-U5 are accepted under the explicit 2026-08-08 supervising-human
+scoped close decision; `M66-PF001` through `M66-PF004` are mechanically closed by the direct
+regressions below rather than represented as individually repeated human tests. Direct
+qualification covers:
 
 - four-point/three-span two-corner batch output and middle-span two-end composition;
 - blank/default radius, both line-pick orders, exact screen-hit progression, point-corner atomicity,
@@ -200,10 +219,9 @@ Mechanical acceptance passed; supervising-human UAT remains open. Direct qualifi
 - ordinary-UI absence of M28 associations, trim views, constraints and radius dimensions; and
 - M27/M28/M30/M58 backward compatibility.
 
-The Tailscale UAT service has live-rebuilt from `ac31791`; its served HTML was verified to contain
-the scoped canvas marker (`draggable="false"`) and is
-reachable at `http://100.94.63.83:8080/`. Execute `docs/M66_UAT.md`; M66 stays open until the
-supervising human explicitly approves it.
+The Tailscale UAT service was live-rebuilt from `ac31791`; its served HTML was verified to contain
+the scoped canvas marker (`draggable="false"`) at the historical endpoint
+`http://100.94.63.83:8080/`. The endpoint is not a continuing post-close requirement.
 
 ## 5. Known limitations or next blocker
 
@@ -213,5 +231,13 @@ supervising human explicitly approves it.
 - Version-one computed features reference native constrained spans only.
 - Computed-on-computed chaining, Offset, Bake/Explode and cross-revision output topological naming
   are deferred.
-- The remaining blocker is supervising-human UAT approval of candidate source `ac31791` at the
-  verified Tailscale endpoint.
+- `M66-KL001` retains radius-drag and branch-choice interaction as an accepted limitation. Radius
+  drag measures pointer distance from the held/old arc center while evaluation moves the center
+  and contacts, so tracking may drift or feel inverted. Post-placement contact/root,
+  retained-parent direction and alternate-arc choices lack intuitive controls, especially for
+  line-circle Fillets. Numeric radius editing, explicit persisted branch state, independent
+  validation, rollback and sketch-state invariance remain correct. The playground line-circle
+  specimen starts at radius `0.5`, near a branch fold.
+- Future, unassigned work may add a headless one-dimensional grip derivative/rail, frozen absolute
+  branch intent, contact/retention handles, continuation arrows, alternate-arc previews and a
+  friendlier sample while retaining the fold as a regression fixture. It is not assigned to M67.

@@ -3,9 +3,10 @@
 ## Release line
 
 GeoSolve `0.2.0` is the current supported preview release; `0.1.0` was the first. The
-seven library crates (`geosolve-geometry`, `geosolve-core`, `geosolve-sketch`,
-`geosolve-linkage`, `geosolve-sketch-ops`, `geosolve-sketch-topology` and
-`geosolve-constraint-editor`) version and release in lockstep. `geosolve-demo-web` is a
+eight library crates (`geosolve-geometry`, `geosolve-core`, `geosolve-sketch`,
+`geosolve-linkage`, `geosolve-sketch-ops`, `geosolve-sketch-topology`,
+`geosolve-sketch-features` and `geosolve-constraint-editor`) version and release in lockstep.
+`geosolve-demo-web` is a
 non-published diagnostic consumer.
 
 Before `1.0`, a minor version may contain source-breaking changes. Patch releases
@@ -22,8 +23,8 @@ advanced-workbench scope, M62 closes approved CAD-style authoring and M63 closes
 constraint presentation. Approved M64 adds only public alpha fixtures and an explicit
 interaction-request preference helper; it does not freeze a new schema. M65 completes approved
 predictable, bounded projected dragging without freezing a new persistence language or claiming
-final API/schema hardening. M66 is the active pre-1.0 Fillet-authoring cut; its editor and
-operations APIs may evolve during qualification and likewise add no persistence language. Its new
+final API/schema hardening. M66 completes the explicitly approved pre-1.0 computed-Fillet feature
+and authoring cut without changing the canonical sketch language. Its new
 `SketchDocument::certify_line_curve_fillet_branch_cell` query is an additive pre-1.0 API backed by
 private outward-rounded curve-piece intervals; it returns only the existing
 `ContactNeighborhood::Local` type plus a typed error. M66 authoring currently accepts
@@ -37,6 +38,13 @@ withdrawn M66-only Offset/Mirror authoring surface and M66-only line-offset requ
 released. Their last three-tool candidate is preserved at
 `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`). This withdrawal does not alter the
 completed M25 offset constraints or the M58 exact supported-family Mirror operation-companion API.
+The unreleased ADR 0030 editor-side `OperationAuthoring*` facade, its coordinator preview/replay
+DTOs and the editor's direct dependency on `geosolve-sketch-ops` were introduced after the
+published `0.2.0` baseline and removed before another release once ADR 0031 superseded ordinary
+Fillet routing. This source-breaking cleanup affects no released API. It does not remove M27/M28
+Fillet equations, associations, trim views, persistence or migrations; M58
+`SketchOperationRequest::AssociativeFillet`; M25 Offset constraints; M58 Mirror; or the branch-cell
+query above. Current grouped Fillet authoring is the separate computed-feature path under ADR 0031.
 The unreleased M61
 `DocumentSolveRequest::stability_target` field and helper were withdrawn before the next
 published minor release because a sample-selected second Temporary target conflicts with M65's
@@ -61,8 +69,10 @@ The supported domain entry points are:
 - `geosolve-sketch-ops` immutable snapshots, controlled prepared proposals and exact-input
   application for equation-free sketch operations;
 - `geosolve-sketch-topology` complete accepted-input production-wire and region profiles; and
+- `geosolve-sketch-features` persistent computed-feature intent plus independently validated,
+  exact-stamped revision-local output; and
 - `geosolve-constraint-editor` state, scene, normalized input and typed effect APIs for
-  presentation-independent constraint, dimension and helper-operation authoring over those sketch
+  presentation-independent constraint, dimension and computed-feature authoring over those sketch
   workflows.
 
 Legacy direct `Sketch`, `Linkage` and `SpatialAssembly` builders remain supported

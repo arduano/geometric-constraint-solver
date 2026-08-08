@@ -156,8 +156,8 @@ M8 is ready for review only when every item below is objectively present. These 
 The checked wording below is the preserved M8 completion record. Its then-current M8-M22
 allocations are historical; `PLAN.md` now governs completed work through the approved M61 gate,
 approved M62 authoring milestone, approved M63 canvas-constraint presentation, approved M64
-editable-sample cleanup and approved reduced-scope M65 predictable dragging, with M66 computed-
-Fillet features active under ADR 0031.
+editable-sample cleanup, approved reduced-scope M65 predictable dragging and approved scoped M66
+computed-Fillet features under ADR 0031.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -937,12 +937,12 @@ finding dispositions and approval record are retained in `docs/M53_UAT.md`.
   regression/requalification plus human retest; deferred future scope retains an explicit roadmap
   owner.
 
-## M54-M65 acceptance
+## M54-M66 acceptance
 
-M54-M65 are the completed post-M53 sequence. M62 received explicit supervising-human approval on
+M54-M66 are the completed post-M53 sequence. M62 received explicit supervising-human approval on
 2026-07-29, M63 and M64 received explicit supervising-human approval on 2026-07-30, and M65
-received focused supervising-human approval on 2026-08-01. No old browser E2E qualification may
-return. M66 is the active milestone below.
+received focused supervising-human approval on 2026-08-01. M66 received explicit scoped
+supervising-human approval on 2026-08-08. No old browser E2E qualification may return.
 
 ## M65 acceptance: predictable bounded projected dragging
 
@@ -991,9 +991,9 @@ in `docs/M65_UAT.md`; M65 is complete.
 
 ## M66 acceptance: computed 2D Fillet features
 
-Status: active after the 2026-08-07 computed-feature pivot. Post-pivot implementation and
-mechanical qualification pass on painted-preview-routing candidate source `ac31791`;
-supervising-human UAT remains open.
+Status: complete. On 2026-08-08, the supervising human explicitly approved and closed M66 for its
+mechanically qualified computed-Fillet scope, accepting `M66-KL001` as a deferred interaction
+limitation. This does not claim a complete post-PF004 replay of every scripted UAT step.
 
 The superseded solver-owned ordinary-UI build is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`). ADR 0031 replaces only the
@@ -1077,8 +1077,22 @@ M66 is accepted only when all of the following are true:
 - M27/M28/M30/M58 compatibility remains green. Formatting, warnings-denied Clippy, locked
   all-feature workspace tests, all-feature demo-web WASM, release Trunk and `git diff --check`
   pass on one nominated post-pivot source.
-- The supervising human explicitly approves the rewritten `docs/M66_UAT.md`; no correctness,
-  data-loss, stale-output, source-editability or ordinary multi-corner Fillet blocker remains.
+- The supervising human explicitly approves the rewritten `docs/M66_UAT.md` under a scoped close
+  decision. U1-U5 are accepted under that decision; `M66-PF001` through `M66-PF004` are closed by
+  direct regression evidence rather than represented as individually repeated human tests. No
+  correctness, data-loss, stale-output, source-editability or ordinary multi-corner Fillet blocker
+  remains within the accepted scope.
+
+Accepted known limitation `M66-KL001` — radius-drag and branch-choice interaction: radius drag
+measures pointer distance from the held/old arc center while evaluation moves the center and
+contacts, so tracking can drift or feel inverted. Post-placement contact/root, retained-parent
+direction and alternate-arc choices lack intuitive controls, especially for line-circle Fillets.
+Numeric radius editing, explicit persisted branch state, independent validation, rollback and
+sketch-state invariance remain correct. The playground line-circle specimen starts at radius `0.5`,
+near a branch fold. A future, unassigned cut may add a headless one-dimensional grip
+derivative/rail, frozen absolute branch intent, contact/retention handles, continuation arrows,
+alternate-arc previews and a friendlier sample while retaining the fold as a regression fixture.
+No such work is assigned to M67.
 
 M66 explicitly excludes Offset implementation/UI/placeholders, computed-on-computed chaining,
 Bake/Explode, production/profile consumption, automatic M28 migration, a canonical sketch-schema

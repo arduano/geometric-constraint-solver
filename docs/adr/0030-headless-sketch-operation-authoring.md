@@ -2,12 +2,18 @@
 
 # ADR 0030: Headless sketch-operation authoring
 
-Status: accepted; amended 2026-08-02 for the Fillet-only M66 pivot; ordinary workbench Fillet
-routing superseded by ADR 0031 on 2026-08-07
+Status: archived. Amended 2026-08-02 for the Fillet-only M66 pivot; ordinary workbench Fillet
+routing was superseded by ADR 0031 on 2026-08-07, and the unreleased editor facade was removed on
+2026-08-08 during M66 close-off.
 
-ADR 0031 supersedes this ADR only for the ordinary workbench Fillet path. The contract below
-remains the historical decision for the archived build and remains compatible with deliberate
-advanced use of M28/M58 solver-owned associative Fillets.
+ADR 0031 supersedes this ADR for ordinary workbench Fillet authoring. The contract below is a
+historical decision record for the archived builds, not an active editor API. Its removed
+`OperationAuthoring*` facade, coordinator operation preview/replay surface and editor-side direct
+`geosolve-sketch-ops` dependency were all unreleased additions after `0.2.0`. Their removal does not
+remove or deprecate M27/M28 Fillet equations, associations, trim views, persistence or migrations;
+M58 `SketchOperationRequest::AssociativeFillet`; M25 Offset constraints; M58 Mirror; or
+`SketchDocument::certify_line_curve_fillet_branch_cell`. ADR 0031 remains the accepted owner of
+current computed-feature authoring/evaluation and grouped Fillet interaction.
 
 ## Context
 
@@ -26,16 +32,16 @@ authority.
 The first M66 candidate applied the same authoring framework to Fillet, Line offset and Mirror.
 Human UAT showed that carrying three tools obscured architectural defects in the Fillet path. That
 unapproved candidate is preserved at `origin/archive/m66-three-helper-tools-2026-08-02`, commit
-`80d4939`. Active M66 is deliberately Fillet-only. It withdraws only the candidate's Offset/Mirror
+`80d4939`. The subsequent M66 pivot was deliberately Fillet-only. It withdrew only the candidate's Offset/Mirror
 authoring state, UI, samples and tests, plus its M66-only single-span/joined-chain line-offset
 request APIs. M25's signed Offset constraints and M58's exact supported-family Mirror
 operation-companion API remain accepted, unchanged capabilities.
 
 ## Decision
 
-### Dependency amendment
+### Historical dependency amendment
 
-This ADR retains ADR 0029's amended dependency graph:
+The archived candidate used ADR 0029's amended dependency graph:
 
 - `geosolve-constraint-editor` may depend directly on `geosolve-sketch-ops` in addition to
   `geosolve-sketch` and `geosolve-geometry`;
@@ -44,12 +50,15 @@ This ADR retains ADR 0029's amended dependency graph:
 - `geosolve-sketch`, `geosolve-geometry`, `geosolve-core` and `geosolve-linkage` remain unable to
   depend on the editor or operations companion.
 
-The editor consumes only public immutable snapshots, Fillet requests/proposals, application APIs
-and typed outcomes. This adds no private solver access.
+That editor consumed only public immutable snapshots, Fillet requests/proposals, application APIs
+and typed outcomes; it added no private solver access. Current source no longer carries that direct
+editor-to-operations dependency. The workbench may still consume the independent public M58
+operations companion, while current ordinary Fillet authoring uses `geosolve-sketch-features`
+under ADR 0031.
 
-### Separate Fillet-authoring state
+### Archived separate Fillet-authoring state
 
-The editor owns a separate, Fillet-only `OperationAuthoringState`; it does not overload M62's
+The archived editor facade owned a separate, Fillet-only `OperationAuthoringState`; it did not overload M62's
 fixed-arity constraint/dimension `AuthoringState`. The state publishes finite model-space picks,
 expected next operands, pending stages, branch/radius options, warnings, preview status and
 terminal outcomes. A pick carries persistent selection identity, exact curve parameter where
@@ -126,7 +135,7 @@ dimension defaults to Reference; Driving requires explicit user intent. Defaults
 the picked retained portions and a minor output arc. Flip-first-side, flip-second-side and
 alternate-arc controls are explicit corrections.
 
-M66 authoring uses a closed parent-pair policy. Two affine line/polyline spans persist
+The archived facade used a closed parent-pair policy. Two affine line/polyline spans persisted
 `ContactNeighborhood::Interior` on both parents. When exactly one parent is non-affine, the affine
 span remains `Interior` and the curved span receives a strict `Local` cell from the public,
 non-mutating `SketchDocument::certify_line_curve_fillet_branch_cell` query. The caller supplies the
@@ -135,7 +144,8 @@ outward-rounded all-family interval/curve-piece kernel and certifies that
 `cross(curve_tangent(t), fixed_line_direction)` is finite, excludes zero and retains the selected
 sign throughout the returned cell. Its safe endpoints conservatively approach the nearest
 tangent-parallel barriers without crossing them. This branch certificate, rather than an arbitrary
-fraction around the seed, is the narrowed disposition of `M66-F011`.
+fraction around the seed, was the narrowed disposition of `M66-F011`. The query itself remains
+active because ADR 0031 computed-feature evaluation reuses its certified branch cell.
 
 Two non-affine-parent authoring returns typed `UnsupportedFilletPair` feedback until a bounded
 pairwise-continuation contract exists. This is an authoring-abstraction limitation, not a domain
@@ -152,16 +162,16 @@ zero-speed/pole/cusp geometry, escaped parameters and two-non-affine authoring r
 or operation failures. Same-support Fillets other than the adjacent-open-polyline shortcut,
 pairwise curved continuation and global root search are deferred.
 
-### Workbench presentation
+### Archived workbench presentation
 
-The workbench exposes one text-free Fillet action. It forwards normalized events and renders
+The archived workbench route exposed one text-free Fillet action. It forwarded normalized events and rendered
 headless DTOs; it does not reconstruct applicability, locate roots, choose branches or apply a
 proposal directly. Fillet options render as a viewport-clamped overlay over the canvas, outside the
 scrolling palette's overflow context. Placement/clamping is covered by pure tests for all viewport
 edges and resize (`M66-F007`). The **2D fillet workshop** is an ordinary editable save-like sample
 with no guide, protected entity, scripted action or alternate coordinator.
 
-There is no active M66 Offset or Mirror action, options panel or sample. This presentation choice
+There was no active M66 Offset or Mirror action, options panel or sample. This presentation choice
 does not deprecate or remove the older M25/M58 domain APIs.
 
 ## Verification

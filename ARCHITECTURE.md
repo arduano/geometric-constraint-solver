@@ -24,8 +24,8 @@ M23-M31 subsequently complete spatial kinematics, sketch embedding identities,
 advanced constructions, generic fillets and persistent trim views, interactive
 construction/NURBS UAT and certified all-family visual profiles.
 
-- **Baseline:** implemented and accepted behavior through M65. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology; M59 adds the read-only production-topology companion with exact accepted-input provenance and fail-closed completeness; M60 exposes the advanced curves, explicit NURBS branches, companion operations, production topology and versioned desktop workspace through the sole directly tested workbench; M61 completes approved supervising-human advanced geometry/topology UAT after targeted remediation; M62 completes approved CAD-style constraint and dimension authoring; M63 completes approved geometry-anchored canvas constraint and dimension presentation; M64 completes the approved editable sample-library cleanup and 1/2/3-DOF fixture cut; M65 completes approved predictable, bounded projected dragging. M1-M7 remain the frozen regression baseline.
-- **Active target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
+- **Baseline:** implemented and accepted behavior through M66. M44 completes focused host-state workbench integration over the M33-M43 production contracts. M45 preserves ten UAT points and inventories the old UI/tests without recording human approval; M46 freezes direct ownership; M47 replaces the broad host composition with five direct fixture groups and removes its controls and M44 E2E infrastructure; M48 directly qualifies the surviving workbench contracts and removes the M40 browser stack; M49 moves every retained M14/legacy semantic claim to a direct owner or reviewed retirement; M50 deletes the final old E2E, legacy route/application and obsolete browser/serving glue; M51 consolidates persistence, evidence, presentation and tests around the one survivor; M52 adds and directly qualifies the disposable in-memory UAT sidecar without product fixture state; M53 receives explicit supervising-human approval; M54 publishes stable persistent-ID diagnostics and moves raw core reports behind explicitly unstable seams; M55 completes the preserved alpha relation, dimension and explicit branch-action surface in the headless editor and sole workbench; M56 adds immutable prepared snapshots, worker-movable jobs, non-mutating patches and exact-input compare-and-swap publication; M57 retains compatible runtime/core state, dependency-local dirtying, revision-local profile caches and bounded rank/scale evidence; M58 adds the equation-free deterministic operations companion and multi-interval visible-support topology; M59 adds the read-only production-topology companion with exact accepted-input provenance and fail-closed completeness; M60 exposes the advanced curves, explicit NURBS branches, companion operations, production topology and versioned desktop workspace through the sole directly tested workbench; M61 completes approved supervising-human advanced geometry/topology UAT after targeted remediation; M62 completes approved CAD-style constraint and dimension authoring; M63 completes approved geometry-anchored canvas constraint and dimension presentation; M64 completes the approved editable sample-library cleanup and 1/2/3-DOF fixture cut; M65 completes approved predictable, bounded projected dragging; M66 completes the approved computed-Fillet feature cut. M1-M7 remain the frozen regression baseline.
+- **Completed target:** M66 adds a separate computed-feature domain for ordinary multi-corner 2D
   Fillets under ADR 0031. Persistent `FilletSet` intent and stable provenance live outside the
   sketch constraint graph; generated arcs/fragments are evaluated from one exact accepted sketch
   snapshot and have revision-local IDs. The headless editor owns grouped authoring, the retained
@@ -36,16 +36,20 @@ construction/NURBS UAT and certified all-family visual profiles.
   no Offset implementation or profile consumption. Implementation and mechanical qualification
   pass on painted-preview-routing candidate source `ac31791`, which extends editable-playground
   source `02649cc` with explicit computed-preview pointer ownership and state-neutral invalid-
-  intent rejection. Focused supervising-human UAT remains open.
-- **Planned sequence:** no milestone is assigned after M66. Every newly scoped milestone ends in
-  its own human UAT.
+  intent rejection. The supervising human explicitly approved and closed the mechanically
+  qualified scope on 2026-08-08, accepting `M66-KL001` as a deferred interaction limitation
+  without claiming a complete post-PF004 scripted replay.
+- **Next placeholder:** M67 is empty and awaits supervising-user scope. Its only recorded theme is
+  cleanup, including removal of the retained old development UI; no goal, checklist, acceptance
+  gate, scenarios or implementation is assigned. Every newly scoped milestone ends in its own
+  human UAT.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
 `PLAN.md` owns current execution numbering. Milestone labels in the preserved M8
 completion record and in ADRs accepted before the playground rebaseline describe the
 allocation at acceptance time; their architectural decisions remain accepted, but
-current ownership is the completed M10-M65 sequence and active M66 cut listed in section 15.
+current ownership is the completed M10-M66 sequence and empty M67 placeholder listed in section 15.
 
 ## 3. Crate responsibilities
 
@@ -140,23 +144,25 @@ input revisions and never calls host code.
 
 ### `geosolve-constraint-editor`
 
-Owns presentation-independent sketch interaction policy over public `geosolve-sketch` APIs and the
-equation-free `geosolve-sketch-ops` proposal seam:
+Owns presentation-independent sketch interaction policy over public `geosolve-sketch` and
+`geosolve-sketch-features` APIs:
 
 - validated viewport transforms and deterministic accepted-scene primitives;
 - screen-space persistent point/span picking and ordered selection;
 - normalized gestures, drafting, snapping and action applicability;
 - persistent interaction context such as remembered hover/snap identities, prospective
   inference candidates and deterministic guide/tolerance activation;
-- constraint/dimension and helper-operation applicability, operand progression and explicit
+- constraint/dimension and computed-feature applicability, operand progression and explicit
   branch/side option state;
 - typed document-edit, preview, commit and cancellation effects; and
 - deterministic transition/replay fixtures for native and WASM qualification.
 
-It depends one way on `geosolve-sketch`, under ADR 0030 on the public equation-free
-`geosolve-sketch-ops` proposal seam, and under ADR 0031 on `geosolve-sketch-features`. Those
-dependencies do not own equations, accepted-sketch validation, a renderer, DOM, widget toolkit,
-platform event loop, storage or host expressions. M40.2 implements accepted scene, picking,
+It depends one way on `geosolve-sketch` and, under ADR 0031, on
+`geosolve-sketch-features`. The unreleased ADR 0030 editor facade and its direct
+`geosolve-sketch-ops` dependency were removed when M66 closed; the independent M58 operations
+companion remains public and the workbench may consume it directly. These dependencies do not own
+equations, accepted-sketch validation, a renderer, DOM, widget toolkit, platform event loop,
+storage or host expressions. M40.2 implements accepted scene, picking,
 selection, basic relation applicability and the click/drag boundary; M40.3-M40.6
 complete and mechanically qualify the state machine under ADR 0029 through one
 canonical native/release-WASM report and focused browser platform evidence.
@@ -210,15 +216,15 @@ before chord-error refinement so an inflection cannot alias to its endpoint chor
 selects one finer pixel-error policy for native and computed scenes; SVG code only serializes the
 resulting polylines.
 
-The archived ADR 0030 advanced path remains implemented compatibility behavior below the ordinary
-UI. In that path, the sketch domain exposes the small, non-mutating
-
+The archived ADR 0030 editor facade is no longer implemented. The underlying M27/M28/M58
+compatibility behavior remains, and the sketch domain still exposes the small, non-mutating
 `SketchDocument::certify_line_curve_fillet_branch_cell` query. It reuses the outward-rounded
 all-family curve-piece interval kernel to prove that
 `cross(curve_tangent(t), fixed_line_direction)` is finite, nonzero and one signed orientation on
-the returned open `ContactNeighborhood::Local` cell. The editor calls it over the complete bounded
-curved span or one explicit unwrapped period. Affine line/polyline spans instead retain
-`Interior`; two non-affine-parent authoring returns a typed unsupported warning rather than
+the returned open `ContactNeighborhood::Local` cell. Current feature evaluation calls it over the
+complete bounded curved span or one explicit unwrapped period. Affine line/polyline spans instead retain
+`Interior`; current ADR 0031 feature evaluation consumes the certificate, while two non-affine-
+parent authoring returns a typed unsupported warning rather than
 guessing a pairwise branch. None of this narrows or replaces M28's public all-family Fillet
 definition, residual or validation path.
 
@@ -272,7 +278,9 @@ one immutable support through exact fixed/contact boundary identity; canonical s
 the supported language until a future schema-freeze milestone is explicitly scoped.
 
 The ADR 0030 solver-owned ordinary-UI candidate wrapped the existing public M28 associative-
-Fillet definition. ADR 0031 removes only that ordinary routing. M27/M28 definitions and
+Fillet definition. ADR 0031 supersedes that ordinary routing, and M66 close-off removes its
+unreleased editor `OperationAuthoring*` facade and direct editor-to-operations dependency.
+M27/M28 definitions and
 `SketchOperationRequest::AssociativeFillet` remain supported advanced/backward-compatible APIs;
 existing documents are not migrated. This also does not remove M25's signed Offset constraints or
 M58's exact supported-family Mirror operation API.
@@ -374,7 +382,7 @@ gesture, drafting, lifecycle and history policy and made this crate a thin adapt
 `geosolve-constraint-editor`. Cleanup M46-M50 replaces direct-test ownership and removes the
 second legacy application and old browser E2E; M51 consolidates the survivor around one workspace
 snapshot and direct presentation/evidence owners. Human acceptance is recorded at completed M40.7,
-M53 and M61-M65; every newly scoped milestone from M66 onward ends in its own UAT after direct
+M53 and M61-M66; every newly scoped milestone from M67 onward ends in its own UAT after direct
 qualification.
 
 M55 makes the surviving workbench render and dispatch the complete alpha action surface returned by
@@ -435,6 +443,17 @@ separately versioned computed-feature document. Workspace v1-v3 inputs migrate t
 document bound to the restored sketch. Existing M28 Fillets are not reinterpreted. Feature intent,
 stable IDs and allocation high-water persist; evaluation regenerates fresh output IDs after
 restore. Canonical sketch v4 and draft-v5 formats are unchanged.
+
+Accepted limitation `M66-KL001` is presentation/interaction state, not a mathematical exception.
+Radius drag measures pointer distance from the held/old arc center while evaluation moves the
+center and contacts, so tracking may drift or feel inverted; post-placement contact/root,
+retained-parent direction and alternate-arc choices lack intuitive controls, especially for
+line-circle Fillets. Numeric radius editing, explicit persisted branch state, independent
+validation, rollback and sketch-state invariance remain correct. The playground line-circle
+specimen starts at radius `0.5`, near a branch fold. Potential one-dimensional grip derivatives or
+rails, frozen absolute branch intent, contact/retention handles, continuation arrows, alternate-
+arc previews and a friendlier sample are future unassigned work, not M67 scope; the fold remains a
+regression fixture.
 
 M61 remediation keeps those boundaries intact while making the candidate genuinely interactive.
 Advanced construction state and proposal/preview generation live in `geosolve-constraint-editor`;
@@ -838,8 +857,11 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   persistence/editing and directly qualified 1/2/3-DOF mechanism examples.
 - M65: completed and approved predictable, bounded projected dragging for the existing editable
   mechanism samples, including twin-roller hit routing and rank-one pantograph-guide projection.
-- M66: active computed-feature architecture and grouped authoring for ordinary multi-corner 2D
+- M66: completed and explicitly approved computed-feature architecture and grouped authoring for ordinary multi-corner 2D
   Fillets outside the constraint graph, with an ordinary editable Fillet playground, SVG-scoped
   browser-default isolation and explicit painted-preview radius routing on candidate `ac31791`,
-  ending in its own focused UAT; the superseded qualified solver-owned UI source remains archived at
+  closed under scoped human approval with `M66-KL001`; the superseded qualified solver-owned UI source remains archived at
   `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`).
+- M67: empty placeholder awaiting supervising-user scope. Its theme is cleanup, including removal
+  of the retained old development UI; no goal, checklist, acceptance gate, scenarios or
+  implementation is assigned.
