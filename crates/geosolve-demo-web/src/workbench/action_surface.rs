@@ -264,8 +264,19 @@ mod tests {
         );
         assert!(html.contains("<strong>Modify</strong>"));
         assert!(html.contains("data-wb-action=\"feature-apply\""));
-        assert!(html.contains("id=\"wb-feature-branch-scope\""));
-        assert!(html.contains("Branch choices set defaults for the next corner"));
-        assert!(html.contains("Select a preview arc to edit one completed corner"));
+        assert!(html.contains("id=\"wb-fillet-actions-panel\""));
+        assert!(html.contains("aria-label=\"Fillet branch actions\""));
+        assert!(html.contains("Select a preview arc to use its explicit retained-direction"));
+        for obsolete in [
+            "wb-feature-fillet-flip-first",
+            "wb-feature-fillet-flip-second",
+            "wb-feature-fillet-alternate-arc",
+            "Branch choices set defaults for the next corner",
+        ] {
+            assert!(
+                !html.contains(obsolete),
+                "obsolete raw branch UI `{obsolete}`"
+            );
+        }
     }
 }

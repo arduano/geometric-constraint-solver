@@ -4,19 +4,20 @@
 use std::{collections::BTreeSet, fmt::Write as _};
 
 use geosolve_constraint_editor::{
-    AdvancedConstructionKind, ComputedFeatureProblemMetadata, ConstructionPreview,
-    ConstructionPreviewGeometry, DimensionTargetDisplayUnit, EditorHoverState, EditorHoverTarget,
-    EditorProblemCategory, EditorProblemMetadata, EditorProblemScope, EditorProblemTarget,
-    EditorScene, SceneAnnotationGeometry, SceneAnnotationKind, ScreenPoint, SelectionItem,
-    Viewport, display_dimension_target,
+    AdvancedConstructionKind, ComputedFeatureProblemMetadata, ComputedFilletContinuationLimitKind,
+    ConstructionPreview, ConstructionPreviewGeometry, DimensionTargetDisplayUnit, EditorHoverState,
+    EditorHoverTarget, EditorProblemCategory, EditorProblemMetadata, EditorProblemScope,
+    EditorProblemTarget, EditorScene, SceneAnnotationGeometry, SceneAnnotationKind,
+    SceneFilletAction, SceneFilletActionAvailability, SceneFilletActionId, SceneFilletActionTarget,
+    SceneFilletCornerAffordances, ScreenPoint, SelectionItem, Viewport, display_dimension_target,
 };
 #[cfg(test)]
 use geosolve_sketch::DocumentConstraintDefinition;
 use geosolve_sketch::{
-    DesignScalarId, DocumentDimensionDefinition, DocumentDimensionMode, GeometryRole, ScalarUnit,
-    SketchAcceptedDocumentState,
+    DesignScalarId, DocumentCurveNormalSide, DocumentDimensionDefinition, DocumentDimensionMode,
+    GeometryRole, ScalarUnit, SketchAcceptedDocumentState,
 };
-use geosolve_sketch_features::NativeCurveSpanSource;
+use geosolve_sketch_features::{ComputedFilletParentIndex, NativeCurveSpanSource};
 
 const SCREEN_SIZE: [f64; 2] = [1000.0, 700.0];
 const DEFAULT_PIXELS_PER_MODEL_UNIT: f64 = 50.0;
@@ -180,11 +181,13 @@ pub(crate) fn svg_markup_with_context(
         hover,
         construction_preview,
         problem,
+        None,
         viewport,
     )
 }
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+#[cfg(test)]
 pub(crate) fn svg_markup_with_computed_context(
     scene: Option<&EditorScene>,
     accepted: Option<&SketchAcceptedDocumentState>,
@@ -194,6 +197,43 @@ pub(crate) fn svg_markup_with_computed_context(
     hover: EditorHoverState,
     construction_preview: Option<&ConstructionPreview>,
     problem: Option<&EditorProblemMetadata>,
+    active_fillet_preview: Option<&SceneFilletActionTarget>,
+    viewport: Viewport,
+) -> String {
+    svg_markup_with_computed_context_and_action_stamp(
+        scene,
+        accepted,
+        computed_problems,
+        selection,
+        pending,
+        hover,
+        construction_preview,
+        problem,
+        active_fillet_preview,
+        None,
+        viewport,
+    )
+}
+
+/// Renders one exact scene while attaching an opaque adapter-owned stamp to
+/// every actionable Fillet branch control.
+///
+/// The stamp is not feature semantics. The browser adapter retains its exact
+/// [`geosolve_sketch_features::ComputedFeatureEvaluationInput`] and rejects a
+/// DOM event unless both still match, so an old element cannot manufacture a
+/// target for a newer scene from persistent owner/action IDs alone.
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+pub(crate) fn svg_markup_with_computed_context_and_action_stamp(
+    scene: Option<&EditorScene>,
+    accepted: Option<&SketchAcceptedDocumentState>,
+    computed_problems: &[ComputedFeatureProblemMetadata],
+    selection: &[SelectionItem],
+    pending: &[SelectionItem],
+    hover: EditorHoverState,
+    construction_preview: Option<&ConstructionPreview>,
+    problem: Option<&EditorProblemMetadata>,
+    active_fillet_preview: Option<&SceneFilletActionTarget>,
+    fillet_action_stamp: Option<u64>,
     viewport: Viewport,
 ) -> String {
     let mut output = String::new();
@@ -245,9 +285,12 @@ pub(crate) fn svg_markup_with_computed_context(
     } else {
         output.push_str("<g class=\"wb-accepted-scene\" data-scene-provenance=\"none\">");
     }
-    output.push_str(
-        "<defs><marker id=\"wb-dimension-arrow\" markerWidth=\"6\" markerHeight=\"6\" refX=\"3\" refY=\"3\" orient=\"auto-start-reverse\"><path d=\"M0 0L6 3L0 6Z\"/></marker></defs>",
-    );
+    output.push_str(concat!(
+        "<defs><marker id=\"wb-dimension-arrow\" markerWidth=\"6\" markerHeight=\"6\" ",
+        "refX=\"3\" refY=\"3\" orient=\"auto-start-reverse\"><path d=\"M0 0L6 3L0 6Z\"/>",
+        "</marker><marker id=\"wb-fillet-direction-arrow\" markerWidth=\"6\" markerHeight=\"6\" ",
+        "refX=\"5\" refY=\"3\" orient=\"auto\"><path d=\"M0 0L6 3L0 6Z\"/></marker></defs>"
+    ));
     let origin = viewport.model_to_screen([0.0, 0.0]);
     let _ = write!(
         output,
@@ -308,7 +351,13 @@ pub(crate) fn svg_markup_with_computed_context(
                 );
             }
         }
-        render_computed_geometry(&mut output, scene, selection);
+        render_computed_geometry(
+            &mut output,
+            scene,
+            selection,
+            active_fillet_preview,
+            fillet_action_stamp,
+        );
         render_computed_problem_markers(&mut computed_problem_markers, scene, computed_problems);
         output.push_str("</g><g class=\"wb-points\">");
         for point in &scene.points {
@@ -496,7 +545,13 @@ fn computed_problem_marker(
     );
 }
 
-fn render_computed_geometry(output: &mut String, scene: &EditorScene, selection: &[SelectionItem]) {
+fn render_computed_geometry(
+    output: &mut String,
+    scene: &EditorScene,
+    selection: &[SelectionItem],
+    active_fillet_preview: Option<&SceneFilletActionTarget>,
+    fillet_action_stamp: Option<u64>,
+) {
     let evaluation = scene
         .computed_curves
         .first()
@@ -505,21 +560,33 @@ fn render_computed_geometry(output: &mut String, scene: &EditorScene, selection:
         output,
         "<g class=\"wb-computed-geometry\" data-computed-evaluation=\"{evaluation}\">"
     );
+    let affected_owners = scene
+        .fillet_affordances
+        .iter()
+        .filter(|affordances| fillet_owner_is_visible(affordances.owner, selection))
+        .flat_map(|affordances| affordances.affected_owners.iter().copied())
+        .collect::<BTreeSet<_>>();
     for curve in &scene.computed_curves {
         let item = SelectionItem::FeatureCorner(curve.owner);
         let selected = selection.contains(&item)
             || selection.contains(&SelectionItem::Feature(curve.owner.feature));
+        let affected = affected_owners.contains(&curve.owner);
         let path = polyline_path(&curve.screen_polyline);
         let _ = write!(
             output,
             concat!(
-                "<g class=\"wb-computed-item{}\" data-editor-item=\"feature-corner\" ",
+                "<g class=\"wb-computed-item{}{}\" data-editor-item=\"feature-corner\" ",
                 "data-feature-id=\"{}\" data-feature-corner-id=\"{}\" ",
                 "data-computed-evaluation=\"{}\" data-computed-edge=\"{}\">",
                 "<path class=\"wb-curve wb-computed-fillet\" d=\"{}\"/>",
                 "<path class=\"wb-computed-hit\" d=\"{}\"/></g>"
             ),
             if selected { " selected" } else { "" },
+            if affected {
+                " shared-radius-affected"
+            } else {
+                ""
+            },
             curve.owner.feature,
             curve.owner.corner,
             curve.edge.evaluation.raw(),
@@ -528,7 +595,391 @@ fn render_computed_geometry(output: &mut String, scene: &EditorScene, selection:
             path,
         );
     }
+    render_fillet_affordances(
+        output,
+        scene,
+        selection,
+        active_fillet_preview,
+        fillet_action_stamp,
+    );
     output.push_str("</g>");
+}
+
+pub(crate) fn fillet_action_key(action: SceneFilletActionId) -> String {
+    match action {
+        SceneFilletActionId::ReverseFirstRetainedDirection => "reverse-first".into(),
+        SceneFilletActionId::ReverseSecondRetainedDirection => "reverse-second".into(),
+        SceneFilletActionId::ComplementaryArc => "complementary-arc".into(),
+        SceneFilletActionId::LocalAlternative { first, second } => format!(
+            "local-alternative-{}-{}",
+            normal_side_key(first),
+            normal_side_key(second),
+        ),
+    }
+}
+
+pub(crate) fn fillet_action_from_key(key: &str) -> Option<SceneFilletActionId> {
+    match key {
+        "reverse-first" => Some(SceneFilletActionId::ReverseFirstRetainedDirection),
+        "reverse-second" => Some(SceneFilletActionId::ReverseSecondRetainedDirection),
+        "complementary-arc" => Some(SceneFilletActionId::ComplementaryArc),
+        _ => {
+            let sides = key.strip_prefix("local-alternative-")?;
+            let (first, second) = sides.split_once('-')?;
+            Some(SceneFilletActionId::LocalAlternative {
+                first: normal_side_from_key(first)?,
+                second: normal_side_from_key(second)?,
+            })
+        }
+    }
+}
+
+const fn normal_side_key(side: DocumentCurveNormalSide) -> &'static str {
+    match side {
+        DocumentCurveNormalSide::Left => "left",
+        DocumentCurveNormalSide::Right => "right",
+    }
+}
+
+fn normal_side_from_key(key: &str) -> Option<DocumentCurveNormalSide> {
+    match key {
+        "left" => Some(DocumentCurveNormalSide::Left),
+        "right" => Some(DocumentCurveNormalSide::Right),
+        _ => None,
+    }
+}
+
+fn render_fillet_affordances(
+    output: &mut String,
+    scene: &EditorScene,
+    selection: &[SelectionItem],
+    active_fillet_preview: Option<&SceneFilletActionTarget>,
+    fillet_action_stamp: Option<u64>,
+) {
+    output.push_str("<g class=\"wb-fillet-affordances\">");
+    for affordances in &scene.fillet_affordances {
+        if !fillet_owner_is_visible(affordances.owner, selection) {
+            continue;
+        }
+        let owner = affordances.owner;
+        let rail = affordances.radius_rail;
+        // Branch actions paint below direct-manipulation handles. This mirrors
+        // the headless contact > radius > action/native priority in native SVG
+        // hit targeting and prevents CSS hover from advertising an occluded
+        // branch action at a crowded contact or grip.
+        for action in &affordances.actions {
+            let target = scene.fillet_action_target(owner, action.id);
+            render_fillet_canvas_action(
+                output,
+                affordances,
+                action,
+                target.as_ref() == active_fillet_preview,
+                fillet_action_stamp,
+            );
+        }
+        let _ = write!(
+            output,
+            concat!(
+                "<g class=\"wb-fillet-radius-affordance\" data-feature-id=\"{}\" ",
+                "data-feature-corner-id=\"{}\">",
+                "<path class=\"wb-fillet-radius-rail\" d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>",
+                "<path class=\"wb-fillet-radius-spoke\" d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>",
+                "<circle class=\"wb-fillet-radius-grip\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"6\" ",
+                "role=\"img\" aria-label=\"Drag shared Fillet radius\" ",
+                "data-editor-item=\"feature-corner\" data-feature-id=\"{}\" ",
+                "data-feature-corner-id=\"{}\"/></g>"
+            ),
+            owner.feature,
+            owner.corner,
+            rail.screen_rail_start.x,
+            rail.screen_rail_start.y,
+            rail.screen_rail_end.x,
+            rail.screen_rail_end.y,
+            rail.screen_center.x,
+            rail.screen_center.y,
+            rail.screen_grip.x,
+            rail.screen_grip.y,
+            rail.screen_grip.x,
+            rail.screen_grip.y,
+            owner.feature,
+            owner.corner,
+        );
+        for handle in affordances.contacts {
+            let parent = fillet_parent_key(handle.parent);
+            let label = if handle.parent == ComputedFilletParentIndex::First {
+                "Drag first-parent Fillet contact"
+            } else {
+                "Drag second-parent Fillet contact"
+            };
+            let _ = write!(
+                output,
+                concat!(
+                    "<circle class=\"wb-fillet-contact\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"5\" ",
+                    "role=\"img\" aria-label=\"{}\" data-fillet-contact=\"{}\" ",
+                    "data-editor-item=\"feature-corner\" data-feature-id=\"{}\" ",
+                    "data-feature-corner-id=\"{}\" data-source-curve=\"{}\" ",
+                    "data-source-segment=\"{}\" data-contact-parameter=\"{}\"/>"
+                ),
+                handle.screen_position.x,
+                handle.screen_position.y,
+                label,
+                parent,
+                owner.feature,
+                owner.corner,
+                handle.source.span.curve,
+                handle.source.span.segment,
+                handle.parameter,
+            );
+        }
+    }
+    output.push_str("</g>");
+}
+
+fn render_fillet_canvas_action(
+    output: &mut String,
+    affordances: &SceneFilletCornerAffordances,
+    action: &SceneFilletAction,
+    previewed: bool,
+    fillet_action_stamp: Option<u64>,
+) {
+    let key = fillet_action_key(action.id);
+    let label = escape(&action.label);
+    let (availability, disabled, reason) = match &action.availability {
+        SceneFilletActionAvailability::Applicable => ("applicable", false, String::new()),
+        SceneFilletActionAvailability::Disabled { reason } => ("disabled", true, escape(reason)),
+    };
+    let anchor = fillet_action_anchor(affordances, action);
+    let _ = write!(
+        output,
+        concat!(
+            "<g class=\"wb-fillet-action{}{}\" tabindex=\"-1\" role=\"button\" ",
+            "aria-label=\"{}\" aria-disabled=\"{}\" data-fillet-action=\"{}\" ",
+            "data-fillet-action-input=\"canvas\" ",
+            "data-fillet-action-availability=\"{}\" data-feature-id=\"{}\" ",
+            "data-feature-corner-id=\"{}\"{}{}>"
+        ),
+        if disabled { " disabled" } else { "" },
+        if previewed { " previewed" } else { "" },
+        label,
+        disabled,
+        key,
+        availability,
+        action.owner.feature,
+        action.owner.corner,
+        fillet_action_stamp.map_or_else(String::new, |stamp| {
+            format!(" data-fillet-action-stamp=\"{stamp}\"")
+        }),
+        if reason.is_empty() {
+            String::new()
+        } else {
+            format!(" data-disabled-reason=\"{reason}\"")
+        },
+    );
+    if previewed && let Some(geometry) = &action.dashed_alternative_arc {
+        let _ = write!(
+            output,
+            "<path class=\"wb-fillet-alternative-ghost\" d=\"{}\"/>",
+            polyline_path(&geometry.screen_polyline),
+        );
+    }
+    if let Some(control) = action.control_geometry {
+        let _ = write!(
+            output,
+            concat!(
+                "<path class=\"wb-fillet-retained-direction\" marker-end=\"url(#wb-fillet-direction-arrow)\" ",
+                "d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>",
+                "<g class=\"wb-fillet-action-control\" transform=\"translate({:.3} {:.3})\">",
+                "<circle r=\"7\"/>{}</g></g>"
+            ),
+            control.screen_start.x,
+            control.screen_start.y,
+            control.screen_end.x,
+            control.screen_end.y,
+            control.screen_end.x,
+            control.screen_end.y,
+            fillet_action_symbol(action.id),
+        );
+    } else {
+        let _ = write!(
+            output,
+            concat!(
+                "<g class=\"wb-fillet-action-control\" transform=\"translate({:.3} {:.3})\">",
+                "<circle r=\"8\"/>{}</g></g>"
+            ),
+            anchor.x,
+            anchor.y,
+            fillet_action_symbol(action.id),
+        );
+    }
+}
+
+fn fillet_owner_is_visible(
+    owner: geosolve_sketch_features::ComputedCornerRef,
+    selection: &[SelectionItem],
+) -> bool {
+    selection.contains(&SelectionItem::FeatureCorner(owner))
+        || selection.contains(&SelectionItem::Feature(owner.feature))
+}
+
+fn fillet_parent_key(parent: ComputedFilletParentIndex) -> &'static str {
+    match parent {
+        ComputedFilletParentIndex::First => "first",
+        ComputedFilletParentIndex::Second => "second",
+    }
+}
+
+fn fillet_action_anchor(
+    affordances: &SceneFilletCornerAffordances,
+    action: &SceneFilletAction,
+) -> ScreenPoint {
+    if let Some(control) = action.control_geometry {
+        return control.screen_end;
+    }
+    match action.id {
+        SceneFilletActionId::ReverseFirstRetainedDirection
+        | SceneFilletActionId::ReverseSecondRetainedDirection => {
+            affordances.radius_rail.screen_grip
+        }
+        SceneFilletActionId::ComplementaryArc | SceneFilletActionId::LocalAlternative { .. } => {
+            action
+                .dashed_alternative_arc
+                .as_ref()
+                .and_then(|geometry| {
+                    geometry
+                        .screen_polyline
+                        .get(geometry.screen_polyline.len() / 2)
+                        .copied()
+                })
+                .unwrap_or(affordances.radius_rail.screen_grip)
+        }
+    }
+}
+
+fn fillet_action_symbol(action: SceneFilletActionId) -> &'static str {
+    match action {
+        SceneFilletActionId::ReverseFirstRetainedDirection
+        | SceneFilletActionId::ReverseSecondRetainedDirection => {
+            "<path d=\"M-4 0H4M-4 0l2-2M-4 0l2 2M4 0 2-2M4 0 2 2\"/>"
+        }
+        SceneFilletActionId::ComplementaryArc => "<path d=\"M-4 2A5 5 0 0 1 4-2M4-2V2M4-2H0\"/>",
+        SceneFilletActionId::LocalAlternative { .. } => "<path d=\"M-4 3Q0-5 4 3M-3-2H3\"/>",
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn fillet_action_panel_markup(scene: &EditorScene) -> String {
+    fillet_action_panel_markup_with_stamp(scene, None)
+}
+
+pub(crate) fn fillet_action_panel_markup_with_stamp(
+    scene: &EditorScene,
+    fillet_action_stamp: Option<u64>,
+) -> String {
+    let mut output = fillet_continuation_status_markup(scene);
+    for affordances in scene
+        .fillet_affordances
+        .iter()
+        .filter(|affordances| !affordances.actions.is_empty())
+    {
+        let owner = affordances.owner;
+        let _ = write!(
+            output,
+            concat!(
+                "<div class=\"wb-fillet-action-group\" role=\"group\" ",
+                "aria-label=\"Fillet corner {} actions\" data-feature-id=\"{}\" ",
+                "data-feature-corner-id=\"{}\"><strong>Fillet corner {}</strong>"
+            ),
+            owner.corner, owner.feature, owner.corner, owner.corner,
+        );
+        for action in &affordances.actions {
+            let key = fillet_action_key(action.id);
+            let label = escape(&action.label);
+            let (availability, disabled, described_by, reason_markup) = match &action.availability {
+                SceneFilletActionAvailability::Applicable => {
+                    ("applicable", String::new(), String::new(), String::new())
+                }
+                SceneFilletActionAvailability::Disabled { reason } => {
+                    let reason_id = format!(
+                        "wb-fillet-action-reason-{}-{}-{key}",
+                        owner.feature, owner.corner,
+                    );
+                    (
+                        "disabled",
+                        " disabled aria-disabled=\"true\"".into(),
+                        format!(" aria-describedby=\"{reason_id}\""),
+                        format!(
+                            "<small id=\"{reason_id}\" class=\"wb-fillet-action-reason\">Unavailable: {}</small>",
+                            escape(reason),
+                        ),
+                    )
+                }
+            };
+            let _ = write!(
+                output,
+                concat!(
+                    "<button type=\"button\" data-fillet-action=\"{}\" ",
+                    "data-fillet-action-input=\"accessible\" ",
+                    "data-fillet-action-availability=\"{}\" data-feature-id=\"{}\" ",
+                    "data-feature-corner-id=\"{}\"{}{}{}>{}</button>{}"
+                ),
+                key,
+                availability,
+                owner.feature,
+                owner.corner,
+                fillet_action_stamp.map_or_else(String::new, |stamp| {
+                    format!(" data-fillet-action-stamp=\"{stamp}\"")
+                }),
+                disabled,
+                described_by,
+                label,
+                reason_markup,
+            );
+        }
+        output.push_str("</div>");
+    }
+    output
+}
+
+pub(crate) fn fillet_continuation_status_markup(scene: &EditorScene) -> String {
+    let mut output = String::new();
+    for status in &scene.computed_fillet_continuation_statuses {
+        let (kind, label) = continuation_limit_presentation(status.limit.kind);
+        let _ = write!(
+            output,
+            concat!(
+                "<p class=\"wb-fillet-continuation-limit\" role=\"status\" ",
+                "data-fillet-limit=\"{}\" data-feature-id=\"{}\" ",
+                "data-feature-corner-id=\"{}\"><strong>{}:</strong> {}</p>"
+            ),
+            kind,
+            status.owner.feature,
+            status.owner.corner,
+            label,
+            escape(&status.limit.message),
+        );
+    }
+    output
+}
+
+const fn continuation_limit_presentation(
+    kind: ComputedFilletContinuationLimitKind,
+) -> (&'static str, &'static str) {
+    match kind {
+        ComputedFilletContinuationLimitKind::BranchFold => ("branch-fold", "Branch fold"),
+        ComputedFilletContinuationLimitKind::DomainBoundary => ("domain-boundary", "Parent limit"),
+        ComputedFilletContinuationLimitKind::OffsetSingularity => {
+            ("offset-singularity", "Offset singularity")
+        }
+        ComputedFilletContinuationLimitKind::LossOfRegularity => {
+            ("loss-of-regularity", "Regularity limit")
+        }
+        ComputedFilletContinuationLimitKind::AmbiguousLocalRoot => {
+            ("ambiguous-local-root", "Ambiguous local branch")
+        }
+        ComputedFilletContinuationLimitKind::WorkStopped => {
+            ("work-stopped", "Continuation stopped")
+        }
+    }
 }
 
 fn digest(bytes: [u8; 32]) -> String {
@@ -2093,6 +2544,7 @@ mod tests {
             EditorHoverState::default(),
             None,
             None,
+            None,
             viewport(),
         );
         let curve_tag = |curve| {
@@ -2122,6 +2574,7 @@ mod tests {
             &[],
             &[],
             EditorHoverState::default(),
+            None,
             None,
             None,
             viewport(),

@@ -381,52 +381,22 @@ fn fillet_workshop_document()
     fix_curve_points(&mut document, line_line_horizontal, "Line-line horizontal")?;
     fix_curve_points(&mut document, line_line_vertical, "Line-line vertical")?;
     add_fixed_high_valence_junction(&mut document)?;
-    let circle_center = document
-        .add_point("Line-circle center", [6.0, 4.0])
-        .map_err(|error| error.to_string())?;
-    let circle_radius = document
-        .add_scalar(
-            "Line-circle radius",
-            2.0,
-            ScalarUnit::Length,
-            ScalarDomain::Positive,
-        )
-        .map_err(|error| error.to_string())?;
-    let circle = document
-        .add_curve(
-            "Line-circle circular support",
-            CurveDefinition::Circle {
-                center: circle_center,
-                radius: circle_radius,
-            },
-        )
-        .map_err(|error| error.to_string())?;
-    fix_point_at_current(&mut document, circle_center, "Line-circle center")?;
-    let circle_radius_target = document
-        .add_scalar(
-            "Line-circle source radius target",
-            2.0,
-            ScalarUnit::Length,
-            ScalarDomain::Positive,
-        )
-        .map_err(|error| error.to_string())?;
-    document
-        .add_dimension(
-            "Line-circle source radius",
-            DocumentDimensionDefinition::Radius {
-                curve: circle,
-                target: circle_radius_target,
-            },
-            DocumentDimensionMode::Driving,
-        )
-        .map_err(|error| error.to_string())?;
-    let line_circle_line = add_line(
+    add_fixed_line_circle_island(
         &mut document,
-        "Line-circle linear support",
-        ("Line-circle line start", [2.0, 1.0]),
-        ("Line-circle line end", [10.0, 1.0]),
+        "Friendly line-circle",
+        [6.0, 4.0],
+        1.0,
+        [1.0, 2.5],
+        [11.0, 2.5],
     )?;
-    fix_curve_points(&mut document, line_circle_line, "Line-circle line")?;
+    add_fixed_line_circle_island(
+        &mut document,
+        "Near-fold stress line-circle",
+        [22.0, 7.0],
+        2.0,
+        [18.0, 4.0],
+        [26.0, 4.0],
+    )?;
     let bezier_controls = [
         ("Line-Bezier start", [1.0, -3.0]),
         ("Line-Bezier control", [4.0, -7.0]),
@@ -475,6 +445,63 @@ fn fillet_workshop_document()
         ],
     )?;
     Ok((document, geosolve_sketch::DocumentSolveRequest::default()))
+}
+
+fn add_fixed_line_circle_island(
+    document: &mut SketchDocument,
+    label: &str,
+    center_position: [f64; 2],
+    radius: f64,
+    line_start: [f64; 2],
+    line_end: [f64; 2],
+) -> Result<(), String> {
+    let center = document
+        .add_point(format!("{label} center"), center_position)
+        .map_err(|error| error.to_string())?;
+    let radius_scalar = document
+        .add_scalar(
+            format!("{label} radius"),
+            radius,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .map_err(|error| error.to_string())?;
+    let circle = document
+        .add_curve(
+            format!("{label} circular support"),
+            CurveDefinition::Circle {
+                center,
+                radius: radius_scalar,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+    fix_point_at_current(document, center, &format!("{label} center"))?;
+    let radius_target = document
+        .add_scalar(
+            format!("{label} source radius target"),
+            radius,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .map_err(|error| error.to_string())?;
+    document
+        .add_dimension(
+            format!("{label} source radius"),
+            DocumentDimensionDefinition::Radius {
+                curve: circle,
+                target: radius_target,
+            },
+            DocumentDimensionMode::Driving,
+        )
+        .map_err(|error| error.to_string())?;
+    let line = add_line(
+        document,
+        &format!("{label} linear support"),
+        (&format!("{label} line start"), line_start),
+        (&format!("{label} line end"), line_end),
+    )?;
+    fix_curve_points(document, line, &format!("{label} line"))?;
+    Ok(())
 }
 
 fn add_fixed_high_valence_junction(document: &mut SketchDocument) -> Result<(), String> {
@@ -747,8 +774,9 @@ mod tests {
     use std::collections::HashSet;
 
     use geosolve_constraint_editor::{
-        CoordinatorError, EditorScene, FeatureAuthoringOptions, FeatureAuthoringOutcome,
-        FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringWarningKind, PickTolerance,
+        ComputedFilletContinuationLimitKind, CoordinatorError, EditorScene,
+        FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringState,
+        FeatureAuthoringTool, FeatureAuthoringWarningKind, PickTolerance,
         RetainedEditorCoordinator, SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
@@ -790,6 +818,119 @@ mod tests {
             FeatureAuthoringOutcome::ModeEntered(_)
         ));
         authoring
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the helper covers one complete browser-independent authoring and affordance boundary"
+    )]
+    fn line_circle_affordance_scene(
+        coordinator: &mut RetainedEditorCoordinator,
+        prefix: &str,
+    ) -> EditorScene {
+        let source_scene = fillet_playground_scene(coordinator);
+        let mut authoring = activate_fillet_playground(coordinator);
+        let (line, circle, line_position, circle_position) = {
+            let snapshot = coordinator
+                .feature_authoring_snapshot()
+                .expect("current line-circle source snapshot");
+            let document = snapshot.sketch_document();
+            let span = |suffix: &str| CurveSpan {
+                curve: document
+                    .curves()
+                    .iter()
+                    .find(|curve| curve.label == format!("{prefix} {suffix}"))
+                    .unwrap_or_else(|| panic!("missing {prefix} {suffix}"))
+                    .id,
+                segment: 0,
+            };
+            let line = span("linear support");
+            let circle = span("circular support");
+            (
+                line,
+                circle,
+                document
+                    .evaluate_curve_jet(line, 0.4)
+                    .expect("line pick position")
+                    .position,
+                document
+                    .evaluate_curve_jet(circle, 4.5)
+                    .expect("circle pick position")
+                    .position,
+            )
+        };
+        let first = coordinator
+            .transact_feature_authoring_pick_at(
+                &mut authoring,
+                &source_scene,
+                source_scene.viewport.model_to_screen(line_position.into()),
+                PickTolerance::default(),
+                format!("{prefix} Fillet"),
+            )
+            .expect("line Fillet pick");
+        assert!(matches!(
+            first.outcome,
+            FeatureAuthoringOutcome::Collecting { .. }
+        ));
+        let second = coordinator
+            .transact_feature_authoring_pick_at(
+                &mut authoring,
+                &source_scene,
+                source_scene
+                    .viewport
+                    .model_to_screen(circle_position.into()),
+                PickTolerance::default(),
+                format!("{prefix} Fillet"),
+            )
+            .expect("circle Fillet pick");
+        assert!(matches!(
+            second.outcome,
+            FeatureAuthoringOutcome::PreviewRequested { .. }
+        ));
+        let (mut scene, feature) = {
+            let preview = coordinator
+                .feature_authoring_preview()
+                .expect("held line-circle preview");
+            let accepted = coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .expect("accepted line-circle source");
+            let expected = preview.snapshot().input();
+            let scene = EditorScene::from_accepted_with_computed(
+                accepted.identity().revision().get(),
+                coordinator.session().design_identity(),
+                accepted.document(),
+                coordinator.session().design_document(),
+                &coordinator
+                    .session()
+                    .accepted_prepared_input()
+                    .expect("accepted line-circle input"),
+                &expected,
+                preview.snapshot(),
+                source_scene.viewport,
+                0.25,
+            )
+            .expect("line-circle computed scene");
+            (scene, preview.metadata().feature)
+        };
+        coordinator
+            .populate_computed_fillet_affordances(
+                &mut scene,
+                &[SelectionItem::Feature(feature)],
+                0.25,
+            )
+            .expect("line-circle affordance population");
+        assert_eq!(
+            scene
+                .computed_curves
+                .iter()
+                .filter(|curve| curve.contacts.iter().any(|contact| {
+                    contact.source.span == line || contact.source.span == circle
+                }))
+                .count(),
+            1,
+        );
+        scene
     }
 
     #[test]
@@ -866,12 +1007,16 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one inventory test keeps the ordinary Fillet playground fixture auditable"
+    )]
     fn fillet_workshop_is_a_plain_editable_document_with_expected_sources() {
         let mut catalog = SampleCatalogState::default();
         let fillet = catalog
             .open_key(SampleId::FilletWorkshop.key())
             .expect("fillet workshop");
-        assert_eq!(fillet.session().design_document().curves().len(), 11);
+        assert_eq!(fillet.session().design_document().curves().len(), 13);
         assert!(
             fillet
                 .session()
@@ -902,7 +1047,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
         assert_eq!(editable_polylines.len(), 2);
-        assert_eq!(fillet_document.constraints().len(), 16);
+        assert_eq!(fillet_document.constraints().len(), 19);
         assert!(
             fillet_document
                 .constraints()
@@ -945,12 +1090,69 @@ mod tests {
                 .count(),
             3
         );
-        assert_eq!(fillet_document.dimensions().len(), 1);
-        assert!(matches!(
-            fillet_document.dimensions()[0].definition,
-            DocumentDimensionDefinition::Radius { .. }
-        ));
+        assert_eq!(fillet_document.dimensions().len(), 2);
+        assert!(
+            fillet_document
+                .dimensions()
+                .iter()
+                .all(|dimension| matches!(
+                    dimension.definition,
+                    DocumentDimensionDefinition::Radius { .. }
+                ))
+        );
+        for label in ["Friendly line-circle", "Near-fold stress line-circle"] {
+            assert!(
+                fillet_document
+                    .curves()
+                    .iter()
+                    .any(|curve| curve.label == format!("{label} circular support"))
+            );
+            assert!(
+                fillet_document
+                    .curves()
+                    .iter()
+                    .any(|curve| curve.label == format!("{label} linear support"))
+            );
+        }
         assert!(fillet.session().accepted_state().is_some());
+    }
+
+    #[test]
+    fn friendly_line_circle_has_a_finite_rail_while_stress_is_an_explicit_fold() {
+        let mut catalog = SampleCatalogState::default();
+        let mut friendly = catalog
+            .open_key(SampleId::FilletWorkshop.key())
+            .expect("friendly Fillet playground");
+        let friendly_scene = line_circle_affordance_scene(&mut friendly, "Friendly line-circle");
+        assert_eq!(friendly_scene.fillet_affordances.len(), 1);
+        let rail = friendly_scene.fillet_affordances[0].radius_rail;
+        assert!(rail.model_derivative.into_iter().all(f64::is_finite));
+        assert!(rail.model_derivative[0].hypot(rail.model_derivative[1]) > 0.0);
+        assert!(
+            friendly_scene
+                .computed_fillet_continuation_statuses
+                .is_empty()
+        );
+
+        let mut stress = catalog
+            .open_key(SampleId::FilletWorkshop.key())
+            .expect("stress Fillet playground");
+        let stress_scene =
+            line_circle_affordance_scene(&mut stress, "Near-fold stress line-circle");
+        assert!(
+            stress_scene.fillet_affordances.is_empty(),
+            "a branch fold must not advertise a finite radius rail"
+        );
+        assert_eq!(stress_scene.computed_fillet_continuation_statuses.len(), 1);
+        assert_eq!(
+            stress_scene.computed_fillet_continuation_statuses[0]
+                .limit
+                .kind,
+            ComputedFilletContinuationLimitKind::BranchFold,
+        );
+        let status_markup = super::super::scene::fillet_action_panel_markup(&stress_scene);
+        assert!(status_markup.contains("data-fillet-limit=\"branch-fold\""));
+        assert!(status_markup.contains("<strong>Branch fold:</strong>"));
     }
 
     #[test]
@@ -1228,9 +1430,9 @@ mod tests {
     fn fillet_playground_curve_specimens_author_through_screen_transactions() {
         let cases = [
             (
-                "Line-circle linear support",
+                "Friendly line-circle linear support",
                 0.4,
-                "Line-circle circular support",
+                "Friendly line-circle circular support",
                 4.5,
             ),
             (

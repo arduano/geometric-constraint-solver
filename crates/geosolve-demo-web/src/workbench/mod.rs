@@ -24,6 +24,167 @@ const WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS: f64 = 0.25;
 const CANVAS_BROWSER_DEFAULT_GUARD_EVENTS: [&str; 2] = ["selectstart", "dragstart"];
 
 #[cfg(any(target_arch = "wasm32", test))]
+const CANVAS_POINTER_TERMINAL_EVENTS: [&str; 3] =
+    ["pointerup", "pointercancel", "lostpointercapture"];
+
+#[cfg(any(target_arch = "wasm32", test))]
+const CANVAS_PAN_POINTER_EVENTS: [&str; 3] = ["pointerdown", "pointermove", "pointerup"];
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CanvasPointerCaptureKind {
+    Point,
+    Fillet,
+    Pan,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CanvasPointerOwnership {
+    Owned,
+    Foreign,
+    Uncaptured,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CanvasPanPointerDownRoute {
+    BeginPan,
+    PreserveCapturedInteraction,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct CapturedCanvasPointer {
+    pointer_id: i32,
+    kind: CanvasPointerCaptureKind,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CanvasPointerTerminal {
+    PointerUp { pointer_id: i32 },
+    PointerCancel { pointer_id: i32 },
+    LostPointerCapture { pointer_id: i32 },
+    InteractionCancel,
+    CameraCancel,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl CanvasPointerTerminal {
+    const fn pointer_id(self) -> Option<i32> {
+        match self {
+            Self::PointerUp { pointer_id }
+            | Self::PointerCancel { pointer_id }
+            | Self::LostPointerCapture { pointer_id } => Some(pointer_id),
+            Self::InteractionCancel | Self::CameraCancel => None,
+        }
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CanvasPointerTerminalDisposition {
+    Complete,
+    Cancel,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct CanvasPointerTerminalRoute {
+    captured: CapturedCanvasPointer,
+    disposition: CanvasPointerTerminalDisposition,
+    release_platform_capture: bool,
+}
+
+/// Browser-only pointer ownership bookkeeping.
+///
+/// Gesture meaning remains in the headless editor. This state records only which
+/// platform pointers the SVG promised to keep delivering so terminal browser
+/// events can release or cancel that promise exactly once.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Default)]
+struct CanvasPointerCaptures {
+    active: Option<CapturedCanvasPointer>,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl CanvasPointerCaptures {
+    fn begin(&mut self, pointer: CapturedCanvasPointer) -> bool {
+        if pointer.pointer_id < 0 || self.active.is_some() {
+            return false;
+        }
+        self.active = Some(pointer);
+        true
+    }
+
+    fn ownership(&self, pointer_id: i32) -> CanvasPointerOwnership {
+        match self.active {
+            Some(active) if active.pointer_id == pointer_id => CanvasPointerOwnership::Owned,
+            Some(_) => CanvasPointerOwnership::Foreign,
+            None => CanvasPointerOwnership::Uncaptured,
+        }
+    }
+
+    fn contains(&self, pointer_id: i32) -> bool {
+        self.ownership(pointer_id) == CanvasPointerOwnership::Owned
+    }
+
+    fn is_empty(&self) -> bool {
+        self.active.is_none()
+    }
+
+    fn route_terminal(
+        &mut self,
+        terminal: CanvasPointerTerminal,
+    ) -> Option<CanvasPointerTerminalRoute> {
+        if terminal
+            .pointer_id()
+            .is_some_and(|pointer_id| !self.contains(pointer_id))
+        {
+            return None;
+        }
+        let captured = self.active.take()?;
+        Some(CanvasPointerTerminalRoute {
+            captured,
+            disposition: if matches!(terminal, CanvasPointerTerminal::PointerUp { .. }) {
+                CanvasPointerTerminalDisposition::Complete
+            } else {
+                CanvasPointerTerminalDisposition::Cancel
+            },
+            release_platform_capture: !matches!(
+                terminal,
+                CanvasPointerTerminal::LostPointerCapture { .. }
+            ),
+        })
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn route_canvas_pan_pointer_down(captures: &CanvasPointerCaptures) -> CanvasPanPointerDownRoute {
+    if captures.is_empty() {
+        CanvasPanPointerDownRoute::BeginPan
+    } else {
+        CanvasPanPointerDownRoute::PreserveCapturedInteraction
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+const fn canvas_pointer_capture_kind(
+    kind: geosolve_constraint_editor::ActivePointerGestureKind,
+) -> CanvasPointerCaptureKind {
+    match kind {
+        geosolve_constraint_editor::ActivePointerGestureKind::Point => {
+            CanvasPointerCaptureKind::Point
+        }
+        geosolve_constraint_editor::ActivePointerGestureKind::FilletRadius
+        | geosolve_constraint_editor::ActivePointerGestureKind::FilletContact => {
+            CanvasPointerCaptureKind::Fillet
+        }
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
 #[derive(Default)]
 struct PointerMoveQueue {
     pending: Option<geosolve_constraint_editor::PointerInput>,
@@ -63,6 +224,17 @@ impl PointerMoveQueue {
     fn drain_before_terminal(&mut self) -> Option<geosolve_constraint_editor::PointerInput> {
         self.scheduled_generation = None;
         self.pending.take()
+    }
+
+    /// Invalidates a coalesced ordinary move before an immediately handled
+    /// semantic overlay transition.
+    ///
+    /// The scheduled animation-frame closure will observe the missing
+    /// generation and do nothing, so it cannot later clear the newer Fillet
+    /// action preview with an older canvas sample.
+    fn invalidate_before_immediate_action(&mut self) {
+        self.scheduled_generation = None;
+        self.pending = None;
     }
 }
 
@@ -181,149 +353,100 @@ fn geometry_hover_selector(item: geosolve_constraint_editor::SelectionItem) -> O
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
-#[derive(Debug, Eq, PartialEq)]
-enum FeatureAuthoringRadiusRefresh {
-    NotApplicable,
-    Refreshed { completed_corners: usize },
-    Rejected(String),
+fn markup_fingerprint(value: &str) -> String {
+    let hash = value
+        .as_bytes()
+        .iter()
+        .fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| {
+            (hash ^ u64::from(*byte)).wrapping_mul(0x0000_0100_0000_01b3)
+        });
+    format!("{hash:016x}")
 }
 
-/// Atomically advances one temporary grouped-Fillet radius gesture.
+/// Browser-render identity paired with one exact headless computed input.
 ///
-/// `FeatureAuthoringState::set_options` re-resolves every corner because a
-/// radius change can alter branch-local contact seeds. The coordinator then
-/// rebuilds the complete temporary feature while preserving the pointer-down
-/// input stamp. Either both layers advance, or the last valid state and held
-/// preview remain available for a later sample in the same gesture.
+/// Owner/action IDs in markup are intentionally insufficient to activate a
+/// Fillet branch. A DOM control also carries this opaque stamp, and an event is
+/// admitted only while the adapter still holds the exact input that produced
+/// that stamp. This prevents an old element from being silently upgraded to a
+/// newer feature revision by rebuilding a target from persistent IDs.
 #[cfg(any(target_arch = "wasm32", test))]
-fn refresh_held_feature_authoring_radius(
-    coordinator: &mut geosolve_constraint_editor::RetainedEditorCoordinator,
-    state: &mut geosolve_constraint_editor::FeatureAuthoringState,
-    held_candidate: &mut Option<geosolve_constraint_editor::FeatureAuthoringCandidate>,
-    gesture_origin: &geosolve_sketch_features::ComputedFeatureEvaluationInput,
-    feature: geosolve_sketch_features::ComputedFeatureId,
-    radius: f64,
-) -> FeatureAuthoringRadiusRefresh {
-    if state.active_tool().is_none()
-        || coordinator
-            .feature_authoring_preview()
-            .is_none_or(|preview| preview.metadata().feature != feature)
-    {
-        return FeatureAuthoringRadiusRefresh::NotApplicable;
-    }
-    let snapshot = match coordinator.feature_authoring_snapshot() {
-        Ok(snapshot) => snapshot,
-        Err(error) => return FeatureAuthoringRadiusRefresh::Rejected(error.to_string()),
-    };
-    let previous_state = state.clone();
-    let mut options = state.options();
-    options.fillet_radius = Some(radius);
-    let outcome = state.set_options(&snapshot, options);
-    let (candidate, guidance) = match outcome {
-        geosolve_constraint_editor::FeatureAuthoringOutcome::PreviewRequested {
-            candidate,
-            guidance,
-        } => (candidate, guidance),
-        geosolve_constraint_editor::FeatureAuthoringOutcome::Warning(warning) => {
-            *state = previous_state;
-            return FeatureAuthoringRadiusRefresh::Rejected(warning.message);
-        }
-        _ => {
-            *state = previous_state;
-            return FeatureAuthoringRadiusRefresh::Rejected(
-                "the grouped Fillet radius preview is incomplete".into(),
-            );
-        }
-    };
-    match coordinator.refresh_feature_authoring_preview(*gesture_origin, &candidate) {
-        Ok(_) => {
-            *held_candidate = Some(candidate);
-            FeatureAuthoringRadiusRefresh::Refreshed {
-                completed_corners: guidance.completed_corners,
-            }
-        }
-        Err(error) => {
-            *state = previous_state;
-            FeatureAuthoringRadiusRefresh::Rejected(error.to_string())
-        }
-    }
-}
-
-/// Restores a cancelled grouped-Fillet radius gesture across both owners of
-/// temporary authoring state. The headless collector is rebuilt on a clone;
-/// only after the coordinator restores its exact pointer-down checkpoint do the
-/// collector and held candidate advance together.
-#[cfg(any(target_arch = "wasm32", test))]
-fn restore_held_feature_authoring_radius(
-    coordinator: &mut geosolve_constraint_editor::RetainedEditorCoordinator,
-    state: &mut geosolve_constraint_editor::FeatureAuthoringState,
-    held_candidate: &mut Option<geosolve_constraint_editor::FeatureAuthoringCandidate>,
-    gesture_origin: &geosolve_sketch_features::ComputedFeatureEvaluationInput,
-    feature: geosolve_sketch_features::ComputedFeatureId,
-    radius: f64,
-) -> FeatureAuthoringRadiusRefresh {
-    if state.active_tool().is_none()
-        || coordinator
-            .feature_authoring_preview()
-            .is_none_or(|preview| preview.metadata().feature != feature)
-    {
-        return FeatureAuthoringRadiusRefresh::NotApplicable;
-    }
-    let snapshot = match coordinator.feature_authoring_snapshot() {
-        Ok(snapshot) => snapshot,
-        Err(error) => return FeatureAuthoringRadiusRefresh::Rejected(error.to_string()),
-    };
-    let mut restored_state = state.clone();
-    let mut options = restored_state.options();
-    options.fillet_radius = Some(radius);
-    let (candidate, guidance) = match restored_state.set_options(&snapshot, options) {
-        geosolve_constraint_editor::FeatureAuthoringOutcome::PreviewRequested {
-            candidate,
-            guidance,
-        } => (candidate, guidance),
-        geosolve_constraint_editor::FeatureAuthoringOutcome::Warning(warning) => {
-            return FeatureAuthoringRadiusRefresh::Rejected(warning.message);
-        }
-        _ => {
-            return FeatureAuthoringRadiusRefresh::Rejected(
-                "the grouped Fillet radius restore is incomplete".into(),
-            );
-        }
-    };
-    if let Err(error) =
-        coordinator.restore_feature_authoring_radius_preview(*gesture_origin, feature)
-    {
-        return FeatureAuthoringRadiusRefresh::Rejected(error.to_string());
-    }
-    let Some(restored) = coordinator.feature_authoring_preview() else {
-        return FeatureAuthoringRadiusRefresh::Rejected(
-            "the grouped Fillet radius origin was not restored".into(),
-        );
-    };
-    if restored.candidate() != &candidate {
-        return FeatureAuthoringRadiusRefresh::Rejected(
-            "the headless Fillet radius origin does not match the exact held preview".into(),
-        );
-    }
-    *state = restored_state;
-    *held_candidate = Some(candidate);
-    FeatureAuthoringRadiusRefresh::Refreshed {
-        completed_corners: guidance.completed_corners,
-    }
+#[derive(Default)]
+struct FilletActionRenderAuthority {
+    next_stamp: u64,
+    active: Option<(
+        u64,
+        geosolve_sketch_features::ComputedFeatureEvaluationInput,
+    )>,
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
-fn selected_feature_authoring_corner_index(
-    coordinator: &geosolve_constraint_editor::RetainedEditorCoordinator,
-) -> Option<usize> {
-    let [geosolve_constraint_editor::SelectionItem::FeatureCorner(owner)] =
-        coordinator.editor().selection()
-    else {
-        return None;
+impl FilletActionRenderAuthority {
+    fn reconcile(
+        &mut self,
+        input: Option<&geosolve_sketch_features::ComputedFeatureEvaluationInput>,
+    ) -> Option<u64> {
+        let Some(input) = input else {
+            self.active = None;
+            return None;
+        };
+        if let Some((stamp, active)) = self.active
+            && active == *input
+        {
+            return Some(stamp);
+        }
+        let Some(stamp) = self.next_stamp.checked_add(1) else {
+            self.active = None;
+            return None;
+        };
+        self.next_stamp = stamp;
+        self.active = Some((stamp, *input));
+        Some(stamp)
+    }
+
+    fn accepts(
+        &self,
+        stamp: u64,
+        input: Option<&geosolve_sketch_features::ComputedFeatureEvaluationInput>,
+    ) -> bool {
+        matches!((self.active, input), (Some((active_stamp, active)), Some(current))
+            if active_stamp == stamp && active == *current)
+    }
+}
+
+/// Browser event disposition for an element painted as a Fillet action.
+///
+/// The headless scene still decides semantic priority. When a contact or radius
+/// affordance owns the same position, the adapter must fall through to the
+/// ordinary editor pointer route instead of consuming the event as a disabled
+/// branch action.
+#[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum CanvasFilletActionRoute {
+    Action,
+    HeadlessPointer,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+fn route_canvas_fillet_action(
+    scene: &geosolve_constraint_editor::EditorScene,
+    position: geosolve_constraint_editor::ScreenPoint,
+    painted: Option<&geosolve_constraint_editor::SceneFilletActionTarget>,
+) -> CanvasFilletActionRoute {
+    let Some(painted) = painted else {
+        return CanvasFilletActionRoute::HeadlessPointer;
     };
-    coordinator
-        .feature_authoring_preview()?
-        .corner_index(*owner)
+    scene
+        .resolve_fillet_action(
+            geosolve_constraint_editor::SceneFilletActionInput::Canvas {
+                position,
+                painted: Some(*painted),
+            },
+            geosolve_constraint_editor::PickTolerance::default(),
+        )
+        .map_or(CanvasFilletActionRoute::HeadlessPointer, |_| {
+            CanvasFilletActionRoute::Action
+        })
 }
 
 /// Revokes one temporary computed-feature owner. Selection cleanup belongs to
@@ -369,7 +492,7 @@ pub(crate) mod wasm {
         FeatureAuthoringPointerDownOutcome, FeatureAuthoringStage, FeatureAuthoringState,
         FeatureAuthoringTool, FeatureAuthoringTransaction, Modifiers, NurbsConstructionOptions,
         PickTolerance, PointerInput, ProvisionalInferenceCandidate, RetainedEditorCoordinator,
-        SelectionItem,
+        SceneFilletActionInput, SceneFilletActionTarget, SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -384,8 +507,8 @@ pub(crate) mod wasm {
     use wasm_bindgen::closure::Closure;
     use wasm_bindgen::prelude::JsValue;
     use web_sys::{
-        Document, Element, Event, HtmlElement, HtmlInputElement, HtmlSelectElement, KeyboardEvent,
-        MouseEvent, PointerEvent, WheelEvent,
+        Document, Element, Event, FocusEvent, HtmlElement, HtmlInputElement, HtmlSelectElement,
+        KeyboardEvent, MouseEvent, PointerEvent, WheelEvent,
     };
 
     use super::persistence::{
@@ -401,6 +524,9 @@ pub(crate) mod wasm {
         samples: super::samples::SampleCatalogState,
         camera: super::scene::CanvasCamera,
         pan_gesture: Option<PanGesture>,
+        pointer_captures: super::CanvasPointerCaptures,
+        pointer_moves: Rc<RefCell<super::PointerMoveQueue>>,
+        fillet_action_render: super::FilletActionRenderAuthority,
         feature_options_open: bool,
         construction_preview: Option<ConstructionPreview>,
         inference_preview: Option<ProvisionalInferenceCandidate>,
@@ -464,6 +590,9 @@ pub(crate) mod wasm {
             samples: super::samples::SampleCatalogState::default(),
             camera: super::scene::CanvasCamera::default(),
             pan_gesture: None,
+            pointer_captures: super::CanvasPointerCaptures::default(),
+            pointer_moves: Rc::new(RefCell::new(super::PointerMoveQueue::default())),
+            fillet_action_render: super::FilletActionRenderAuthority::default(),
             feature_options_open: false,
             construction_preview: None,
             inference_preview: None,
@@ -633,6 +762,10 @@ pub(crate) mod wasm {
         .map_err(|error| error.to_string())
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one delegated root listener keeps click, change and Fillet focus routing ordered"
+    )]
     fn install_clicks(
         document: &Document,
         workbench: &Rc<RefCell<Workbench>>,
@@ -672,7 +805,7 @@ pub(crate) mod wasm {
             let target = origin
                 .closest(concat!(
                     "[data-wb-tool], [data-wb-authoring], [data-wb-feature], ",
-                    "[data-editor-item], [data-wb-action], [data-sample-id], ",
+                    "[data-fillet-action], [data-editor-item], [data-wb-action], [data-sample-id], ",
                     "[data-sample-group-trigger]"
                 ))
                 .ok()
@@ -712,6 +845,57 @@ pub(crate) mod wasm {
             {
                 let mut wb = callback_workbench.borrow_mut();
                 activate_feature_authoring(&callback_document, &mut wb, tool);
+            } else if target.has_attribute("data-fillet-action") {
+                let mut wb = callback_workbench.borrow_mut();
+                let Some(scene) = editor_scene(&wb) else {
+                    wb.notice = "Fillet action requires current computed geometry".into();
+                    return;
+                };
+                let Some(painted) = fillet_action_target(&scene, &target, &wb.fillet_action_render)
+                else {
+                    wb.notice = "Fillet action is stale or unavailable".into();
+                    return;
+                };
+                let input = if target.get_attribute("data-fillet-action-input").as_deref()
+                    == Some("canvas")
+                {
+                    let Some(mouse) = event.dyn_ref::<MouseEvent>() else {
+                        return;
+                    };
+                    let Ok(viewport) = required(&callback_document, "wb-viewport") else {
+                        return;
+                    };
+                    let Some(position) = client_screen_point(
+                        &viewport,
+                        scene.viewport,
+                        f64::from(mouse.client_x()),
+                        f64::from(mouse.client_y()),
+                    ) else {
+                        return;
+                    };
+                    let super::CanvasFilletActionRoute::Action =
+                        super::route_canvas_fillet_action(&scene, position, Some(&painted))
+                    else {
+                        // Pointer-down already routed this crowded position to
+                        // the higher-priority contact/radius editor gesture.
+                        return;
+                    };
+                    SceneFilletActionInput::Canvas {
+                        position,
+                        painted: Some(painted),
+                    }
+                } else {
+                    SceneFilletActionInput::Accessible(painted)
+                };
+                let effects = wb
+                    .coordinator
+                    .editor_mut()
+                    .activate_fillet_action(&scene, input);
+                if effects.is_empty() {
+                    wb.notice = "Preview this Fillet branch choice before activating it".into();
+                } else {
+                    dispatch_effects(&mut wb, effects);
+                }
             } else if target.has_attribute("data-editor-item") {
                 if let Some(item) = selection_item(&target) {
                     let is_canvas_item = target
@@ -757,7 +941,7 @@ pub(crate) mod wasm {
                 }
             } else if let Some(key) = target.get_attribute("data-sample-id") {
                 let mut wb = callback_workbench.borrow_mut();
-                selected_sample = open_sample(&mut wb, &key);
+                selected_sample = open_sample(&callback_document, &mut wb, &key);
             } else if let Some(action) = target.get_attribute("data-wb-action") {
                 perform_action(
                     &callback_document,
@@ -830,15 +1014,99 @@ pub(crate) mod wasm {
         required(document, "workbench-root")?
             .add_event_listener_with_callback("change", change.as_ref().unchecked_ref())?;
         change.forget();
+        install_fillet_action_focus(document, workbench)
+    }
+
+    fn install_fillet_action_focus(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+    ) -> Result<(), JsValue> {
+        let root = required(document, "workbench-root")?;
+        let focus_document = document.clone();
+        let focus_workbench = Rc::clone(workbench);
+        let focus_in = Closure::<dyn FnMut(FocusEvent)>::new(move |event: FocusEvent| {
+            let Some(target) = event
+                .target()
+                .and_then(|target| target.dyn_into::<Element>().ok())
+                .and_then(|target| target.closest("[data-fillet-action]").ok().flatten())
+                .filter(|target| {
+                    target.get_attribute("data-fillet-action-input").as_deref()
+                        == Some("accessible")
+                })
+            else {
+                return;
+            };
+            let mut wb = focus_workbench.borrow_mut();
+            wb.pointer_moves
+                .borrow_mut()
+                .invalidate_before_immediate_action();
+            let Some(scene) = editor_scene(&wb) else {
+                return;
+            };
+            let Some(target) = fillet_action_target(&scene, &target, &wb.fillet_action_render)
+            else {
+                return;
+            };
+            let effects = wb
+                .coordinator
+                .editor_mut()
+                .preview_fillet_action(&scene, SceneFilletActionInput::Accessible(target));
+            if effects.is_empty() {
+                return;
+            }
+            dispatch_effects(&mut wb, effects);
+            drop(wb);
+            let _ = render(&focus_document, &focus_workbench);
+        });
+        root.add_event_listener_with_callback("focusin", focus_in.as_ref().unchecked_ref())?;
+        focus_in.forget();
+
+        let blur_document = document.clone();
+        let blur_workbench = Rc::clone(workbench);
+        let focus_out = Closure::<dyn FnMut(FocusEvent)>::new(move |event: FocusEvent| {
+            let leaving_action = event
+                .target()
+                .and_then(|target| target.dyn_into::<Element>().ok())
+                .and_then(|target| target.closest("[data-fillet-action]").ok().flatten())
+                .is_some_and(|target| {
+                    target.get_attribute("data-fillet-action-input").as_deref()
+                        == Some("accessible")
+                });
+            let enters_action = event
+                .related_target()
+                .and_then(|target| target.dyn_into::<Element>().ok())
+                .and_then(|target| target.closest("[data-fillet-action]").ok().flatten())
+                .is_some_and(|target| {
+                    target.get_attribute("data-fillet-action-input").as_deref()
+                        == Some("accessible")
+                });
+            if !leaving_action || enters_action {
+                return;
+            }
+            let mut wb = blur_workbench.borrow_mut();
+            let effects = wb.coordinator.editor_mut().clear_fillet_branch_preview();
+            if effects.is_empty() {
+                return;
+            }
+            dispatch_effects(&mut wb, effects);
+            drop(wb);
+            let _ = render(&blur_document, &blur_workbench);
+        });
+        root.add_event_listener_with_callback("focusout", focus_out.as_ref().unchecked_ref())?;
+        focus_out.forget();
         Ok(())
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one canvas installer keeps browser pointer ownership and terminal listeners together"
+    )]
     fn install_canvas(
         document: &Document,
         workbench: &Rc<RefCell<Workbench>>,
     ) -> Result<(), JsValue> {
         let viewport = required(document, "wb-viewport")?;
-        let pointer_moves = Rc::new(RefCell::new(super::PointerMoveQueue::default()));
+        let pointer_moves = Rc::clone(&workbench.borrow().pointer_moves);
         install_canvas_browser_default_guards(&viewport)?;
         install_pan_listeners(document, workbench, &viewport)?;
         install_pointer_listener(
@@ -855,19 +1123,61 @@ pub(crate) mod wasm {
 
         let cancel_document = document.clone();
         let cancel_workbench = Rc::clone(workbench);
-        let cancel_pointer_moves = Rc::clone(&pointer_moves);
-        let cancel = Closure::<dyn FnMut(PointerEvent)>::new(move |_event| {
-            cancel_pointer_moves.borrow_mut().drain_before_terminal();
+        let cancel_viewport = viewport.clone();
+        let cancel = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
             let mut wb = cancel_workbench.borrow_mut();
-            let effects = wb.coordinator.editor_mut().cancel();
-            dispatch_effects(&mut wb, effects);
-            wb.notice = "Interaction canceled".into();
+            match wb.pointer_captures.ownership(event.pointer_id()) {
+                super::CanvasPointerOwnership::Owned => {
+                    let canceled = cancel_captured_canvas_interactions(
+                        &cancel_viewport,
+                        &mut wb,
+                        super::CanvasPointerTerminal::PointerCancel {
+                            pointer_id: event.pointer_id(),
+                        },
+                        "Interaction canceled",
+                    );
+                    debug_assert!(canceled);
+                }
+                super::CanvasPointerOwnership::Foreign => return,
+                super::CanvasPointerOwnership::Uncaptured => {
+                    wb.pointer_moves.borrow_mut().drain_before_terminal();
+                    let effects = wb.coordinator.editor_mut().cancel();
+                    dispatch_effects(&mut wb, effects);
+                    wb.notice = "Interaction canceled".into();
+                }
+            }
             drop(wb);
             let _ = render(&cancel_document, &cancel_workbench);
         });
-        viewport
-            .add_event_listener_with_callback("pointercancel", cancel.as_ref().unchecked_ref())?;
+        viewport.add_event_listener_with_callback(
+            super::CANVAS_POINTER_TERMINAL_EVENTS[1],
+            cancel.as_ref().unchecked_ref(),
+        )?;
         cancel.forget();
+
+        let lost_document = document.clone();
+        let lost_workbench = Rc::clone(workbench);
+        let lost_viewport = viewport.clone();
+        let lost = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
+            let mut wb = lost_workbench.borrow_mut();
+            if !cancel_captured_canvas_interactions(
+                &lost_viewport,
+                &mut wb,
+                super::CanvasPointerTerminal::LostPointerCapture {
+                    pointer_id: event.pointer_id(),
+                },
+                "Interaction canceled because pointer capture was lost",
+            ) {
+                return;
+            }
+            drop(wb);
+            let _ = render(&lost_document, &lost_workbench);
+        });
+        viewport.add_event_listener_with_callback(
+            super::CANVAS_POINTER_TERMINAL_EVENTS[2],
+            lost.as_ref().unchecked_ref(),
+        )?;
+        lost.forget();
 
         let leave_document = document.clone();
         let leave_workbench = Rc::clone(workbench);
@@ -911,6 +1221,106 @@ pub(crate) mod wasm {
         Ok(())
     }
 
+    fn begin_canvas_pointer_capture(
+        viewport: &Element,
+        wb: &mut Workbench,
+        pointer_id: i32,
+        kind: super::CanvasPointerCaptureKind,
+    ) -> bool {
+        if wb.pointer_captures.contains(pointer_id) {
+            return true;
+        }
+        if pointer_id < 0
+            || !wb.pointer_captures.is_empty()
+            || viewport.set_pointer_capture(pointer_id).is_err()
+        {
+            return false;
+        }
+        wb.pointer_captures
+            .begin(super::CapturedCanvasPointer { pointer_id, kind })
+    }
+
+    fn capture_active_editor_pointer(
+        viewport: &Element,
+        wb: &mut Workbench,
+        pointer_id: i32,
+    ) -> Result<bool, ()> {
+        let Ok(normalized_pointer_id) = u64::try_from(pointer_id) else {
+            return Err(());
+        };
+        let Some(active) = wb.coordinator.editor().active_pointer_gesture() else {
+            return Ok(false);
+        };
+        if active.pointer_id != normalized_pointer_id {
+            return Ok(false);
+        }
+        begin_canvas_pointer_capture(
+            viewport,
+            wb,
+            pointer_id,
+            super::canvas_pointer_capture_kind(active.kind),
+        )
+        .then_some(true)
+        .ok_or(())
+    }
+
+    fn release_canvas_pointer_capture(
+        viewport: &Element,
+        wb: &mut Workbench,
+        pointer_id: i32,
+    ) -> Option<super::CapturedCanvasPointer> {
+        let route = wb
+            .pointer_captures
+            .route_terminal(super::CanvasPointerTerminal::PointerUp { pointer_id })?;
+        debug_assert_eq!(
+            route.disposition,
+            super::CanvasPointerTerminalDisposition::Complete
+        );
+        release_routed_canvas_pointer_capture(viewport, route);
+        Some(route.captured)
+    }
+
+    fn cancel_captured_canvas_interactions(
+        viewport: &Element,
+        wb: &mut Workbench,
+        terminal: super::CanvasPointerTerminal,
+        notice: &str,
+    ) -> bool {
+        let Some(route) = cancel_captured_canvas_state(wb, terminal, notice) else {
+            return false;
+        };
+        release_routed_canvas_pointer_capture(viewport, route);
+        true
+    }
+
+    fn cancel_captured_canvas_state(
+        wb: &mut Workbench,
+        terminal: super::CanvasPointerTerminal,
+        notice: &str,
+    ) -> Option<super::CanvasPointerTerminalRoute> {
+        let route = wb.pointer_captures.route_terminal(terminal)?;
+        debug_assert_eq!(
+            route.disposition,
+            super::CanvasPointerTerminalDisposition::Cancel
+        );
+        wb.pointer_moves.borrow_mut().drain_before_terminal();
+        wb.pan_gesture = None;
+        let effects = wb.coordinator.editor_mut().cancel();
+        dispatch_effects(wb, effects);
+        wb.notice = notice.into();
+        Some(route)
+    }
+
+    fn release_routed_canvas_pointer_capture(
+        viewport: &Element,
+        route: super::CanvasPointerTerminalRoute,
+    ) {
+        if route.release_platform_capture && viewport.has_pointer_capture(route.captured.pointer_id)
+        {
+            let _ = viewport.release_pointer_capture(route.captured.pointer_id);
+        }
+    }
+
     fn install_canvas_browser_default_guards(viewport: &Element) -> Result<(), JsValue> {
         for name in super::CANVAS_BROWSER_DEFAULT_GUARD_EVENTS {
             let callback = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
@@ -936,9 +1346,53 @@ pub(crate) mod wasm {
             if event_targets_problem_marker(&event) {
                 return;
             }
+            if let Some(painted_element) = pointer_event_fillet_action(&event) {
+                let mut wb = callback_workbench.borrow_mut();
+                if wb.pointer_captures.is_empty() {
+                    let Some(scene) = editor_scene(&wb) else {
+                        return;
+                    };
+                    let Some(pointer) = pointer_input(&callback_viewport, scene.viewport, &event)
+                    else {
+                        return;
+                    };
+                    let painted =
+                        fillet_action_target(&scene, &painted_element, &wb.fillet_action_render);
+                    if super::route_canvas_fillet_action(&scene, pointer.position, painted.as_ref())
+                        == super::CanvasFilletActionRoute::Action
+                    {
+                        let Some(target) = painted else {
+                            return;
+                        };
+                        callback_pointer_moves
+                            .borrow_mut()
+                            .invalidate_before_immediate_action();
+                        let effects = wb.coordinator.editor_mut().preview_fillet_action(
+                            &scene,
+                            SceneFilletActionInput::Canvas {
+                                position: pointer.position,
+                                painted: Some(target),
+                            },
+                        );
+                        if !effects.is_empty() {
+                            dispatch_effects(&mut wb, effects);
+                            drop(wb);
+                            let _ = render(&callback_document, &callback_workbench);
+                        }
+                        return;
+                    }
+                } else if !wb.pointer_captures.contains(event.pointer_id()) {
+                    return;
+                }
+            }
             let input = {
                 let wb = callback_workbench.borrow();
                 if wb.pan_gesture.is_some() || wb.authoring.active_tool().is_some() {
+                    return;
+                }
+                if !wb.pointer_captures.is_empty()
+                    && !wb.pointer_captures.contains(event.pointer_id())
+                {
                     return;
                 }
                 let Some(scene) = editor_scene(&wb) else {
@@ -996,20 +1450,66 @@ pub(crate) mod wasm {
         let callback_viewport = viewport.clone();
         let callback_pointer_moves = Rc::clone(pointer_moves);
         let callback = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
-            if event_targets_problem_marker(&event) {
+            let mut wb = callback_workbench.borrow_mut();
+            let owns_pointer = wb.pointer_captures.contains(event.pointer_id());
+            if !owns_pointer
+                && (event_targets_problem_marker(&event) || event_targets_fillet_action(&event))
+            {
                 return;
             }
-            let mut wb = callback_workbench.borrow_mut();
+            if !wb.pointer_captures.is_empty() && !wb.pointer_captures.contains(event.pointer_id())
+            {
+                return;
+            }
+            if event.button() != 0 {
+                return;
+            }
             if wb.pan_gesture.is_some() {
                 return;
             }
             let Some(scene) = editor_scene(&wb) else {
+                if wb.pointer_captures.contains(event.pointer_id()) {
+                    cancel_captured_canvas_interactions(
+                        &callback_viewport,
+                        &mut wb,
+                        super::CanvasPointerTerminal::PointerCancel {
+                            pointer_id: event.pointer_id(),
+                        },
+                        "Interaction canceled because the current canvas scene is unavailable",
+                    );
+                    drop(wb);
+                    let _ = render(&callback_document, &callback_workbench);
+                }
                 return;
             };
             let Some(input) = pointer_input(&callback_viewport, scene.viewport, &event) else {
+                if wb.pointer_captures.contains(event.pointer_id()) {
+                    cancel_captured_canvas_interactions(
+                        &callback_viewport,
+                        &mut wb,
+                        super::CanvasPointerTerminal::PointerCancel {
+                            pointer_id: event.pointer_id(),
+                        },
+                        "Interaction canceled because the terminal pointer sample is invalid",
+                    );
+                    drop(wb);
+                    let _ = render(&callback_document, &callback_workbench);
+                }
                 return;
             };
             if wb.authoring.active_tool().is_some() {
+                if wb.pointer_captures.contains(event.pointer_id()) {
+                    cancel_captured_canvas_interactions(
+                        &callback_viewport,
+                        &mut wb,
+                        super::CanvasPointerTerminal::PointerCancel {
+                            pointer_id: event.pointer_id(),
+                        },
+                        "Interaction canceled because authoring mode changed",
+                    );
+                    drop(wb);
+                    let _ = render(&callback_document, &callback_workbench);
+                }
                 return;
             }
             if let Some(pending) = callback_pointer_moves.borrow_mut().drain_before_terminal() {
@@ -1020,12 +1520,15 @@ pub(crate) mod wasm {
             let expected = coordinator.session().design_identity();
             let effects = coordinator.editor_mut().pointer_up(&scene, expected, input);
             dispatch_effects(&mut wb, effects);
+            release_canvas_pointer_capture(&callback_viewport, &mut wb, event.pointer_id());
             save(&wb);
             drop(wb);
             let _ = render(&callback_document, &callback_workbench);
         });
-        viewport
-            .add_event_listener_with_callback("pointerup", callback.as_ref().unchecked_ref())?;
+        viewport.add_event_listener_with_callback(
+            super::CANVAS_POINTER_TERMINAL_EVENTS[0],
+            callback.as_ref().unchecked_ref(),
+        )?;
         callback.forget();
         Ok(())
     }
@@ -1036,6 +1539,17 @@ pub(crate) mod wasm {
             .and_then(|target| target.dyn_into::<Element>().ok())
             .and_then(|target| target.closest("[data-problem-marker]").ok().flatten())
             .is_some()
+    }
+
+    fn event_targets_fillet_action(event: &PointerEvent) -> bool {
+        pointer_event_fillet_action(event).is_some()
+    }
+
+    fn pointer_event_fillet_action(event: &PointerEvent) -> Option<Element> {
+        event
+            .target()
+            .and_then(|target| target.dyn_into::<Element>().ok())
+            .and_then(|target| target.closest("[data-fillet-action]").ok().flatten())
     }
 
     /// Returns the stable identity painted directly under this pointer sample.
@@ -1052,7 +1566,7 @@ pub(crate) mod wasm {
         workbench: &Rc<RefCell<Workbench>>,
         viewport: &Element,
     ) -> Result<(), JsValue> {
-        for name in ["pointerdown", "pointermove", "pointerup", "pointercancel"] {
+        for name in super::CANVAS_PAN_POINTER_EVENTS {
             let callback_document = document.clone();
             let callback_workbench = Rc::clone(workbench);
             let callback_viewport = viewport.clone();
@@ -1070,6 +1584,25 @@ pub(crate) mod wasm {
                             return;
                         };
                         event.prevent_default();
+                        match super::route_canvas_pan_pointer_down(&wb.pointer_captures) {
+                            super::CanvasPanPointerDownRoute::BeginPan => {
+                                let effects =
+                                    wb.coordinator.editor_mut().clear_fillet_branch_preview();
+                                dispatch_effects(&mut wb, effects);
+                            }
+                            super::CanvasPanPointerDownRoute::PreserveCapturedInteraction => {
+                                return;
+                            }
+                        }
+                        if !begin_canvas_pointer_capture(
+                            &callback_viewport,
+                            &mut wb,
+                            event.pointer_id(),
+                            super::CanvasPointerCaptureKind::Pan,
+                        ) {
+                            wb.notice = "Canvas pan canceled because pointer capture failed".into();
+                            return;
+                        }
                         wb.pan_gesture = Some(PanGesture {
                             pointer_id: event.pointer_id(),
                             origin,
@@ -1093,13 +1626,18 @@ pub(crate) mod wasm {
                         drop(wb);
                         let _ = render(&callback_document, &callback_workbench);
                     }
-                    "pointerup" | "pointercancel"
+                    "pointerup"
                         if wb
                             .pan_gesture
                             .is_some_and(|gesture| gesture.pointer_id == event.pointer_id()) =>
                     {
                         event.prevent_default();
                         wb.pan_gesture = None;
+                        release_canvas_pointer_capture(
+                            &callback_viewport,
+                            &mut wb,
+                            event.pointer_id(),
+                        );
                         wb.notice = "Canvas pan complete".into();
                         drop(wb);
                         let _ = render(&callback_document, &callback_workbench);
@@ -1123,6 +1661,17 @@ pub(crate) mod wasm {
         let callback_viewport = viewport.clone();
         let callback = Closure::<dyn FnMut(WheelEvent)>::new(move |event: WheelEvent| {
             let mut wb = callback_workbench.borrow_mut();
+            if wb.pointer_captures.is_empty() {
+                let effects = wb.coordinator.editor_mut().clear_fillet_branch_preview();
+                dispatch_effects(&mut wb, effects);
+            } else {
+                cancel_captured_canvas_interactions(
+                    &callback_viewport,
+                    &mut wb,
+                    super::CanvasPointerTerminal::CameraCancel,
+                    "Active drag canceled before canvas zoom",
+                );
+            }
             let Some(anchor) = client_screen_point(
                 &callback_viewport,
                 wb.camera.viewport(),
@@ -1147,6 +1696,10 @@ pub(crate) mod wasm {
         Ok(())
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the pointer-down adapter preserves one explicit priority and capture sequence"
+    )]
     fn install_pointer_listener(
         document: &Document,
         workbench: &Rc<RefCell<Workbench>>,
@@ -1163,17 +1716,19 @@ pub(crate) mod wasm {
         let callback_workbench = Rc::clone(workbench);
         let callback_viewport = viewport.clone();
         let callback = Closure::<dyn FnMut(PointerEvent)>::new(move |event: PointerEvent| {
-            if event
-                .target()
-                .and_then(|target| target.dyn_into::<Element>().ok())
-                .and_then(|target| target.closest("[data-problem-marker]").ok().flatten())
-                .is_some()
-            {
+            if event_targets_problem_marker(&event) {
                 return;
             }
+            let painted_action = pointer_event_fillet_action(&event);
             let mut wb = callback_workbench.borrow_mut();
             if wb.pan_gesture.is_some() {
                 return;
+            }
+            if event.button() != 0 {
+                return;
+            }
+            if wb.pointer_captures.is_empty() {
+                wb.pointer_moves.borrow_mut().drain_before_terminal();
             }
             let Some(scene) = editor_scene(&wb) else {
                 return;
@@ -1181,10 +1736,19 @@ pub(crate) mod wasm {
             let Some(input) = pointer_input(&callback_viewport, scene.viewport, &event) else {
                 return;
             };
-            if wb.feature_authoring.active_tool().is_some() {
-                if event.button() != 0 {
+            if wb.pointer_captures.is_empty()
+                && let Some(painted_element) = painted_action
+            {
+                let painted =
+                    fillet_action_target(&scene, &painted_element, &wb.fillet_action_render);
+                if matches!(
+                    super::route_canvas_fillet_action(&scene, input.position, painted.as_ref(),),
+                    super::CanvasFilletActionRoute::Action
+                ) {
                     return;
                 }
+            }
+            if wb.feature_authoring.active_tool().is_some() {
                 if let Some(outcome) = feature_canvas_pointer_down(
                     &mut wb,
                     &scene,
@@ -1208,15 +1772,19 @@ pub(crate) mod wasm {
                         }
                     }
                 }
+                if capture_active_editor_pointer(&callback_viewport, &mut wb, event.pointer_id())
+                    .is_err()
+                {
+                    let effects = wb.coordinator.editor_mut().cancel();
+                    dispatch_effects(&mut wb, effects);
+                    wb.notice = "Canvas interaction canceled because pointer capture failed".into();
+                }
                 save(&wb);
                 drop(wb);
                 let _ = render(&callback_document, &callback_workbench);
                 return;
             }
             if wb.authoring.active_tool().is_some() {
-                if event.button() != 0 {
-                    return;
-                }
                 if super::owns_authoring_pick(super::AuthoringItemInput::CanvasPointerDown)
                     && let Some(hit) =
                         scene.native_authoring_hit_test(input.position, PickTolerance::default())
@@ -1248,6 +1816,13 @@ pub(crate) mod wasm {
                 .unwrap_or_default();
             let effects = { transition(&mut wb.coordinator, &scene, input, &problem_items) };
             dispatch_effects(&mut wb, effects);
+            if capture_active_editor_pointer(&callback_viewport, &mut wb, event.pointer_id())
+                .is_err()
+            {
+                let effects = wb.coordinator.editor_mut().cancel();
+                dispatch_effects(&mut wb, effects);
+                wb.notice = "Canvas interaction canceled because pointer capture failed".into();
+            }
             save(&wb);
             drop(wb);
             let _ = render(&callback_document, &callback_workbench);
@@ -1257,6 +1832,10 @@ pub(crate) mod wasm {
         Ok(())
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "keyboard precedence is intentionally visible in one delegated event route"
+    )]
     fn install_keyboard(
         document: &Document,
         workbench: &Rc<RefCell<Workbench>>,
@@ -1264,6 +1843,28 @@ pub(crate) mod wasm {
         let callback_document = document.clone();
         let callback_workbench = Rc::clone(workbench);
         let callback = Closure::<dyn FnMut(KeyboardEvent)>::new(move |event: KeyboardEvent| {
+            if event.key() == "Escape" && !callback_workbench.borrow().pointer_captures.is_empty() {
+                event.prevent_default();
+                let mut wb = callback_workbench.borrow_mut();
+                if let Ok(viewport) = required(&callback_document, "wb-viewport") {
+                    cancel_captured_canvas_interactions(
+                        &viewport,
+                        &mut wb,
+                        super::CanvasPointerTerminal::InteractionCancel,
+                        "Interaction canceled",
+                    );
+                } else {
+                    let _ = cancel_captured_canvas_state(
+                        &mut wb,
+                        super::CanvasPointerTerminal::InteractionCancel,
+                        "Interaction canceled because the canvas is unavailable",
+                    );
+                }
+                save(&wb);
+                drop(wb);
+                let _ = render(&callback_document, &callback_workbench);
+                return;
+            }
             if event.key() == "Escape"
                 && required(&callback_document, "wb-sample-selector")
                     .is_ok_and(|selector| selector.has_attribute("open"))
@@ -1287,6 +1888,36 @@ pub(crate) mod wasm {
                     .closest("[data-problem-marker]")
                     .is_ok_and(|marker| marker.is_some())
             {
+                return;
+            }
+            if matches!(event.key().as_str(), "Enter" | " ")
+                && let Some(target) = event
+                    .target()
+                    .and_then(|target| target.dyn_into::<Element>().ok())
+                    .and_then(|target| target.closest("[data-fillet-action]").ok().flatten())
+            {
+                event.prevent_default();
+                let mut wb = callback_workbench.borrow_mut();
+                let Some(scene) = editor_scene(&wb) else {
+                    return;
+                };
+                let Some(target) = fillet_action_target(&scene, &target, &wb.fillet_action_render)
+                else {
+                    wb.notice = "Fillet action is stale or unavailable".into();
+                    return;
+                };
+                let effects = wb
+                    .coordinator
+                    .editor_mut()
+                    .activate_fillet_action(&scene, SceneFilletActionInput::Accessible(target));
+                if effects.is_empty() {
+                    wb.notice = "Focus this Fillet branch choice before activating it".into();
+                } else {
+                    dispatch_effects(&mut wb, effects);
+                }
+                save(&wb);
+                drop(wb);
+                let _ = render(&callback_document, &callback_workbench);
                 return;
             }
             if matches!(event.key().as_str(), "Enter" | " ")
@@ -1389,6 +2020,10 @@ pub(crate) mod wasm {
         Ok(())
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one exhaustive adapter keeps every typed editor effect on a single dispatch path"
+    )]
     fn dispatch_effects(wb: &mut Workbench, effects: Vec<EditorEffect>) {
         use super::effect_adapter::{
             ConstructionDispatch, InferenceDispatch, dispatch_construction_effect,
@@ -1460,53 +2095,93 @@ pub(crate) mod wasm {
                 EditorEffect::ClearPointPreview => {
                     wb.coordinator.clear_transient();
                 }
-                EditorEffect::PreviewComputedFeatureRadius {
-                    expected,
-                    feature,
-                    radius,
-                } => {
-                    if !update_feature_authoring_radius(wb, expected, *feature, *radius) {
-                        match wb.coordinator.apply_editor_effect(&effect) {
-                            Ok(_) => wb.notice = format!("Fillet radius preview {radius:.4}"),
-                            Err(error) => wb.notice = error.to_string(),
+                EditorEffect::PreviewComputedFeatureRadius { radius, .. } => {
+                    match apply_computed_feature_editor_effect(wb, &effect) {
+                        Ok(Some(completed_corners)) => {
+                            wb.notice = format!(
+                                "Fillet radius preview {radius:.4} · {completed_corners} corner{} retained",
+                                if completed_corners == 1 { "" } else { "s" },
+                            );
+                        }
+                        Ok(None) => wb.notice = format!("Fillet radius preview {radius:.4}"),
+                        Err(error) => {
+                            wb.notice = format!(
+                                "Fillet radius sample was rejected; the last valid preview is retained: {error}"
+                            );
                         }
                     }
                 }
-                EditorEffect::CommitComputedFeatureRadius {
-                    expected,
-                    feature,
-                    radius,
-                } => {
-                    if update_feature_authoring_radius(wb, expected, *feature, *radius) {
-                        match wb
-                            .coordinator
-                            .accept_feature_authoring_radius_preview(*expected, *feature)
-                        {
-                            Ok(()) => wb.notice = format!("Fillet radius set to {radius:.4}"),
-                            Err(error) => wb.notice = error.to_string(),
+                EditorEffect::CommitComputedFeatureRadius { radius, .. } => {
+                    match apply_computed_feature_editor_effect(wb, &effect) {
+                        Ok(_) => wb.notice = format!("Fillet radius set to {radius:.4}"),
+                        Err(error) => wb.notice = error,
+                    }
+                }
+                EditorEffect::RestoreComputedFeatureRadius { .. } => {
+                    match apply_computed_feature_editor_effect(wb, &effect) {
+                        Ok(Some(completed_corners)) => {
+                            wb.notice = format!(
+                                "Fillet radius edit canceled · {completed_corners} corner{} restored",
+                                if completed_corners == 1 { "" } else { "s" },
+                            );
                         }
-                    } else {
-                        match wb.coordinator.apply_editor_effect(&effect) {
-                            Ok(_) => wb.notice = format!("Fillet radius set to {radius:.4}"),
-                            Err(error) => wb.notice = error.to_string(),
+                        Ok(None) => wb.notice = "Fillet radius edit canceled".into(),
+                        Err(error) => {
+                            wb.notice = format!("Fillet radius restore was rejected: {error}");
                         }
                     }
                 }
-                EditorEffect::RestoreComputedFeatureRadius {
-                    expected,
-                    feature,
-                    radius,
-                } => {
-                    if !restore_feature_authoring_radius(wb, expected, *feature, *radius) {
-                        match wb.coordinator.apply_editor_effect(&effect) {
-                            Ok(_) => wb.notice = "Fillet radius edit cancelled".into(),
-                            Err(error) => wb.notice = error.to_string(),
+                EditorEffect::ClearComputedFeaturePreview
+                | EditorEffect::ClearComputedFeatureContactPreview => {
+                    if let Err(error) = apply_computed_feature_editor_effect(wb, &effect) {
+                        wb.notice = error;
+                    }
+                }
+                EditorEffect::PreviewComputedFeatureContact { parameter, .. } => {
+                    match apply_computed_feature_editor_effect(wb, &effect) {
+                        Ok(Some(completed_corners)) => {
+                            wb.notice = format!(
+                                "Fillet contact preview {parameter:.4} · {completed_corners} corner{} retained",
+                                if completed_corners == 1 { "" } else { "s" },
+                            );
+                        }
+                        Ok(None) => wb.notice = format!("Fillet contact preview {parameter:.4}"),
+                        Err(error) => {
+                            wb.notice = format!(
+                                "Fillet contact sample was rejected; the last valid preview is retained: {error}"
+                            );
                         }
                     }
                 }
-                EditorEffect::ClearComputedFeaturePreview => {
-                    if wb.feature_authoring.active_tool().is_none() {
-                        wb.coordinator.clear_computed_feature_preview();
+                EditorEffect::CommitComputedFeatureContact { .. } => {
+                    match apply_computed_feature_editor_effect(wb, &effect) {
+                        Ok(_) => wb.notice = "Fillet contact retained".into(),
+                        Err(error) => wb.notice = error,
+                    }
+                }
+                EditorEffect::RestoreComputedFeatureContact { .. } => {
+                    match apply_computed_feature_editor_effect(wb, &effect) {
+                        Ok(_) => wb.notice = "Fillet contact edit canceled".into(),
+                        Err(error) => {
+                            wb.notice = format!("Fillet contact restore was rejected: {error}");
+                        }
+                    }
+                }
+                EditorEffect::FilletBranchPreviewChanged { target } => {
+                    if target.is_some() {
+                        wb.notice = "Fillet branch preview".into();
+                    }
+                }
+                EditorEffect::CommitComputedFilletAction { .. } => {
+                    match apply_computed_feature_editor_effect(wb, &effect) {
+                        Ok(Some(completed_corners)) => {
+                            wb.notice = format!(
+                                "Fillet branch updated · {completed_corners} corner{} retained",
+                                if completed_corners == 1 { "" } else { "s" },
+                            );
+                        }
+                        Ok(None) => wb.notice = "Fillet branch action retained".into(),
+                        Err(error) => wb.notice = error,
                     }
                 }
                 EditorEffect::SelectionChanged(_) | EditorEffect::HoverChanged(_) => {}
@@ -1531,71 +2206,41 @@ pub(crate) mod wasm {
         }
     }
 
-    fn restore_feature_authoring_radius(
+    fn apply_computed_feature_editor_effect(
         wb: &mut Workbench,
-        expected: &geosolve_sketch_features::ComputedFeatureEvaluationInput,
-        feature: ComputedFeatureId,
-        radius: f64,
-    ) -> bool {
-        match super::restore_held_feature_authoring_radius(
-            &mut wb.coordinator,
-            &mut wb.feature_authoring,
-            &mut wb.feature_candidate,
-            expected,
-            feature,
-            radius,
-        ) {
-            super::FeatureAuthoringRadiusRefresh::NotApplicable => false,
-            super::FeatureAuthoringRadiusRefresh::Refreshed { completed_corners } => {
-                wb.feature_pending.clear();
-                wb.notice = format!(
-                    "Fillet radius edit cancelled · {completed_corners} corner{} restored",
-                    if completed_corners == 1 { "" } else { "s" },
-                );
-                true
-            }
-            super::FeatureAuthoringRadiusRefresh::Rejected(error) => {
-                wb.notice = format!("Fillet radius restore was rejected: {error}");
-                true
-            }
+        effect: &EditorEffect,
+    ) -> Result<Option<usize>, String> {
+        if wb.coordinator.feature_authoring_preview().is_some() {
+            wb.coordinator
+                .apply_feature_authoring_editor_effect(&mut wb.feature_authoring, effect)
+                .map_err(|error| error.to_string())?;
+            let candidate = wb
+                .coordinator
+                .feature_authoring_preview()
+                .map(|preview| preview.candidate().clone())
+                .ok_or_else(|| {
+                    "the current Fillet authoring preview disappeared during its edit".to_owned()
+                })?;
+            let completed_corners = candidate.corners().len();
+            wb.feature_candidate = Some(candidate);
+            wb.feature_pending.clear();
+            Ok(Some(completed_corners))
+        } else {
+            wb.coordinator
+                .apply_editor_effect(effect)
+                .map(|_| None)
+                .map_err(|error| error.to_string())
         }
     }
 
-    fn update_feature_authoring_radius(
-        wb: &mut Workbench,
-        expected: &geosolve_sketch_features::ComputedFeatureEvaluationInput,
-        feature: ComputedFeatureId,
-        radius: f64,
-    ) -> bool {
-        match super::refresh_held_feature_authoring_radius(
-            &mut wb.coordinator,
-            &mut wb.feature_authoring,
-            &mut wb.feature_candidate,
-            expected,
-            feature,
-            radius,
-        ) {
-            super::FeatureAuthoringRadiusRefresh::NotApplicable => false,
-            super::FeatureAuthoringRadiusRefresh::Refreshed { completed_corners } => {
-                wb.feature_pending.clear();
-                wb.notice = format!(
-                    "Fillet radius preview {radius:.4} · {completed_corners} corner{} retained",
-                    if completed_corners == 1 { "" } else { "s" },
-                );
-                true
-            }
-            super::FeatureAuthoringRadiusRefresh::Rejected(error) => {
-                wb.notice = format!(
-                    "Fillet radius sample was rejected; the last valid preview is retained: {error}"
-                );
-                true
-            }
-        }
-    }
-
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the closed workbench action catalog is kept in one auditable dispatch table"
+    )]
     fn perform_action(document: &Document, wb: &mut Workbench, action: &str) {
         let result = match action {
-            "new" => empty_coordinator().map(|coordinator| {
+            "new" => cancel_before_camera_change(document, wb).and_then(|()| {
+                let coordinator = empty_coordinator()?;
                 wb.coordinator = coordinator;
                 wb.authoring.deactivate();
                 clear_feature_authoring(wb);
@@ -1603,10 +2248,11 @@ pub(crate) mod wasm {
                 wb.feature_options_open = false;
                 wb.construction_preview = None;
                 wb.inference_preview = None;
+                Ok(())
             }),
             "undo" => wb.coordinator.undo().map_err(|error| error.to_string()),
             "redo" => wb.coordinator.redo().map_err(|error| error.to_string()),
-            "cancel" => {
+            "cancel" => cancel_before_camera_change(document, wb).map(|()| {
                 if wb.feature_authoring.active_tool().is_some() {
                     let effects = wb.coordinator.editor_mut().cancel();
                     dispatch_effects(wb, effects);
@@ -1620,8 +2266,7 @@ pub(crate) mod wasm {
                     let effects = wb.coordinator.editor_mut().cancel();
                     dispatch_effects(wb, effects);
                 }
-                Ok(())
-            }
+            }),
             "feature-apply" => {
                 let outcome = wb.feature_authoring.apply();
                 handle_feature_outcome(wb, outcome);
@@ -1655,24 +2300,21 @@ pub(crate) mod wasm {
                 wb.problems_open = !wb.problems_open;
                 Ok(())
             }
-            "zoom-in" => {
+            "zoom-in" => cancel_before_camera_change(document, wb).map(|()| {
                 wb.camera.zoom_about(
                     geosolve_constraint_editor::ScreenPoint { x: 500.0, y: 350.0 },
                     1.25,
                 );
-                Ok(())
-            }
-            "zoom-out" => {
+            }),
+            "zoom-out" => cancel_before_camera_change(document, wb).map(|()| {
                 wb.camera.zoom_about(
                     geosolve_constraint_editor::ScreenPoint { x: 500.0, y: 350.0 },
                     0.8,
                 );
-                Ok(())
-            }
-            "zoom-fit" => {
+            }),
+            "zoom-fit" => cancel_before_camera_change(document, wb).map(|()| {
                 fit_camera(wb);
-                Ok(())
-            }
+            }),
             _ => Ok(()),
         };
         if result.is_ok() && wb.authoring.active_tool().is_some() {
@@ -1698,6 +2340,23 @@ pub(crate) mod wasm {
                 _ => "Action retained".into(),
             },
         );
+    }
+
+    fn cancel_before_camera_change(document: &Document, wb: &mut Workbench) -> Result<(), String> {
+        if wb.pointer_captures.is_empty() {
+            let effects = wb.coordinator.editor_mut().clear_fillet_branch_preview();
+            dispatch_effects(wb, effects);
+            return Ok(());
+        }
+        let viewport = required(document, "wb-viewport")
+            .map_err(|_| "canvas viewport is unavailable".to_owned())?;
+        cancel_captured_canvas_interactions(
+            &viewport,
+            wb,
+            super::CanvasPointerTerminal::CameraCancel,
+            "Active drag canceled before camera change",
+        );
+        Ok(())
     }
 
     fn apply_dimension_target(document: &Document, wb: &mut Workbench) -> Result<(), String> {
@@ -1788,7 +2447,11 @@ pub(crate) mod wasm {
             .map_err(|error| error.to_string())
     }
 
-    fn open_sample(wb: &mut Workbench, key: &str) -> bool {
+    fn open_sample(document: &Document, wb: &mut Workbench, key: &str) -> bool {
+        if let Err(error) = cancel_before_camera_change(document, wb) {
+            wb.notice = error;
+            return false;
+        }
         match wb.samples.open_key(key) {
             Ok(coordinator) => {
                 wb.coordinator = coordinator;
@@ -1863,13 +2526,17 @@ pub(crate) mod wasm {
         wb: &mut Workbench,
         tool: FeatureAuthoringTool,
     ) {
-        let options = match feature_options(document) {
-            Ok(options) => options,
+        let radius = match feature_radius_input(document) {
+            Ok(radius) => radius,
             Err(error) => {
                 clear_feature_authoring(wb);
                 wb.notice = error;
                 return;
             }
+        };
+        let options = FeatureAuthoringOptions {
+            fillet_radius: radius,
+            ..FeatureAuthoringOptions::default()
         };
         let snapshot = match wb.coordinator.feature_authoring_snapshot() {
             Ok(snapshot) => snapshot,
@@ -1978,19 +2645,17 @@ pub(crate) mod wasm {
     }
 
     fn update_feature_options(document: &Document, wb: &mut Workbench) {
-        let options = match feature_options(document) {
-            Ok(options) => options,
+        let radius = match feature_radius_input(document) {
+            Ok(radius) => radius,
             Err(error) => {
                 wb.notice = error;
                 return;
             }
         };
-        let selected_corner = super::selected_feature_authoring_corner_index(&wb.coordinator);
         let label = next_feature_authoring_label(wb);
-        match wb.coordinator.transact_feature_authoring_options(
+        match wb.coordinator.transact_feature_authoring_radius(
             &mut wb.feature_authoring,
-            options,
-            selected_corner,
+            radius,
             label,
         ) {
             Ok(transaction) => handle_feature_transaction(wb, transaction),
@@ -2000,17 +2665,8 @@ pub(crate) mod wasm {
         }
     }
 
-    fn feature_options(document: &Document) -> Result<FeatureAuthoringOptions, String> {
-        Ok(FeatureAuthoringOptions {
-            fillet_radius: optional_positive_input(
-                document,
-                "wb-feature-fillet-radius",
-                "fillet radius",
-            )?,
-            flip_first_side: input_checked(document, "wb-feature-fillet-flip-first"),
-            flip_second_side: input_checked(document, "wb-feature-fillet-flip-second"),
-            alternate_arc: input_checked(document, "wb-feature-fillet-alternate-arc"),
-        })
+    fn feature_radius_input(document: &Document) -> Result<Option<f64>, String> {
+        optional_positive_input(document, "wb-feature-fillet-radius", "fillet radius")
     }
 
     fn optional_positive_input(
@@ -2070,12 +2726,12 @@ pub(crate) mod wasm {
                 wb.notice = format!("{} · Escape exits", guidance.message);
             }
             FeatureAuthoringOutcome::NoNativeHit(guidance) => {
-                wb.notice = guidance.message.to_owned();
+                guidance.message.clone_into(&mut wb.notice);
             }
             FeatureAuthoringOutcome::Collecting { pending, guidance } => {
                 wb.feature_candidate = None;
                 wb.feature_pending = pending;
-                wb.notice = guidance.message.to_owned();
+                guidance.message.clone_into(&mut wb.notice);
             }
             FeatureAuthoringOutcome::PreviewRequested {
                 candidate,
@@ -2400,7 +3056,7 @@ pub(crate) mod wasm {
         let accepted_input = source.accepted_prepared_input()?;
         match coordinator.computed_scene_state() {
             ComputedSceneState::Current { expected, snapshot } => {
-                EditorScene::from_accepted_with_computed(
+                let mut scene = EditorScene::from_accepted_with_computed(
                     accepted.identity().revision().get(),
                     coordinator.session().design_identity(),
                     accepted.document(),
@@ -2411,7 +3067,21 @@ pub(crate) mod wasm {
                     wb.camera.viewport(),
                     super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
                 )
-                .ok()
+                .ok()?;
+                let mut action_items = coordinator.editor().selection().to_vec();
+                if let Some(preview) = coordinator.feature_authoring_preview() {
+                    action_items.push(SelectionItem::Feature(preview.metadata().feature));
+                    action_items.sort_unstable();
+                    action_items.dedup();
+                }
+                coordinator
+                    .populate_computed_fillet_affordances(
+                        &mut scene,
+                        &action_items,
+                        super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
+                    )
+                    .ok()?;
+                Some(scene)
             }
             ComputedSceneState::Withheld | ComputedSceneState::Absent => {
                 EditorScene::from_accepted_for_design(
@@ -2433,7 +3103,25 @@ pub(crate) mod wasm {
         }
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one render pass synchronizes the complete retained workbench snapshot"
+    )]
     fn render(document: &Document, workbench: &Rc<RefCell<Workbench>>) -> Result<(), JsValue> {
+        let scene = editor_scene(&workbench.borrow());
+        if let Some(scene) = scene.as_ref() {
+            let mut wb = workbench.borrow_mut();
+            let effects = wb
+                .coordinator
+                .editor_mut()
+                .reconcile_fillet_branch_preview(scene);
+            dispatch_effects(&mut wb, effects);
+        }
+        let fillet_action_stamp = workbench.borrow_mut().fillet_action_render.reconcile(
+            scene
+                .as_ref()
+                .and_then(|scene| scene.computed_input.as_ref()),
+        );
         let wb = workbench.borrow();
         let coordinator = &wb.coordinator;
         required(document, "workbench-root")?.set_attribute(
@@ -2448,12 +3136,17 @@ pub(crate) mod wasm {
                 "none"
             },
         )?;
-        let scene = editor_scene(&wb);
         let source = coordinator
             .visible_preview_session()
             .unwrap_or(coordinator.session());
         let accepted = source.accepted_state();
         let selection = coordinator.editor().selection();
+        let mut canvas_selection = selection.to_vec();
+        if let Some(preview) = coordinator.feature_authoring_preview() {
+            canvas_selection.push(SelectionItem::Feature(preview.metadata().feature));
+            canvas_selection.sort_unstable();
+            canvas_selection.dedup();
+        }
         let mut pending = wb
             .authoring
             .pending()
@@ -2470,16 +3163,19 @@ pub(crate) mod wasm {
         let construction_preview = wb.construction_preview.as_ref();
         let hover = coordinator.editor().hover_state();
         let computed_problems = coordinator.computed_feature_problems();
+        let active_fillet_preview = coordinator.editor().fillet_branch_preview();
         required(document, "wb-viewport")?.set_inner_html(
-            &super::scene::svg_markup_with_computed_context(
+            &super::scene::svg_markup_with_computed_context_and_action_stamp(
                 scene.as_ref(),
                 accepted,
                 &computed_problems,
-                selection,
+                &canvas_selection,
                 &pending,
                 hover,
                 construction_preview,
                 coordinator.current_problem_metadata().as_ref(),
+                active_fillet_preview.as_ref(),
+                fillet_action_stamp,
                 wb.camera.viewport(),
             ),
         );
@@ -2582,16 +3278,12 @@ pub(crate) mod wasm {
             }
         }
         render_action_availability(document, coordinator, &wb.authoring, &wb.feature_authoring)?;
-        render_feature_options(
-            document,
-            coordinator,
-            &wb.feature_authoring,
-            wb.feature_candidate.as_ref(),
-        )?;
+        render_feature_options(document, &wb.feature_authoring)?;
         render_fillet_options_overlay(document, wb.feature_options_open)?;
         render_dimension_target_editor(document, coordinator)?;
         render_branch_editor(document, coordinator)?;
         render_feature_editor(document, coordinator)?;
+        render_fillet_action_panel(document, scene.as_ref(), fillet_action_stamp)?;
         required(document, "workbench-root")?
             .set_attribute("data-editor-adapter", "retained-coordinator")?;
         Ok(())
@@ -2688,11 +3380,10 @@ pub(crate) mod wasm {
         }
         let actions = coordinator.actions();
         let state = |action| {
-            actions
-                .iter()
-                .find(|value| value.action == action)
-                .map(|value| value.state)
-                .unwrap_or(ActionState::Disabled(DisabledReason::WrongOperandKind))
+            actions.iter().find(|value| value.action == action).map_or(
+                ActionState::Disabled(DisabledReason::WrongOperandKind),
+                |value| value.state,
+            )
         };
         for (key, action) in [
             ("undo", CoordinatorActionKind::Undo),
@@ -2754,9 +3445,6 @@ pub(crate) mod wasm {
             "wb-authoring-dimension-mode",
             "wb-authoring-angle-orientation",
             "wb-feature-fillet-radius",
-            "wb-feature-fillet-flip-first",
-            "wb-feature-fillet-flip-second",
-            "wb-feature-fillet-alternate-arc",
         ] {
             set_disabled(&required(document, id)?, false)?;
         }
@@ -2814,52 +3502,10 @@ pub(crate) mod wasm {
 
     fn render_feature_options(
         document: &Document,
-        coordinator: &RetainedEditorCoordinator,
         state: &FeatureAuthoringState,
-        candidate: Option<&FeatureAuthoringCandidate>,
     ) -> Result<(), JsValue> {
         let options = state.options();
-        render_optional_number(document, "wb-feature-fillet-radius", options.fillet_radius)?;
-        let selected_corner = super::selected_feature_authoring_corner_index(coordinator);
-        let displayed_branches = selected_corner
-            .and_then(|index| candidate?.corners().get(index))
-            .map_or(
-                (
-                    options.flip_first_side,
-                    options.flip_second_side,
-                    options.alternate_arc,
-                ),
-                |corner| {
-                    (
-                        corner.options.flip_first_side,
-                        corner.options.flip_second_side,
-                        corner.options.alternate_arc,
-                    )
-                },
-            );
-        for (id, checked) in [
-            ("wb-feature-fillet-flip-first", displayed_branches.0),
-            ("wb-feature-fillet-flip-second", displayed_branches.1),
-            ("wb-feature-fillet-alternate-arc", displayed_branches.2),
-        ] {
-            if let Ok(input) = required(document, id)?.dyn_into::<HtmlInputElement>() {
-                input.set_checked(checked);
-            }
-        }
-        let scope = required(document, "wb-feature-branch-scope")?;
-        if let Some(index) = selected_corner {
-            scope.set_attribute("data-branch-scope", "selected-corner")?;
-            scope.set_text_content(Some(&format!(
-                "Editing branch choices for selected preview corner {} and using them as next-corner defaults. Shared radius edits the whole set.",
-                index + 1
-            )));
-        } else {
-            scope.set_attribute("data-branch-scope", "next-corner")?;
-            scope.set_text_content(Some(
-                "Branch choices set defaults for the next corner. Select a preview arc to edit one completed corner.",
-            ));
-        }
-        Ok(())
+        render_optional_number(document, "wb-feature-fillet-radius", options.fillet_radius)
     }
 
     fn render_feature_editor(
@@ -2900,6 +3546,29 @@ pub(crate) mod wasm {
         Ok(())
     }
 
+    fn render_fillet_action_panel(
+        document: &Document,
+        scene: Option<&EditorScene>,
+        fillet_action_stamp: Option<u64>,
+    ) -> Result<(), JsValue> {
+        let panel = required(document, "wb-fillet-actions-panel")?;
+        let markup = scene.map_or_else(String::new, |scene| {
+            super::scene::fillet_action_panel_markup_with_stamp(scene, fillet_action_stamp)
+        });
+        let actions = required(document, "wb-fillet-actions")?;
+        let fingerprint = super::markup_fingerprint(&markup);
+        if actions.get_attribute("data-markup-fingerprint").as_deref() != Some(&fingerprint) {
+            actions.set_inner_html(&markup);
+            actions.set_attribute("data-markup-fingerprint", &fingerprint)?;
+        }
+        if markup.is_empty() {
+            panel.set_attribute("hidden", "")?;
+        } else {
+            panel.remove_attribute("hidden")?;
+        }
+        Ok(())
+    }
+
     fn render_optional_number(
         document: &Document,
         id: &str,
@@ -2920,6 +3589,11 @@ pub(crate) mod wasm {
         Ok(())
     }
 
+    #[allow(
+        clippy::format_collect,
+        clippy::too_many_lines,
+        reason = "the closed branch DTO catalog is rendered as one auditable HTML fragment"
+    )]
     fn render_branch_editor(
         document: &Document,
         coordinator: &RetainedEditorCoordinator,
@@ -3242,6 +3916,30 @@ pub(crate) mod wasm {
         }
     }
 
+    fn fillet_action_target(
+        scene: &EditorScene,
+        target: &Element,
+        authority: &super::FilletActionRenderAuthority,
+    ) -> Option<SceneFilletActionTarget> {
+        let stamp = target
+            .get_attribute("data-fillet-action-stamp")?
+            .parse::<u64>()
+            .ok()?;
+        if !authority.accepts(stamp, scene.computed_input.as_ref()) {
+            return None;
+        }
+        let owner = ComputedCornerRef {
+            feature: ComputedFeatureId::from_str(&target.get_attribute("data-feature-id")?).ok()?,
+            corner: ComputedFeatureCornerId::from_str(
+                &target.get_attribute("data-feature-corner-id")?,
+            )
+            .ok()?,
+        };
+        let action =
+            super::scene::fillet_action_from_key(&target.get_attribute("data-fillet-action")?)?;
+        scene.fillet_action_target(owner, action)
+    }
+
     fn tool_from_key(key: &str) -> Option<EditorTool> {
         Some(match key {
             "select" => EditorTool::Select,
@@ -3403,13 +4101,6 @@ pub(crate) mod wasm {
         )
     }
 
-    fn input_checked(document: &Document, id: &str) -> bool {
-        document
-            .get_element_by_id(id)
-            .and_then(|element| element.dyn_into::<HtmlInputElement>().ok())
-            .is_some_and(|input| input.checked())
-    }
-
     fn close_sample_selector(document: &Document) {
         if let Ok(selector) = required(document, "wb-sample-selector") {
             let _ = selector.remove_attribute("open");
@@ -3446,17 +4137,20 @@ mod tests {
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
-        CurveDefinition, CurveSpan, DesignPointId, DocumentSolveRequest,
+        CurveDefinition, CurveSpan, DesignPointId, DocumentCurveNormalSide, DocumentSolveRequest,
         RetainedSketchDocumentSession, SketchDocument,
     };
 
     use super::{
-        AuthoringItemInput, CANVAS_BROWSER_DEFAULT_GUARD_EVENTS, FeatureAuthoringRadiusRefresh,
-        OverlayRect, PointerMoveQueue, canvas_overlay_position, change_owns_option_control_click,
-        geometry_hover_selector, observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
-        palette_details_overlay_reflow_listener, refresh_held_feature_authoring_radius,
-        restore_held_feature_authoring_radius, revoke_held_feature_authoring_preview,
-        selected_feature_authoring_corner_index,
+        AuthoringItemInput, CANVAS_BROWSER_DEFAULT_GUARD_EVENTS, CANVAS_PAN_POINTER_EVENTS,
+        CANVAS_POINTER_TERMINAL_EVENTS, CanvasFilletActionRoute, CanvasPanPointerDownRoute,
+        CanvasPointerCaptureKind, CanvasPointerCaptures, CanvasPointerOwnership,
+        CanvasPointerTerminal, CanvasPointerTerminalDisposition, CapturedCanvasPointer,
+        FilletActionRenderAuthority, OverlayRect, PointerMoveQueue, canvas_overlay_position,
+        canvas_pointer_capture_kind, change_owns_option_control_click, geometry_hover_selector,
+        markup_fingerprint, observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
+        palette_details_overlay_reflow_listener, revoke_held_feature_authoring_preview,
+        route_canvas_fillet_action, route_canvas_pan_pointer_down,
     };
 
     #[test]
@@ -3505,6 +4199,199 @@ mod tests {
             assert!(guard.contains(declaration), "missing `{declaration}`");
         }
         assert!(!guard.contains("wb-feature-options"));
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one table qualifies every production capture owner against every terminal route"
+    )]
+    fn canvas_pointer_capture_route_machine_has_exact_terminal_ownership() {
+        use geosolve_constraint_editor::ActivePointerGestureKind;
+
+        assert_eq!(
+            CANVAS_POINTER_TERMINAL_EVENTS,
+            ["pointerup", "pointercancel", "lostpointercapture"]
+        );
+        assert_eq!(
+            CANVAS_PAN_POINTER_EVENTS,
+            ["pointerdown", "pointermove", "pointerup"],
+            "pointercancel has one centralized owner rather than a second pan listener"
+        );
+        assert_eq!(
+            canvas_pointer_capture_kind(ActivePointerGestureKind::Point),
+            CanvasPointerCaptureKind::Point
+        );
+        for fillet_kind in [
+            ActivePointerGestureKind::FilletRadius,
+            ActivePointerGestureKind::FilletContact,
+        ] {
+            assert_eq!(
+                canvas_pointer_capture_kind(fillet_kind),
+                CanvasPointerCaptureKind::Fillet,
+                "radius and higher-priority contact overlap routes share exact Fillet capture"
+            );
+        }
+
+        let terminals = [
+            (
+                CanvasPointerTerminal::PointerUp { pointer_id: 11 },
+                CanvasPointerTerminalDisposition::Complete,
+                true,
+            ),
+            (
+                CanvasPointerTerminal::PointerCancel { pointer_id: 11 },
+                CanvasPointerTerminalDisposition::Cancel,
+                true,
+            ),
+            (
+                CanvasPointerTerminal::LostPointerCapture { pointer_id: 11 },
+                CanvasPointerTerminalDisposition::Cancel,
+                false,
+            ),
+            (
+                CanvasPointerTerminal::InteractionCancel,
+                CanvasPointerTerminalDisposition::Cancel,
+                true,
+            ),
+            (
+                CanvasPointerTerminal::CameraCancel,
+                CanvasPointerTerminalDisposition::Cancel,
+                true,
+            ),
+        ];
+        for kind in [
+            CanvasPointerCaptureKind::Point,
+            CanvasPointerCaptureKind::Fillet,
+            CanvasPointerCaptureKind::Pan,
+        ] {
+            for (terminal, disposition, release_platform_capture) in terminals {
+                let captured = CapturedCanvasPointer {
+                    pointer_id: 11,
+                    kind,
+                };
+                let mut route_machine = CanvasPointerCaptures::default();
+                assert_eq!(
+                    route_machine.ownership(11),
+                    CanvasPointerOwnership::Uncaptured,
+                    "uncaptured pointercancel remains available to cancel editor drafts"
+                );
+                assert!(route_machine.begin(captured));
+                assert_eq!(route_machine.ownership(11), CanvasPointerOwnership::Owned);
+                assert_eq!(route_machine.ownership(12), CanvasPointerOwnership::Foreign);
+                assert!(
+                    !route_machine.begin(CapturedCanvasPointer {
+                        pointer_id: 12,
+                        kind,
+                    }),
+                    "a foreign pointer cannot steal {kind:?} capture"
+                );
+                assert_eq!(
+                    route_machine
+                        .route_terminal(CanvasPointerTerminal::PointerCancel { pointer_id: 12 }),
+                    None,
+                    "a foreign terminal cannot release {kind:?} capture"
+                );
+                assert!(route_machine.contains(11));
+
+                let route = route_machine
+                    .route_terminal(terminal)
+                    .expect("the owning terminal must route exactly once");
+                assert_eq!(route.captured, captured);
+                assert_eq!(route.disposition, disposition);
+                assert_eq!(
+                    route.release_platform_capture, release_platform_capture,
+                    "lostpointercapture is already released by the browser"
+                );
+                assert!(route_machine.is_empty(), "{kind:?} capture must not strand");
+                assert_eq!(
+                    route_machine.route_terminal(terminal),
+                    None,
+                    "a repeated terminal cannot release {kind:?} twice"
+                );
+            }
+        }
+
+        let mut captures = CanvasPointerCaptures::default();
+        assert!(!captures.begin(CapturedCanvasPointer {
+            pointer_id: -1,
+            kind: CanvasPointerCaptureKind::Point,
+        }));
+    }
+
+    #[test]
+    fn canvas_fillet_action_emphasis_requires_headless_preview_routing() {
+        let css = include_str!("../../styles.css");
+        assert!(css.contains(".wb-fillet-action.previewed .wb-fillet-action-control circle"));
+        for browser_owned_selector in [".wb-fillet-action:hover", ".wb-fillet-action:focus"] {
+            assert!(
+                !css.contains(browser_owned_selector),
+                "{browser_owned_selector} would disagree with headless overlap priority"
+            );
+        }
+    }
+
+    #[test]
+    fn canvas_pan_pointer_down_preserves_every_existing_capture() {
+        let empty = CanvasPointerCaptures::default();
+        assert_eq!(
+            route_canvas_pan_pointer_down(&empty),
+            CanvasPanPointerDownRoute::BeginPan
+        );
+
+        for kind in [
+            CanvasPointerCaptureKind::Point,
+            CanvasPointerCaptureKind::Fillet,
+            CanvasPointerCaptureKind::Pan,
+        ] {
+            let mut route_machine = CanvasPointerCaptures::default();
+            assert!(route_machine.begin(CapturedCanvasPointer {
+                pointer_id: 11,
+                kind,
+            }));
+            assert_eq!(
+                route_canvas_pan_pointer_down(&route_machine),
+                CanvasPanPointerDownRoute::PreserveCapturedInteraction,
+                "foreign middle-button pointerdown must not steal {kind:?} capture"
+            );
+            assert!(route_machine.contains(11));
+            assert_eq!(route_machine.ownership(12), CanvasPointerOwnership::Foreign);
+        }
+    }
+
+    #[test]
+    fn fillet_local_action_dom_keys_round_trip_semantic_normal_sides() {
+        use geosolve_constraint_editor::SceneFilletActionId;
+
+        for first in [
+            DocumentCurveNormalSide::Left,
+            DocumentCurveNormalSide::Right,
+        ] {
+            for second in [
+                DocumentCurveNormalSide::Left,
+                DocumentCurveNormalSide::Right,
+            ] {
+                let action = SceneFilletActionId::LocalAlternative { first, second };
+                let key = super::scene::fillet_action_key(action);
+                assert_eq!(super::scene::fillet_action_from_key(&key), Some(action));
+                assert!(key.contains(if first == DocumentCurveNormalSide::Left {
+                    "left"
+                } else {
+                    "right"
+                }));
+            }
+        }
+        assert_eq!(
+            super::scene::fillet_action_from_key("local-alternative-0"),
+            None,
+            "DOM identity must not regress to visible-list ordinals"
+        );
+    }
+
+    #[test]
+    fn fillet_panel_markup_fingerprint_is_stable_and_content_sensitive() {
+        assert_eq!(markup_fingerprint("same"), markup_fingerprint("same"));
+        assert_ne!(markup_fingerprint("same"), markup_fingerprint("different"));
     }
 
     fn grouped_fillet_fixture() -> (
@@ -3615,6 +4502,61 @@ mod tests {
         assert_ne!(next_frame, stale_frame);
         assert_eq!(queue.take_for_frame(stale_frame), None);
         assert_eq!(queue.take_for_frame(next_frame), Some(input(5.0)));
+
+        let stale_before_action = queue.push(input(6.0)).unwrap();
+        assert_eq!(queue.push(input(6.5)), None);
+        queue.invalidate_before_immediate_action();
+        assert_eq!(queue.take_for_frame(stale_before_action), None);
+        let after_action = queue.push(input(7.0)).unwrap();
+        assert_ne!(after_action, stale_before_action);
+        assert_eq!(queue.take_for_frame(after_action), Some(input(7.0)));
+    }
+
+    #[test]
+    fn fillet_action_render_authority_rejects_stale_dom_stamps_and_inputs() {
+        let (mut coordinator, _, points) = grouped_fillet_fixture();
+        let mut state = FeatureAuthoringState::default();
+        let (_, first) =
+            prepare_grouped_fillet(&mut coordinator, &mut state, [points[1], points[2]]);
+        let mut authority = FilletActionRenderAuthority::default();
+        let first_stamp = authority
+            .reconcile(Some(&first.input))
+            .expect("first exact action render stamp");
+        assert_eq!(authority.reconcile(Some(&first.input)), Some(first_stamp));
+        assert!(authority.accepts(first_stamp, Some(&first.input)));
+
+        let snapshot = coordinator
+            .feature_authoring_snapshot()
+            .expect("current authoring snapshot");
+        let FeatureAuthoringOutcome::PreviewRequested {
+            candidate: changed, ..
+        } = state.set_options(
+            &snapshot,
+            FeatureAuthoringOptions {
+                fillet_radius: Some(0.7),
+                ..state.options()
+            },
+        )
+        else {
+            panic!("radius change should refresh the complete Fillet batch");
+        };
+        let second = coordinator
+            .refresh_feature_authoring_preview(first.input, &changed)
+            .expect("new exact computed input");
+        assert_ne!(second.input, first.input);
+        assert!(
+            !authority.accepts(first_stamp, Some(&second.input)),
+            "a changed scene must not be upgraded through the old DOM stamp"
+        );
+        let second_stamp = authority
+            .reconcile(Some(&second.input))
+            .expect("replacement exact action render stamp");
+        assert_ne!(second_stamp, first_stamp);
+        assert!(!authority.accepts(first_stamp, Some(&first.input)));
+        assert!(authority.accepts(second_stamp, Some(&second.input)));
+
+        assert_eq!(authority.reconcile(None), None);
+        assert!(!authority.accepts(second_stamp, Some(&second.input)));
     }
 
     #[test]
@@ -4084,6 +5026,10 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one presentation fixture proves exact-preview, shared-owner and accessible action rendering together"
+    )]
     fn grouped_preview_renders_both_corner_arcs_with_feature_provenance() {
         let (mut coordinator, _, points) = grouped_fillet_fixture();
         let mut state = FeatureAuthoringState::default();
@@ -4097,7 +5043,7 @@ mod tests {
             .accepted_state_for_current_input()
             .expect("accepted source");
         let viewport = Viewport::new([1000.0, 700.0], [3.0, 1.5], 80.0).expect("viewport");
-        let scene = geosolve_constraint_editor::EditorScene::from_accepted_with_computed(
+        let mut scene = geosolve_constraint_editor::EditorScene::from_accepted_with_computed(
             accepted.identity().revision().get(),
             coordinator.session().design_identity(),
             accepted.document(),
@@ -4114,6 +5060,14 @@ mod tests {
         .expect("exact grouped preview scene");
         assert_eq!(scene.computed_curves.len(), 2);
         let selected = SelectionItem::FeatureCorner(scene.computed_curves[0].owner);
+        coordinator
+            .populate_computed_fillet_affordances(
+                &mut scene,
+                &[SelectionItem::Feature(metadata.feature)],
+                0.8,
+            )
+            .expect("grouped Fillet affordances");
+        assert_eq!(scene.fillet_affordances.len(), 2);
         let markup = super::scene::svg_markup_with_context(
             Some(&scene),
             Some(accepted),
@@ -4127,16 +5081,163 @@ mod tests {
         assert_eq!(markup.matches("class=\"wb-computed-item").count(), 2);
         assert_eq!(
             markup
-                .matches("class=\"wb-computed-item selected\"")
+                .matches("class=\"wb-computed-item selected shared-radius-affected\"")
                 .count(),
             1
         );
-        assert_eq!(
-            markup
-                .matches(&format!("data-feature-id=\"{}\"", metadata.feature))
-                .count(),
-            2
+        assert_eq!(markup.matches("shared-radius-affected").count(), 2);
+        assert!(
+            !markup.contains("wb-fillet-alternative-ghost"),
+            "unpreviewed alternatives must not be painted as CSS-owned ghosts"
         );
+        let preview_action = scene
+            .fillet_affordances
+            .iter()
+            .flat_map(|affordances| &affordances.actions)
+            .find(|action| {
+                action.dashed_alternative_arc.is_some()
+                    && matches!(
+                        action.availability,
+                        geosolve_constraint_editor::SceneFilletActionAvailability::Applicable
+                    )
+            })
+            .expect("applicable branch alternative");
+        let target = scene
+            .fillet_action_target(preview_action.owner, preview_action.id)
+            .expect("exact semantic action target");
+        let (canvas_target, action_position) = scene
+            .fillet_affordances
+            .iter()
+            .flat_map(|affordances| &affordances.actions)
+            .filter(|action| {
+                matches!(
+                    action.availability,
+                    geosolve_constraint_editor::SceneFilletActionAvailability::Applicable
+                )
+            })
+            .find_map(|action| {
+                let canvas_target = scene.fillet_action_target(action.owner, action.id)?;
+                let mut positions = Vec::new();
+                if let Some(control) = action.control_geometry {
+                    positions.push(control.screen_end);
+                    positions.push(geosolve_constraint_editor::ScreenPoint {
+                        x: (control.screen_start.x + control.screen_end.x) * 0.5,
+                        y: (control.screen_start.y + control.screen_end.y) * 0.5,
+                    });
+                }
+                if let Some(geometry) = &action.dashed_alternative_arc {
+                    positions.extend(geometry.screen_polyline.iter().copied());
+                }
+                positions
+                    .into_iter()
+                    .find(|position| {
+                        route_canvas_fillet_action(&scene, *position, Some(&canvas_target))
+                            == CanvasFilletActionRoute::Action
+                    })
+                    .map(|position| (canvas_target, position))
+            })
+            .expect("unoccluded branch action hit point");
+        assert_eq!(
+            route_canvas_fillet_action(&scene, action_position, Some(&canvas_target)),
+            CanvasFilletActionRoute::Action
+        );
+        assert_eq!(
+            route_canvas_fillet_action(&scene, action_position, None),
+            CanvasFilletActionRoute::HeadlessPointer,
+            "an invalid DOM stamp must not be upgraded from current geometry"
+        );
+        let direct = scene
+            .fillet_affordances
+            .iter()
+            .find(|affordances| affordances.owner == canvas_target.owner)
+            .expect("selected corner affordances");
+        for crowded in [
+            direct.contacts[0].screen_position,
+            direct.radius_rail.screen_grip,
+        ] {
+            assert_eq!(
+                route_canvas_fillet_action(&scene, crowded, Some(&canvas_target)),
+                CanvasFilletActionRoute::HeadlessPointer,
+                "contact/radius priority must fall through to the ordinary editor route"
+            );
+        }
+        let action_stamp = 73;
+        let preview_markup = super::scene::svg_markup_with_computed_context_and_action_stamp(
+            Some(&scene),
+            Some(accepted),
+            &[],
+            &[selected],
+            &[],
+            EditorHoverState::default(),
+            None,
+            None,
+            Some(&target),
+            Some(action_stamp),
+            viewport,
+        );
+        assert_eq!(
+            preview_markup
+                .matches("class=\"wb-fillet-alternative-ghost\"")
+                .count(),
+            1,
+            "only the editor's exact active preview may paint a ghost"
+        );
+        assert!(preview_markup.contains("wb-fillet-action previewed"));
+        assert!(preview_markup.contains(&format!("data-fillet-action-stamp=\"{action_stamp}\"")));
+        let panel = super::scene::fillet_action_panel_markup_with_stamp(&scene, Some(action_stamp));
+        assert!(panel.contains("data-fillet-action-input=\"accessible\""));
+        assert!(panel.contains(&format!("data-fillet-action-stamp=\"{action_stamp}\"")));
+        assert!(panel.contains(&format!(
+            "data-fillet-action=\"{}\"",
+            super::scene::fillet_action_key(target.action)
+        )));
+        let mut second_only = scene.clone();
+        let second_owner = second_only.fillet_affordances[1].owner;
+        second_only
+            .fillet_affordances
+            .retain(|affordances| affordances.owner == second_owner);
+        let disabled_action = second_only.fillet_affordances[0]
+            .actions
+            .first_mut()
+            .expect("second corner action");
+        disabled_action.availability =
+            geosolve_constraint_editor::SceneFilletActionAvailability::Disabled {
+                reason: "Retained <root> & rail unavailable".into(),
+            };
+        let disabled_key = super::scene::fillet_action_key(disabled_action.id);
+        let reason_id = format!(
+            "wb-fillet-action-reason-{}-{}-{disabled_key}",
+            second_owner.feature, second_owner.corner,
+        );
+        let second_panel = super::scene::fillet_action_panel_markup(&second_only);
+        assert!(second_panel.contains(&format!(
+            "aria-label=\"Fillet corner {} actions\"",
+            second_owner.corner,
+        )));
+        assert!(second_panel.contains(&format!(
+            "<strong>Fillet corner {}</strong>",
+            second_owner.corner,
+        )));
+        assert!(second_panel.contains(&format!("aria-describedby=\"{reason_id}\"")));
+        assert!(second_panel.contains(&format!(
+            "<small id=\"{reason_id}\" class=\"wb-fillet-action-reason\">Unavailable: Retained &lt;root&gt; &amp; rail unavailable</small>"
+        )));
+        assert!(
+            !second_panel.contains("<strong>Corner 1</strong>"),
+            "a filtered second corner must not be relabelled as the first persisted corner"
+        );
+        let retained = scene
+            .fillet_affordances
+            .iter()
+            .flat_map(|affordances| &affordances.actions)
+            .find_map(|action| action.control_geometry)
+            .expect("retained-direction control geometry");
+        assert!(preview_markup.contains(&format!(
+            "L{:.3} {:.3}",
+            retained.screen_end.x, retained.screen_end.y
+        )));
+        assert!(markup.contains(&format!("data-feature-id=\"{}\"", metadata.feature)));
+        assert_eq!(markup.matches("data-computed-edge=").count(), 2);
         assert!(markup.contains("data-scene-provenance=\"accepted\""));
         assert!(markup.contains(&format!(
             "data-accepted-revision=\"{}\"",
@@ -4205,259 +5306,5 @@ mod tests {
             .expect("native source remains authorable at the computed contact");
         assert_eq!(hit.item, SelectionItem::Curve(source));
         assert!(matches!(hit.item, SelectionItem::Curve(_)));
-    }
-
-    #[test]
-    fn authoring_radius_drag_accepts_multiple_samples_from_one_origin() {
-        let (mut coordinator, _, points) = grouped_fillet_fixture();
-        let mut state = FeatureAuthoringState::default();
-        let (candidate, metadata) =
-            prepare_grouped_fillet(&mut coordinator, &mut state, [points[1], points[2]]);
-        let mut held_candidate = Some(candidate);
-        let initial_token = metadata.token;
-
-        assert_eq!(
-            refresh_held_feature_authoring_radius(
-                &mut coordinator,
-                &mut state,
-                &mut held_candidate,
-                &metadata.input,
-                metadata.feature,
-                0.6,
-            ),
-            FeatureAuthoringRadiusRefresh::Refreshed {
-                completed_corners: 2
-            }
-        );
-        let first_token = coordinator
-            .feature_authoring_preview()
-            .expect("first refreshed preview")
-            .metadata()
-            .token;
-        assert_ne!(first_token, initial_token);
-        assert_eq!(
-            refresh_held_feature_authoring_radius(
-                &mut coordinator,
-                &mut state,
-                &mut held_candidate,
-                &metadata.input,
-                metadata.feature,
-                0.7,
-            ),
-            FeatureAuthoringRadiusRefresh::Refreshed {
-                completed_corners: 2
-            }
-        );
-        let latest = coordinator
-            .feature_authoring_preview()
-            .expect("second refreshed preview");
-        assert_ne!(latest.metadata().token, first_token);
-        assert_eq!(
-            held_candidate
-                .as_ref()
-                .map(FeatureAuthoringCandidate::radius),
-            Some(0.7)
-        );
-        coordinator
-            .apply_feature_authoring_preview(
-                latest.metadata().token,
-                held_candidate.as_ref().expect("latest candidate"),
-            )
-            .expect("Apply consumes the exact last drag sample");
-    }
-
-    #[test]
-    fn rejected_authoring_radius_sample_retains_last_valid_preview_and_recovers() {
-        let (mut coordinator, _, points) = grouped_fillet_fixture();
-        let mut state = FeatureAuthoringState::default();
-        let (candidate, metadata) =
-            prepare_grouped_fillet(&mut coordinator, &mut state, [points[1], points[2]]);
-        let mut held_candidate = Some(candidate);
-        assert!(matches!(
-            refresh_held_feature_authoring_radius(
-                &mut coordinator,
-                &mut state,
-                &mut held_candidate,
-                &metadata.input,
-                metadata.feature,
-                0.6,
-            ),
-            FeatureAuthoringRadiusRefresh::Refreshed { .. }
-        ));
-        let valid_state = state.clone();
-        let valid_candidate = held_candidate.clone();
-        let valid_token = coordinator
-            .feature_authoring_preview()
-            .expect("last valid preview")
-            .metadata()
-            .token;
-
-        assert!(matches!(
-            refresh_held_feature_authoring_radius(
-                &mut coordinator,
-                &mut state,
-                &mut held_candidate,
-                &metadata.input,
-                metadata.feature,
-                f64::NAN,
-            ),
-            FeatureAuthoringRadiusRefresh::Rejected(_)
-        ));
-        assert_eq!(state, valid_state);
-        assert_eq!(held_candidate, valid_candidate);
-        assert_eq!(
-            coordinator
-                .feature_authoring_preview()
-                .expect("invalid sample retains preview")
-                .metadata()
-                .token,
-            valid_token
-        );
-
-        assert!(matches!(
-            refresh_held_feature_authoring_radius(
-                &mut coordinator,
-                &mut state,
-                &mut held_candidate,
-                &metadata.input,
-                metadata.feature,
-                0.65,
-            ),
-            FeatureAuthoringRadiusRefresh::Refreshed { .. }
-        ));
-        assert_eq!(
-            held_candidate
-                .as_ref()
-                .map(FeatureAuthoringCandidate::radius),
-            Some(0.65)
-        );
-        assert_ne!(
-            coordinator
-                .feature_authoring_preview()
-                .expect("recovered preview")
-                .metadata()
-                .token,
-            valid_token
-        );
-    }
-
-    #[test]
-    fn cancelled_authoring_radius_drag_restores_exact_pointer_down_state() {
-        let (mut coordinator, _, points) = grouped_fillet_fixture();
-        let mut state = FeatureAuthoringState::default();
-        let (candidate, metadata) =
-            prepare_grouped_fillet(&mut coordinator, &mut state, [points[1], points[2]]);
-        let origin_state = state.clone();
-        let origin_candidate = candidate.clone();
-        let mut held_candidate = Some(candidate);
-
-        assert!(matches!(
-            refresh_held_feature_authoring_radius(
-                &mut coordinator,
-                &mut state,
-                &mut held_candidate,
-                &metadata.input,
-                metadata.feature,
-                0.7,
-            ),
-            FeatureAuthoringRadiusRefresh::Refreshed { .. }
-        ));
-        assert_ne!(
-            coordinator
-                .feature_authoring_preview()
-                .expect("moved preview")
-                .metadata()
-                .token,
-            metadata.token
-        );
-
-        assert_eq!(
-            restore_held_feature_authoring_radius(
-                &mut coordinator,
-                &mut state,
-                &mut held_candidate,
-                &metadata.input,
-                metadata.feature,
-                0.5,
-            ),
-            FeatureAuthoringRadiusRefresh::Refreshed {
-                completed_corners: 2
-            }
-        );
-        assert_eq!(state, origin_state);
-        assert_eq!(held_candidate, Some(origin_candidate.clone()));
-        let restored = coordinator
-            .feature_authoring_preview()
-            .expect("exact pointer-down preview restored");
-        assert_eq!(restored.metadata(), &metadata);
-        assert_eq!(restored.candidate(), &origin_candidate);
-    }
-
-    #[test]
-    fn branch_controls_edit_selected_preview_corner_and_explicit_next_defaults() {
-        let (mut coordinator, _, points) = grouped_fillet_fixture();
-        let mut state = FeatureAuthoringState::default();
-        let (_, _) = prepare_grouped_fillet(&mut coordinator, &mut state, [points[1], points[2]]);
-        let second = coordinator
-            .feature_authoring_preview()
-            .expect("grouped preview")
-            .corner_bindings()[1];
-        coordinator
-            .editor_mut()
-            .set_selection([SelectionItem::FeatureCorner(second.owner)]);
-        assert_eq!(
-            selected_feature_authoring_corner_index(&coordinator),
-            Some(1)
-        );
-
-        let snapshot = coordinator
-            .feature_authoring_snapshot()
-            .expect("current authoring snapshot");
-        let edited = state.set_options_with_corner(
-            &snapshot,
-            FeatureAuthoringOptions {
-                fillet_radius: Some(0.5),
-                flip_first_side: false,
-                flip_second_side: false,
-                alternate_arc: true,
-            },
-            Some(1),
-        );
-        let FeatureAuthoringOutcome::PreviewRequested {
-            candidate: edited, ..
-        } = edited
-        else {
-            panic!("selected-corner branch edit should rebuild the grouped candidate");
-        };
-        assert_eq!(edited.corners().len(), 2);
-        assert!(!edited.corners()[0].options.flip_first_side);
-        assert!(!edited.corners()[0].options.alternate_arc);
-        assert!(edited.corners()[1].options.alternate_arc);
-        assert!(
-            state.options().alternate_arc,
-            "the selected-corner scope explicitly also establishes defaults for future picks"
-        );
-
-        coordinator.editor_mut().set_selection([]);
-        assert_eq!(selected_feature_authoring_corner_index(&coordinator), None);
-        let defaults = state.set_options_with_corner(
-            &snapshot,
-            FeatureAuthoringOptions {
-                fillet_radius: Some(0.5),
-                flip_first_side: false,
-                flip_second_side: true,
-                alternate_arc: false,
-            },
-            None,
-        );
-        let FeatureAuthoringOutcome::PreviewRequested {
-            candidate: defaults,
-            ..
-        } = defaults
-        else {
-            panic!("next-corner defaults should retain the existing preview");
-        };
-        assert!(state.options().flip_second_side);
-        assert!(defaults.corners()[1].options.alternate_arc);
     }
 }

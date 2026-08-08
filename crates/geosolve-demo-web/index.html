@@ -114,10 +114,7 @@
         <div id="wb-feature-options-overlay" class="wb-feature-options wb-canvas-feature-options" role="dialog" aria-label="Fillet options" hidden>
           <div class="wb-feature-options-title"><strong>Fillet options</strong><button type="button" data-wb-action="fillet-options-close" aria-label="Close Fillet options">×</button></div>
           <label>Shared radius<input id="wb-feature-fillet-radius" type="number" min="0" step="any" /></label>
-          <label class="wb-option-check"><input id="wb-feature-fillet-flip-first" type="checkbox" /> Flip first side</label>
-          <label class="wb-option-check"><input id="wb-feature-fillet-flip-second" type="checkbox" /> Flip second side</label>
-          <label class="wb-option-check"><input id="wb-feature-fillet-alternate-arc" type="checkbox" /> Alternate arc</label>
-          <p id="wb-feature-branch-scope" class="wb-feature-help">Branch choices set defaults for the next corner. Select a preview arc to edit one completed corner.</p>
+          <p class="wb-feature-help">Select a preview arc to use its explicit retained-direction and local-alternative controls on the canvas or in the Inspector.</p>
           <p class="wb-feature-help">Pick one or more corners, then Apply. Every corner in this batch shares the radius.</p>
         </div>
         <div id="wb-draft-guide" class="wb-draft-guide" hidden>
@@ -191,6 +188,11 @@
           <button type="button" data-wb-action="feature-radius">Update shared radius</button>
           <button id="wb-feature-suppression" type="button" data-wb-action="feature-suppression">Suppress feature</button>
           <p>Generated arcs remain outside the sketch constraint graph. Drag an arc to resize the complete set.</p>
+        </section>
+        <section id="wb-fillet-actions-panel" class="wb-inspector-section wb-fillet-actions-panel" aria-label="Fillet branch actions" hidden>
+          <span class="wb-field-label">Fillet branch actions</span>
+          <div id="wb-fillet-actions" class="wb-fillet-actions"></div>
+          <p>These actions preview and commit the same headless absolute branch choices shown on the canvas.</p>
         </section>
         <p class="wb-inspector-note">Constraint glyphs and dimensions are persistent selectable objects. Values and equations come from the sketch domain.</p>
       </aside>
