@@ -2,15 +2,16 @@
 
 # M68 focused UAT — Fillet direct manipulation
 
-Status: not started. Implementation and focused direct qualification are complete. Do not run or
-approve this scorecard until the complete clean release gate passes and a frozen candidate is
-nominated.
+Status: ready for supervising-human UAT. Implementation, focused direct qualification and the
+complete clean release gate pass. M68 remains open until this scorecard receives explicit human
+approval.
 
-Candidate source: pending
+Candidate source: `b01e583`
 
-Tailscale endpoint: pending
+Tailscale endpoint: `http://100.94.63.83:8080/`
 
-Release distribution manifest: pending
+Release distribution manifest:
+`36447a722f4ffd83a6e18530a9cc783efc72ba7be90680f6878d015d9d6cb81a`
 
 Use only the ordinary GeoSolve Sketch Workbench. Direct Rust tests are the correctness authority;
 this scorecard assesses discoverability, continuity and interaction feel. It does not qualify an

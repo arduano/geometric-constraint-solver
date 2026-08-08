@@ -3211,8 +3211,8 @@ UAT approval. That approval is recorded above and M67 is closed.
 
 ### M68
 
-Status: active. Implementation and focused direct qualification are complete; the clean full
-release gate, frozen candidate publication and human UAT remain pending.
+Status: active. Implementation, focused direct qualification and the clean full release gate are
+complete on frozen candidate `b01e583`; explicit supervising-human UAT remains pending.
 
 Goal: close accepted limitation `M66-KL001` with a CAD-like, branch-preserving direct-
 manipulation model for ordinary computed Fillets, while establishing only the shared canvas
@@ -3256,7 +3256,7 @@ explicit branch action; pointer motion and numeric editing never auto-switch roo
   authoring/published/numeric parity, history/reload and a bounded transition model proving no
   unaccepted preview can publish or survive cancellation. Keep `M66-PF001`-`M66-PF004` green and
   prove native sketch identity, coordinates, residuals, rank and DOF never change.
-- [ ] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature
+- [x] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature
   WASM, rustdoc, benchmark/licence/package checks, release Trunk build, static single-workbench
   inventory and Git hygiene on one nominated source.
 - [ ] Publish that release candidate through Tailscale and receive explicit supervising-human
@@ -3270,8 +3270,16 @@ model and its stale/invalid/foreign-pointer hardening. Focused Nix qualification
 feature tests, 168 editor unit tests, 46 editor integration tests and 68 demo-web tests, with
 formatting, strict native/WASM Clippy and warnings-denied WASM checking. The bounded coordinator
 reference model enumerates 28 reachable states and all 240 applicable state/event transitions,
-including same-position retry and terminal-coordinate validation. The complete clean release gate
-and explicit human UAT remain deliberately unchecked.
+including same-position retry and terminal-coordinate validation.
+
+Mechanical qualification record (2026-08-09): the complete clean
+`nix-shell shell.nix --run './scripts/release-gate.sh'` passes from source `b01e583`, including
+formatting, warnings-denied workspace Clippy, locked all-feature tests, all-feature WASM, rustdoc,
+benchmarks, licence/package checks, the static single-workbench inventory, Git hygiene and release
+Trunk. The release-only 256-moving-body spatial sparse-crossover regression passes in `137.41s`.
+The frozen `crates/geosolve-demo-web/dist/*` aggregate SHA-256 manifest is
+`36447a722f4ffd83a6e18530a9cc783efc72ba7be90680f6878d015d9d6cb81a`. Only explicit human
+approval of the frozen Tailscale candidate remains unchecked.
 
 Gate: radius, contact, retention and local-branch manipulation are branch-explicit, independently
 validated and transactional at the headless boundary. Only an exact last-`Current` candidate may

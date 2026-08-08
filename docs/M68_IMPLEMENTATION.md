@@ -2,8 +2,9 @@
 
 # M68 implementation — headless Fillet direct manipulation
 
-Status: implementation and focused direct qualification complete. The clean full release gate,
-frozen candidate publication and human UAT remain pending; M68 is not yet accepted.
+Status: implementation, focused direct qualification and the clean full release gate are complete
+on frozen candidate `b01e583`. Explicit supervising-human UAT remains pending; M68 is not yet
+accepted.
 
 ## 1. Files and APIs
 
@@ -104,9 +105,27 @@ terminal-coordinate matching, stale acknowledgements, foreign pointers and cance
 audit verified exact-once release ownership, outside-canvas terminal delivery, non-stealing pan,
 and camera/workspace cancellation ordering.
 
-The complete clean `scripts/release-gate.sh`, nominated source commit, release distribution
-manifest and Tailscale endpoint are intentionally still pending and will be recorded only after
-that gate actually runs from a clean commit.
+The complete clean gate then passed from source `b01e583`:
+
+```text
+nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+The command exited successfully after formatting, warnings-denied workspace Clippy, locked
+all-feature tests, all-feature WASM, rustdoc, benchmark, licence/package, static single-workbench,
+Git-hygiene and release Trunk checks. The release-only 256-moving-body spatial sparse-crossover
+regression passed in `137.41s`. Cargo's repeated `license` plus `license-file` advisory is
+pre-existing and non-blocking; the explicit licence gate passed.
+
+The frozen release distribution is identified by:
+
+```text
+sha256sum crates/geosolve-demo-web/dist/* | sha256sum
+36447a722f4ffd83a6e18530a9cc783efc72ba7be90680f6878d015d9d6cb81a  -
+```
+
+The focused candidate is served from that exact distribution at
+`http://100.94.63.83:8080/` for `docs/M68_UAT.md`.
 
 ## 4. Acceptance criteria
 
@@ -131,17 +150,15 @@ of at most five events. It compares exact durable feature JSON/radius/stable IDs
 and cursor, held preview revision, active pointer ownership and native sketch coordinates,
 residual/rank/DOF invariants after every transition.
 
-The remaining objective gate is the clean workspace-wide release command, including rustdoc,
-benchmarks, licence/package checks, static single-workbench inventory and release Trunk output.
-After it passes, `docs/M68_UAT.md` still requires explicit supervising-human approval over the
-frozen build served through Tailscale. M68 remains open until that approval is recorded.
+The complete objective mechanical gate now passes. `docs/M68_UAT.md` still requires explicit
+supervising-human approval over the frozen build served through Tailscale. M68 remains open until
+that approval is recorded.
 
 ## 5. Known limitations or next blocker
 
-The next blocker is qualification/publication rather than implementation: run the complete release
-gate from the clean milestone-record commit, freeze and hash its Trunk distribution, then perform
-the focused human UAT. This is a scoped active milestone, not a completion record. M68
-intentionally excludes Offset/Mirror authoring, two-non-affine-parent
+The sole remaining blocker is focused human UAT of the frozen candidate. This is a scoped active
+milestone, not a completion record. M68 intentionally excludes Offset/Mirror authoring,
+two-non-affine-parent
 Fillets, computed-on-computed chaining, Bake/Explode, profile/topology consumption,
 cross-revision topological naming, computed arcs as constraint operands, schema changes, global
 root enumeration, browser E2E, mobile and legacy UI.
