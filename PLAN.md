@@ -3158,8 +3158,8 @@ recorded above.
 
 ### M67
 
-Status: in progress; implementation and direct qualification are assigned, with supervising-human
-UAT required before closure.
+Status: mechanically qualified on candidate `3d52b29`; supervising-human UAT is required before
+closure.
 
 Goal: remove obsolete developer presentation, frozen qualification harnesses and demonstrably
 unused implementation without weakening direct domain ownership, accepted-state validation,
@@ -3171,25 +3171,25 @@ cards from the sole workbench—Production topology, Host-state evidence and Acc
 redundancy—plus residual tombstones and orphan styling. The reusable topology, lifecycle,
 redundancy, diagnostic and audit APIs remain domain-owned and directly tested.
 
-- [ ] Remove the three named developer inspector cards, their render-only markup/tests/styles and
+- [x] Remove the three named developer inspector cards, their render-only markup/tests/styles and
   the demo-web topology dependency that becomes unused, while preserving Problems, canvas error
   attribution, authoring, Samples, persistence and computed-Fillet interaction.
-- [ ] Remove obsolete negative HTML/CSS substring assertions and the misleading hash brand link;
+- [x] Remove obsolete negative HTML/CSS substring assertions and the misleading hash brand link;
   retain positive typed action, editable-sample, event-boundary and overlay-layout regressions.
-- [ ] Classify all fourteen frozen M40 transition cases, give every retained executed semantic a
+- [x] Classify all fourteen frozen M40 transition cases, give every retained executed semantic a
   current direct editor/coordinator/sketch test owner, and explicitly retire nonexecuted delivery
   labels and the checksum/schedule format; then delete the production qualification runner,
   browser-evidence matrix, JSON corpus/golden report and doc-hidden evidence exports.
-- [ ] Remove the unused generic local-AD prototype and normalized-tangent fused-Jacobian branch,
+- [x] Remove the unused generic local-AD prototype and normalized-tangent fused-Jacobian branch,
   retaining live Pose2/Pose3 local-difference AD and finite-difference qualification. Remove the
   two unused sketch persistent-ID helpers and consolidate the duplicate core-default test.
-- [ ] Rename the two actively owned M49 regression files by capability, correct active
+- [x] Rename the two actively owned M49 regression files by capability, correct active
   playground-only prose, align the stale M32 supporting-offset timing witness with its current
   direct behavior owner and remove only the release-gate commands already executed identically by
   the full workspace test.
-- [ ] Mark stale M53/M60-M65 endpoint and selector instructions as historical/superseded, preserve
+- [x] Mark stale M53/M60-M65 endpoint and selector instructions as historical/superseded, preserve
   accepted milestone/ADR history, and record the unreleased M40 evidence-API removal.
-- [ ] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, forced dead-code
+- [x] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, forced dead-code
   review, all-feature WASM check, rustdoc, benchmark compilation, licence/package checks, release
   Trunk build, static single-workbench inventory and Git hygiene on one nominated source.
 - [ ] Complete and explicitly approve `docs/M67_UAT.md` over the release Tailscale candidate.

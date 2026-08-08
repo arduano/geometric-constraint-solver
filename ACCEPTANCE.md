@@ -1100,7 +1100,8 @@ change, global root enumeration, browser E2E, `/#/dev/lab` and mobile behavior.
 
 ## M67 acceptance: legacy surface and harness cleanup
 
-Status: in progress; direct qualification and supervising-human UAT are required.
+Status: mechanically qualified on candidate `3d52b29`; supervising-human UAT is required before
+closure.
 
 M67 is accepted only when all of the following are true:
 

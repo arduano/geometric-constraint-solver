@@ -2,7 +2,7 @@
 
 # M67 implementation — legacy surface and harness cleanup
 
-Status: implementation in progress; supervising-human UAT is not yet approved.
+Status: mechanically qualified on candidate `3d52b29`; supervising-human UAT is not yet approved.
 
 ## 1. Files and APIs
 
@@ -42,12 +42,51 @@ global-error fallback remain the user-facing diagnostic surface.
 
 ## 3. Commands and outcomes
 
-Exact final commands, source identity, test counts and outcomes will be recorded here after the
-mechanical gate completes on one clean candidate.
+Nominated source: `3d52b29fc11f5cef572fe86f58a95897ec8c8214` on `main`. It was the sole
+registered worktree, with no stash, untracked file or tracked modification.
+
+The exact clean command
+
+```text
+nix-shell shell.nix --run './scripts/release-gate.sh'
+```
+
+passed on 2026-08-08. It completed locked offline metadata, format and diff checks;
+warnings-denied workspace Clippy; the locked all-feature workspace suite; all-feature WASM;
+warnings-denied rustdoc; benchmark compilation; M14 and M32 release workloads; the explicit
+256-moving-body sparse release test; dependency licences; package contents for all eight
+publishable crates; and Trunk 0.21.14's optimized release build.
+
+The test inventory command
+
+```text
+nix-shell shell.nix --run 'cargo test --locked --workspace --all-features -- --list'
+```
+
+listed 1,193 tests across 96 suite binaries. The normal full suite passed with its declared manual
+and release-only ignored tests left ignored; the release gate separately ran the ignored
+1,536-coordinate spatial case, which passed in 114.79 seconds. Focused retained-consumer counts
+were editor 183, demo-web 65, renamed sketch 3 and renamed linkage 2, all passing.
+
+The corrected M32 workload passed with p95 `0.193/0.689 ms` for supporting-offset load/edit,
+`0.291/0.446 ms` for NURBS load/knot insertion, and `17.760/11.144 ms` for all-family/NURBS-self
+profile analysis, all below their respective `1/1/2/2/10/5 s` budgets.
+
+Additional literal boundary checks passed:
+
+```text
+nix-shell shell.nix --run 'RUSTFLAGS="-D dead-code" cargo check --locked -p geosolve-core -p geosolve-sketch -p geosolve-constraint-editor --lib'
+nix-shell shell.nix --run 'RUSTFLAGS="-D warnings" cargo check --locked -p geosolve-demo-web --all-features --target wasm32-unknown-unknown'
+```
+
+Static inventory reported one `#[wasm_bindgen(start)]`, one `workbench-root`, zero forbidden
+runtime references and zero E2E directories. The seven-file distribution manifest is
+`e9d410c71290e7200595aaf9be6327523a812a1fa7d23abfa9d12c8279c176ac`; all seven HTTP
+responses matched their local SHA-256 values at the recorded Tailscale endpoint.
 
 ## 4. Acceptance criteria
 
-Acceptance requires:
+Mechanically passed:
 
 - one workbench startup/root and no alternate lab runtime, developer card or browser harness;
 - reviewed dispositions for all fourteen former M40 transition cases and direct current owners for
@@ -55,10 +94,14 @@ Acceptance requires:
 - ordinary authoring, editable Samples, persistence, camera, Problems and computed Fillets to
   remain qualified;
 - canonical sketch v1-v4 and workspace v1-v4 migration behavior to remain unchanged; and
-- the full locked release gate plus focused human `docs/M67_UAT.md` approval.
+- the full locked release gate.
+
+Still pending: focused supervising-human approval of all four areas in `docs/M67_UAT.md`.
 
 ## 5. Known limitations or next blocker
 
 M67 intentionally does not address `M66-KL001`, add Offset/Mirror, redesign computed-feature
-branches, add topology presentation elsewhere, or harden new solver behavior. Until the focused
-human scorecard is explicitly approved, M67 remains open.
+branches, add topology presentation elsewhere, or harden new solver behavior. Cargo continues to
+emit its pre-existing advisory that workspace packages specify both `license` and `license-file`;
+licence validation and all package-content gates pass. Until the focused human scorecard is
+explicitly approved, M67 remains open.

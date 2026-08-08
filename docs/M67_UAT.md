@@ -2,10 +2,18 @@
 
 # M67 focused UAT — cleaned workbench
 
-Status: pending mechanical qualification and supervising-human review.
+Status: mechanically qualified candidate serving; supervising-human review pending.
 
-Candidate source and temporary Tailscale endpoint will be recorded after the clean release build.
-This is one focused human checkpoint; direct Rust/WASM tests remain the correctness authority.
+Candidate source: `3d52b29fc11f5cef572fe86f58a95897ec8c8214` on `main`.
+
+Temporary Tailscale endpoint: `http://100.94.63.83:8080/`
+
+Release distribution manifest: `e9d410c71290e7200595aaf9be6327523a812a1fa7d23abfa9d12c8279c176ac`
+
+The clean release gate built the seven-file distribution. A non-watching static server exposes
+only those completed files on the Tailscale address, and all seven HTTP responses matched their
+local SHA-256 values before handoff. This is one focused human checkpoint; direct Rust/WASM tests
+remain the correctness authority.
 
 ## M67-U1 — one surviving application
 
