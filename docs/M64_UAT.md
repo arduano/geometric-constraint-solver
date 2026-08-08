@@ -1,8 +1,11 @@
 # M64 editable samples UAT
 
+Historical record: the candidate URL below identifies the approved M64 review service and is not a
+current deployment instruction. The purpose-based editable Samples workflow remains current.
+
 Status: approved by the supervising human on 2026-07-30.
 
-Candidate URL: `http://100.94.63.83:8080/`
+Historical candidate URL: `http://100.94.63.83:8080/`
 
 ## Review setup
 

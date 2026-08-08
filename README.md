@@ -40,15 +40,16 @@ predictable bounded dragging. M66 completes the explicitly approved computed-2D-
 authoring cut, with radius-drag/branch-choice interaction retained as known limitation
 `M66-KL001`. Its earlier unapproved Fillet/Offset/Mirror candidate is archived at
 `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`); the completed M25 offset constraints
-and M58 Mirror companion remain available. M67 is only an empty cleanup-themed placeholder awaiting
-supervising-user scope. Physics, collision and a production rendering system remain out of scope.
+and M58 Mirror companion remain available. M67 is the active legacy UI, qualification-harness and
+dead-code cleanup and awaits its focused UAT. Physics, collision and a production rendering system
+remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and next milestone.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — active roadmap: completed and approved through scoped M66, with an empty M67
-   placeholder awaiting supervising-user scope.
+3. `PLAN.md` — active roadmap: completed and approved through scoped M66, with M67 cleanup in
+   progress and awaiting its own UAT.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -63,7 +64,11 @@ supervising-user scope. Physics, collision and a production rendering system rem
 - `geosolve-sketch-features` — separately versioned persistent computed-feature intent and independently validated revision-local output over exact accepted sketch snapshots; no residuals, solver variables, canonical sketch schema or B-rep state.
 - `geosolve-constraint-editor` — presentation-independent accepted scene, persistent picking, selection, gestures, constraint/dimension and computed-feature authoring, and typed editor effects over public sketch/feature APIs; no renderer, DOM, storage or equations.
 - `geosolve-linkage` — persistent planar and spatial rigid bodies/features/sources, deterministic JSON/runtime remapping, gauge-separated mobility, common joints/mates, drivers, explicit assembly modes, independently published natural/pseudo-arclength continuation, typed hysteretic branch events/mode changes and multi-driver body/feature velocity fields with optional physical motion bases.
-- `geosolve-demo-web` — separate desktop WASM/SVG diagnostic consumer without equations or authoritative document semantics; M50 removed its old playground, M51 consolidated the one directly tested workbench and M60 added public advanced-operation/topology presentation plus the versioned workspace-v2 envelope.
+- `geosolve-demo-web` — separate desktop WASM/SVG consumer without equations or authoritative
+  document semantics; M50 removed its old playground, M51 consolidated the one directly tested
+  workbench, M60 added public advanced-operation/topology presentation plus the versioned workspace
+  envelope, and M67 removes its raw developer evidence/topology cards while preserving the domain
+  APIs beneath them.
 
 The critical design rule is: **share numerical machinery and feature evaluation, not one undifferentiated sketch/mechanism entity model.**
 

@@ -1273,7 +1273,9 @@ M62 completes approved CAD-style constraint/dimension authoring, and M63 complet
 geometry-anchored canvas constraint/dimension presentation, M64 completes the approved editable
 purpose-based sample library and M65 completes approved predictable, bounded projected dragging.
 M66 completes the explicitly approved computed-feature cut for ordinary multi-corner 2D Fillets;
-M67 is only an empty placeholder awaiting supervising-user scope.
+M67 is the active cleanup cut and adds no new scenario fixture. Its focused UAT uses the ordinary
+editable Samples catalog to prove the surviving workbench after removal of developer-only cards
+and frozen harnesses.
 Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -1368,6 +1370,12 @@ without selecting from coordinates.
 
 ### UAT-C2 - CAD host semantics at M53
 
+Historical/superseded UI record: this M53-M55 section describes the typed scenario selector and
+guided sidecar at their approved checkpoints. M64 later flattened retained fixtures into the
+ordinary editable **Samples** catalog and removed scenario mode, reset/exit controls, guidance,
+transcript and evidence capture. The domain/error behavior and direct tests below remain relevant;
+the selector paths and interaction instructions do not describe the current workbench.
+
 M52 directly qualified four fixed fixture families and ten objective points without
 recording human approval. Completed M53 presents that same behavior as six typed scenarios and adds
 two M53-P013 error-presentation scenarios under the stable root `m53-host-semantics`
@@ -1419,9 +1427,10 @@ hover/focus tooltips and the canonical Problems panel.
 
 ### M55-AP1 - Alpha action-surface parity matrix
 
-The headless qualification corpus and reusable workbench scenario catalog jointly cover every
-preserved M13-M14 constraint, dimension and explicit branch action without restoring the old
-application. The matrix includes:
+At the M55 checkpoint, the now-retired headless qualification corpus and reusable workbench
+scenario catalog jointly covered every preserved M13-M14 constraint, dimension and explicit branch
+action without restoring the old application. M67 maps the retained corpus claims to current
+direct tests in `docs/M67_M40_OWNERSHIP.md`. The historical matrix includes:
 
 - one-point, two-point, point-curve, line-line, circle/arc and generic curve-pair applicability;
 - fixed, coincident, horizontal, vertical, point-on-curve, parallel, perpendicular, equal-length,

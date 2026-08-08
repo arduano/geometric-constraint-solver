@@ -2,19 +2,23 @@
 
 # M62 human UAT — CAD constraint authoring
 
+Historical record: this is the approved M62 review procedure, not a live deployment instruction.
+The temporary endpoint is not expected to be running. M64 later made Samples ordinary editable
+workspaces, so the historical read-only scenario statement below no longer describes current UI.
+
 Status: approved by the supervising human on 2026-07-29.
 
-This review uses the ordinary workspace. Do not load a scenario: M62 adds no scenario definitions
-or UAT-only geometry. Existing scenarios remain read-only.
+This review used the ordinary workspace. M62 added no scenario definitions or UAT-only geometry;
+at that historical checkpoint the then-existing guided scenarios were read-only.
 
-Temporary Tailscale endpoint:
+Historical temporary Tailscale endpoint:
 
 ```text
 http://100.94.63.83:8080/
 ```
 
-The release watcher is serving the current M62 palette build. The endpoint is temporary and is not
-a production deployment.
+At review time the release watcher served the M62 palette build. The endpoint was temporary and is
+not a production deployment or current service.
 
 ## Review scorecard
 

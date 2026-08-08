@@ -2,6 +2,10 @@
 
 # M61 human UAT 3 — advanced geometry and topology
 
+Historical record: the approved selector paths and temporary candidate endpoint below describe the
+M61 review build. M64 later flattened retained fixtures into the ordinary editable **Samples**
+catalog, and the endpoint is not expected to be live.
+
 Status: complete; explicitly approved by the supervising human on 2026-07-29 for the recorded M61
 scope
 
@@ -68,9 +72,9 @@ line plus circle/arc Perpendicular / Normal to radial centre-on-line incidence. 
 domain-level direction relation remains available but is no longer presented as this authoring
 intent.
 
-## Entry point
+## Historical entry point
 
-The qualified shared endpoint is:
+The qualified shared endpoint at review time was:
 
 ```text
 http://100.94.63.83:8080/

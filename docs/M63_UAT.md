@@ -2,6 +2,10 @@
 
 # M63 UAT — canvas constraints
 
+Historical record: the temporary endpoint and milestone-named scenario group below belonged to the
+approved M63 candidate. The endpoint is not expected to be live; M64 later moved the retained
+fixtures into purpose-based ordinary editable **Samples**.
+
 Status: approved by the supervising human on 2026-07-30.
 
 ## Candidate
@@ -14,7 +18,7 @@ Status: approved by the supervising human on 2026-07-30.
   `M63-F007` moves line-relation markers to line interiors in `e75bb1b`; `M63-F008`
   specializes visible line-line perpendicularity as right-angle geometry in `22f52b3`; and
   `M63-F009` completes the adjacent workbench icon audit in `38f79f3`.
-- Temporary Tailscale endpoint: `http://100.94.63.83:8080/`.
+- Historical temporary Tailscale endpoint: `http://100.94.63.83:8080/`.
 - Scenario group: **Scenarios → M63 Canvas constraints**
 - Mechanical gate: format, warnings-denied workspace Clippy, all-feature workspace tests,
   all-feature WASM check and release Trunk build passed on 2026-07-30.

@@ -1098,6 +1098,41 @@ M66 explicitly excludes Offset implementation/UI/placeholders, computed-on-compu
 Bake/Explode, production/profile consumption, automatic M28 migration, a canonical sketch-schema
 change, global root enumeration, browser E2E, `/#/dev/lab` and mobile behavior.
 
+## M67 acceptance: legacy surface and harness cleanup
+
+Status: in progress; direct qualification and supervising-human UAT are required.
+
+M67 is accepted only when all of the following are true:
+
+- The sole workbench no longer renders Production topology, Host-state evidence or Accepted
+  redundancy developer cards. Problems, canvas error attribution, selection/branch/dimension/
+  computed-feature editors, authoring, editable Samples, history, camera and persistence remain.
+- There is exactly one WASM startup and one workbench root. No playground root, router,
+  `/#/dev/lab` runtime, browser E2E, guided scenario harness or misleading hash brand link exists.
+- All fourteen former M40 transition cases have reviewed dispositions. Every retained executed
+  semantic has a named current test owner; nonexecuted browser-delivery labels and the seeded
+  schedule/digest format are explicitly retired. The production qualification runner,
+  browser-evidence matrix, JSON corpus/golden report and doc-hidden evidence API are gone rather
+  than replaced by another generic harness.
+- The unused generic local-AD prototype and normalized-tangent fused-Jacobian branch are absent.
+  Live Pose2/Pose3 local-difference AD and finite-difference tests remain; solver equations,
+  independent success validation and priority semantics are unchanged.
+- Audited orphan selectors, unused sketch lowering helpers, a duplicate defaults test and exactly
+  duplicated release-gate invocations are removed. Capability-owning M49 regressions, performance
+  probes, architecture boundaries and persistence migrations remain. The M32 supporting-offset
+  timing witness observes movement of the edited endpoint rather than requiring unrelated passive
+  motion from a valid two-DOF solve.
+- Reusable topology, lifecycle, redundancy, diagnostic and audit domain APIs retain their direct
+  owning-layer regressions even though raw developer cards no longer consume them in demo-web.
+- Formatting, warnings-denied Clippy, locked all-feature workspace tests, forced dead-code review,
+  all-feature WASM, rustdoc, benchmark compilation, licence/package checks, release Trunk and Git
+  hygiene pass on one nominated source.
+- The supervising human explicitly approves all four areas in `docs/M67_UAT.md`.
+
+M67 changes no residual family, branch/orientation choice, tolerance, persistence language,
+computed-Fillet behavior, Offset/Mirror capability or mobile support claim. Historical milestone
+and ADR records remain evidence rather than live endpoint instructions.
+
 ### Superseded M66 solver-owned Fillet acceptance record
 
 The mechanically qualified but unapproved ordinary-UI route through M28 is preserved with commit

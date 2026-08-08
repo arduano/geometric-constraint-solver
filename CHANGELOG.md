@@ -82,6 +82,18 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 
 ### Changed
 
+- Scoped M67 as a source-cleanup milestone. The non-published workbench drops its raw Production
+  topology, Host-state evidence and Accepted redundancy developer cards while retaining Problems,
+  canvas attribution and the reusable domain APIs/tests beneath those views. M50 had already
+  removed the separately routed `/#/dev/lab` application.
+- Retired the unreleased, doc-hidden M40 browser-evidence qualification API and frozen JSON
+  matrix/corpus/golden harness after moving every retained transition claim to a direct current
+  test owner. This evidence-only surface postdated `0.2.0` and had no runtime consumer.
+- Removed an unused private generic local-AD prototype, that prototype's unused normalized-tangent
+  fused-storage branch, orphan workbench styles and other audited private/duplicate cleanup without
+  changing solver equations, branch state, priority semantics or independently validated success
+  publication. The stale M32 supporting-offset timing witness now verifies the edited endpoint
+  instead of requiring incidental motion from its other free endpoint.
 - Rebased the post-M44 roadmap: M45 preserves cleanup evidence without human approval;
   M46-M53 replace and purge legacy browser E2E/playground infrastructure, consolidate one
   directly tested workbench and perform post-cleanup host-semantics UAT. M53 received explicit

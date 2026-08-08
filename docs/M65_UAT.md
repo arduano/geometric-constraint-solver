@@ -1,12 +1,15 @@
 # M65 focused UAT
 
+Historical record: the endpoint and candidate language below describe the approved M65 review
+session. The endpoint is not expected to remain live.
+
 Status: complete and explicitly approved by the supervising human on 2026-08-01.
 
 Candidate code source: `b6433d1`.
 
-Tailscale endpoint: `http://100.94.63.83:8080/`
+Historical Tailscale endpoint: `http://100.94.63.83:8080/`
 
-Use only the ordinary workbench candidate recorded above once it is available. This scorecard is a
+The review used only the ordinary workbench candidate recorded above. This scorecard is a
 focused human behavior check after direct native, WASM and release qualification; it does not
 replace those gates.
 

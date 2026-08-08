@@ -2,6 +2,11 @@
 
 # M53 CAD host-semantics UAT scorecard
 
+Historical record: this approved scorecard describes the M53 scenario selector and guided sidecar
+as they existed at review time. M64 later replaced them with the ordinary editable **Samples**
+catalog; the selector paths, reset/exit controls and capture instructions below are not current UI
+instructions.
+
 ## Status and ownership
 
 M45 is complete as the historical cleanup investigation and ten-point capture checkpoint retained

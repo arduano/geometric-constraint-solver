@@ -197,8 +197,8 @@ unit, integration and doc tests pass. Trunk 0.21.14 emits a successful optimized
 The Cargo manifest warning that both `license` and `license-file` are present is pre-existing
 metadata advice and is not a warnings-denied Rust/Clippy failure.
 
-Qualified replacement code source: `b6433d1`. The exact code is served for focused UAT at
-`http://100.94.63.83:8080/`.
+Qualified replacement code source: `b6433d1`. At review time the exact code was served for focused
+UAT at `http://100.94.63.83:8080/`; that historical endpoint is not a continuing service.
 
 ## 4. Acceptance criteria passed
 

@@ -39,17 +39,18 @@ construction/NURBS UAT and certified all-family visual profiles.
   intent rejection. The supervising human explicitly approved and closed the mechanically
   qualified scope on 2026-08-08, accepting `M66-KL001` as a deferred interaction limitation
   without claiming a complete post-PF004 scripted replay.
-- **Next placeholder:** M67 is empty and awaits supervising-user scope. Its only recorded theme is
-  cleanup, including removal of the retained old development UI; no goal, checklist, acceptance
-  gate, scenarios or implementation is assigned. Every newly scoped milestone ends in its own
-  human UAT.
+- **Active cleanup:** M67 removes the sole workbench's raw Production topology, Host-state evidence
+  and Accepted redundancy developer cards, the frozen M40 browser-evidence/transition harness and
+  audited unused private code. M50 already deleted the separately routed `/#/dev/lab` application.
+  Reusable topology, lifecycle, redundancy, diagnostic and audit APIs remain directly owned below
+  presentation, and M67 ends in its own human UAT.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
 `PLAN.md` owns current execution numbering. Milestone labels in the preserved M8
 completion record and in ADRs accepted before the playground rebaseline describe the
 allocation at acceptance time; their architectural decisions remain accepted, but
-current ownership is the completed M10-M66 sequence and empty M67 placeholder listed in section 15.
+current ownership is the completed M10-M66 sequence and active M67 cleanup listed in section 15.
 
 ## 3. Crate responsibilities
 
@@ -399,6 +400,11 @@ evidence remains non-consumable. The application workspace v2 envelope labels ea
 payload as frozen canonical v4 or explicitly unstable draft v5 and migrates legacy workspace v1.
 These presentation/persistence additions own no equation, branch inference or B-rep state.
 
+M67 later removes the raw production-topology card and direct topology dependency from the
+non-published workbench together with the Host-state evidence and Accepted redundancy developer
+cards. This is a presentation-consumer cleanup only: `geosolve-sketch-topology`, stable lifecycle/
+redundancy DTOs and their direct owning-layer qualification remain reusable and unchanged.
+
 M66 makes the ordinary Fillet tool a direct presentation of headless computed-feature authoring.
 The workbench renders grouped corner candidates, shared-radius preview, stable feature/corner
 selection, a **Features** tree and attributed feature issues. It never creates M28 contacts,
@@ -434,8 +440,9 @@ existing modifier behavior.
 Invalid computed output is withheld rather than drawn from an older snapshot. A valid sketch edit
 still publishes and may leave a repairable feature failure. Base-only profile/fill presentation is
 also withheld with typed “computed geometry not yet included” status whenever active computed
-geometry would make it misleading. The workbench remains a read-only production-topology consumer;
-M66 does not pass computed output to that companion.
+geometry would make it misleading. At the M66 checkpoint the workbench remained a read-only
+production-topology consumer and did not pass computed output to that companion; M67 removes that
+raw developer presentation without changing either computed-feature or topology domain behavior.
 
 M66 advances the application workspace envelope from version 3 to version 4. It retains the
 canonical-v4/draft-v5 document encoding and current-materialization provenance, then adds the
@@ -862,6 +869,6 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   browser-default isolation and explicit painted-preview radius routing on candidate `ac31791`,
   closed under scoped human approval with `M66-KL001`; the superseded qualified solver-owned UI source remains archived at
   `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`).
-- M67: empty placeholder awaiting supervising-user scope. Its theme is cleanup, including removal
-  of the retained old development UI; no goal, checklist, acceptance gate, scenarios or
-  implementation is assigned.
+- M67: active cleanup of the three developer-oriented inspector cards, frozen M40 qualification
+  harness, obsolete UI tombstones and audited dead code. It preserves reusable domain diagnostics,
+  topology and persistence and awaits its focused human UAT.
