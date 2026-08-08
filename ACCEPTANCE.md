@@ -1091,10 +1091,11 @@ contacts, so tracking can drift or feel inverted. Post-placement contact/root, r
 direction and alternate-arc choices lack intuitive controls, especially for line-circle Fillets.
 Numeric radius editing, explicit persisted branch state, independent validation, rollback and
 sketch-state invariance remain correct. The playground line-circle specimen starts at radius `0.5`,
-near a branch fold. A future, unassigned cut may add a headless one-dimensional grip
-derivative/rail, frozen absolute branch intent, contact/retention handles, continuation arrows,
-alternate-arc previews and a friendlier sample while retaining the fold as a regression fixture.
-No such work is assigned to M67.
+near a branch fold. At M66 close, a future cut was left unassigned; active M68 now owns the
+headless one-dimensional radius rail, frozen absolute branch intent, contact/retention handles,
+continuation arrows, bounded local-alternative previews and friendlier specimen while retaining
+the fold as a regression fixture. This does not reopen M66 or assign the work retroactively to
+M67.
 
 M66 explicitly excludes Offset implementation/UI/placeholders, computed-on-computed chaining,
 Bake/Explode, production/profile consumption, automatic M28 migration, a canonical sketch-schema
@@ -1132,12 +1133,81 @@ M67 is accepted only when all of the following are true:
 - The supervising human explicitly approves all four areas in `docs/M67_UAT.md`.
 
 The 2026-08-08 close decision accepts all four focused UAT areas with no new M67 finding recorded.
-M68 remains an empty placeholder without acceptance criteria until the supervising user supplies
-its scope.
+M68 is now the active headless Fillet direct-manipulation milestone under ADR 0032; that later
+scope does not reopen M67.
 
 M67 changes no residual family, branch/orientation choice, tolerance, persistence language,
 computed-Fillet behavior, Offset/Mirror capability or mobile support claim. Historical milestone
 and ADR records remain evidence rather than live endpoint instructions.
+
+## M68 acceptance: headless Fillet direct manipulation
+
+Status: in progress. ADR 0032's implementation and focused direct qualification are complete;
+the clean full release gate, frozen candidate publication and human-UAT completion are not yet
+claimed.
+
+M68 is accepted only when all of the following are true:
+
+- `geosolve-sketch-features` continues a completed Fillet corner from its exact absolute accepted
+  intent. Radius continuation preserves normal sides, retained endpoints, contact
+  neighbourhoods/windings, endpoint order, sweep and local root; relative authoring booleans do
+  not reconstruct completed corners.
+- A regular corner exposes a finite one-dimensional radius rail derived from the analytic
+  offset-intersection centre sensitivity. Both parent expressions agree within a documented
+  scale-aware tolerance, and central finite differences independently qualify orthogonal, acute
+  and reversed line-line, line-circle and line-Bezier cases under transforms/scales and forward/
+  reverse motion. Non-finite, singular and ill-conditioned rails reject.
+- Pointer motion projects onto the frozen pointer-down rail. Tangential motion is a no-op and
+  there is no arbitrary radius clamp beyond finite positive radius, parent domains and valid
+  same-branch geometry. A shared-radius edit previews every corner atomically and identifies all
+  affected arcs.
+- A branch fold, offset singularity, domain limit or loss of regularity retains the exact last
+  `Current` result with a typed reason. Radius dragging and numeric editing never switch roots
+  implicitly. Contact reseeding, retained-direction changes and complementary/local alternatives
+  are explicit actions bounded to the selected native parents and persisted neighbourhoods;
+  tied candidates report ambiguity rather than guessing.
+- One atomic feature-set mutation can publish an accepted radius and replacement absolute corner
+  configuration in one feature revision and one history step without changing stable
+  feature/corner IDs. Workspace v4 and the separately versioned feature document require no
+  schema migration.
+- `geosolve-constraint-editor` owns idle, radius-drag, named-parent contact-drag and branch-preview
+  state, including exact stamps, pointer ID, owner, origin configuration, frozen rail and last
+  current preview token/sample. Authoring, published drag and direct numeric edits use the same
+  Current-only transaction. Invalid release, cancellation, stale/exhausted work, foreign or
+  second pointers and camera cancellation publish nothing and create no history.
+- Stable model-space DTOs/actions describe the radius grip/spoke/rail, contact handles, solid
+  retained-direction arrows, outlined alternatives and dashed complementary/local previews.
+  Canvas hover, canvas click and the compact accessible panel use the same action IDs,
+  applicability and disabled reasons. While selected/authoring, hit priority is contact handle,
+  then explicit radius grip/generated arc, then native support.
+- Painted SVG identity remains a hint. Independent exact owner, provenance and model-space
+  proximity checks preserve `M66-PF004`; stale/foreign painted owners cannot mutate selection,
+  authoring, preview or history.
+- The workbench captures and releases the initiating pointer for point, Fillet and pan gestures.
+  Release/cancel outside the SVG cannot strand interaction. A camera change cancels/restores a
+  live Fillet manipulation first, while pan/zoom remain usable during collection and inspection.
+  Rendering, accessibility, overlay layout and browser-default suppression remain thin-adapter
+  concerns with direct Rust/WASM presentation tests, not a restored browser E2E suite.
+- One friendly line-circle specimen supports ordinary manipulation away from a fold, and the
+  existing radius-`0.5` fold configuration remains a distinct stress specimen. Both are ordinary
+  editable save-like scenes with no guide, protected state or alternate coordinator.
+- Direct feature tests cover rail derivatives, same-branch continuation and bounded alternatives;
+  direct editor tests exhaust pointer/action matrices, sampling/zoom invariance, invalid recovery,
+  authoring/published/numeric parity, one-step history and Undo/Redo/reload. A bounded transition
+  model proves no unaccepted preview can publish or survive cancellation.
+- Every feature-edit test asserts unchanged native sketch identity, coordinates, independently
+  validated residuals, numerical rank and DOF. `M66-PF001` through `M66-PF004`, M27/M28/M30/M58
+  compatibility and the independent solver success contract remain green.
+- Formatting, warnings-denied Clippy, locked all-feature workspace tests, WASM, rustdoc,
+  benchmark/licence/package checks, release Trunk, static single-workbench inventory and Git
+  hygiene pass on one nominated candidate.
+- A fresh release candidate is served through Tailscale and the supervising human explicitly
+  approves every area in `docs/M68_UAT.md`.
+
+M68 explicitly excludes Offset/Mirror authoring, two-non-affine-parent Fillets,
+computed-on-computed chaining, Bake/Explode, profile/topology consumption, cross-revision
+topological naming, computed arcs as constraint operands, persistence/schema changes, global root
+enumeration, browser E2E, mobile and legacy UI.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

@@ -105,4 +105,6 @@ M67 intentionally does not address `M66-KL001`, add Offset/Mirror, redesign comp
 branches, add topology presentation elsewhere, or harden new solver behavior. Cargo continues to
 emit its pre-existing advisory that workspace packages specify both `license` and `license-file`;
 licence validation and all package-content gates pass. No blocker remains within the approved M67
-scope. M68 is an empty placeholder awaiting supervising-user scope.
+scope. At M67 close, M68 was an empty placeholder awaiting supervising-user scope. The
+subsequently approved scope is recorded in ADR 0032, `PLAN.md` and
+`docs/M68_IMPLEMENTATION.md`; it does not alter M67's historical acceptance record.

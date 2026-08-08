@@ -1275,7 +1275,11 @@ purpose-based sample library and M65 completes approved predictable, bounded pro
 M66 completes the explicitly approved computed-feature cut for ordinary multi-corner 2D Fillets;
 M67 completed the approved cleanup cut and added no new scenario fixture. Its focused UAT used the
 ordinary editable Samples catalog to prove the surviving workbench after removal of developer-only
-cards and frozen harnesses. M68 is empty and has no assigned scenario.
+cards and frozen harnesses. M68 is now active under ADR 0032 and owns the Fillet direct-
+manipulation scenarios below: branch-preserving radius rails, explicit local branch/contact/
+retention actions, Current-only interaction history, pointer capture and separate friendly/fold
+specimens. Their implementation and focused direct qualification are complete; the clean full
+release gate and human UAT remain pending.
 Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -2044,12 +2048,115 @@ line-circle Fillets. Numeric radius editing, explicit persisted branch state, in
 validation, rollback and sketch-state invariance remain correct. The playground line-circle
 specimen starts at radius `0.5`, near a branch fold.
 
-Potential follow-up is deliberately unassigned: a headless one-dimensional grip derivative/rail,
-frozen absolute branch intent, contact/retention handles, continuation arrows, alternate-arc
-previews and a friendlier sample while retaining the fold as a regression fixture. None of it is
-assigned to M67. The supervising human accepted this limitation when explicitly closing M66's
+At M66 close the potential follow-up was deliberately unassigned. Active M68 now owns a headless
+one-dimensional radius rail, frozen absolute branch intent, contact/retention handles,
+continuation arrows, bounded local-alternative previews and a friendlier specimen while retaining
+the fold as a regression fixture. None of it was assigned to M67, and it remains pending until the
+M68 gate passes. The supervising human accepted this limitation when explicitly closing M66's
 mechanically qualified computed-Fillet scope on 2026-08-08; that close does not claim a complete
 post-PF004 replay of every scripted UAT step.
+
+### M68-DM1 - Absolute same-branch continuation and radius rail
+
+For orthogonal, acute and reversed line-line corners, every supported line-circle root/retained
+direction and a line-quadratic-Bezier corner, begin from one accepted absolute
+`NewComputedFilletCorner`. Continue radius forward and backward under translated, rotated and
+scaled inputs while preserving normal sides, retained endpoints, contact neighbourhoods/windings,
+output endpoint order, sweep and local root.
+
+At each regular sample, derive centre sensitivity from the differentiated offset intersection and
+independently reconstruct it from both parents. Compare it to a central finite difference taken
+over the same absolute branch. Non-finite, singular, ill-conditioned or disagreeing rails reject;
+they never become a zero/finite success. At the headless editor boundary, projecting pointer
+displacement perpendicular to a frozen rail changes no radius, while radial displacement is
+invariant to coarse/fine event sampling and viewport scale.
+
+Status: mechanically implemented and directly qualified in `geosolve-sketch-features` and
+`geosolve-constraint-editor`; full release qualification and human UAT remain pending.
+
+### M68-DM2 - Fold stop and bounded explicit alternatives
+
+Use the retained radius-`0.5` line-circle configuration to approach its local fold from both
+directions. Same-branch continuation publishes current samples up to the limit, retains the final
+current sample beyond it and reports a typed fold/domain/regularity reason. It never silently
+selects another root.
+
+Enumerate alternatives only for the two persisted native parents and their local neighbourhoods.
+Explicit source-contact, retained-direction and complementary/local-arc actions preview a complete
+absolute replacement corner; a tied choice reports ambiguity. Hover/focus changes no durable
+intent, and click/activation commits only the named preview. No test asks for global root
+enumeration.
+
+Status: mechanically implemented and directly feature/editor-qualified; full release
+qualification and human UAT remain pending.
+
+### M68-DM3 - Current-only interaction transition model
+
+Drive the closed headless Fillet interaction through idle, radius drag, contact drag on either
+parent and branch preview. Exhaust pointer down/move/up/cancel orderings, radial/tangential motion,
+coarse/fine sampling, several viewport scales, invalid-to-valid recovery, release while invalid,
+modifiers, a second pointer, stale/foreign owners, work exhaustion and camera cancellation.
+
+The model records exact origin configuration and stamps plus only the last exact `Current` preview
+token/sample. A commit is legal iff that evidence still matches. Rejected samples may not replace
+the solid last-current preview; an invalid release or cancellation may not mutate durable intent,
+the persistent feature allocator high-water or history. Revision-local computed-evaluation IDs
+remain never-reused even for discarded previews. Authoring preview, published dragging and direct
+numeric editing obey the same transition oracle.
+
+Status: mechanically implemented and directly qualified. The bounded reference model enumerates
+28 reachable states and all 240 applicable transitions, including invalid samples, delayed or
+duplicate acknowledgements, foreign pointers, same-position retry and terminal-coordinate
+validation. Full release qualification and human UAT remain pending.
+
+### M68-DM4 - Shared action resolution and crowded priority
+
+At positions where a contact handle, generated arc/grip and native support overlap, resolve both
+hover and click through the same headless action resolver. While the Fillet is selected or being
+authored, priority is named contact handle, then explicit radius grip/generated arc, then native
+support. Painted `FeatureCorner` metadata is only a hint: exact owner, accepted/computed
+provenance and model-space proximity must also match, preserving `M66-PF004`.
+
+Canvas actions and the compact accessible panel expose identical stable IDs, labels,
+applicability, disabled reasons, attribution and affected corners. A shared-radius action visibly
+identifies every affected arc. Hovering a ghost alternative never commits it.
+
+Status: mechanically implemented and directly editor/presentation-qualified; full release
+qualification and human UAT remain pending.
+
+### M68-DM5 - Atomic history, persistence and sketch invariance
+
+For one- and multi-corner FilletSets, atomically publish an accepted radius plus any replacement
+absolute corner configuration in one feature revision/history step while preserving stable
+feature/corner IDs. Exercise Undo/Redo, encode/decode/reload, cancellation and stale exact-CAS
+work. Generated edge IDs remain revision-local and no persistence migration is introduced.
+
+Before and after every accepted or rejected feature action, compare native sketch document/
+accepted identity, coordinates, residual vectors, numerical rank and DOF bit-for-bit or by their
+existing exact public contract. They remain unchanged. `M66-PF001` through `M66-PF004` and
+M27/M28/M30/M58 compatibility remain mandatory.
+
+Status: mechanically implemented and directly feature/coordinator/persistence-qualified; full
+release qualification and human UAT remain pending.
+
+### M68-DM6 - Friendly and fold specimens with captured pointers
+
+Keep the stable **Samples → Curves & constructions → 2D Fillet playground** leaf as one ordinary
+editable save-like scene. Add a friendly line-circle island comfortably away from a fold for
+normal contact/retention/alternative exploration and preserve the radius-`0.5` fold configuration
+as a separately labelled stress island. Neither has guide text, protected state, a scripted
+transcript or a sample-specific coordinator; the catalog remains purpose-owned rather than
+milestone-owned.
+
+The workbench captures/releases the initiating pointer for point, Fillet and pan gestures so a
+release outside the SVG cannot strand state. A camera change cancels/restores live Fillet
+manipulation before navigation, while pan/zoom stay available during collection/inspection.
+Thin Rust/WASM presentation tests own event translation, pointer capture, overlay layout,
+accessibility and browser-default suppression. No browser E2E is restored. Human interaction feel
+is accepted only through the pending `docs/M68_UAT.md` Tailscale scorecard.
+
+Status: mechanically implemented and directly presentation-qualified; clean release publication
+and explicit human UAT remain pending.
 
 ### Archived solver-owned M66 scenario record
 

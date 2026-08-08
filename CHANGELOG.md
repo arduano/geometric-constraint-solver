@@ -79,6 +79,10 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - One ordinary editable **2D Fillet playground** for independent lines, line-circle,
   line-quadratic-Bezier, high-valence, multi-corner/sequential and short-middle conflict
   authoring, with no guide, protected state or alternate coordinator.
+- ADR 0032 and the implemented M68 candidate for headless computed-Fillet direct manipulation:
+  an analytic branch-preserving radius rail, explicit contact/retention/bounded-local-alternative
+  actions, Current-only coordinator transactions, pointer capture and Rust-first qualification.
+  The clean release gate and human UAT remain open, so M68 is not yet accepted.
 
 ### Changed
 
@@ -86,8 +90,8 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   workbench dropped its raw Production topology, Host-state evidence and Accepted redundancy
   developer cards while retaining Problems,
   canvas attribution and the reusable domain APIs/tests beneath those views. M50 had already
-  removed the separately routed `/#/dev/lab` application. M68 remains an empty placeholder awaiting
-  supervising-user scope.
+  removed the separately routed `/#/dev/lab` application. M68 is now scoped and implemented as
+  the ADR 0032 Fillet-interaction cut; release qualification and human UAT remain open.
 - Retired the unreleased, doc-hidden M40 browser-evidence qualification API and frozen JSON
   matrix/corpus/golden harness after moving every retained transition claim to a direct current
   test owner. This evidence-only surface postdated `0.2.0` and had no runtime consumer.

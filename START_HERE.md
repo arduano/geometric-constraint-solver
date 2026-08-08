@@ -28,8 +28,11 @@ completed approved predictable bounded dragging, and M66 completed the explicitl
 computed-feature cut for ordinary multi-corner 2D Fillets outside the sketch constraint graph.
 M67 completed and received supervising-human approval for removal of the three remaining
 developer-oriented inspector cards, frozen browser-evidence/transition harnesses and audited dead
-code while preserving direct domain ownership and the ordinary workbench. M68 is an empty
-placeholder awaiting supervising-user scope.
+code while preserving direct domain ownership and the ordinary workbench. M68 is now active under
+ADR 0032: it implements branch-preserving Fillet radius rails, explicit contact/retention/
+local-alternative actions, coordinator-owned Current-only transactions and the pointer-capture
+foundation needed by those interactions. Focused direct qualification passes; the clean full
+release gate and human UAT remain open.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -41,7 +44,7 @@ support and physics remain outside future acceptance.
 4. `ACCEPTANCE.md`
 5. `docs/SCENARIOS.md`
 6. `REFERENCES.md`
-7. `docs/adr/0001-*.md` through `docs/adr/0031-*.md`
+7. `docs/adr/0001-*.md` through `docs/adr/0032-*.md`
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -156,10 +159,10 @@ evaluation moves the center and contacts, so tracking may drift or feel inverted
 contact/root, retained-parent direction and alternate-arc choices lack intuitive controls,
 especially for line-circle Fillets; the playground specimen starts at radius `0.5` near a branch
 fold. Numeric radius editing, explicit persisted branch state, independent validation, rollback
-and sketch-state invariance remain correct. A future, unassigned cut may add a headless one-
-dimensional grip derivative/rail, frozen absolute branch intent, contact/retention handles,
-continuation arrows, alternate-arc previews and a friendlier sample while retaining the fold as a
-regression fixture. This work is not assigned to M67.
+and sketch-state invariance remain correct. M68 now owns the approved headless one-dimensional
+radius rail, frozen absolute branch intent, contact/retention handles, continuation arrows, bounded
+local-alternative previews and friendlier specimen while retaining the fold as a regression case.
+That work remains in progress and does not retroactively change M66's scoped approval.
 M62 follow-up `M62-F001` corrects accepted-state line-angle seeding and exposes acute-degree
 presentation while retaining the explicit directed-radian solver branch.
 Follow-up `M62-F002` gives canvas pointer-down exclusive ownership of canvas authoring picks,
@@ -223,10 +226,11 @@ view. Existing M27/M28/M58 capabilities remain supported below that route. Compu
 yet consumed by profiles, and Offset is a future variable-topology use of the seam rather than an
 M66 implementation or UI placeholder. M66 ended in its own scoped computed-Fillet UAT. M67
 completed the legacy-surface and qualification-harness cleanup described in `PLAN.md`, changed no
-computed-feature behavior and received focused supervising-human approval. M68 remains empty and
-unscoped.
+computed-feature behavior and received focused supervising-human approval. M68 is the active ADR
+0032 Fillet direct-manipulation cut; its implementation and focused direct qualification are
+complete, while the complete release gate and explicit Tailscale UAT are pending.
 
-Durable cleanup records:
+Durable milestone and cleanup records:
 
 - `docs/M45_CLEANUP_PLAN.md`
 - `docs/M45_UI_CLEANUP_INVESTIGATION.md`
@@ -262,6 +266,9 @@ Durable cleanup records:
 - `docs/M67_M40_OWNERSHIP.md` (direct owners for the retired transition corpus)
 - `docs/M67_IMPLEMENTATION.md` (completed legacy-surface and harness cleanup record)
 - `docs/M67_UAT.md` (approved focused cleanup scorecard)
+- `docs/M68_IMPLEMENTATION.md` (active Fillet direct-manipulation implementation ledger)
+- `docs/M68_UAT.md` (pending focused scorecard; do not mark approved before human UAT)
+- `docs/adr/0032-headless-computed-feature-direct-manipulation.md`
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

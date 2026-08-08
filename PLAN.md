@@ -3211,9 +3211,81 @@ UAT approval. That approval is recorded above and M67 is closed.
 
 ### M68
 
-Status: empty placeholder awaiting supervising-user scope.
+Status: active. Implementation and focused direct qualification are complete; the clean full
+release gate, frozen candidate publication and human UAT remain pending.
 
-No goal, theme, checklist, acceptance gate, scenarios or implementation is assigned yet.
+Goal: close accepted limitation `M66-KL001` with a CAD-like, branch-preserving direct-
+manipulation model for ordinary computed Fillets, while establishing only the shared canvas
+foundations that interaction needs. ADR 0032 makes the headless feature/editor boundary—not the
+SVG or workbench—the authority for radius rails, contacts, retained directions, local alternatives,
+preview validity and commit/rollback.
+
+M68 uses a hybrid presentation: visible on-canvas grip/rail/contact/branch affordances and a
+compact accessible panel expose the same stable headless actions. At a branch fold, continuation
+stops on the current absolute branch, retains the last exact current result and requires an
+explicit branch action; pointer motion and numeric editing never auto-switch roots.
+
+- [x] Add absolute same-branch Fillet continuation in `geosolve-sketch-features`, preserving
+  normal sides, retained endpoints, contact neighbourhoods/windings, endpoint order, sweep and
+  local root from the previously accepted `NewComputedFilletCorner`.
+- [x] Derive a validated one-dimensional radius rail from offset-intersection sensitivity, check
+  its two parent expressions independently, and qualify it against central finite differences
+  across supported parent families, transforms, scales, directions, folds and singularities.
+- [x] Expose bounded local contact/root, retained-direction, complementary-arc and alternative
+  candidates without global enumeration; tied choices reject with typed ambiguity and no
+  implicit root change.
+- [x] Add an atomic feature-set configuration mutation so a current radius plus any re-anchored
+  absolute corner intent publishes in one revision/history step while preserving stable IDs and
+  the existing workspace-v4/schema contract.
+- [x] Move authoring and published Fillet radius/contact/branch interaction into one closed
+  `geosolve-constraint-editor` state machine with exact stamps, pointer ownership, frozen rail,
+  last-`Current` preview evidence, cancellation and Current-only numeric/drag publication.
+- [x] Publish model-space grip/spoke/rail, contact, retained-direction and local-alternative DTOs
+  with stable accessible action IDs, labels, applicability, disabled reasons, attribution and one
+  shared hover/click resolver. Preserve `M66-PF004` independent owner/provenance/proximity checks.
+- [x] Keep the workbench a thin adapter: render the returned affordances and compact action panel,
+  remove raw relative branch checkboxes, highlight all shared-radius arcs and capture/release the
+  initiating pointer for point, Fillet and pan gestures. A camera change cancels/restores a live
+  Fillet manipulation before navigation.
+- [x] Add a friendly ordinary editable line-circle playground specimen away from a fold and retain
+  the existing radius-`0.5` fold specimen separately as a stress case, with no guide, protected
+  state or sample-specific coordinator.
+- [x] Build the direct Rust matrix in `geosolve-sketch-features` and especially
+  `geosolve-constraint-editor`: exhaustive pointer transitions, sampling/zoom invariance,
+  invalid/recovery/release, stale/foreign/second-pointer cases, overlap and hover/click parity,
+  authoring/published/numeric parity, history/reload and a bounded transition model proving no
+  unaccepted preview can publish or survive cancellation. Keep `M66-PF001`-`M66-PF004` green and
+  prove native sketch identity, coordinates, residuals, rank and DOF never change.
+- [ ] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature
+  WASM, rustdoc, benchmark/licence/package checks, release Trunk build, static single-workbench
+  inventory and Git hygiene on one nominated source.
+- [ ] Publish that release candidate through Tailscale and receive explicit supervising-human
+  approval of `docs/M68_UAT.md`.
+
+Implementation checkpoint (2026-08-08): `807d2f4` implements the feature-domain continuation,
+rail, bounded alternatives and atomic configuration replacement; `0954e97` implements the thin
+workbench affordances, accessible actions, exact render stamps, friendly/fold specimens and
+pointer capture; and `240a174` completes the headless Current-only radius/contact transaction
+model and its stale/invalid/foreign-pointer hardening. Focused Nix qualification passes 34
+feature tests, 168 editor unit tests, 46 editor integration tests and 68 demo-web tests, with
+formatting, strict native/WASM Clippy and warnings-denied WASM checking. The bounded coordinator
+reference model enumerates 28 reachable states and all 240 applicable state/event transitions,
+including same-position retry and terminal-coordinate validation. The complete clean release gate
+and explicit human UAT remain deliberately unchecked.
+
+Gate: radius, contact, retention and local-branch manipulation are branch-explicit, independently
+validated and transactional at the headless boundary. Only an exact last-`Current` candidate may
+enter feature intent or history; invalid release, cancellation, stale work, a foreign/second
+pointer or a camera change cannot publish. At a fold, the last valid same-branch result stays solid
+until the user explicitly chooses another applicable local branch. Canvas and accessible-panel
+actions resolve identically, pointer capture cannot strand a gesture, and every feature-only edit
+leaves the accepted sketch/residual/rank/DOF state exactly unchanged. M68 closes only after the
+complete mechanical gate and explicit human Tailscale UAT approval.
+
+M68 explicitly excludes Offset/Mirror authoring, two-non-affine-parent Fillets,
+computed-on-computed chaining, Bake/Explode, profile or production-topology consumption,
+cross-revision topological naming, computed arcs as constraint operands, schema changes, global
+root enumeration, browser E2E, mobile behavior and legacy UI.
 
 ## Explicit non-goals
 

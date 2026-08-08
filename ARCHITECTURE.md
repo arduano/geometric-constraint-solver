@@ -45,15 +45,19 @@ construction/NURBS UAT and certified all-family visual profiles.
   `/#/dev/lab` application. Reusable topology, lifecycle, redundancy, diagnostic and audit APIs
   remain directly owned below presentation. M67 received explicit human UAT approval on
   2026-08-08.
-- **Next placeholder:** M68 is empty and awaits supervising-user scope. No architecture, feature,
-  acceptance gate, scenario or implementation is assigned.
+- **Active target:** M68 implements ADR 0032's headless computed-Fillet direct manipulation:
+  absolute same-branch continuation, an analytic one-dimensional radius rail, explicit bounded
+  contact/retention/local-alternative actions, Current-only coordinator transactions and the thin
+  pointer-capture/rendering foundation needed by them. Implementation and focused direct
+  qualification are complete; the clean full release gate and human UAT remain open, so M68 is
+  not yet accepted.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
 `PLAN.md` owns current execution numbering. Milestone labels in the preserved M8
 completion record and in ADRs accepted before the playground rebaseline describe the
 allocation at acceptance time; their architectural decisions remain accepted, but
-current ownership is the completed M10-M67 sequence and empty M68 placeholder listed in section 15.
+current ownership is the completed M10-M67 sequence and active M68 target listed in section 15.
 
 ## 3. Crate responsibilities
 
@@ -214,6 +218,20 @@ set, builds corner incidence once, permits fallthrough only for an incomplete si
 or duplicate pending support, and reports a high-valence junction as ambiguous rather than choosing
 an underlying curve.
 
+ADR 0032 tightens this boundary for M68. A completed corner is continued from its exact absolute
+accepted branch state; relative authoring toggles remain defaults only for collecting new corners.
+The editor owns idle, radius-drag, named-parent contact-drag and branch-preview interaction with
+exact stamps, pointer identity, origin configuration, a frozen model-space rail and the last exact
+`Current` preview token/sample. Authoring, published dragging and numeric edits share one
+Current-only transaction. Invalid release, cancellation, stale/exhausted work, a foreign/second
+pointer or camera cancellation cannot publish or create history.
+
+The editor also owns model-space grip/spoke/rail, contact, retained-direction and bounded-local-
+alternative DTOs with stable action IDs, applicability and disabled reasons. One resolver governs
+hover and click; while a Fillet is selected or being authored, priority is contact handle, then
+explicit radius grip/generated arc, then native support. Painted SVG ownership remains only a
+hint and still requires independent exact provenance and proximity validation.
+
 The same headless scene boundary tessellates native curves, computed source fragments and generated
 Fillet arcs for both presentation and picking. Non-linear spans receive a bounded seed subdivision
 before chord-error refinement so an inflection cannot alias to its endpoint chord. The workbench
@@ -322,6 +340,18 @@ order, sweep and offset regularity. Endpoint claims compose without mutating
 crossed or consumed claims fail all participants. One invalid corner withholds its whole set;
 unrelated sets remain current. A sketch edit is not rejected merely because computed output fails,
 and no failed set retains a stale ghost.
+
+M68 adds same-branch continuation and radius-rail evidence without moving equations into the
+editor. For offset points `O_i(t_i,r) = p_i(t_i) + s_i r n_i(t_i)`, the feature layer solves the
+two-parent differentiated intersection for `dt_i/dr` and derives `dC/dr` independently from each
+parent. Non-finite, ill-conditioned or disagreeing results reject, and central finite differences
+remain the independent oracle. Pointer projection uses the rail frozen at gesture start. At a
+fold, same-branch continuation retains the last current result and requires an explicit local
+branch action; it never searches or switches roots implicitly.
+
+One accepted M68 configuration transaction may replace the shared radius and re-anchored absolute
+corner intent atomically while preserving stable feature/corner IDs. It uses the existing
+separately versioned feature document and workspace-v4 envelope; M68 adds no schema migration.
 
 Version-one references name native constrained spans only. Computed-on-computed chaining,
 Bake/Explode, cross-revision output topological naming and production/profile consumption are
@@ -461,9 +491,19 @@ retained-parent direction and alternate-arc choices lack intuitive controls, esp
 line-circle Fillets. Numeric radius editing, explicit persisted branch state, independent
 validation, rollback and sketch-state invariance remain correct. The playground line-circle
 specimen starts at radius `0.5`, near a branch fold. Potential one-dimensional grip derivatives or
-rails, frozen absolute branch intent, contact/retention handles, continuation arrows, alternate-
-arc previews and a friendlier sample are future unassigned work, not M67 scope; the fold remains a
-regression fixture.
+rails, frozen absolute branch intent, contact/retention handles, continuation arrows, bounded
+local-alternative previews and a friendlier sample were not M67 scope. ADR 0032 assigns that
+focused work to active M68 while retaining the fold as a distinct regression fixture; M66's scoped
+approval remains historical and unchanged.
+
+For M68, the workbench renders a visible midpoint radius grip, spoke/rail, named contact dots,
+solid current retention arrows, outlined alternatives and dashed complementary/local previews.
+The same stable actions appear in a compact accessible panel; raw relative Flip-first,
+Flip-second and Alternate-arc checkboxes are not the ordinary branch UI. The adapter captures and
+releases pointers for point, Fillet and pan gestures, cancels/restores live Fillet manipulation
+before a camera change, and owns no root selection or rollback logic. A friendly line-circle
+specimen is separate from the retained radius-`0.5` fold stress case. These are M68 targets until
+the mechanical gate and human UAT pass.
 
 M61 remediation keeps those boundaries intact while making the candidate genuinely interactive.
 Advanced construction state and proposal/preview generation live in `geosolve-constraint-editor`;
@@ -875,5 +915,8 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
 - M67: completed and approved cleanup of the three developer-oriented inspector cards, frozen M40
   qualification harness, obsolete UI tombstones and audited dead code. It preserves reusable
   domain diagnostics, topology and persistence.
-- M68: empty placeholder awaiting supervising-user scope; no goal, gate, scenario or implementation
-  is assigned.
+- M68: active ADR 0032 headless computed-Fillet direct-manipulation cut, including absolute branch
+  continuation, analytic radius rail, explicit contact/retention/local alternatives,
+  coordinator-owned Current-only interaction/history, thin pointer capture and a dedicated human
+  Tailscale UAT. Implementation and focused direct qualification are complete; release
+  qualification and acceptance remain pending.
