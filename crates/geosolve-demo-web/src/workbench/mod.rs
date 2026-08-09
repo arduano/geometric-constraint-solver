@@ -448,6 +448,23 @@ fn route_canvas_fillet_action(
         })
 }
 
+/// Reconciles every painted action below one canvas sample with the
+/// headless nearest-action result.
+///
+/// SVG action hit corridors can overlap. Their paint order is presentation
+/// detail, so the topmost corridor must not suppress a closer independently
+/// validated action. A stale or foreign stack still produces no route.
+#[cfg(any(target_arch = "wasm32", test))]
+fn resolve_canvas_fillet_action_candidates(
+    scene: &geosolve_constraint_editor::EditorScene,
+    position: geosolve_constraint_editor::ScreenPoint,
+    painted: impl IntoIterator<Item = geosolve_constraint_editor::SceneFilletActionTarget>,
+) -> Option<geosolve_constraint_editor::SceneFilletActionTarget> {
+    painted.into_iter().find(|target| {
+        route_canvas_fillet_action(scene, position, Some(target)) == CanvasFilletActionRoute::Action
+    })
+}
+
 /// Revokes one temporary computed-feature owner. Selection cleanup belongs to
 /// the headless coordinator so every caller gets identical lifetime semantics.
 #[cfg(any(target_arch = "wasm32", test))]
@@ -850,11 +867,6 @@ pub(crate) mod wasm {
                     wb.notice = "Fillet action requires current computed geometry".into();
                     return;
                 };
-                let Some(painted) = fillet_action_target(&scene, &target, &wb.fillet_action_render)
-                else {
-                    wb.notice = "Fillet action is stale or unavailable".into();
-                    return;
-                };
                 let input = if target.get_attribute("data-fillet-action-input").as_deref()
                     == Some("canvas")
                 {
@@ -872,9 +884,16 @@ pub(crate) mod wasm {
                     ) else {
                         return;
                     };
-                    let super::CanvasFilletActionRoute::Action =
-                        super::route_canvas_fillet_action(&scene, position, Some(&painted))
-                    else {
+                    let Some(painted) = fillet_action_targets_at_point(
+                        &callback_document,
+                        &scene,
+                        &wb.fillet_action_render,
+                        mouse.client_x(),
+                        mouse.client_y(),
+                    )
+                    .and_then(|painted| {
+                        super::resolve_canvas_fillet_action_candidates(&scene, position, painted)
+                    }) else {
                         // Pointer-down already routed this position through the
                         // ordinary editor because the painted action was stale,
                         // spoofed or outside its headless control geometry.
@@ -885,6 +904,12 @@ pub(crate) mod wasm {
                         painted: Some(painted),
                     }
                 } else {
+                    let Some(painted) =
+                        fillet_action_target(&scene, &target, &wb.fillet_action_render)
+                    else {
+                        wb.notice = "Fillet action is stale or unavailable".into();
+                        return;
+                    };
                     SceneFilletActionInput::Accessible(painted)
                 };
                 let effects = wb
@@ -1346,7 +1371,7 @@ pub(crate) mod wasm {
             if event_targets_problem_marker(&event) {
                 return;
             }
-            if let Some(painted_element) = pointer_event_fillet_action(&event) {
+            if pointer_event_fillet_action(&event).is_some() {
                 let mut wb = callback_workbench.borrow_mut();
                 if wb.pointer_captures.is_empty() {
                     let Some(scene) = editor_scene(&wb) else {
@@ -1356,14 +1381,21 @@ pub(crate) mod wasm {
                     else {
                         return;
                     };
-                    let painted =
-                        fillet_action_target(&scene, &painted_element, &wb.fillet_action_render);
-                    if super::route_canvas_fillet_action(&scene, pointer.position, painted.as_ref())
-                        == super::CanvasFilletActionRoute::Action
-                    {
-                        let Some(target) = painted else {
-                            return;
-                        };
+                    let painted = fillet_action_targets_at_point(
+                        &callback_document,
+                        &scene,
+                        &wb.fillet_action_render,
+                        event.client_x(),
+                        event.client_y(),
+                    )
+                    .and_then(|painted| {
+                        super::resolve_canvas_fillet_action_candidates(
+                            &scene,
+                            pointer.position,
+                            painted,
+                        )
+                    });
+                    if let Some(target) = painted {
                         callback_pointer_moves
                             .borrow_mut()
                             .invalidate_before_immediate_action();
@@ -1552,6 +1584,23 @@ pub(crate) mod wasm {
             .and_then(|target| target.closest("[data-fillet-action]").ok().flatten())
     }
 
+    fn fillet_action_targets_at_point(
+        document: &Document,
+        scene: &EditorScene,
+        authority: &super::FilletActionRenderAuthority,
+        client_x: i32,
+        client_y: i32,
+    ) -> Option<Vec<SceneFilletActionTarget>> {
+        let targets = document
+            .elements_from_point(client_x as f32, client_y as f32)
+            .iter()
+            .filter_map(|value| value.dyn_into::<Element>().ok())
+            .filter_map(|element| element.closest("[data-fillet-action]").ok().flatten())
+            .filter_map(|element| fillet_action_target(scene, &element, authority))
+            .collect::<Vec<_>>();
+        (!targets.is_empty()).then_some(targets)
+    }
+
     /// Returns the stable identity painted directly under this pointer sample.
     /// The coordinator treats it only as an intent hint and independently
     /// validates current preview ownership, scene provenance and arc proximity.
@@ -1736,15 +1785,18 @@ pub(crate) mod wasm {
             let Some(input) = pointer_input(&callback_viewport, scene.viewport, &event) else {
                 return;
             };
-            if wb.pointer_captures.is_empty()
-                && let Some(painted_element) = painted_action
-            {
-                let painted =
-                    fillet_action_target(&scene, &painted_element, &wb.fillet_action_render);
-                if matches!(
-                    super::route_canvas_fillet_action(&scene, input.position, painted.as_ref(),),
-                    super::CanvasFilletActionRoute::Action
-                ) {
+            if wb.pointer_captures.is_empty() && painted_action.is_some() {
+                let painted = fillet_action_targets_at_point(
+                    &callback_document,
+                    &scene,
+                    &wb.fillet_action_render,
+                    event.client_x(),
+                    event.client_y(),
+                )
+                .and_then(|painted| {
+                    super::resolve_canvas_fillet_action_candidates(&scene, input.position, painted)
+                });
+                if painted.is_some() {
                     return;
                 }
             }
@@ -4149,8 +4201,9 @@ mod tests {
         FilletActionRenderAuthority, OverlayRect, PointerMoveQueue, canvas_overlay_position,
         canvas_pointer_capture_kind, change_owns_option_control_click, geometry_hover_selector,
         markup_fingerprint, observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
-        palette_details_overlay_reflow_listener, revoke_held_feature_authoring_preview,
-        route_canvas_fillet_action, route_canvas_pan_pointer_down,
+        palette_details_overlay_reflow_listener, resolve_canvas_fillet_action_candidates,
+        revoke_held_feature_authoring_preview, route_canvas_fillet_action,
+        route_canvas_pan_pointer_down,
     };
 
     #[test]
@@ -5161,6 +5214,22 @@ mod tests {
         assert_eq!(
             route_canvas_fillet_action(&scene, action_position, Some(&canvas_target)),
             CanvasFilletActionRoute::Action
+        );
+        let overlapping_paint_order_target = scene
+            .fillet_affordances
+            .iter()
+            .flat_map(|affordances| &affordances.actions)
+            .filter_map(|action| scene.fillet_action_target(action.owner, action.id))
+            .find(|target| *target != canvas_target)
+            .expect("another painted action target");
+        assert_eq!(
+            resolve_canvas_fillet_action_candidates(
+                &scene,
+                action_position,
+                [overlapping_paint_order_target, canvas_target],
+            ),
+            Some(canvas_target),
+            "an overlapping topmost corridor must not suppress the headless nearest action"
         );
         assert_eq!(
             route_canvas_fillet_action(&scene, action_position, None),
