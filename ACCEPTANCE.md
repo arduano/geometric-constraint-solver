@@ -158,7 +158,7 @@ allocations are historical; `PLAN.md` now governs completed work through the app
 approved M62 authoring milestone, approved M63 canvas-constraint presentation, approved M64
 editable-sample cleanup, approved reduced-scope M65 predictable dragging and approved scoped M66
 computed-Fillet features under ADR 0031, followed by the approved M67 legacy-surface and harness
-cleanup.
+cleanup and approved M68 headless Fillet direct manipulation under ADR 0032.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -938,13 +938,14 @@ finding dispositions and approval record are retained in `docs/M53_UAT.md`.
   regression/requalification plus human retest; deferred future scope retains an explicit roadmap
   owner.
 
-## M54-M67 acceptance
+## M54-M68 acceptance
 
-M54-M67 are the completed post-M53 sequence. M62 received explicit supervising-human approval on
+M54-M68 are the completed post-M53 sequence. M62 received explicit supervising-human approval on
 2026-07-29, M63 and M64 received explicit supervising-human approval on 2026-07-30, and M65
 received focused supervising-human approval on 2026-08-01. M66 received explicit scoped
 supervising-human approval on 2026-08-08. M67 received explicit supervising-human approval on
-2026-08-08. No old browser E2E qualification may return.
+2026-08-08, and M68 received explicit supervising-human approval on 2026-08-09. No old browser E2E
+qualification may return.
 
 ## M65 acceptance: predictable bounded projected dragging
 
@@ -1091,11 +1092,11 @@ contacts, so tracking can drift or feel inverted. Post-placement contact/root, r
 direction and alternate-arc choices lack intuitive controls, especially for line-circle Fillets.
 Numeric radius editing, explicit persisted branch state, independent validation, rollback and
 sketch-state invariance remain correct. The playground line-circle specimen starts at radius `0.5`,
-near a branch fold. At M66 close, a future cut was left unassigned; active M68 now owns the
-headless one-dimensional radius rail, frozen absolute branch intent, contact/retention handles,
-continuation arrows, bounded local-alternative previews and friendlier specimen while retaining
-the fold as a regression fixture. This does not reopen M66 or assign the work retroactively to
-M67.
+near a branch fold. At M66 close, a future cut was left unassigned; completed M68 now owns the
+headless one-dimensional radius rail, frozen absolute branch intent, typed contact metadata and its
+internal continuation seam, retention/continuation actions, bounded local-alternative previews and
+friendlier specimen while retaining the fold as a regression fixture. M68 closes `M66-KL001`; it
+does not reopen M66 or assign the work retroactively to M67.
 
 M66 explicitly excludes Offset implementation/UI/placeholders, computed-on-computed chaining,
 Bake/Explode, production/profile consumption, automatic M28 migration, a canonical sketch-schema
@@ -1133,8 +1134,8 @@ M67 is accepted only when all of the following are true:
 - The supervising human explicitly approves all four areas in `docs/M67_UAT.md`.
 
 The 2026-08-08 close decision accepts all four focused UAT areas with no new M67 finding recorded.
-M68 is now the active headless Fillet direct-manipulation milestone under ADR 0032; that later
-scope does not reopen M67.
+M68 subsequently completed and received explicit approval under ADR 0032; that later scope does
+not reopen M67.
 
 M67 changes no residual family, branch/orientation choice, tolerance, persistence language,
 computed-Fillet behavior, Offset/Mirror capability or mobile support claim. Historical milestone
@@ -1142,9 +1143,9 @@ and ADR records remain evidence rather than live endpoint instructions.
 
 ## M68 acceptance: headless Fillet direct manipulation
 
-Status: in progress. ADR 0032's implementation and focused direct qualification are complete;
-the clean full release gate, frozen candidate publication and human-UAT completion are not yet
-claimed.
+Status: complete and explicitly approved by the supervising human on 2026-08-09. ADR 0032's
+implementation, focused direct qualification, complete release qualification, frozen candidate
+publication and focused human UAT all pass.
 
 M68 is accepted only when all of the following are true:
 
@@ -1175,11 +1176,21 @@ M68 is accepted only when all of the following are true:
   current preview token/sample. Authoring, published drag and direct numeric edits use the same
   Current-only transaction. Invalid release, cancellation, stale/exhausted work, foreign or
   second pointers and camera cancellation publish nothing and create no history.
-- Stable model-space DTOs/actions describe the radius grip/spoke/rail, contact handles, solid
-  retained-direction arrows, outlined alternatives and dashed complementary/local previews.
-  Canvas hover, canvas click and the compact accessible panel use the same action IDs,
-  applicability and disabled reasons. While selected/authoring, hit priority is contact handle,
-  then explicit radius grip/generated arc, then native support.
+- Stable model-space DTOs/actions describe the one central radius grip/spoke/rail, typed named-
+  contact metadata, solid retained-direction arrows, outlined alternatives and dashed
+  complementary/local previews. Named-contact state and its continuation seam remain headless;
+  there is no endpoint contact dot, canvas hit zone or compact-panel contact control. Canvas hover,
+  canvas click and the compact accessible panel use the same branch-action IDs, applicability and
+  disabled reasons.
+- Every advertised branch action survives exact replacement and complete cloned-feature-document
+  evaluation. A locally resolvable but composition-invalid action is omitted. A validated visible
+  arrow outranks an overlapping Fillet radius surface, the visible central grip remains
+  authoritative where it covers an arrow, and the generated arc/radius surface outranks native
+  support. Hover and click resolve the same unique headless-nearest action independently of SVG
+  paint order.
+- Full-period closed parents retain their complete native presentation and expose no meaningless
+  retained-direction action. Arcs, bounded/open parents and explicitly open periodic views retain
+  source-fragment trimming.
 - Painted SVG identity remains a hint. Independent exact owner, provenance and model-space
   proximity checks preserve `M66-PF004`; stale/foreign painted owners cannot mutate selection,
   authoring, preview or history.
@@ -1187,7 +1198,9 @@ M68 is accepted only when all of the following are true:
   Release/cancel outside the SVG cannot strand interaction. A camera change cancels/restores a
   live Fillet manipulation first, while pan/zoom remain usable during collection and inspection.
   Rendering, accessibility, overlay layout and browser-default suppression remain thin-adapter
-  concerns with direct Rust/WASM presentation tests, not a restored browser E2E suite.
+  concerns with direct Rust/WASM presentation tests, not a restored browser E2E suite. Automatically
+  exposed problem detail is a bounded non-intercepting canvas overlay and cannot resize the canvas
+  or change pointer-to-model mapping during a gesture.
 - One friendly line-circle specimen supports ordinary manipulation away from a fold, and the
   existing radius-`0.5` fold configuration remains a distinct stress specimen. Both are ordinary
   editable save-like scenes with no guide, protected state or alternate coordinator.
@@ -1203,6 +1216,11 @@ M68 is accepted only when all of the following are true:
   hygiene pass on one nominated candidate.
 - A fresh release candidate is served through Tailscale and the supervising human explicitly
   approves every area in `docs/M68_UAT.md`.
+
+The 2026-08-09 close decision accepts M68-U1 through M68-U6 and resolved findings `M68-F001`
+through `M68-F005` with no new blocker recorded. It records explicit approval of frozen candidate
+`edffb8a` without inventing a separate exhaustive replay of every scripted step. M68 is closed.
+M69 remains an empty unscoped placeholder without acceptance criteria.
 
 M68 explicitly excludes Offset/Mirror authoring, two-non-affine-parent Fillets,
 computed-on-computed chaining, Bake/Explode, profile/topology consumption, cross-revision

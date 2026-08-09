@@ -79,10 +79,11 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
 - One ordinary editable **2D Fillet playground** for independent lines, line-circle,
   line-quadratic-Bezier, high-valence, multi-corner/sequential and short-middle conflict
   authoring, with no guide, protected state or alternate coordinator.
-- ADR 0032 and the implemented M68 candidate for headless computed-Fillet direct manipulation:
+- ADR 0032 and the completed, supervising-human-approved M68 headless computed-Fillet direct
+  manipulation cut:
   an analytic branch-preserving radius rail, explicit contact/retention/bounded-local-alternative
   actions, Current-only coordinator transactions, pointer capture and Rust-first qualification.
-  The clean release gate and human UAT remain open, so M68 is not yet accepted.
+  The complete release gate and focused human UAT pass on approved candidate `edffb8a`.
 
 ### Changed
 
@@ -90,8 +91,14 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   workbench dropped its raw Production topology, Host-state evidence and Accepted redundancy
   developer cards while retaining Problems,
   canvas attribution and the reusable domain APIs/tests beneath those views. M50 had already
-  removed the separately routed `/#/dev/lab` application. M68 is now scoped and implemented as
-  the ADR 0032 Fillet-interaction cut; release qualification and human UAT remain open.
+  removed the separately routed `/#/dev/lab` application. M68 subsequently completed the ADR 0032
+  Fillet-interaction cut and received explicit supervising-human approval on 2026-08-09. M69 is an
+  empty unscoped placeholder.
+- Consolidated M68 close-off code and tests without changing accepted behavior: one workbench
+  painted-action resolver replaces three copies, redundant routing/panel wrappers and brittle
+  presentation literals are gone, and two manual radius-transition sequences are superseded by
+  the retained exhaustive 240-transition model. Distinct feature, editor, coordinator,
+  persistence and web regressions—including all five M68 findings—remain directly owned.
 - Retired the unreleased, doc-hidden M40 browser-evidence qualification API and frozen JSON
   matrix/corpus/golden harness after moving every retained transition claim to a direct current
   test owner. This evidence-only surface postdated `0.2.0` and had no runtime consumer.

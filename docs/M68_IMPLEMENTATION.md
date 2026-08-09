@@ -2,9 +2,9 @@
 
 # M68 implementation — headless Fillet direct manipulation
 
-Status: implementation, focused direct qualification and complete release qualification are
-complete on frozen candidate `edffb8a`. Explicit supervising-human UAT, including the `M68-F001`
-through `M68-F005` retests, remains pending; M68 is not yet accepted.
+Status: complete and explicitly approved by the supervising human on 2026-08-09. Implementation,
+focused direct qualification and complete release qualification pass on approved frozen candidate
+`edffb8a`.
 
 ## 1. Files and APIs
 
@@ -173,9 +173,54 @@ sha256sum crates/geosolve-demo-web/dist/* | sha256sum
 77d071d711255c2c2385cee04d3b6820e5a0ed2dc4d8ffa501abcbab97657c79  -
 ```
 
-The focused candidate is served from that exact distribution at
-`http://100.94.63.83:8080/` for `docs/M68_UAT.md`. All seven served HTTP responses match their
-local release files by SHA-256.
+The focused candidate was served from that exact distribution at the historical
+`http://100.94.63.83:8080/` endpoint for `docs/M68_UAT.md`. All seven served HTTP responses matched
+their local release files by SHA-256 before handoff.
+
+### Post-UAT close-off cleanup
+
+After acceptance, three independent audits reviewed M68 production scaffolding and tests against
+their owning boundaries. Cleanup commit `764dce8` removes two superseded manual coordinator test
+sequences, folds their sole unique frozen-rail value assertion into the retained publication/history
+test, and keeps the exhaustive 28-state/240-transition model as the transaction authority. It
+also consolidates three workbench painted-action routing copies behind one helper and removes
+redundant routing/panel wrappers, one tautological hash test and assertions tied to discarded SVG
+literals. Disabled-action metadata, typed headless contact continuation, every `M68-F001` through
+`M68-F005` regression and every `M66-PF001` through `M66-PF004` compatibility boundary remain.
+
+The complete post-cleanup qualification passes:
+
+```text
+cargo fmt --all -- --check
+cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+cargo test --locked --workspace --all-features
+RUSTFLAGS="-D warnings" cargo check --locked -p geosolve-demo-web --all-features \
+  --target wasm32-unknown-unknown
+cargo clippy --locked -p geosolve-demo-web --all-features \
+  --target wasm32-unknown-unknown -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --locked --workspace --all-features --no-deps
+cargo bench --locked --workspace --all-features --no-run
+cargo run --locked --release -p geosolve-sketch --example m14_performance
+cargo run --locked --release -p geosolve-sketch --example m32_performance
+cargo test --locked --release -p geosolve-linkage --test m23_performance \
+  exact_auto_sparse_crossover_solves_and_validates_256_moving_body_chain \
+  -- --exact --ignored --nocapture
+cargo deny check licenses
+for package in geosolve-geometry geosolve-core geosolve-sketch geosolve-linkage \
+  geosolve-sketch-features geosolve-sketch-ops geosolve-sketch-topology \
+  geosolve-constraint-editor; do
+  cargo package --locked --allow-dirty --list -p "$package"
+done
+nix-shell shell.nix --run \
+  'cd crates/geosolve-demo-web && env -u NO_COLOR trunk build --release'
+```
+
+Direct results are 37/37 feature tests, 168/168 editor unit tests, all 46 editor integration
+tests and 68/68 web tests. Rustdoc, all benchmark builds, both normal performance suites,
+licence/package contents and release Trunk pass; the release-only 256-body sparse crossover passes
+in `115.36s`. A reboot-stale local Rustup `lld` launcher was repaired before the WASM/release
+continuation; it was an execution-environment issue and changed no repository source. This
+post-acceptance build is not substituted for approved served source `edffb8a` or its manifest.
 
 ## 4. Acceptance criteria
 
@@ -212,15 +257,15 @@ of at most five events. It compares exact durable feature JSON/radius/stable IDs
 and cursor, held preview revision, active pointer ownership and native sketch coordinates,
 residual/rank/DOF invariants after every transition.
 
-The complete objective mechanical gate now passes. `docs/M68_UAT.md` still requires explicit
-supervising-human approval over the frozen build served through Tailscale. M68 remains open until
-that approval is recorded.
+The complete objective mechanical gate passes. On 2026-08-09, the supervising human explicitly
+accepted `docs/M68_UAT.md` over the frozen build and requested M68 closure. M68-U1 through M68-U6
+and resolved findings `M68-F001` through `M68-F005` are accepted under that close decision without
+claiming a separate exhaustive replay of every scripted step.
 
 ## 5. Known limitations or next blocker
 
-The sole remaining blocker is focused human UAT of the frozen candidate, including explicit
-retest of `M68-F001` through `M68-F005`. This is a scoped active milestone, not a completion record.
-M68 intentionally excludes Offset/Mirror authoring,
+No blocker remains within the explicitly approved M68 scope. M69 is an empty unscoped placeholder
+awaiting supervising-user goals. M68 intentionally excludes Offset/Mirror authoring,
 two-non-affine-parent Fillets, computed-on-computed chaining, Bake/Explode, profile/topology
 consumption, cross-revision topological naming, computed arcs as constraint operands, schema
 changes, global

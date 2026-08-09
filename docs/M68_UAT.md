@@ -2,18 +2,18 @@
 
 # M68 focused UAT — Fillet direct manipulation
 
-Status: ready for supervising-human UAT. Implementation, focused direct qualification and complete
-release qualification pass. M68 remains open until this scorecard receives
-explicit human approval.
+Status: closed with explicit supervising-human approval on 2026-08-09. Implementation, focused
+direct qualification and complete release qualification pass.
 
 Candidate source: `edffb8a`
 
-Tailscale endpoint: `http://100.94.63.83:8080/`
+Historical Tailscale endpoint: `http://100.94.63.83:8080/`
 
 Release distribution manifest:
 `77d071d711255c2c2385cee04d3b6820e5a0ed2dc4d8ffa501abcbab97657c79`
 
-Delivery check: all seven served HTTP responses match the frozen local distribution by SHA-256.
+Delivery check: all seven served HTTP responses matched the frozen local distribution by SHA-256
+before handoff. The endpoint is not a continuing post-close requirement.
 
 Use only the ordinary GeoSolve Sketch Workbench. Direct Rust tests are the correctness authority;
 this scorecard assesses discoverability, continuity and interaction feel. It does not qualify an
@@ -39,7 +39,7 @@ jumping roots. Perpendicular motion is effectively a no-op. Arc-body, grip and n
 the same behavior. Every arc in a shared-radius set is visibly identified and updates atomically;
 native points, constraints, rank and DOF do not change.
 
-Result: Pending
+Result: Accepted under the explicit M68 close decision.
 
 Notes:
 
@@ -63,7 +63,7 @@ Valid recovery resumes from the same absolute branch. One accepted gesture is ex
 step and survives reload. The problem appears as a bottom-left canvas overlay: it neither resizes
 the canvas nor changes pointer-to-model mapping, and it does not intercept the active gesture.
 
-Result: Pending
+Result: Accepted under the explicit M68 close decision.
 
 Notes:
 
@@ -88,7 +88,7 @@ an impossible retained-direction change, while valid outer-segment controls rema
 full circle or ellipse remains visually complete and exposes no meaningless trim-direction arrow;
 an arc or other open curve retains its ordinary trimming behavior.
 
-Result: Pending
+Result: Accepted under the explicit M68 close decision.
 
 Notes:
 
@@ -104,7 +104,7 @@ same two native parents/neighbourhoods and are visually distinct from the curren
 and panel use the same labels, disabled reasons and action identities. Click commits only the
 explicitly previewed alternative; Undo restores the exact prior branch.
 
-Result: Pending
+Result: Accepted under the explicit M68 close decision.
 
 Notes:
 
@@ -127,7 +127,7 @@ stranded, and another pointer cannot steal or publish it. Hover and click resolv
 Camera navigation remains available outside live manipulation; a live Fillet gesture
 cancels/restores before camera state changes.
 
-Result: Pending
+Result: Accepted under the explicit M68 close decision.
 
 Notes:
 
@@ -145,7 +145,7 @@ feature/corner identities and explicit branch intent survive history and reload 
 output IDs remain revision-local. M27/M28/M58 advanced compatibility remains unchanged. The
 workbench exposes only the approved M68 Fillet slice.
 
-Result: Pending
+Result: Accepted under the explicit M68 close decision.
 
 Notes:
 
@@ -173,8 +173,8 @@ continuation status, radius preview/publication, one history step, stable IDs an
 sketch identity, coordinates, residuals, rank and DOF. The full release gate passes on `c82d420`,
 and the replacement frozen distribution is byte-verified at the Tailscale endpoint.
 
-Retest: Pending. Repeat the reproduction on the candidate and confirm both Fillets remain
-adjustable after moving the polyline points.
+Retest: Accepted under the explicit M68 close decision. The close decision records the resolved
+finding without claiming a separate exhaustive replay of every scripted step.
 
 ### M68-F002 — redundant endpoint Fillet drag handles
 
@@ -194,9 +194,9 @@ selected corner, no `wb-fillet-contact` elements and no circular branch-action b
 browser reproduction over the frozen Tailscale bundle confirms the selected affordance group has
 one circle, class `wb-fillet-radius-grip`. The full release gate passes on `5355162`.
 
-Retest: Pending. Select a Fillet and confirm it shows one central radius handle, no endpoint dots
-or circular branch controls, and no hidden contact-drag behavior at either end. Branch choices may
-remain visible as lightweight icons/arrows.
+Retest: Accepted under the explicit M68 close decision. The accepted contract has one central
+radius handle, no endpoint dots or circular branch controls, and no hidden canvas contact-drag
+behavior. Branch choices remain lightweight icons/arrows.
 
 ### M68-F003 — branch arrows fell through to Fillet radius dragging
 
@@ -227,11 +227,9 @@ headless-nearest action. A real release-browser reproduction showed a three-entr
 stack resolving to `reverse-first`; the arrow became `3px` bright/glowing and a drag changed
 neither the `0.5` radius, central grip nor generated arc.
 
-Retest: Pending. Select a Fillet, hover each visible arrow—including crowded arrows—and confirm
-exactly one arrow highlights strongly. Click one to commit its branch action, then drag from an
-arrow and confirm it does not resize the Fillet or show a pressed outline. Confirm there is no
-separate glyph beside a retained-direction arrow and that keyboard-focused Inspector buttons keep
-their focus indication.
+Retest: Accepted under the explicit M68 close decision. The accepted contract retains one strongly
+highlighted headless-nearest arrow, no radius fall-through or pressed outline, no adjacent duplicate
+glyph and normal keyboard focus indication for Inspector buttons.
 
 ### M68-F004 — impossible retained arrows and closed-loop trimming
 
@@ -255,10 +253,9 @@ line-circle Fillet that retains the complete circle, full circle/ellipse topolog
 and an explicitly open periodic view. Strict Clippy, warnings-denied WASM checking, release Trunk
 and seven-asset Tailscale byte verification pass.
 
-Retest: Pending. On a three-segment polyline with both corners Filleted, select the feature and
-confirm no middle-segment arrow is shown for a direction the solver cannot accept, while the
-outer-segment arrows still work. Fillet a line against a circle or ellipse and confirm the closed
-parent remains complete; repeat with an arc and confirm the arc remains trim-capable.
+Retest: Accepted under the explicit M68 close decision. The accepted contract omits an
+uncommittable middle-segment arrow, retains valid outer actions, preserves a full circle/ellipse and
+keeps arcs and other open parents trim-capable.
 
 ### M68-F005 — global error panel resized the canvas during invalid gestures
 
@@ -280,11 +277,12 @@ containment, absolute overlay positioning, absence of grid-flow sizing and point
 Formatting, strict web Clippy, warnings-denied WASM checking, release Trunk and byte verification
 of all seven Tailscale assets pass.
 
-Retest: Pending. During any drag that can cross into invalid geometry, hold the pointer still as
-the global card appears and disappears. Confirm the grid/canvas framing and geometry under the
-pointer do not jump, and that the drag continues through the overlaid corner without interception.
+Retest: Accepted under the explicit M68 close decision. The accepted contract keeps the canvas and
+pointer mapping stable while the non-intercepting global card appears or disappears.
 
 ## Approval
 
-Pending explicit supervising-human approval. Mechanical qualification, a reachable Tailscale
-candidate and completion of this scorecard do not by themselves close M68.
+On 2026-08-09, the supervising human explicitly accepted the focused M68 UAT and requested
+milestone closure. M68-U1 through M68-U6 and resolved findings `M68-F001` through `M68-F005` are
+accepted under that close decision with no new blocker recorded. This approval does not replace
+the direct qualification above or invent a separate exhaustive replay of every scripted step.

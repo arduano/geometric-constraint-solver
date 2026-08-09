@@ -2,8 +2,8 @@
 
 # ADR 0032: Headless computed-feature direct manipulation
 
-Status: accepted for M68; implementation, focused direct qualification and release qualification
-are complete, while human UAT remains pending
+Status: accepted and completed in M68; implementation, focused direct/release qualification and
+explicit supervising-human UAT approval are complete as of 2026-08-09
 
 ## Context
 
@@ -198,8 +198,8 @@ validated residuals, numerical rank and DOF remain unchanged. M66's `M66-PF001` 
 accessibility/action metadata, event translation, pointer capture/release, overlay layout and
 browser-default suppression. No browser E2E suite is restored.
 
-Mechanical qualification precedes a fresh human UAT over the release build served through
-Tailscale. M68 is not complete until that scorecard receives explicit supervising-human approval.
+Mechanical qualification preceded a fresh human UAT over the release build served through
+Tailscale. The supervising human explicitly approved that scorecard and closed M68 on 2026-08-09.
 
 ## Consequences
 

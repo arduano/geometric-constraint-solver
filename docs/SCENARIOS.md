@@ -1275,11 +1275,12 @@ purpose-based sample library and M65 completes approved predictable, bounded pro
 M66 completes the explicitly approved computed-feature cut for ordinary multi-corner 2D Fillets;
 M67 completed the approved cleanup cut and added no new scenario fixture. Its focused UAT used the
 ordinary editable Samples catalog to prove the surviving workbench after removal of developer-only
-cards and frozen harnesses. M68 is now active under ADR 0032 and owns the Fillet direct-
-manipulation scenarios below: branch-preserving radius rails, explicit local branch/contact/
+cards and frozen harnesses. M68 completed and received supervising-human approval under ADR 0032
+for the Fillet direct-manipulation scenarios below: branch-preserving radius rails, explicit local
+branch/contact/
 retention actions, Current-only interaction history, pointer capture and separate friendly/fold
-specimens. Their implementation and focused direct qualification are complete; the clean full
-release gate and human UAT remain pending.
+specimens. Their implementation, focused direct qualification, clean full release gate and human
+UAT are complete. M69 is an empty unscoped placeholder with no assigned scenario.
 Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -1288,7 +1289,7 @@ required.
 Objective geometry, residual, derivative, rank, branch, persistence, migration, resource,
 cancellation, presentation-adapter and topology assertions are directly automated at their
 owning Rust/WASM layer. Old browser E2E is not a qualification path. Human review is
-recorded at completed M40.7, M53 and M61-M67. Every newly scoped milestone from M68 onward ends in
+recorded at completed M40.7, M53 and M61-M68. Every newly scoped milestone from M69 onward ends in
 its own UAT after direct automated qualification.
 
 ### M40-ES1 - Headless persistent line selection and relation action
@@ -2048,11 +2049,12 @@ line-circle Fillets. Numeric radius editing, explicit persisted branch state, in
 validation, rollback and sketch-state invariance remain correct. The playground line-circle
 specimen starts at radius `0.5`, near a branch fold.
 
-At M66 close the potential follow-up was deliberately unassigned. Active M68 now owns a headless
-one-dimensional radius rail, frozen absolute branch intent, contact/retention handles,
-continuation arrows, bounded local-alternative previews and a friendlier specimen while retaining
-the fold as a regression fixture. None of it was assigned to M67, and it remains pending until the
-M68 gate passes. The supervising human accepted this limitation when explicitly closing M66's
+At M66 close the potential follow-up was deliberately unassigned. Completed M68 now owns a
+headless one-dimensional radius rail, frozen absolute branch intent, typed contact metadata and its
+internal continuation seam, retention/continuation actions, bounded local-alternative previews and
+a friendlier specimen while retaining the fold as a regression fixture. None of it was assigned to
+M67; the M68 gate and focused UAT now pass. The supervising human accepted this limitation when
+explicitly closing M66's
 mechanically qualified computed-Fillet scope on 2026-08-08; that close does not claim a complete
 post-PF004 replay of every scripted UAT step.
 
@@ -2072,8 +2074,7 @@ displacement perpendicular to a frozen rail changes no radius, while radial disp
 invariant to coarse/fine event sampling and viewport scale.
 
 Status: mechanically implemented and directly qualified in `geosolve-sketch-features` and
-`geosolve-constraint-editor`; clean release qualification is complete and explicit human UAT
-remains pending.
+`geosolve-constraint-editor`; clean release qualification and explicit human UAT are complete.
 
 ### M68-DM2 - Fold stop and bounded explicit alternatives
 
@@ -2088,8 +2089,8 @@ absolute replacement corner; a tied choice reports ambiguity. Hover/focus change
 intent, and click/activation commits only the named preview. No test asks for global root
 enumeration.
 
-Status: mechanically implemented and directly feature/editor-qualified; clean release
-qualification is complete and explicit human UAT remains pending.
+Status: mechanically implemented, directly feature/editor-qualified and accepted through the
+approved M68 UAT; clean release qualification is complete.
 
 ### M68-DM3 - Current-only interaction transition model
 
@@ -2109,7 +2110,7 @@ numeric editing obey the same transition oracle.
 Status: mechanically implemented and directly qualified. The bounded reference model enumerates
 28 reachable states and all 240 applicable transitions, including invalid samples, delayed or
 duplicate acknowledgements, foreign pointers, same-position retry and terminal-coordinate
-validation. Clean release qualification is complete and explicit human UAT remains pending.
+validation. Clean release qualification and explicit human UAT are complete.
 
 ### M68-DM4 - Shared action resolution and crowded priority
 
@@ -2131,7 +2132,7 @@ of the shared middle segment would duplicate an endpoint claim; that control is 
 than presented as an arrow that cannot commit. Valid outer-segment actions remain present.
 
 Status: mechanically implemented and directly editor/presentation-qualified; clean release
-qualification is complete and explicit human UAT remains pending.
+qualification and explicit human UAT are complete.
 
 The `M68-F002` hotfix narrows the visible canvas affordance to one central radius handle per
 selected corner. Direct editor and web tests prove Fillet endpoints have neither rendered contact
@@ -2161,7 +2162,7 @@ existing exact public contract. They remain unchanged. `M66-PF001` through `M66-
 M27/M28/M30/M58 compatibility remain mandatory.
 
 Status: mechanically implemented and directly feature/coordinator/persistence-qualified; clean
-release qualification is complete and explicit human UAT remains pending.
+release qualification and explicit human UAT are complete.
 
 ### M68-DM6 - Friendly and fold specimens with captured pointers
 
@@ -2180,11 +2181,11 @@ overlay inside the canvas panel. Entering or leaving invalidity cannot add a wor
 resize the viewport or change pointer-to-model mapping during the captured gesture.
 Thin Rust/WASM presentation tests own event translation, pointer capture, overlay layout,
 accessibility and browser-default suppression. No browser E2E is restored. Human interaction feel
-is accepted only through the pending `docs/M68_UAT.md` Tailscale scorecard.
+is accepted through the approved `docs/M68_UAT.md` Tailscale scorecard.
 
 Status: mechanically implemented and directly presentation-qualified; clean release qualification
-is complete, and the distribution is published and byte-verified through Tailscale. Explicit human
-UAT remains pending.
+is complete, and the distribution was published and byte-verified through Tailscale. Explicit human
+UAT is complete.
 
 ### M68-DM7 - Affine source edits preserve grouped-Fillet manipulation
 
@@ -2202,8 +2203,8 @@ line-curve cases retain bounded seed-local root protection and the true-fold fix
 rail-less.
 
 Status: mechanically implemented and directly qualified by the `M68-F001` feature/editor
-regressions on `c82d420`; clean release qualification passes and explicit human retest remains
-pending.
+regressions on `c82d420`; clean release qualification passes and the resolved finding is accepted
+under the explicit M68 close decision.
 
 ### M68-DM8 - Closed-loop parents remain complete
 
@@ -2218,8 +2219,8 @@ and remain eligible for valid retained-direction actions. The distinction follow
 topology, not a hard-coded circle/ellipse family list.
 
 Status: mechanically implemented and directly feature/editor-qualified by `M68-F004` on
-`a1ed6ff`; release Trunk and all seven Tailscale asset checks pass, while explicit human retest
-remains pending.
+`a1ed6ff`; release Trunk and all seven Tailscale asset checks pass, and the resolved finding is
+accepted under the explicit M68 close decision.
 
 ### Archived solver-owned M66 scenario record
 

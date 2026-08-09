@@ -41,17 +41,17 @@ authoring cut, with radius-drag/branch-choice interaction retained as known limi
 `M66-KL001`. Its earlier unapproved Fillet/Offset/Mirror candidate is archived at
 `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`); the completed M25 offset constraints
 and M58 Mirror companion remain available. M67 completed the approved legacy UI,
-qualification-harness and dead-code cleanup. M68 is the active ADR 0032 headless Fillet direct-
-manipulation cut: branch-preserving radius rails, explicit contact/retention/local-alternative
-actions, Current-only coordinator transactions and pointer capture are implemented and directly
-qualified. Its clean release gate and focused human UAT remain pending, so it is not yet accepted.
+qualification-harness and dead-code cleanup. M68 completed and received supervising-human approval
+for the ADR 0032 headless Fillet direct-manipulation cut: branch-preserving radius rails, typed
+headless contact metadata/internal continuation, explicit retention/local-alternative actions,
+Current-only coordinator transactions and pointer capture. M69 is an empty unscoped placeholder.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and next milestone.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — active roadmap: completed and approved through M67, with M68 in progress.
+3. `PLAN.md` — active roadmap: completed and approved through M68, with M69 awaiting scope.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.
@@ -78,10 +78,9 @@ The post-M32 sketch north star is a Rust/WASM embeddable planar engine with reta
 unsolved design intent, ordinary CAD constraints/dimensions, immutable host inputs,
 cancellation, stable diagnostics and separate sketch-operation/production-topology
 companions. The host continues to own expressions, B-rep projection, feature history
-and application undo. Human UAT is complete at M40.7, M53 and M61-M67; every newly scoped
-milestone from M68 onward ends in its own UAT and all objective behavior is directly automated
-first. M68 therefore remains open until its Rust-heavy qualification and explicit Tailscale UAT
-approval both pass. The desktop demo has no future mobile support requirement.
+and application undo. Human UAT is complete at M40.7, M53 and M61-M68; every newly scoped
+milestone from M69 onward ends in its own UAT and all objective behavior is directly automated
+first. The desktop demo has no future mobile support requirement.
 
 ## Pre-1.0 API policy
 

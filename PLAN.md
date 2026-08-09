@@ -39,7 +39,9 @@ approved CAD-style authoring, and M63 completes approved geometry-anchored canva
 dimension presentation. M64 completes the approved editable-sample cleanup and focused UAT cut;
 M65 completes approved predictable, bounded projected dragging for those ordinary editable
 samples; M66 completes the approved computed-feature cut for ordinary multi-corner 2D Fillets
-outside the constraint graph. Its superseded solver-owned ordinary-UI source is preserved at
+outside the constraint graph; M67 completes the approved legacy-surface and frozen-harness cleanup;
+and M68 completes approved ADR 0032 Fillet direct manipulation. M69 is an empty unscoped
+placeholder. M66's superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
 This deliverable does not include a solid B-rep kernel, meshing or 3D sketch curves.
@@ -141,8 +143,8 @@ engine that a real CAD host can use. The accepted personality is:
   geometry enter one attempt as immutable revisioned values.
 - Keep cross-system expressions, B-rep projection, topological naming, feature
   history and application undo outside the sketch solver contract.
-- Keep human acceptance records explicit: M40.7, M53 and M61-M67 are complete and approved, and
-  every newly scoped milestone from M68 onward ends in its own supervising-human UAT. Every
+- Keep human acceptance records explicit: M40.7, M53 and M61-M68 are complete and approved, and
+  every newly scoped milestone from M69 onward ends in its own supervising-human UAT. Every
   objective correctness, persistence, compatibility and presentation-adapter assertion must pass
   through direct unit or integration tests at its owning layer before a human checkpoint begins;
   old CDP E2E suites are not a qualification path.
@@ -3137,10 +3139,11 @@ contacts, so tracking can drift or feel inverted. Post-placement contact/root, r
 direction and alternate-arc choices lack intuitive controls, especially for line-circle Fillets.
 Numeric radius editing, explicit persisted branch state, independent validation, rollback and
 sketch-state invariance remain correct. The playground's line-circle specimen starts at radius
-`0.5`, near a branch fold. Future, unassigned work may add a headless one-dimensional grip
-derivative/rail, frozen absolute branch intent, contact/retention handles, continuation arrows,
-alternate-arc previews and a friendlier sample while retaining the fold as a regression fixture.
-None of that work is assigned to M67.
+`0.5`, near a branch fold. At M66 close this follow-up was unassigned; M68 subsequently completed
+the headless one-dimensional radius rail, frozen absolute branch intent, typed contact metadata and
+its internal continuation seam, retention/continuation actions, bounded local-alternative previews
+and friendlier sample while retaining the fold as a regression fixture. None of that work was
+assigned to M67.
 
 Gate: one Apply creates one persistent multi-corner `FilletSet` with a shared editable radius;
 later Applies create separate sets whose opposite-end claims can compose on a shared source span.
@@ -3211,9 +3214,9 @@ UAT approval. That approval is recorded above and M67 is closed.
 
 ### M68
 
-Status: active. Implementation, focused direct qualification and complete release qualification
-are complete on frozen candidate `edffb8a`; explicit supervising-human UAT, including the
-`M68-F001` through `M68-F005` retests, remains pending.
+Status: complete and explicitly approved by the supervising human on 2026-08-09. Implementation,
+focused direct qualification and complete release qualification pass on approved frozen candidate
+`edffb8a`.
 
 Goal: close accepted limitation `M66-KL001` with a CAD-like, branch-preserving direct-
 manipulation model for ordinary computed Fillets, while establishing only the shared canvas
@@ -3275,7 +3278,29 @@ explicit branch action; pointer motion and numeric editing never auto-switch roo
   inventory and Git hygiene on one nominated source.
 - [x] Publish the frozen release candidate through Tailscale and byte-verify every served release
   asset against the local distribution.
-- [ ] Receive explicit supervising-human approval of `docs/M68_UAT.md`.
+- [x] Receive explicit supervising-human approval of `docs/M68_UAT.md`.
+
+Completion record (2026-08-09): the supervising human accepted the focused M68 UAT and requested
+milestone closure. M68-U1 through M68-U6 and resolved findings `M68-F001` through `M68-F005` are
+accepted under that close decision with no new blocker recorded. This records the explicit close
+decision without inventing a separate exhaustive replay of every scripted step. Approved served
+source remains `edffb8a`; later behavior-preserving source/test/documentation cleanup does not
+claim a different served candidate.
+
+Post-UAT close-off cleanup record (2026-08-09): commit `764dce8` records the outcome of three
+independent audits that separated true duplicate coverage from feature-math, editor-transition,
+coordinator-history and web-presentation boundary tests. Two manual coordinator sequences were
+removed after their one unique frozen-rail assertion was folded into the retained end-to-end
+publication test; the exhaustive 28-state/240-transition model remains authoritative. The
+workbench now has one shared painted-action resolution path instead of three copies, with redundant
+wrappers, one tautological fingerprint test and brittle retired-SVG literal assertions removed.
+Disabled-action metadata, the typed headless contact seam, all `M68-F001` through `M68-F005`
+regressions and all `M66-PF001` through `M66-PF004` compatibility tests remain. Requalification
+passes 37 feature tests, 168 editor unit tests, all 46 editor
+integration tests and 68 web tests, plus warnings-denied native/WASM Clippy, WASM checking,
+rustdoc, benchmark builds, normal performance suites, the 256-body release regression in
+`115.36s`, licence/package checks and release Trunk. No cleaned build is represented as the served
+human-UAT candidate.
 
 Implementation checkpoint (2026-08-08): `807d2f4` implements the feature-domain continuation,
 rail, bounded alternatives and atomic configuration replacement; `0954e97` implements the thin
@@ -3304,10 +3329,10 @@ tests, 170 editor unit tests and all 46 editor integration tests. Presentation f
 moves the problem live region from a layout-owning grid row into a non-intercepting canvas overlay;
 all 69 web tests, strict Clippy, warnings-denied WASM checking and release Trunk pass. The frozen
 `crates/geosolve-demo-web/dist/*` aggregate SHA-256 manifest is
-`77d071d711255c2c2385cee04d3b6820e5a0ed2dc4d8ffa501abcbab97657c79`. Only explicit human
-approval of the frozen Tailscale candidate remains unchecked. The static distribution is served
-at `http://100.94.63.83:8080/`; all seven HTTP responses match their local release files by
-SHA-256.
+`77d071d711255c2c2385cee04d3b6820e5a0ed2dc4d8ffa501abcbab97657c79`. The supervising human
+approved that frozen Tailscale candidate on 2026-08-09. The historical static distribution was
+served at `http://100.94.63.83:8080/`; all seven HTTP responses matched their local release files
+by SHA-256.
 
 Finding checkpoint `M68-F001` (2026-08-09): after large native point edits, valid affine/affine
 Fillets reevaluated over their complete unique-intersection cells, but radius-rail continuation
@@ -3317,7 +3342,8 @@ current-branch domain policy: two affine supports use their complete certified c
 non-affine case retains the bounded seed-local guard. Direct feature/editor regressions prove two
 grouped Fillets remain Current and adjustable after large source-point drags, retain stable IDs,
 publish one history step and leave native sketch identity, coordinates, residuals, rank and DOF
-unchanged. Independent review found no blocker; human retest remains pending.
+unchanged. Independent review found no blocker; the supervising human accepted this resolved
+finding under the explicit M68 close decision.
 
 Finding checkpoint `M68-F002` (2026-08-09): the two endpoint contact circles duplicated the
 central radius interaction visually and made selected Fillets unnecessarily busy. Commit
@@ -3328,8 +3354,8 @@ tests prove a Fillet endpoint resolves to the visible radius surface rather than
 contact target. A live-browser sanity check then identified circular branch-action backplates as a
 second handle-like visual layer; `5355162` removes those backplates while preserving the branch
 icons, arrows and action semantics. Web markup tests prove exactly one central grip for the
-selected corner, no endpoint contact elements and no handle-like branch circles. Human retest
-remains pending.
+selected corner, no endpoint contact elements and no handle-like branch circles. The supervising
+human accepted this resolved finding under the explicit M68 close decision.
 
 Finding checkpoint `M68-F003` (2026-08-09): lightweight arrows could still lose pointer priority
 to the Fillet radius surface, and overlapping transparent arrow corridors could make the SVG's
@@ -3346,7 +3372,7 @@ confirmed the correct crowded arrow previews and that dragging it changes neithe
 The canvas SVG action suppresses only its user-agent pointer-focus outline; accessible panel
 buttons retain normal keyboard focus indication.
 
-Human retest remains pending.
+The supervising human accepted this resolved finding under the explicit M68 close decision.
 
 Finding checkpoint `M68-F004` (2026-08-09): a retained-direction alternative was previously
 advertised whenever one corner solved in isolation, even when replacing that corner made the
@@ -3358,9 +3384,8 @@ uncommittable controls, and excludes full-period parents from visual trim claims
 their contact/branch state. Direct regressions cover the adjacent two-Fillet shared segment, full
 circle publication and retained-action catalog, full circle/ellipse topology, directed arcs and
 explicitly open periodic views. Focused native/WASM/release qualification passes and the
-replacement Tailscale bundle is byte-verified.
-
-Human retest remains pending.
+replacement Tailscale bundle is byte-verified. The supervising human accepted this resolved
+finding under the explicit M68 close decision.
 
 Finding checkpoint `M68-F005` (2026-08-09): automatically exposing the global Problems panel
 inserted an `auto` grid row beneath the canvas. Entering an invalid solver state therefore shrank
@@ -3371,9 +3396,8 @@ left overlay and gives it no pointer interception. The workbench now has fixed h
 status rows whether the card is hidden or visible. A direct presentation regression owns DOM
 containment, absolute positioning, removal of grid-flow declarations and pointer transparency;
 69 web tests, strict Clippy, warnings-denied WASM checking, release Trunk and seven-asset
-Tailscale byte verification pass.
-
-Human retest remains pending.
+Tailscale byte verification pass. The supervising human accepted this resolved finding under the
+explicit M68 close decision.
 
 Gate: radius, contact, retention and local-branch manipulation are branch-explicit, independently
 validated and transactional at the headless boundary. Only an exact last-`Current` candidate may
@@ -3381,13 +3405,19 @@ enter feature intent or history; invalid release, cancellation, stale work, a fo
 pointer or a camera change cannot publish. At a fold, the last valid same-branch result stays solid
 until the user explicitly chooses another applicable local branch. Canvas and accessible-panel
 actions resolve identically, pointer capture cannot strand a gesture, and every feature-only edit
-leaves the accepted sketch/residual/rank/DOF state exactly unchanged. M68 closes only after the
-complete mechanical gate and explicit human Tailscale UAT approval.
+leaves the accepted sketch/residual/rank/DOF state exactly unchanged. The complete mechanical gate
+and explicit human Tailscale UAT approval pass; M68 is closed.
 
 M68 explicitly excludes Offset/Mirror authoring, two-non-affine-parent Fillets,
 computed-on-computed chaining, Bake/Explode, profile or production-topology consumption,
 cross-revision topological naming, computed arcs as constraint operands, schema changes, global
 root enumeration, browser E2E, mobile behavior and legacy UI.
+
+### M69
+
+Status: empty unscoped placeholder awaiting supervising-user goals.
+
+No goal, theme, checklist, acceptance gate, scenarios or implementation is assigned yet.
 
 ## Explicit non-goals
 
