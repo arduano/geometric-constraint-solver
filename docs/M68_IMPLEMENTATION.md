@@ -3,7 +3,7 @@
 # M68 implementation — headless Fillet direct manipulation
 
 Status: implementation, focused direct qualification and complete release qualification are
-complete on frozen candidate `25211e5`. Explicit supervising-human UAT, including the `M68-F001`
+complete on frozen candidate `f5a17b9`. Explicit supervising-human UAT, including the `M68-F001`
 through `M68-F003` retests, remains pending; M68 is not yet accepted.
 
 ## 1. Files and APIs
@@ -77,7 +77,7 @@ priority semantics, residual catalog and M27/M28 advanced Fillet APIs are unchan
 
 ## 3. Commands and outcomes
 
-The implementation and its UAT repairs are split into eight reviewable source commits:
+The implementation and its UAT repairs are split into nine reviewable source commits:
 
 - `807d2f4` — feature-domain absolute continuation, analytic rail, bounded alternatives and
   atomic configuration replacement;
@@ -94,7 +94,9 @@ The implementation and its UAT repairs are split into eight reviewable source co
 - `8e3ee5d` — independently validated branch-action priority, icon-free retained-direction arrows,
   a 24-pixel action corridor and headless-authoritative preview emphasis; and
 - `25211e5` — SVG-stack reconciliation so overlapping painted corridors cannot suppress the
-  unique headless-nearest action or fall through to a Fillet drag.
+  unique headless-nearest action or fall through to a Fillet drag; and
+- `f5a17b9` — canvas-only suppression of Chrome's SVG pointer-focus outline while preserving
+  keyboard focus indication on the accessible action panel.
 
 The latest integrated focused gate passed in the project Nix shell:
 
@@ -143,11 +145,16 @@ source, the exact release-only 256-moving-body spatial sparse-crossover command 
 `license` plus `license-file` advisory is pre-existing and non-blocking; the explicit licence gate
 passed.
 
+The presentation-only `f5a17b9` follow-up then passed formatting, all 68 demo-web tests, strict
+demo-web Clippy, warnings-denied WASM checking and release Trunk. A real Chromium pressed-state
+check reported the focused canvas action's computed `outline-style` as `none`; the selector does
+not match the accessible-panel buttons.
+
 The frozen release distribution is identified by:
 
 ```text
 sha256sum crates/geosolve-demo-web/dist/* | sha256sum
-24438f7019d58628ca3c34814be890c6a7a6687f233545d7b6ef03ee84664e05  -
+0938c78fa43fed012f0a729982025d8cdc9826ff59ba197b671127b14aaf3cca  -
 ```
 
 The focused candidate is served from that exact distribution at

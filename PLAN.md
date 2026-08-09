@@ -3212,7 +3212,7 @@ UAT approval. That approval is recorded above and M67 is closed.
 ### M68
 
 Status: active. Implementation, focused direct qualification and complete release qualification
-are complete on frozen candidate `25211e5`; explicit supervising-human UAT, including the
+are complete on frozen candidate `f5a17b9`; explicit supervising-human UAT, including the
 `M68-F001` through `M68-F003` retests, remains pending.
 
 Goal: close accepted limitation `M66-KL001` with a CAD-like, branch-preserving direct-
@@ -3285,8 +3285,11 @@ single-workbench inventory, Git hygiene and release Trunk. The wrapper invocatio
 terminated while its unchanged long regression was running; that exact release-only
 256-moving-body spatial sparse-crossover command then passed independently in `136.32s`, followed
 by the remaining licence/package and Trunk commands on the same untouched source.
+Presentation-only follow-up `f5a17b9` removes the canvas SVG user-agent focus outline without
+changing headless behavior or the accessible-panel keyboard ring; formatting, 68 web tests,
+strict web Clippy, WASM checking, release Trunk and a pressed-state Chromium reproduction pass.
 The frozen `crates/geosolve-demo-web/dist/*` aggregate SHA-256 manifest is
-`24438f7019d58628ca3c34814be890c6a7a6687f233545d7b6ef03ee84664e05`. Only explicit human
+`0938c78fa43fed012f0a729982025d8cdc9826ff59ba197b671127b14aaf3cca`. Only explicit human
 approval of the frozen Tailscale candidate remains unchecked. The static distribution is served
 at `http://100.94.63.83:8080/`; all seven HTTP responses match their local release files by
 SHA-256.
@@ -3315,14 +3318,19 @@ remains pending.
 
 Finding checkpoint `M68-F003` (2026-08-09): lightweight arrows could still lose pointer priority
 to the Fillet radius surface, and overlapping transparent arrow corridors could make the SVG's
-topmost action disagree with the headless nearest action. Commits `8e3ee5d` and `25211e5` make an
-independently validated painted arrow outrank the ordinary Fillet surface, reconcile every
+topmost action disagree with the headless nearest action. Commits `8e3ee5d`, `25211e5` and
+`f5a17b9` make an independently validated painted arrow outrank the ordinary Fillet surface,
+reconcile every
 current stamped action under the pointer before selecting the unique headless-nearest action, and
 leave the visible central grip authoritative where it actually paints over an arrow. Retained-
 direction arrows no longer carry an adjacent duplicate glyph; their 24-pixel corridor previews
-through the headless editor and brightens, thickens and glows on hover. Native regressions cover
+through the headless editor, and each arrow brightens, thickens and glows on hover. Native
+regressions cover
 stale/foreign/spoofed and overlapping paint-order candidates. A release-browser reproduction
 confirmed the correct crowded arrow previews and that dragging it changes neither radius nor arc.
+The canvas SVG action suppresses only its user-agent pointer-focus outline; accessible panel
+buttons retain normal keyboard focus indication.
+
 Human retest remains pending.
 
 Gate: radius, contact, retention and local-branch manipulation are branch-explicit, independently

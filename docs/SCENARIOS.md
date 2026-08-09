@@ -2139,6 +2139,8 @@ selects the unique nearest applicable control from independently projected model
 A visible validated arrow outranks an overlapping Fillet radius surface, while the central radius
 grip retains priority where it visibly covers the arrow. Retained-direction arrows have no
 adjacent duplicate glyph; only the exact headless preview adds the bright, thick glowing state.
+Canvas SVG actions suppress their browser pointer-focus outline, while the separate accessible
+panel buttons retain ordinary keyboard focus indication.
 
 ### M68-DM5 - Atomic history, persistence and sketch invariance
 

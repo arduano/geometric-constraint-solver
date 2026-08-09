@@ -6,12 +6,12 @@ Status: ready for supervising-human UAT. Implementation, focused direct qualific
 release qualification pass. M68 remains open until this scorecard receives
 explicit human approval.
 
-Candidate source: `25211e5`
+Candidate source: `f5a17b9`
 
 Tailscale endpoint: `http://100.94.63.83:8080/`
 
 Release distribution manifest:
-`24438f7019d58628ca3c34814be890c6a7a6687f233545d7b6ef03ee84664e05`
+`0938c78fa43fed012f0a729982025d8cdc9826ff59ba197b671127b14aaf3cca`
 
 Delivery check: all seven served HTTP responses match the frozen local distribution by SHA-256.
 
@@ -201,12 +201,15 @@ After reversing that semantic priority, overlapping 24-pixel SVG action corridor
 second adapter defect: DOM paint order could report a different stamped arrow from the uniquely
 nearest headless action, causing safe rejection and a fall-through to ordinary Fillet dragging.
 
-Disposition: fixed by `8e3ee5d` and `25211e5`. A current stamped painted action must match exact
-owner, action, accepted/computed input, applicability and model-space proximity before outranking
+Disposition: fixed by `8e3ee5d`, `25211e5` and `f5a17b9`. A current stamped painted action must
+match exact owner, action, accepted/computed input, applicability and model-space proximity before
+outranking
 the radius surface. The adapter now submits every stamped action in the SVG stack at the pointer,
 so the unique headless-nearest action wins independently of paint order. The visible central grip
 keeps priority where it actually covers an arrow. Retained-direction arrows have no adjacent
 glyph, and an active headless preview brightens and thickens the full arrow with a glow.
+The canvas-only SVG action suppresses Chrome's pointer-focus outline; accessible-panel buttons
+retain the workbench keyboard-focus ring.
 
 Mechanical regression: 169 editor unit tests, 46 editor integration tests and 68 web tests pass.
 Focused cases reject stale, foreign, far and spoofed targets; admit an independently verified
@@ -217,8 +220,9 @@ neither the `0.5` radius, central grip nor generated arc.
 
 Retest: Pending. Select a Fillet, hover each visible arrow—including crowded arrows—and confirm
 exactly one arrow highlights strongly. Click one to commit its branch action, then drag from an
-arrow and confirm it does not resize the Fillet. Confirm there is no separate glyph beside a
-retained-direction arrow.
+arrow and confirm it does not resize the Fillet or show a pressed outline. Confirm there is no
+separate glyph beside a retained-direction arrow and that keyboard-focused Inspector buttons keep
+their focus indication.
 
 ## Approval
 
