@@ -3416,8 +3416,9 @@ root enumeration, browser E2E, mobile behavior and legacy UI.
 
 ### M69
 
-Status: mechanically qualified implementation candidate, pending focused supervising-human UAT.
-Scope and architecture were approved by the supervising user on 2026-08-09.
+Status: mechanically qualified and byte-verified UAT candidate, pending focused
+supervising-human approval. Scope and architecture were approved by the supervising user on
+2026-08-09.
 
 Goal: establish a clean CAD-facing semantic and interaction boundary between Profile geometry,
 user-authored explicit Construction geometry and evaluation-local implicit Construction geometry
@@ -3454,12 +3455,12 @@ owners, computed-feature evaluation, the headless editor and the sole workbench.
 edits remain ordinary transactional sketch edits; Fillet-discarded portions are finite
 evaluation-local metadata and always resolve back to their complete native curve.
 
-Qualification note (2026-08-09): focused owner tests, native/WASM checks and warnings-denied owner
-Clippy pass. The complete integrated release-gate result for the nominated consolidation source is
-`PENDING SUPERVISING RUN RESULT`; record that exact result in `docs/M69_IMPLEMENTATION.md` before
-freezing the served candidate. Mechanical implementation is ready for candidate publication, but
-M69 remains open until the release assets are byte-verified and the supervising human approves the
-focused UAT.
+Qualification note (2026-08-09): focused owner tests, native/WASM checks, warnings-denied owner
+Clippy and the complete clean release gate pass on candidate source
+`567141776c78178022f6123cbb399599ba713c62`. Its seven-file release distribution is retained at
+`http://100.94.63.83:8080/` and was fetched and compared byte-for-byte against the frozen local
+manifest recorded in `docs/M69_IMPLEMENTATION.md` and `docs/M69_UAT.md`. M69 remains open only for
+the supervising human's focused UAT decision.
 
 Gate: persistent Construction remains solver-active and default-profile-ineligible; implicit
 construction is finite derived output with exact native provenance and no independent identity;

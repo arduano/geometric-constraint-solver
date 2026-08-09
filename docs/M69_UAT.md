@@ -2,14 +2,28 @@
 
 # M69 focused UAT — Profile and construction geometry
 
-Status: not started. Implementation and direct/release qualification must pass before this
-scorecard is served.
+Status: ready for focused supervising-human review; approval is pending.
 
-Candidate source: pending
+Candidate source: `567141776c78178022f6123cbb399599ba713c62` on `main`
 
-Tailscale endpoint: pending
+Tailscale endpoint: `http://100.94.63.83:8080/`
 
-Release distribution manifest: pending
+Release distribution manifest aggregate:
+`1ffc65e4dadee3da240bad502254ea850a1cb9b11e06376572179b0ef1c75ba1`
+
+```text
+3dcb87723d1807a9829741aa31f5a53de003a460ecdf5e9a0516a32bb399caee  dist/API_COMPATIBILITY.md
+ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  dist/LICENSE
+665e4df98334f5efea3efa83d18ea71198a182825c2d40f96dbf141e43a2a418  dist/THIRD_PARTY_LICENSES.md
+cfc925cc92300bef04cefbcd19d0e28f0c40b884ea90f9c27df3ed17012be35e  dist/geosolve-demo-web-2b7cfc5e20c98b47.js
+2e21db895e0305c60d983defdd4551f3ce10ae9ff258883a440e5acec071c6d0  dist/geosolve-demo-web-2b7cfc5e20c98b47_bg.wasm
+f097939267de41cbb4246c6fb40a70aa5c0a03a273dfa4db5a6a994abb0c6611  dist/index.html
+02e29144773da283540f73aabce70f6ce483f3a8be585a4fe7ed026e39b14393  dist/styles-642247db02aebd54.css
+```
+
+All seven served assets and `/` were fetched over the Tailscale endpoint and compared byte-for-byte
+with the frozen local release distribution. Hard-refresh once before beginning if this browser tab
+previously loaded an older candidate from the same endpoint.
 
 Use only the ordinary GeoSolve Sketch Workbench. Direct Rust tests are the mathematical,
 persistence and interaction-policy authority; this scorecard assesses discoverability,

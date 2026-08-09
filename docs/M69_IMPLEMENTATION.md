@@ -2,13 +2,13 @@
 
 # M69 implementation — Profile and construction geometry semantics
 
-Status: mechanically qualified implementation candidate, pending the nominated-source release-gate
-record, release-asset publication and focused supervising-human UAT. ADR 0033 is the accepted
-architecture. M69 must not be marked complete until `docs/M69_UAT.md` records explicit approval.
+Status: mechanically qualified and byte-verified UAT candidate, pending focused
+supervising-human approval. ADR 0033 is the accepted architecture. M69 must not be marked complete
+until `docs/M69_UAT.md` records explicit approval.
 
-Candidate source: pending consolidation commit
+Candidate source: `567141776c78178022f6123cbb399599ba713c62` on `main`
 
-Integrated release-gate result: **PENDING SUPERVISING RUN RESULT**
+Integrated release-gate result: **PASS**
 
 ## 1. Files and APIs
 
@@ -136,15 +136,14 @@ All commands pass. The two package test totals remain 41/41 and 10/10 respective
 Clippy reports only Cargo's pre-existing `license` plus `license-file` manifest advisory; it emits
 no Rust warning and the explicit warnings-denied check passes.
 
-An earlier integrated WASM owner check passed:
+The integrated and final WASM owner checks passed:
 
 ```text
 cargo check --locked -p geosolve-demo-web --all-features \
   --target wasm32-unknown-unknown
 ```
 
-The nominated consolidation source must record the complete clean qualification sequence below.
-Its outcome is deliberately not inferred from focused package runs:
+The nominated consolidation source passed the complete clean qualification sequence below:
 
 ```text
 cargo fmt --all -- --check
@@ -171,13 +170,32 @@ nix-shell shell.nix --run \
   'cd crates/geosolve-demo-web && env -u NO_COLOR trunk build --release'
 ```
 
-Integrated release-gate outcome: **PENDING SUPERVISING RUN RESULT**. Replace this marker with the
-exact command results, nominated commit and any execution-environment note before freezing the
-release distribution. Do not describe M69 as clean-gate-qualified while the marker remains.
+Integrated release-gate outcome: **PASS**. On clean candidate source
+`567141776c78178022f6123cbb399599ba713c62`,
+`nix-shell shell.nix --run './scripts/release-gate.sh'` exited 0. Workspace formatting, strict
+native Clippy, locked all-feature tests, rustdoc, bench compilation, performance budgets, package
+contents, `cargo deny check licenses` and Trunk 0.21.14 release assembly all passed. The explicit
+256-moving-body release performance gate passed in 147.33 seconds. The two supplemental commands
+above then passed against the same source with no Rust warnings. Cargo's existing `license` plus
+`license-file` manifest advisories remain non-blocking; the licence audit itself passed.
 
-Release distribution SHA-256 manifest: **PENDING RELEASE BUILD**
+Release distribution SHA-256 manifest aggregate:
+`1ffc65e4dadee3da240bad502254ea850a1cb9b11e06376572179b0ef1c75ba1`.
 
-Tailscale byte verification: **PENDING RELEASE CANDIDATE**
+```text
+3dcb87723d1807a9829741aa31f5a53de003a460ecdf5e9a0516a32bb399caee  dist/API_COMPATIBILITY.md
+ca372a7d92560b1fa9f6d832b440e8bcd62d9adfa8870c98287deab66d98310e  dist/LICENSE
+665e4df98334f5efea3efa83d18ea71198a182825c2d40f96dbf141e43a2a418  dist/THIRD_PARTY_LICENSES.md
+cfc925cc92300bef04cefbcd19d0e28f0c40b884ea90f9c27df3ed17012be35e  dist/geosolve-demo-web-2b7cfc5e20c98b47.js
+2e21db895e0305c60d983defdd4551f3ce10ae9ff258883a440e5acec071c6d0  dist/geosolve-demo-web-2b7cfc5e20c98b47_bg.wasm
+f097939267de41cbb4246c6fb40a70aa5c0a03a273dfa4db5a6a994abb0c6611  dist/index.html
+02e29144773da283540f73aabce70f6ce483f3a8be585a4fe7ed026e39b14393  dist/styles-642247db02aebd54.css
+```
+
+Tailscale byte verification: **PASS** at `http://100.94.63.83:8080/`. All seven manifest members
+were fetched without proxy/cache reuse, matched their expected SHA-256 values and compared
+byte-for-byte with local `dist`; `/` also matched `index.html`, and the local manifest remained
+unchanged after verification.
 
 ## 4. Acceptance criteria
 
@@ -209,16 +227,14 @@ Direct evidence covers the implementation criteria as follows:
 - the focused ordinary samples and `docs/M69_UAT.md` cover role authoring/conversion, overlap,
   shared points, implicit Fillet portions, failure withholding and closed-loop preservation.
 
-Implementation and focused owner acceptance evidence pass. The integrated release-gate result must
-replace the explicit placeholder in section 3. Release publication, byte verification and explicit
-supervising-human UAT remain open and are intentionally not claimed here.
+Implementation, focused owner acceptance, the complete integrated release gate, release
+publication and byte verification pass. Explicit supervising-human UAT remains open and is
+intentionally not claimed here.
 
 ## 5. Known limitations or next blocker
 
-The next blocker is procedural: record the nominated-source integrated release-gate result, build
-and hash the release distribution, serve and byte-verify that exact distribution over Tailscale,
-then obtain explicit supervising-human approval of `docs/M69_UAT.md`. M69 remains open until those
-steps pass.
+The next blocker is procedural: obtain explicit supervising-human approval of `docs/M69_UAT.md`.
+M69 remains open until that review passes.
 
 M69 intentionally has no persistent point role. Pick scope and visibility remain independent
 session state: changing scope does not hide painted geometry or alter history, while hiding
