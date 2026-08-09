@@ -159,7 +159,8 @@ approved M62 authoring milestone, approved M63 canvas-constraint presentation, a
 editable-sample cleanup, approved reduced-scope M65 predictable dragging, approved scoped M66
 computed-Fillet features under ADR 0031, approved M67 legacy-surface and harness cleanup, approved
 M68 headless Fillet direct manipulation under ADR 0032 and approved M69 Profile/Construction
-semantics under ADR 0033.
+semantics under ADR 0033. M70 is the active, not-yet-accepted ADR 0034 headless auto-constraint
+drafting milestone.
 
 - [x] `ARCHITECTURE.md` and this file describe both product deliverables and allocate target behavior across M8-M22 without presenting a target as implemented baseline behavior.
 - [x] Hard validity is specified independently from hard nonlinear termination, secondary optimum status, rank and structural class, including the baseline-to-target report transition.
@@ -1251,13 +1252,137 @@ publication and focused human UAT all pass.
 The 2026-08-09 close decision accepts M69-U1 through M69-U5 with no new finding or blocker
 recorded. It records explicit approval of frozen candidate
 `567141776c78178022f6123cbb399599ba713c62` without inventing a separate exhaustive replay of every
-scripted step. M69 is closed. M70 remains an empty unscoped placeholder without acceptance
-criteria.
+scripted step. M69 is closed. M70 is active under the acceptance criteria below and is not yet
+complete.
 
 M69 explicitly excludes persistent point roles, canonical sketch v5, workspace migration,
 marquee/cycling/search additions, Offset/Mirror UI, computed-on-computed chaining, Bake/Explode,
 computed-feature production-topology consumption, new residuals, browser E2E, mobile behavior and
 legacy UI.
+
+## M70 acceptance: headless auto-constraint drafting intelligence
+
+Status: implementation and focused direct qualification are complete. Integrated release
+qualification, release publication and supervising-human UAT are pending. M70 remains open.
+
+M70 is accepted only when all of the following are true:
+
+- `geosolve-constraint-editor` owns semantic anchors, stage-local wake/reference memory, candidate
+  generation/ranking, hysteresis, guide and adjusted-preview DTOs, suppression, commit/cancel
+  consequences and retained replay. No browser/native host reconstructs those decisions.
+- Validated policy independently controls guide publication, coordinate adjustment and durable
+  relation creation per inference family where those choices are semantically coherent.
+  Persistent-point identity reuse cannot persist without adjustment because it is structural
+  operand reuse, not a solver relation; that invalid combination is rejected. Default inclusive
+  enter/leave thresholds are `8/12 px`
+  for points/midpoints, `10/14 px` for curves and `4/6 degrees` for directions. Configured policy
+  has hard ceilings of 32 candidates and eight remembered references; default scene-query bounds
+  are 4,096 semantic anchors and 16,384 tessellation chords.
+- Candidate generation stops as soon as the first unique bundle proves the configured candidate
+  bound insufficient. It reports the first proven lower bound, returns raw unadjusted coordinates
+  with no candidate/guide prefix and acquires no wake state. A scene-anchor/chord bound likewise
+  returns one typed scene-limit result rather than a truncated semantic prefix. The complete
+  derived candidate, guide, reference, ranking and raw/adjusted screen/model output is independently
+  finite-validated before any identities or state publish; derived overflow is `InvalidFrame` and
+  leaves the engine transactionally unchanged.
+- Every `ConstructionPoint`-backed stage receives positional inference. Directional inference is
+  limited to real newly authored line/polyline spans; raw-coordinate-only stages retain their
+  existing behavior.
+- Existing persistent-point inference reuses that exact point identity. It creates neither a
+  duplicate point nor a redundant Coincident source. Reuse inside another construction is encoded
+  directly in its point operand; a standalone Point-tool confirmation of an already-existing point
+  emits no construction plan and is a history-neutral no-op.
+- PointOnCurve supports native line, circle/arc, Bezier, conic, B-spline and NURBS families and
+  carries explicit span, accepted parameter/domain, winding and contact neighbourhood metadata.
+- A semantic line/polyline midpoint ranks ahead of generic PointOnCurve and commits the existing
+  Midpoint relation. A compatible midpoint-plus-perpendicular bundle may commit together.
+- Near-Horizontal/Vertical applies to new line and each live polyline span. A remembered native
+  line/polyline span supports later Parallel/Perpendicular. Bare-point H/V is explicitly
+  `TrackingOnly`: it neither adjusts nor persists a relation by default and is never emulated by a
+  fixed coordinate, zero dimension or hidden geometry.
+- Ranking is deterministic and lexicographic: applicable constraint-backed before tracking-only;
+  persistent point before Midpoint before PointOnCurve; remembered Parallel/Perpendicular before
+  equivalent world-axis direction; then ADR 0033 Profile/Construction priority and geometric
+  error. Persistent IDs stabilize output order only; an otherwise exact tie is Ambiguous and
+  cannot auto-commit.
+- At most one positional and one compatible directional inference participates in a stage bundle.
+  Multi-stage tools retain confirmed earlier-stage relations until their one final construction
+  transaction.
+- Wake is immediate and timer-free. Reference state clears after the current stage click, cancel,
+  tool exit, mutation, Undo/Redo, reload, viewport/policy change or stale identity and is never
+  serialized. Only eligible reusable affine spans consume bounded reference capacity; nonlinear
+  contacts do not evict them, and geometry role/scope priority matches ordinary headless picking.
+- Semantic suppression acquires no reference, clears active latches/guides and cannot commit a
+  stale candidate. A suppressed click places the raw stage; releasing suppression recomputes from
+  the current sample. Rust does not hard-code a keyboard key.
+- The ordinary placement click explicitly confirms exactly the visible candidate bundle; there is
+  no second Apply step. If no candidate is active, the construction remains geometry-only.
+- Typed draft point/span slots allow relations to refer to persistent operands and geometry
+  allocated by the same `ConstructionProposal`. The complete construction, role, contacts and
+  inferred constraints form one `ConstructionCommitPlan`; direct geometry-only apply remains a
+  supported compatibility path. One plan contains at most 32 inferred relations, and each
+  relation is charged to the caller-controlled operation before publication.
+- The retained coordinator evaluates the plan on a clone, solves once, requires fresh independent
+  acceptance and rejects any newly fully or partially redundant inferred source. Only the exact
+  displayed plan may publish; staleness, ambiguity, conflict, cancellation or exhaustion never
+  falls through to another relation.
+- Publication authority originates only from a scene authenticated against the retained session's
+  exact current accepted document, design filter and `PreparedSketchInput`; caller-assembled
+  document/revision/stamp combinations cannot grant it. The terminal transition retains one commit
+  token, frozen plan and that exact input. Dispatch authenticates all three and rechecks the
+  complete input against the live session before mutation. Compatibility/render-only scenes may
+  display inference but cannot emit an inferred construction plan. A private exact seal covers the
+  accepted revision, design identity, viewport, native inference curves and construction snap
+  anchors: mutation before binding rejects authentication and mutation after binding revokes
+  publication authority.
+- Rejection leaves live document/history unchanged and the exact draft/last preview available for
+  correction. Success produces one history/replay checkpoint; one Undo/Redo removes/restores the
+  construction and all inferred relations together. Undo may remove those objects but never
+  rewinds the persistent-object or spline-span allocator high-water; Redo, reload and divergent
+  history cannot reuse retired identities. Restoring history preserves the current exact parameter
+  batch and external snapshot set rather than silently reverting to defaults. Application
+  workspace v5 stores the field-opaque checkpoint value, validates that it belongs to and covers
+  both stored graphs, bounds and streaming-decodes spline cursor entries, and rejects inconsistent
+  object/curve/span cursor relationships. A collision-free process-local epoch makes
+  allocator-only retention stale to prepared CAS and distinguishes independent restored session
+  incarnations. Workspace v5 strictly migrates v1-v4 by deriving their graph-visible maxima.
+  Frozen sketch v1-v4 bytes and current unsupported draft-v5 bytes remain unchanged.
+- ADR 0033 Profile/Construction scope, visibility, one-pixel overlap priority and implicit
+  Fillet-discarded-to-native-source mapping remain unchanged. Computed Fillet arcs are not anchors.
+- Direct Rust tests cover exact hysteresis boundaries, order/zoom/scale invariance, non-finite
+  rejection, resource limits, every construction stage, every native curve family, line/polyline
+  directions, reference lifecycle, bundles, ambiguity, suppression, stale/rejected/exhausted work,
+  exact scene-publication authentication, atomic allocation/publication and deterministic Undo/
+  Redo/reload/replay. The focused inference selection passes exactly 46/46; the complete editor
+  crate passes 266 unit tests plus all relevant integration suites, without inventing one aggregate
+  integration-suite count; demo-web passes 82/82 tests; the sketch library passes 33/33 unit tests;
+  and its M56 prepared-work suite passes 6/6.
+- Native and WASM match the shared golden transition oracle in
+  `crates/geosolve-constraint-editor/tests/m70_transition_parity.rs` and
+  `crates/geosolve-constraint-editor/tests/fixtures/m70_transition_parity.golden.txt`. It covers
+  every M70 inference family, tracking, ambiguity, suppression/release, stale/clear lifecycle,
+  atomic publication, rejection, Undo/Redo and reload. Direct workbench tests prove semantic
+  suppression translation, Shift/RAF ownership without losing queued terminal projected-drag
+  samples, accessible guide/glyph rendering and absence of browser-owned ranking or geometry
+  calculation; no browser E2E, CDP or legacy route returns.
+- One ordinary editable **Samples → Constraints & dimensions → Auto-constraint drafting
+  playground** covers point reuse, curve contact, midpoint/normal, H/V, remembered parallel/
+  perpendicular, suppression, ambiguity, role/scope, zoom, Undo/Redo and reload without a guide,
+  protected state or alternate coordinator.
+- Formatting, warnings-denied Clippy, locked all-feature workspace tests, WASM, rustdoc,
+  benchmark/licence/package checks, release Trunk, static single-workbench inventory and Git
+  hygiene pass on one nominated candidate. Its release distribution is byte-verified over
+  Tailscale before human review.
+- The supervising human explicitly approves every area in `docs/M70_UAT.md`; objective findings
+  receive direct owning-layer regressions before any targeted recheck.
+
+M70 adds no residual, persistent relation kind, inferred-state persistence, hidden construction
+geometry, canonical sketch-schema migration, global root search or browser-owned branch policy.
+Its application-workspace v5 migration is limited to host-owned identity high-water. Equality,
+symmetry, concentric/quadrant, certified intersection/collinear/extension, nonlinear
+tangent/normal, grid/axis, angle increment and durable arbitrary point-pair H/V inference remain
+outside scope.
+`docs/M71_GOALS.md` is a non-active candidate backlog and confers no implementation authority.
 
 ### Superseded M66 solver-owned Fillet acceptance record
 

@@ -1119,8 +1119,8 @@ fn point_segment_distance(point: ScreenPoint, start: ScreenPoint, end: ScreenPoi
 #[cfg(test)]
 mod tests {
     use geosolve_sketch::{
-        ContactNeighborhood, CurveDefinition, CurveSpan, DocumentFilletTrimEndpoint, GeometryRole,
-        SketchDocument,
+        ContactDomain, ContactNeighborhood, CurveDefinition, CurveSpan, DocumentFilletTrimEndpoint,
+        GeometryRole, SketchDocument,
     };
 
     use super::{SceneCurve, ScreenPoint, contact_operand_anchor, curve_parameter_anchor};
@@ -1165,6 +1165,12 @@ mod tests {
             .expect("contact");
         let retained = SceneCurve {
             span,
+            authoring_eligible: true,
+            affine: true,
+            contact_domain: ContactDomain::Bounded {
+                lower: 0.0,
+                upper: 1.0,
+            },
             role: GeometryRole::Profile,
             source_role: GeometryRole::Profile,
             origin: SceneCurveOrigin::Native,

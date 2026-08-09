@@ -680,6 +680,61 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
 .wb-draft-point,
 .wb-cursor-point { fill: none; stroke: #efb856; stroke-width: 2; vector-effect: non-scaling-stroke; }
 .wb-cursor-point { opacity: 0.55; }
+.wb-inference-guides,
+.wb-inference-candidates,
+.wb-inference-state { pointer-events: none; }
+.wb-inference-guide-point,
+.wb-inference-guide-segment {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.wb-inference-guide.constraint-backed .wb-inference-guide-point,
+.wb-inference-guide.constraint-backed .wb-inference-guide-segment {
+  stroke: #79d6ca;
+  stroke-width: 1.8;
+  filter: drop-shadow(0 0 3px rgb(121 214 202 / 38%));
+}
+.wb-inference-guide.constraint-backed .wb-inference-guide-segment { stroke-dasharray: 7 4; }
+.wb-inference-guide.tracking-only .wb-inference-guide-point,
+.wb-inference-guide.tracking-only .wb-inference-guide-segment {
+  stroke: #8a9897;
+  stroke-width: 1.25;
+  stroke-dasharray: 2 5;
+  opacity: 0.82;
+}
+.wb-inference-glyph-background {
+  fill: rgb(23 28 29 / 94%);
+  stroke: #79d6ca;
+  stroke-width: 1.25;
+  vector-effect: non-scaling-stroke;
+}
+.wb-inference-glyph-symbol {
+  fill: none;
+  stroke: #c8fff7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.65;
+  vector-effect: non-scaling-stroke;
+}
+.wb-inference-candidates.ambiguous .wb-inference-glyph-background { stroke: #e2ad5d; }
+.wb-inference-candidates.ambiguous .wb-inference-glyph-symbol { stroke: #ffe0a1; }
+.wb-inference-state rect {
+  fill: rgb(41 34 24 / 96%);
+  stroke: #b88743;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.wb-inference-state text {
+  fill: #f2d59c;
+  font: 600 12px Inter, "IBM Plex Sans", system-ui, sans-serif;
+}
+.wb-inference-state[data-inference-status="suppressed"] rect {
+  fill: rgb(30 35 35 / 94%);
+  stroke: #718080;
+}
+.wb-inference-state[data-inference-status="suppressed"] text { fill: #b9c5c4; }
 .wb-draft-guide {
   position: absolute;
   top: 0.75rem;

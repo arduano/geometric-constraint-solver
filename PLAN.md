@@ -42,7 +42,9 @@ samples; M66 completes the approved computed-feature cut for ordinary multi-corn
 outside the constraint graph; M67 completes the approved legacy-surface and frozen-harness cleanup;
 M68 completes approved ADR 0032 Fillet direct manipulation; and M69 completes approved ADR 0033
 Profile/Construction authoring, selection and computed Fillet-discarded geometry semantics. M70
-is an empty placeholder awaiting supervising-user scope. M66's
+is the active ADR 0034 headless auto-constraint drafting milestone; implementation and focused
+direct qualification are complete, while integrated release qualification, publication and its
+dedicated human UAT remain pending. M66's
 superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
@@ -3490,10 +3492,118 @@ legacy UI.
 
 ### M70
 
-Status: empty unscoped placeholder awaiting supervising-user goals.
+Status: implementation and focused direct qualification are complete under ADR 0034. Integrated
+release qualification, release-candidate publication and supervising-human UAT are pending. M70
+remains open.
 
-No goal, theme, checklist, acceptance gate, scenario or implementation is assigned yet. Once
-scoped, M70 will end in its own direct qualification and supervising-human UAT.
+Goal: add reusable CAD-like auto-constraint drafting intelligence to the headless Rust editor.
+Hover may wake semantic anchors and affine references; live construction may publish adjusted
+previews, guides and ranked prospective relations; and the placement click commits the exact
+displayed construction-plus-relation plan atomically. The browser remains a thin consumer, and
+M70 uses no new solver residual or persistent constraint definition.
+
+- [x] Replace the dormant `ProvisionalInferenceCandidate` stage/confirm seam and separate manual
+  inference effects with one stateful headless drafting-inference engine.
+- [x] Publish validated per-family behavior, tolerance and resource policy; semantic suppression
+  input; stable session-local anchors/candidates; typed guides; raw and adjusted coordinates;
+  ranking evidence; ambiguity; and explicit Complete, candidate-limited and scene-limited resource
+  state. Candidate and scene exhaustion return no partial semantic prefix. Validate the complete
+  derived candidate/guide/reference/ranking and screen/model output before publishing identities or
+  state; non-finite derived geometry rejects transactionally.
+- [x] Apply positional inference at every construction stage backed by `ConstructionPoint` and
+  directional inference only to real authored line/polyline spans.
+- [x] Reuse an existing persistent point identity without manufacturing a redundant Coincident
+  source or duplicate point. A standalone Point-tool confirmation of that same identity is a
+  history-neutral no-op; reuse inside another construction is encoded in its point operand.
+- [x] Create explicit native PointOnCurve contacts for line, circle/arc, Bezier, conic, B-spline
+  and NURBS spans with complete span/domain/parameter/winding/neighbourhood metadata.
+- [x] Prefer semantic line/polyline Midpoint over generic PointOnCurve and support a compatible
+  midpoint-plus-perpendicular new-span bundle.
+- [x] Infer Horizontal/Vertical for new line and live polyline spans, and remember native affine
+  spans for later Parallel/Perpendicular inference.
+- [x] Keep bare-point H/V as typed tracking-only guidance. Do not adjust from or persist that guide
+  by default, and never fake it with `FixedCoordinate`, a zero dimension or hidden construction
+  geometry.
+- [x] Rank candidates deterministically: applicable constraint-backed before tracking-only; point
+  identity before Midpoint before PointOnCurve; remembered Parallel/Perpendicular before an
+  equivalent world-axis direction; then ADR 0033 role priority and geometric error. Exact semantic
+  ties remain Ambiguous and do not auto-commit.
+- [x] Use inclusive `8/12 px` point/midpoint, `10/14 px` curve and `4/6 degree` direction enter/
+  leave hysteresis defaults, with hard ceilings of 32 candidates and eight remembered references.
+  Stop generation at the first unique candidate proving overflow and fail closed without first
+  allocating every possible bundle.
+- [x] Keep reference memory immediate, bounded, stage-local and non-persistent. Clear it after the
+  stage click, cancel/tool exit, mutation, Undo/Redo, reload, policy/viewport change or stale
+  identity. Only reusable affine references consume its capacity, and role/scope priority remains
+  the same as ordinary headless picking.
+- [x] Let hosts control guide publication, coordinate adjustment and durable relation creation
+  independently where semantically coherent. Reject persist-without-adjust for structural point
+  identity reuse, which has no separate solver relation. Suppression is semantic Rust input; it
+  clears active wake/latch state and raw placement cannot commit a stale inference.
+- [x] Add typed draft point/span slots and one `ConstructionCommitPlan` that can reference geometry
+  allocated by the same proposal. Retain the direct geometry-only `ConstructionProposal::apply`
+  route for compatibility. Bound plans to 32 inferred relations and charge each relation to the
+  caller-controlled operation so oversized, cancelled or exhausted work stays atomic.
+- [x] Apply the plan on a cloned retained coordinator, solve once, require fresh independent
+  acceptance and reject newly inferred fully/partially redundant sources. Publish exactly the
+  displayed plan as one history/replay checkpoint or leave live state unchanged and the draft
+  recoverable.
+- [x] Grant publication authority only to scenes authenticated against the retained session's
+  exact current accepted document, design filter and `PreparedSketchInput`; caller-assembled or
+  compatibility/render-only scenes may display inference but cannot emit a plan. Seal every
+  inference-visible public scene semantic exactly so pre-bind mutation rejects authentication and
+  post-bind mutation revokes publication authority. Authenticate the pending commit token, frozen
+  plan and prepared input together; preserve persistent-object and spline-span allocator high-water
+  through Undo/Redo, process reload and divergent history so retired identities are never reused.
+  Make allocator-only advancement stale to prepared CAS with a collision-free process-local epoch;
+  bound and streaming-decode spline cursor maps; validate every namespace/cursor relationship; and
+  restore historical design under exact current parameter/external inputs. Persist that host-owned
+  value in workbench v5 while leaving frozen sketch v1-v4 bytes and current unsupported draft-v5
+  bytes unchanged, and strictly migrate workspace v1-v4.
+- [x] Preserve ADR 0033 Profile/Construction scope, visibility, implicit native-source mapping and
+  overlap priority. Computed Fillet arcs are never inference anchors.
+- [x] Keep `geosolve-demo-web` thin: map Shift to semantic suppression, render returned guides/
+  adjusted previews/glyphs and own no anchor generation, memory, ranking, tolerance or inferred
+  document edit. Modifier changes invalidate/replay queued movement only when drafting owns
+  suppression; unrelated projected drags retain their exact queued terminal sample.
+- [x] Add one ordinary editable **Auto-constraint drafting playground** under **Constraints &
+  dimensions** with spaced Profile/Construction point, line, midpoint, circle, Bezier and NURBS
+  targets plus ambiguity/suppression areas and no guided-scenario state.
+- [x] Directly qualify exact boundaries/hysteresis, zoom/scale/order invariance, non-finite input
+  and derived output, candidate/scene/plan/cursor resource caps, every construction stage/family,
+  scope-aware reference lifecycle, suppression/ambiguity, stale/rejected/cancelled/exhausted work,
+  prepared-epoch and current-host-input restoration, one-solve atomicity, one-step
+  Undo/Redo/reload and byte-identical native/WASM state transitions.
+- [ ] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, WASM, rustdoc,
+  benchmarks, licence/package, release Trunk, static single-workbench and Git-hygiene gates on one
+  nominated source.
+- [ ] Freeze a candidate source, pass the integrated release gate, publish it through Tailscale and
+  byte-verify the release distribution. Candidate source, endpoint and manifest: **PENDING**.
+- [ ] Complete `docs/M70_UAT.md` and receive explicit supervising-human approval.
+
+Gate: the placement click is the sole explicit confirmation and either publishes adjusted geometry
+plus every displayed compatible inferred relation in one retained transaction or publishes
+nothing. Rejection never falls through to a different relation; reference state never persists;
+native/WASM hosts observe the same headless transitions; and no solver success, branch, priority,
+M69 geometry-role or retained-state truth contract is weakened. M70 closes only after direct
+qualification and explicit supervising-human UAT approval.
+
+`docs/M70_IMPLEMENTATION.md`, `docs/M70_UAT.md`, ADR 0034 and `docs/SCENARIOS.md` own the detailed
+ledger. Equality, symmetry, concentric/quadrant, certified intersection/collinear/extension,
+nonlinear tangent/normal, grid/axis, angle-increment and durable arbitrary point-pair H/V inference
+remain outside M70. Candidate retained primitives are recorded in `docs/M71_GOALS.md`; that
+temporary backlog does not make M71 active, ordered or authorized for implementation.
+
+Pre-UAT qualification note (2026-08-10): the focused Rust owner matrix and the shared native/WASM
+golden transition oracle are implemented and pass in the working candidate. The oracle lives at
+`crates/geosolve-constraint-editor/tests/m70_transition_parity.rs` with golden bytes in
+`crates/geosolve-constraint-editor/tests/fixtures/m70_transition_parity.golden.txt`; the release
+gate now runs its WASM form explicitly. The focused inference selection passes exactly 46/46; the
+complete editor crate passes 266 unit tests plus all relevant integration suites (no aggregate
+integration-suite count is claimed), demo-web passes 82/82 tests, the sketch library passes 33/33
+unit tests and its M56 prepared-work suite passes 6/6. A nominated candidate hash,
+clean integrated release-gate result, release distribution manifest and Tailscale byte verification
+do not exist yet and remain pending. This note records no human UAT result or approval.
 
 ## Explicit non-goals
 

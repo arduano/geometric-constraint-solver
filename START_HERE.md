@@ -35,7 +35,11 @@ pointer-capture foundation needed by those interactions. The complete mechanical
 passed and the supervising human explicitly approved M68 on 2026-08-09. M69 completed ADR 0033's
 persistent Profile/Construction authoring, headless role-aware interaction and computed
 Fillet-discarded implicit construction geometry; its complete mechanical/release gate passed and
-the supervising human explicitly approved it on 2026-08-09. M70 is an empty unscoped placeholder.
+the supervising human explicitly approved it on 2026-08-09. M70 is now the active milestone under
+ADR 0034: reusable headless auto-constraint drafting intelligence, atomic
+construction-plus-inference commit and an ordinary editable UAT playground. Implementation and
+focused direct qualification are complete; integrated release qualification, publication and
+supervising-human UAT are pending.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -47,7 +51,7 @@ support and physics remain outside future acceptance.
 4. `ACCEPTANCE.md`
 5. `docs/SCENARIOS.md`
 6. `REFERENCES.md`
-7. `docs/adr/0001-*.md` through `docs/adr/0033-*.md`
+7. `docs/adr/0001-*.md` through `docs/adr/0034-*.md`
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -103,8 +107,31 @@ explicit relation choice at the headless boundary, and retains picked curve para
 seeding. M61 remediation added ten movable nonzero-DOF mechanism leaves, full
 Bezier/conic/NURBS authoring and an inspectable canvas camera. Follow-up `M61-F005` makes compact
 circle Tangent contact-bearing and circle/arc Normal explicitly radial while retaining the public
-direction-at-contact domain API. M61-M69 are complete and approved. M64 supersedes active-scenario
-routing and sample-specific passive-driver metadata with one ordinary workspace coordinator.
+direction-at-contact domain API. M61-M69 are complete and approved. M70 implementation and focused
+direct qualification are complete under ADR 0034, but the milestone remains open for integrated
+release qualification, publication and human UAT. It uses only existing ordinary retained
+relations for persistent-point reuse, native PointOnCurve, Midpoint, line/polyline
+Horizontal/Vertical and remembered affine
+Parallel/Perpendicular. Its semantic anchor/reference/candidate/commit pipeline remains headless,
+inferred placement is atomic and bare-point H/V remains honest tracking-only guidance. Persistent
+point reuse is structural, so a standalone Point click on an existing point is a history-neutral
+no-op. Candidate generation fails closed at its hard 32-candidate bound; stage memory retains no
+more than eight reusable affine references, and nonlinear contacts do not consume that capacity.
+Candidate/guide output is finite-validated after projection, and commit plans are independently
+bounded to 32 charged relations. Only a scene authenticated from the retained session's exact
+accepted input can publish. A private exact seal covers every inference-visible public scene semantic, so
+mutation before binding rejects authentication and mutation after binding revokes publication
+authority; compatibility scenes may still present inference. Persistent identity high-water is
+field-opaque, bounded and checkpoint-serializable; a process-local epoch invalidates allocator-only
+prepared work, and history restore keeps exact current host inputs. Application workspace v5 stores
+the cursor value while strictly migrating v1-v4 without changing frozen sketch v1-v4 bytes or
+current unsupported draft-v5 bytes. Shift/RAF handling preserves queued movement for interactions
+that do not own drafting suppression. The focused inference
+selection passes 46/46, the complete editor crate passes 266 unit tests plus all relevant
+integration suites, demo-web passes 82/82 tests, the sketch library passes 33/33 unit tests and M56
+passes 6/6. No candidate source is frozen yet. M64
+supersedes active-scenario routing and sample-specific passive-driver metadata with one ordinary
+workspace coordinator.
 M65 completed the reduced-scope predictable-dragging cut for those existing editable mechanisms. It
 replaces retry-based stabilization with one gesture-start accepted-nullspace locality plan,
 continues exactly one retained attempt per non-stale pointer sample from the complete last valid
@@ -234,7 +261,11 @@ computed-feature behavior and received focused supervising-human approval. M68 c
 0032 Fillet direct-manipulation cut, passed its complete release gate and received explicit
 supervising-human approval on 2026-08-09. M69 completed ADR 0033's Profile/Construction semantics,
 passed its complete release gate and received explicit supervising-human approval on 2026-08-09.
-M70 is empty and awaits scope.
+M70 is active: implementation and focused direct qualification are complete, while integrated
+release qualification, publication and human UAT are pending. `docs/M70_IMPLEMENTATION.md` owns
+its objective ledger, `docs/M70_UAT.md` is the pending scorecard and ADR 0034 owns the architecture.
+The temporary `docs/M71_GOALS.md` backlog is not an active milestone or implementation
+authorization.
 
 Durable milestone and cleanup records:
 
@@ -278,6 +309,11 @@ Durable milestone and cleanup records:
 - `docs/M69_IMPLEMENTATION.md` (completed Profile/Construction implementation ledger)
 - `docs/M69_UAT.md` (approved focused Profile/Construction scorecard)
 - `docs/adr/0033-profile-and-construction-geometry-semantics.md`
+- `docs/M70_IMPLEMENTATION.md` (implemented/directly qualified auto-constraint ledger; release
+  pending)
+- `docs/M70_UAT.md` (draft focused auto-constraint scorecard; UAT pending)
+- `docs/adr/0034-headless-auto-constraint-drafting-intelligence.md`
+- `docs/M71_GOALS.md` (non-active follow-up primitive backlog)
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

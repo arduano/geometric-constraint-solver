@@ -186,9 +186,38 @@ const fn canvas_pointer_capture_kind(
 }
 
 #[cfg(any(target_arch = "wasm32", test))]
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct DraftingPointerSample {
+    input: geosolve_constraint_editor::PointerInput,
+    inference: geosolve_constraint_editor::DraftInferenceInput,
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
+impl DraftingPointerSample {
+    const fn from_input(input: geosolve_constraint_editor::PointerInput) -> Self {
+        Self {
+            inference: effect_adapter::draft_inference_input(input.modifiers),
+            input,
+        }
+    }
+
+    const fn with_suppression(
+        input: geosolve_constraint_editor::PointerInput,
+        suppressed: bool,
+    ) -> Self {
+        Self {
+            input,
+            inference: effect_adapter::draft_inference_input_for_suppression(suppressed),
+        }
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", test))]
 #[derive(Default)]
 struct PointerMoveQueue {
-    pending: Option<geosolve_constraint_editor::PointerInput>,
+    pending: Option<DraftingPointerSample>,
+    last_input: Option<geosolve_constraint_editor::PointerInput>,
+    suppressed: bool,
     next_generation: u64,
     scheduled_generation: Option<u64>,
 }
@@ -196,7 +225,8 @@ struct PointerMoveQueue {
 #[cfg(any(target_arch = "wasm32", test))]
 impl PointerMoveQueue {
     fn push(&mut self, input: geosolve_constraint_editor::PointerInput) -> Option<u64> {
-        self.pending = Some(input);
+        let sample = self.observe(input);
+        self.pending = Some(sample);
         if self.scheduled_generation.is_some() {
             return None;
         }
@@ -205,10 +235,47 @@ impl PointerMoveQueue {
         Some(self.next_generation)
     }
 
-    fn take_for_frame(
+    fn observe(
         &mut self,
-        generation: u64,
-    ) -> Option<geosolve_constraint_editor::PointerInput> {
+        input: geosolve_constraint_editor::PointerInput,
+    ) -> DraftingPointerSample {
+        self.last_input = Some(input);
+        self.suppressed = input.modifiers.shift;
+        DraftingPointerSample::from_input(input)
+    }
+
+    fn stationary_suppression(
+        &mut self,
+        suppressed: bool,
+        owns_queued_sample: bool,
+    ) -> Option<DraftingPointerSample> {
+        if self.suppressed == suppressed {
+            return None;
+        }
+        self.suppressed = suppressed;
+        if !owns_queued_sample {
+            // Select drags, Fillet gestures, authoring overlays, and pan share
+            // this RAF queue but do not consume drafting suppression. Keep their
+            // exact queued movement while still tracking the browser modifier.
+            return None;
+        }
+        self.scheduled_generation = None;
+        self.pending = None;
+        self.last_input
+            .map(|input| DraftingPointerSample::with_suppression(input, suppressed))
+    }
+
+    fn window_blur(&mut self, owns_queued_sample: bool) -> Option<DraftingPointerSample> {
+        self.stationary_suppression(false, owns_queued_sample)
+    }
+
+    fn clear_stationary_sample(&mut self) {
+        self.last_input = None;
+        self.suppressed = false;
+        self.invalidate_before_immediate_action();
+    }
+
+    fn take_for_frame(&mut self, generation: u64) -> Option<DraftingPointerSample> {
         if self.scheduled_generation != Some(generation) {
             return None;
         }
@@ -222,7 +289,7 @@ impl PointerMoveQueue {
         }
     }
 
-    fn drain_before_terminal(&mut self) -> Option<geosolve_constraint_editor::PointerInput> {
+    fn drain_before_terminal(&mut self) -> Option<DraftingPointerSample> {
         self.scheduled_generation = None;
         self.pending.take()
     }
@@ -478,12 +545,12 @@ pub(crate) mod wasm {
         ActionState, AuthoringApplication, AuthoringOperand, AuthoringOptions, AuthoringOutcome,
         AuthoringState, AuthoringTool, BranchAction, ComputedSceneState, ConicConstructionOptions,
         ConstructionPreview, CoordinatorActionKind, DimensionTargetDisplayUnit, DisabledReason,
-        EditorEffect, EditorHoverTarget, EditorScene, EditorTool, FeatureAuthoringCandidate,
-        FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringPick,
-        FeatureAuthoringPointerDownOutcome, FeatureAuthoringStage, FeatureAuthoringState,
-        FeatureAuthoringTool, FeatureAuthoringTransaction, GeometryInteractionPolicy,
-        GeometryPickScope, GeometryRoleSelectionState, GeometryVisibility, Modifiers,
-        NurbsConstructionOptions, PickTolerance, PointerInput, ProvisionalInferenceCandidate,
+        DraftInferenceInput, EditorEffect, EditorHoverTarget, EditorScene, EditorTool,
+        FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
+        FeatureAuthoringPick, FeatureAuthoringPointerDownOutcome, FeatureAuthoringStage,
+        FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringTransaction,
+        GeometryInteractionPolicy, GeometryPickScope, GeometryRoleSelectionState,
+        GeometryVisibility, Modifiers, NurbsConstructionOptions, PickTolerance, PointerInput,
         RetainedEditorCoordinator, SceneCurveOrigin, SceneFilletActionInput,
         SceneFilletActionTarget, ScreenPoint, SelectionItem,
     };
@@ -505,7 +572,8 @@ pub(crate) mod wasm {
     };
 
     use super::persistence::{
-        LEGACY_STORAGE_KEY, OLDER_STORAGE_KEY, PREVIOUS_STORAGE_KEY, STORAGE_KEY, WorkspaceSnapshot,
+        LEGACY_STORAGE_KEY, OLDER_STORAGE_KEY, OLDER_V2_STORAGE_KEY, PREVIOUS_STORAGE_KEY,
+        STORAGE_KEY, WorkspaceSnapshot,
     };
 
     struct Workbench {
@@ -522,7 +590,6 @@ pub(crate) mod wasm {
         fillet_action_render: super::FilletActionRenderAuthority,
         feature_options_open: bool,
         construction_preview: Option<ConstructionPreview>,
-        inference_preview: Option<ProvisionalInferenceCandidate>,
         notice: String,
         problems_open: bool,
     }
@@ -560,6 +627,7 @@ pub(crate) mod wasm {
                 .flatten()
                 .or_else(|| storage.get_item(PREVIOUS_STORAGE_KEY).ok().flatten())
                 .or_else(|| storage.get_item(OLDER_STORAGE_KEY).ok().flatten())
+                .or_else(|| storage.get_item(OLDER_V2_STORAGE_KEY).ok().flatten())
                 .or_else(|| storage.get_item(LEGACY_STORAGE_KEY).ok().flatten())
         });
         let restored = if let Some(snapshot) = snapshot.as_deref() {
@@ -588,7 +656,6 @@ pub(crate) mod wasm {
             fillet_action_render: super::FilletActionRenderAuthority::default(),
             feature_options_open: false,
             construction_preview: None,
-            inference_preview: None,
             notice,
             problems_open: false,
         }));
@@ -597,6 +664,7 @@ pub(crate) mod wasm {
         install_clicks(document, &workbench)?;
         install_sample_flyout_state(document)?;
         install_canvas(document, &workbench)?;
+        install_draft_inference_modifier_listeners(document, &workbench)?;
         install_keyboard(document, &workbench)?;
         install_fillet_options_overlay_reposition(document)?;
         Ok(())
@@ -1133,8 +1201,13 @@ pub(crate) mod wasm {
             workbench,
             &viewport,
             "pointerdown",
-            |coordinator, scene, input, problem_items| {
-                coordinator.pointer_down_with_problem_items(scene, input, problem_items)
+            |coordinator, scene, input, problem_items, inference| {
+                coordinator.pointer_down_with_problem_items_and_draft_inference(
+                    scene,
+                    input,
+                    problem_items,
+                    inference,
+                )
             },
         )?;
         install_pointer_move_listener(document, workbench, &viewport, &pointer_moves)?;
@@ -1202,6 +1275,7 @@ pub(crate) mod wasm {
         let leave_workbench = Rc::clone(workbench);
         let leave = Closure::<dyn FnMut(PointerEvent)>::new(move |_event| {
             let mut wb = leave_workbench.borrow_mut();
+            wb.pointer_moves.borrow_mut().clear_stationary_sample();
             let effects = wb.coordinator.editor_mut().pointer_leave();
             if effects.is_empty() {
                 return;
@@ -1361,7 +1435,7 @@ pub(crate) mod wasm {
         let frame_workbench = Rc::clone(workbench);
         let frame_pointer_moves = Rc::clone(pointer_moves);
         let frame = Closure::once_into_js(move || {
-            let Some(input) = frame_pointer_moves.borrow_mut().take_for_frame(generation) else {
+            let Some(sample) = frame_pointer_moves.borrow_mut().take_for_frame(generation) else {
                 return;
             };
             let mut wb = frame_workbench.borrow_mut();
@@ -1371,7 +1445,10 @@ pub(crate) mod wasm {
             let Some(scene) = editor_scene(&wb) else {
                 return;
             };
-            let effects = wb.coordinator.editor_mut().pointer_move(&scene, input);
+            let effects = wb
+                .coordinator
+                .editor_mut()
+                .pointer_move_with_draft_inference(&scene, sample.input, sample.inference);
             dispatch_effects(&mut wb, effects);
             save(&wb);
             drop(wb);
@@ -1548,9 +1625,13 @@ pub(crate) mod wasm {
                 return;
             }
             if let Some(pending) = callback_pointer_moves.borrow_mut().drain_before_terminal() {
-                let effects = wb.coordinator.editor_mut().pointer_move(&scene, pending);
+                let effects = wb
+                    .coordinator
+                    .editor_mut()
+                    .pointer_move_with_draft_inference(&scene, pending.input, pending.inference);
                 dispatch_effects(&mut wb, effects);
             }
+            callback_pointer_moves.borrow_mut().observe(input);
             let coordinator = &mut wb.coordinator;
             let expected = coordinator.session().design_identity();
             let effects = coordinator.editor_mut().pointer_up(&scene, expected, input);
@@ -1645,6 +1726,7 @@ pub(crate) mod wasm {
                                 let effects =
                                     wb.coordinator.editor_mut().clear_fillet_branch_preview();
                                 dispatch_effects(&mut wb, effects);
+                                invalidate_draft_inference_for_camera_change(&mut wb);
                             }
                             super::CanvasPanPointerDownRoute::PreserveCapturedInteraction => {
                                 return;
@@ -1728,6 +1810,7 @@ pub(crate) mod wasm {
                     "Active drag canceled before canvas zoom",
                 );
             }
+            invalidate_draft_inference_for_camera_change(&mut wb);
             let Some(anchor) = client_screen_point(
                 &callback_viewport,
                 wb.camera.viewport(),
@@ -1766,6 +1849,7 @@ pub(crate) mod wasm {
             &EditorScene,
             PointerInput,
             &[SelectionItem],
+            DraftInferenceInput,
         ) -> Vec<EditorEffect>,
     ) -> Result<(), JsValue> {
         let callback_document = document.clone();
@@ -1792,6 +1876,7 @@ pub(crate) mod wasm {
             let Some(input) = pointer_input(&callback_viewport, scene.viewport, &event) else {
                 return;
             };
+            let drafting_sample = wb.pointer_moves.borrow_mut().observe(input);
             if wb.pointer_captures.is_empty() && painted_action.is_some() {
                 let painted = resolve_canvas_fillet_action_at_point(
                     &callback_document,
@@ -1873,7 +1958,15 @@ pub(crate) mod wasm {
                         .collect::<Vec<_>>()
                 })
                 .unwrap_or_default();
-            let effects = { transition(&mut wb.coordinator, &scene, input, &problem_items) };
+            let effects = {
+                transition(
+                    &mut wb.coordinator,
+                    &scene,
+                    input,
+                    &problem_items,
+                    drafting_sample.inference,
+                )
+            };
             dispatch_effects(&mut wb, effects);
             if capture_active_editor_pointer(&callback_viewport, &mut wb, event.pointer_id())
                 .is_err()
@@ -1889,6 +1982,105 @@ pub(crate) mod wasm {
         viewport.add_event_listener_with_callback(name, callback.as_ref().unchecked_ref())?;
         callback.forget();
         Ok(())
+    }
+
+    fn install_draft_inference_modifier_listeners(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+    ) -> Result<(), JsValue> {
+        let pointer_moves = Rc::clone(&workbench.borrow().pointer_moves);
+        let down_document = document.clone();
+        let down_workbench = Rc::clone(workbench);
+        let down_pointer_moves = Rc::clone(&pointer_moves);
+        let keydown = Closure::<dyn FnMut(KeyboardEvent)>::new(move |event: KeyboardEvent| {
+            if event.key() != "Shift" || event.repeat() {
+                return;
+            }
+            let owns_queued_sample = {
+                let wb = down_workbench.borrow();
+                owns_stationary_draft_inference(&wb)
+            };
+            let sample = down_pointer_moves
+                .borrow_mut()
+                .stationary_suppression(true, owns_queued_sample);
+            if let Some(sample) = sample {
+                dispatch_stationary_draft_inference(&down_document, &down_workbench, sample);
+            }
+        });
+        document.add_event_listener_with_callback("keydown", keydown.as_ref().unchecked_ref())?;
+        keydown.forget();
+
+        let up_document = document.clone();
+        let up_workbench = Rc::clone(workbench);
+        let up_pointer_moves = Rc::clone(&pointer_moves);
+        let keyup = Closure::<dyn FnMut(KeyboardEvent)>::new(move |event: KeyboardEvent| {
+            if event.key() != "Shift" {
+                return;
+            }
+            let owns_queued_sample = {
+                let wb = up_workbench.borrow();
+                owns_stationary_draft_inference(&wb)
+            };
+            let sample = up_pointer_moves
+                .borrow_mut()
+                .stationary_suppression(false, owns_queued_sample);
+            if let Some(sample) = sample {
+                dispatch_stationary_draft_inference(&up_document, &up_workbench, sample);
+            }
+        });
+        document.add_event_listener_with_callback("keyup", keyup.as_ref().unchecked_ref())?;
+        keyup.forget();
+
+        let blur_document = document.clone();
+        let blur_workbench = Rc::clone(workbench);
+        let blur_pointer_moves = Rc::clone(&pointer_moves);
+        let blur = Closure::<dyn FnMut(Event)>::new(move |_event: Event| {
+            let owns_queued_sample = {
+                let wb = blur_workbench.borrow();
+                owns_stationary_draft_inference(&wb)
+            };
+            let sample = blur_pointer_moves
+                .borrow_mut()
+                .window_blur(owns_queued_sample);
+            if let Some(sample) = sample {
+                dispatch_stationary_draft_inference(&blur_document, &blur_workbench, sample);
+            }
+        });
+        super::platform::window()?
+            .add_event_listener_with_callback("blur", blur.as_ref().unchecked_ref())?;
+        blur.forget();
+        Ok(())
+    }
+
+    fn owns_stationary_draft_inference(wb: &Workbench) -> bool {
+        wb.pan_gesture.is_none()
+            && wb.authoring.active_tool().is_none()
+            && wb.feature_authoring.active_tool().is_none()
+            && wb.coordinator.editor().tool() != EditorTool::Select
+    }
+
+    fn dispatch_stationary_draft_inference(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+        sample: super::DraftingPointerSample,
+    ) {
+        let mut wb = workbench.borrow_mut();
+        if !owns_stationary_draft_inference(&wb) {
+            return;
+        }
+        let Some(scene) = editor_scene(&wb) else {
+            return;
+        };
+        let effects = wb
+            .coordinator
+            .editor_mut()
+            .pointer_move_with_draft_inference(&scene, sample.input, sample.inference);
+        if effects.is_empty() {
+            return;
+        }
+        dispatch_effects(&mut wb, effects);
+        drop(wb);
+        let _ = render(document, workbench);
     }
 
     #[allow(
@@ -2085,8 +2277,8 @@ pub(crate) mod wasm {
     )]
     fn dispatch_effects(wb: &mut Workbench, effects: Vec<EditorEffect>) {
         use super::effect_adapter::{
-            ConstructionDispatch, InferenceDispatch, dispatch_construction_effect,
-            dispatch_inference_effect,
+            ConstructionDispatch, PlannedConstructionDispatch, dispatch_construction_effect,
+            dispatch_planned_construction_effect,
         };
 
         let mut pending = VecDeque::from(effects);
@@ -2116,22 +2308,19 @@ pub(crate) mod wasm {
                 ConstructionDispatch::Handled => continue,
                 ConstructionDispatch::NotConstruction => {}
             }
-            match dispatch_inference_effect(&mut wb.inference_preview, &effect) {
-                InferenceDispatch::ApplyCommit => {
-                    match wb.coordinator.apply_editor_effect(&effect) {
-                        Ok(Some(_)) => wb.notice = "Inference retained".into(),
-                        Ok(None) => {}
-                        Err(error) => wb.notice = error.to_string(),
+            match dispatch_planned_construction_effect(&mut wb.coordinator, &effect) {
+                PlannedConstructionDispatch::Handled(outcome) => {
+                    if outcome.accepted {
+                        wb.notice = "Auto-constrained construction retained".into();
+                    } else if let Some(error) = outcome.error {
+                        wb.notice = format!(
+                            "Auto-constrained placement was rejected; the draft is retained: {error}"
+                        );
                     }
+                    pending.extend(outcome.acknowledgement);
                     continue;
                 }
-                InferenceDispatch::Handled => {
-                    if let EditorEffect::PreviewInference(candidate) = &effect {
-                        wb.notice = format!("Inference proposed: {}", candidate.label);
-                    }
-                    continue;
-                }
-                InferenceDispatch::NotInference => {}
+                PlannedConstructionDispatch::NotPlannedConstruction => {}
             }
             match &effect {
                 EditorEffect::RequestProjectedPointMove {
@@ -2253,14 +2442,11 @@ pub(crate) mod wasm {
                 }
                 EditorEffect::PreviewConstruction(_)
                 | EditorEffect::ClearConstructionPreview
-                | EditorEffect::CommitConstruction { .. } => {
+                | EditorEffect::CommitConstruction { .. }
+                | EditorEffect::CommitConstructionPlan { .. } => {
                     unreachable!("construction effects were dispatched above")
                 }
-                EditorEffect::PreviewInference(_)
-                | EditorEffect::CommitInference(_)
-                | EditorEffect::ClearInferencePreview => {
-                    unreachable!("inference effects were dispatched above")
-                }
+                EditorEffect::DraftInferenceChanged(_) => {}
             }
         }
     }
@@ -2306,7 +2492,6 @@ pub(crate) mod wasm {
                 wb.camera.reset();
                 wb.feature_options_open = false;
                 wb.construction_preview = None;
-                wb.inference_preview = None;
                 Ok(())
             }),
             "undo" => wb.coordinator.undo().map_err(|error| error.to_string()),
@@ -2471,17 +2656,24 @@ pub(crate) mod wasm {
         if wb.pointer_captures.is_empty() {
             let effects = wb.coordinator.editor_mut().clear_fillet_branch_preview();
             dispatch_effects(wb, effects);
-            return Ok(());
+        } else {
+            let viewport = required(document, "wb-viewport")
+                .map_err(|_| "canvas viewport is unavailable".to_owned())?;
+            cancel_captured_canvas_interactions(
+                &viewport,
+                wb,
+                super::CanvasPointerTerminal::CameraCancel,
+                "Active drag canceled before camera change",
+            );
         }
-        let viewport = required(document, "wb-viewport")
-            .map_err(|_| "canvas viewport is unavailable".to_owned())?;
-        cancel_captured_canvas_interactions(
-            &viewport,
-            wb,
-            super::CanvasPointerTerminal::CameraCancel,
-            "Active drag canceled before camera change",
-        );
+        invalidate_draft_inference_for_camera_change(wb);
         Ok(())
+    }
+
+    fn invalidate_draft_inference_for_camera_change(wb: &mut Workbench) {
+        wb.pointer_moves.borrow_mut().clear_stationary_sample();
+        let effects = wb.coordinator.editor_mut().invalidate_draft_inference();
+        dispatch_effects(wb, effects);
     }
 
     fn apply_dimension_target(document: &Document, wb: &mut Workbench) -> Result<(), String> {
@@ -2584,7 +2776,6 @@ pub(crate) mod wasm {
                 clear_feature_authoring(wb);
                 wb.feature_options_open = false;
                 wb.construction_preview = None;
-                wb.inference_preview = None;
                 fit_camera(wb);
                 wb.notice = format!(
                     "{} opened as an editable workspace",
@@ -3206,7 +3397,7 @@ pub(crate) mod wasm {
                         super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
                     )
                     .ok()?;
-                Some(scene)
+                scene.with_retained_session(source).ok()
             }
             ComputedSceneState::Withheld | ComputedSceneState::Absent => {
                 EditorScene::from_accepted_for_design(
@@ -3217,6 +3408,7 @@ pub(crate) mod wasm {
                     wb.camera.viewport(),
                     super::WORKBENCH_CURVE_CHORD_TOLERANCE_PIXELS,
                 )
+                .and_then(|scene| scene.with_retained_session(source))
                 .ok()
             }
         }
@@ -3298,6 +3490,7 @@ pub(crate) mod wasm {
                 &pending,
                 hover,
                 construction_preview,
+                coordinator.editor().draft_inference_resolution(),
                 coordinator.current_problem_metadata().as_ref(),
                 active_fillet_preview.as_ref(),
                 fillet_action_stamp,
@@ -4434,9 +4627,9 @@ mod tests {
         AuthoringItemInput, CANVAS_BROWSER_DEFAULT_GUARD_EVENTS, CANVAS_PAN_POINTER_EVENTS,
         CANVAS_POINTER_TERMINAL_EVENTS, CanvasPanPointerDownRoute, CanvasPointerCaptureKind,
         CanvasPointerCaptures, CanvasPointerOwnership, CanvasPointerTerminal,
-        CanvasPointerTerminalDisposition, CapturedCanvasPointer, FilletActionRenderAuthority,
-        OverlayRect, PointerMoveQueue, canvas_overlay_position, canvas_pointer_capture_kind,
-        change_owns_option_control_click, geometry_hover_selector,
+        CanvasPointerTerminalDisposition, CapturedCanvasPointer, DraftingPointerSample,
+        FilletActionRenderAuthority, OverlayRect, PointerMoveQueue, canvas_overlay_position,
+        canvas_pointer_capture_kind, change_owns_option_control_click, geometry_hover_selector,
         observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
         palette_details_overlay_reflow_listener, resolve_canvas_fillet_action_candidates,
         revoke_held_feature_authoring_preview, route_canvas_pan_pointer_down,
@@ -4861,25 +5054,26 @@ mod tests {
             position: ScreenPoint { x, y: 3.0 },
             modifiers: Modifiers::default(),
         };
+        let sample = |x| DraftingPointerSample::from_input(input(x));
         let mut queue = PointerMoveQueue::default();
         let first_frame = queue.push(input(1.0)).unwrap();
         assert_eq!(queue.push(input(2.0)), None);
-        assert_eq!(queue.take_for_frame(first_frame), Some(input(2.0)));
+        assert_eq!(queue.take_for_frame(first_frame), Some(sample(2.0)));
         assert_eq!(queue.take_for_frame(first_frame), None);
 
         let failed_frame = queue.push(input(2.5)).unwrap();
         queue.cancel_frame(failed_frame);
         let retried_frame = queue.push(input(2.75)).unwrap();
         assert_ne!(retried_frame, failed_frame);
-        assert_eq!(queue.take_for_frame(retried_frame), Some(input(2.75)));
+        assert_eq!(queue.take_for_frame(retried_frame), Some(sample(2.75)));
 
         let stale_frame = queue.push(input(3.0)).unwrap();
         assert_eq!(queue.push(input(4.0)), None);
-        assert_eq!(queue.drain_before_terminal(), Some(input(4.0)));
+        assert_eq!(queue.drain_before_terminal(), Some(sample(4.0)));
         let next_frame = queue.push(input(5.0)).unwrap();
         assert_ne!(next_frame, stale_frame);
         assert_eq!(queue.take_for_frame(stale_frame), None);
-        assert_eq!(queue.take_for_frame(next_frame), Some(input(5.0)));
+        assert_eq!(queue.take_for_frame(next_frame), Some(sample(5.0)));
 
         let stale_before_action = queue.push(input(6.0)).unwrap();
         assert_eq!(queue.push(input(6.5)), None);
@@ -4887,7 +5081,92 @@ mod tests {
         assert_eq!(queue.take_for_frame(stale_before_action), None);
         let after_action = queue.push(input(7.0)).unwrap();
         assert_ne!(after_action, stale_before_action);
-        assert_eq!(queue.take_for_frame(after_action), Some(input(7.0)));
+        assert_eq!(queue.take_for_frame(after_action), Some(sample(7.0)));
+
+        let suppressed = PointerInput {
+            modifiers: Modifiers {
+                shift: true,
+                ..Modifiers::default()
+            },
+            ..input(8.0)
+        };
+        let suppression_frame = queue.push(suppressed).unwrap();
+        let captured = queue
+            .take_for_frame(suppression_frame)
+            .expect("captured suppression sample");
+        assert!(captured.inference.suppressed);
+        assert_eq!(captured.input, suppressed);
+    }
+
+    #[test]
+    fn foreign_shift_transition_preserves_queued_projected_pointer_sample() {
+        let input = |x, shift| PointerInput {
+            pointer_id: 23,
+            position: ScreenPoint { x, y: 19.0 },
+            modifiers: Modifiers {
+                shift,
+                ..Modifiers::default()
+            },
+        };
+        let mut queue = PointerMoveQueue::default();
+
+        let press_frame = queue
+            .push(input(40.0, false))
+            .expect("projected drag frame before Shift press");
+        assert_eq!(queue.stationary_suppression(true, false), None);
+        assert_eq!(
+            queue.drain_before_terminal(),
+            Some(DraftingPointerSample::from_input(input(40.0, false)))
+        );
+        assert_eq!(queue.take_for_frame(press_frame), None);
+
+        let release_frame = queue
+            .push(input(44.0, true))
+            .expect("projected drag frame before Shift release");
+        assert_eq!(queue.stationary_suppression(false, false), None);
+        assert_eq!(
+            queue.take_for_frame(release_frame),
+            Some(DraftingPointerSample::from_input(input(44.0, true)))
+        );
+    }
+
+    #[test]
+    fn stationary_shift_press_release_and_blur_replay_the_exact_pointer_sample() {
+        let input = PointerInput {
+            pointer_id: 17,
+            position: ScreenPoint { x: 412.5, y: 91.25 },
+            modifiers: Modifiers {
+                control: true,
+                ..Modifiers::default()
+            },
+        };
+        let mut queue = PointerMoveQueue::default();
+        let stale_frame = queue.push(input).expect("scheduled pointer frame");
+
+        let pressed = queue
+            .stationary_suppression(true, true)
+            .expect("stationary Shift press");
+        assert_eq!(pressed.input, input);
+        assert!(pressed.inference.suppressed);
+        assert_eq!(queue.take_for_frame(stale_frame), None);
+        assert_eq!(queue.stationary_suppression(true, true), None);
+
+        let released = queue
+            .stationary_suppression(false, true)
+            .expect("stationary Shift release");
+        assert_eq!(released.input, input);
+        assert!(!released.inference.suppressed);
+
+        queue
+            .stationary_suppression(true, true)
+            .expect("second stationary Shift press");
+        let blurred = queue.window_blur(true).expect("blur releases suppression");
+        assert_eq!(blurred.input, input);
+        assert!(!blurred.inference.suppressed);
+        assert_eq!(queue.window_blur(true), None);
+
+        queue.clear_stationary_sample();
+        assert_eq!(queue.stationary_suppression(true, true), None);
     }
 
     #[test]
@@ -5471,6 +5750,7 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
                 GeometryInteractionPolicy::default(),
                 viewport,
             );
@@ -5501,6 +5781,7 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
                 GeometryInteractionPolicy {
                     scope: GeometryPickScope::All,
                     visibility: GeometryVisibility {
@@ -5519,6 +5800,7 @@ mod tests {
                 &[],
                 &[],
                 EditorHoverState::default(),
+                None,
                 None,
                 None,
                 None,
@@ -5557,6 +5839,7 @@ mod tests {
             &[selected],
             &[],
             EditorHoverState::default(),
+            None,
             None,
             None,
             None,
@@ -5737,6 +6020,7 @@ mod tests {
             &[selected],
             &[],
             EditorHoverState::default(),
+            None,
             None,
             None,
             Some(&target),

@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use geosolve_core::{
     HardValidity, OperationCheckpoint, OperationControl, OperationController, OperationOutcome,
@@ -23,7 +24,7 @@ use crate::document::{
     DocumentParameterTarget, DocumentSourceId, ExternalFeatureKindV1, ExternalTopologyDigest,
     GeometryRole, GeometryRoleEdit, HostConfigurationActivation, LineLineFilletIds,
     LineLineFilletRequest, MirroredCurveIds, PersistentId, RectangleIds, ScalarDomain, ScalarUnit,
-    SketchDocument,
+    SketchDocument, SketchPersistentIdentityHighWater,
 };
 use crate::document_lowering::{
     DocumentRuntimeMap, ResolvedDocumentParameters, ResolvedParameterBinding, RuntimeSource,
@@ -41,6 +42,12 @@ pub const MAX_EXTERNAL_SNAPSHOT_ENTRIES: usize = crate::MAX_EXTERNAL_BINDINGS;
 pub const MAX_EXTERNAL_SNAPSHOT_POINTS: u32 = 2;
 pub const MAX_EXTERNAL_SNAPSHOT_CONTROLS: u32 = 2;
 pub const MAX_EXTERNAL_SNAPSHOT_SPANS: u32 = 1;
+
+// Prepared jobs are process-local, non-serializable values. This monotonically
+// allocates a collision-free epoch for each retained-session incarnation and
+// each allocator-only state transition. Exhaustion fails closed rather than
+// permitting a stale prepared patch to compare equal again.
+static NEXT_PREPARED_STATE_EPOCH: AtomicU32 = AtomicU32::new(1);
 
 /// Canonical digest of host-provided bytes for one external feature.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -2173,6 +2180,24 @@ mod exact_preview_release_tests {
             .with_drag(point, [0.5, 0.75]);
         assert!(!unrelated_publication.differs_only_by_consumed_point_edit_guidance(current));
     }
+
+    #[test]
+    fn prepared_state_epoch_exhaustion_is_permanently_fail_closed() {
+        let epochs = AtomicU32::new(u32::MAX - 1);
+
+        assert_eq!(
+            next_prepared_state_epoch_from(&epochs).expect("last unique epoch"),
+            u32::MAX - 1
+        );
+        assert_eq!(epochs.load(Ordering::Relaxed), u32::MAX);
+        assert!(matches!(
+            next_prepared_state_epoch_from(&epochs),
+            Err(DocumentSessionError::RevisionExhausted {
+                domain: "prepared retained-state epoch",
+            })
+        ));
+        assert_eq!(epochs.load(Ordering::Relaxed), u32::MAX);
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -2213,21 +2238,25 @@ pub struct RetainedSketchDocumentSession {
     config: SolverConfig,
     parameter_batch: ParameterBatch,
     external_snapshots: ExternalSnapshotSet,
+    persistent_identity_high_water: SketchPersistentIdentityHighWater,
+    prepared_state_epoch: u32,
 }
 
 /// Exact immutable session input captured before host-scheduled solve work.
 ///
 /// The attempt input records the current retained design, solve requests, solver
 /// policy, activation, parameter, and external-snapshot identities. The latest
-/// attempt and accepted/high-water identities close the lifecycle stamp so a
-/// candidate computed from an older session can never compare equal after any
-/// intervening attempt or accepted publication.
+/// attempt, accepted/high-water identities, and the collision-free process-local
+/// retained-state epoch close the lifecycle stamp so a candidate computed from
+/// an older session can never compare equal after any intervening publication or
+/// allocator-cursor retention.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PreparedSketchInput {
     input: SketchAttemptInput,
     latest_attempt: SketchAttemptIdentity,
     accepted: Option<SketchAcceptedStateIdentity>,
     accepted_revision_high_water: Option<SketchAcceptedRevision>,
+    prepared_state_epoch: u32,
 }
 
 impl PreparedSketchInput {
@@ -3474,6 +3503,7 @@ impl RetainedSketchDocumentSession {
         if !document.validate_with_controller(Some(&mut controller))? {
             return Ok(controller.outcome_unchecked());
         }
+        let persistent_identity_high_water = document.persistent_identity_high_water();
         let config = crate::compiler::acceptance_solver_config(config);
         config.validate().map_err(crate::SketchError::from)?;
         let design_identity = SketchDesignIdentity {
@@ -3523,6 +3553,7 @@ impl RetainedSketchDocumentSession {
         );
         let accepted_revision_high_water =
             accepted.as_ref().map(|accepted| accepted.identity.revision);
+        let prepared_state_epoch = next_prepared_state_epoch()?;
         Ok(controller.outcome(Self {
             design: document,
             design_identity,
@@ -3533,6 +3564,8 @@ impl RetainedSketchDocumentSession {
             config,
             parameter_batch,
             external_snapshots,
+            persistent_identity_high_water,
+            prepared_state_epoch,
         }))
     }
 
@@ -3550,6 +3583,33 @@ impl RetainedSketchDocumentSession {
         request: DocumentSolveRequest,
         config: SolverConfig,
     ) -> Result<Self, DocumentSessionError> {
+        Self::restore_design_with_inputs(
+            design,
+            revisions,
+            ParameterBatch::default(),
+            ExternalSnapshotSet::default(),
+            request,
+            config,
+        )
+    }
+
+    /// Restores design intent under the caller's current immutable host inputs.
+    ///
+    /// This is the input-preserving counterpart to [`Self::restore_design`]. Host
+    /// inputs remain outside canonical sketch history, but they are part of every
+    /// exact retained attempt and must therefore be present during restoration.
+    ///
+    /// # Errors
+    ///
+    /// Rejects invalid design/input state, policy, or exhausted revision space.
+    pub fn restore_design_with_inputs(
+        design: SketchDocument,
+        revisions: SketchLifecycleRevisionHighWater,
+        parameter_batch: ParameterBatch,
+        external_snapshots: ExternalSnapshotSet,
+        request: DocumentSolveRequest,
+        config: SolverConfig,
+    ) -> Result<Self, DocumentSessionError> {
         let design_revision = next_revision(revisions.design.0, "design")?;
         let attempt_revision = next_revision(revisions.attempt.0, "attempt")?;
         let accepted_revision = revisions
@@ -3557,8 +3617,8 @@ impl RetainedSketchDocumentSession {
             .map_or(Ok(0), |revision| next_revision(revision.0, "accepted"))?;
         Self::new_at(
             design,
-            ParameterBatch::default(),
-            ExternalSnapshotSet::default(),
+            parameter_batch,
+            external_snapshots,
             request,
             config,
             design_revision,
@@ -3581,6 +3641,7 @@ impl RetainedSketchDocumentSession {
         accepted_revision: u64,
     ) -> Result<Self, DocumentSessionError> {
         document.validate()?;
+        let persistent_identity_high_water = document.persistent_identity_high_water();
         let config = crate::compiler::acceptance_solver_config(config);
         config.validate().map_err(crate::SketchError::from)?;
         let design_identity = SketchDesignIdentity {
@@ -3621,6 +3682,7 @@ impl RetainedSketchDocumentSession {
             .as_ref()
             .map(|accepted| accepted.identity.revision)
             .or(prior_accepted_high_water);
+        let prepared_state_epoch = next_prepared_state_epoch()?;
         Ok(Self {
             design: document,
             design_identity,
@@ -3631,12 +3693,16 @@ impl RetainedSketchDocumentSession {
             config,
             parameter_batch,
             external_snapshots,
+            persistent_identity_high_water,
+            prepared_state_epoch,
         })
     }
 
     #[allow(clippy::too_many_arguments)]
     fn new_at_from_exact_accepted(
         document: SketchDocument,
+        parameter_batch: ParameterBatch,
+        external_snapshots: ExternalSnapshotSet,
         request: DocumentSolveRequest,
         config: SolverConfig,
         design_revision: u64,
@@ -3647,8 +3713,7 @@ impl RetainedSketchDocumentSession {
         document.validate()?;
         let config = crate::compiler::acceptance_solver_config(config);
         config.validate().map_err(crate::SketchError::from)?;
-        let parameter_batch = ParameterBatch::default();
-        let external_snapshots = ExternalSnapshotSet::default();
+        let persistent_identity_high_water = document.persistent_identity_high_water();
         let design_identity = SketchDesignIdentity {
             document: document.id(),
             revision: SketchDesignRevision(design_revision),
@@ -3688,6 +3753,7 @@ impl RetainedSketchDocumentSession {
         if accepted.is_none() {
             return Err(DocumentSessionError::InvalidAcceptedSnapshot);
         }
+        let prepared_state_epoch = next_prepared_state_epoch()?;
         Ok(Self {
             design: document,
             design_identity,
@@ -3698,6 +3764,8 @@ impl RetainedSketchDocumentSession {
             config,
             parameter_batch,
             external_snapshots,
+            persistent_identity_high_water,
+            prepared_state_epoch,
         })
     }
 
@@ -3715,6 +3783,38 @@ impl RetainedSketchDocumentSession {
         design: SketchDocument,
         accepted: SketchDocument,
         revisions: SketchLifecycleRevisionHighWater,
+        request: DocumentSolveRequest,
+        config: SolverConfig,
+    ) -> Result<Self, DocumentSessionError> {
+        Self::restore_design_with_accepted_and_inputs(
+            design,
+            accepted,
+            revisions,
+            ParameterBatch::default(),
+            ExternalSnapshotSet::default(),
+            request,
+            config,
+        )
+    }
+
+    /// Restores separate retained and accepted graphs under exact current host inputs.
+    ///
+    /// The accepted graph is independently certified using the supplied parameter
+    /// batch and external snapshot set before any state is returned. A distinct
+    /// retained design is then attempted under those same immutable inputs.
+    ///
+    /// # Errors
+    ///
+    /// Rejects either invalid graph, mismatched document identities, invalid host
+    /// input or policy, or an accepted snapshot that cannot be independently
+    /// certified under the supplied inputs.
+    #[allow(clippy::too_many_arguments)]
+    pub fn restore_design_with_accepted_and_inputs(
+        design: SketchDocument,
+        accepted: SketchDocument,
+        revisions: SketchLifecycleRevisionHighWater,
+        parameter_batch: ParameterBatch,
+        external_snapshots: ExternalSnapshotSet,
         request: DocumentSolveRequest,
         config: SolverConfig,
     ) -> Result<Self, DocumentSessionError> {
@@ -3739,6 +3839,8 @@ impl RetainedSketchDocumentSession {
         };
         let mut session = Self::new_at_from_exact_accepted(
             accepted,
+            parameter_batch,
+            external_snapshots,
             certification_request,
             config,
             accepted_design_revision,
@@ -3778,6 +3880,38 @@ impl RetainedSketchDocumentSession {
         request: DocumentSolveRequest,
         config: SolverConfig,
     ) -> Result<Self, DocumentSessionError> {
+        Self::restore_current_design_with_accepted_and_inputs(
+            design,
+            accepted,
+            revisions,
+            ParameterBatch::default(),
+            ExternalSnapshotSet::default(),
+            request,
+            config,
+        )
+    }
+
+    /// Restores one current-design accepted materialization under exact host inputs.
+    ///
+    /// This preserves the provenance semantics of
+    /// [`Self::restore_current_design_with_accepted`] while resolving and certifying
+    /// both graphs with the caller's current parameter batch and external snapshots.
+    ///
+    /// # Errors
+    ///
+    /// Rejects temporary targets, invalid/foreign graphs, differing activation or
+    /// runtime topology, invalid host input or policy, and a snapshot that cannot be
+    /// exactly and independently certified under the supplied inputs.
+    #[allow(clippy::too_many_arguments)]
+    pub fn restore_current_design_with_accepted_and_inputs(
+        design: SketchDocument,
+        accepted: SketchDocument,
+        revisions: SketchLifecycleRevisionHighWater,
+        parameters: ParameterBatch,
+        snapshots: ExternalSnapshotSet,
+        request: DocumentSolveRequest,
+        config: SolverConfig,
+    ) -> Result<Self, DocumentSessionError> {
         design.validate()?;
         accepted.validate()?;
         if request.drag.is_some() {
@@ -3794,8 +3928,6 @@ impl RetainedSketchDocumentSession {
         if design_activity.activation_digest() != accepted_activity.activation_digest() {
             return Err(DocumentSessionError::InvalidAcceptedSnapshot);
         }
-        let parameters = ParameterBatch::default();
-        let snapshots = ExternalSnapshotSet::default();
         let design_resolved = resolve_attempt_inputs(&design, &parameters, &snapshots)
             .map_err(|_| DocumentSessionError::InvalidAcceptedSnapshot)?;
         let design_mappings = design
@@ -3809,6 +3941,8 @@ impl RetainedSketchDocumentSession {
             .map_or(Ok(0), |revision| next_revision(revision.0, "accepted"))?;
         let mut session = Self::new_at_from_exact_accepted(
             accepted,
+            parameters,
+            snapshots,
             request,
             config,
             design_revision,
@@ -3837,7 +3971,9 @@ impl RetainedSketchDocumentSession {
             .as_mut()
             .ok_or(DocumentSessionError::InvalidAcceptedSnapshot)?;
         accepted_state.solved_design = design.clone();
+        let persistent_identity_high_water = design.persistent_identity_high_water();
         session.design = design;
+        session.retain_persistent_identity_high_water(&persistent_identity_high_water)?;
         Ok(session)
     }
 
@@ -3862,6 +3998,49 @@ impl RetainedSketchDocumentSession {
     #[must_use]
     pub const fn external_snapshot_set(&self) -> &ExternalSnapshotSet {
         &self.external_snapshots
+    }
+
+    /// Returns field-opaque never-reuse cursors for this complete retained lifecycle.
+    ///
+    /// Unlike inspecting the current design graph alone, this value retains
+    /// curve-local span cursors even while that curve is absent at a historical
+    /// Undo position.
+    #[must_use]
+    pub const fn persistent_identity_high_water(&self) -> &SketchPersistentIdentityHighWater {
+        &self.persistent_identity_high_water
+    }
+
+    /// Merges never-reuse cursors from an earlier incarnation of this sketch.
+    ///
+    /// The retained design and any accepted solved/design materialization are all
+    /// advanced together. Geometry, equations and lifecycle revisions are unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Rejects metadata from a different persistent sketch namespace.
+    pub fn retain_persistent_identity_high_water(
+        &mut self,
+        high_water: &SketchPersistentIdentityHighWater,
+    ) -> Result<(), DocumentSessionError> {
+        let mut merged = self.persistent_identity_high_water.merged(high_water)?;
+        merged = merged.merged(&self.design.persistent_identity_high_water())?;
+        if let Some(accepted) = &self.accepted {
+            merged = merged.merged(&accepted.solved_design.persistent_identity_high_water())?;
+            merged = merged.merged(&accepted.document.persistent_identity_high_water())?;
+        }
+        let prepared_state_epoch = self.prepared_state_epoch_for(&merged)?;
+        self.design.retain_persistent_identity_high_water(&merged)?;
+        if let Some(accepted) = &mut self.accepted {
+            accepted
+                .solved_design
+                .retain_persistent_identity_high_water(&merged)?;
+            accepted
+                .document
+                .retain_persistent_identity_high_water(&merged)?;
+        }
+        self.persistent_identity_high_water = merged;
+        self.prepared_state_epoch = prepared_state_epoch;
+        Ok(())
     }
 
     /// Returns non-authoritative evidence for the most recent exact attempt.
@@ -4116,6 +4295,7 @@ impl RetainedSketchDocumentSession {
             latest_attempt: current.latest_attempt,
             accepted: current.accepted,
             accepted_revision_high_water: current.accepted_revision_high_water,
+            prepared_state_epoch: current.prepared_state_epoch,
         })
     }
 
@@ -4922,24 +5102,79 @@ impl RetainedSketchDocumentSession {
     where
         F: FnOnce(&mut SketchDocument) -> Result<T, DocumentError>,
     {
-        self.check_design_identity(expected)?;
         let mut controller = OperationController::new(control);
+        let Some(outcome) = self.transact_in_controller(expected, edit, &mut controller)? else {
+            return Ok(controller.outcome_unchecked());
+        };
+        Ok(controller.outcome(outcome))
+    }
+
+    /// Retains one compound transaction inside a caller-owned operation.
+    ///
+    /// This lower-level controlled seam lets a domain coordinator account for
+    /// related staging and final-publication work in the same controller. A
+    /// stopped controller returns `Ok(None)` and leaves this session unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same edit and solve setup errors as [`Self::transact`].
+    pub fn transact_in_controller<T, F>(
+        &mut self,
+        expected: SketchDesignIdentity,
+        edit: F,
+        controller: &mut OperationController,
+    ) -> Result<Option<RetainedDocumentTransactionOutcome<T>>, DocumentSessionError>
+    where
+        F: FnOnce(&mut SketchDocument) -> Result<T, DocumentError>,
+    {
+        self.transact_controlled_edit_in_controller(
+            expected,
+            |document, _controller| edit(document).map(Some),
+            controller,
+        )
+    }
+
+    /// Retains one compound transaction whose edit construction shares the
+    /// caller-owned operation controller.
+    ///
+    /// The callback returns `Ok(None)` after any cancellation or work-limit stop.
+    /// Its scratch document is then discarded before validation, solving, or
+    /// lifecycle publication. This lets bounded domain planners charge incremental
+    /// construction work without splitting an atomic retained transaction.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same edit and solve setup errors as [`Self::transact`].
+    pub fn transact_controlled_edit_in_controller<T, F>(
+        &mut self,
+        expected: SketchDesignIdentity,
+        edit: F,
+        controller: &mut OperationController,
+    ) -> Result<Option<RetainedDocumentTransactionOutcome<T>>, DocumentSessionError>
+    where
+        F: FnOnce(
+            &mut SketchDocument,
+            &mut OperationController,
+        ) -> Result<Option<T>, DocumentError>,
+    {
+        self.check_design_identity(expected)?;
         if controller
             .checkpoint(OperationCheckpoint::DocumentValidation)
             .is_err()
         {
-            return Ok(controller.outcome_unchecked());
+            return Ok(None);
         }
         let mut candidate = self.design.clone();
         candidate.defer_mutation_validation();
-        let value = edit(&mut candidate)?;
-        candidate.resume_mutation_validation();
-        let Some(outcome) =
-            self.retain_candidate_controlled(candidate, value, None, &mut controller)?
-        else {
-            return Ok(controller.outcome_unchecked());
+        let Some(value) = edit(&mut candidate, controller)? else {
+            return Ok(None);
         };
-        Ok(controller.outcome(outcome))
+        candidate.resume_mutation_validation();
+        let Some(outcome) = self.retain_candidate_controlled(candidate, value, None, controller)?
+        else {
+            return Ok(None);
+        };
+        Ok(Some(outcome))
     }
 
     /// Attempts the current design again without allocating a design revision.
@@ -5562,9 +5797,30 @@ impl RetainedSketchDocumentSession {
         })
     }
 
+    fn candidate_persistent_identity_high_water(
+        &self,
+        candidate: &SketchDocument,
+    ) -> Result<SketchPersistentIdentityHighWater, DocumentSessionError> {
+        let retained = self
+            .persistent_identity_high_water
+            .merged(&self.design.persistent_identity_high_water())?;
+        Ok(retained.merged(&candidate.persistent_identity_high_water())?)
+    }
+
+    fn prepared_state_epoch_for(
+        &self,
+        high_water: &SketchPersistentIdentityHighWater,
+    ) -> Result<u32, DocumentSessionError> {
+        if high_water == &self.persistent_identity_high_water {
+            Ok(self.prepared_state_epoch)
+        } else {
+            next_prepared_state_epoch()
+        }
+    }
+
     fn retain_candidate<T>(
         &mut self,
-        candidate: SketchDocument,
+        mut candidate: SketchDocument,
         value: T,
         command_drag: Option<DocumentDragTarget>,
     ) -> Result<RetainedDocumentTransactionOutcome<T>, DocumentSessionError> {
@@ -5574,6 +5830,9 @@ impl RetainedSketchDocumentSession {
                 actual: candidate.id(),
             });
         }
+        let persistent_identity_high_water =
+            self.candidate_persistent_identity_high_water(&candidate)?;
+        candidate.retain_persistent_identity_high_water(&persistent_identity_high_water)?;
         candidate.validate()?;
         let design_revision = self
             .design_identity
@@ -5623,7 +5882,11 @@ impl RetainedSketchDocumentSession {
             execution,
         );
         let published_accepted = accepted.as_ref().map(SketchAcceptedDocumentState::identity);
+        let prepared_state_epoch =
+            self.prepared_state_epoch_for(&persistent_identity_high_water)?;
         self.design = candidate;
+        self.persistent_identity_high_water = persistent_identity_high_water;
+        self.prepared_state_epoch = prepared_state_epoch;
         self.design_identity = design_identity;
         self.last_attempt = attempt;
         if let Some(accepted) = accepted {
@@ -5640,7 +5903,7 @@ impl RetainedSketchDocumentSession {
 
     fn retain_candidate_with_seed<T>(
         &mut self,
-        candidate: SketchDocument,
+        mut candidate: SketchDocument,
         value: T,
         command_drag: Option<DocumentDragTarget>,
         seed: &SketchDocument,
@@ -5651,6 +5914,9 @@ impl RetainedSketchDocumentSession {
                 actual: candidate.id(),
             });
         }
+        let persistent_identity_high_water =
+            self.candidate_persistent_identity_high_water(&candidate)?;
+        candidate.retain_persistent_identity_high_water(&persistent_identity_high_water)?;
         candidate.validate()?;
         seed.validate()?;
         let design_revision = next_revision(self.design_identity.revision.0, "design")?;
@@ -5690,7 +5956,11 @@ impl RetainedSketchDocumentSession {
             execution,
         );
         let published_accepted = accepted.as_ref().map(SketchAcceptedDocumentState::identity);
+        let prepared_state_epoch =
+            self.prepared_state_epoch_for(&persistent_identity_high_water)?;
         self.design = candidate;
+        self.persistent_identity_high_water = persistent_identity_high_water;
+        self.prepared_state_epoch = prepared_state_epoch;
         self.design_identity = design_identity;
         self.last_attempt = attempt;
         if let Some(accepted) = accepted {
@@ -5707,7 +5977,7 @@ impl RetainedSketchDocumentSession {
 
     fn retain_candidate_controlled<T>(
         &mut self,
-        candidate: SketchDocument,
+        mut candidate: SketchDocument,
         value: T,
         command_drag: Option<DocumentDragTarget>,
         controller: &mut OperationController,
@@ -5718,6 +5988,9 @@ impl RetainedSketchDocumentSession {
                 actual: candidate.id(),
             });
         }
+        let persistent_identity_high_water =
+            self.candidate_persistent_identity_high_water(&candidate)?;
+        candidate.retain_persistent_identity_high_water(&persistent_identity_high_water)?;
         if !candidate.validate_with_controller(Some(controller))? {
             return Ok(None);
         }
@@ -5786,7 +6059,11 @@ impl RetainedSketchDocumentSession {
             return Ok(None);
         }
         let published_accepted = accepted.as_ref().map(SketchAcceptedDocumentState::identity);
+        let prepared_state_epoch =
+            self.prepared_state_epoch_for(&persistent_identity_high_water)?;
         self.design = candidate;
+        self.persistent_identity_high_water = persistent_identity_high_water;
+        self.prepared_state_epoch = prepared_state_epoch;
         self.design_identity = design_identity;
         self.last_attempt = attempt;
         if let Some(accepted) = accepted {
@@ -5818,6 +6095,7 @@ impl RetainedSketchDocumentSession {
                 .as_ref()
                 .map(SketchAcceptedDocumentState::identity),
             accepted_revision_high_water: self.accepted_revision_high_water,
+            prepared_state_epoch: self.prepared_state_epoch,
         }
     }
 }
@@ -5826,6 +6104,20 @@ fn next_revision(current: u64, domain: &'static str) -> Result<u64, DocumentSess
     current
         .checked_add(1)
         .ok_or(DocumentSessionError::RevisionExhausted { domain })
+}
+
+fn next_prepared_state_epoch() -> Result<u32, DocumentSessionError> {
+    next_prepared_state_epoch_from(&NEXT_PREPARED_STATE_EPOCH)
+}
+
+fn next_prepared_state_epoch_from(epochs: &AtomicU32) -> Result<u32, DocumentSessionError> {
+    epochs
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+            current.checked_add(1)
+        })
+        .map_err(|_| DocumentSessionError::RevisionExhausted {
+            domain: "prepared retained-state epoch",
+        })
 }
 
 fn next_accepted_revision(high_water: Option<SketchAcceptedRevision>) -> Option<u64> {

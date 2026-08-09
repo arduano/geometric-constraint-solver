@@ -36,6 +36,8 @@ fn accepted_scene(document: &SketchDocument, viewport: Viewport) -> EditorScene 
         0.25,
     )
     .expect("editor scene")
+    .with_retained_session(&session)
+    .expect("bound editor scene")
 }
 
 fn line(
@@ -181,14 +183,29 @@ fn line_start_snap(
             modifiers: Modifiers::default(),
         },
     );
-    let Some(EditorEffect::CommitConstruction {
-        proposal: ConstructionProposal::Line { start, .. },
-        ..
-    }) = effects.first()
-    else {
-        panic!("line draft should commit after its second point: {effects:?}");
-    };
-    *start
+    let (start, token) = effects
+        .iter()
+        .find_map(|effect| match effect {
+            EditorEffect::CommitConstruction {
+                proposal: ConstructionProposal::Line { start, .. },
+                ..
+            } => Some((*start, None)),
+            EditorEffect::CommitConstructionPlan { token, plan, .. } => match &plan.proposal {
+                ConstructionProposal::Line { start, .. } => Some((*start, Some(*token))),
+                _ => None,
+            },
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("line draft should commit after its second point: {effects:?}"));
+    if let Some(token) = token {
+        assert!(
+            editor
+                .acknowledge_construction_commit(token, true)
+                .iter()
+                .any(|effect| matches!(effect, EditorEffect::ClearConstructionPreview))
+        );
+    }
+    start
 }
 
 fn assert_point_scope_matrix(
@@ -1070,16 +1087,28 @@ fn drawing_role_is_frozen_into_the_commit_effect() {
             modifiers: Modifiers::default(),
         },
     );
-    assert!(matches!(
-        effects.as_slice(),
-        [
-            EditorEffect::CommitConstruction {
-                role: GeometryRole::Construction,
-                ..
-            },
-            EditorEffect::ClearConstructionPreview
-        ]
-    ));
+    let token = effects
+        .iter()
+        .find_map(|effect| match effect {
+            EditorEffect::CommitConstructionPlan { token, plan, .. }
+                if plan.role == GeometryRole::Construction =>
+            {
+                Some(*token)
+            }
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("construction-role plan expected: {effects:?}"));
+    assert!(
+        !effects
+            .iter()
+            .any(|effect| matches!(effect, EditorEffect::ClearConstructionPreview))
+    );
+    assert!(
+        editor
+            .acknowledge_construction_commit(token, true)
+            .iter()
+            .any(|effect| matches!(effect, EditorEffect::ClearConstructionPreview))
+    );
 }
 
 #[test]
@@ -1116,20 +1145,25 @@ fn geometry_policy_change_cancels_an_incomplete_geometry_draft() {
             )
             .is_empty()
     );
-    assert!(matches!(
+    let effects = editor.pointer_down(
+        &scene,
+        PointerInput {
+            pointer_id: 10,
+            position: first,
+            modifiers: Modifiers::default(),
+        },
+    );
+    let token = effects
+        .iter()
+        .find_map(|effect| match effect {
+            EditorEffect::CommitConstructionPlan { token, .. } => Some(*token),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("restarted draft should publish one plan: {effects:?}"));
+    assert!(
         editor
-            .pointer_down(
-                &scene,
-                PointerInput {
-                    pointer_id: 10,
-                    position: first,
-                    modifiers: Modifiers::default(),
-                },
-            )
-            .as_slice(),
-        [
-            EditorEffect::CommitConstruction { .. },
-            EditorEffect::ClearConstructionPreview
-        ]
-    ));
+            .acknowledge_construction_commit(token, true)
+            .iter()
+            .any(|effect| matches!(effect, EditorEffect::ClearConstructionPreview))
+    );
 }

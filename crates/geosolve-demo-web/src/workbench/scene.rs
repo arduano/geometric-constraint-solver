@@ -5,10 +5,12 @@ use std::{collections::BTreeSet, fmt::Write as _};
 
 use geosolve_constraint_editor::{
     AdvancedConstructionKind, ComputedFeatureProblemMetadata, ComputedFilletContinuationLimitKind,
-    ConstructionPreview, ConstructionPreviewGeometry, DimensionTargetDisplayUnit, EditorHoverState,
-    EditorHoverTarget, EditorProblemCategory, EditorProblemMetadata, EditorProblemScope,
-    EditorProblemTarget, EditorScene, GeometryInteractionPolicy, SceneAnnotationGeometry,
-    SceneAnnotationKind, SceneCurveOrigin, SceneFilletAction, SceneFilletActionAvailability,
+    ConstructionPreview, ConstructionPreviewGeometry, DimensionTargetDisplayUnit, DraftGuide,
+    DraftGuideClassification, DraftGuideGeometry, DraftInferenceFamily, DraftInferenceRelation,
+    DraftInferenceResolution, DraftInferenceStatus, EditorHoverState, EditorHoverTarget,
+    EditorProblemCategory, EditorProblemMetadata, EditorProblemScope, EditorProblemTarget,
+    EditorScene, GeometryInteractionPolicy, SceneAnnotationGeometry, SceneAnnotationKind,
+    SceneConstraintGlyph, SceneCurveOrigin, SceneFilletAction, SceneFilletActionAvailability,
     SceneFilletActionId, SceneFilletActionTarget, SceneFilletCornerAffordances, ScreenPoint,
     SelectionItem, Viewport, display_dimension_target,
 };
@@ -209,6 +211,7 @@ pub(crate) fn svg_markup_with_computed_context(
         pending,
         hover,
         construction_preview,
+        None,
         problem,
         active_fillet_preview,
         None,
@@ -233,6 +236,7 @@ pub(crate) fn svg_markup_with_computed_context_and_action_stamp(
     pending: &[SelectionItem],
     hover: EditorHoverState,
     construction_preview: Option<&ConstructionPreview>,
+    inference: Option<&DraftInferenceResolution>,
     problem: Option<&EditorProblemMetadata>,
     active_fillet_preview: Option<&SceneFilletActionTarget>,
     fillet_action_stamp: Option<u64>,
@@ -445,8 +449,14 @@ pub(crate) fn svg_markup_with_computed_context_and_action_stamp(
         );
     }
     output.push_str("</g>");
+    if let Some(inference) = inference {
+        render_inference_guides(&mut output, inference, viewport);
+    }
     if let Some(preview) = construction_preview {
         output.push_str(&construction_markup(preview, viewport));
+    }
+    if let Some(inference) = inference {
+        render_inference_candidates(&mut output, inference);
     }
     if let Some(problem) = problem {
         if problem.scope == EditorProblemScope::Global || resolved_targets.is_empty() {
@@ -1603,6 +1613,231 @@ fn construction_markup(preview: &ConstructionPreview, viewport: Viewport) -> Str
     output
 }
 
+fn render_inference_guides(
+    output: &mut String,
+    resolution: &DraftInferenceResolution,
+    viewport: Viewport,
+) {
+    let _ = write!(
+        output,
+        "<g class=\"wb-inference-guides\" data-inference-status=\"{}\" pointer-events=\"none\">",
+        inference_status_key(&resolution.status),
+    );
+    for guide in &resolution.guides {
+        render_inference_guide(output, *guide, viewport);
+    }
+    output.push_str("</g>");
+}
+
+fn render_inference_guide(output: &mut String, guide: DraftGuide, viewport: Viewport) {
+    let family = inference_family_key(guide.family);
+    let label = inference_family_label(guide.family);
+    let classification = match guide.classification {
+        DraftGuideClassification::ConstraintBacked => "constraint-backed",
+        DraftGuideClassification::TrackingOnly => "tracking-only",
+    };
+    let candidate = guide
+        .id
+        .candidate
+        .map_or_else(|| "tracking".to_owned(), |id| id.get().to_string());
+    let _ = write!(
+        output,
+        concat!(
+            "<g class=\"wb-inference-guide {}\" data-inference-family=\"{}\" ",
+            "data-inference-classification=\"{}\" data-inference-candidate=\"{}\" ",
+            "data-inference-guide-ordinal=\"{}\" role=\"img\" aria-label=\"{}\"><title>{}</title>"
+        ),
+        classification,
+        family,
+        classification,
+        candidate,
+        guide.id.ordinal,
+        escape(label),
+        escape(label),
+    );
+    match guide.geometry {
+        DraftGuideGeometry::Point { position } => {
+            let point = viewport.model_to_screen(position);
+            let _ = write!(
+                output,
+                "<circle class=\"wb-inference-guide-point\" cx=\"{:.3}\" cy=\"{:.3}\" r=\"7\"/>",
+                point.x, point.y,
+            );
+        }
+        DraftGuideGeometry::Segment { start, end } => {
+            let start = viewport.model_to_screen(start);
+            let end = viewport.model_to_screen(end);
+            let _ = write!(
+                output,
+                "<path class=\"wb-inference-guide-segment\" d=\"M {:.3} {:.3} L {:.3} {:.3}\"/>",
+                start.x, start.y, end.x, end.y,
+            );
+        }
+    }
+    output.push_str("</g>");
+}
+
+fn render_inference_candidates(output: &mut String, resolution: &DraftInferenceResolution) {
+    let candidate_ids = match &resolution.status {
+        DraftInferenceStatus::Resolved { candidate } => vec![*candidate],
+        DraftInferenceStatus::Ambiguous { candidates } => candidates.clone(),
+        DraftInferenceStatus::None
+        | DraftInferenceStatus::Suppressed
+        | DraftInferenceStatus::ResourceLimited
+        | DraftInferenceStatus::StalePreferredCandidate { .. } => Vec::new(),
+    };
+    let ambiguous = matches!(&resolution.status, DraftInferenceStatus::Ambiguous { .. });
+    if !candidate_ids.is_empty() {
+        let _ = write!(
+            output,
+            "<g class=\"wb-inference-candidates{}\" data-inference-candidate-count=\"{}\" pointer-events=\"none\">",
+            if ambiguous { " ambiguous" } else { "" },
+            candidate_ids.len(),
+        );
+        let count = f64::from(u32::try_from(candidate_ids.len()).unwrap_or(u32::MAX));
+        for (candidate_index, candidate_id) in candidate_ids.into_iter().enumerate() {
+            let Some(candidate) = resolution
+                .candidates
+                .iter()
+                .find(|candidate| candidate.id == candidate_id)
+            else {
+                continue;
+            };
+            let index = f64::from(u32::try_from(candidate_index).unwrap_or(u32::MAX));
+            let candidate_offset = (index - (count - 1.0) * 0.5) * 24.0;
+            for (relation_index, relation) in candidate.relations.iter().copied().enumerate() {
+                let (key, label, glyph) = inference_relation_presentation(relation);
+                let relation_offset =
+                    f64::from(u32::try_from(relation_index).unwrap_or(u32::MAX)) * 22.0;
+                let x = candidate.adjusted_screen_position.x + 16.0 + relation_offset;
+                let y = candidate.adjusted_screen_position.y - 16.0 + candidate_offset;
+                let _ = write!(
+                    output,
+                    concat!(
+                        "<g class=\"wb-inference-glyph\" transform=\"translate({:.3} {:.3})\" ",
+                        "data-inference-candidate=\"{}\" data-inference-relation=\"{}\" ",
+                        "role=\"img\" aria-label=\"{}\"><title>{}</title>",
+                        "<circle class=\"wb-inference-glyph-background\" r=\"10\"/>",
+                        "<g class=\"wb-inference-glyph-symbol\">{}</g></g>"
+                    ),
+                    x,
+                    y,
+                    candidate.id.get(),
+                    key,
+                    escape(label),
+                    escape(label),
+                    super::icons::constraint_icon_fragment(glyph),
+                );
+            }
+        }
+        output.push_str("</g>");
+    }
+    if let Some((key, message)) = inference_status_warning(&resolution.status) {
+        let message = escape(message);
+        let _ = write!(
+            output,
+            concat!(
+                "<g class=\"wb-inference-state\" data-inference-status=\"{}\" ",
+                "transform=\"translate(18 18)\" role=\"status\" aria-label=\"{}\">",
+                "<rect width=\"310\" height=\"30\" rx=\"5\"/><text x=\"12\" y=\"20\">{}</text></g>"
+            ),
+            key, message, message,
+        );
+    }
+}
+
+const fn inference_family_key(family: DraftInferenceFamily) -> &'static str {
+    match family {
+        DraftInferenceFamily::PointIdentity => "point-identity",
+        DraftInferenceFamily::PointOnCurve => "point-on-curve",
+        DraftInferenceFamily::Midpoint => "midpoint",
+        DraftInferenceFamily::Horizontal => "horizontal",
+        DraftInferenceFamily::Vertical => "vertical",
+        DraftInferenceFamily::Parallel => "parallel",
+        DraftInferenceFamily::Perpendicular => "perpendicular",
+        DraftInferenceFamily::PointTracking => "point-tracking",
+    }
+}
+
+const fn inference_family_label(family: DraftInferenceFamily) -> &'static str {
+    match family {
+        DraftInferenceFamily::PointIdentity => "Reuse existing point",
+        DraftInferenceFamily::PointOnCurve => "Point on curve",
+        DraftInferenceFamily::Midpoint => "Midpoint",
+        DraftInferenceFamily::Horizontal => "Horizontal",
+        DraftInferenceFamily::Vertical => "Vertical",
+        DraftInferenceFamily::Parallel => "Parallel",
+        DraftInferenceFamily::Perpendicular => "Perpendicular",
+        DraftInferenceFamily::PointTracking => "Alignment tracking only",
+    }
+}
+
+const fn inference_relation_presentation(
+    relation: DraftInferenceRelation,
+) -> (&'static str, &'static str, SceneConstraintGlyph) {
+    match relation {
+        DraftInferenceRelation::PointIdentity { .. } => (
+            "point-identity",
+            "Reuse existing point",
+            SceneConstraintGlyph::Coincident,
+        ),
+        DraftInferenceRelation::PointOnCurve { .. } => (
+            "point-on-curve",
+            "Point on curve",
+            SceneConstraintGlyph::PointOnCurve,
+        ),
+        DraftInferenceRelation::Midpoint { .. } => {
+            ("midpoint", "Midpoint", SceneConstraintGlyph::Midpoint)
+        }
+        DraftInferenceRelation::Horizontal => {
+            ("horizontal", "Horizontal", SceneConstraintGlyph::Horizontal)
+        }
+        DraftInferenceRelation::Vertical => {
+            ("vertical", "Vertical", SceneConstraintGlyph::Vertical)
+        }
+        DraftInferenceRelation::Parallel { .. } => {
+            ("parallel", "Parallel", SceneConstraintGlyph::Parallel)
+        }
+        DraftInferenceRelation::Perpendicular { .. } => (
+            "perpendicular",
+            "Perpendicular",
+            SceneConstraintGlyph::Perpendicular,
+        ),
+    }
+}
+
+const fn inference_status_key(status: &DraftInferenceStatus) -> &'static str {
+    match status {
+        DraftInferenceStatus::None => "none",
+        DraftInferenceStatus::Resolved { .. } => "resolved",
+        DraftInferenceStatus::Ambiguous { .. } => "ambiguous",
+        DraftInferenceStatus::Suppressed => "suppressed",
+        DraftInferenceStatus::ResourceLimited => "resource-limited",
+        DraftInferenceStatus::StalePreferredCandidate { .. } => "stale-preference",
+    }
+}
+
+const fn inference_status_warning(
+    status: &DraftInferenceStatus,
+) -> Option<(&'static str, &'static str)> {
+    match status {
+        DraftInferenceStatus::Ambiguous { .. } => Some((
+            "ambiguous",
+            "Ambiguous auto-constraint — move closer to one target",
+        )),
+        DraftInferenceStatus::Suppressed => Some(("suppressed", "Auto-constraints suppressed")),
+        DraftInferenceStatus::ResourceLimited => Some((
+            "resource-limited",
+            "Auto-constraints unavailable: inference resource limit reached",
+        )),
+        DraftInferenceStatus::StalePreferredCandidate { .. } => Some((
+            "stale-preference",
+            "Auto-constraint choice expired — move to refresh",
+        )),
+        DraftInferenceStatus::None | DraftInferenceStatus::Resolved { .. } => None,
+    }
+}
+
 fn construction_geometry_markup(
     output: &mut String,
     geometry: &ConstructionPreviewGeometry,
@@ -1761,9 +1996,12 @@ fn escape(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use geosolve_constraint_editor::{
-        ComputedFeatureProblemMetadata, ConstructionPreviewGeometry, EditorHoverState,
-        EditorHoverTarget, EditorProblemScope, EditorScene, RetainedEditorCoordinator,
-        SceneAnnotationGeometry, SceneAnnotationOccurrence, ScreenPoint, SelectionItem,
+        ComputedFeatureProblemMetadata, ConstructionPreviewGeometry, DraftInferenceEngine,
+        DraftInferenceFrame, DraftInferenceInput, DraftInferencePolicy, DraftInferenceResolution,
+        DraftInferenceSample, DraftReferenceAnchor, EditorHoverState, EditorHoverTarget,
+        EditorProblemScope, EditorScene, GeometryInteractionPolicy, RetainedEditorCoordinator,
+        SceneAnnotationGeometry, SceneAnnotationOccurrence, ScenePointRoleIncidence, ScreenPoint,
+        SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -1772,7 +2010,7 @@ mod tests {
         DocumentDimensionMode, DocumentEdit, DocumentParameterId, DocumentParameterKind,
         DocumentParameterTarget, DocumentSolveRequest, ParameterBatch, ParameterBatchEntry,
         ParameterValue, PersistentId, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
-        SketchDocument,
+        SketchDesignIdentity, SketchDocument,
     };
     use geosolve_sketch_features::{
         ComputedFeatureCornerId, ComputedFeatureId, NativeCurveSpanSource,
@@ -1780,7 +2018,8 @@ mod tests {
 
     use super::{
         CanvasCamera, constraint_glyph, construction_geometry_markup, dimension_kind, svg_markup,
-        svg_markup_with_computed_context, svg_markup_with_context, viewport,
+        svg_markup_with_computed_context, svg_markup_with_computed_context_and_action_stamp,
+        svg_markup_with_context, viewport,
     };
     use crate::workbench::panels::{lifecycle_presentation, problem_markup};
 
@@ -1814,6 +2053,77 @@ mod tests {
         }
     }
 
+    fn inference_fixture() -> (SketchDesignIdentity, u64, Viewport, [DesignPointId; 2]) {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let first = document.add_point("first", [0.0, 0.0]).expect("first");
+        let second = document.add_point("second", [0.0, 0.0]).expect("second");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("accepted inference fixture");
+        (
+            session.design_identity(),
+            accepted.identity().revision().get(),
+            Viewport::new([1000.0, 700.0], [0.0, 0.0], 100.0).expect("viewport"),
+            [first, second],
+        )
+    }
+
+    fn point_anchor(point: DesignPointId) -> DraftReferenceAnchor {
+        DraftReferenceAnchor::PersistentPoint {
+            point,
+            model_position: [0.0, 0.0],
+            role_incidence: ScenePointRoleIncidence {
+                profile: true,
+                construction: false,
+            },
+        }
+    }
+
+    fn inference_frame(
+        design_identity: SketchDesignIdentity,
+        accepted_revision: u64,
+        viewport: Viewport,
+        raw_model_position: [f64; 2],
+        anchors: Vec<DraftReferenceAnchor>,
+    ) -> DraftInferenceFrame {
+        DraftInferenceFrame {
+            design_identity,
+            accepted_revision,
+            prepared_input: None,
+            viewport,
+            geometry_policy: GeometryInteractionPolicy::default(),
+            sample: DraftInferenceSample {
+                raw_screen_position: viewport.model_to_screen(raw_model_position),
+                span_start: None,
+            },
+            anchors,
+        }
+    }
+
+    fn inference_markup(resolution: &DraftInferenceResolution, viewport: Viewport) -> String {
+        svg_markup_with_computed_context_and_action_stamp(
+            None,
+            None,
+            &[],
+            &[],
+            &[],
+            EditorHoverState::default(),
+            None,
+            Some(resolution),
+            None,
+            None,
+            None,
+            GeometryInteractionPolicy::default(),
+            viewport,
+        )
+    }
+
     #[test]
     fn camera_zoom_preserves_anchor_and_pan_uses_screen_space_direction() {
         let mut camera = CanvasCamera::default();
@@ -1835,6 +2145,86 @@ mod tests {
                 origin_center[1] + 50.0 / camera.pixels_per_model_unit,
             ],
         );
+    }
+
+    #[test]
+    fn inference_markup_distinguishes_constraint_backed_and_tracking_only_guides() {
+        let (design, accepted_revision, viewport, [point, _]) = inference_fixture();
+        let anchor = point_anchor(point);
+        let frame = inference_frame(
+            design,
+            accepted_revision,
+            viewport,
+            [0.0, 0.0],
+            vec![anchor],
+        );
+        let resolved = DraftInferenceEngine::default()
+            .resolve(&frame, DraftInferenceInput::default())
+            .expect("resolved point inference");
+        let resolved_markup = inference_markup(&resolved, viewport);
+        assert!(resolved_markup.contains("data-inference-status=\"resolved\""));
+        assert!(resolved_markup.contains("data-inference-classification=\"constraint-backed\""));
+        assert!(resolved_markup.contains("data-inference-relation=\"point-identity\""));
+        assert!(resolved_markup.contains("aria-label=\"Reuse existing point\""));
+
+        let mut tracking_engine = DraftInferenceEngine::default();
+        tracking_engine
+            .remember_reference(anchor)
+            .expect("remember point reference");
+        let tracking_frame =
+            inference_frame(design, accepted_revision, viewport, [2.0, 0.0], Vec::new());
+        let tracking = tracking_engine
+            .resolve(&tracking_frame, DraftInferenceInput::default())
+            .expect("tracking-only inference");
+        let tracking_markup = inference_markup(&tracking, viewport);
+        assert!(tracking_markup.contains("data-inference-family=\"point-tracking\""));
+        assert!(tracking_markup.contains("data-inference-classification=\"tracking-only\""));
+        assert!(!tracking_markup.contains("data-inference-relation="));
+    }
+
+    #[test]
+    fn inference_markup_exposes_ambiguity_and_suppression_accessibly() {
+        let (design, accepted_revision, viewport, points) = inference_fixture();
+        let frame = inference_frame(
+            design,
+            accepted_revision,
+            viewport,
+            [0.0, 0.0],
+            points.into_iter().map(point_anchor).collect(),
+        );
+        let ambiguous = DraftInferenceEngine::default()
+            .resolve(&frame, DraftInferenceInput::default())
+            .expect("ambiguous point inference");
+        let ambiguous_markup = inference_markup(&ambiguous, viewport);
+        assert!(ambiguous_markup.contains("data-inference-status=\"ambiguous\""));
+        assert!(ambiguous_markup.contains("role=\"status\""));
+        assert!(ambiguous_markup.contains("aria-label=\"Ambiguous auto-constraint"));
+
+        let suppressed = DraftInferenceEngine::default()
+            .resolve(
+                &frame,
+                DraftInferenceInput {
+                    suppressed: true,
+                    preferred_candidate: None,
+                },
+            )
+            .expect("suppressed inference");
+        let suppressed_markup = inference_markup(&suppressed, viewport);
+        assert!(suppressed_markup.contains("data-inference-status=\"suppressed\""));
+        assert!(suppressed_markup.contains("aria-label=\"Auto-constraints suppressed\""));
+        assert!(!suppressed_markup.contains("wb-inference-glyph"));
+
+        let mut resource_policy = DraftInferencePolicy::default();
+        resource_policy.limits.max_candidates = 1;
+        let resource_limited = DraftInferenceEngine::new(resource_policy)
+            .expect("bounded engine")
+            .resolve(&frame, DraftInferenceInput::default())
+            .expect("resource-limited inference");
+        let resource_markup = inference_markup(&resource_limited, viewport);
+        assert!(resource_markup.contains("data-inference-status=\"resource-limited\""));
+        assert!(resource_markup.contains(
+            "aria-label=\"Auto-constraints unavailable: inference resource limit reached\""
+        ));
     }
 
     #[test]

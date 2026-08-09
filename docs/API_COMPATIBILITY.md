@@ -60,6 +60,26 @@ had no runtime consumer and was explicitly not a product API. M67 did not remove
 domain API or v1-v4 persistence reader. Removing raw topology/lifecycle/redundancy cards from the
 non-published demo does not narrow the corresponding reusable domain contracts.
 
+M70 adds pre-1.0 headless drafting-inference and atomic construction-plan APIs to
+`geosolve-constraint-editor`, including typed policy/input/output DTOs, exact accepted-input/token
+authentication and relation-indexed publication results. These are additive to the current
+unreleased editor surface; they do not add a residual, persistent relation kind or browser-owned
+geometric policy. Public document/revision/stamp fields do not confer publication authority: only
+a scene authenticated from the retained session's exact current accepted input may emit an
+inferred commit plan. A private exact seal covers every inference-visible public scene semantic;
+mutation before binding rejects authentication and mutation after binding revokes publication.
+Compatibility/render-only scenes remain useful for inference presentation but are deliberately
+non-publishing. M70 also adds field-opaque, checkpoint-serializable
+`SketchPersistentIdentityHighWater` retention plus exact-current-input restore and controlled
+transaction seams to `geosolve-sketch`. Hosts may serialize, deserialize, inspect the owning
+document identity and merge the DTO through its validated API; allocator cursor fields remain
+private. Application workspace v5 stores that value, validates its namespace and graph coverage,
+and strictly migrates v1-v4. These APIs change no frozen sketch v1-v4 bytes and do not make
+draft-v5 supported.
+M70 implementation and focused direct qualification are complete, but its integrated release gate
+and supervising-human UAT remain pending; no later M71 API is authorized by the temporary
+`docs/M71_GOALS.md` backlog.
+
 The minimum supported Rust version is `1.89`. Raising it requires a minor release
 before `1.0`, a major release after `1.0`, and a changelog entry.
 

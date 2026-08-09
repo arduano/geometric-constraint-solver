@@ -1282,7 +1282,10 @@ retention actions, Current-only interaction history, pointer capture and separat
 specimens. Their implementation, focused direct qualification, clean full release gate and human
 UAT are complete. M69 reuses the ordinary Construction/reference and 2D Fillet playground leaves
 for the Profile/construction scenarios below; it adds no scenario-mode state. Its direct/release
-qualification and focused human UAT are complete.
+qualification and focused human UAT are complete. M70 is now active under ADR 0034 and adds one
+ordinary editable auto-constraint drafting playground; implementation and focused direct
+qualification are complete, while integrated release qualification, publication and human UAT
+remain pending.
 Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -1366,22 +1369,77 @@ double-click emit the same ordered terminal effects: commit the complete proposa
 clear all provisional geometry. In particular, Finish commits only placed polyline
 vertices and removes any last pointer-following unplaced segment immediately.
 
-### Future-HI1 - Remembered reference inference is headless
+### M70-AI1 - Remembered reference inference is headless
 
-This scenario records a future interaction contract; it is not an M40 completion
-requirement. Start a line draft, move within the headless snap tolerance of persistent
-point `P`, then move away without placing the endpoint. The editor state remembers
-`P` as a typed reference candidate. When a later pointer sample enters the horizontal
-or vertical activation boundary relative to `P`, the editor—not the UI—publishes the
-ranked prospective relation, guide and adjusted preview. Leaving that boundary removes
-the assistance deterministically; explicit confirmation is still required before any
-constraint changes the document.
+This scenario was originally recorded as `Future-HI1`; ADR 0034 assigns its implemented target to
+M70 without making it an M40 completion requirement. Start a line draft, hover an eligible
+persistent point, semantic line midpoint or native affine span, then move away without placing the
+endpoint. The editor—not the UI—retains that bounded stage-local reference. A later sample may
+publish a ranked Horizontal/Vertical, Parallel/Perpendicular or midpoint-normal candidate, guide
+and adjusted preview. Hysteresis owns stable entry/leave behavior and the placement click is the
+explicit confirmation.
 
-The replay uses persistent identities and normalized 2D editor inputs and must produce
-the same transitions natively and through WASM. A browser can render the guide, and a
-3D CAD host can first map its camera ray onto the active sketch plane, but neither host
-may remember the hovered point, calculate the inference tolerance, rank candidates or
-adjust the preview. Replacing either UI must leave the replay result unchanged.
+Bare-point horizontal/vertical guidance is `TrackingOnly` in M70 and does not adjust or create a
+durable source. Existing persistent points are reused by identity; native curve positions create
+explicit PointOnCurve metadata; midpoint outranks generic curve contact; and new real line/polyline
+spans may receive H/V or a remembered affine Parallel/Perpendicular relation. Exact semantic ties
+remain Ambiguous. Suppression clears the current latch/reference and a suppressed click places the
+raw sample.
+
+Point identity lowers structurally into another construction's existing-point operand rather than
+creating a Coincident relation. A standalone Point-tool click on that already-existing identity is
+therefore a history-neutral no-op. Candidate enumeration stops at the first unique bundle proving
+its configured bound insufficient; candidate or scene exhaustion returns typed incomplete
+evidence, raw coordinates and no partial semantic prefix.
+
+The replay uses persistent identities and normalized 2D editor inputs and must produce identical
+transitions natively and through WASM. A browser can map Shift to semantic suppression and render
+the returned guide; a 3D CAD host can first map its camera ray onto the active sketch plane.
+Neither may generate anchors, remember references, calculate tolerances, rank candidates, adjust
+the preview or compose the inferred edit. Cancellation, stage completion, mutation, Undo/Redo,
+reload and viewport/policy changes clear memory deterministically.
+
+The publication replay must originate from the retained session's exact current accepted input.
+A compatibility/render-only scene built from caller-supplied document, revision or detached stamp
+may show identical inference, but cannot emit or authorize the inferred plan. Direct coordinator
+regressions own this distinction; browser behavior is not the authority. The exact private seal
+covers the accepted revision, design identity, viewport, native inference curves and construction
+snap anchors: changing them before binding rejects authentication, while changing them after
+binding revokes plan publication without disabling detached presentation.
+
+`crates/geosolve-constraint-editor/tests/m70_transition_parity.rs` and its
+`tests/fixtures/m70_transition_parity.golden.txt` bytes are the shared native/WASM transition
+oracle. Focused native tests separately own exact candidate, reference, anchor and chord limits.
+
+### M70-AI2 - Editable auto-constraint drafting playground
+
+The **Samples → Constraints & dimensions → Auto-constraint drafting playground** is an ordinary
+editable save-like leaf. It increases the post-M66 current sample catalog from 23 to 24 leaves
+without changing the historical M64 22-leaf freeze. The sample contains spaced Profile and
+explicit Construction reference points, lines and polyline midpoints; native circle, Bezier and
+NURBS targets; parallel/perpendicular reference spans; a midpoint-normal area; and one deliberately
+ambiguous overlap. Separate Profile and Construction point markers expose role/scope behavior. A
+prepared Construction line over two labelled rejection-marker centres already owns Horizontal;
+drawing a new line between those same identities deterministically rejects the duplicate inferred
+Horizontal while preserving the draft for an off-axis retry. No specimen is computed Fillet
+output.
+
+The sample owns no guide text, scripted action, protected geometry, preselection, alternate
+coordinator or read-only state. Normal drawing, selection, constraints, roles/scopes, Delete,
+dragging, Undo/Redo, camera and workspace persistence remain available. Opening it clears any
+prior ephemeral reference memory just like ordinary reload.
+
+Direct headless tests, not sample coordinates, own point identity reuse, all-family contact
+metadata, ranking, hysteresis, suppression, resource limits and atomic commit. Human M70 UAT uses
+the leaf to assess discoverability and predictability for H/V, point reuse, PointOnCurve,
+midpoint-normal, remembered Parallel/Perpendicular, ambiguity, suppression, zoom/scope,
+Undo/Redo and reload. `docs/M70_UAT.md` records the pending scorecard.
+
+Application-workspace v5 round trips the field-opaque persistent-object and spline-span allocator
+high-water needed for never-reuse after Undo/divergent history and process reload. Frozen workspace
+v1-v4 fixtures migrate by deriving graph-visible maxima, while malformed, foreign or trailing
+cursors reject. This checkpoint metadata is distinct from inference wake/reference state, which
+remains ephemeral and is never serialized.
 
 ### M41-A1 - Construction geometry remains solver-active but profile-ineligible
 

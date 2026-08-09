@@ -2,8 +2,8 @@
 
 use geosolve_core::SolverConfig;
 use geosolve_sketch::{
-    AlphaScenarioIds, AlphaScenarioKind, DocumentEdit, DocumentSessionError, DocumentSolveRequest,
-    ExternalFeatureKindV1, ExternalSnapshotDigest, ExternalSnapshotEntry,
+    AlphaScenarioIds, AlphaScenarioKind, DocumentCommandEffect, DocumentEdit, DocumentSessionError,
+    DocumentSolveRequest, ExternalFeatureKindV1, ExternalSnapshotDigest, ExternalSnapshotEntry,
     ExternalSnapshotFeatureV1, ExternalSnapshotResourcesV1, ExternalSnapshotSet, OperationControl,
     OperationLimits, OperationOutcome, ParameterBatch, PreparedSketchCommit, PreparedSketchInput,
     PreparedSketchJob, PreparedSketchOperation, PreparedSketchPatch, PreparedSketchSnapshot,
@@ -146,6 +146,125 @@ fn stale_out_of_order_patch_cannot_overwrite_a_newer_commit() {
         pair_bits(session.design_document().point(point).unwrap().position),
         pair_bits(committed_position)
     );
+}
+
+#[test]
+fn retained_allocator_high_water_makes_an_allocating_patch_stale() {
+    let (mut session, _) = fixture();
+    let accepted = session
+        .accepted_state_for_current_input()
+        .expect("current accepted state")
+        .identity();
+    let job = session
+        .prepared_snapshot()
+        .prepare(PreparedSketchOperation::Apply(DocumentEdit::CreatePoint {
+            label: "prepared allocation".into(),
+            position: [7.0, 3.0],
+        }));
+    let captured = job.input();
+
+    // Model an abandoned authoring branch whose identity must never be reused.
+    // Retaining its cursor intentionally changes no design/attempt revision.
+    let mut abandoned = session.design_document().clone();
+    let retired = abandoned
+        .add_point("retired branch allocation", [8.0, 3.0])
+        .unwrap();
+    session
+        .retain_persistent_identity_high_water(&abandoned.persistent_identity_high_water())
+        .unwrap();
+    assert_eq!(captured.design_identity(), session.design_identity());
+    assert_eq!(
+        captured.latest_attempt_identity(),
+        session.last_attempt().identity()
+    );
+    assert_ne!(captured, session.prepared_input());
+    assert_eq!(
+        session.persistent_identity_high_water(),
+        &abandoned.persistent_identity_high_water()
+    );
+    assert_eq!(
+        session
+            .accepted_state_for_current_input()
+            .expect("allocator-only retention preserves accepted provenance")
+            .identity(),
+        accepted
+    );
+
+    let patch = completed_patch(job.execute(OperationControl::unlimited()).unwrap());
+    assert!(matches!(
+        session.commit_prepared_patch(patch),
+        Err(DocumentSessionError::StalePreparedPatch { .. })
+    ));
+
+    let created = session
+        .apply(
+            session.design_identity(),
+            DocumentEdit::CreatePoint {
+                label: "live allocation after rejection".into(),
+                position: [9.0, 3.0],
+            },
+        )
+        .unwrap()
+        .into_value();
+    let DocumentCommandEffect::CreatedPoint(created) = created else {
+        panic!("created point effect expected");
+    };
+    assert!(created.0.as_u128() > retired.0.as_u128());
+}
+
+#[test]
+fn restored_incarnations_have_distinct_prepared_cas_epochs_while_clones_share_one() {
+    let (baseline, _) = fixture();
+    let document = baseline.design_document().clone();
+    let revisions = baseline.revision_high_water();
+    let request = baseline.request();
+    let left = RetainedSketchDocumentSession::restore_design(
+        document.clone(),
+        revisions,
+        request,
+        SolverConfig::default(),
+    )
+    .expect("left restored incarnation");
+    let mut right = RetainedSketchDocumentSession::restore_design(
+        document,
+        revisions,
+        request,
+        SolverConfig::default(),
+    )
+    .expect("right restored incarnation");
+    let mut shared_clone = left.clone();
+
+    assert_ne!(left.prepared_input(), right.prepared_input());
+    assert_eq!(left.prepared_input(), shared_clone.prepared_input());
+
+    let snapshot = left.prepared_snapshot();
+    let foreign_patch = completed_patch(
+        snapshot
+            .clone()
+            .prepare(PreparedSketchOperation::Apply(DocumentEdit::CreatePoint {
+                label: "foreign incarnation allocation".into(),
+                position: [7.0, 4.0],
+            }))
+            .execute(OperationControl::unlimited())
+            .expect("foreign patch execution"),
+    );
+    let clone_patch = completed_patch(
+        snapshot
+            .prepare(PreparedSketchOperation::Apply(DocumentEdit::CreatePoint {
+                label: "shared clone allocation".into(),
+                position: [8.0, 4.0],
+            }))
+            .execute(OperationControl::unlimited())
+            .expect("clone patch execution"),
+    );
+
+    assert!(matches!(
+        right.commit_prepared_patch(foreign_patch),
+        Err(DocumentSessionError::StalePreparedPatch { .. })
+    ));
+    shared_clone
+        .commit_prepared_patch(clone_patch)
+        .expect("an unchanged logical clone accepts the shared-incarnation patch");
 }
 
 #[test]

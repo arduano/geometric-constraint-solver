@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use geosolve_constraint_editor::{
-    ConstructionPreview, EditorEffect, ProvisionalInferenceCandidate, ScreenPoint,
+    ConstructionPreview, DraftInferenceInput, EditorEffect, Modifiers, RetainedEditorCoordinator,
+    ScreenPoint,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -43,6 +44,24 @@ pub(super) fn normalize_client_point(
     })
 }
 
+/// Translates one browser-captured modifier sample into semantic headless
+/// drafting input. The adapter chooses Shift as the demo personality; the
+/// editor remains keyboard-agnostic.
+#[must_use]
+pub(super) const fn draft_inference_input(modifiers: Modifiers) -> DraftInferenceInput {
+    draft_inference_input_for_suppression(modifiers.shift)
+}
+
+/// Builds semantic drafting input for a modifier-state transition that has no
+/// newer pointer coordinates of its own.
+#[must_use]
+pub(super) const fn draft_inference_input_for_suppression(suppressed: bool) -> DraftInferenceInput {
+    DraftInferenceInput {
+        suppressed,
+        preferred_candidate: None,
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum ConstructionDispatch {
     NotConstruction,
@@ -50,29 +69,38 @@ pub(super) enum ConstructionDispatch {
     Handled,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum InferenceDispatch {
-    NotInference,
-    ApplyCommit,
-    Handled,
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct PlannedConstructionOutcome {
+    pub(super) accepted: bool,
+    pub(super) error: Option<String>,
+    pub(super) acknowledgement: Vec<EditorEffect>,
 }
 
-pub(super) fn dispatch_inference_effect(
-    preview: &mut Option<ProvisionalInferenceCandidate>,
+#[derive(Clone, Debug, PartialEq)]
+pub(super) enum PlannedConstructionDispatch {
+    NotPlannedConstruction,
+    Handled(PlannedConstructionOutcome),
+}
+
+/// Applies and acknowledges one tokenized inferred construction without any
+/// browser or DOM state. Keeping this transition in the native adapter makes
+/// accepted, rejected and stale-token behavior directly testable.
+pub(super) fn dispatch_planned_construction_effect(
+    coordinator: &mut RetainedEditorCoordinator,
     effect: &EditorEffect,
-) -> InferenceDispatch {
-    match effect {
-        EditorEffect::PreviewInference(candidate) => {
-            *preview = Some(candidate.clone());
-            InferenceDispatch::Handled
-        }
-        EditorEffect::CommitInference(_) => InferenceDispatch::ApplyCommit,
-        EditorEffect::ClearInferencePreview => {
-            *preview = None;
-            InferenceDispatch::Handled
-        }
-        _ => InferenceDispatch::NotInference,
-    }
+) -> PlannedConstructionDispatch {
+    let EditorEffect::CommitConstructionPlan { token, .. } = effect else {
+        return PlannedConstructionDispatch::NotPlannedConstruction;
+    };
+    let result = coordinator.apply_editor_effect(effect);
+    let accepted = result.is_ok();
+    let error = result.err().map(|error| error.to_string());
+    let acknowledgement = coordinator.acknowledge_construction_commit(*token, accepted);
+    PlannedConstructionDispatch::Handled(PlannedConstructionOutcome {
+        accepted,
+        error,
+        acknowledgement,
+    })
 }
 
 pub(super) fn dispatch_construction_effect(
@@ -109,18 +137,19 @@ pub(super) fn dispatch_construction_effect(
 mod tests {
     use geosolve_constraint_editor::{
         ConstraintEditor, ConstructionPoint, ConstructionPreview, ConstructionProposal,
-        EditorEffect, EditorScene, EditorTool, Modifiers, PointerInput,
-        ProvisionalInferenceCandidate, ScreenPoint,
+        EditorEffect, EditorScene, EditorTool, Modifiers, PointerInput, RetainedEditorCoordinator,
+        ScreenPoint, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
-        CurveDefinition, DocumentConstraintDefinition, DocumentEdit, DocumentSolveRequest,
-        GeometryRole, RetainedSketchDocumentSession, SketchDocument,
+        CurveDefinition, DocumentConstraintDefinition, DocumentSolveRequest, GeometryRole,
+        RetainedSketchDocumentSession, SketchDocument,
     };
 
     use super::{
-        ClientRect, ConstructionDispatch, InferenceDispatch, dispatch_construction_effect,
-        dispatch_inference_effect, normalize_client_point,
+        ClientRect, ConstructionDispatch, PlannedConstructionDispatch,
+        dispatch_construction_effect, dispatch_planned_construction_effect, draft_inference_input,
+        draft_inference_input_for_suppression, normalize_client_point,
     };
 
     fn input(pointer_id: u64, position: [f64; 2]) -> PointerInput {
@@ -132,6 +161,51 @@ mod tests {
             },
             modifiers: Modifiers::default(),
         }
+    }
+
+    fn inferred_plan_fixture() -> (RetainedEditorCoordinator, EditorScene, EditorEffect) {
+        let session = RetainedSketchDocumentSession::new(
+            SketchDocument::new(10.0).expect("document"),
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("accepted state");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            accepted.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport"),
+            0.5,
+        )
+        .expect("scene")
+        .with_retained_session(&session)
+        .expect("bound scene");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let effect = emit_inferred_plan(&mut coordinator, &scene, 91);
+        (coordinator, scene, effect)
+    }
+
+    fn emit_inferred_plan(
+        coordinator: &mut RetainedEditorCoordinator,
+        scene: &EditorScene,
+        pointer_id: u64,
+    ) -> EditorEffect {
+        coordinator.editor_mut().activate_tool(EditorTool::Line);
+        for position in [[0.0, 0.0], [2.0, 0.01]] {
+            let screen = scene.viewport.model_to_screen(position);
+            let effects = coordinator.pointer_down(scene, input(pointer_id, [screen.x, screen.y]));
+            if let Some(effect) = effects
+                .into_iter()
+                .find(|effect| matches!(effect, EditorEffect::CommitConstructionPlan { .. }))
+            {
+                return effect;
+            }
+        }
+        panic!("inferred construction plan was not emitted");
     }
 
     #[test]
@@ -189,6 +263,118 @@ mod tests {
     }
 
     #[test]
+    fn shift_is_translated_to_semantic_inference_suppression_only() {
+        assert_eq!(
+            draft_inference_input(Modifiers::default()),
+            geosolve_constraint_editor::DraftInferenceInput::default()
+        );
+        assert_eq!(
+            draft_inference_input(Modifiers {
+                shift: true,
+                control: true,
+                command: true,
+            }),
+            geosolve_constraint_editor::DraftInferenceInput {
+                suppressed: true,
+                preferred_candidate: None,
+            }
+        );
+        assert_eq!(
+            draft_inference_input_for_suppression(false),
+            geosolve_constraint_editor::DraftInferenceInput::default()
+        );
+    }
+
+    #[test]
+    fn planned_construction_dispatch_accepts_and_acknowledges_atomically() {
+        let (mut coordinator, _, effect) = inferred_plan_fixture();
+        let before = coordinator.session().design_identity();
+        let PlannedConstructionDispatch::Handled(outcome) =
+            dispatch_planned_construction_effect(&mut coordinator, &effect)
+        else {
+            panic!("planned effect was not handled");
+        };
+        assert!(outcome.accepted);
+        assert!(outcome.error.is_none());
+        assert!(
+            outcome
+                .acknowledgement
+                .iter()
+                .any(|effect| matches!(effect, EditorEffect::ClearConstructionPreview))
+        );
+        assert_ne!(coordinator.session().design_identity(), before);
+        assert!(
+            coordinator
+                .editor()
+                .pending_construction_commit_token()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn planned_construction_rejection_retains_preview_and_stale_ack_preserves_new_token() {
+        let (mut coordinator, scene, original) = inferred_plan_fixture();
+        let before = coordinator.session().design_identity();
+        let mut substituted = original.clone();
+        let EditorEffect::CommitConstructionPlan { plan, token, .. } = &mut substituted else {
+            unreachable!("fixture returns a construction plan")
+        };
+        plan.role = match plan.role {
+            GeometryRole::Profile => GeometryRole::Construction,
+            GeometryRole::Construction => GeometryRole::Profile,
+        };
+        let rejected_token = *token;
+        let PlannedConstructionDispatch::Handled(rejected) =
+            dispatch_planned_construction_effect(&mut coordinator, &substituted)
+        else {
+            panic!("planned effect was not handled");
+        };
+        assert!(!rejected.accepted);
+        assert!(rejected.error.is_some());
+        assert!(rejected.acknowledgement.is_empty());
+        assert_eq!(coordinator.session().design_identity(), before);
+
+        let mut preview = Some(ConstructionPreview::Complete {
+            proposal: ConstructionProposal::Point {
+                point: ConstructionPoint::New([0.0, 0.0]),
+            },
+            geometry: geosolve_constraint_editor::ConstructionPreviewGeometry::Point {
+                position: [0.0, 0.0],
+            },
+        });
+        let mut failed = true;
+        for effect in &rejected.acknowledgement {
+            dispatch_construction_effect(&mut preview, effect, None, &mut failed);
+        }
+        assert!(
+            preview.is_some(),
+            "rejection must not clear the terminal preview"
+        );
+
+        let current = emit_inferred_plan(&mut coordinator, &scene, 92);
+        let EditorEffect::CommitConstructionPlan {
+            token: current_token,
+            ..
+        } = current
+        else {
+            unreachable!("helper returns a construction plan");
+        };
+        assert_ne!(current_token, rejected_token);
+        let PlannedConstructionDispatch::Handled(stale) =
+            dispatch_planned_construction_effect(&mut coordinator, &original)
+        else {
+            panic!("stale planned effect was not handled");
+        };
+        assert!(!stale.accepted);
+        assert!(stale.acknowledgement.is_empty());
+        assert_eq!(
+            coordinator.editor().pending_construction_commit_token(),
+            Some(current_token),
+            "a stale acknowledgement must not consume the genuine pending token"
+        );
+    }
+
+    #[test]
     fn failed_construction_commit_retains_preview_across_terminal_clear() {
         let session = RetainedSketchDocumentSession::new(
             SketchDocument::new(10.0).expect("document"),
@@ -232,7 +418,7 @@ mod tests {
         let commit = EditorEffect::CommitConstruction {
             expected: session.design_identity(),
             proposal: ConstructionProposal::Point {
-                position: [1.0, 0.0],
+                point: ConstructionPoint::New([1.0, 0.0]),
             },
             role: GeometryRole::Profile,
         };
@@ -253,47 +439,10 @@ mod tests {
     }
 
     #[test]
-    fn inference_dispatch_stages_commits_and_clears_typed_preview_state() {
-        let session = RetainedSketchDocumentSession::new(
-            SketchDocument::new(1.0).expect("document"),
-            DocumentSolveRequest::default(),
-            SolverConfig::default(),
-        )
-        .expect("session");
-        let candidate = ProvisionalInferenceCandidate {
-            expected: session.design_identity(),
-            label: "coincident inference".into(),
-            edit: DocumentEdit::CreatePoint {
-                label: "inferred point".into(),
-                position: [1.0, 2.0],
-            },
-        };
-        let mut preview = None;
-
-        assert_eq!(
-            dispatch_inference_effect(
-                &mut preview,
-                &EditorEffect::PreviewInference(candidate.clone()),
-            ),
-            InferenceDispatch::Handled
-        );
-        assert_eq!(preview, Some(candidate.clone()));
-        assert_eq!(
-            dispatch_inference_effect(
-                &mut preview,
-                &EditorEffect::CommitInference(candidate.clone()),
-            ),
-            InferenceDispatch::ApplyCommit
-        );
-        assert_eq!(preview, Some(candidate));
-        assert_eq!(
-            dispatch_inference_effect(&mut preview, &EditorEffect::ClearInferencePreview),
-            InferenceDispatch::Handled
-        );
-        assert!(preview.is_none());
-    }
-
-    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one adapter regression keeps preview retention and inference publication on the same pointer lifecycle"
+    )]
     fn m49_editor_cancel_and_invalid_completion_only_clear_or_retain_staged_preview() {
         // Match the accepted fixed-line scene and snapped pointer route covered by the
         // editor's construction tests. An empty document does not provide a valid accepted
@@ -355,9 +504,19 @@ mod tests {
         );
         let preview_end = scene.viewport.model_to_screen([1.0, 0.0]);
         let staged = editor.pointer_move(&scene, input(1, [preview_end.x, preview_end.y]));
-        let [EditorEffect::PreviewConstruction(preview)] = staged.as_slice() else {
-            panic!("line route must stage a construction preview");
-        };
+        let preview = staged
+            .iter()
+            .find_map(|effect| match effect {
+                EditorEffect::PreviewConstruction(preview) => Some(preview),
+                _ => None,
+            })
+            .expect("line route must stage a construction preview");
+        assert!(
+            staged
+                .iter()
+                .any(|effect| matches!(effect, EditorEffect::DraftInferenceChanged(Some(_)))),
+            "the same pointer sample should publish its headless inference DTO"
+        );
         let mut displayed = None;
         let mut failed_commit = false;
         dispatch_construction_effect(
@@ -386,8 +545,11 @@ mod tests {
         );
 
         let effects = editor.cancel();
-        assert_eq!(effects, [EditorEffect::ClearConstructionPreview]);
-        dispatch_construction_effect(&mut displayed, &effects[0], None, &mut failed_commit);
+        assert!(effects.contains(&EditorEffect::ClearConstructionPreview));
+        assert!(effects.contains(&EditorEffect::DraftInferenceChanged(None)));
+        for effect in &effects {
+            dispatch_construction_effect(&mut displayed, effect, None, &mut failed_commit);
+        }
         assert!(displayed.is_none());
         assert_eq!(
             session

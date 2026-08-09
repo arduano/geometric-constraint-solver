@@ -13,13 +13,14 @@ use geosolve_sketch::{
     DocumentFilletTrimEndpoint, DocumentMeasurementCatalog, DocumentMeasurementProvenance,
     DocumentMeasurementValue, DocumentObjectId, DocumentRuntimeMap, DocumentSessionError,
     DocumentSolveRequest, DocumentSourceId, DocumentSourceOwner, ExternalFeatureKindV1,
-    ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole, GeometryRoleEdit, OperationControl,
-    OperationController, OperationLimits, OperationOutcome, OperationReport, OperationWork,
-    ParameterBatch, RetainedSketchDocumentSession, RuntimeCurve, ScalarDomain, ScalarUnit,
+    ExternalSnapshotSet, ExternalTopologyDigest, GeometryRole, GeometryRoleEdit,
+    OperationCheckpoint, OperationControl, OperationController, OperationLimits, OperationOutcome,
+    OperationReport, OperationWork, ParameterBatch, PreparedSketchInput,
+    RetainedSketchDocumentSession, RuntimeCurve, ScalarDomain, ScalarUnit,
     SketchAcceptedDocumentRedundancy, SketchAcceptedStateIdentity, SketchAttemptFailure,
     SketchAttemptFailureKind, SketchAttemptIdentity, SketchBound, SketchDesignIdentity,
-    SketchDocument, SketchLifecycleRevisionHighWater, SketchSolveResult, SketchSource,
-    SolveRejection, TangentOrientation,
+    SketchDocument, SketchLifecycleRevisionHighWater, SketchPersistentIdentityHighWater,
+    SketchSolveResult, SketchSource, SolveRejection, TangentOrientation,
 };
 use geosolve_sketch_features::{
     ComputedCornerRef, ComputedEdgeId, ComputedEdgeProvenance, ComputedEvaluationAllocator,
@@ -41,11 +42,12 @@ use crate::{
     ComputedFilletContinuationLimit, ComputedFilletContinuationLimitKind,
     ComputedFilletContinuationStatus, ComputedFilletInteractionSample, ConstraintActionRequest,
     ConstraintEditor, ConstraintIntent, ConstraintKind, ConstraintRelationChoice,
-    ConstructionProposal, ConstructionResult, DimensionActionRequest, DimensionKind, EditorEffect,
-    EditorScene, FeatureAuthoringCandidate, FeatureAuthoringOptions, FeatureAuthoringOutcome,
-    FeatureAuthoringPick, FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringWarningKind,
-    GeometryInteractionPolicy, PickTolerance, PointGestureSnapshot, PointerInput,
-    ProjectedDragRequestDisposition, ProvisionalInferenceCandidate, ResolvedConstraintKind,
+    ConstructionCommitPlan, ConstructionCommitResult, ConstructionCommitToken,
+    ConstructionProposal, ConstructionResult, DimensionActionRequest, DimensionKind,
+    DraftInferenceInput, EditorEffect, EditorScene, FeatureAuthoringCandidate,
+    FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringPick, FeatureAuthoringState,
+    FeatureAuthoringTool, FeatureAuthoringWarningKind, GeometryInteractionPolicy, PickTolerance,
+    PointGestureSnapshot, PointerInput, ProjectedDragRequestDisposition, ResolvedConstraintKind,
     SceneFilletAction, SceneFilletActionAvailability, SceneFilletActionControlGeometry,
     SceneFilletActionId, ScreenPoint, SelectionItem,
 };
@@ -147,6 +149,21 @@ fn evaluate_computed_features(
     )?
     .prepare(allocator)?
     .execute(control)?)
+}
+
+fn evaluate_computed_features_in_controller(
+    session: &RetainedSketchDocumentSession,
+    features: &ComputedFeatureDocument,
+    allocator: &mut ComputedEvaluationAllocator,
+    controller: &mut OperationController,
+) -> Result<Option<ComputedFeatureSnapshot>, CoordinatorError> {
+    Ok(ComputedFeatureEvaluationSnapshot::capture(
+        session,
+        features,
+        ComputedFeatureEvaluationPolicy::default(),
+    )?
+    .prepare(allocator)?
+    .execute_in_controller(controller)?)
 }
 
 fn require_current_feature_authoring_evaluation(
@@ -633,6 +650,7 @@ pub struct RestoreCheckpoint {
     accepted_is_draft_v5: bool,
     accepted_belongs_to_current_design: bool,
     revisions: SketchLifecycleRevisionHighWater,
+    sketch_identity_high_water: SketchPersistentIdentityHighWater,
     feature_json: String,
     feature_lifecycle: ComputedFeatureLifecycleHighWater,
     evaluation_allocator: ComputedEvaluationAllocatorHighWater,
@@ -682,6 +700,12 @@ impl RestoreCheckpoint {
     #[must_use]
     pub const fn revisions(&self) -> SketchLifecycleRevisionHighWater {
         self.revisions
+    }
+
+    /// Never-reuse persistent sketch object and spline-span allocator metadata.
+    #[must_use]
+    pub const fn sketch_identity_high_water(&self) -> &SketchPersistentIdentityHighWater {
+        &self.sketch_identity_high_water
     }
 
     /// Canonical computed-feature sidecar JSON stored beside the sketch payload.
@@ -920,7 +944,7 @@ pub struct MutationOutcome<T> {
 pub enum EditorMutation {
     PointMove(DocumentCommandEffect),
     Construction(ConstructionResult),
-    Inference(DocumentCommandEffect),
+    InferredConstruction(ConstructionCommitResult),
 }
 
 /// Typed retained mutation emitted by one complete headless authoring application.
@@ -1204,6 +1228,10 @@ pub enum ReplayAction {
         proposal: ConstructionProposal,
         role: GeometryRole,
     },
+    ConstructionPlan {
+        expected: Box<PreparedSketchInput>,
+        plan: ConstructionCommitPlan,
+    },
     ConstraintAction {
         expected: SketchDesignIdentity,
         selection: Vec<SelectionItem>,
@@ -1304,6 +1332,14 @@ pub enum CoordinatorError {
     NothingToUndo,
     #[error("history has no later checkpoint")]
     NothingToRedo,
+    #[error("auto-constrained construction did not publish a newly accepted state")]
+    InferredConstructionNotAccepted,
+    #[error("auto-constrained construction would add redundant source {inferred_source:?}")]
+    RedundantInferredConstruction { inferred_source: DocumentSourceId },
+    #[error("auto-constrained construction effect does not match the editor's pending plan")]
+    InferredConstructionCommitMismatch,
+    #[error("auto-constrained construction input is no longer the current accepted input")]
+    StaleInferredConstructionInput,
     #[error("computed-feature authoring pick is unavailable: {0:?}")]
     FeatureAuthoringPick(crate::FeatureAuthoringWarningKind),
     #[error("computed-feature candidate does not match the current exact input")]
@@ -1345,6 +1381,19 @@ pub struct RetainedEditorCoordinator {
     projected_drag_work: Option<ProjectedDragWorkEvidence>,
     feature_authoring_preview: Option<FeatureAuthoringPreview>,
     next_feature_authoring_preview_token: u64,
+}
+
+/// Fully prepared, infallibly publishable state for one accepted inferred
+/// construction.  Building this value performs every fallible checkpoint and
+/// computed-output step against clones, so the live coordinator remains exact
+/// if staging fails.
+struct StagedConstructionPublication {
+    session: RetainedSketchDocumentSession,
+    computed_evaluation_allocator: ComputedEvaluationAllocator,
+    computed_input: Option<geosolve_sketch_features::ComputedFeatureEvaluationInput>,
+    computed_snapshot: Option<ComputedFeatureSnapshot>,
+    computed_evaluation_problem: Option<String>,
+    checkpoint: RestoreCheckpoint,
 }
 
 /// Exact non-persistent whole-feature candidate accepted during one published
@@ -3660,6 +3709,57 @@ impl RetainedEditorCoordinator {
         self.pointer_down_with_problem_items(scene, input, &[])
     }
 
+    /// Resolves a pointer press with explicit host-normalized drafting
+    /// inference input and captures any point-drag locality state.
+    pub fn pointer_down_with_draft_inference(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        inference: DraftInferenceInput,
+    ) -> Vec<EditorEffect> {
+        self.pointer_down_with_problem_items_and_draft_inference(scene, input, &[], inference)
+    }
+
+    /// Resolves a pointer press with diagnostic annotation forcing and explicit
+    /// host-normalized drafting inference input while retaining point-drag
+    /// locality ownership in the coordinator.
+    pub fn pointer_down_with_problem_items_and_draft_inference(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        problem_items: &[SelectionItem],
+        inference: DraftInferenceInput,
+    ) -> Vec<EditorEffect> {
+        let before = self.editor.point_gesture_snapshot();
+        let effects = self
+            .editor
+            .pointer_down_with_problem_items_and_draft_inference(
+                scene,
+                input,
+                problem_items,
+                inference,
+            );
+        let after = self.editor.point_gesture_snapshot();
+        if after != before {
+            self.clear_transient();
+            if let Some(gesture) = after {
+                self.drag_continuation =
+                    Some(self.plan_projected_drag_start(gesture, projected_drag_control()));
+            }
+        }
+        effects
+    }
+
+    /// Reports the retained publication result for one tokenized construction
+    /// plan back to the editor state machine.
+    pub fn acknowledge_construction_commit(
+        &mut self,
+        token: ConstructionCommitToken,
+        accepted: bool,
+    ) -> Vec<EditorEffect> {
+        self.editor.acknowledge_construction_commit(token, accepted)
+    }
+
     /// Resolves a pointer press with diagnostically forced annotations and captures
     /// any point gesture's locality plan from the exact accepted state visible at
     /// press time.
@@ -4331,43 +4431,12 @@ impl RetainedEditorCoordinator {
         let restored = if sketch_unchanged {
             None
         } else {
-            let design = checkpoint_document_from_json(
-                &saved_checkpoint.design_json,
-                saved_checkpoint.design_is_draft_v5,
-            )?;
-            let input = self.session.last_attempt().input();
-            let request = input
-                .candidate_request()
-                .without_temporary_targets()
-                .without_previous_state_preferences();
-            Some(if let Some(json) = &saved_checkpoint.accepted_json {
-                let accepted =
-                    checkpoint_document_from_json(json, saved_checkpoint.accepted_is_draft_v5)?;
-                if saved_checkpoint.accepted_belongs_to_current_design {
-                    RetainedSketchDocumentSession::restore_current_design_with_accepted(
-                        design,
-                        accepted,
-                        revisions,
-                        request,
-                        input.solver_config(),
-                    )?
-                } else {
-                    RetainedSketchDocumentSession::restore_design_with_accepted(
-                        design,
-                        accepted,
-                        revisions,
-                        request,
-                        input.solver_config(),
-                    )?
-                }
-            } else {
-                RetainedSketchDocumentSession::restore_design(
-                    design,
-                    revisions,
-                    request,
-                    input.solver_config(),
-                )?
-            })
+            Some(restore_sketch_checkpoint(
+                &self.session,
+                saved_checkpoint,
+                revisions,
+                AcceptedCheckpointRestore::RequireExact,
+            )?)
         };
         let retained_features = merge_feature_lifecycle_high_water(
             self.features.lifecycle_high_water(),
@@ -4387,8 +4456,16 @@ impl RetainedEditorCoordinator {
             .retain_high_water(saved_checkpoint.evaluation_allocator);
         if let Some(restored) = restored {
             self.session = restored;
+        } else {
+            let high_water = self
+                .session
+                .persistent_identity_high_water()
+                .merged(&saved_checkpoint.sketch_identity_high_water)?;
+            self.session
+                .retain_persistent_identity_high_water(&high_water)?;
         }
         self.features = restored_features;
+        self.editor.invalidate_for_retained_state_change(true);
         self.clear_transient();
         self.refresh_computed_features();
         self.history.clear();
@@ -4815,6 +4892,7 @@ impl RetainedEditorCoordinator {
             attempt: attempt.identity(),
             published_accepted: attempt.accepted_state_identity(),
         };
+        self.editor.invalidate_for_retained_state_change(true);
         self.clear_transient();
         self.refresh_computed_features();
         Ok(result)
@@ -4844,6 +4922,7 @@ impl RetainedEditorCoordinator {
             attempt: attempt.identity(),
             published_accepted: attempt.accepted_state_identity(),
         };
+        self.editor.invalidate_for_retained_state_change(true);
         self.clear_transient();
         self.refresh_computed_features();
         Ok(result)
@@ -4891,6 +4970,261 @@ impl RetainedEditorCoordinator {
         };
         self.record_mutation(replay)?;
         Ok(result)
+    }
+
+    /// Atomically applies one construction and its constraint-backed drafting
+    /// inferences, publishing only a newly accepted, non-redundant candidate.
+    ///
+    /// Unlike ordinary retained design edits, automatic inference is
+    /// fail-closed: a rejected solve or a newly redundant inferred source never
+    /// enters retained design, history, or the allocator lifecycle. The exact
+    /// trial session is swapped in after validation, so the accepted candidate
+    /// is not reconstructed or solved a second time.
+    ///
+    /// # Errors
+    ///
+    /// Returns stale-design, document, solve, non-acceptance, redundancy, or
+    /// checkpoint errors without mutating the live coordinator.
+    pub fn apply_construction_plan(
+        &mut self,
+        expected: &PreparedSketchInput,
+        plan: &ConstructionCommitPlan,
+    ) -> Result<MutationOutcome<ConstructionCommitResult>, CoordinatorError> {
+        self.ensure_pending_construction_plan_compatible(expected, plan)?;
+        self.ensure_construction_plan_input(expected)?;
+        plan.validate_relation_count()?;
+        let design = expected.design_identity();
+        let mut trial = self.session.clone();
+        let outcome = trial.transact(design, |document| plan.apply(document))?;
+        self.publish_construction_plan_trial(expected, plan, trial, &outcome)
+    }
+
+    /// Controlled counterpart to [`Self::apply_construction_plan`].
+    ///
+    /// Cancellation or deterministic work exhaustion returns its exact
+    /// [`OperationOutcome`] and leaves the live retained design, accepted state,
+    /// allocator lifecycle, history, transcript, and pending draft untouched.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same stale-design, document, solve, non-acceptance,
+    /// redundancy, or checkpoint errors as [`Self::apply_construction_plan`].
+    pub fn apply_construction_plan_controlled(
+        &mut self,
+        expected: &PreparedSketchInput,
+        plan: &ConstructionCommitPlan,
+        control: OperationControl,
+    ) -> Result<OperationOutcome<MutationOutcome<ConstructionCommitResult>>, CoordinatorError> {
+        self.ensure_pending_construction_plan_compatible(expected, plan)?;
+        self.ensure_construction_plan_input(expected)?;
+        plan.validate_relation_count()?;
+        let design = expected.design_identity();
+        let mut controller = OperationController::new(control);
+        let mut trial = self.session.clone();
+        let Some(outcome) = trial.transact_controlled_edit_in_controller(
+            design,
+            |document, controller| plan.apply_in_controller(document, controller),
+            &mut controller,
+        )?
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        let value = Self::validate_construction_plan_trial(&trial, &outcome)?;
+        let Some(staged) =
+            self.stage_construction_publication_in_controller(trial, &mut controller)?
+        else {
+            return Ok(controller.outcome_unchecked());
+        };
+        if !self.publish_staged_construction_in_controller(
+            staged,
+            ReplayAction::ConstructionPlan {
+                expected: Box::new(*expected),
+                plan: plan.clone(),
+            },
+            &mut controller,
+        ) {
+            return Ok(controller.outcome_unchecked());
+        }
+        Ok(controller.outcome(value))
+    }
+
+    fn publish_construction_plan_trial(
+        &mut self,
+        expected: &PreparedSketchInput,
+        plan: &ConstructionCommitPlan,
+        trial: RetainedSketchDocumentSession,
+        outcome: &geosolve_sketch::RetainedDocumentTransactionOutcome<ConstructionCommitResult>,
+    ) -> Result<MutationOutcome<ConstructionCommitResult>, CoordinatorError> {
+        let result = Self::validate_construction_plan_trial(&trial, outcome)?;
+        let staged = self.stage_construction_publication(trial)?;
+        self.publish_staged_construction(
+            staged,
+            ReplayAction::ConstructionPlan {
+                expected: Box::new(*expected),
+                plan: plan.clone(),
+            },
+        );
+        Ok(result)
+    }
+
+    fn validate_construction_plan_trial(
+        trial: &RetainedSketchDocumentSession,
+        outcome: &geosolve_sketch::RetainedDocumentTransactionOutcome<ConstructionCommitResult>,
+    ) -> Result<MutationOutcome<ConstructionCommitResult>, CoordinatorError> {
+        if outcome.published_accepted_identity().is_none() {
+            return Err(CoordinatorError::InferredConstructionNotAccepted);
+        }
+        let accepted = trial
+            .accepted_state_for_current_input()
+            .ok_or(CoordinatorError::InferredConstructionNotAccepted)?;
+        let redundancy = accepted.accepted_redundancy();
+        if let Some(source) = outcome
+            .value()
+            .constraints
+            .iter()
+            .map(|constraint| constraint.source)
+            .find(|source| {
+                redundancy.fully_redundant_sources().contains(source)
+                    || redundancy
+                        .sources_containing_redundant_rows()
+                        .contains(source)
+            })
+        {
+            return Err(CoordinatorError::RedundantInferredConstruction {
+                inferred_source: source,
+            });
+        }
+        Ok(mutation_from(outcome))
+    }
+
+    fn ensure_construction_plan_input(
+        &self,
+        expected: &PreparedSketchInput,
+    ) -> Result<(), CoordinatorError> {
+        if self.session.accepted_prepared_input().as_ref() != Some(expected) {
+            return Err(CoordinatorError::StaleInferredConstructionInput);
+        }
+        Ok(())
+    }
+
+    fn ensure_pending_construction_plan_compatible(
+        &self,
+        expected: &PreparedSketchInput,
+        plan: &ConstructionCommitPlan,
+    ) -> Result<(), CoordinatorError> {
+        if self.editor.pending_construction_commit_token().is_some()
+            && !self
+                .editor
+                .pending_construction_plan_matches(expected, plan)
+        {
+            return Err(CoordinatorError::InferredConstructionCommitMismatch);
+        }
+        Ok(())
+    }
+
+    fn stage_construction_publication(
+        &self,
+        session: RetainedSketchDocumentSession,
+    ) -> Result<StagedConstructionPublication, CoordinatorError> {
+        let mut computed_evaluation_allocator = self.computed_evaluation_allocator.clone();
+        let (computed_input, computed_snapshot, computed_evaluation_problem) =
+            match evaluate_computed_features(
+                &session,
+                &self.features,
+                &mut computed_evaluation_allocator,
+                bounded_geometry_control(),
+            ) {
+                Ok(OperationOutcome::Completed { value, .. }) => {
+                    (Some(value.input()), Some(value), None)
+                }
+                Ok(stopped) => (
+                    None,
+                    None,
+                    Some(format!(
+                        "computed-feature evaluation stopped: {:?}",
+                        stopped.report().stopping_reason
+                    )),
+                ),
+                Err(error) => (None, None, Some(error.to_string())),
+            };
+        let next = checkpoint(&session, &self.features, &computed_evaluation_allocator)?;
+        Ok(StagedConstructionPublication {
+            session,
+            computed_evaluation_allocator,
+            computed_input,
+            computed_snapshot,
+            computed_evaluation_problem,
+            checkpoint: next,
+        })
+    }
+
+    fn stage_construction_publication_in_controller(
+        &self,
+        session: RetainedSketchDocumentSession,
+        controller: &mut OperationController,
+    ) -> Result<Option<StagedConstructionPublication>, CoordinatorError> {
+        if controller
+            .checkpoint(OperationCheckpoint::DocumentValidation)
+            .is_err()
+        {
+            return Ok(None);
+        }
+        let mut computed_evaluation_allocator = self.computed_evaluation_allocator.clone();
+        let (computed_input, computed_snapshot, computed_evaluation_problem) =
+            match evaluate_computed_features_in_controller(
+                &session,
+                &self.features,
+                &mut computed_evaluation_allocator,
+                controller,
+            ) {
+                Ok(Some(value)) => (Some(value.input()), Some(value), None),
+                Ok(None) => return Ok(None),
+                Err(error) => (None, None, Some(error.to_string())),
+            };
+        let next = checkpoint(&session, &self.features, &computed_evaluation_allocator)?;
+        Ok(Some(StagedConstructionPublication {
+            session,
+            computed_evaluation_allocator,
+            computed_input,
+            computed_snapshot,
+            computed_evaluation_problem,
+            checkpoint: next,
+        }))
+    }
+
+    fn publish_staged_construction(
+        &mut self,
+        staged: StagedConstructionPublication,
+        replay: ReplayAction,
+    ) {
+        self.session = staged.session;
+        self.computed_evaluation_allocator = staged.computed_evaluation_allocator;
+        self.computed_input = staged.computed_input;
+        self.computed_snapshot = staged.computed_snapshot;
+        self.computed_evaluation_problem = staged.computed_evaluation_problem;
+        self.history.truncate(self.history_cursor + 1);
+        self.history.push(staged.checkpoint);
+        self.history_cursor += 1;
+        self.transcript.push(replay);
+        self.editor.invalidate_for_retained_state_change(false);
+        self.clear_transient();
+        self.reconcile_selection();
+    }
+
+    fn publish_staged_construction_in_controller(
+        &mut self,
+        staged: StagedConstructionPublication,
+        replay: ReplayAction,
+        controller: &mut OperationController,
+    ) -> bool {
+        if controller
+            .checkpoint(OperationCheckpoint::BeforeCommit)
+            .is_err()
+        {
+            return false;
+        }
+        self.publish_staged_construction(staged, replay);
+        true
     }
 
     /// Applies one complete alpha relation action over the current selection.
@@ -5862,6 +6196,7 @@ impl RetainedEditorCoordinator {
         self.ensure_expected(expected)?;
         let request = self.session.last_attempt().input().candidate_request();
         let attempt = self.session.reattempt(expected, request)?.identity();
+        self.editor.invalidate_for_retained_state_change(true);
         self.clear_transient();
         self.refresh_computed_features();
         self.transcript.push(ReplayAction::Reattempt { expected });
@@ -6128,12 +6463,20 @@ impl RetainedEditorCoordinator {
                     published_accepted: outcome.published_accepted,
                 }))
             }
-            EditorEffect::CommitInference(ProvisionalInferenceCandidate {
-                expected, edit, ..
-            }) => {
-                let outcome = self.apply_edit(*expected, edit.clone())?;
+            EditorEffect::CommitConstructionPlan {
+                expected,
+                token,
+                plan,
+            } => {
+                if !self
+                    .editor
+                    .authenticates_construction_commit(*token, expected.as_ref(), plan)
+                {
+                    return Err(CoordinatorError::InferredConstructionCommitMismatch);
+                }
+                let outcome = self.apply_construction_plan(expected.as_ref(), plan)?;
                 Ok(Some(MutationOutcome {
-                    value: EditorMutation::Inference(outcome.value),
+                    value: EditorMutation::InferredConstruction(outcome.value),
                     design: outcome.design,
                     attempt: outcome.attempt,
                     published_accepted: outcome.published_accepted,
@@ -6147,8 +6490,7 @@ impl RetainedEditorCoordinator {
             | EditorEffect::ClearPointPreview
             | EditorEffect::PreviewConstruction(_)
             | EditorEffect::ClearConstructionPreview
-            | EditorEffect::PreviewInference(_)
-            | EditorEffect::ClearInferencePreview => Ok(None),
+            | EditorEffect::DraftInferenceChanged(_) => Ok(None),
         }
     }
 
@@ -6225,6 +6567,9 @@ impl RetainedEditorCoordinator {
                 role,
             } => {
                 self.apply_construction_with_role(*expected, proposal, *role)?;
+            }
+            ReplayAction::ConstructionPlan { expected, plan } => {
+                self.apply_construction_plan(expected.as_ref(), plan)?;
             }
             ReplayAction::PointDistance {
                 expected,
@@ -6376,45 +6721,21 @@ impl RetainedEditorCoordinator {
             && checkpoint.accepted_is_draft_v5 == current_checkpoint.accepted_is_draft_v5
             && checkpoint.accepted_belongs_to_current_design
                 == current_checkpoint.accepted_belongs_to_current_design;
-        if !sketch_unchanged {
-            let design = checkpoint_document_from_json(
-                &checkpoint.design_json,
-                checkpoint.design_is_draft_v5,
-            )?;
-            let input = self.session.last_attempt().input();
-            let request = input
-                .candidate_request()
-                .without_temporary_targets()
-                .without_previous_state_preferences();
+        if sketch_unchanged {
+            let high_water = self
+                .session
+                .persistent_identity_high_water()
+                .merged(&checkpoint.sketch_identity_high_water)?;
+            self.session
+                .retain_persistent_identity_high_water(&high_water)?;
+        } else {
             let revisions = self.session.revision_high_water();
-            self.session = if let Some(json) = &checkpoint.accepted_json {
-                let accepted =
-                    checkpoint_document_from_json(json, checkpoint.accepted_is_draft_v5)?;
-                if checkpoint.accepted_belongs_to_current_design {
-                    RetainedSketchDocumentSession::restore_current_design_with_accepted(
-                        design,
-                        accepted,
-                        revisions,
-                        request,
-                        input.solver_config(),
-                    )?
-                } else {
-                    RetainedSketchDocumentSession::restore_design_with_accepted(
-                        design,
-                        accepted,
-                        revisions,
-                        request,
-                        input.solver_config(),
-                    )?
-                }
-            } else {
-                RetainedSketchDocumentSession::restore_design(
-                    design,
-                    revisions,
-                    request,
-                    input.solver_config(),
-                )?
-            };
+            self.session = restore_sketch_checkpoint(
+                &self.session,
+                &checkpoint,
+                revisions,
+                AcceptedCheckpointRestore::PreferCurrentInputTruth,
+            )?;
         }
         let retained_features = merge_feature_lifecycle_high_water(
             self.features.lifecycle_high_water(),
@@ -6429,6 +6750,7 @@ impl RetainedEditorCoordinator {
             .retain_high_water(checkpoint.evaluation_allocator);
         self.features = restored_features;
         self.history_cursor = target;
+        self.editor.invalidate_for_retained_state_change(true);
         self.clear_transient();
         self.refresh_computed_features();
         self.reconcile_selection();
@@ -6436,6 +6758,7 @@ impl RetainedEditorCoordinator {
     }
 
     fn record_mutation(&mut self, replay: ReplayAction) -> Result<(), CoordinatorError> {
+        let preserve_pending_plan = matches!(&replay, ReplayAction::ConstructionPlan { .. });
         self.refresh_computed_features();
         let next = checkpoint(
             &self.session,
@@ -6446,6 +6769,8 @@ impl RetainedEditorCoordinator {
         self.history.push(next);
         self.history_cursor += 1;
         self.transcript.push(replay);
+        self.editor
+            .invalidate_for_retained_state_change(!preserve_pending_plan);
         self.clear_transient();
         self.reconcile_selection();
         Ok(())
@@ -6515,6 +6840,7 @@ impl RetainedEditorCoordinator {
         self.history.push(next);
         self.history_cursor += 1;
         self.transcript.push(replay);
+        self.editor.invalidate_for_retained_state_change(true);
         self.clear_transient();
         self.reconcile_selection();
     }
@@ -6948,6 +7274,7 @@ impl ReplayAction {
             | Self::Delete { expected, .. }
             | Self::SetSuppressed { expected, .. }
             | Self::Reattempt { expected } => Some(*expected),
+            Self::ConstructionPlan { expected, .. } => Some(expected.design_identity()),
             Self::CreateComputedFillet { .. }
             | Self::SetComputedFilletRadius { .. }
             | Self::SetComputedFilletConfiguration { .. }
@@ -6993,6 +7320,7 @@ fn checkpoint(
             .accepted_state()
             .is_some_and(|accepted| accepted.design_identity() == session.design_identity()),
         revisions: session.revision_high_water(),
+        sketch_identity_high_water: session.persistent_identity_high_water().clone(),
         feature_json: features.to_json()?,
         feature_lifecycle: features.lifecycle_high_water(),
         evaluation_allocator: evaluation_allocator.high_water(),
@@ -7017,6 +7345,91 @@ fn checkpoint_document_from_json(
     } else {
         SketchDocument::from_json(json)
     }
+}
+
+fn restore_sketch_checkpoint(
+    current: &RetainedSketchDocumentSession,
+    checkpoint: &RestoreCheckpoint,
+    revisions: SketchLifecycleRevisionHighWater,
+    accepted_restore: AcceptedCheckpointRestore,
+) -> Result<RetainedSketchDocumentSession, CoordinatorError> {
+    let high_water = current
+        .persistent_identity_high_water()
+        .merged(&checkpoint.sketch_identity_high_water)?;
+    let mut design =
+        checkpoint_document_from_json(&checkpoint.design_json, checkpoint.design_is_draft_v5)?;
+    design.retain_persistent_identity_high_water(&high_water)?;
+    let input = current.last_attempt().input();
+    let request = input
+        .candidate_request()
+        .without_temporary_targets()
+        .without_previous_state_preferences();
+    let parameters = current.parameter_batch().clone();
+    let snapshots = current.external_snapshot_set().clone();
+    let mut restored = if let Some(json) = &checkpoint.accepted_json {
+        let mut accepted = checkpoint_document_from_json(json, checkpoint.accepted_is_draft_v5)?;
+        accepted.retain_persistent_identity_high_water(&high_water)?;
+        let exact = if checkpoint.accepted_belongs_to_current_design {
+            RetainedSketchDocumentSession::restore_current_design_with_accepted_and_inputs(
+                design.clone(),
+                accepted,
+                revisions,
+                parameters.clone(),
+                snapshots.clone(),
+                request,
+                input.solver_config(),
+            )
+        } else {
+            RetainedSketchDocumentSession::restore_design_with_accepted_and_inputs(
+                design.clone(),
+                accepted,
+                revisions,
+                parameters.clone(),
+                snapshots.clone(),
+                request,
+                input.solver_config(),
+            )
+        };
+        match (exact, accepted_restore) {
+            (Ok(restored), _) => restored,
+            (Err(error), AcceptedCheckpointRestore::RequireExact) => return Err(error.into()),
+            (Err(_), AcceptedCheckpointRestore::PreferCurrentInputTruth) => {
+                // Parameter values and external snapshots are host state rather than
+                // sketch history. A historical accepted materialization can therefore
+                // cease to certify after those inputs change. Restore the historical
+                // design as a fresh attempt under the exact current inputs; it may
+                // publish a newly accepted state or retain a typed input failure, but
+                // the older accepted geometry must never masquerade as current.
+                RetainedSketchDocumentSession::restore_design_with_inputs(
+                    design,
+                    revisions,
+                    parameters,
+                    snapshots,
+                    request,
+                    input.solver_config(),
+                )?
+            }
+        }
+    } else {
+        RetainedSketchDocumentSession::restore_design_with_inputs(
+            design,
+            revisions,
+            parameters,
+            snapshots,
+            request,
+            input.solver_config(),
+        )?
+    };
+    restored.retain_persistent_identity_high_water(&high_water)?;
+    Ok(restored)
+}
+
+#[derive(Clone, Copy)]
+enum AcceptedCheckpointRestore {
+    /// Persistence reload treats the stored accepted payload as a strict contract.
+    RequireExact,
+    /// History restores design intent under host inputs that are not historical state.
+    PreferCurrentInputTruth,
 }
 
 fn availability<T>(result: Result<T, DisabledReason>) -> ActionState {
@@ -8206,7 +8619,7 @@ mod tests {
         PickTolerance, PointerInput, ScreenPoint, Viewport,
     };
     use geosolve_sketch::{
-        AlphaScenarioIds, AlphaScenarioKind, DocumentConstraintDefinition,
+        AlphaScenarioIds, AlphaScenarioKind, DocumentBSplineForm, DocumentConstraintDefinition,
         DocumentExternalPointRef, DocumentM38DimensionDefinition, DocumentMeasurementDefinition,
         DocumentParameterKind, DocumentPointRef, ExternalLineOrientationV1, ExternalSnapshotDigest,
         ExternalSnapshotEntry, ExternalSnapshotFeatureV1, ExternalSnapshotInputError,
@@ -8489,6 +8902,726 @@ mod tests {
         )
     }
 
+    fn inferred_normal_plan(reference: CurveSpan) -> ConstructionCommitPlan {
+        ConstructionCommitPlan {
+            proposal: ConstructionProposal::Line {
+                start: ConstructionPoint::New([0.5, 0.0]),
+                end: ConstructionPoint::New([0.5, 2.5]),
+            },
+            role: GeometryRole::Construction,
+            relations: vec![
+                crate::InferredRelation::PointOnCurve {
+                    point: crate::DraftPointSlot::Created { point_index: 0 },
+                    contact: crate::DraftContactDescriptor {
+                        span: crate::DraftSpanSlot::Existing(reference),
+                        domain: ContactDomain::Bounded {
+                            lower: 0.0,
+                            upper: 1.0,
+                        },
+                        parameter: 0.25,
+                        winding: 0,
+                        neighborhood: ContactNeighborhood::Interior,
+                    },
+                },
+                crate::InferredRelation::Perpendicular {
+                    first: crate::DraftSpanSlot::Created {
+                        curve_index: 0,
+                        segment: 0,
+                    },
+                    second: crate::DraftSpanSlot::Existing(reference),
+                },
+            ],
+        }
+    }
+
+    fn redundant_inferred_plan(reference: CurveSpan) -> ConstructionCommitPlan {
+        let created = crate::DraftSpanSlot::Created {
+            curve_index: 0,
+            segment: 0,
+        };
+        ConstructionCommitPlan {
+            proposal: ConstructionProposal::Line {
+                start: ConstructionPoint::New([0.0, 1.0]),
+                end: ConstructionPoint::New([2.0, 1.0]),
+            },
+            role: GeometryRole::Profile,
+            relations: vec![
+                crate::InferredRelation::Horizontal { line: created },
+                crate::InferredRelation::Parallel {
+                    first: created,
+                    second: crate::DraftSpanSlot::Existing(reference),
+                },
+            ],
+        }
+    }
+
+    fn retained_document_payloads(
+        coordinator: &RetainedEditorCoordinator,
+    ) -> ((String, bool), Option<(String, bool)>) {
+        let design = checkpoint_document_to_json(coordinator.session().design_document())
+            .expect("design checkpoint payload");
+        let accepted = coordinator.session().accepted_state().map(|accepted| {
+            checkpoint_document_to_json(accepted.document()).expect("accepted checkpoint payload")
+        });
+        (design, accepted)
+    }
+
+    fn construction_commit_persistent_ids(
+        result: &ConstructionCommitResult,
+        document: &SketchDocument,
+    ) -> BTreeSet<PersistentId> {
+        let mut ids = result
+            .construction
+            .points
+            .iter()
+            .map(|id| id.0)
+            .chain(result.construction.curves.iter().map(|id| id.0))
+            .chain(result.contacts.iter().map(|result| result.contact.0))
+            .chain(
+                result
+                    .constraints
+                    .iter()
+                    .flat_map(|result| [result.constraint.0, result.source.0]),
+            )
+            .collect::<BTreeSet<_>>();
+        for contact in &result.contacts {
+            ids.insert(
+                document
+                    .contact(contact.contact)
+                    .expect("committed contact")
+                    .parameter
+                    .0,
+            );
+        }
+        ids
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one transaction fixture keeps solve count, atomic contents, history, replay, and reload evidence together"
+    )]
+    fn inferred_construction_is_one_solve_checkpoint_with_exact_undo_redo_and_replay() {
+        let (session, _, reference, _) = fixed_line_session();
+        let replay_session = session.clone();
+        let reload_session = session.clone();
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let expected = coordinator.session().design_identity();
+        let expected_input = coordinator
+            .session()
+            .accepted_prepared_input()
+            .expect("accepted input");
+        let initial_attempt = coordinator.session().last_attempt().identity();
+        let initial_accepted = coordinator
+            .session()
+            .accepted_state()
+            .expect("accepted baseline")
+            .identity();
+        let initial_history = coordinator.history_len();
+        let initial_cursor = coordinator.history_cursor();
+        let initial_points = coordinator.session().design_document().points().len();
+        let initial_curves = coordinator.session().design_document().curves().len();
+        let initial_contacts = coordinator.session().design_document().contacts().len();
+        let initial_constraints = coordinator.session().design_document().constraints().len();
+        let plan = inferred_normal_plan(reference);
+
+        let outcome = coordinator
+            .apply_construction_plan(&expected_input, &plan)
+            .expect("accepted inferred construction");
+        let published = outcome.published_accepted.expect("new accepted state");
+        assert_eq!(
+            outcome.design.revision().get(),
+            expected.revision().get() + 1
+        );
+        assert_eq!(
+            outcome.attempt.revision().get(),
+            initial_attempt.revision().get() + 1
+        );
+        assert_eq!(
+            published.revision().get(),
+            initial_accepted.revision().get() + 1
+        );
+        assert_eq!(outcome.value.contacts.len(), 1);
+        assert_eq!(outcome.value.constraints.len(), 2);
+        assert_eq!(coordinator.history_len(), initial_history + 1);
+        assert_eq!(coordinator.history_cursor(), initial_cursor + 1);
+        assert_eq!(
+            coordinator.session().design_document().points().len(),
+            initial_points + 2
+        );
+        assert_eq!(
+            coordinator.session().design_document().curves().len(),
+            initial_curves + 1
+        );
+        assert_eq!(
+            coordinator.session().design_document().contacts().len(),
+            initial_contacts + 1
+        );
+        assert_eq!(
+            coordinator.session().design_document().constraints().len(),
+            initial_constraints + 2
+        );
+        let created_curve = outcome.value.construction.curves[0];
+        assert_eq!(
+            coordinator
+                .session()
+                .design_document()
+                .geometry_role(created_curve),
+            Some(GeometryRole::Construction)
+        );
+        assert!(matches!(
+            coordinator.transcript().last(),
+            Some(ReplayAction::ConstructionPlan { plan: retained, .. }) if retained == &plan
+        ));
+        let replay = coordinator.transcript().last().expect("replay").clone();
+        let committed_payloads = retained_document_payloads(&coordinator);
+        let committed_identity_high_water = coordinator
+            .session()
+            .persistent_identity_high_water()
+            .clone();
+
+        coordinator.undo().expect("one-step undo");
+        assert_eq!(coordinator.history_len(), initial_history + 1);
+        assert_eq!(coordinator.history_cursor(), initial_cursor);
+        let undone = coordinator.session().design_document();
+        assert_eq!(undone.points().len(), initial_points);
+        assert_eq!(undone.curves().len(), initial_curves);
+        assert_eq!(undone.contacts().len(), initial_contacts);
+        assert_eq!(undone.constraints().len(), initial_constraints);
+        assert!(undone.curve(created_curve).is_none());
+        assert!(undone.contact(outcome.value.contacts[0].contact).is_none());
+        assert_eq!(
+            coordinator.session().persistent_identity_high_water(),
+            &committed_identity_high_water,
+            "Undo removes objects but must not rewind their allocator lifecycle"
+        );
+
+        coordinator.redo().expect("one-step redo");
+        assert_eq!(coordinator.history_cursor(), initial_cursor + 1);
+        assert_eq!(retained_document_payloads(&coordinator), committed_payloads);
+        for result in &outcome.value.constraints {
+            assert!(
+                coordinator
+                    .session()
+                    .design_document()
+                    .constraint(result.constraint)
+                    .is_some()
+            );
+        }
+        assert!(
+            coordinator
+                .session()
+                .design_document()
+                .contact(outcome.value.contacts[0].contact)
+                .is_some()
+        );
+        let saved = coordinator
+            .persistence_checkpoint()
+            .expect("committed persistence checkpoint");
+
+        let mut replayed =
+            RetainedEditorCoordinator::new(replay_session).expect("replay coordinator");
+        replayed.replay(&replay).expect("construction-plan replay");
+        assert_eq!(retained_document_payloads(&replayed), committed_payloads);
+        assert_eq!(replayed.session().design_identity(), outcome.design);
+        assert_eq!(
+            replayed.session().last_attempt().identity(),
+            outcome.attempt
+        );
+        assert_eq!(
+            replayed
+                .session()
+                .accepted_state()
+                .map(geosolve_sketch::SketchAcceptedDocumentState::identity),
+            outcome.published_accepted
+        );
+
+        let mut reloaded =
+            RetainedEditorCoordinator::new(reload_session).expect("reload coordinator");
+        reloaded.reload(&saved).expect("construction-plan reload");
+        assert_eq!(retained_document_payloads(&reloaded), committed_payloads);
+        assert_eq!(reloaded.history_len(), 1);
+        assert_eq!(reloaded.history_cursor(), 0);
+    }
+
+    #[test]
+    fn undo_then_divergent_inferred_construction_never_reuses_persistent_ids() {
+        let (session, _, reference, _) = fixed_line_session();
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let plan = inferred_normal_plan(reference);
+        let first_input = coordinator
+            .session()
+            .accepted_prepared_input()
+            .expect("first exact input");
+        let first = coordinator
+            .apply_construction_plan(&first_input, &plan)
+            .expect("first inferred construction");
+        let first_ids = construction_commit_persistent_ids(
+            &first.value,
+            coordinator.session().design_document(),
+        );
+
+        coordinator.undo().expect("undo first construction");
+        let divergent_input = coordinator
+            .session()
+            .accepted_prepared_input()
+            .expect("divergent exact input");
+        let second = coordinator
+            .apply_construction_plan(&divergent_input, &plan)
+            .expect("divergent inferred construction");
+        let second_ids = construction_commit_persistent_ids(
+            &second.value,
+            coordinator.session().design_document(),
+        );
+
+        assert!(first_ids.is_disjoint(&second_ids));
+        assert!(!coordinator.can_redo());
+    }
+
+    #[test]
+    fn reloading_an_undone_checkpoint_never_reuses_retired_persistent_ids() {
+        let (session, _, reference, _) = fixed_line_session();
+        let reload_seed = session.clone();
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let plan = inferred_normal_plan(reference);
+        let first_input = coordinator
+            .session()
+            .accepted_prepared_input()
+            .expect("first exact input");
+        let first = coordinator
+            .apply_construction_plan(&first_input, &plan)
+            .expect("first inferred construction");
+        let retired_ids = construction_commit_persistent_ids(
+            &first.value,
+            coordinator.session().design_document(),
+        );
+
+        coordinator.undo().expect("undo first construction");
+        let saved = coordinator
+            .persistence_checkpoint()
+            .expect("undone persistence checkpoint");
+        let mut reloaded = RetainedEditorCoordinator::new(reload_seed).expect("reload coordinator");
+        reloaded.reload(&saved).expect("reload undone checkpoint");
+
+        let second_input = reloaded
+            .session()
+            .accepted_prepared_input()
+            .expect("reloaded exact input");
+        let second = reloaded
+            .apply_construction_plan(&second_input, &plan)
+            .expect("post-reload inferred construction");
+        let allocated_ids =
+            construction_commit_persistent_ids(&second.value, reloaded.session().design_document());
+
+        assert!(retired_ids.is_disjoint(&allocated_ids));
+    }
+
+    #[test]
+    fn retained_history_never_reuses_an_undone_spline_span_id() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let controls = [[0.0, 0.0], [1.0, 2.0], [2.0, -1.0], [3.0, 1.5], [4.0, 0.0]]
+            .map(|position| {
+                document
+                    .add_point("clamped control", position)
+                    .expect("control")
+            })
+            .to_vec();
+        let curve = document
+            .add_curve(
+                "clamped cubic",
+                CurveDefinition::BSpline {
+                    form: DocumentBSplineForm::Clamped,
+                    degree: 3,
+                    controls,
+                    knots: vec![0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0],
+                    span_ids: vec![41, 73],
+                    next_span_id: 100,
+                },
+            )
+            .expect("B-spline");
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+
+        let first = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::InsertBSplineKnot {
+                    curve,
+                    parameter: 0.25,
+                },
+            )
+            .expect("first insertion");
+        let DocumentCommandEffect::InsertedBSplineKnot(first) = first.value else {
+            panic!("expected first B-spline insertion");
+        };
+        assert_eq!(first.new_span_id, Some(100));
+
+        coordinator.undo().expect("undo insertion");
+        let divergent = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::InsertBSplineKnot {
+                    curve,
+                    parameter: 0.75,
+                },
+            )
+            .expect("divergent insertion");
+        let DocumentCommandEffect::InsertedBSplineKnot(divergent) = divergent.value else {
+            panic!("expected divergent B-spline insertion");
+        };
+        assert_eq!(divergent.new_span_id, Some(101));
+        assert!(!coordinator.can_redo());
+    }
+
+    #[test]
+    fn redundant_inferred_bundle_is_rejected_without_design_or_history_mutation() {
+        let (session, _, reference, _) = fixed_line_session();
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let expected = coordinator.session().design_identity();
+        let expected_input = coordinator
+            .session()
+            .accepted_prepared_input()
+            .expect("accepted input");
+        let before = coordinator
+            .session()
+            .export_design_json()
+            .expect("design JSON");
+        let accepted_before = coordinator
+            .session()
+            .export_accepted_json()
+            .expect("accepted JSON");
+        let identity_before = coordinator.session().last_attempt().identity();
+        let history = coordinator.history_len();
+        let cursor = coordinator.history_cursor();
+        let transcript = coordinator.transcript().len();
+        let evaluation_high_water = coordinator
+            .persistence_checkpoint()
+            .expect("persistence checkpoint")
+            .computed_evaluation_high_water();
+        let plan = redundant_inferred_plan(reference);
+
+        let result = coordinator.apply_construction_plan(&expected_input, &plan);
+        assert!(
+            matches!(
+                result,
+                Err(CoordinatorError::RedundantInferredConstruction { .. })
+            ),
+            "unexpected redundant-bundle result: {result:?}"
+        );
+        assert_eq!(coordinator.session().design_identity(), expected);
+        assert_eq!(
+            coordinator
+                .session()
+                .export_design_json()
+                .expect("design JSON"),
+            before
+        );
+        assert_eq!(
+            coordinator
+                .session()
+                .export_accepted_json()
+                .expect("accepted JSON"),
+            accepted_before
+        );
+        assert_eq!(
+            coordinator.session().last_attempt().identity(),
+            identity_before
+        );
+        assert_eq!(coordinator.history_len(), history);
+        assert_eq!(coordinator.history_cursor(), cursor);
+        assert_eq!(coordinator.transcript().len(), transcript);
+        assert_eq!(
+            coordinator
+                .persistence_checkpoint()
+                .expect("persistence checkpoint")
+                .computed_evaluation_high_water(),
+            evaluation_high_water
+        );
+    }
+
+    #[test]
+    fn partially_redundant_inferred_contact_is_rejected_exactly() {
+        let (session, _, reference, _) = fixed_line_session();
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let expected_input = coordinator
+            .session()
+            .accepted_prepared_input()
+            .expect("accepted input");
+        let retained = retained_state_snapshot(&coordinator);
+        let cursor = coordinator.history_cursor();
+        let plan = ConstructionCommitPlan {
+            proposal: ConstructionProposal::Point {
+                point: ConstructionPoint::New([1.0, 0.0]),
+            },
+            role: GeometryRole::Profile,
+            relations: vec![
+                crate::InferredRelation::Midpoint {
+                    point: crate::DraftPointSlot::Created { point_index: 0 },
+                    line: crate::DraftSpanSlot::Existing(reference),
+                },
+                crate::InferredRelation::PointOnCurve {
+                    point: crate::DraftPointSlot::Created { point_index: 0 },
+                    contact: crate::DraftContactDescriptor {
+                        span: crate::DraftSpanSlot::Existing(reference),
+                        domain: ContactDomain::Bounded {
+                            lower: 0.0,
+                            upper: 1.0,
+                        },
+                        parameter: 0.5,
+                        winding: 0,
+                        neighborhood: ContactNeighborhood::Interior,
+                    },
+                },
+            ],
+        };
+
+        let result = coordinator.apply_construction_plan(&expected_input, &plan);
+        assert!(
+            matches!(
+                result,
+                Err(CoordinatorError::RedundantInferredConstruction { .. })
+            ),
+            "unexpected partial-redundancy result: {result:?}"
+        );
+        assert_retained_state_snapshot(&coordinator, &retained);
+        assert_eq!(coordinator.history_cursor(), cursor);
+    }
+
+    #[test]
+    fn oversized_inferred_plan_rejects_before_controlled_trial_state() {
+        let (session, _, _, _) = fixed_line_session();
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let expected = coordinator
+            .session()
+            .accepted_prepared_input()
+            .expect("accepted input");
+        let retained = retained_state_snapshot(&coordinator);
+        let cursor = coordinator.history_cursor();
+        let created = crate::DraftSpanSlot::Created {
+            curve_index: 0,
+            segment: 0,
+        };
+        let plan = ConstructionCommitPlan {
+            proposal: ConstructionProposal::Line {
+                start: ConstructionPoint::New([0.0, 1.0]),
+                end: ConstructionPoint::New([2.0, 1.0]),
+            },
+            role: GeometryRole::Profile,
+            relations: vec![
+                crate::InferredRelation::Horizontal { line: created };
+                crate::MAX_CONSTRUCTION_PLAN_RELATIONS + 1
+            ],
+        };
+
+        assert!(matches!(
+            coordinator.apply_construction_plan_controlled(
+                &expected,
+                &plan,
+                OperationControl::unlimited(),
+            ),
+            Err(CoordinatorError::Document(
+                geosolve_sketch::DocumentError::ResourceLimit {
+                    resource: "construction plan inferred relations",
+                    actual,
+                    limit: crate::MAX_CONSTRUCTION_PLAN_RELATIONS,
+                }
+            )) if actual == crate::MAX_CONSTRUCTION_PLAN_RELATIONS + 1
+        ));
+        assert_retained_state_snapshot(&coordinator, &retained);
+        assert_eq!(coordinator.history_cursor(), cursor);
+    }
+
+    #[test]
+    fn cancelled_and_exhausted_inferred_construction_are_exact_and_retryable() {
+        let (session, _, reference, _) = fixed_line_session();
+        let control_session = session.clone();
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let mut control =
+            RetainedEditorCoordinator::new(control_session).expect("control coordinator");
+        let expected = coordinator
+            .session()
+            .accepted_prepared_input()
+            .expect("accepted input");
+        let retained = retained_state_snapshot(&coordinator);
+        let cursor = coordinator.history_cursor();
+        let evaluation_high_water = coordinator
+            .persistence_checkpoint()
+            .expect("persistence checkpoint")
+            .computed_evaluation_high_water();
+        let plan = inferred_normal_plan(reference);
+
+        let (cancellation, token) = cancellation_pair();
+        cancellation.cancel();
+        let mut cancelled_control = OperationControl::unlimited();
+        cancelled_control.token = token;
+        assert!(matches!(
+            coordinator
+                .apply_construction_plan_controlled(&expected, &plan, cancelled_control)
+                .expect("controlled cancellation"),
+            OperationOutcome::Cancelled { .. }
+        ));
+        assert_retained_state_snapshot(&coordinator, &retained);
+        assert_eq!(coordinator.history_cursor(), cursor);
+
+        let mut exhausted_control = OperationControl::unlimited();
+        exhausted_control.limits.document_validation_items = 1;
+        let OperationOutcome::WorkExhausted { report } = coordinator
+            .apply_construction_plan_controlled(&expected, &plan, exhausted_control)
+            .expect("controlled exhaustion")
+        else {
+            panic!("the second inferred relation must exhaust the plan work envelope");
+        };
+        assert_eq!(report.consumed.document_validation_items, 1);
+        assert_eq!(
+            report.stopping_reason,
+            Some(OperationStopReason::WorkExhausted {
+                counter: geosolve_sketch::OperationWorkCounter::DocumentValidationItems,
+                checkpoint: OperationCheckpoint::DocumentValidation,
+            })
+        );
+        assert_retained_state_snapshot(&coordinator, &retained);
+        assert_eq!(coordinator.history_cursor(), cursor);
+        assert_eq!(
+            coordinator
+                .persistence_checkpoint()
+                .expect("persistence checkpoint")
+                .computed_evaluation_high_water(),
+            evaluation_high_water
+        );
+
+        let retry = coordinator
+            .apply_construction_plan(&expected, &plan)
+            .expect("retry after stopped work");
+        let control_expected = control
+            .session()
+            .accepted_prepared_input()
+            .expect("control accepted input");
+        let direct = control
+            .apply_construction_plan(&control_expected, &plan)
+            .expect("direct control publication");
+        assert_eq!(retry.value, direct.value);
+        assert_eq!(retry.design, direct.design);
+        assert_eq!(retry.attempt, direct.attempt);
+        assert_eq!(retry.published_accepted, direct.published_accepted);
+        assert_eq!(
+            retained_document_payloads(&coordinator),
+            retained_document_payloads(&control)
+        );
+    }
+
+    #[test]
+    fn cancellation_after_complete_inferred_staging_cannot_publish_live_state() {
+        let (session, _, reference, _) = fixed_line_session();
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        let expected = coordinator
+            .session()
+            .accepted_prepared_input()
+            .expect("accepted input");
+        let plan = inferred_normal_plan(reference);
+        let retained = retained_state_snapshot(&coordinator);
+        let evaluation_high_water = coordinator
+            .persistence_checkpoint()
+            .expect("persistence checkpoint")
+            .computed_evaluation_high_water();
+
+        let (cancellation, token) = cancellation_pair();
+        let mut control = OperationControl::unlimited();
+        control.token = token;
+        let mut controller = OperationController::new(control);
+        let mut trial = coordinator.session().clone();
+        let outcome = trial
+            .transact_in_controller(
+                expected.design_identity(),
+                |document| plan.apply(document),
+                &mut controller,
+            )
+            .expect("trial transaction")
+            .expect("trial completed");
+        RetainedEditorCoordinator::validate_construction_plan_trial(&trial, &outcome)
+            .expect("trial validation");
+        let staged = coordinator
+            .stage_construction_publication_in_controller(trial, &mut controller)
+            .expect("staging")
+            .expect("staging completed");
+
+        cancellation.cancel();
+        assert!(!coordinator.publish_staged_construction_in_controller(
+            staged,
+            ReplayAction::ConstructionPlan {
+                expected: Box::new(expected),
+                plan,
+            },
+            &mut controller,
+        ));
+        assert!(matches!(
+            controller.outcome_unchecked::<()>(),
+            OperationOutcome::Cancelled {
+                report: OperationReport {
+                    stopping_reason: Some(OperationStopReason::Cancelled {
+                        checkpoint: OperationCheckpoint::BeforeCommit,
+                    }),
+                    ..
+                }
+            }
+        ));
+        assert_retained_state_snapshot(&coordinator, &retained);
+        assert_eq!(
+            coordinator
+                .persistence_checkpoint()
+                .expect("persistence checkpoint")
+                .computed_evaluation_high_water(),
+            evaluation_high_water
+        );
+    }
+
+    #[test]
+    fn controlled_inferred_report_includes_computed_staging_work() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate = grouped_fillet_candidate(&fixture.coordinator, [fixture.points[1]]);
+        apply_grouped_fillet(&mut fixture.coordinator, &candidate);
+        let plan = ConstructionCommitPlan {
+            proposal: ConstructionProposal::Point {
+                point: ConstructionPoint::New([10.0, 10.0]),
+            },
+            role: GeometryRole::Profile,
+            relations: Vec::new(),
+        };
+        let expected = fixture
+            .coordinator
+            .session()
+            .accepted_prepared_input()
+            .expect("accepted input");
+
+        let mut trial = fixture.coordinator.session().clone();
+        let mut trial_controller = OperationController::new(OperationControl::unlimited());
+        trial
+            .transact_in_controller(
+                expected.design_identity(),
+                |document| plan.apply(document),
+                &mut trial_controller,
+            )
+            .expect("trial transaction")
+            .expect("trial completion");
+        let trial_work = trial_controller.report().consumed.document_validation_items;
+
+        let OperationOutcome::Completed { report, .. } = fixture
+            .coordinator
+            .apply_construction_plan_controlled(&expected, &plan, OperationControl::unlimited())
+            .expect("controlled inferred publication")
+        else {
+            panic!("controlled inferred publication did not complete");
+        };
+        assert!(
+            report.consumed.document_validation_items > trial_work,
+            "computed-feature staging work must be included in the compound report"
+        );
+    }
+
     fn redundant_distance_session() -> (RetainedSketchDocumentSession, DocumentSourceId) {
         let mut document = SketchDocument::new(4.0).expect("document");
         let first = document.add_point("first", [0.0, 0.0]).expect("point");
@@ -8554,59 +9687,28 @@ mod tests {
         }
     }
 
-    fn inference_candidate_coordinator() -> (
-        RetainedEditorCoordinator,
-        ProvisionalInferenceCandidate,
-        SketchDesignIdentity,
-        usize,
-    ) {
-        let mut document = SketchDocument::new(1.0).expect("document");
-        let first = document.add_point("first", [0.0, 0.0]).expect("point");
-        let second = document.add_point("second", [2.0, 0.0]).expect("point");
-        let curve = document
-            .add_curve(
-                "line",
-                CurveDefinition::Line {
-                    start: first,
-                    end: second,
-                    branch_direction: [1.0, 0.0],
+    fn external_line_entry(
+        binding: DocumentExternalBindingId,
+        topology_digest: ExternalTopologyDigest,
+    ) -> ExternalSnapshotEntry {
+        ExternalSnapshotEntry {
+            binding,
+            source_revision: 1,
+            source_digest: ExternalSnapshotDigest::from_bytes([18; 32]),
+            feature: ExternalSnapshotFeatureV1::LineSegment {
+                start: [0.0, 0.0],
+                end: [4.0, 0.0],
+                domain: [0.0, 1.0],
+                orientation: ExternalLineOrientationV1::StartToEnd,
+                scale: 1.0,
+                topology_digest,
+                resources: ExternalSnapshotResourcesV1 {
+                    point_count: 2,
+                    control_count: 0,
+                    span_count: 1,
                 },
-            )
-            .expect("line");
-        #[allow(clippy::default_trait_access)]
-        let session = RetainedSketchDocumentSession::new(
-            document,
-            DocumentSolveRequest::default(),
-            Default::default(),
-        )
-        .expect("session");
-        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
-        let expected = coordinator.session().design_identity();
-        let history = coordinator.history_len();
-        let span = CurveSpan { curve, segment: 0 };
-        coordinator
-            .editor_mut()
-            .set_selection([SelectionItem::Curve(span)]);
-        let candidate = ProvisionalInferenceCandidate {
-            expected,
-            label: "horizontal inference".into(),
-            edit: coordinator
-                .editor()
-                .constraint_edit(
-                    coordinator.session().design_document(),
-                    ConstraintKind::Horizontal,
-                    "inferred horizontal",
-                )
-                .expect("horizontal edit"),
-        };
-        assert!(matches!(
-            candidate.edit,
-            DocumentEdit::CreateConstraint {
-                definition: DocumentConstraintDefinition::Horizontal { line },
-                ..
-            } if line == span
-        ));
-        (coordinator, candidate, expected, history)
+            },
+        }
     }
 
     struct RetainedStateSnapshot {
@@ -8850,6 +9952,413 @@ mod tests {
             ))
         ));
         assert_eq!(coordinator.session().last_attempt().identity(), attempt);
+    }
+
+    #[test]
+    fn undo_redo_preserve_the_current_nondefault_parameter_batch() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let rectangle = document
+            .add_rectangle("parameterized rectangle", [0.0, 0.0], 4.0, 3.0)
+            .expect("rectangle");
+        let parameter = document
+            .add_parameter("width input", DocumentParameterKind::Length)
+            .expect("parameter");
+        document
+            .add_parameter_binding(
+                parameter,
+                geosolve_sketch::DocumentParameterTarget::DrivingDimension(rectangle.dimensions[0]),
+            )
+            .expect("binding");
+        let initial = ParameterBatch::new(
+            1,
+            vec![ParameterBatchEntry {
+                parameter,
+                value: ParameterValue::Length(4.0),
+            }],
+        )
+        .expect("initial batch");
+        let session = RetainedSketchDocumentSession::new_with_parameter_batch(
+            document,
+            initial,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        assert!(session.accepted_state().is_some());
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::CreatePoint {
+                    label: "history point".into(),
+                    position: [8.0, 5.0],
+                },
+            )
+            .expect("history edit");
+        let current = ParameterBatch::new(
+            2,
+            vec![ParameterBatchEntry {
+                parameter,
+                value: ParameterValue::Length(6.0),
+            }],
+        )
+        .expect("current batch");
+        coordinator
+            .replace_parameter_batch(
+                coordinator.session().design_identity(),
+                current.clone(),
+                DocumentSolveRequest::default(),
+            )
+            .expect("replace parameter batch");
+        let assert_current_width = |coordinator: &RetainedEditorCoordinator| {
+            let accepted = coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .expect("accepted current parameter input");
+            let left = accepted
+                .document()
+                .point(rectangle.points[0])
+                .expect("bottom-left point")
+                .position;
+            let right = accepted
+                .document()
+                .point(rectangle.points[1])
+                .expect("bottom-right point")
+                .position;
+            assert!(((right[0] - left[0]) - 6.0).abs() < 1.0e-9);
+        };
+
+        coordinator.undo().expect("undo with current parameters");
+        assert_eq!(coordinator.session().parameter_batch(), &current);
+        assert_current_width(&coordinator);
+        assert_eq!(
+            coordinator
+                .session()
+                .last_attempt()
+                .input()
+                .parameter_revision(),
+            current.revision()
+        );
+        coordinator.redo().expect("redo with current parameters");
+        assert_eq!(coordinator.session().parameter_batch(), &current);
+        assert_current_width(&coordinator);
+        assert_eq!(
+            coordinator
+                .session()
+                .last_attempt()
+                .input()
+                .parameter_digest(),
+            current.digest()
+        );
+    }
+
+    #[test]
+    fn undo_redo_keep_current_parameter_contract_without_stale_accepted_geometry() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let rectangle = document
+            .add_rectangle("parameterized rectangle", [0.0, 0.0], 4.0, 3.0)
+            .expect("rectangle");
+        let parameter = document
+            .add_parameter("width input", DocumentParameterKind::Length)
+            .expect("parameter");
+        let target =
+            geosolve_sketch::DocumentParameterTarget::DrivingDimension(rectangle.dimensions[0]);
+        document
+            .add_parameter_binding(parameter, target)
+            .expect("binding");
+        let initial = ParameterBatch::new(
+            1,
+            vec![ParameterBatchEntry {
+                parameter,
+                value: ParameterValue::Length(4.0),
+            }],
+        )
+        .expect("initial batch");
+        let session = RetainedSketchDocumentSession::new_with_parameter_batch(
+            document,
+            initial,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::RemoveParameterBinding { parameter, target },
+            )
+            .expect("remove parameter binding");
+        let current = ParameterBatch::new(2, Vec::new()).expect("empty current batch");
+        coordinator
+            .replace_parameter_batch(
+                coordinator.session().design_identity(),
+                current.clone(),
+                DocumentSolveRequest::default(),
+            )
+            .expect("replace parameter batch");
+        assert!(
+            coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .is_some()
+        );
+
+        coordinator
+            .undo()
+            .expect("undo with incompatible current batch");
+        assert_eq!(coordinator.session().parameter_batch(), &current);
+        assert_eq!(
+            coordinator
+                .session()
+                .design_document()
+                .parameter_bindings()
+                .len(),
+            1
+        );
+        assert!(
+            coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .is_none()
+        );
+        assert!(matches!(
+            coordinator
+                .session()
+                .last_attempt()
+                .failure()
+                .and_then(SketchAttemptFailure::parameter_input_issue),
+            Some(geosolve_sketch::SketchParameterInputIssue::Missing(actual))
+                if actual == parameter
+        ));
+
+        coordinator
+            .redo()
+            .expect("redo with compatible current batch");
+        assert_eq!(coordinator.session().parameter_batch(), &current);
+        assert!(
+            coordinator
+                .session()
+                .design_document()
+                .parameter_bindings()
+                .is_empty()
+        );
+        assert!(
+            coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn undo_redo_preserve_the_current_nondefault_external_snapshot_set() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let point = document.add_point("point", [1.0, 2.0]).expect("point");
+        let binding = document
+            .add_external_binding("external", ExternalFeatureKindV1::Point, None)
+            .expect("binding");
+        document
+            .add_constraint(
+                "external point",
+                DocumentConstraintDefinition::ExternalPointCoincident {
+                    point,
+                    external: DocumentExternalPointRef { binding },
+                },
+            )
+            .expect("constraint");
+        let initial = ExternalSnapshotSet::new(1, vec![external_point_entry(binding, [1.0, 2.0])])
+            .expect("initial snapshots");
+        let session = RetainedSketchDocumentSession::new_with_inputs(
+            document,
+            ParameterBatch::default(),
+            initial,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        assert!(session.accepted_state().is_some());
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::CreatePoint {
+                    label: "history point".into(),
+                    position: [8.0, 5.0],
+                },
+            )
+            .expect("history edit");
+        let current = ExternalSnapshotSet::new(2, vec![external_point_entry(binding, [3.0, 4.0])])
+            .expect("current snapshots");
+        coordinator
+            .replace_external_snapshot_set(
+                coordinator.session().design_identity(),
+                current.clone(),
+                DocumentSolveRequest::default(),
+            )
+            .expect("replace snapshots");
+        let assert_current_external_point = |coordinator: &RetainedEditorCoordinator| {
+            let accepted = coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .expect("accepted current external input");
+            let position = accepted
+                .document()
+                .point(point)
+                .expect("externally constrained point")
+                .position;
+            assert!((position[0] - 3.0).abs() < 1.0e-9);
+            assert!((position[1] - 4.0).abs() < 1.0e-9);
+        };
+
+        coordinator.undo().expect("undo with current snapshots");
+        assert_eq!(coordinator.session().external_snapshot_set(), &current);
+        assert_current_external_point(&coordinator);
+        assert_eq!(
+            coordinator
+                .session()
+                .last_attempt()
+                .input()
+                .external_snapshot_set_revision(),
+            current.revision()
+        );
+        coordinator.redo().expect("redo with current snapshots");
+        assert_eq!(coordinator.session().external_snapshot_set(), &current);
+        assert_current_external_point(&coordinator);
+        assert_eq!(
+            coordinator
+                .session()
+                .last_attempt()
+                .input()
+                .external_snapshot_set_digest(),
+            current.digest()
+        );
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)]
+    fn undo_redo_keep_current_external_contract_without_stale_accepted_geometry() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let start = document.add_point("start", [0.0, 0.0]).expect("start");
+        let end = document.add_point("end", [4.0, 0.0]).expect("end");
+        let line = document
+            .add_curve(
+                "line",
+                CurveDefinition::Line {
+                    start,
+                    end,
+                    branch_direction: [1.0, 0.0],
+                },
+            )
+            .expect("line");
+        let first_topology = ExternalTopologyDigest::from_bytes([21; 32]);
+        let second_topology = ExternalTopologyDigest::from_bytes([22; 32]);
+        let binding = document
+            .add_external_binding(
+                "external line",
+                ExternalFeatureKindV1::LineSegment,
+                Some(first_topology),
+            )
+            .expect("binding");
+        document
+            .add_constraint(
+                "external collinear",
+                DocumentConstraintDefinition::ExternalLineCollinear {
+                    line: geosolve_sketch::DocumentLineSupportRef {
+                        span: CurveSpan::line(line),
+                        direction: geosolve_sketch::DocumentDirectionSense::Forward,
+                    },
+                    external: geosolve_sketch::DocumentExternalLineSupportRef {
+                        binding,
+                        direction: geosolve_sketch::DocumentDirectionSense::Forward,
+                    },
+                },
+            )
+            .expect("constraint");
+        let initial =
+            ExternalSnapshotSet::new(1, vec![external_line_entry(binding, first_topology)])
+                .expect("initial snapshots");
+        let session = RetainedSketchDocumentSession::new_with_inputs(
+            document,
+            ParameterBatch::default(),
+            initial,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+        coordinator
+            .rebind_external_binding(
+                coordinator.session().design_identity(),
+                binding,
+                ExternalFeatureKindV1::LineSegment,
+                Some(second_topology),
+            )
+            .expect("rebind topology");
+        let current =
+            ExternalSnapshotSet::new(2, vec![external_line_entry(binding, second_topology)])
+                .expect("current snapshots");
+        coordinator
+            .replace_external_snapshot_set(
+                coordinator.session().design_identity(),
+                current.clone(),
+                DocumentSolveRequest::default(),
+            )
+            .expect("replace snapshots");
+        assert!(
+            coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .is_some()
+        );
+
+        coordinator
+            .undo()
+            .expect("undo with incompatible current snapshots");
+        assert_eq!(coordinator.session().external_snapshot_set(), &current);
+        assert_eq!(
+            coordinator
+                .session()
+                .design_document()
+                .external_binding(binding)
+                .expect("historical binding")
+                .expected_topology,
+            Some(first_topology)
+        );
+        assert!(
+            coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .is_none()
+        );
+        assert!(matches!(
+            coordinator
+                .session()
+                .last_attempt()
+                .failure()
+                .and_then(SketchAttemptFailure::external_snapshot_error),
+            Some(ExternalSnapshotInputError::TopologyMismatch { binding: actual })
+                if *actual == binding
+        ));
+
+        coordinator
+            .redo()
+            .expect("redo with compatible current snapshots");
+        assert_eq!(coordinator.session().external_snapshot_set(), &current);
+        assert_eq!(
+            coordinator
+                .session()
+                .design_document()
+                .external_binding(binding)
+                .expect("current binding")
+                .expected_topology,
+            Some(second_topology)
+        );
+        assert!(
+            coordinator
+                .session()
+                .accepted_state_for_current_input()
+                .is_some()
+        );
     }
 
     #[test]
@@ -9437,7 +10946,7 @@ mod tests {
             EditorEffect::CommitConstruction {
                 expected: stale,
                 proposal: ConstructionProposal::Point {
-                    position: [7.0, 2.0],
+                    point: ConstructionPoint::New([7.0, 2.0]),
                 },
                 role: GeometryRole::Profile,
             },
@@ -9600,7 +11109,7 @@ mod tests {
         let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
         let proposals = [
             ConstructionProposal::Point {
-                position: [-8.0, -8.0],
+                point: ConstructionPoint::New([-8.0, -8.0]),
             },
             ConstructionProposal::Line {
                 start: ConstructionPoint::New([-6.0, -6.0]),
@@ -12855,89 +14364,6 @@ mod tests {
                     if point == points[0] && target == [0.0, 0.0]
             )
         ));
-    }
-
-    #[test]
-    fn staged_inference_is_non_authoritative_until_its_commit_effect_is_applied() {
-        let (mut coordinator, candidate, expected, history) = inference_candidate_coordinator();
-
-        assert_eq!(
-            coordinator.editor_mut().stage_inference(candidate.clone()),
-            vec![EditorEffect::PreviewInference(candidate.clone())]
-        );
-        assert_eq!(coordinator.editor().staged_inference(), Some(&candidate));
-        assert_eq!(coordinator.session().design_identity(), expected);
-        assert!(
-            coordinator
-                .session()
-                .design_document()
-                .constraints()
-                .is_empty()
-        );
-        assert_eq!(coordinator.history_len(), history);
-
-        assert_eq!(
-            coordinator.editor_mut().cancel_inference(),
-            vec![EditorEffect::ClearInferencePreview]
-        );
-        assert!(coordinator.editor().staged_inference().is_none());
-        assert_eq!(coordinator.session().design_identity(), expected);
-        assert!(
-            coordinator
-                .session()
-                .design_document()
-                .constraints()
-                .is_empty()
-        );
-        assert_eq!(coordinator.history_len(), history);
-
-        coordinator.editor_mut().stage_inference(candidate.clone());
-        let confirmation = coordinator.editor_mut().confirm_inference();
-        assert_eq!(
-            confirmation,
-            vec![
-                EditorEffect::CommitInference(candidate.clone()),
-                EditorEffect::ClearInferencePreview,
-            ]
-        );
-        assert!(coordinator.editor().staged_inference().is_none());
-        assert_eq!(coordinator.session().design_identity(), expected);
-        assert!(
-            coordinator
-                .session()
-                .design_document()
-                .constraints()
-                .is_empty()
-        );
-        assert_eq!(coordinator.history_len(), history);
-
-        let outcome = coordinator
-            .apply_editor_effect(&confirmation[0])
-            .expect("inference commit")
-            .expect("mutation");
-        assert!(matches!(outcome.value, EditorMutation::Inference(_)));
-        assert_eq!(
-            coordinator.session().design_document().constraints().len(),
-            1
-        );
-        assert_eq!(coordinator.history_len(), history + 1);
-
-        let before_stale = coordinator.session().design_identity();
-        let history = coordinator.history_len();
-        coordinator.editor_mut().stage_inference(candidate);
-        let stale_confirmation = coordinator.editor_mut().confirm_inference();
-        assert!(matches!(
-            coordinator.apply_editor_effect(&stale_confirmation[0]),
-            Err(CoordinatorError::Session(
-                DocumentSessionError::StaleDesign { .. }
-            ))
-        ));
-        assert_eq!(coordinator.session().design_identity(), before_stale);
-        assert_eq!(
-            coordinator.session().design_document().constraints().len(),
-            1
-        );
-        assert_eq!(coordinator.history_len(), history);
     }
 
     #[test]

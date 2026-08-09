@@ -9,8 +9,10 @@
 
 mod annotations;
 mod authoring;
+mod commit_plan;
 mod coordinator;
 mod feature_authoring;
+mod inference;
 
 pub use annotations::{
     SceneAnnotation, SceneAnnotationGeometry, SceneAnnotationKind, SceneAnnotationVisibility,
@@ -19,6 +21,11 @@ pub use annotations::{
 pub use authoring::{
     AuthoringApplication, AuthoringOperand, AuthoringOperandKind, AuthoringOptions,
     AuthoringOutcome, AuthoringState, AuthoringTool, AuthoringWarning,
+};
+pub use commit_plan::{
+    ConstructionCommitPlan, ConstructionCommitResult, ConstructionConstraintResult,
+    ConstructionContactResult, DraftContactDescriptor, DraftPointSlot, DraftSpanSlot,
+    InferredRelation, MAX_CONSTRUCTION_PLAN_RELATIONS,
 };
 pub use coordinator::{
     ActionAvailability, ActionState, AuditDto, AuditProvenance, AuthoringMutation, BranchAction,
@@ -54,6 +61,7 @@ pub use geosolve_sketch_features::{
     ComputedFilletContact, ComputedFilletCorner, ComputedFilletParentIndex, ComputedFilletSet,
     ComputedSourceInterval, NativeCurveSpanSource, NewComputedFilletCorner,
 };
+pub use inference::*;
 use std::cmp::Ordering;
 
 use geosolve_sketch::{
@@ -63,7 +71,8 @@ use geosolve_sketch::{
     DocumentCurveCurvatureRelation, DocumentCurveNormalSide, DocumentCurveSpanRef,
     DocumentDimensionId, DocumentDimensionMode, DocumentEdit, DocumentHyperbolaBranch,
     DocumentObjectId, GeometryRole, MIN_RATIONAL_QUADRATIC_MIDDLE_WEIGHT, PreparedSketchInput,
-    ScalarDomain, ScalarUnit, SketchDesignIdentity, SketchDocument, TangentOrientation,
+    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDesignIdentity, SketchDocument,
+    TangentOrientation,
 };
 use thiserror::Error;
 
@@ -75,6 +84,10 @@ const MIN_CURVED_TESSELLATION_DEPTH: u8 = 3;
 const MIN_COMPUTED_ARC_SEGMENTS: u16 = 8;
 // Construction previews use model-space sampling before a viewport is available.
 const ADVANCED_CURVE_PREVIEW_SUBDIVISIONS: u16 = 64;
+// Preserve distinct local contacts whose tessellation distances are close
+// enough that choosing only the first chord would be presentation-order bias.
+const CURVE_BRANCH_CANDIDATE_BAND_PIXELS: f64 = 1.0;
+const CURVE_POINTER_REFINEMENT_STEPS: u8 = 12;
 
 /// A finite position in presentation pixels.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -117,16 +130,19 @@ impl Viewport {
             model_center,
             pixels_per_model_unit,
         };
-        if !screen_size
-            .into_iter()
-            .all(|value| value.is_finite() && value > 0.0)
-            || !model_center.into_iter().all(f64::is_finite)
-            || !pixels_per_model_unit.is_finite()
-            || pixels_per_model_unit <= 0.0
-        {
+        if !viewport.is_valid() {
             return Err(EditorError::InvalidViewport);
         }
         Ok(viewport)
+    }
+
+    pub(crate) fn is_valid(self) -> bool {
+        self.screen_size
+            .into_iter()
+            .all(|value| value.is_finite() && value > 0.0)
+            && self.model_center.into_iter().all(f64::is_finite)
+            && self.pixels_per_model_unit.is_finite()
+            && self.pixels_per_model_unit > 0.0
     }
 
     /// Converts a finite model point to presentation pixels with positive model Y upward.
@@ -299,6 +315,18 @@ impl ScenePoint {
 #[derive(Clone, Debug, PartialEq)]
 pub struct SceneCurve {
     pub span: CurveSpan,
+    /// Whether the persistent span still exists in retained design and may be
+    /// captured by a new construction. Accepted-but-removed geometry remains
+    /// paintable/pickable without becoming a stale inferred operand.
+    pub authoring_eligible: bool,
+    /// Whether this semantic span is a genuine affine line/polyline span.
+    ///
+    /// Presentation consumers must not infer this from tessellation chords.
+    pub affine: bool,
+    /// Exact persistent contact topology used by native drafting inference.
+    /// Supporting-line contacts remain an explicit authoring choice and are
+    /// therefore never selected by ordinary on-painted-curve inference.
+    pub contact_domain: ContactDomain,
     /// Effective canvas/profile role for this visible occurrence.
     pub role: GeometryRole,
     /// Persistent role of the complete native source curve.
@@ -723,11 +751,59 @@ impl SceneFilletHit {
     }
 }
 
+/// Exact constructor-owned scene semantics that may participate in drafting
+/// inference publication.
+///
+/// `EditorScene` remains an ergonomic presentation DTO with public fields, so
+/// a host may alter a detached scene for rendering or compatibility behavior.
+/// Those alterations must not retain (or manufacture) retained-session
+/// publication authority. Keeping the constructor result behind this private
+/// seal lets the editor compare exact inference-visible values without relying
+/// on a caller-maintained dirty bit or a collision-prone digest.
+#[derive(Clone, Debug, PartialEq)]
+struct DraftInferenceSceneSeal {
+    accepted_revision: u64,
+    design_identity: SketchDesignIdentity,
+    viewport: Viewport,
+    curves: Vec<SceneCurve>,
+    construction_snap_points: Vec<ScenePoint>,
+}
+
+impl DraftInferenceSceneSeal {
+    fn capture(scene: &EditorScene) -> Self {
+        Self {
+            accepted_revision: scene.accepted_revision,
+            design_identity: scene.design_identity,
+            viewport: scene.viewport,
+            curves: scene.curves.clone(),
+            construction_snap_points: scene.construction_snap_points.clone(),
+        }
+    }
+
+    fn matches(&self, scene: &EditorScene) -> bool {
+        self.accepted_revision == scene.accepted_revision
+            && self.design_identity == scene.design_identity
+            && self.viewport == scene.viewport
+            && self.curves == scene.curves
+            && self.construction_snap_points == scene.construction_snap_points
+    }
+}
+
 /// Deterministic presentation-neutral scene derived from one accepted revision.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EditorScene {
     pub accepted_revision: u64,
     pub design_identity: SketchDesignIdentity,
+    /// Exact retained-session input that certified the accepted geometry.
+    ///
+    /// Legacy scene constructors leave this absent. Such scenes remain valid
+    /// for rendering, picking, and ordinary construction, but cannot authorize
+    /// an inferred construction plan.
+    prepared_input: Option<PreparedSketchInput>,
+    /// Private constructor-owned copy of every scene value consumed by drafting
+    /// inference. Public presentation-field mutation invalidates publication
+    /// authority instead of silently changing authenticated semantics.
+    draft_inference_seal: Option<DraftInferenceSceneSeal>,
     pub viewport: Viewport,
     pub points: Vec<ScenePoint>,
     pub curves: Vec<SceneCurve>,
@@ -745,6 +821,10 @@ pub struct EditorScene {
     /// Accepted, geometry-derived constraint and dimension presentation.
     pub annotations: Vec<SceneAnnotation>,
     construction_snap_points: Vec<ScenePoint>,
+    /// Exact accepted-domain evaluator used after screen-space tessellation has
+    /// selected a semantic parameter.  This keeps preview correction on the
+    /// owning sketch equations instead of treating display chords as geometry.
+    accepted_document: SketchDocument,
 }
 
 impl EditorScene {
@@ -858,6 +938,13 @@ impl EditorScene {
                     )?;
                     curves.push(SceneCurve {
                         span,
+                        authoring_eligible: snap_design.is_none_or(|design| {
+                            design
+                                .curve_spans(span.curve)
+                                .is_ok_and(|spans| spans.contains(&span))
+                        }),
+                        affine: is_linear_span(document, span),
+                        contact_domain: painted_contact_domain(document, span)?,
                         role,
                         source_role: role,
                         origin: SceneCurveOrigin::Native,
@@ -873,9 +960,11 @@ impl EditorScene {
             }
         }
         let annotations = annotations::build_annotations(document, &points, &curves, viewport);
-        Ok(Self {
+        let mut scene = Self {
             accepted_revision,
             design_identity,
+            prepared_input: None,
+            draft_inference_seal: None,
             viewport,
             points,
             curves,
@@ -887,12 +976,203 @@ impl EditorScene {
             computed_fillet_continuation_statuses: Vec::new(),
             annotations,
             construction_snap_points,
-        })
+            accepted_document: document.clone(),
+        };
+        scene.refresh_draft_inference_seal();
+        Ok(scene)
+    }
+
+    /// Binds this scene to the exact retained session that certified its accepted
+    /// geometry.
+    ///
+    /// Drafting inference may still be presented by an unbound compatibility
+    /// scene, but only a bound scene can emit an atomic inferred construction
+    /// plan. This prevents a scene reconstructed from document/revision fields
+    /// alone from acquiring publication authority.
+    ///
+    /// # Errors
+    ///
+    /// Rejects a session whose current accepted document, design filter, or
+    /// lifecycle stamp differs from the scene, or when an inference-visible
+    /// public scene field changed after trusted construction, without changing
+    /// the scene. A later change to one of those fields revokes publication
+    /// authority while leaving detached inference presentation available.
+    /// Taking the retained session instead of a detached
+    /// [`PreparedSketchInput`] is deliberate: identities and revisions alone
+    /// cannot authenticate scene geometry supplied by a caller.
+    pub fn with_retained_session(
+        mut self,
+        session: &RetainedSketchDocumentSession,
+    ) -> Result<Self, EditorError> {
+        let prepared_input = session
+            .accepted_prepared_input()
+            .ok_or(EditorError::StalePreparedSketchInput)?;
+        let accepted = prepared_input
+            .accepted_state_identity()
+            .ok_or(EditorError::StalePreparedSketchInput)?;
+        let accepted_state = session
+            .accepted_state_for_current_input()
+            .ok_or(EditorError::StalePreparedSketchInput)?;
+        if !self.draft_inference_semantics_are_sealed()
+            || prepared_input.design_identity() != self.design_identity
+            || prepared_input.latest_attempt_identity().document() != self.accepted_document.id()
+            || accepted.document() != self.accepted_document.id()
+            || accepted.revision().get() != self.accepted_revision
+            || accepted_state.identity() != accepted
+            || accepted_state.document() != &self.accepted_document
+            || !self.matches_design_filter(session.design_document())
+        {
+            return Err(EditorError::StalePreparedSketchInput);
+        }
+        self.prepared_input = Some(prepared_input);
+        Ok(self)
+    }
+
+    fn refresh_draft_inference_seal(&mut self) {
+        self.draft_inference_seal = Some(DraftInferenceSceneSeal::capture(self));
+    }
+
+    fn draft_inference_semantics_are_sealed(&self) -> bool {
+        self.draft_inference_seal
+            .as_ref()
+            .is_some_and(|seal| seal.matches(self))
+    }
+
+    pub(crate) fn authenticated_prepared_input(&self) -> Option<PreparedSketchInput> {
+        self.draft_inference_semantics_are_sealed()
+            .then_some(self.prepared_input)
+            .flatten()
+    }
+
+    fn matches_design_filter(&self, design: &SketchDocument) -> bool {
+        let point_roles = point_role_incidence(&self.accepted_document);
+        let expected_snap_points = self
+            .accepted_document
+            .points()
+            .iter()
+            .filter(|point| design.point(point.id).is_some())
+            .map(|point| ScenePoint {
+                id: point.id,
+                model_position: point.position,
+                screen_position: self.viewport.model_to_screen(point.position),
+                role_incidence: point_roles.get(&point.id).copied().unwrap_or(
+                    ScenePointRoleIncidence {
+                        profile: true,
+                        construction: false,
+                    },
+                ),
+            })
+            .collect::<Vec<_>>();
+        self.construction_snap_points == expected_snap_points
+            && self.curves.iter().all(|curve| {
+                curve.authoring_eligible
+                    == design
+                        .curve_spans(curve.span.curve)
+                        .is_ok_and(|spans| spans.contains(&curve.span))
+            })
+    }
+
+    /// Produces native semantic anchors for one drafting-inference sample.
+    ///
+    /// Only point identities and native curve occurrences that still exist in
+    /// retained design participate. Generated Fillet arcs are intentionally
+    /// absent; a discarded Fillet source fragment participates only through its
+    /// mapped native [`CurveSpan`] and explicit origin metadata. Anchor count
+    /// and tessellation-chord work are bounded before projection; exhaustion
+    /// returns typed evidence and no partial anchor prefix.
+    #[must_use]
+    pub fn draft_inference_anchors(
+        &self,
+        pointer: ScreenPoint,
+        limits: DraftInferenceLimits,
+    ) -> DraftInferenceAnchorCollection {
+        if !pointer.is_finite() {
+            return DraftInferenceAnchorCollection::Complete {
+                anchors: Vec::new(),
+            };
+        }
+        if let Some(evidence) = draft_inference_scene_resource_limit(self, limits) {
+            return DraftInferenceAnchorCollection::ResourceLimited(evidence);
+        }
+
+        let mut anchors = self
+            .construction_snap_points
+            .iter()
+            .map(|point| DraftReferenceAnchor::PersistentPoint {
+                point: point.id,
+                model_position: point.model_position,
+                role_incidence: point.role_incidence,
+            })
+            .collect::<Vec<_>>();
+        let mut nonlinear_samples = Vec::new();
+
+        for curve in self.curves.iter().filter(|curve| curve.authoring_eligible) {
+            let samples =
+                scene_curve_pointer_samples(curve, &self.accepted_document, self.viewport, pointer);
+            if samples.is_empty() {
+                continue;
+            }
+            let origin = match curve.origin {
+                SceneCurveOrigin::Native => DraftReferenceOrigin::Native,
+                SceneCurveOrigin::FilletDiscarded { .. } => DraftReferenceOrigin::FilletDiscarded,
+            };
+            if curve.affine {
+                let sample = samples[0];
+                let Some(contact) = draft_curve_contact(
+                    &self.accepted_document,
+                    curve.span,
+                    curve.contact_domain,
+                    sample.total_parameter,
+                ) else {
+                    continue;
+                };
+                let Some(affine_direction) = scene_curve_affine_direction(curve, self.viewport)
+                else {
+                    continue;
+                };
+                anchors.push(DraftReferenceAnchor::AffineSupport {
+                    contact,
+                    model_position: sample.model_position,
+                    affine_direction,
+                    role: curve.role,
+                    source_role: curve.source_role,
+                    origin,
+                });
+                if let Some(model_position) =
+                    scene_curve_model_position_at_parameter(curve, &self.accepted_document, 0.5)
+                {
+                    anchors.push(DraftReferenceAnchor::Midpoint {
+                        span: curve.span,
+                        model_position,
+                        affine_direction,
+                        role: curve.role,
+                        source_role: curve.source_role,
+                        origin,
+                    });
+                }
+            } else {
+                nonlinear_samples.extend(samples.into_iter().map(|sample| (curve, origin, sample)));
+            }
+        }
+
+        if let Err(evidence) = append_nonlinear_draft_anchors(
+            &self.accepted_document,
+            &mut nonlinear_samples,
+            &mut anchors,
+            limits.max_scene_anchors,
+        ) {
+            return DraftInferenceAnchorCollection::ResourceLimited(evidence);
+        }
+        DraftInferenceAnchorCollection::Complete { anchors }
     }
 
     /// Builds one composite scene from exact-stamped accepted sketch and computed
     /// output. Replaced native supports use evaluated source fragments, while
     /// generated arcs retain stable feature/corner selection provenance.
+    ///
+    /// The detached stamps validate computed-output provenance but do not grant
+    /// inference-publication authority. Call [`Self::with_retained_session`] on
+    /// the completed scene when that capability is required.
     ///
     /// # Errors
     ///
@@ -954,6 +1234,9 @@ impl EditorScene {
                         interval.end,
                         chord_tolerance_pixels,
                     )?;
+                    curve.authoring_eligible = design_document
+                        .curve_spans(curve.span.curve)
+                        .is_ok_and(|spans| spans.contains(&curve.span));
                     curve.role = edge.role;
                     curve.source_role = accepted_document
                         .geometry_role(source.span.curve)
@@ -992,6 +1275,9 @@ impl EditorScene {
                 fragment.interval.end,
                 chord_tolerance_pixels,
             )?;
+            curve.authoring_eligible = design_document
+                .curve_spans(curve.span.curve)
+                .is_ok_and(|spans| spans.contains(&curve.span));
             curve.role = GeometryRole::Construction;
             curve.source_role = fragment.source_role;
             curve.origin = SceneCurveOrigin::FilletDiscarded {
@@ -1006,6 +1292,10 @@ impl EditorScene {
         scene.computed_curves.sort_by_key(|curve| curve.edge);
         scene.feature_identity = Some(computed.input().features);
         scene.computed_input = Some(computed.input());
+        // A detached input stamp cannot authenticate caller-supplied scene
+        // geometry. Inference publication is enabled only by
+        // `with_retained_session` after this composite scene is complete.
+        scene.prepared_input = None;
         scene.fillet_affordances.clear();
         scene.annotations = annotations::build_annotations(
             accepted_document,
@@ -1013,6 +1303,7 @@ impl EditorScene {
             &scene.curves,
             viewport,
         );
+        scene.refresh_draft_inference_seal();
         Ok(scene)
     }
 
@@ -2185,29 +2476,35 @@ pub enum EditorEffect {
         proposal: ConstructionProposal,
         role: GeometryRole,
     },
+    /// Requests one atomic construction-plus-inference publication.
+    ///
+    /// The editor retains the terminal draft until the host reports the result
+    /// through [`ConstraintEditor::acknowledge_construction_commit`].  A
+    /// rejected publication therefore remains correction-ready rather than
+    /// silently discarding the user's draft.
+    CommitConstructionPlan {
+        expected: Box<PreparedSketchInput>,
+        token: ConstructionCommitToken,
+        plan: ConstructionCommitPlan,
+    },
     /// A non-authoritative staged construction preview.
     PreviewConstruction(ConstructionPreview),
     ClearConstructionPreview,
-    /// A non-authoritative preview of one explicitly staged inference candidate.
-    PreviewInference(ProvisionalInferenceCandidate),
-    /// Requests the revision-checked commit of one explicitly confirmed inference.
-    CommitInference(ProvisionalInferenceCandidate),
-    /// Clears the presentation of a staged inference candidate.
-    ClearInferencePreview,
+    /// Complete headless inference publication for the current draft sample.
+    /// `None` explicitly clears every guide previously published by the editor.
+    DraftInferenceChanged(Option<DraftInferenceResolution>),
 }
 
-/// One explicitly staged, non-authoritative relation inference.
-///
-/// The candidate is bound to the exact retained design it was formed from. Its label is
-/// presentation text only; the contained edit remains the sole proposed document change.
-#[derive(Clone, Debug, PartialEq)]
-pub struct ProvisionalInferenceCandidate {
-    /// Retained design identity expected when this candidate is confirmed.
-    pub expected: SketchDesignIdentity,
-    /// Human-readable description for presentation.
-    pub label: String,
-    /// The ordinary sketch edit proposed by this candidate.
-    pub edit: DocumentEdit,
+/// Session-local identity for one pending atomic construction publication.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ConstructionCommitToken(u64);
+
+impl ConstructionCommitToken {
+    /// Stable raw value for presentation-adapter correlation and diagnostics.
+    #[must_use]
+    pub const fn get(self) -> u64 {
+        self.0
+    }
 }
 
 /// A point operand used by a construction proposal.
@@ -2229,7 +2526,7 @@ pub enum ConstructionPoint {
 #[derive(Clone, Debug, PartialEq)]
 pub enum ConstructionProposal {
     Point {
-        position: [f64; 2],
+        point: ConstructionPoint,
     },
     Line {
         start: ConstructionPoint,
@@ -2499,8 +2796,8 @@ impl ConstructionProposal {
                 }
             };
         match self {
-            Self::Point { position } => {
-                result.points.push(document.add_point("point", *position)?);
+            Self::Point { point: operand } => {
+                let _ = point(*operand)?;
             }
             Self::Line { start, end } => {
                 let branch_direction =
@@ -2987,6 +3284,9 @@ pub(crate) struct PointGestureSnapshot {
 pub enum EditorTool {
     #[default]
     Select,
+    /// Places one point. Confirming an inferred existing point reuses that
+    /// persistent identity as a history-neutral no-op: it allocates no point
+    /// and creates no redundant coincidence source.
     Point,
     Line,
     Polyline,
@@ -3003,33 +3303,40 @@ pub enum EditorTool {
     Nurbs,
 }
 
-/// Configurable deterministic endpoint snapping policy.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct SnapTolerance {
-    pub point_pixels: f64,
-}
-
-impl Default for SnapTolerance {
-    fn default() -> Self {
-        Self { point_pixels: 8.0 }
-    }
-}
-
-impl SnapTolerance {
-    fn is_valid(self) -> bool {
-        self.point_pixels.is_finite() && self.point_pixels >= 0.0
-    }
-}
-
 #[derive(Clone, Debug)]
 struct Draft {
     tool: EditorTool,
     geometry_role: GeometryRole,
+    prepared_input: Option<PreparedSketchInput>,
     pointer_id: u64,
     points: Vec<ConstructionPoint>,
     positions: Vec<[f64; 2]>,
+    confirmed_inference: Vec<ConfirmedDraftInference>,
     conic_options: ConicConstructionOptions,
     nurbs_options: NurbsConstructionOptions,
+}
+
+#[derive(Clone, Debug)]
+struct ConfirmedDraftInference {
+    stage_index: usize,
+    relations: Vec<DraftInferenceRelation>,
+    references: Vec<DraftReferenceAnchor>,
+}
+
+#[derive(Clone, Debug)]
+struct PendingConstructionCommit {
+    token: ConstructionCommitToken,
+    expected: Box<PreparedSketchInput>,
+    plan: ConstructionCommitPlan,
+    recovery_inference_engine: DraftInferenceEngine,
+}
+
+#[derive(Clone, Debug)]
+struct ResolvedDraftStage {
+    operand: ConstructionPoint,
+    position: [f64; 2],
+    confirmed: Option<ConfirmedDraftInference>,
+    resolution: Option<DraftInferenceResolution>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -3056,14 +3363,16 @@ pub struct ConstraintEditor {
     computed_fillet_continuation_status: Option<ComputedFilletContinuationStatus>,
     fillet_branch_preview: Option<SceneFilletActionTarget>,
     tool: EditorTool,
-    snap_tolerance: SnapTolerance,
     conic_options: ConicConstructionOptions,
     nurbs_options: NurbsConstructionOptions,
     draft: Option<Draft>,
     last_valid_drag_preview: Option<(u64, u64, u64, DesignPointId, [f64; 2])>,
     next_point_gesture_epoch: u64,
     next_projection_request: u64,
-    staged_inference: Option<ProvisionalInferenceCandidate>,
+    draft_inference_engine: DraftInferenceEngine,
+    draft_inference_resolution: Option<DraftInferenceResolution>,
+    pending_construction_commit: Option<PendingConstructionCommit>,
+    next_construction_commit_token: u64,
 }
 
 impl Default for ConstraintEditor {
@@ -3084,14 +3393,16 @@ impl Default for ConstraintEditor {
             computed_fillet_continuation_status: None,
             fillet_branch_preview: None,
             tool: EditorTool::Select,
-            snap_tolerance: SnapTolerance::default(),
             conic_options: ConicConstructionOptions::default(),
             nurbs_options: NurbsConstructionOptions::default(),
             draft: None,
             last_valid_drag_preview: None,
             next_point_gesture_epoch: 0,
             next_projection_request: 0,
-            staged_inference: None,
+            draft_inference_engine: DraftInferenceEngine::default(),
+            draft_inference_resolution: None,
+            pending_construction_commit: None,
+            next_construction_commit_token: 1,
         }
     }
 }
@@ -3124,6 +3435,9 @@ impl ConstraintEditor {
     /// A moved gesture emits [`EditorEffect::ClearPointPreview`] even when every
     /// projection was rejected, so hosts also close retained continuation state.
     pub fn activate_tool(&mut self, tool: EditorTool) -> Vec<EditorEffect> {
+        if self.pending_construction_commit.is_some() {
+            return Vec::new();
+        }
         self.tool = tool;
         let mut effects = self.cancel_draft();
         effects.extend(self.cancel_point_gesture());
@@ -3152,6 +3466,9 @@ impl ConstraintEditor {
         &mut self,
         policy: GeometryInteractionPolicy,
     ) -> Vec<EditorEffect> {
+        if self.pending_construction_commit.is_some() {
+            return Vec::new();
+        }
         if self.geometry_policy == policy {
             return Vec::new();
         }
@@ -3206,26 +3523,60 @@ impl ConstraintEditor {
 
     /// Chooses the role for subsequently started drawing workflows.
     pub fn set_authoring_geometry_role(&mut self, role: GeometryRole) {
-        self.authoring_geometry_role = role;
+        if self.pending_construction_commit.is_none() {
+            self.authoring_geometry_role = role;
+        }
     }
 
-    /// Replaces the endpoint snap policy.
+    /// Returns the reusable semantic drafting-inference policy.
+    #[must_use]
+    pub const fn draft_inference_policy(&self) -> DraftInferencePolicy {
+        self.draft_inference_engine.policy()
+    }
+
+    /// Replaces drafting inference policy and clears state acquired under the
+    /// previous policy.
     ///
     /// # Errors
     ///
-    /// Returns [`EditorError::InvalidTolerance`] when the pixel tolerance is invalid.
-    pub fn set_snap_tolerance(&mut self, tolerance: SnapTolerance) -> Result<(), EditorError> {
-        if !tolerance.is_valid() {
-            return Err(EditorError::InvalidTolerance);
+    /// Returns [`DraftInferenceError::InvalidPolicy`] without changing policy.
+    pub fn set_draft_inference_policy(
+        &mut self,
+        policy: DraftInferencePolicy,
+    ) -> Result<Vec<EditorEffect>, DraftInferenceError> {
+        policy.validate()?;
+        if self.pending_construction_commit.is_some() {
+            return Ok(Vec::new());
         }
-        self.snap_tolerance = tolerance;
-        Ok(())
+        self.draft_inference_engine.set_policy(policy)?;
+        Ok(self.clear_draft_inference_publication())
     }
 
-    /// Returns the configured snap policy.
+    /// Current complete headless inference publication, if any.
     #[must_use]
-    pub const fn snap_tolerance(&self) -> SnapTolerance {
-        self.snap_tolerance
+    pub fn draft_inference_resolution(&self) -> Option<&DraftInferenceResolution> {
+        self.draft_inference_resolution.as_ref()
+    }
+
+    /// Invalidates camera/scene-bound inference memory and presentation.
+    ///
+    /// Presentation adapters call this immediately when the viewport changes;
+    /// waiting for another pointer sample could otherwise leave stale guides on
+    /// screen. The construction draft itself is preserved.
+    pub fn invalidate_draft_inference(&mut self) -> Vec<EditorEffect> {
+        self.draft_inference_engine.clear_session();
+        if let Some(pending) = self.pending_construction_commit.as_mut() {
+            pending.recovery_inference_engine.clear_session();
+        }
+        self.clear_draft_inference_publication()
+    }
+
+    fn clear_draft_inference_publication(&mut self) -> Vec<EditorEffect> {
+        self.draft_inference_resolution
+            .take()
+            .map(|_| EditorEffect::DraftInferenceChanged(None))
+            .into_iter()
+            .collect()
     }
 
     /// Replaces explicit conic authoring values and updates a retained conic draft.
@@ -3238,6 +3589,9 @@ impl ConstraintEditor {
         options: ConicConstructionOptions,
     ) -> Result<(), EditorError> {
         validate_conic_options(options)?;
+        if self.pending_construction_commit.is_some() {
+            return Ok(());
+        }
         self.conic_options = options;
         if let Some(draft) = self.draft.as_mut()
             && is_conic_tool(draft.tool)
@@ -3263,6 +3617,9 @@ impl ConstraintEditor {
         options: NurbsConstructionOptions,
     ) -> Result<(), EditorError> {
         validate_nurbs_options(&options)?;
+        if self.pending_construction_commit.is_some() {
+            return Ok(());
+        }
         self.nurbs_options = options.clone();
         if let Some(draft) = self.draft.as_mut()
             && draft.tool == EditorTool::Nurbs
@@ -3532,7 +3889,17 @@ impl ConstraintEditor {
 
     /// Resolves a pointer press and changes selection immediately.
     pub fn pointer_down(&mut self, scene: &EditorScene, input: PointerInput) -> Vec<EditorEffect> {
-        self.pointer_down_with_problem_items(scene, input, &[])
+        self.pointer_down_with_draft_inference(scene, input, DraftInferenceInput::default())
+    }
+
+    /// Resolves a pointer press with explicit host-normalized inference input.
+    pub fn pointer_down_with_draft_inference(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        inference: DraftInferenceInput,
+    ) -> Vec<EditorEffect> {
+        self.pointer_down_with_problem_items_and_draft_inference(scene, input, &[], inference)
     }
 
     /// Resolves a pointer press while including diagnostically forced annotations.
@@ -3542,12 +3909,29 @@ impl ConstraintEditor {
         input: PointerInput,
         problem_items: &[SelectionItem],
     ) -> Vec<EditorEffect> {
+        self.pointer_down_with_problem_items_and_draft_inference(
+            scene,
+            input,
+            problem_items,
+            DraftInferenceInput::default(),
+        )
+    }
+
+    /// Resolves a pointer press with both diagnostic annotation forcing and
+    /// explicit host-normalized drafting inference input.
+    pub fn pointer_down_with_problem_items_and_draft_inference(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        problem_items: &[SelectionItem],
+        inference: DraftInferenceInput,
+    ) -> Vec<EditorEffect> {
         if !input.position.is_finite() {
             return Vec::new();
         }
         let mut effects = self.clear_fillet_branch_preview();
         if self.tool != EditorTool::Select {
-            effects.extend(self.draft_down(scene, input));
+            effects.extend(self.draft_down(scene, input, inference));
             return effects;
         }
         if self.feature_radius_gesture.is_some() || self.feature_contact_gesture.is_some() {
@@ -3809,9 +4193,19 @@ impl ConstraintEditor {
     /// Advances an active point gesture and emits projected-preview work only after
     /// the configured screen-space movement threshold.
     pub fn pointer_move(&mut self, scene: &EditorScene, input: PointerInput) -> Vec<EditorEffect> {
+        self.pointer_move_with_draft_inference(scene, input, DraftInferenceInput::default())
+    }
+
+    /// Advances a gesture with explicit host-normalized drafting inference input.
+    pub fn pointer_move_with_draft_inference(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        inference: DraftInferenceInput,
+    ) -> Vec<EditorEffect> {
         let mut effects = self.clear_fillet_branch_preview();
         if self.tool != EditorTool::Select {
-            effects.extend(self.draft_move(scene, input));
+            effects.extend(self.draft_move(scene, input, inference));
             return effects;
         }
         if self.feature_contact_gesture.is_some() {
@@ -4065,6 +4459,9 @@ impl ConstraintEditor {
     pub fn pointer_leave(&mut self) -> Vec<EditorEffect> {
         let mut effects = self.clear_fillet_branch_preview();
         effects.extend(self.set_hover_state(None, None));
+        if self.tool != EditorTool::Select {
+            effects.extend(self.invalidate_draft_inference());
+        }
         effects
     }
 
@@ -4444,7 +4841,10 @@ impl ConstraintEditor {
 
     /// Completes a variable-length polyline or NURBS draft.
     pub fn complete_draft(&mut self, expected: SketchDesignIdentity) -> Vec<EditorEffect> {
-        let Some(draft) = self.draft.take() else {
+        if self.pending_construction_commit.is_some() {
+            return Vec::new();
+        }
+        let Some(draft) = self.draft.clone() else {
             return Vec::new();
         };
         let proposal = match draft.tool {
@@ -4452,9 +4852,17 @@ impl ConstraintEditor {
             EditorTool::Nurbs => nurbs_proposal(&draft),
             _ => None,
         };
-        proposal
-            .map(|proposal| commit_construction(expected, proposal, draft.geometry_role))
-            .unwrap_or_default()
+        let Some(proposal) = proposal else {
+            return Vec::new();
+        };
+        if draft.confirmed_inference.is_empty() {
+            self.draft = None;
+            self.draft_inference_engine.clear_session();
+            let mut effects = self.clear_draft_inference_publication();
+            effects.extend(commit_construction(expected, proposal, draft.geometry_role));
+            return effects;
+        }
+        self.begin_construction_plan(expected, &draft, proposal)
     }
 
     /// Whether the current retained draft can be completed by an explicit Finish action.
@@ -4468,10 +4876,17 @@ impl ConstraintEditor {
     }
 
     fn cancel_draft(&mut self) -> Vec<EditorEffect> {
-        self.draft
+        if self.pending_construction_commit.is_some() {
+            return Vec::new();
+        }
+        let mut effects = self
+            .draft
             .take()
             .map(|_| vec![EditorEffect::ClearConstructionPreview])
-            .unwrap_or_default()
+            .unwrap_or_default();
+        self.draft_inference_engine.clear_session();
+        effects.extend(self.clear_draft_inference_publication());
+        effects
     }
 
     fn cancel_point_gesture(&mut self) -> Vec<EditorEffect> {
@@ -4486,8 +4901,17 @@ impl ConstraintEditor {
             .collect()
     }
 
-    fn draft_down(&mut self, scene: &EditorScene, input: PointerInput) -> Vec<EditorEffect> {
-        if !input.position.is_finite() {
+    #[allow(
+        clippy::too_many_lines,
+        reason = "stage validation, preview retention, and tokenized terminal recovery are one auditable transition"
+    )]
+    fn draft_down(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        inference: DraftInferenceInput,
+    ) -> Vec<EditorEffect> {
+        if !input.position.is_finite() || self.pending_construction_commit.is_some() {
             return Vec::new();
         }
         if self
@@ -4497,34 +4921,65 @@ impl ConstraintEditor {
         {
             return Vec::new();
         }
-        let position = scene.viewport.screen_to_model(input.position);
-        if !position.into_iter().all(f64::is_finite) {
-            return Vec::new();
+        if self
+            .draft
+            .as_ref()
+            .is_some_and(|draft| draft.prepared_input != scene.authenticated_prepared_input())
+        {
+            return self.clear_draft_inference_publication();
         }
-        let operand = snap_point(
+        let prior_draft = self.draft.clone();
+        let recovery_inference_engine = self.draft_inference_engine.clone();
+        let stage_index = prior_draft.as_ref().map_or(0, |draft| draft.points.len());
+        let stage = match self.resolve_draft_stage(
             scene,
             input.position,
-            self.snap_tolerance,
-            self.geometry_policy,
-        )
-        .unwrap_or(ConstructionPoint::New(position));
-        let prior_draft = self.draft.take();
+            inference,
+            self.tool,
+            stage_index,
+            prior_draft.as_ref(),
+        ) {
+            Ok(Some(stage)) => stage,
+            Ok(None) => return Vec::new(),
+            Err(_) => {
+                self.draft_inference_engine = recovery_inference_engine;
+                return self.clear_draft_inference_publication();
+            }
+        };
+        let ResolvedDraftStage {
+            operand,
+            position,
+            confirmed,
+            resolution,
+        } = stage;
+        if resolution
+            .as_ref()
+            .is_some_and(draft_inference_blocks_confirmation)
+        {
+            return self.publish_draft_inference(resolution);
+        }
         let mut draft = prior_draft.clone().unwrap_or(Draft {
             tool: self.tool,
             geometry_role: self.authoring_geometry_role,
+            prepared_input: scene.authenticated_prepared_input(),
             pointer_id: input.pointer_id,
             points: Vec::new(),
             positions: Vec::new(),
+            confirmed_inference: Vec::new(),
             conic_options: self.conic_options,
             nurbs_options: self.nurbs_options.clone(),
         });
         if draft.tool != self.tool {
+            self.draft_inference_engine = recovery_inference_engine;
             return Vec::new();
         }
         draft.points.push(operand);
-        draft.positions.push(operand_position(operand));
+        draft.positions.push(position);
+        if let Some(confirmed) = confirmed {
+            draft.confirmed_inference.push(confirmed);
+        }
         if !valid_draft_stage(&draft) {
-            self.draft = prior_draft;
+            self.draft_inference_engine = recovery_inference_engine;
             return Vec::new();
         }
         let proposal = draft_proposal(&draft);
@@ -4546,44 +5001,405 @@ impl ConstraintEditor {
         if keep {
             let preview = draft_preview(&draft);
             self.draft = Some(draft);
-            preview
-                .map(EditorEffect::PreviewConstruction)
-                .into_iter()
-                .collect::<Vec<_>>()
+            self.prepare_next_draft_stage();
+            let mut effects = self.clear_draft_inference_publication();
+            effects.extend(
+                preview
+                    .map(EditorEffect::PreviewConstruction)
+                    .into_iter()
+                    .collect::<Vec<_>>(),
+            );
+            effects
         } else {
-            proposal
-                .map(|proposal| {
-                    commit_construction(scene.design_identity, proposal, draft.geometry_role)
-                })
-                .unwrap_or_default()
+            let Some(proposal) = proposal else {
+                self.draft_inference_engine = recovery_inference_engine;
+                return Vec::new();
+            };
+            if matches!(
+                &proposal,
+                ConstructionProposal::Point {
+                    point: ConstructionPoint::Existing { .. }
+                }
+            ) {
+                self.draft = None;
+                self.draft_inference_engine.clear_session();
+                return self.clear_draft_inference_publication();
+            }
+            if draft.confirmed_inference.is_empty() {
+                self.draft = None;
+                self.draft_inference_engine.clear_session();
+                let mut effects = self.clear_draft_inference_publication();
+                effects.extend(commit_construction(
+                    scene.design_identity,
+                    proposal,
+                    draft.geometry_role,
+                ));
+                effects
+            } else {
+                self.draft = prior_draft;
+                self.begin_construction_plan_with_recovery(
+                    scene.design_identity,
+                    &draft,
+                    proposal,
+                    recovery_inference_engine,
+                    resolution,
+                )
+            }
         }
     }
 
-    fn draft_move(&mut self, scene: &EditorScene, input: PointerInput) -> Vec<EditorEffect> {
+    fn draft_move(
+        &mut self,
+        scene: &EditorScene,
+        input: PointerInput,
+        inference: DraftInferenceInput,
+    ) -> Vec<EditorEffect> {
+        if self.pending_construction_commit.is_some() {
+            return Vec::new();
+        }
         let Some(draft) = self.draft.as_ref() else {
-            return Vec::new();
+            if !construction_point_stage(self.tool, 0) {
+                return self.clear_draft_inference_publication();
+            }
+            let resolution =
+                self.resolve_draft_inference(scene, input.position, inference, self.tool, 0, None);
+            return if let Ok(resolution) = resolution {
+                self.publish_draft_inference(resolution)
+            } else {
+                self.draft_inference_engine.clear_session();
+                self.clear_draft_inference_publication()
+            };
         };
-        if draft.pointer_id != input.pointer_id || !input.position.is_finite() {
+        if draft.pointer_id != input.pointer_id
+            || draft.prepared_input != scene.authenticated_prepared_input()
+            || !input.position.is_finite()
+        {
             return Vec::new();
         }
-        let position = scene.viewport.screen_to_model(input.position);
-        if !position.into_iter().all(f64::is_finite) {
-            return Vec::new();
-        }
-        let operand = snap_point(
+        let draft = draft.clone();
+        let stage_index = draft.points.len();
+        let recovery_inference_engine = self.draft_inference_engine.clone();
+        let stage = match self.resolve_draft_stage(
             scene,
             input.position,
-            self.snap_tolerance,
+            inference,
+            draft.tool,
+            stage_index,
+            Some(&draft),
+        ) {
+            Ok(Some(stage)) => stage,
+            Ok(None) => return Vec::new(),
+            Err(_) => {
+                self.draft_inference_engine = recovery_inference_engine;
+                return self.clear_draft_inference_publication();
+            }
+        };
+        let mut preview = draft;
+        preview.points.push(stage.operand);
+        preview.positions.push(stage.position);
+        let mut effects = self.publish_draft_inference(stage.resolution);
+        effects.extend(
+            draft_preview(&preview)
+                .map(EditorEffect::PreviewConstruction)
+                .into_iter()
+                .collect::<Vec<_>>(),
+        );
+        effects
+    }
+
+    fn resolve_draft_stage(
+        &mut self,
+        scene: &EditorScene,
+        pointer: ScreenPoint,
+        input: DraftInferenceInput,
+        tool: EditorTool,
+        stage_index: usize,
+        draft: Option<&Draft>,
+    ) -> Result<Option<ResolvedDraftStage>, DraftInferenceError> {
+        let raw_position = scene.viewport.screen_to_model(pointer);
+        if !raw_position.into_iter().all(f64::is_finite) {
+            return Ok(None);
+        }
+        if !construction_point_stage(tool, stage_index) {
+            return Ok(Some(ResolvedDraftStage {
+                operand: ConstructionPoint::New(raw_position),
+                position: raw_position,
+                confirmed: None,
+                resolution: None,
+            }));
+        }
+
+        let resolution =
+            self.resolve_draft_inference(scene, pointer, input, tool, stage_index, draft)?;
+        let Some(candidate) = resolution
+            .as_ref()
+            .and_then(resolved_draft_inference_candidate)
+            .cloned()
+        else {
+            return Ok(Some(ResolvedDraftStage {
+                operand: ConstructionPoint::New(raw_position),
+                position: raw_position,
+                confirmed: None,
+                resolution,
+            }));
+        };
+        let point_identity = candidate
+            .relations
+            .iter()
+            .find_map(|relation| match relation {
+                DraftInferenceRelation::PointIdentity { point } => Some(*point),
+                DraftInferenceRelation::PointOnCurve { .. }
+                | DraftInferenceRelation::Midpoint { .. }
+                | DraftInferenceRelation::Horizontal
+                | DraftInferenceRelation::Vertical
+                | DraftInferenceRelation::Parallel { .. }
+                | DraftInferenceRelation::Perpendicular { .. } => None,
+            });
+        let position = candidate.adjusted_model_position;
+        let operand = if let Some(id) = point_identity {
+            let accepted_position = candidate.references.iter().find_map(|reference| {
+                if let DraftReferenceAnchor::PersistentPoint {
+                    point,
+                    model_position,
+                    ..
+                } = reference
+                    && *point == id
+                {
+                    return Some(*model_position);
+                }
+                None
+            });
+            let Some(accepted_position) = accepted_position else {
+                return Err(DraftInferenceError::InvalidFrame);
+            };
+            ConstructionPoint::Existing {
+                id,
+                position: accepted_position,
+            }
+        } else {
+            ConstructionPoint::New(position)
+        };
+        Ok(Some(ResolvedDraftStage {
+            operand,
+            position,
+            confirmed: Some(ConfirmedDraftInference {
+                stage_index,
+                relations: candidate.relations,
+                references: candidate.references,
+            }),
+            resolution,
+        }))
+    }
+
+    fn resolve_draft_inference(
+        &mut self,
+        scene: &EditorScene,
+        pointer: ScreenPoint,
+        input: DraftInferenceInput,
+        tool: EditorTool,
+        stage_index: usize,
+        draft: Option<&Draft>,
+    ) -> Result<Option<DraftInferenceResolution>, DraftInferenceError> {
+        if !pointer.is_finite() || !construction_point_stage(tool, stage_index) {
+            return Ok(None);
+        }
+        let span_start = directional_span_stage(tool, stage_index)
+            .then(|| draft.and_then(|draft| draft.positions.last().copied()))
+            .flatten();
+        let anchors = if input.suppressed {
+            Vec::new()
+        } else {
+            match scene
+                .draft_inference_anchors(pointer, self.draft_inference_engine.policy().limits)
+            {
+                DraftInferenceAnchorCollection::Complete { anchors } => anchors,
+                DraftInferenceAnchorCollection::ResourceLimited(evidence) => {
+                    self.draft_inference_engine.clear_stage();
+                    let raw_model = scene.viewport.screen_to_model(pointer);
+                    return Ok(Some(DraftInferenceResolution {
+                        status: DraftInferenceStatus::ResourceLimited,
+                        completeness: DraftInferenceCompleteness::SceneLimit(evidence),
+                        raw_model_position: raw_model,
+                        adjusted_model_position: raw_model,
+                        raw_screen_position: pointer,
+                        adjusted_screen_position: pointer,
+                        candidates: Vec::new(),
+                        guides: Vec::new(),
+                    }));
+                }
+            }
+        };
+        let frame = DraftInferenceFrame::from_scene(
+            scene,
             self.geometry_policy,
+            DraftInferenceSample {
+                raw_screen_position: pointer,
+                span_start,
+            },
+            anchors,
+        );
+        self.draft_inference_engine.resolve(&frame, input).map(Some)
+    }
+
+    fn publish_draft_inference(
+        &mut self,
+        resolution: Option<DraftInferenceResolution>,
+    ) -> Vec<EditorEffect> {
+        let resolution = resolution.filter(draft_inference_is_publishable);
+        if self.draft_inference_resolution == resolution {
+            return Vec::new();
+        }
+        self.draft_inference_resolution.clone_from(&resolution);
+        vec![EditorEffect::DraftInferenceChanged(resolution)]
+    }
+
+    fn prepare_next_draft_stage(&mut self) {
+        let references = self
+            .draft
+            .as_ref()
+            .filter(|draft| matches!(draft.tool, EditorTool::Line | EditorTool::Polyline))
+            .and_then(|draft| draft.confirmed_inference.last())
+            .map(confirmed_positional_references)
+            .unwrap_or_default();
+        self.draft_inference_engine.clear_stage();
+        for reference in references {
+            let _ = self.draft_inference_engine.remember_reference(reference);
+        }
+    }
+
+    fn begin_construction_plan(
+        &mut self,
+        expected: SketchDesignIdentity,
+        draft: &Draft,
+        proposal: ConstructionProposal,
+    ) -> Vec<EditorEffect> {
+        self.begin_construction_plan_with_recovery(
+            expected,
+            draft,
+            proposal,
+            self.draft_inference_engine.clone(),
+            self.draft_inference_resolution.clone(),
         )
-        .unwrap_or(ConstructionPoint::New(position));
-        let mut preview = draft.clone();
-        preview.points.push(operand);
-        preview.positions.push(operand_position(operand));
-        draft_preview(&preview)
-            .map(EditorEffect::PreviewConstruction)
-            .into_iter()
-            .collect()
+    }
+
+    fn begin_construction_plan_with_recovery(
+        &mut self,
+        expected: SketchDesignIdentity,
+        draft: &Draft,
+        proposal: ConstructionProposal,
+        recovery_inference_engine: DraftInferenceEngine,
+        resolution: Option<DraftInferenceResolution>,
+    ) -> Vec<EditorEffect> {
+        let Some(plan) = construction_commit_plan(draft, proposal) else {
+            self.draft_inference_engine = recovery_inference_engine;
+            return Vec::new();
+        };
+        let Some(prepared_input) = draft
+            .prepared_input
+            .filter(|input| input.design_identity() == expected)
+        else {
+            self.draft_inference_engine = recovery_inference_engine;
+            return Vec::new();
+        };
+        let token = ConstructionCommitToken(self.next_construction_commit_token);
+        let Some(next_token) = self.next_construction_commit_token.checked_add(1) else {
+            self.draft_inference_engine = recovery_inference_engine;
+            return Vec::new();
+        };
+        self.next_construction_commit_token = next_token;
+        self.pending_construction_commit = Some(PendingConstructionCommit {
+            token,
+            expected: Box::new(prepared_input),
+            plan: plan.clone(),
+            recovery_inference_engine,
+        });
+        let mut effects = self.publish_draft_inference(resolution);
+        effects.extend(draft_preview(draft).map(EditorEffect::PreviewConstruction));
+        effects.push(EditorEffect::CommitConstructionPlan {
+            expected: Box::new(prepared_input),
+            token,
+            plan,
+        });
+        effects
+    }
+
+    /// Returns the token awaiting host publication acknowledgement, if any.
+    #[must_use]
+    pub fn pending_construction_commit_token(&self) -> Option<ConstructionCommitToken> {
+        self.pending_construction_commit
+            .as_ref()
+            .map(|pending| pending.token)
+    }
+
+    pub(crate) fn authenticates_construction_commit(
+        &self,
+        token: ConstructionCommitToken,
+        expected: &PreparedSketchInput,
+        plan: &ConstructionCommitPlan,
+    ) -> bool {
+        self.pending_construction_commit
+            .as_ref()
+            .is_some_and(|pending| {
+                pending.token == token
+                    && pending.expected.as_ref() == expected
+                    && pending.plan == *plan
+            })
+    }
+
+    pub(crate) fn pending_construction_plan_matches(
+        &self,
+        expected: &PreparedSketchInput,
+        plan: &ConstructionCommitPlan,
+    ) -> bool {
+        self.pending_construction_commit
+            .as_ref()
+            .is_some_and(|pending| pending.expected.as_ref() == expected && pending.plan == *plan)
+    }
+
+    /// Completes or rejects one tokenized atomic construction publication.
+    ///
+    /// Success consumes the retained draft and clears its preview. Rejection
+    /// restores the exact pre-terminal inference state while leaving the
+    /// terminal preview visible, so the next pointer move replaces only the
+    /// rejected terminal candidate.
+    pub fn acknowledge_construction_commit(
+        &mut self,
+        token: ConstructionCommitToken,
+        accepted: bool,
+    ) -> Vec<EditorEffect> {
+        if self
+            .pending_construction_commit
+            .as_ref()
+            .is_none_or(|pending| pending.token != token)
+        {
+            return Vec::new();
+        }
+        let Some(pending) = self.pending_construction_commit.take() else {
+            return Vec::new();
+        };
+        if !accepted {
+            self.draft_inference_engine = pending.recovery_inference_engine;
+            return Vec::new();
+        }
+        self.draft = None;
+        self.draft_inference_engine.clear_session();
+        let mut effects = vec![EditorEffect::ClearConstructionPreview];
+        effects.extend(self.clear_draft_inference_publication());
+        effects
+    }
+
+    pub(crate) fn invalidate_for_retained_state_change(&mut self, force: bool) {
+        let preserve_pending_ack = !force && self.pending_construction_commit.is_some();
+        if force {
+            self.pending_construction_commit = None;
+        }
+        if !preserve_pending_ack {
+            self.draft = None;
+        }
+        self.draft_inference_engine.clear_session();
+        if !preserve_pending_ack {
+            self.draft_inference_resolution = None;
+        }
     }
 
     /// Returns compatible core relation actions for the current ordered selection.
@@ -4606,45 +5422,6 @@ impl ConstraintEditor {
     ) -> Result<DocumentEdit, EditorError> {
         constraint_edit(document, &self.selection, kind, label.into())
     }
-
-    /// Stages one inference candidate without changing a document.
-    ///
-    /// Staging replaces any previously staged candidate and emits only its
-    /// non-authoritative presentation preview.
-    pub fn stage_inference(
-        &mut self,
-        candidate: ProvisionalInferenceCandidate,
-    ) -> Vec<EditorEffect> {
-        self.staged_inference = Some(candidate.clone());
-        vec![EditorEffect::PreviewInference(candidate)]
-    }
-
-    /// Returns the one currently staged inference candidate, if any.
-    #[must_use]
-    pub fn staged_inference(&self) -> Option<&ProvisionalInferenceCandidate> {
-        self.staged_inference.as_ref()
-    }
-
-    /// Cancels the staged inference candidate without changing a document.
-    pub fn cancel_inference(&mut self) -> Vec<EditorEffect> {
-        self.staged_inference
-            .take()
-            .map(|_| vec![EditorEffect::ClearInferencePreview])
-            .unwrap_or_default()
-    }
-
-    /// Confirms and consumes the staged candidate, requesting its commit then preview clear.
-    pub fn confirm_inference(&mut self) -> Vec<EditorEffect> {
-        self.staged_inference
-            .take()
-            .map(|candidate| {
-                vec![
-                    EditorEffect::CommitInference(candidate),
-                    EditorEffect::ClearInferencePreview,
-                ]
-            })
-            .unwrap_or_default()
-    }
 }
 
 fn commit_construction(
@@ -4660,6 +5437,213 @@ fn commit_construction(
         },
         EditorEffect::ClearConstructionPreview,
     ]
+}
+
+fn resolved_draft_inference_candidate(
+    resolution: &DraftInferenceResolution,
+) -> Option<&DraftInferenceCandidate> {
+    let DraftInferenceStatus::Resolved { candidate } = resolution.status else {
+        return None;
+    };
+    resolution
+        .candidates
+        .iter()
+        .find(|value| value.id == candidate)
+}
+
+fn draft_inference_is_publishable(resolution: &DraftInferenceResolution) -> bool {
+    !resolution.guides.is_empty()
+        || matches!(
+            resolution.status,
+            DraftInferenceStatus::Resolved { .. }
+                | DraftInferenceStatus::Ambiguous { .. }
+                | DraftInferenceStatus::Suppressed
+                | DraftInferenceStatus::ResourceLimited
+                | DraftInferenceStatus::StalePreferredCandidate { .. }
+        )
+}
+
+fn draft_inference_blocks_confirmation(resolution: &DraftInferenceResolution) -> bool {
+    matches!(
+        resolution.status,
+        DraftInferenceStatus::Ambiguous { .. }
+            | DraftInferenceStatus::ResourceLimited
+            | DraftInferenceStatus::StalePreferredCandidate { .. }
+    )
+}
+
+/// Explicit table of stages whose coordinates are persistent point operands.
+///
+/// Keeping this separate from `Draft.positions` prevents inference from being
+/// attached to radius/extents/weighted-coordinate clicks that a proposal would
+/// otherwise discard.
+const fn construction_point_stage(tool: EditorTool, stage_index: usize) -> bool {
+    match tool {
+        EditorTool::Point | EditorTool::Circle | EditorTool::CounterClockwiseArc => {
+            stage_index == 0
+        }
+        EditorTool::Line
+        | EditorTool::Ellipse
+        | EditorTool::EllipticalArc
+        | EditorTool::Parabola
+        | EditorTool::Hyperbola => stage_index < 2,
+        EditorTool::Polyline | EditorTool::Nurbs => true,
+        EditorTool::Rectangle | EditorTool::Select => false,
+        EditorTool::QuadraticBezier => stage_index < 3,
+        EditorTool::CubicBezier => stage_index < 4,
+        EditorTool::RationalQuadraticConic => stage_index == 0 || stage_index == 2,
+    }
+}
+
+const fn directional_span_stage(tool: EditorTool, stage_index: usize) -> bool {
+    matches!(tool, EditorTool::Line) && stage_index == 1
+        || matches!(tool, EditorTool::Polyline) && stage_index >= 1
+}
+
+fn construction_commit_plan(
+    draft: &Draft,
+    proposal: ConstructionProposal,
+) -> Option<ConstructionCommitPlan> {
+    let mut relations = Vec::new();
+    for confirmed in &draft.confirmed_inference {
+        let point = draft_point_slot(draft, confirmed.stage_index)?;
+        for relation in confirmed.relations.iter().copied() {
+            match relation {
+                DraftInferenceRelation::PointIdentity { point: expected } => {
+                    if point != DraftPointSlot::Existing(expected) {
+                        return None;
+                    }
+                }
+                DraftInferenceRelation::PointOnCurve { contact } => {
+                    relations.push(InferredRelation::PointOnCurve {
+                        point,
+                        contact: DraftContactDescriptor {
+                            span: DraftSpanSlot::Existing(contact.span),
+                            domain: contact.domain,
+                            parameter: contact.parameter,
+                            winding: contact.winding,
+                            neighborhood: contact.neighborhood,
+                        },
+                    });
+                }
+                DraftInferenceRelation::Midpoint { span } => {
+                    relations.push(InferredRelation::Midpoint {
+                        point,
+                        line: DraftSpanSlot::Existing(span),
+                    });
+                }
+                DraftInferenceRelation::Horizontal => {
+                    relations.push(InferredRelation::Horizontal {
+                        line: draft_span_slot(draft.tool, confirmed.stage_index)?,
+                    });
+                }
+                DraftInferenceRelation::Vertical => {
+                    relations.push(InferredRelation::Vertical {
+                        line: draft_span_slot(draft.tool, confirmed.stage_index)?,
+                    });
+                }
+                DraftInferenceRelation::Parallel { reference } => {
+                    relations.push(InferredRelation::Parallel {
+                        first: draft_span_slot(draft.tool, confirmed.stage_index)?,
+                        second: DraftSpanSlot::Existing(reference),
+                    });
+                }
+                DraftInferenceRelation::Perpendicular { reference } => {
+                    relations.push(InferredRelation::Perpendicular {
+                        first: draft_span_slot(draft.tool, confirmed.stage_index)?,
+                        second: DraftSpanSlot::Existing(reference),
+                    });
+                }
+            }
+        }
+    }
+    Some(ConstructionCommitPlan {
+        proposal,
+        role: draft.geometry_role,
+        relations,
+    })
+}
+
+fn confirmed_positional_references(
+    confirmed: &ConfirmedDraftInference,
+) -> Vec<DraftReferenceAnchor> {
+    let relation = confirmed.relations.iter().find(|relation| {
+        matches!(
+            relation,
+            DraftInferenceRelation::PointIdentity { .. }
+                | DraftInferenceRelation::PointOnCurve { .. }
+                | DraftInferenceRelation::Midpoint { .. }
+        )
+    });
+    let Some(relation) = relation else {
+        return Vec::new();
+    };
+    confirmed
+        .references
+        .iter()
+        .copied()
+        .filter(|reference| match (relation, reference) {
+            (
+                DraftInferenceRelation::PointIdentity { point: expected },
+                DraftReferenceAnchor::PersistentPoint { point, .. },
+            ) => *point == *expected,
+            (
+                DraftInferenceRelation::Midpoint { span: expected },
+                DraftReferenceAnchor::Midpoint { span, .. },
+            ) => *span == *expected,
+            (
+                DraftInferenceRelation::PointOnCurve { contact: expected },
+                DraftReferenceAnchor::CurvePoint { contact, .. }
+                | DraftReferenceAnchor::AffineSupport { contact, .. },
+            ) => *contact == *expected,
+            _ => false,
+        })
+        .take(1)
+        .collect()
+}
+
+fn draft_point_slot(draft: &Draft, stage_index: usize) -> Option<DraftPointSlot> {
+    if !construction_point_stage(draft.tool, stage_index) {
+        return None;
+    }
+    match *draft.points.get(stage_index)? {
+        ConstructionPoint::Existing { id, .. } => Some(DraftPointSlot::Existing(id)),
+        ConstructionPoint::New(_) => {
+            let point_index = (0..stage_index)
+                .filter(|index| construction_point_stage(draft.tool, *index))
+                .filter(|index| matches!(draft.points.get(*index), Some(ConstructionPoint::New(_))))
+                .count();
+            Some(DraftPointSlot::Created { point_index })
+        }
+    }
+}
+
+fn draft_span_slot(tool: EditorTool, stage_index: usize) -> Option<DraftSpanSlot> {
+    match tool {
+        EditorTool::Line if stage_index == 1 => Some(DraftSpanSlot::Created {
+            curve_index: 0,
+            segment: 0,
+        }),
+        EditorTool::Polyline if stage_index >= 1 => Some(DraftSpanSlot::Created {
+            curve_index: 0,
+            segment: u32::try_from(stage_index.checked_sub(1)?).ok()?,
+        }),
+        EditorTool::Select
+        | EditorTool::Point
+        | EditorTool::Line
+        | EditorTool::Polyline
+        | EditorTool::Rectangle
+        | EditorTool::Circle
+        | EditorTool::CounterClockwiseArc
+        | EditorTool::QuadraticBezier
+        | EditorTool::CubicBezier
+        | EditorTool::Ellipse
+        | EditorTool::EllipticalArc
+        | EditorTool::RationalQuadraticConic
+        | EditorTool::Parabola
+        | EditorTool::Hyperbola
+        | EditorTool::Nurbs => None,
+    }
 }
 
 /// Complete M55 alpha relation action vocabulary.
@@ -4827,6 +5811,8 @@ pub enum EditorError {
     IncompatibleConstraint(ConstraintKind),
     #[error("computed-feature snapshot does not match the supplied accepted sketch")]
     StaleComputedFeatureSnapshot,
+    #[error("prepared sketch input does not match the supplied accepted scene")]
+    StalePreparedSketchInput,
     #[error("computed-feature interaction affordance is missing, stale, or malformed")]
     InvalidComputedFeatureAffordance,
     #[error(transparent)]
@@ -4877,6 +5863,9 @@ fn scene_curve_for_interval(
         });
     Ok(SceneCurve {
         span,
+        authoring_eligible: true,
+        affine: is_linear_span(document, span),
+        contact_domain: painted_contact_domain(document, span)?,
         role: document.geometry_role(span.curve).unwrap_or_default(),
         source_role: document.geometry_role(span.curve).unwrap_or_default(),
         origin: SceneCurveOrigin::Native,
@@ -4884,6 +5873,19 @@ fn scene_curve_for_interval(
         screen_parameters,
         drag_handle_point,
     })
+}
+
+fn painted_contact_domain(
+    document: &SketchDocument,
+    span: CurveSpan,
+) -> Result<ContactDomain, EditorError> {
+    document
+        .curve_contact_domains(span)?
+        .into_iter()
+        .find(|domain| !matches!(domain, ContactDomain::SupportingLine))
+        .ok_or(EditorError::InvalidConstructionOptions(
+            "native curve span has no painted contact domain",
+        ))
 }
 
 // The segment count is explicitly clamped to 4096 before allocation, and every
@@ -5026,6 +6028,365 @@ fn point_hit(point: &ScenePoint, position: ScreenPoint, tolerance_pixels: f64) -
             incidence: point.role_incidence,
         }),
     })
+}
+
+#[derive(Clone, Copy, Debug)]
+struct SceneCurvePointerSample {
+    total_parameter: f64,
+    model_position: [f64; 2],
+    distance_pixels: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct SceneCurveChordProjection {
+    segment_index: usize,
+    distance_pixels: f64,
+    parameter: f64,
+    lower_parameter: f64,
+    upper_parameter: f64,
+}
+
+fn draft_inference_scene_resource_limit(
+    scene: &EditorScene,
+    limits: DraftInferenceLimits,
+) -> Option<DraftInferenceSceneLimit> {
+    let eligible_curves = scene.curves.iter().filter(|curve| curve.authoring_eligible);
+    let prospective_anchors = eligible_curves
+        .clone()
+        .fold(scene.construction_snap_points.len(), |count, curve| {
+            count.saturating_add(if curve.affine { 2 } else { 1 })
+        });
+    if prospective_anchors > limits.max_scene_anchors {
+        return Some(DraftInferenceSceneLimit {
+            resource: DraftInferenceSceneResource::Anchors,
+            required: prospective_anchors,
+            limit: limits.max_scene_anchors,
+        });
+    }
+    let curve_segments = eligible_curves.fold(0usize, |count, curve| {
+        count.saturating_add(curve.screen_polyline.len().saturating_sub(1))
+    });
+    (curve_segments > limits.max_scene_curve_segments).then_some(DraftInferenceSceneLimit {
+        resource: DraftInferenceSceneResource::CurveSegments,
+        required: curve_segments,
+        limit: limits.max_scene_curve_segments,
+    })
+}
+
+fn append_nonlinear_draft_anchors(
+    document: &SketchDocument,
+    samples: &mut Vec<(&SceneCurve, DraftReferenceOrigin, SceneCurvePointerSample)>,
+    anchors: &mut Vec<DraftReferenceAnchor>,
+    anchor_limit: usize,
+) -> Result<(), DraftInferenceSceneLimit> {
+    samples.sort_by(|first, second| {
+        first
+            .0
+            .span
+            .cmp(&second.0.span)
+            .then_with(|| first.2.total_parameter.total_cmp(&second.2.total_parameter))
+            .then_with(|| first.2.distance_pixels.total_cmp(&second.2.distance_pixels))
+    });
+    let mut span_start = 0;
+    while span_start < samples.len() {
+        let span = samples[span_start].0.span;
+        let span_end = samples[span_start..]
+            .iter()
+            .position(|(curve, _, _)| curve.span != span)
+            .map_or(samples.len(), |offset| span_start + offset);
+        let Some(nearest) = samples[span_start..span_end]
+            .iter()
+            .map(|(_, _, sample)| sample.distance_pixels)
+            .min_by(f64::total_cmp)
+        else {
+            span_start = span_end;
+            continue;
+        };
+        let close_to_nearest = |sample: &SceneCurvePointerSample| {
+            sample.distance_pixels <= nearest + CURVE_BRANCH_CANDIDATE_BAND_PIXELS
+        };
+        let candidate_count = samples[span_start..span_end]
+            .iter()
+            .filter(|(_, _, sample)| close_to_nearest(sample))
+            .count();
+        let required = anchors.len().saturating_add(candidate_count);
+        if required > anchor_limit {
+            return Err(DraftInferenceSceneLimit {
+                resource: DraftInferenceSceneResource::Anchors,
+                required,
+                limit: anchor_limit,
+            });
+        }
+
+        let mut branch_ordinal = 0u32;
+        let mut previous_parameter: Option<f64> = None;
+        for (curve, origin, sample) in samples[span_start..span_end]
+            .iter()
+            .copied()
+            .filter(|(_, _, sample)| close_to_nearest(sample))
+        {
+            if let Some(previous) = previous_parameter {
+                let scale = sample.total_parameter.abs().max(previous.abs()).max(1.0);
+                if (sample.total_parameter - previous).abs() > 64.0 * f64::EPSILON * scale {
+                    branch_ordinal = branch_ordinal.saturating_add(1);
+                }
+            }
+            previous_parameter = Some(sample.total_parameter);
+            let Some(contact) = draft_curve_contact(
+                document,
+                curve.span,
+                curve.contact_domain,
+                sample.total_parameter,
+            ) else {
+                continue;
+            };
+            anchors.push(DraftReferenceAnchor::CurvePoint {
+                contact,
+                branch_candidate: DraftCurveBranchCandidate::from_ordinal(branch_ordinal),
+                model_position: sample.model_position,
+                role: curve.role,
+                source_role: curve.source_role,
+                origin,
+            });
+        }
+        span_start = span_end;
+    }
+    Ok(())
+}
+
+fn scene_curve_pointer_samples(
+    curve: &SceneCurve,
+    document: &SketchDocument,
+    viewport: Viewport,
+    pointer: ScreenPoint,
+) -> Vec<SceneCurvePointerSample> {
+    let mut projections = curve
+        .screen_polyline
+        .windows(2)
+        .zip(curve.screen_parameters.windows(2))
+        .enumerate()
+        .filter_map(|(segment_index, (segment, parameters))| {
+            let (distance, projection) = point_segment_projection(pointer, segment[0], segment[1]);
+            let parameter = (parameters[1] - parameters[0]).mul_add(projection, parameters[0]);
+            (distance.is_finite() && parameter.is_finite()).then_some(SceneCurveChordProjection {
+                segment_index,
+                distance_pixels: distance,
+                parameter,
+                lower_parameter: parameters[0].min(parameters[1]),
+                upper_parameter: parameters[0].max(parameters[1]),
+            })
+        })
+        .collect::<Vec<_>>();
+    let Some(nearest_distance) = projections
+        .iter()
+        .map(|projection| projection.distance_pixels)
+        .min_by(f64::total_cmp)
+    else {
+        return Vec::new();
+    };
+    projections.retain(|projection| {
+        projection.distance_pixels <= nearest_distance + CURVE_BRANCH_CANDIDATE_BAND_PIXELS
+    });
+
+    let mut samples = Vec::new();
+    let mut group_start = 0;
+    for index in 1..=projections.len() {
+        let continues_group = index < projections.len()
+            && projections[index].segment_index == projections[index - 1].segment_index + 1;
+        if continues_group {
+            continue;
+        }
+        if let Some(sample) = refine_scene_curve_pointer_sample(
+            curve.span,
+            document,
+            viewport,
+            pointer,
+            &projections[group_start..index],
+        ) {
+            samples.push(sample);
+        }
+        group_start = index;
+    }
+    let Some(best_exact_distance) = samples
+        .iter()
+        .map(|sample| sample.distance_pixels)
+        .min_by(f64::total_cmp)
+    else {
+        return Vec::new();
+    };
+    samples.retain(|sample| {
+        sample.distance_pixels <= best_exact_distance + CURVE_BRANCH_CANDIDATE_BAND_PIXELS
+    });
+    samples.sort_by(|first, second| {
+        first
+            .total_parameter
+            .total_cmp(&second.total_parameter)
+            .then_with(|| first.distance_pixels.total_cmp(&second.distance_pixels))
+    });
+    samples.dedup_by(|first, second| {
+        let scale = first
+            .total_parameter
+            .abs()
+            .max(second.total_parameter.abs())
+            .max(1.0);
+        (first.total_parameter - second.total_parameter).abs() <= 64.0 * f64::EPSILON * scale
+    });
+    samples
+}
+
+fn refine_scene_curve_pointer_sample(
+    span: CurveSpan,
+    document: &SketchDocument,
+    viewport: Viewport,
+    pointer: ScreenPoint,
+    projections: &[SceneCurveChordProjection],
+) -> Option<SceneCurvePointerSample> {
+    let seed = projections.iter().min_by(|first, second| {
+        first
+            .distance_pixels
+            .total_cmp(&second.distance_pixels)
+            .then_with(|| first.parameter.total_cmp(&second.parameter))
+    })?;
+    let lower = projections
+        .iter()
+        .map(|projection| projection.lower_parameter)
+        .min_by(f64::total_cmp)?;
+    let upper = projections
+        .iter()
+        .map(|projection| projection.upper_parameter)
+        .max_by(f64::total_cmp)?;
+    if !lower.is_finite() || !upper.is_finite() || lower >= upper {
+        return None;
+    }
+    let pointer_model = viewport.screen_to_model(pointer);
+    let mut parameter = seed.parameter.clamp(lower, upper);
+    for _ in 0..CURVE_POINTER_REFINEMENT_STEPS {
+        let jet = document.evaluate_curve_jet(span, parameter).ok()?;
+        let residual = [
+            jet.position.x - pointer_model[0],
+            jet.position.y - pointer_model[1],
+        ];
+        let first = [jet.first_derivative.x, jet.first_derivative.y];
+        let second = [jet.second_derivative.x, jet.second_derivative.y];
+        let stationarity = residual[0].mul_add(first[0], residual[1] * first[1]);
+        let derivative = first[0].mul_add(
+            first[0],
+            first[1] * first[1] + residual[0].mul_add(second[0], residual[1] * second[1]),
+        );
+        if !stationarity.is_finite() || !derivative.is_finite() || derivative.abs() <= f64::EPSILON
+        {
+            break;
+        }
+        let next = (parameter - stationarity / derivative).clamp(lower, upper);
+        if !next.is_finite() || next.to_bits() == parameter.to_bits() {
+            break;
+        }
+        parameter = next;
+    }
+    let model_position = exact_curve_model_position(document, span, parameter)?;
+    let distance_pixels = viewport.model_to_screen(model_position).distance(pointer);
+    distance_pixels
+        .is_finite()
+        .then_some(SceneCurvePointerSample {
+            total_parameter: parameter,
+            model_position,
+            distance_pixels,
+        })
+}
+
+fn scene_curve_model_position_at_parameter(
+    curve: &SceneCurve,
+    document: &SketchDocument,
+    parameter: f64,
+) -> Option<[f64; 2]> {
+    let occurs_on_painted_interval = curve
+        .screen_polyline
+        .windows(2)
+        .zip(curve.screen_parameters.windows(2))
+        .any(|(_, parameters)| {
+            let lower = parameters[0].min(parameters[1]);
+            let upper = parameters[0].max(parameters[1]);
+            (lower..=upper).contains(&parameter)
+                && parameters[0].to_bits() != parameters[1].to_bits()
+        });
+    occurs_on_painted_interval
+        .then(|| exact_curve_model_position(document, curve.span, parameter))
+        .flatten()
+}
+
+fn exact_curve_model_position(
+    document: &SketchDocument,
+    span: CurveSpan,
+    parameter: f64,
+) -> Option<[f64; 2]> {
+    let position = document.evaluate_curve_jet(span, parameter).ok()?.position;
+    let model_position = [position.x, position.y];
+    model_position
+        .into_iter()
+        .all(f64::is_finite)
+        .then_some(model_position)
+}
+
+fn scene_curve_affine_direction(curve: &SceneCurve, viewport: Viewport) -> Option<[f64; 2]> {
+    let first_parameter = *curve.screen_parameters.first()?;
+    let last_parameter = *curve.screen_parameters.last()?;
+    let first = viewport.screen_to_model(*curve.screen_polyline.first()?);
+    let last = viewport.screen_to_model(*curve.screen_polyline.last()?);
+    let direction = if first_parameter <= last_parameter {
+        [last[0] - first[0], last[1] - first[1]]
+    } else {
+        [first[0] - last[0], first[1] - last[1]]
+    };
+    let length = direction[0].hypot(direction[1]);
+    (length.is_finite() && length > 0.0).then_some([direction[0] / length, direction[1] / length])
+}
+
+fn draft_curve_contact(
+    document: &SketchDocument,
+    span: CurveSpan,
+    domain: ContactDomain,
+    total_parameter: f64,
+) -> Option<DraftCurveContact> {
+    if !total_parameter.is_finite() {
+        return None;
+    }
+    let neighborhood = document
+        .picked_contact_neighborhood(span, total_parameter)
+        .ok()?;
+    let (parameter, winding) = match domain {
+        ContactDomain::SupportingLine => (total_parameter, 0),
+        ContactDomain::Bounded { lower, upper }
+            if lower.is_finite()
+                && upper.is_finite()
+                && lower < upper
+                && (lower..=upper).contains(&total_parameter) =>
+        {
+            (total_parameter, 0)
+        }
+        ContactDomain::Periodic { period } if period.is_finite() && period > 0.0 => {
+            let principal = total_parameter.rem_euclid(period);
+            let winding = periodic_contact_winding(total_parameter, principal, period)?;
+            (principal, winding)
+        }
+        ContactDomain::Bounded { .. } | ContactDomain::Periodic { .. } => return None,
+    };
+    Some(DraftCurveContact {
+        span,
+        domain,
+        parameter,
+        winding,
+        neighborhood,
+    })
+}
+
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "the finite quotient is range-checked against i32 before conversion"
+)]
+fn periodic_contact_winding(total: f64, principal: f64, period: f64) -> Option<i32> {
+    let winding = ((total - principal) / period).round();
+    (winding.is_finite() && winding >= f64::from(i32::MIN) && winding <= f64::from(i32::MAX))
+        .then_some(winding as i32)
 }
 
 fn curve_hit(curve: &SceneCurve, position: ScreenPoint, tolerance_pixels: f64) -> Option<Hit> {
@@ -5313,39 +6674,6 @@ const fn fillet_normal_side_order(side: DocumentCurveNormalSide) -> u8 {
     }
 }
 
-fn snap_point(
-    scene: &EditorScene,
-    position: ScreenPoint,
-    tolerance: SnapTolerance,
-    policy: GeometryInteractionPolicy,
-) -> Option<ConstructionPoint> {
-    if !tolerance.is_valid() {
-        return None;
-    }
-    scene
-        .construction_snap_points
-        .iter()
-        .filter(|point| point.is_pickable(policy))
-        .filter_map(|point| {
-            let distance = position.distance(point.screen_position);
-            (distance <= tolerance.point_pixels).then_some((distance, *point))
-        })
-        .min_by(|first, second| {
-            first
-                .0
-                .total_cmp(&second.0)
-                .then_with(|| first.1.id.cmp(&second.1.id))
-        })
-        .map(|(_, point)| ConstructionPoint::Existing {
-            id: point.id,
-            position: point.model_position,
-        })
-}
-
-fn operand_position(operand: ConstructionPoint) -> [f64; 2] {
-    operand.position()
-}
-
 fn polyline_proposal(draft: &Draft) -> Option<ConstructionProposal> {
     (draft.points.len() >= 2 && draft.positions.windows(2).all(nonzero_segment)).then(|| {
         ConstructionProposal::Polyline {
@@ -5406,10 +6734,10 @@ fn nonzero_segment(segment: &[[f64; 2]]) -> bool {
 fn draft_proposal(draft: &Draft) -> Option<ConstructionProposal> {
     match draft.tool {
         EditorTool::Point => draft
-            .positions
+            .points
             .first()
             .copied()
-            .map(|position| ConstructionProposal::Point { position }),
+            .map(|point| ConstructionProposal::Point { point }),
         EditorTool::Line if draft.points.len() == 2 => {
             let delta = [
                 draft.positions[1][0] - draft.positions[0][0],
@@ -5559,8 +6887,8 @@ fn draft_preview(draft: &Draft) -> Option<ConstructionPreview> {
 fn complete_preview(draft: &Draft) -> Option<ConstructionPreview> {
     let proposal = draft_proposal(draft)?;
     let geometry = match &proposal {
-        ConstructionProposal::Point { position } => ConstructionPreviewGeometry::Point {
-            position: *position,
+        ConstructionProposal::Point { point } => ConstructionPreviewGeometry::Point {
+            position: point.position(),
         },
         ConstructionProposal::Line { .. } | ConstructionProposal::Polyline { .. } => {
             ConstructionPreviewGeometry::Polyline {
@@ -6100,21 +7428,2058 @@ mod tests {
 
     fn scene(document: &SketchDocument) -> EditorScene {
         #[allow(clippy::default_trait_access)]
-        let identity = geosolve_sketch::RetainedSketchDocumentSession::new(
+        let session = geosolve_sketch::RetainedSketchDocumentSession::new(
             document.clone(),
             geosolve_sketch::DocumentSolveRequest::default(),
             Default::default(),
         )
-        .expect("retained session")
-        .design_identity();
-        EditorScene::from_accepted(
-            7,
-            identity,
-            document,
+        .expect("retained session");
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("accepted state");
+        EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            session.design_identity(),
+            accepted.document(),
+            session.design_document(),
             Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport"),
             0.5,
         )
         .expect("scene")
+        .with_retained_session(&session)
+        .expect("bound scene")
+    }
+
+    fn point_identity_branch_fixture() -> (RetainedEditorCoordinator, EditorScene, DesignPointId) {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let existing = document
+            .add_point("existing", [0.0, 0.0])
+            .expect("existing point");
+        let support = document
+            .add_point("support", [-2.0, 0.0])
+            .expect("support point");
+        document
+            .add_curve(
+                "profile incidence",
+                CurveDefinition::Line {
+                    start: existing,
+                    end: support,
+                    branch_direction: [-1.0, 0.0],
+                },
+            )
+            .expect("profile line");
+        document
+            .add_constraint(
+                "fix existing",
+                DocumentConstraintDefinition::FixedPoint {
+                    point: existing,
+                    target: [0.0, 0.0],
+                },
+            )
+            .expect("fixed existing point");
+        let session = geosolve_sketch::RetainedSketchDocumentSession::new(
+            document,
+            geosolve_sketch::DocumentSolveRequest::default(),
+            geosolve_sketch::SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("accepted state");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            accepted.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport"),
+            0.5,
+        )
+        .expect("scene")
+        .with_retained_session(&session)
+        .expect("bound scene");
+        let mut coordinator =
+            RetainedEditorCoordinator::new(session).expect("retained coordinator");
+        coordinator.editor_mut().activate_tool(EditorTool::Line);
+        (coordinator, scene, existing)
+    }
+
+    fn inference_anchors(scene: &EditorScene, pointer: ScreenPoint) -> Vec<DraftReferenceAnchor> {
+        match scene.draft_inference_anchors(pointer, DraftInferenceLimits::default()) {
+            DraftInferenceAnchorCollection::Complete { anchors } => anchors,
+            DraftInferenceAnchorCollection::ResourceLimited(evidence) => {
+                panic!("ordinary test scene exceeded inference resources: {evidence:?}")
+            }
+        }
+    }
+
+    fn proposal_curve_fixture(
+        label: &'static str,
+        proposal: &ConstructionProposal,
+        parameter: f64,
+    ) -> (&'static str, SketchDocument, CurveSpan, f64) {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        let result = proposal.apply(&mut document).expect("curve proposal");
+        let span = document.curve_spans(result.curves[0]).expect("curve spans")[0];
+        (label, document, span, parameter)
+    }
+
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the native-family fixture table keeps every exact-evaluation contract directly comparable"
+    )]
+    fn native_point_on_curve_fixtures() -> Vec<(&'static str, SketchDocument, CurveSpan, f64)> {
+        let mut fixtures = vec![
+            proposal_curve_fixture(
+                "line",
+                &ConstructionProposal::Line {
+                    start: ConstructionPoint::New([-3.0, -1.0]),
+                    end: ConstructionPoint::New([4.0, 2.0]),
+                },
+                0.37,
+            ),
+            proposal_curve_fixture(
+                "circle",
+                &ConstructionProposal::Circle {
+                    center: ConstructionPoint::New([0.0, 0.0]),
+                    radius: 3.0,
+                },
+                1.1,
+            ),
+            proposal_curve_fixture(
+                "circular arc",
+                &ConstructionProposal::CounterClockwiseArc {
+                    center: ConstructionPoint::New([0.0, 0.0]),
+                    start: [3.0, 0.0],
+                    end: [-1.0, 3.0],
+                },
+                0.37,
+            ),
+            proposal_curve_fixture(
+                "quadratic Bezier",
+                &ConstructionProposal::QuadraticBezier {
+                    controls: [
+                        ConstructionPoint::New([-3.0, -1.0]),
+                        ConstructionPoint::New([-0.5, 4.0]),
+                        ConstructionPoint::New([4.0, 0.5]),
+                    ],
+                },
+                0.37,
+            ),
+            proposal_curve_fixture(
+                "cubic Bezier",
+                &ConstructionProposal::CubicBezier {
+                    controls: [
+                        ConstructionPoint::New([-4.0, -1.0]),
+                        ConstructionPoint::New([-2.0, 5.0]),
+                        ConstructionPoint::New([2.0, -4.0]),
+                        ConstructionPoint::New([4.0, 1.0]),
+                    ],
+                },
+                0.37,
+            ),
+            proposal_curve_fixture(
+                "ellipse",
+                &ConstructionProposal::Ellipse {
+                    center: ConstructionPoint::New([0.0, 0.0]),
+                    major_axis_point: ConstructionPoint::New([4.0, 1.0]),
+                    minor_axis_ratio: 0.55,
+                },
+                1.1,
+            ),
+            proposal_curve_fixture(
+                "elliptical arc",
+                &ConstructionProposal::EllipticalArc {
+                    center: ConstructionPoint::New([0.0, 0.0]),
+                    major_axis_point: ConstructionPoint::New([4.0, 1.0]),
+                    minor_axis_ratio: 0.55,
+                    start_angle: -0.7,
+                    end_angle: 2.2,
+                    sweep: DocumentArcSweep::CounterClockwise,
+                },
+                0.37,
+            ),
+            proposal_curve_fixture(
+                "rational quadratic conic",
+                &ConstructionProposal::RationalQuadraticConic {
+                    start: ConstructionPoint::New([-3.0, -1.0]),
+                    weighted_middle: [0.0, 4.0],
+                    middle_weight: 0.65,
+                    end: ConstructionPoint::New([4.0, 0.5]),
+                },
+                0.37,
+            ),
+            proposal_curve_fixture(
+                "parabola",
+                &ConstructionProposal::Parabola {
+                    vertex: ConstructionPoint::New([0.0, -1.0]),
+                    focus: ConstructionPoint::New([0.5, 1.0]),
+                    trim_start: -1.4,
+                    trim_end: 1.7,
+                },
+                0.37,
+            ),
+            proposal_curve_fixture(
+                "hyperbola",
+                &ConstructionProposal::Hyperbola {
+                    center: ConstructionPoint::New([0.0, 0.0]),
+                    transverse_axis_point: ConstructionPoint::New([2.5, 0.5]),
+                    semi_conjugate: 1.3,
+                    branch: DocumentHyperbolaBranch::Positive,
+                    trim_start: -1.1,
+                    trim_end: 1.4,
+                },
+                0.37,
+            ),
+            proposal_curve_fixture(
+                "NURBS",
+                &ConstructionProposal::Nurbs {
+                    controls: vec![
+                        ConstructionPoint::New([-4.0, -1.0]),
+                        ConstructionPoint::New([-2.0, 4.0]),
+                        ConstructionPoint::New([2.0, -3.0]),
+                        ConstructionPoint::New([4.0, 1.0]),
+                    ],
+                    options: NurbsConstructionOptions {
+                        form: DocumentBSplineForm::Clamped,
+                        degree: 3,
+                        weights: vec![1.0, 0.7, 1.4, 1.0],
+                        gauge_index: 0,
+                    },
+                },
+                0.37,
+            ),
+        ];
+
+        let mut bspline = SketchDocument::new(10.0).expect("B-spline document");
+        let controls = [[-4.0, -1.0], [-2.0, 4.0], [2.0, -3.0], [4.0, 1.0]].map(|position| {
+            bspline
+                .add_point("B-spline control", position)
+                .expect("control")
+        });
+        let curve = bspline
+            .add_curve(
+                "B-spline",
+                CurveDefinition::BSpline {
+                    form: DocumentBSplineForm::Clamped,
+                    degree: 3,
+                    controls: controls.to_vec(),
+                    knots: vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+                    span_ids: vec![41],
+                    next_span_id: 42,
+                },
+            )
+            .expect("B-spline");
+        fixtures.insert(
+            fixtures.len() - 1,
+            ("B-spline", bspline, CurveSpan { curve, segment: 41 }, 0.37),
+        );
+        fixtures
+    }
+
+    fn construction_plan_effect(
+        effects: &[EditorEffect],
+    ) -> (ConstructionCommitToken, ConstructionCommitPlan) {
+        effects
+            .iter()
+            .find_map(|effect| match effect {
+                EditorEffect::CommitConstructionPlan { token, plan, .. } => {
+                    Some((*token, plan.clone()))
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("construction plan effect expected, got {effects:?}"))
+    }
+
+    fn has_construction_commit(effects: &[EditorEffect]) -> bool {
+        effects.iter().any(|effect| {
+            matches!(
+                effect,
+                EditorEffect::CommitConstruction { .. }
+                    | EditorEffect::CommitConstructionPlan { .. }
+            )
+        })
+    }
+
+    fn model_points_close(first: [f64; 2], second: [f64; 2]) -> bool {
+        first
+            .into_iter()
+            .zip(second)
+            .all(|(first, second)| (first - second).abs() < 1.0e-12)
+    }
+
+    fn acknowledge_planned_commit(editor: &mut ConstraintEditor, effects: &[EditorEffect]) {
+        if let Some(token) = effects.iter().find_map(|effect| match effect {
+            EditorEffect::CommitConstructionPlan { token, .. } => Some(*token),
+            _ => None,
+        }) {
+            assert!(
+                editor
+                    .acknowledge_construction_commit(token, true)
+                    .iter()
+                    .any(|effect| matches!(effect, EditorEffect::ClearConstructionPreview))
+            );
+        }
+    }
+
+    #[test]
+    fn construction_point_stage_table_excludes_coordinate_only_clicks() {
+        let cases: &[(EditorTool, &[bool])] = &[
+            (EditorTool::Point, &[true, false]),
+            (EditorTool::Line, &[true, true, false]),
+            (EditorTool::Polyline, &[true, true, true]),
+            (EditorTool::Rectangle, &[false, false]),
+            (EditorTool::Circle, &[true, false]),
+            (EditorTool::CounterClockwiseArc, &[true, false, false]),
+            (EditorTool::QuadraticBezier, &[true, true, true, false]),
+            (EditorTool::CubicBezier, &[true, true, true, true, false]),
+            (EditorTool::Ellipse, &[true, true, false]),
+            (EditorTool::EllipticalArc, &[true, true, false]),
+            (
+                EditorTool::RationalQuadraticConic,
+                &[true, false, true, false],
+            ),
+            (EditorTool::Parabola, &[true, true, false]),
+            (EditorTool::Hyperbola, &[true, true, false]),
+            (EditorTool::Nurbs, &[true, true, true]),
+        ];
+        for (tool, expected) in cases {
+            for (stage, expected) in expected.iter().copied().enumerate() {
+                assert_eq!(
+                    construction_point_stage(*tool, stage),
+                    expected,
+                    "unexpected operand ownership for {tool:?} stage {stage}"
+                );
+                assert_eq!(
+                    directional_span_stage(*tool, stage),
+                    (*tool == EditorTool::Line && stage == 1)
+                        || (*tool == EditorTool::Polyline && stage >= 1),
+                    "unexpected directional ownership for {tool:?} stage {stage}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn advanced_positional_inference_keeps_interleaved_slots_and_mixed_operands_exact() {
+        let (document, lines, points) = line_document();
+        let scene = scene(&document);
+        let click = |editor: &mut ConstraintEditor, pointer_id, model: [f64; 2]| {
+            let screen = scene.viewport.model_to_screen(model);
+            editor.pointer_down(
+                &scene,
+                pointer(pointer_id, screen.x, screen.y, Modifiers::default()),
+            )
+        };
+
+        let mut conic = ConstraintEditor::default();
+        conic.activate_tool(EditorTool::RationalQuadraticConic);
+        click(&mut conic, 61, [-4.0, 1.0]);
+        click(&mut conic, 61, [0.0, 4.0]);
+        assert_eq!(
+            conic
+                .draft
+                .as_ref()
+                .expect("interleaved conic draft")
+                .confirmed_inference
+                .len(),
+            1,
+            "the weighted-middle coordinate stage must not acquire positional inference"
+        );
+        let conic_effects = click(&mut conic, 61, [0.0, 1.0]);
+        let (_, conic_plan) = construction_plan_effect(&conic_effects);
+        assert!(matches!(
+            conic_plan.proposal,
+            ConstructionProposal::RationalQuadraticConic {
+                start: ConstructionPoint::Existing { id, .. },
+                weighted_middle,
+                end: ConstructionPoint::New(end),
+                ..
+            } if id == points[0]
+                && model_points_close(weighted_middle, [0.0, 4.0])
+                && model_points_close(end, [0.0, 1.0])
+        ));
+        assert!(matches!(
+            conic_plan.relations.as_slice(),
+            [InferredRelation::Midpoint {
+                point: DraftPointSlot::Created { point_index: 0 },
+                line: DraftSpanSlot::Existing(line),
+            }] if *line == lines[0]
+        ));
+        let mut conic_document = document.clone();
+        let conic_result = conic_plan
+            .apply(&mut conic_document)
+            .expect("interleaved conic plan");
+        assert_eq!(conic_result.construction.points.len(), 1);
+        assert!(matches!(
+            conic_document
+                .constraint(conic_result.constraints[0].constraint)
+                .expect("conic midpoint")
+                .definition,
+            DocumentConstraintDefinition::Midpoint { point, line }
+                if point == conic_result.construction.points[0] && line == lines[0]
+        ));
+
+        let mut cubic = ConstraintEditor::default();
+        cubic.activate_tool(EditorTool::CubicBezier);
+        click(&mut cubic, 62, [-4.0, 1.0]);
+        click(&mut cubic, 62, [-2.0, 4.0]);
+        click(&mut cubic, 62, [0.0, 1.0]);
+        let cubic_effects = click(&mut cubic, 62, [4.0, 1.0]);
+        let (_, cubic_plan) = construction_plan_effect(&cubic_effects);
+        assert!(matches!(
+            &cubic_plan.proposal,
+            ConstructionProposal::CubicBezier { controls }
+                if matches!(controls[0], ConstructionPoint::Existing { id, .. } if id == points[0])
+                    && matches!(controls[1], ConstructionPoint::New(position) if model_points_close(position, [-2.0, 4.0]))
+                    && matches!(controls[2], ConstructionPoint::New(position) if model_points_close(position, [0.0, 1.0]))
+                    && matches!(controls[3], ConstructionPoint::Existing { id, .. } if id == points[1])
+        ));
+        assert!(matches!(
+            cubic_plan.relations.as_slice(),
+            [InferredRelation::Midpoint {
+                point: DraftPointSlot::Created { point_index: 1 },
+                line: DraftSpanSlot::Existing(line),
+            }] if *line == lines[0]
+        ));
+        let mut cubic_document = document.clone();
+        let cubic_result = cubic_plan
+            .apply(&mut cubic_document)
+            .expect("mixed-control cubic plan");
+        assert_eq!(cubic_result.construction.points.len(), 2);
+        assert!(matches!(
+            cubic_document
+                .constraint(cubic_result.constraints[0].constraint)
+                .expect("cubic midpoint")
+                .definition,
+            DocumentConstraintDefinition::Midpoint { point, line }
+                if point == cubic_result.construction.points[1] && line == lines[0]
+        ));
+    }
+
+    #[test]
+    fn scene_anchors_retain_exact_bounded_and_periodic_contact_topology() {
+        let (document, lines, _) = line_document();
+        let scene = scene(&document);
+        let start = scene.viewport.model_to_screen([-4.0, 1.0]);
+        let anchors = inference_anchors(&scene, start);
+        assert!(anchors.iter().any(|anchor| matches!(
+            anchor,
+            DraftReferenceAnchor::AffineSupport { contact, .. }
+                if contact.span == lines[0]
+                    && contact.parameter == 0.0
+                    && contact.winding == 0
+                    && contact.neighborhood == ContactNeighborhood::Start
+        )));
+        let end = scene.viewport.model_to_screen([4.0, 1.0]);
+        assert!(inference_anchors(&scene, end).iter().any(|anchor| matches!(
+            anchor,
+                DraftReferenceAnchor::AffineSupport { contact, .. }
+                if contact.span == lines[0]
+                    && (contact.parameter - 1.0).abs() < 1.0e-12
+                    && contact.neighborhood == ContactNeighborhood::End
+        )));
+
+        let period = std::f64::consts::TAU;
+        let (_, periodic_document, periodic_span, _) = native_point_on_curve_fixtures()
+            .into_iter()
+            .find(|(family, ..)| *family == "circle")
+            .expect("periodic circle fixture");
+        let contact = draft_curve_contact(
+            &periodic_document,
+            periodic_span,
+            ContactDomain::Periodic { period },
+            period.mul_add(2.0, 0.25),
+        )
+        .expect("periodic contact");
+        assert_eq!(contact.parameter.to_bits(), 0.25f64.to_bits());
+        assert_eq!(contact.winding, 2);
+        let seam = draft_curve_contact(
+            &periodic_document,
+            periodic_span,
+            ContactDomain::Periodic { period },
+            period,
+        )
+        .expect("periodic seam");
+        assert_eq!(seam.parameter.to_bits(), 0.0f64.to_bits());
+        assert_eq!(seam.winding, 1);
+        let negative = draft_curve_contact(
+            &periodic_document,
+            periodic_span,
+            ContactDomain::Periodic { period },
+            -0.25,
+        )
+        .expect("negative winding");
+        assert!((negative.parameter - (period - 0.25)).abs() < 1.0e-12);
+        assert_eq!(negative.winding, -1);
+    }
+
+    #[test]
+    fn scene_anchor_resource_limit_fails_closed_without_a_partial_prefix() {
+        let (document, _, _) = line_document();
+        let scene = scene(&document);
+        let pointer_position = scene.viewport.model_to_screen([0.0, 1.0]);
+        let mut policy = DraftInferencePolicy::default();
+        policy.limits.max_scene_anchors = 7;
+        let evidence = DraftInferenceSceneLimit {
+            resource: DraftInferenceSceneResource::Anchors,
+            required: 8,
+            limit: 7,
+        };
+        assert_eq!(
+            scene.draft_inference_anchors(pointer_position, policy.limits),
+            DraftInferenceAnchorCollection::ResourceLimited(evidence)
+        );
+        let segment_limits = DraftInferenceLimits {
+            max_scene_curve_segments: 1,
+            ..DraftInferenceLimits::default()
+        };
+        assert_eq!(
+            scene.draft_inference_anchors(pointer_position, segment_limits),
+            DraftInferenceAnchorCollection::ResourceLimited(DraftInferenceSceneLimit {
+                resource: DraftInferenceSceneResource::CurveSegments,
+                required: 2,
+                limit: 1,
+            })
+        );
+
+        let mut editor = ConstraintEditor::default();
+        editor
+            .set_draft_inference_policy(policy)
+            .expect("bounded policy");
+        let resolution = editor
+            .resolve_draft_inference(
+                &scene,
+                pointer_position,
+                DraftInferenceInput::default(),
+                EditorTool::Point,
+                0,
+                None,
+            )
+            .expect("typed scene limit")
+            .expect("point stage resolution");
+        assert_eq!(resolution.status, DraftInferenceStatus::ResourceLimited);
+        assert_eq!(
+            resolution.completeness,
+            DraftInferenceCompleteness::SceneLimit(evidence)
+        );
+        assert!(resolution.candidates.is_empty());
+        assert!(resolution.guides.is_empty());
+
+        editor.activate_tool(EditorTool::Point);
+        let effects = editor.pointer_down(
+            &scene,
+            pointer(
+                91,
+                pointer_position.x,
+                pointer_position.y,
+                Modifiers::default(),
+            ),
+        );
+        assert!(editor.draft.is_none());
+        assert!(!has_construction_commit(&effects));
+        assert!(effects.iter().any(|effect| matches!(
+            effect,
+            EditorEffect::DraftInferenceChanged(Some(resolution))
+                if resolution.status == DraftInferenceStatus::ResourceLimited
+                    && resolution.completeness
+                        == DraftInferenceCompleteness::SceneLimit(evidence)
+        )));
+    }
+
+    #[test]
+    fn nonlinear_self_intersection_preserves_both_contact_branches() {
+        let controls = [
+            ConstructionPoint::New([0.0, 0.0]),
+            ConstructionPoint::New([2.0, 3.0]),
+            ConstructionPoint::New([-2.0, 3.0]),
+            ConstructionPoint::New([84.0 / 79.0, 0.0]),
+        ];
+        let (_, document, span, _) = proposal_curve_fixture(
+            "self-intersecting cubic",
+            &ConstructionProposal::CubicBezier { controls },
+            0.0,
+        );
+        let scene = scene(&document);
+        let first_parameter = 0.089_385_032_953_265_66;
+        let second_parameter = 1.0 - first_parameter;
+        let crossing = document
+            .evaluate_curve_jet(span, first_parameter)
+            .expect("first crossing branch")
+            .position;
+        let pointer_position = scene.viewport.model_to_screen([crossing.x, crossing.y]);
+        let branches = inference_anchors(&scene, pointer_position)
+            .into_iter()
+            .filter_map(|anchor| match anchor {
+                DraftReferenceAnchor::CurvePoint {
+                    contact,
+                    branch_candidate,
+                    ..
+                } if contact.span == span => Some((contact, branch_candidate)),
+                DraftReferenceAnchor::PersistentPoint { .. }
+                | DraftReferenceAnchor::Midpoint { .. }
+                | DraftReferenceAnchor::CurvePoint { .. }
+                | DraftReferenceAnchor::AffineSupport { .. } => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(branches.len(), 2);
+        assert!((branches[0].0.parameter - first_parameter).abs() <= 1.0e-10);
+        assert!((branches[1].0.parameter - second_parameter).abs() <= 1.0e-10);
+        assert_eq!(branches[0].1.get(), 0);
+        assert_eq!(branches[1].1.get(), 1);
+
+        let mut editor = ConstraintEditor::default();
+        let resolution = editor
+            .resolve_draft_inference(
+                &scene,
+                pointer_position,
+                DraftInferenceInput::default(),
+                EditorTool::Point,
+                0,
+                None,
+            )
+            .expect("self-intersection resolution")
+            .expect("point stage resolution");
+        let DraftInferenceStatus::Ambiguous { candidates } = &resolution.status else {
+            panic!(
+                "self-intersection must remain explicit, got {:?}",
+                resolution.status
+            );
+        };
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(resolution.candidates.len(), 2);
+
+        let mut click_editor = ConstraintEditor::default();
+        click_editor.activate_tool(EditorTool::Point);
+        let effects = click_editor.pointer_down(
+            &scene,
+            pointer(
+                92,
+                pointer_position.x,
+                pointer_position.y,
+                Modifiers::default(),
+            ),
+        );
+        assert!(click_editor.draft.is_none());
+        assert!(!has_construction_commit(&effects));
+        assert!(effects.iter().any(|effect| matches!(
+            effect,
+            EditorEffect::DraftInferenceChanged(Some(resolution))
+                if matches!(resolution.status, DraftInferenceStatus::Ambiguous { .. })
+        )));
+    }
+
+    #[test]
+    fn scene_inference_is_invariant_to_sketch_model_scale() {
+        let resolve = |model_scale: f64| {
+            let mut document = SketchDocument::new(model_scale).expect("document");
+            let start = document.add_point("start", [-4.0, 0.0]).expect("point");
+            let end = document.add_point("end", [4.0, 0.0]).expect("point");
+            document
+                .add_curve(
+                    "reference",
+                    CurveDefinition::Line {
+                        start,
+                        end,
+                        branch_direction: [1.0, 0.0],
+                    },
+                )
+                .expect("line");
+            let scene = scene(&document);
+            let pointer = scene.viewport.model_to_screen([0.0, 0.0]);
+            let resolution = ConstraintEditor::default()
+                .resolve_draft_inference(
+                    &scene,
+                    pointer,
+                    DraftInferenceInput::default(),
+                    EditorTool::Point,
+                    0,
+                    None,
+                )
+                .expect("inference")
+                .expect("point-stage resolution");
+            let DraftInferenceStatus::Resolved { candidate: winner } = resolution.status else {
+                panic!("expected resolved midpoint inference");
+            };
+            let summaries = resolution
+                .candidates
+                .iter()
+                .map(|candidate| {
+                    let [relation] = candidate.relations.as_slice() else {
+                        panic!("expected one positional relation");
+                    };
+                    let (family, contact) = match relation {
+                        DraftInferenceRelation::Midpoint { .. } => ("midpoint", None),
+                        DraftInferenceRelation::PointOnCurve { contact } => (
+                            "point-on-curve",
+                            Some((
+                                contact.domain,
+                                contact.parameter.to_bits(),
+                                contact.winding,
+                                contact.neighborhood,
+                            )),
+                        ),
+                        DraftInferenceRelation::PointIdentity { .. }
+                        | DraftInferenceRelation::Horizontal
+                        | DraftInferenceRelation::Vertical
+                        | DraftInferenceRelation::Parallel { .. }
+                        | DraftInferenceRelation::Perpendicular { .. } => {
+                            panic!("unexpected midpoint-scene relation")
+                        }
+                    };
+                    (
+                        candidate.id == winner,
+                        family,
+                        contact,
+                        candidate.ranking,
+                        candidate.adjusted_model_position.map(f64::to_bits),
+                    )
+                })
+                .collect::<Vec<_>>();
+            (resolution.completeness, summaries)
+        };
+
+        let baseline = resolve(1.0);
+        for model_scale in [1.0e-6, 1.0e6] {
+            assert_eq!(resolve(model_scale), baseline);
+        }
+    }
+
+    #[test]
+    fn standalone_point_reuses_identity_and_point_on_curve_keeps_contact_metadata() {
+        let (document, lines, points) = line_document();
+        let scene = scene(&document);
+        let mut editor = ConstraintEditor::default();
+        editor.activate_tool(EditorTool::Point);
+        let endpoint = scene.viewport.model_to_screen([-4.0, 1.0]);
+        let endpoint_effects = editor.pointer_down(
+            &scene,
+            pointer(1, endpoint.x, endpoint.y, Modifiers::default()),
+        );
+        assert!(!has_construction_commit(&endpoint_effects));
+        assert!(editor.pending_construction_commit_token().is_none());
+        assert!(
+            inference_anchors(&scene, endpoint)
+                .iter()
+                .any(|anchor| matches!(
+                    anchor,
+                    DraftReferenceAnchor::PersistentPoint { point, .. } if *point == points[0]
+                ))
+        );
+
+        let quarter = scene.viewport.model_to_screen([-2.0, 1.0]);
+        let curve_effects = editor.pointer_down(
+            &scene,
+            pointer(1, quarter.x, quarter.y, Modifiers::default()),
+        );
+        let (_, plan) = construction_plan_effect(&curve_effects);
+        let expected_neighborhood = document
+            .picked_contact_neighborhood(lines[0], 0.25)
+            .expect("line contact neighborhood");
+        assert!(matches!(
+            plan.proposal,
+            ConstructionProposal::Point {
+                point: ConstructionPoint::New(position)
+            } if (position[0] + 2.0).abs() < 1.0e-12
+                && (position[1] - 1.0).abs() < 1.0e-12
+        ));
+        assert!(matches!(
+            plan.relations.as_slice(),
+            [InferredRelation::PointOnCurve {
+                point: DraftPointSlot::Created { point_index: 0 },
+                contact: DraftContactDescriptor {
+                    span: DraftSpanSlot::Existing(span),
+                    domain: ContactDomain::Bounded { lower: 0.0, upper: 1.0 },
+                    parameter,
+                    winding: 0,
+                    neighborhood,
+                },
+            }] if *span == lines[0]
+                && (*parameter - 0.25).abs() < 1.0e-12
+                && *neighborhood == expected_neighborhood
+        ));
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the native curve-family matrix verifies one complete anchor-to-commit contract per row"
+    )]
+    fn point_on_curve_inference_is_exact_across_every_native_curve_family() {
+        for (family, document, span, probe_parameter) in native_point_on_curve_fixtures() {
+            let scene = scene(&document);
+            let probe = document
+                .evaluate_curve_jet(span, probe_parameter)
+                .unwrap_or_else(|error| panic!("{family} probe evaluation failed: {error}"))
+                .position;
+            let probe_screen = scene.viewport.model_to_screen([probe.x, probe.y]);
+            let anchor = inference_anchors(&scene, probe_screen)
+                .into_iter()
+                .find(|anchor| {
+                    matches!(
+                        anchor,
+                        DraftReferenceAnchor::CurvePoint { contact, .. }
+                            | DraftReferenceAnchor::AffineSupport { contact, .. }
+                            if contact.span == span
+                    )
+                })
+                .unwrap_or_else(|| panic!("{family} PointOnCurve anchor"));
+            let (anchor_contact, anchor_position) = match anchor {
+                DraftReferenceAnchor::CurvePoint {
+                    contact,
+                    model_position,
+                    ..
+                }
+                | DraftReferenceAnchor::AffineSupport {
+                    contact,
+                    model_position,
+                    ..
+                } => (contact, model_position),
+                DraftReferenceAnchor::PersistentPoint { .. }
+                | DraftReferenceAnchor::Midpoint { .. } => unreachable!(),
+            };
+            let expected_domain = painted_contact_domain(&document, span)
+                .unwrap_or_else(|error| panic!("{family} painted domain: {error}"));
+            assert_eq!(anchor_contact.domain, expected_domain, "{family} domain");
+            let anchor_total_parameter = match anchor_contact.domain {
+                ContactDomain::Periodic { period } => {
+                    period.mul_add(f64::from(anchor_contact.winding), anchor_contact.parameter)
+                }
+                ContactDomain::Bounded { .. } | ContactDomain::SupportingLine => {
+                    assert_eq!(anchor_contact.winding, 0, "{family} bounded winding");
+                    anchor_contact.parameter
+                }
+            };
+            let expected_neighborhood = document
+                .picked_contact_neighborhood(span, anchor_total_parameter)
+                .unwrap_or_else(|error| panic!("{family} picked neighborhood: {error}"));
+            assert_eq!(
+                anchor_contact.neighborhood, expected_neighborhood,
+                "{family} picked neighborhood"
+            );
+            let anchor_exact = document
+                .evaluate_curve_jet(span, anchor_total_parameter)
+                .unwrap_or_else(|error| panic!("{family} exact anchor evaluation: {error}"))
+                .position;
+            assert!(
+                model_points_close(anchor_position, [anchor_exact.x, anchor_exact.y]),
+                "{family} anchor position must come from exact curve evaluation"
+            );
+
+            let mut editor = ConstraintEditor::default();
+            editor.activate_tool(EditorTool::Point);
+            let effects = editor.pointer_down(
+                &scene,
+                pointer(81, probe_screen.x, probe_screen.y, Modifiers::default()),
+            );
+            let (_, plan) = construction_plan_effect(&effects);
+            let resolution = editor
+                .draft_inference_resolution()
+                .unwrap_or_else(|| panic!("{family} retained resolution"));
+            let DraftInferenceStatus::Resolved { candidate } = resolution.status else {
+                panic!("{family} should resolve one candidate: {resolution:?}");
+            };
+            let candidate = resolution
+                .candidates
+                .iter()
+                .find(|item| item.id == candidate)
+                .unwrap_or_else(|| panic!("{family} resolved candidate"));
+            assert!(model_points_close(
+                candidate.adjusted_model_position,
+                anchor_position
+            ));
+            assert!(matches!(
+                candidate.relations.as_slice(),
+                [DraftInferenceRelation::PointOnCurve { contact }]
+                    if *contact == anchor_contact
+            ));
+            assert!(matches!(
+                plan.proposal,
+                ConstructionProposal::Point {
+                    point: ConstructionPoint::New(position)
+                } if model_points_close(position, anchor_position)
+            ));
+            assert!(matches!(
+                plan.relations.as_slice(),
+                [InferredRelation::PointOnCurve {
+                    point: DraftPointSlot::Created { point_index: 0 },
+                    contact: DraftContactDescriptor {
+                        span: DraftSpanSlot::Existing(existing),
+                        domain,
+                        parameter,
+                        winding,
+                        neighborhood,
+                    },
+                }] if *existing == span
+                    && *domain == anchor_contact.domain
+                    && parameter.to_bits() == anchor_contact.parameter.to_bits()
+                    && *winding == anchor_contact.winding
+                    && *neighborhood == anchor_contact.neighborhood
+            ));
+
+            let mut committed = document.clone();
+            let result = plan
+                .apply(&mut committed)
+                .unwrap_or_else(|error| panic!("{family} commit plan: {error}"));
+            assert_eq!(result.construction.points.len(), 1, "{family} point slot");
+            assert_eq!(result.contacts.len(), 1, "{family} contact slot");
+            let contact = committed
+                .contact(result.contacts[0].contact)
+                .unwrap_or_else(|| panic!("{family} committed contact"));
+            assert_eq!(contact.curve, span, "{family} existing span");
+            assert_eq!(contact.domain, expected_domain, "{family} committed domain");
+            assert_eq!(contact.winding, anchor_contact.winding, "{family} winding");
+            assert_eq!(
+                contact.neighborhood, anchor_contact.neighborhood,
+                "{family} committed neighborhood"
+            );
+        }
+    }
+
+    #[test]
+    fn curved_inference_corrects_display_chord_samples_with_exact_domain_evaluation() {
+        let (_, document, span, _) = native_point_on_curve_fixtures()
+            .into_iter()
+            .find(|(family, ..)| *family == "cubic Bezier")
+            .expect("cubic fixture");
+        let base = scene(&document);
+        let scene = EditorScene::from_accepted(
+            base.accepted_revision,
+            base.design_identity,
+            &document,
+            base.viewport,
+            1_000.0,
+        )
+        .expect("coarsely tessellated scene");
+        let probe = document
+            .evaluate_curve_jet(span, 0.31)
+            .expect("probe")
+            .position;
+        let pointer = scene.viewport.model_to_screen([probe.x, probe.y]);
+        let anchor = inference_anchors(&scene, pointer)
+            .into_iter()
+            .find_map(|anchor| match anchor {
+                DraftReferenceAnchor::CurvePoint {
+                    contact,
+                    model_position,
+                    ..
+                } if contact.span == span => Some((contact, model_position)),
+                DraftReferenceAnchor::PersistentPoint { .. }
+                | DraftReferenceAnchor::Midpoint { .. }
+                | DraftReferenceAnchor::CurvePoint { .. }
+                | DraftReferenceAnchor::AffineSupport { .. } => None,
+            })
+            .expect("curved anchor");
+        let curve = scene
+            .curves
+            .iter()
+            .find(|curve| curve.span == span)
+            .expect("scene curve");
+        let (segment, parameters) = curve
+            .screen_polyline
+            .windows(2)
+            .zip(curve.screen_parameters.windows(2))
+            .find(|(_, parameters)| {
+                (parameters[0].min(parameters[1])..=parameters[0].max(parameters[1]))
+                    .contains(&anchor.0.parameter)
+            })
+            .expect("owning display chord");
+        let ratio = (anchor.0.parameter - parameters[0]) / (parameters[1] - parameters[0]);
+        let chord_position = scene.viewport.screen_to_model(ScreenPoint {
+            x: (segment[1].x - segment[0].x).mul_add(ratio, segment[0].x),
+            y: (segment[1].y - segment[0].y).mul_add(ratio, segment[0].y),
+        });
+        let exact = document
+            .evaluate_curve_jet(span, anchor.0.parameter)
+            .expect("exact correction")
+            .position;
+        let exact_position = [exact.x, exact.y];
+        assert!(model_points_close(anchor.1, exact_position));
+        assert!(
+            (chord_position[0] - exact_position[0]).hypot(chord_position[1] - exact_position[1])
+                > 1.0e-6,
+            "fixture must distinguish tessellation-chord interpolation from exact curve evaluation"
+        );
+    }
+
+    #[test]
+    fn standalone_point_on_existing_identity_is_history_neutral() {
+        let (document, _, points) = line_document();
+        let session = geosolve_sketch::RetainedSketchDocumentSession::new(
+            document,
+            geosolve_sketch::DocumentSolveRequest::default(),
+            geosolve_sketch::SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("accepted state");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            accepted.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport"),
+            0.5,
+        )
+        .expect("scene")
+        .with_retained_session(&session)
+        .expect("bound scene");
+        let mut coordinator =
+            RetainedEditorCoordinator::new(session).expect("retained coordinator");
+        coordinator.editor_mut().activate_tool(EditorTool::Point);
+        let history = coordinator.history_len();
+        let design = coordinator.session().design_identity();
+        let endpoint = scene.viewport.model_to_screen([-4.0, 1.0]);
+        let effects = coordinator.pointer_down(
+            &scene,
+            pointer(44, endpoint.x, endpoint.y, Modifiers::default()),
+        );
+        assert!(!has_construction_commit(&effects));
+        assert!(
+            coordinator
+                .editor()
+                .pending_construction_commit_token()
+                .is_none()
+        );
+        assert_eq!(coordinator.history_len(), history);
+        assert_eq!(coordinator.session().design_identity(), design);
+        assert!(
+            coordinator
+                .session()
+                .design_document()
+                .point(points[0])
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn point_identity_preview_direction_and_branch_share_the_accepted_operand() {
+        let (mut coordinator, scene, existing) = point_identity_branch_fixture();
+        let raw_start = [0.15, 0.0];
+        let start = scene.viewport.model_to_screen(raw_start);
+        let first =
+            coordinator.pointer_down(&scene, pointer(63, start.x, start.y, Modifiers::default()));
+        assert!(!has_construction_commit(&first));
+        let draft = coordinator.editor().draft.as_ref().expect("line prefix");
+        assert_eq!(draft.points.len(), 1);
+        assert!(matches!(
+            draft.points[0],
+            ConstructionPoint::Existing { id, position }
+                if id == existing && model_points_close(position, [0.0, 0.0])
+        ));
+        assert!(model_points_close(draft.positions[0], [0.0, 0.0]));
+        assert!(matches!(
+            draft.confirmed_inference[0].relations.as_slice(),
+            [DraftInferenceRelation::PointIdentity { point }] if *point == existing
+        ));
+
+        let raw_end = [0.1, 0.0];
+        let end = scene.viewport.model_to_screen(raw_end);
+        let suppressed = DraftInferenceInput {
+            suppressed: true,
+            preferred_candidate: None,
+        };
+        let preview = coordinator.editor_mut().pointer_move_with_draft_inference(
+            &scene,
+            pointer(63, end.x, end.y, Modifiers::default()),
+            suppressed,
+        );
+        assert!(preview.iter().any(|effect| matches!(
+            effect,
+            EditorEffect::PreviewConstruction(ConstructionPreview::Complete {
+                proposal: ConstructionProposal::Line {
+                    start: ConstructionPoint::Existing { id, position },
+                    ..
+                },
+                geometry: ConstructionPreviewGeometry::Polyline { points },
+            }) if *id == existing
+                && model_points_close(*position, [0.0, 0.0])
+                && points.len() == 2
+                && model_points_close(points[0], [0.0, 0.0])
+                && model_points_close(points[1], raw_end)
+        )));
+
+        let effects = coordinator.pointer_down_with_draft_inference(
+            &scene,
+            pointer(63, end.x, end.y, Modifiers::default()),
+            suppressed,
+        );
+        let (token, plan) = construction_plan_effect(&effects);
+        assert!(matches!(
+            plan.proposal,
+            ConstructionProposal::Line {
+                start: ConstructionPoint::Existing { id, position },
+                ..
+            } if id == existing && model_points_close(position, [0.0, 0.0])
+        ));
+        assert!(plan.relations.is_empty());
+        let effect = effects
+            .iter()
+            .find(|effect| matches!(effect, EditorEffect::CommitConstructionPlan { .. }))
+            .expect("commit plan effect");
+        let outcome = coordinator
+            .apply_editor_effect(effect)
+            .expect("accepted inferred construction")
+            .expect("construction mutation");
+        let EditorMutation::InferredConstruction(result) = outcome.value else {
+            panic!("expected inferred construction mutation")
+        };
+        let curve = result.construction.curves[0];
+        let accepted = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("accepted inferred line");
+        let CurveDefinition::Line {
+            start,
+            end,
+            branch_direction,
+        } = accepted
+            .document()
+            .curve(curve)
+            .expect("inferred line")
+            .definition
+        else {
+            panic!("expected line definition")
+        };
+        let solved = accepted.document();
+        let start = solved.point(start).expect("line start").position;
+        let end = solved.point(end).expect("line end").position;
+        assert!(model_points_close(start, [0.0, 0.0]));
+        assert!(model_points_close(end, raw_end));
+        assert!(branch_direction[0] > 0.0);
+        assert!(branch_direction[1].abs() < 1.0e-12);
+        assert!(
+            coordinator
+                .acknowledge_construction_commit(token, true)
+                .iter()
+                .any(|effect| matches!(effect, EditorEffect::ClearConstructionPreview))
+        );
+    }
+
+    #[test]
+    fn inference_binding_rejects_modified_same_identity_accepted_geometry() {
+        let (document, _, points) = line_document();
+        let session = geosolve_sketch::RetainedSketchDocumentSession::new(
+            document,
+            geosolve_sketch::DocumentSolveRequest::default(),
+            geosolve_sketch::SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("accepted state");
+        let mut modified = accepted.document().clone();
+        modified
+            .set_point_position(points[0], [40.0, 10.0])
+            .expect("same-identity modified geometry");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            accepted.design_identity(),
+            &modified,
+            session.design_document(),
+            Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport"),
+            0.5,
+        )
+        .expect("structurally valid detached scene");
+        assert!(matches!(
+            scene.with_retained_session(&session),
+            Err(EditorError::StalePreparedSketchInput)
+        ));
+    }
+
+    #[test]
+    fn inference_binding_rejects_mutated_public_scene_semantics() {
+        let (document, _, _) = line_document();
+        let session = geosolve_sketch::RetainedSketchDocumentSession::new(
+            document,
+            geosolve_sketch::DocumentSolveRequest::default(),
+            geosolve_sketch::SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("accepted state");
+        let mut scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            accepted.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport"),
+            0.5,
+        )
+        .expect("scene");
+        scene.curves[0].role = GeometryRole::Construction;
+        assert!(matches!(
+            scene.with_retained_session(&session),
+            Err(EditorError::StalePreparedSketchInput)
+        ));
+    }
+
+    #[test]
+    fn public_scene_mutation_revokes_inferred_publication_authority() {
+        let session = geosolve_sketch::RetainedSketchDocumentSession::new(
+            SketchDocument::new(10.0).expect("document"),
+            geosolve_sketch::DocumentSolveRequest::default(),
+            geosolve_sketch::SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("accepted state");
+        let mut scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            accepted.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport"),
+            0.5,
+        )
+        .expect("scene")
+        .with_retained_session(&session)
+        .expect("bound scene");
+
+        // These presentation fields remain public for compatibility, but a
+        // caller must not retain the bound session's authority after changing
+        // an inference-visible lifecycle or geometric value.
+        scene.accepted_revision = scene.accepted_revision.wrapping_add(1);
+
+        let mut coordinator =
+            RetainedEditorCoordinator::new(session).expect("retained coordinator");
+        coordinator.editor_mut().activate_tool(EditorTool::Line);
+        let history = coordinator.history_len();
+        let first = scene.viewport.model_to_screen([0.0, 0.0]);
+        assert!(
+            coordinator
+                .pointer_down(&scene, pointer(64, first.x, first.y, Modifiers::default()))
+                .iter()
+                .all(|effect| !matches!(effect, EditorEffect::CommitConstructionPlan { .. }))
+        );
+        let second = scene.viewport.model_to_screen([2.0, 0.01]);
+        coordinator.editor_mut().pointer_move(
+            &scene,
+            pointer(64, second.x, second.y, Modifiers::default()),
+        );
+        assert!(matches!(
+            coordinator
+                .editor()
+                .draft_inference_resolution()
+                .and_then(resolved_draft_inference_candidate)
+                .map(|candidate| candidate.relations.as_slice()),
+            Some([DraftInferenceRelation::Horizontal])
+        ));
+        let effects = coordinator.pointer_down(
+            &scene,
+            pointer(64, second.x, second.y, Modifiers::default()),
+        );
+        assert!(
+            effects
+                .iter()
+                .all(|effect| !matches!(effect, EditorEffect::CommitConstructionPlan { .. }))
+        );
+        assert!(
+            coordinator
+                .editor()
+                .pending_construction_commit_token()
+                .is_none()
+        );
+        assert_eq!(coordinator.history_len(), history);
+    }
+
+    #[test]
+    fn line_plan_rejection_restores_only_the_preterminal_prefix() {
+        let document = SketchDocument::new(10.0).expect("document");
+        let scene = scene(&document);
+        let mut editor = ConstraintEditor::default();
+        editor.activate_tool(EditorTool::Line);
+        let first = scene.viewport.model_to_screen([0.0, 0.0]);
+        editor.pointer_down(&scene, pointer(7, first.x, first.y, Modifiers::default()));
+        let inferred = scene.viewport.model_to_screen([2.0, 0.01]);
+        let effects = editor.pointer_down(
+            &scene,
+            pointer(7, inferred.x, inferred.y, Modifiers::default()),
+        );
+        let (token, plan) = construction_plan_effect(&effects);
+        assert!(matches!(
+            plan.relations.as_slice(),
+            [InferredRelation::Horizontal {
+                line: DraftSpanSlot::Created {
+                    curve_index: 0,
+                    segment: 0
+                }
+            }]
+        ));
+        assert!(
+            editor
+                .pointer_move(
+                    &scene,
+                    pointer(7, inferred.x + 20.0, inferred.y, Modifiers::default())
+                )
+                .is_empty()
+        );
+        assert!(editor.activate_tool(EditorTool::Point).is_empty());
+        assert_eq!(editor.tool(), EditorTool::Line);
+        let inference_policy = editor.draft_inference_policy();
+        let invalid_inference_policy = DraftInferencePolicy {
+            point_tracking: DraftInferenceBehavior::constraint_backed(),
+            ..inference_policy
+        };
+        assert_eq!(
+            editor
+                .set_draft_inference_policy(invalid_inference_policy)
+                .expect_err("invalid policy must reject even while publication is pending"),
+            DraftInferenceError::InvalidPolicy
+        );
+        assert_eq!(editor.draft_inference_policy(), inference_policy);
+        assert_eq!(editor.pending_construction_commit_token(), Some(token));
+        let mut changed_inference_policy = inference_policy;
+        changed_inference_policy.horizontal = DraftInferenceBehavior::tracking_only();
+        assert!(
+            editor
+                .set_draft_inference_policy(changed_inference_policy)
+                .expect("valid policy")
+                .is_empty()
+        );
+        assert_eq!(editor.draft_inference_policy(), inference_policy);
+        let geometry_policy = editor.geometry_interaction_policy();
+        assert!(
+            editor
+                .set_geometry_pick_scope(GeometryPickScope::Construction)
+                .is_empty()
+        );
+        assert_eq!(editor.geometry_interaction_policy(), geometry_policy);
+        editor.set_authoring_geometry_role(GeometryRole::Construction);
+        assert_eq!(editor.authoring_geometry_role(), GeometryRole::Profile);
+        let stale_token = ConstructionCommitToken(token.get().wrapping_add(1));
+        assert!(
+            editor
+                .acknowledge_construction_commit(stale_token, false)
+                .is_empty()
+        );
+        assert_eq!(editor.pending_construction_commit_token(), Some(token));
+        assert!(editor.draft_inference_resolution().is_some());
+        assert!(
+            editor
+                .acknowledge_construction_commit(token, false)
+                .is_empty()
+        );
+
+        let replacement = scene.viewport.model_to_screen([2.0, 1.0]);
+        let preview = editor.pointer_move(
+            &scene,
+            pointer(7, replacement.x, replacement.y, Modifiers::default()),
+        );
+        assert!(preview.iter().any(|effect| matches!(
+            effect,
+            EditorEffect::PreviewConstruction(ConstructionPreview::Complete {
+                proposal: ConstructionProposal::Line {
+                    start: ConstructionPoint::New(start),
+                    end: ConstructionPoint::New(end),
+                },
+                ..
+            }) if model_points_close(*start, [0.0, 0.0])
+                && model_points_close(*end, [2.0, 1.0])
+        )));
+    }
+
+    #[test]
+    fn coordinator_plan_success_waits_for_ack_before_clearing_publication() {
+        let session = geosolve_sketch::RetainedSketchDocumentSession::new(
+            SketchDocument::new(10.0).expect("document"),
+            geosolve_sketch::DocumentSolveRequest::default(),
+            geosolve_sketch::SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("accepted state");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            accepted.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport"),
+            0.5,
+        )
+        .expect("scene")
+        .with_retained_session(&session)
+        .expect("bound scene");
+        let mut coordinator =
+            RetainedEditorCoordinator::new(session).expect("retained coordinator");
+        coordinator.editor_mut().activate_tool(EditorTool::Line);
+        let first = scene.viewport.model_to_screen([0.0, 0.0]);
+        coordinator.pointer_down(&scene, pointer(45, first.x, first.y, Modifiers::default()));
+        let second = scene.viewport.model_to_screen([2.0, 0.01]);
+        let effects = coordinator.pointer_down(
+            &scene,
+            pointer(45, second.x, second.y, Modifiers::default()),
+        );
+        let (token, _) = construction_plan_effect(&effects);
+        let commit = effects
+            .iter()
+            .find(|effect| matches!(effect, EditorEffect::CommitConstructionPlan { .. }))
+            .expect("commit effect");
+        let history = coordinator.history_len();
+        let outcome = coordinator
+            .apply_editor_effect(commit)
+            .expect("plan publication")
+            .expect("mutation");
+        assert!(matches!(
+            outcome.value,
+            EditorMutation::InferredConstruction(_)
+        ));
+        assert_eq!(coordinator.history_len(), history + 1);
+        assert!(coordinator.editor().draft_inference_resolution().is_some());
+        let stale_token = ConstructionCommitToken(token.get().wrapping_add(1));
+        assert!(
+            coordinator
+                .acknowledge_construction_commit(stale_token, true)
+                .is_empty()
+        );
+        assert_eq!(
+            coordinator.editor().pending_construction_commit_token(),
+            Some(token)
+        );
+        assert!(coordinator.editor().draft_inference_resolution().is_some());
+        let acknowledged = coordinator.acknowledge_construction_commit(token, true);
+        assert!(
+            acknowledged
+                .iter()
+                .any(|effect| matches!(effect, EditorEffect::ClearConstructionPreview))
+        );
+        assert!(
+            acknowledged
+                .iter()
+                .any(|effect| matches!(effect, EditorEffect::DraftInferenceChanged(None)))
+        );
+        assert!(coordinator.editor().draft_inference_resolution().is_none());
+        assert!(
+            coordinator
+                .editor()
+                .pending_construction_commit_token()
+                .is_none()
+        );
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the real scene-to-coordinator checkpoint keeps every wake, display, and atomic-publication assertion in one ordered transition"
+    )]
+    fn native_midpoint_normal_is_one_exact_scene_editor_coordinator_checkpoint() {
+        let (document, lines, _) = line_document();
+        let session = geosolve_sketch::RetainedSketchDocumentSession::new(
+            document,
+            geosolve_sketch::DocumentSolveRequest::default(),
+            geosolve_sketch::SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("accepted state");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            accepted.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport"),
+            0.5,
+        )
+        .expect("scene")
+        .with_retained_session(&session)
+        .expect("bound scene");
+        let mut coordinator =
+            RetainedEditorCoordinator::new(session).expect("retained coordinator");
+        coordinator.editor_mut().activate_tool(EditorTool::Line);
+        let history = coordinator.history_len();
+
+        let midpoint = scene.viewport.model_to_screen([0.0, 1.0]);
+        coordinator.editor_mut().pointer_move(
+            &scene,
+            pointer(46, midpoint.x, midpoint.y, Modifiers::default()),
+        );
+        let awakened = coordinator
+            .editor()
+            .draft_inference_resolution()
+            .and_then(resolved_draft_inference_candidate)
+            .expect("awakened midpoint candidate");
+        assert!(matches!(
+            awakened.relations.as_slice(),
+            [DraftInferenceRelation::Midpoint { span }] if *span == lines[0]
+        ));
+        assert!(
+            coordinator
+                .editor()
+                .draft_inference_engine
+                .remembered_references()
+                .iter()
+                .any(|reference| matches!(
+                    reference,
+                    DraftReferenceAnchor::Midpoint { span, .. } if *span == lines[0]
+                ))
+        );
+
+        let left_anchor = scene.viewport.model_to_screen([1.0, 3.0]);
+        coordinator.editor_mut().pointer_move(
+            &scene,
+            pointer(46, left_anchor.x, left_anchor.y, Modifiers::default()),
+        );
+        assert!(coordinator.editor().draft_inference_resolution().is_none());
+        assert!(
+            coordinator
+                .editor()
+                .draft_inference_engine
+                .remembered_references()
+                .iter()
+                .any(|reference| matches!(
+                    reference,
+                    DraftReferenceAnchor::Midpoint { span, .. } if *span == lines[0]
+                ))
+        );
+
+        let first = coordinator.pointer_down(
+            &scene,
+            pointer(46, midpoint.x, midpoint.y, Modifiers::default()),
+        );
+        assert!(!has_construction_commit(&first));
+        assert_eq!(
+            coordinator
+                .editor()
+                .draft
+                .as_ref()
+                .expect("line prefix")
+                .positions,
+            vec![[0.0, 1.0]]
+        );
+        assert!(matches!(
+            coordinator
+                .editor()
+                .draft_inference_engine
+                .remembered_references(),
+            [DraftReferenceAnchor::Midpoint { span, .. }] if *span == lines[0]
+        ));
+
+        let near_normal = scene.viewport.model_to_screen([0.05, 4.0]);
+        coordinator.editor_mut().pointer_move(
+            &scene,
+            pointer(46, near_normal.x, near_normal.y, Modifiers::default()),
+        );
+        let displayed = coordinator
+            .editor()
+            .draft_inference_resolution()
+            .and_then(resolved_draft_inference_candidate)
+            .expect("displayed midpoint-normal candidate");
+        assert!(matches!(
+            displayed.relations.as_slice(),
+            [DraftInferenceRelation::Perpendicular { reference }]
+                if *reference == lines[0]
+        ));
+        let effects = coordinator.pointer_down(
+            &scene,
+            pointer(46, near_normal.x, near_normal.y, Modifiers::default()),
+        );
+        let (token, plan) = construction_plan_effect(&effects);
+        assert!(matches!(
+            plan.proposal,
+            ConstructionProposal::Line {
+                start: ConstructionPoint::New(start),
+                end: ConstructionPoint::New(end),
+            } if model_points_close(start, [0.0, 1.0])
+                && model_points_close(end, [0.0, 4.0])
+        ));
+        assert!(matches!(
+            plan.relations.as_slice(),
+            [
+                InferredRelation::Midpoint {
+                    point: DraftPointSlot::Created { point_index: 0 },
+                    line: DraftSpanSlot::Existing(midpoint_line),
+                },
+                InferredRelation::Perpendicular {
+                    first: DraftSpanSlot::Created {
+                        curve_index: 0,
+                        segment: 0,
+                    },
+                    second: DraftSpanSlot::Existing(normal_line),
+                },
+            ] if *midpoint_line == lines[0] && *normal_line == lines[0]
+        ));
+
+        let commit = effects
+            .iter()
+            .find(|effect| matches!(effect, EditorEffect::CommitConstructionPlan { .. }))
+            .expect("commit effect");
+        let outcome = coordinator
+            .apply_editor_effect(commit)
+            .expect("plan publication")
+            .expect("retained mutation");
+        let EditorMutation::InferredConstruction(result) = outcome.value else {
+            panic!("expected inferred construction mutation");
+        };
+        assert_eq!(result.constraints.len(), 2);
+        assert_eq!(coordinator.history_len(), history + 1);
+        let accepted = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("accepted atomic midpoint-normal publication");
+        assert_eq!(
+            accepted.design_identity(),
+            coordinator.session().design_identity()
+        );
+        assert!(matches!(
+            coordinator
+                .session()
+                .design_document()
+                .constraint(result.constraints[0].constraint)
+                .expect("midpoint constraint")
+                .definition,
+            DocumentConstraintDefinition::Midpoint { line, .. } if line == lines[0]
+        ));
+        assert!(matches!(
+            coordinator
+                .session()
+                .design_document()
+                .constraint(result.constraints[1].constraint)
+                .expect("perpendicular constraint")
+                .definition,
+            DocumentConstraintDefinition::Perpendicular { second, .. } if second == lines[0]
+        ));
+        let acknowledged = coordinator.acknowledge_construction_commit(token, true);
+        assert!(
+            acknowledged
+                .iter()
+                .any(|effect| matches!(effect, EditorEffect::ClearConstructionPreview))
+        );
+    }
+
+    fn pending_horizontal_plan_fixture() -> (RetainedEditorCoordinator, EditorEffect) {
+        let mut document = SketchDocument::new(10.0).expect("document");
+        document
+            .add_external_binding(
+                "unused external point",
+                geosolve_sketch::ExternalFeatureKindV1::Point,
+                None,
+            )
+            .expect("external binding");
+        let session = geosolve_sketch::RetainedSketchDocumentSession::new(
+            document,
+            geosolve_sketch::DocumentSolveRequest::default(),
+            geosolve_sketch::SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("accepted state");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            accepted.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport"),
+            0.5,
+        )
+        .expect("scene")
+        .with_retained_session(&session)
+        .expect("bound scene");
+        let mut coordinator =
+            RetainedEditorCoordinator::new(session).expect("retained coordinator");
+        coordinator.editor_mut().activate_tool(EditorTool::Line);
+        for position in [[0.0, 0.0], [2.0, 0.01]] {
+            let screen = scene.viewport.model_to_screen(position);
+            let effects = coordinator.pointer_down(
+                &scene,
+                pointer(73, screen.x, screen.y, Modifiers::default()),
+            );
+            if let Some(effect) = effects
+                .into_iter()
+                .find(|effect| matches!(effect, EditorEffect::CommitConstructionPlan { .. }))
+            {
+                return (coordinator, effect);
+            }
+        }
+        panic!("pending construction-plan effect was not emitted");
+    }
+
+    fn construction_auth_state(
+        coordinator: &RetainedEditorCoordinator,
+    ) -> (
+        geosolve_sketch::SketchDesignIdentity,
+        geosolve_sketch::SketchAttemptIdentity,
+        Option<PreparedSketchInput>,
+        usize,
+        usize,
+        usize,
+    ) {
+        (
+            coordinator.session().design_identity(),
+            coordinator.session().last_attempt().identity(),
+            coordinator.session().accepted_prepared_input(),
+            coordinator.history_len(),
+            coordinator.history_cursor(),
+            coordinator.transcript().len(),
+        )
+    }
+
+    fn assert_input_change_invalidated_pending_plan(
+        coordinator: &mut RetainedEditorCoordinator,
+        effect: &EditorEffect,
+    ) {
+        let (expected, plan) = match effect {
+            EditorEffect::CommitConstructionPlan { expected, plan, .. } => (**expected, plan),
+            _ => unreachable!("fixture returns a construction plan"),
+        };
+        assert!(
+            coordinator
+                .editor()
+                .pending_construction_commit_token()
+                .is_none()
+        );
+        assert!(coordinator.editor().draft_inference_resolution().is_none());
+        let before = construction_auth_state(coordinator);
+        assert!(matches!(
+            coordinator.apply_editor_effect(effect),
+            Err(CoordinatorError::InferredConstructionCommitMismatch)
+        ));
+        assert!(matches!(
+            coordinator.apply_construction_plan(&expected, plan),
+            Err(CoordinatorError::StaleInferredConstructionInput)
+        ));
+        assert_eq!(construction_auth_state(coordinator), before);
+    }
+
+    #[test]
+    fn pending_plan_authentication_rejects_token_and_plan_substitution_then_accepts_original() {
+        let (mut coordinator, original) = pending_horizontal_plan_fixture();
+        let (token, original_plan) = match &original {
+            EditorEffect::CommitConstructionPlan { token, plan, .. } => (*token, plan.clone()),
+            _ => unreachable!("fixture returns a construction plan"),
+        };
+        let before = construction_auth_state(&coordinator);
+
+        let mut wrong_token = original.clone();
+        let EditorEffect::CommitConstructionPlan {
+            token: candidate, ..
+        } = &mut wrong_token
+        else {
+            unreachable!("cloned construction plan")
+        };
+        *candidate = ConstructionCommitToken(token.get().wrapping_add(1));
+        assert!(matches!(
+            coordinator.apply_editor_effect(&wrong_token),
+            Err(CoordinatorError::InferredConstructionCommitMismatch)
+        ));
+        assert_eq!(construction_auth_state(&coordinator), before);
+        assert_eq!(
+            coordinator.editor().pending_construction_commit_token(),
+            Some(token)
+        );
+
+        let mut substituted = original.clone();
+        let EditorEffect::CommitConstructionPlan { plan, .. } = &mut substituted else {
+            unreachable!("cloned construction plan")
+        };
+        plan.role = match plan.role {
+            GeometryRole::Profile => GeometryRole::Construction,
+            GeometryRole::Construction => GeometryRole::Profile,
+        };
+        assert_ne!(*plan, original_plan);
+        assert!(matches!(
+            coordinator.apply_editor_effect(&substituted),
+            Err(CoordinatorError::InferredConstructionCommitMismatch)
+        ));
+        let EditorEffect::CommitConstructionPlan { expected, plan, .. } = &substituted else {
+            unreachable!("cloned construction plan")
+        };
+        assert!(matches!(
+            coordinator.apply_construction_plan(expected.as_ref(), plan),
+            Err(CoordinatorError::InferredConstructionCommitMismatch)
+        ));
+        assert_eq!(construction_auth_state(&coordinator), before);
+        assert_eq!(
+            coordinator.editor().pending_construction_commit_token(),
+            Some(token)
+        );
+
+        assert!(matches!(
+            coordinator.apply_editor_effect(&original),
+            Ok(Some(MutationOutcome {
+                value: EditorMutation::InferredConstruction(_),
+                ..
+            }))
+        ));
+        assert_eq!(
+            coordinator.editor().pending_construction_commit_token(),
+            Some(token)
+        );
+    }
+
+    #[test]
+    fn construction_plan_effect_without_its_pending_token_is_state_neutral() {
+        let (mut coordinator, effect) = pending_horizontal_plan_fixture();
+        let token = match &effect {
+            EditorEffect::CommitConstructionPlan { token, .. } => *token,
+            _ => unreachable!("fixture returns a construction plan"),
+        };
+        assert!(
+            coordinator
+                .acknowledge_construction_commit(token, false)
+                .is_empty()
+        );
+        assert!(
+            coordinator
+                .editor()
+                .pending_construction_commit_token()
+                .is_none()
+        );
+        let before = construction_auth_state(&coordinator);
+        assert!(matches!(
+            coordinator.apply_editor_effect(&effect),
+            Err(CoordinatorError::InferredConstructionCommitMismatch)
+        ));
+        assert_eq!(construction_auth_state(&coordinator), before);
+    }
+
+    #[test]
+    fn parameter_change_invalidates_pending_plan_exact_input_before_mutation() {
+        let (mut coordinator, effect) = pending_horizontal_plan_fixture();
+        let design = coordinator.session().design_identity();
+        coordinator
+            .replace_parameter_batch(
+                design,
+                geosolve_sketch::ParameterBatch::new(1, Vec::new()).expect("parameter batch"),
+                geosolve_sketch::DocumentSolveRequest::default(),
+            )
+            .expect("parameter replacement");
+        assert_input_change_invalidated_pending_plan(&mut coordinator, &effect);
+    }
+
+    #[test]
+    fn external_snapshot_change_invalidates_pending_plan_exact_input_before_mutation() {
+        let (mut coordinator, effect) = pending_horizontal_plan_fixture();
+        let design = coordinator.session().design_identity();
+        let binding = coordinator.session().design_document().external_bindings()[0].id;
+        let snapshot = geosolve_sketch::ExternalSnapshotEntry {
+            binding,
+            source_revision: 1,
+            source_digest: geosolve_sketch::ExternalSnapshotDigest::from_bytes([17; 32]),
+            feature: geosolve_sketch::ExternalSnapshotFeatureV1::Point {
+                position: [3.0, 4.0],
+                scale: 1.0,
+                resources: geosolve_sketch::ExternalSnapshotResourcesV1 {
+                    point_count: 1,
+                    control_count: 0,
+                    span_count: 0,
+                },
+            },
+        };
+        coordinator
+            .replace_external_snapshot_set(
+                design,
+                geosolve_sketch::ExternalSnapshotSet::new(1, vec![snapshot])
+                    .expect("external snapshots"),
+                geosolve_sketch::DocumentSolveRequest::default(),
+            )
+            .expect("external snapshot replacement");
+        assert_input_change_invalidated_pending_plan(&mut coordinator, &effect);
+    }
+
+    #[test]
+    fn reattempt_invalidates_pending_plan_exact_input_before_mutation() {
+        let (mut coordinator, effect) = pending_horizontal_plan_fixture();
+        let design = coordinator.session().design_identity();
+        coordinator.reattempt(design).expect("reattempt");
+        assert_input_change_invalidated_pending_plan(&mut coordinator, &effect);
+    }
+
+    #[test]
+    fn polyline_direction_inference_targets_each_created_segment() {
+        let document = SketchDocument::new(10.0).expect("document");
+        let scene = scene(&document);
+        let mut editor = ConstraintEditor::default();
+        editor.activate_tool(EditorTool::Polyline);
+        for position in [[0.0, 0.0], [2.0, 0.01], [2.01, 2.0]] {
+            let screen = scene.viewport.model_to_screen(position);
+            editor.pointer_down(&scene, pointer(9, screen.x, screen.y, Modifiers::default()));
+        }
+        let effects = editor.complete_draft(scene.design_identity);
+        let (_, plan) = construction_plan_effect(&effects);
+        assert!(matches!(
+            plan.relations.as_slice(),
+            [
+                InferredRelation::Horizontal {
+                    line: DraftSpanSlot::Created {
+                        curve_index: 0,
+                        segment: 0
+                    }
+                },
+                InferredRelation::Vertical {
+                    line: DraftSpanSlot::Created {
+                        curve_index: 0,
+                        segment: 1
+                    }
+                }
+            ]
+        ));
+    }
+
+    #[test]
+    fn direction_only_reference_does_not_leak_across_polyline_stages() {
+        let (document, lines, _) = line_document();
+        let scene = scene(&document);
+        let mut editor = ConstraintEditor::default();
+        editor.activate_tool(EditorTool::Polyline);
+        let first = scene.viewport.model_to_screen([0.0, 3.0]);
+        editor.pointer_down(&scene, pointer(10, first.x, first.y, Modifiers::default()));
+        let line_anchor = inference_anchors(&scene, scene.viewport.model_to_screen([0.0, 1.0]))
+            .into_iter()
+            .find(|anchor| {
+                matches!(
+                    anchor,
+                    DraftReferenceAnchor::AffineSupport { contact, .. }
+                        if contact.span == lines[0]
+                )
+            })
+            .expect("affine reference");
+        editor
+            .draft_inference_engine
+            .remember_reference(line_anchor)
+            .expect("remember reference");
+        let second = scene.viewport.model_to_screen([2.0, 3.0]);
+        editor.pointer_down(
+            &scene,
+            pointer(10, second.x, second.y, Modifiers::default()),
+        );
+        assert!(
+            editor
+                .draft
+                .as_ref()
+                .expect("polyline draft")
+                .confirmed_inference
+                .last()
+                .is_some_and(
+                    |confirmed| confirmed.relations.iter().any(|relation| matches!(
+                        relation,
+                        DraftInferenceRelation::Parallel { reference } if *reference == lines[0]
+                    ))
+                )
+        );
+        assert!(
+            editor
+                .draft_inference_engine
+                .remembered_references()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn semantic_suppression_is_explicit_and_commits_raw_geometry() {
+        let document = SketchDocument::new(10.0).expect("document");
+        let scene = scene(&document);
+        let mut editor = ConstraintEditor::default();
+        editor.activate_tool(EditorTool::Line);
+        let first = scene.viewport.model_to_screen([0.0, 0.0]);
+        editor.pointer_down(&scene, pointer(11, first.x, first.y, Modifiers::default()));
+        let end = scene.viewport.model_to_screen([2.0, 0.01]);
+        let inference = DraftInferenceInput {
+            suppressed: true,
+            preferred_candidate: None,
+        };
+        let preview = editor.pointer_move_with_draft_inference(
+            &scene,
+            pointer(11, end.x, end.y, Modifiers::default()),
+            inference,
+        );
+        assert!(preview.iter().any(|effect| matches!(
+            effect,
+            EditorEffect::DraftInferenceChanged(Some(DraftInferenceResolution {
+                status: DraftInferenceStatus::Suppressed,
+                ..
+            }))
+        )));
+        let commit = editor.pointer_down_with_draft_inference(
+            &scene,
+            pointer(11, end.x, end.y, Modifiers::default()),
+            inference,
+        );
+        assert!(commit.iter().any(|effect| matches!(
+            effect,
+            EditorEffect::CommitConstruction {
+                proposal: ConstructionProposal::Line {
+                    end: ConstructionPoint::New(position),
+                    ..
+                },
+                ..
+            } if model_points_close(*position, [2.0, 0.01])
+        )));
+        assert!(
+            !commit
+                .iter()
+                .any(|effect| matches!(effect, EditorEffect::CommitConstructionPlan { .. }))
+        );
+    }
+
+    #[test]
+    fn invalid_terminal_inference_frame_never_falls_through_to_raw_construction() {
+        let (document, _, _) = line_document();
+        let scene = scene(&document);
+        let mut editor = ConstraintEditor::default();
+        editor.activate_tool(EditorTool::Line);
+        let start = scene.viewport.model_to_screen([0.0, 3.0]);
+        editor.pointer_down(&scene, pointer(71, start.x, start.y, Modifiers::default()));
+        let end = scene.viewport.model_to_screen([2.0, 3.01]);
+        editor.pointer_move(&scene, pointer(71, end.x, end.y, Modifiers::default()));
+        assert!(editor.draft_inference_resolution().is_some());
+
+        let mut invalid_scene = scene.clone();
+        invalid_scene.construction_snap_points[0].model_position = [f64::NAN, 0.0];
+        let effects = editor.pointer_down(
+            &invalid_scene,
+            pointer(71, end.x, end.y, Modifiers::default()),
+        );
+        assert!(effects.iter().all(|effect| !matches!(
+            effect,
+            EditorEffect::CommitConstruction { .. } | EditorEffect::CommitConstructionPlan { .. }
+        )));
+        assert_eq!(
+            effects,
+            vec![EditorEffect::DraftInferenceChanged(None)],
+            "a malformed terminal frame clears the stale guide instead of committing raw geometry"
+        );
+        assert!(editor.pending_construction_commit_token().is_none());
+        assert_eq!(
+            editor.draft.as_ref().map(|draft| draft.points.len()),
+            Some(1),
+            "the valid pre-terminal prefix remains correction-ready"
+        );
+
+        let retry = editor.pointer_down(&scene, pointer(71, end.x, end.y, Modifiers::default()));
+        assert!(
+            retry
+                .iter()
+                .any(|effect| matches!(effect, EditorEffect::CommitConstructionPlan { .. }))
+        );
+    }
+
+    #[test]
+    fn camera_invalidation_immediately_clears_published_guides() {
+        let document = SketchDocument::new(10.0).expect("document");
+        let scene = scene(&document);
+        let mut editor = ConstraintEditor::default();
+        editor.activate_tool(EditorTool::Line);
+        let first = scene.viewport.model_to_screen([0.0, 0.0]);
+        editor.pointer_down(&scene, pointer(12, first.x, first.y, Modifiers::default()));
+        let end = scene.viewport.model_to_screen([2.0, 0.01]);
+        editor.pointer_move(&scene, pointer(12, end.x, end.y, Modifiers::default()));
+        assert!(editor.draft_inference_resolution().is_some());
+        assert_eq!(
+            editor.invalidate_draft_inference(),
+            vec![EditorEffect::DraftInferenceChanged(None)]
+        );
+        assert!(editor.draft_inference_resolution().is_none());
+        assert!(
+            editor
+                .draft_inference_engine
+                .remembered_references()
+                .is_empty()
+        );
     }
 
     #[test]
@@ -9361,24 +12726,13 @@ mod tests {
                 editor.pointer_down(&scene, pointer(1, second.x, second.y, Modifiers::default()));
             if tool == EditorTool::CounterClockwiseArc {
                 let third = scene.viewport.model_to_screen([0.0, 2.0]);
-                assert!(
-                    editor
-                        .pointer_down(&scene, pointer(1, third.x, third.y, Modifiers::default()))
-                        .iter()
-                        .any(|effect| matches!(
-                            effect,
-                            EditorEffect::CommitConstruction {
-                                proposal: ConstructionProposal::CounterClockwiseArc { .. },
-                                ..
-                            }
-                        ))
-                );
+                let effects =
+                    editor.pointer_down(&scene, pointer(1, third.x, third.y, Modifiers::default()));
+                assert!(has_construction_commit(&effects));
+                acknowledge_planned_commit(&mut editor, &effects);
             } else if tool != EditorTool::Point {
-                assert!(
-                    effects
-                        .iter()
-                        .any(|effect| matches!(effect, EditorEffect::CommitConstruction { .. }))
-                );
+                assert!(has_construction_commit(&effects));
+                acknowledge_planned_commit(&mut editor, &effects);
             }
             editor.activate_tool(tool);
             editor.pointer_down(&scene, pointer(2, center.x, center.y, Modifiers::default()));
@@ -9393,71 +12747,14 @@ mod tests {
         editor.pointer_down(&scene, pointer(3, center.x, center.y, Modifiers::default()));
         let second = scene.viewport.model_to_screen([2.0, 1.0]);
         editor.pointer_down(&scene, pointer(3, second.x, second.y, Modifiers::default()));
-        assert!(matches!(
-            editor.complete_draft(scene.design_identity).as_slice(),
-            [
-                EditorEffect::CommitConstruction {
-                    proposal: ConstructionProposal::Polyline { .. },
-                    ..
-                },
-                EditorEffect::ClearConstructionPreview
-            ]
-        ));
+        let effects = editor.complete_draft(scene.design_identity);
+        assert!(has_construction_commit(&effects));
+        acknowledge_planned_commit(&mut editor, &effects);
     }
 
     #[test]
-    fn snapping_is_identity_ordered_and_exactly_inclusive_at_tolerance() {
-        let (document, _, points) = line_document();
-        let scene = scene(&document);
-        let endpoint = scene.viewport.model_to_screen([-4.0, 1.0]);
-        let target = scene.viewport.model_to_screen([0.0, 0.0]);
-        for offset in [7.999, 8.0, 8.001] {
-            let mut editor = ConstraintEditor::default();
-            editor
-                .set_snap_tolerance(SnapTolerance { point_pixels: 8.0 })
-                .expect("tolerance");
-            editor.activate_tool(EditorTool::Line);
-            editor.pointer_down(
-                &scene,
-                pointer(1, endpoint.x + offset, endpoint.y, Modifiers::default()),
-            );
-            let effects =
-                editor.pointer_down(&scene, pointer(1, target.x, target.y, Modifiers::default()));
-            assert_eq!(
-                matches!(effects.as_slice(), [EditorEffect::CommitConstruction { proposal: ConstructionProposal::Line { start: ConstructionPoint::Existing { id, .. }, .. }, .. }, EditorEffect::ClearConstructionPreview] if *id == points[0]),
-                offset <= 8.0,
-            );
-        }
-
-        let midpoint = scene.viewport.model_to_screen([-4.0, 0.0]);
-        let mut editor = ConstraintEditor::default();
-        editor
-            .set_snap_tolerance(SnapTolerance { point_pixels: 51.0 })
-            .expect("tie tolerance");
-        editor.activate_tool(EditorTool::Line);
-        editor.pointer_down(
-            &scene,
-            pointer(2, midpoint.x, midpoint.y, Modifiers::default()),
-        );
-        let effects =
-            editor.pointer_down(&scene, pointer(2, target.x, target.y, Modifiers::default()));
-        let winner = points[0].min(points[2]);
-        assert!(
-            matches!(effects.as_slice(), [EditorEffect::CommitConstruction { proposal: ConstructionProposal::Line { start: ConstructionPoint::Existing { id, .. }, .. }, .. }, EditorEffect::ClearConstructionPreview] if *id == winner)
-        );
-
-        assert!(ConstraintEditor::new(PickTolerance::default(), -0.0).is_ok());
-        assert!(
-            editor
-                .set_snap_tolerance(SnapTolerance {
-                    point_pixels: f64::NAN
-                })
-                .is_err()
-        );
-    }
-
-    #[test]
-    fn accepted_geometry_remains_pickable_but_removed_design_ids_are_not_snappable() {
+    fn accepted_geometry_remains_pickable_but_removed_design_ids_are_not_snappable_or_authoritative()
+     {
         let (accepted, _, points) = line_document();
         let design = SketchDocument::new(10.0).expect("design");
         #[allow(clippy::default_trait_access)]
@@ -9485,53 +12782,61 @@ mod tests {
         );
         let mut editor = ConstraintEditor::default();
         editor.activate_tool(EditorTool::Line);
-        editor.pointer_down(
-            &scene,
-            pointer(1, old_point.x, old_point.y, Modifiers::default()),
-        );
-        let end = scene.viewport.model_to_screen([-2.0, 1.0]);
-        assert!(matches!(
+        assert!(
             editor
-                .pointer_down(&scene, pointer(1, end.x, end.y, Modifiers::default()))
-                .as_slice(),
-            [EditorEffect::CommitConstruction {
-                proposal: ConstructionProposal::Line {
-                    start: ConstructionPoint::New(position),
-                    ..
-                },
-                ..
-            }, EditorEffect::ClearConstructionPreview]
+                .pointer_down(
+                    &scene,
+                    pointer(1, old_point.x, old_point.y, Modifiers::default()),
+                )
+                .is_empty()
+        );
+        assert!(matches!(
+            editor.draft.as_ref().map(|draft| draft.points.as_slice()),
+            Some([ConstructionPoint::New(position)])
                 if (position[0] + 4.0).abs() < 1.0e-12
                     && (position[1] - 1.0).abs() < 1.0e-12
         ));
+        let end = scene.viewport.model_to_screen([-2.0, 1.0]);
+        let effects = editor.pointer_down(&scene, pointer(1, end.x, end.y, Modifiers::default()));
+        assert!(effects.is_empty());
+        assert!(editor.pending_construction_commit_token().is_none());
     }
 
     #[test]
     fn snapped_operand_snapshot_keeps_preview_and_commit_branch_identical() {
-        let (accepted, _, points) = line_document();
-        let mut retained_design = accepted.clone();
-        retained_design
-            .set_point_position(points[0], [-4.0, 5.0])
-            .expect("retained rejected-edit position");
-        let accepted_scene = scene(&accepted);
+        let (document, _, points) = line_document();
+        let session = geosolve_sketch::RetainedSketchDocumentSession::new(
+            document,
+            geosolve_sketch::DocumentSolveRequest::default(),
+            geosolve_sketch::SolverConfig::default(),
+        )
+        .expect("session");
+        let accepted = session
+            .accepted_state_for_current_input()
+            .expect("accepted state");
         let scene = EditorScene::from_accepted_for_design(
-            accepted_scene.accepted_revision,
-            accepted_scene.design_identity,
-            &accepted,
-            &retained_design,
-            accepted_scene.viewport,
+            accepted.identity().revision().get(),
+            accepted.design_identity(),
+            accepted.document(),
+            session.design_document(),
+            Viewport::new([1000.0, 700.0], [0.0, 0.0], 50.0).expect("viewport"),
             0.5,
         )
-        .expect("accepted scene over divergent retained design");
+        .expect("accepted scene")
+        .with_retained_session(&session)
+        .expect("bound accepted scene");
+        let mut retained_design = session.design_document().clone();
+        retained_design
+            .set_point_position(points[0], [-4.0, 5.0])
+            .expect("different current coordinate after the operand snapshot");
         let mut editor = ConstraintEditor::default();
         editor.activate_tool(EditorTool::Line);
         let start = scene.viewport.model_to_screen([-4.0, 1.0]);
         let end = scene.viewport.model_to_screen([-2.0, 1.0]);
         editor.pointer_down(&scene, pointer(9, start.x, start.y, Modifiers::default()));
         let effects = editor.pointer_down(&scene, pointer(9, end.x, end.y, Modifiers::default()));
-        let EditorEffect::CommitConstruction { proposal, .. } = &effects[0] else {
-            panic!("expected terminal line commit");
-        };
+        let (_, plan) = construction_plan_effect(&effects);
+        let proposal = &plan.proposal;
         let ConstructionProposal::Line {
             start: ConstructionPoint::Existing { id, position },
             ..
@@ -9690,17 +12995,19 @@ mod tests {
         assert!(!editor.can_complete_draft());
         editor.pointer_down(&scene, pointer(4, second.x, second.y, Modifiers::default()));
         assert!(editor.can_complete_draft());
-        assert!(matches!(
-            editor.complete_draft(scene.design_identity).as_slice(),
-            [
-                EditorEffect::CommitConstruction {
-                    expected,
+        let effects = editor.complete_draft(scene.design_identity);
+        assert!(effects.iter().any(|effect| matches!(
+            effect,
+            EditorEffect::CommitConstructionPlan {
+                expected,
+                plan: ConstructionCommitPlan {
                     proposal: ConstructionProposal::Polyline { .. },
                     ..
                 },
-                EditorEffect::ClearConstructionPreview,
-            ] if *expected == scene.design_identity
-        ));
+                ..
+            } if expected.design_identity() == scene.design_identity
+        )));
+        acknowledge_planned_commit(&mut editor, &effects);
     }
 
     #[test]
@@ -10340,10 +13647,7 @@ mod tests {
                             .is_empty()
                     );
                     assert_eq!(
-                        effects.iter().any(|effect| matches!(
-                            effect,
-                            EditorEffect::CommitConstruction { .. }
-                        )),
+                        has_construction_commit(&effects),
                         stage + 1 == stages && !explicit_completion
                     );
                 }
@@ -10352,12 +13656,7 @@ mod tests {
                 } else {
                     Vec::new()
                 };
-                assert_eq!(
-                    completed
-                        .iter()
-                        .any(|effect| matches!(effect, EditorEffect::CommitConstruction { .. })),
-                    explicit_completion
-                );
+                assert_eq!(has_construction_commit(&completed), explicit_completion);
             }
         }
         let mut editor = ConstraintEditor::default();
@@ -10395,11 +13694,8 @@ mod tests {
                 tool == EditorTool::Circle
             );
             assert!(click(&mut editor, invalid).is_empty());
-            assert!(
-                click(&mut editor, valid)
-                    .iter()
-                    .any(|effect| matches!(effect, EditorEffect::CommitConstruction { .. }))
-            );
+            let effects = click(&mut editor, valid);
+            assert!(has_construction_commit(&effects));
         }
 
         let mut arc = ConstraintEditor::default();
@@ -10408,23 +13704,29 @@ mod tests {
         assert!(click(&mut arc, [0.0, 0.0]).is_empty());
         click(&mut arc, [2.0, 0.0]);
         assert!(click(&mut arc, [0.0, 0.0]).is_empty());
-        assert!(click(&mut arc, [0.0, 2.0]).iter().any(|effect| matches!(
-            effect,
-            EditorEffect::CommitConstruction {
-                proposal: ConstructionProposal::CounterClockwiseArc { .. },
-                ..
-            }
-        )));
+        assert!(has_construction_commit(&click(&mut arc, [0.0, 2.0])));
 
         let mut polyline = ConstraintEditor::default();
         polyline.activate_tool(EditorTool::Polyline);
         click(&mut polyline, [0.0, 0.0]);
         assert!(click(&mut polyline, [0.0, 0.0]).is_empty());
         click(&mut polyline, [2.0, 0.0]);
-        assert!(
-            matches!(polyline.complete_draft(scene.design_identity).as_slice(),
-            [EditorEffect::CommitConstruction { proposal: ConstructionProposal::Polyline { points }, .. }, EditorEffect::ClearConstructionPreview] if points.len() == 2)
-        );
+        let effects = polyline.complete_draft(scene.design_identity);
+        assert!(effects.iter().any(|effect| match effect {
+            EditorEffect::CommitConstruction {
+                proposal: ConstructionProposal::Polyline { points },
+                ..
+            }
+            | EditorEffect::CommitConstructionPlan {
+                plan:
+                    ConstructionCommitPlan {
+                        proposal: ConstructionProposal::Polyline { points },
+                        ..
+                    },
+                ..
+            } => points.len() == 2,
+            _ => false,
+        }));
     }
 
     #[test]
@@ -10506,17 +13808,7 @@ mod tests {
                 .pointer_down(&scene, pointer(3, f64::NAN, second.y, modifiers))
                 .is_empty()
         );
-        assert!(matches!(
-            editor
-                .pointer_down(&scene, pointer(3, second.x, second.y, modifiers))
-                .as_slice(),
-            [
-                EditorEffect::CommitConstruction {
-                    proposal: ConstructionProposal::Line { .. },
-                    ..
-                },
-                EditorEffect::ClearConstructionPreview
-            ]
-        ));
+        let effects = editor.pointer_down(&scene, pointer(3, second.x, second.y, modifiers));
+        assert!(has_construction_commit(&effects));
     }
 }

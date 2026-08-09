@@ -17,5 +17,8 @@ geosolve-sketch = { version = "0.2.0", path = "../geosolve-sketch" }
 geosolve-sketch-features = { version = "0.2.0", path = "../geosolve-sketch-features" }
 thiserror.workspace = true
 
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "=0.3.71"
+
 [lints]
 workspace = true

@@ -57,15 +57,19 @@ construction/NURBS UAT and certified all-family visual profiles.
   selection scopes and role-aware authoring own the interaction policy. Implementation, complete
   release qualification and focused human UAT are complete; the supervising human explicitly
   approved M69 on 2026-08-09.
-- **Next placeholder:** M70 is empty and awaits supervising-user scope. No architecture, feature,
-  acceptance gate, scenario or implementation is assigned.
+- **Active target:** M70 implements ADR 0034's reusable headless auto-constraint drafting
+  intelligence. Semantic anchors, stage-local reference memory, ranked prospective bundles and
+  atomic construction-plus-relation commit belong to `geosolve-constraint-editor`; the browser
+  remains a thin renderer/event adapter. The target uses existing retained constraint primitives
+  only. Implementation and focused direct qualification are complete; integrated release
+  qualification, publication and supervising-human UAT remain pending.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
 `PLAN.md` owns current execution numbering. Milestone labels in the preserved M8
 completion record and in ADRs accepted before the playground rebaseline describe the
 allocation at acceptance time; their architectural decisions remain accepted, but
-current ownership is the completed M10-M69 sequence and empty M70 placeholder listed in section 15.
+current ownership is the completed M10-M69 sequence and active M70 target listed in section 15.
 
 ## 3. Crate responsibilities
 
@@ -299,6 +303,32 @@ plane conversion, event delivery, rendering and styling. After producing the edi
 normalized 2D input, each host consumes the same headless previews, guides, inference
 candidates and effects, so changing UI technology cannot change sketch behavior.
 
+ADR 0034 makes this prospective rule concrete in M70. One headless inference engine separates
+semantic native anchors, bounded stage-local wake/reference state, ranked candidate bundles and
+an atomic construction commit plan. Its policy independently controls guide publication,
+coordinate adjustment and durable relation creation where semantically coherent. Persisting
+point identity without adjustment is rejected because structural operand reuse necessarily uses
+the accepted point position. The active scope is persistent-point reuse,
+native PointOnCurve, line/polyline Midpoint, new-span Horizontal/Vertical and remembered affine
+Parallel/Perpendicular. Bare-point H/V is tracking-only because the ordinary retained editor path
+cannot yet persist that relationship; it is never emulated with a fixed coordinate, zero dimension
+or hidden construction object. Point identity lowers into a construction operand rather than a
+Coincident source; standalone Point confirmation of an existing identity is a history-neutral
+no-op. Candidate enumeration stops at its configured bound and fails closed without a partial
+semantic prefix. This paragraph describes implemented but not-yet-human-accepted M70 behavior; the
+milestone remains open until its integrated release and UAT gates pass.
+
+Publication authority is not derivable from public scene fields. Only the retained coordinator can
+authenticate an `EditorScene` against its exact current accepted document, design filter and
+prepared input. A private collision-free seal captures the accepted revision, design identity,
+viewport, native inference curves and construction snap anchors produced by trusted scene
+construction. Changing any covered public semantic before binding rejects authentication;
+changing it after binding revokes plan publication while preserving presentation-only inference.
+Compatibility/render-only scenes can expose the same inference presentation but have no
+prepared-input authority and cannot publish a plan. Terminal dispatch additionally binds one
+session-local token to the frozen displayed plan and rechecks the exact accepted input before
+mutation.
+
 ### Sketch companion APIs
 
 M58 completes `geosolve-sketch-ops` for split/break/trim, line extension, exact
@@ -386,9 +416,10 @@ primary purpose is interactive sanity checking:
 - it uses public sketch document, session, command, history, serialization and audit APIs;
 - rendering, accessibility, browser event translation and browser `localStorage` exist only here;
 - it contains no residual, curve, measurement, inference-commit or document-validation equations;
-- prospective coincident/horizontal/vertical inference remains uncommitted until
-  explicit user confirmation; future candidate generation and interaction memory must
-  come from the headless editor, while this crate only presents and dispatches it;
+- auto-constraint candidates remain uncommitted until the placement click explicitly confirms the
+  currently displayed headless plan; candidate generation, wake/reference memory, ranking,
+  adjustment and commit composition come from the editor, while this crate only translates
+  semantic suppression and presents/dispatches returned DTOs;
 - direct native/WASM tests qualify its adapters and it always renders accepted geometry and audit data from the same result;
 - it is desktop-only for all future work; responsive, tablet and mobile support are
   not implementation or acceptance targets;
@@ -647,6 +678,16 @@ domains plus current design, attempt, accepted/high-water, request and solver po
 Typed work executes only against a captured session clone. A completed candidate can replace the
 live session only when `commit_prepared_patch` compares that complete base stamp equal; stale or
 out-of-order candidates leave every live identity unchanged.
+
+M70 adds field-opaque, checkpoint-serializable `SketchPersistentIdentityHighWater` above frozen
+document JSON. It retains persistent-object and curve-local spline-span allocator maxima even while
+Undo removes the corresponding graph objects. Coordinator checkpoints merge that lifecycle
+maximum into Redo, reload and divergent history, so no retired identity is reused. Historical
+graph restoration uses the current exact parameter batch and external snapshot set rather than
+silently restoring default host input. Application workspace v5 stores and validates these
+cursors; strict v1-v4 migration derives them from the stored design and accepted graphs. This
+changes neither frozen sketch v1-v4 bytes nor current unsupported draft-v5 bytes, nor does it
+change host-owned lifecycle revision high-water.
 
 M57 retains compatible `DocumentRuntimeMap`, `CompiledSketch` and `SolveSession` state across
 accepted document attempts. Persistent point/curve/source/contact joins are indexed. One scratch
@@ -952,4 +993,9 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   role-aware operation output, explicit/implicit construction scene metadata, Fillet-discarded
   complements, shared headless pick scopes and a focused human UAT. Implementation, direct/release
   qualification and supervising-human acceptance are complete as of 2026-08-09.
-- M70: empty unscoped placeholder awaiting supervising-user goals.
+- M70: active ADR 0034 headless auto-constraint drafting cut: semantic native anchors, bounded
+  stage-local references, ranked/hysteretic candidate bundles, semantic suppression, atomic
+  construction-plus-existing-relation publication, one editable playground and a dedicated human
+  UAT. Implementation and focused direct qualification are complete; integrated release
+  qualification, publication and human UAT are pending. `docs/M71_GOALS.md` is a non-active backlog
+  for additional retained primitives, not the next authorized milestone.

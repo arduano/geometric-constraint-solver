@@ -46,15 +46,18 @@ for the ADR 0032 headless Fillet direct-manipulation cut: branch-preserving radi
 headless contact metadata/internal continuation, explicit retention/local-alternative actions,
 Current-only coordinator transactions and pointer capture. M69 completed and received
 supervising-human approval for ADR 0033's Profile/Construction semantics, including computed
-Fillet-hidden construction provenance and headless role-aware picking. M70 is an empty unscoped
-placeholder.
+Fillet-hidden construction provenance and headless role-aware picking. M70 is the active ADR 0034
+headless auto-constraint drafting milestone; implementation and focused direct qualification are
+complete, while integrated release qualification, publication and its focused human UAT are
+pending. M70 remains open.
 Physics, collision and a production rendering system remain out of scope.
 
 ## Start here
 
 1. `START_HERE.md` — current implementation handoff and next milestone.
 2. `ARCHITECTURE.md` — crate boundaries, mathematical model, and API direction.
-3. `PLAN.md` — active roadmap: completed and approved through M69, with M70 awaiting scope.
+3. `PLAN.md` — active roadmap: completed and approved through M69, with implemented M70 open for
+   integrated release qualification and human UAT.
 4. `ACCEPTANCE.md` — objective completion gates.
 5. `REFERENCES.md` — libraries and reference implementations.
 6. `docs/SCENARIOS.md` — canonical end-to-end scenarios.

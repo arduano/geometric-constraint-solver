@@ -259,8 +259,10 @@ publication, byte verification and explicit supervising-human UAT all pass.
 
 ## 5. Known limitations or next blocker
 
-No blocker remains within the explicitly approved M69 scope. M70 is intentionally unscoped and
-receives no inferred Profile/Construction follow-up work from this close decision.
+No blocker remains within the explicitly approved M69 scope. At M69 close, M70 was intentionally
+unscoped and received no inferred Profile/Construction follow-up work from that decision. M70 has
+since been independently scoped under ADR 0034 for headless auto-constraint drafting; this does
+not reopen or retroactively extend M69.
 
 M69 intentionally has no persistent point role. Pick scope and visibility remain independent
 session state: changing scope does not hide painted geometry or alter history, while hiding

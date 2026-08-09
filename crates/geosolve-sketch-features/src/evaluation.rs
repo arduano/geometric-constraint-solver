@@ -657,6 +657,25 @@ impl PreparedComputedFeatureEvaluation {
         self,
         control: OperationControl,
     ) -> Result<OperationOutcome<ComputedFeatureSnapshot>, ComputedFeatureEvaluationError> {
+        let mut controller = OperationController::new(control);
+        let Some(result) = self.execute_in_controller(&mut controller)? else {
+            return Ok(controller.outcome_unchecked());
+        };
+        Ok(controller.outcome(result))
+    }
+
+    /// Evaluates this snapshot inside a caller-owned compound operation.
+    ///
+    /// A stopped controller returns `Ok(None)` without publishing any state;
+    /// callers may continue to use its exact cancellation/work report.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same structural and policy failures as [`Self::execute`].
+    pub fn execute_in_controller(
+        self,
+        controller: &mut OperationController,
+    ) -> Result<Option<ComputedFeatureSnapshot>, ComputedFeatureEvaluationError> {
         let policy = self.snapshot.input.policy;
         policy.validate()?;
         let feature_count = self.snapshot.features.features().len();
@@ -684,7 +703,6 @@ impl PreparedComputedFeatureEvaluation {
                 limit: policy.max_corners,
             });
         }
-        let mut controller = OperationController::new(control);
         if controller
             .charge(
                 OperationWorkCounter::DocumentValidationItems,
@@ -693,19 +711,19 @@ impl PreparedComputedFeatureEvaluation {
             )
             .is_err()
         {
-            return Ok(controller.outcome_unchecked());
+            return Ok(None);
         }
-        let result = evaluate_snapshot(&self.snapshot, self.evaluation, &mut controller)?;
+        let result = evaluate_snapshot(&self.snapshot, self.evaluation, controller)?;
         if controller.is_stopped() {
-            return Ok(controller.outcome_unchecked());
+            return Ok(None);
         }
         if controller
             .checkpoint(OperationCheckpoint::BeforeFinalValidation)
             .is_err()
         {
-            return Ok(controller.outcome_unchecked());
+            return Ok(None);
         }
-        Ok(controller.outcome(result))
+        Ok(Some(result))
     }
 }
 

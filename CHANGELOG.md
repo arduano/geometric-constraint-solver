@@ -89,6 +89,22 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   Fillet-discarded construction provenance, shared headless pick/visibility policy and thin
   workbench controls. The complete release gate and focused human UAT pass on approved candidate
   `567141776c78178022f6123cbb399599ba713c62`.
+- The implemented and focused-directly-qualified M70 ADR 0034 headless auto-constraint drafting
+  cut: semantic native anchors, bounded stage-local wake/reference memory, ranked and hysteretic
+  point/contact/midpoint/direction candidates, honest tracking-only guides, semantic suppression
+  and one exact atomic construction-plus-existing-relation plan. Persistent point identity is
+  reused structurally, candidate enumeration fails closed at hard 32-candidate/eight-reference
+  ceilings, and one shared golden transcript qualifies native/WASM transitions. Retained sketch
+  sessions additionally preserve field-opaque, checkpoint-serializable persistent-object and
+  spline-span allocator high-water across history and application-workspace v5 reload. Cursor
+  maps and commit plans are bounded, malformed cursor relationships and derived non-finite output
+  reject transactionally, allocator-only changes invalidate prepared CAS, history restore preserves
+  current host inputs, and Shift changes do not discard queued foreign-interaction movement. A private
+  exact scene-semantics seal makes public mutation revoke inference-publication authority. One
+  ordinary editable auto-constraint playground supports the still-pending release gate and focused
+  human UAT. Focused inference passes 46/46, the editor passes 266 unit tests plus every relevant
+  integration suite, demo-web passes 82/82, the sketch library passes 33/33 and M56 passes 6/6;
+  M70 is not yet accepted.
 
 ### Changed
 
@@ -98,8 +114,10 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   canvas attribution and the reusable domain APIs/tests beneath those views. M50 had already
   removed the separately routed `/#/dev/lab` application. M68 subsequently completed the ADR 0032
   Fillet-interaction cut, and M69 subsequently completed the ADR 0033 Profile/Construction cut;
-  both received explicit supervising-human approval on 2026-08-09. M70 is an empty unscoped
-  placeholder.
+  both received explicit supervising-human approval on 2026-08-09. M70 is now scoped under ADR
+  0034 for headless auto-constraint drafting intelligence. Implementation and focused direct
+  qualification are complete; integrated release qualification, publication and human acceptance
+  remain pending.
 - Consolidated M68 close-off code and tests without changing accepted behavior: one workbench
   painted-action resolver replaces three copies, redundant routing/panel wrappers and brittle
   presentation literals are gone, and two manual radius-transition sequences are superseded by

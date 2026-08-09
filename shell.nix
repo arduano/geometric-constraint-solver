@@ -6,6 +6,7 @@ pkgs.mkShell {
     cargo
     clippy
     lld
+    nodejs
     rust-analyzer
     rustc
     rustfmt

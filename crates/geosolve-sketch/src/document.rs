@@ -27,6 +27,8 @@ pub const MAX_ACTIVATION_OVERRIDES: usize = MAX_DOCUMENT_OBJECTS;
 pub const MAX_DOCUMENT_PARAMETERS: usize = MAX_DOCUMENT_OBJECTS;
 /// Defensive bound for persistent external-reference declarations.
 pub const MAX_EXTERNAL_BINDINGS: usize = MAX_DOCUMENT_OBJECTS;
+/// Defensive bound for spline curves retained by lifecycle identity high-water.
+pub const MAX_PERSISTENT_SPLINE_SPAN_CURSORS: usize = MAX_DOCUMENT_OBJECTS;
 
 static DOCUMENT_NONCE: AtomicU32 = AtomicU32::new(1);
 
@@ -1617,6 +1619,346 @@ pub struct CurveCurveFilletRequest {
 
 /// Persistent identities created by one associative generic curve fillet construction.
 pub type CurveCurveFilletIds = LineLineFilletIds;
+
+/// Field-opaque, checkpoint-serializable never-reuse cursors for one persistent sketch namespace.
+///
+/// Frozen sketch v1-v4 records the cursors of its current graph, but a historical
+/// graph cannot itself retain identities consumed by a later abandoned branch.
+/// Hosts retain this lifecycle maximum beside checkpoints and merge it back into
+/// a restored document before permitting further authoring.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct SketchPersistentIdentityHighWater {
+    document: DocumentId,
+    next_id: PersistentId,
+    spline_span_cursors: BTreeMap<CurveId, u32>,
+}
+
+impl SketchPersistentIdentityHighWater {
+    /// Persistent sketch namespace owned by these allocator cursors.
+    #[must_use]
+    pub const fn document(&self) -> DocumentId {
+        self.document
+    }
+
+    /// Returns the componentwise maximum of two cursors for the same sketch.
+    ///
+    /// # Errors
+    ///
+    /// Rejects cursors from different persistent sketch namespaces.
+    pub fn merged(&self, other: &Self) -> Result<Self, DocumentError> {
+        if self.document != other.document {
+            return invalid(
+                "persistent identity high-water",
+                "cannot merge cursors from different sketch documents",
+            );
+        }
+        self.validate()?;
+        other.validate()?;
+        let additional = other
+            .spline_span_cursors
+            .keys()
+            .filter(|curve| !self.spline_span_cursors.contains_key(curve))
+            .count();
+        let merged_count = self.spline_span_cursors.len().saturating_add(additional);
+        validate_persistent_spline_cursor_count(merged_count)?;
+        let mut merged = self.clone();
+        merged.next_id = merged.next_id.max(other.next_id);
+        for (curve, cursor) in &other.spline_span_cursors {
+            merged
+                .spline_span_cursors
+                .entry(*curve)
+                .and_modify(|retained| *retained = (*retained).max(*cursor))
+                .or_insert(*cursor);
+        }
+        Ok(merged)
+    }
+
+    fn validate(&self) -> Result<(), DocumentError> {
+        validate_persistent_spline_cursor_count(self.spline_span_cursors.len())?;
+        let document = self.document.0.as_u128();
+        let next_id = self.next_id.as_u128();
+        if document == 0 || next_id <= document {
+            return invalid(
+                "persistent identity high-water",
+                "next object cursor must be greater than the nonzero document identity",
+            );
+        }
+        for (curve, cursor) in &self.spline_span_cursors {
+            let curve = curve.0.as_u128();
+            if curve <= document || curve >= next_id {
+                return invalid(
+                    "persistent identity high-water",
+                    "spline cursor curve must be an allocated object identity in this document",
+                );
+            }
+            if *cursor == 0 {
+                return invalid(
+                    "persistent identity high-water",
+                    "spline next-span cursor must be nonzero",
+                );
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SketchPersistentIdentityHighWaterWire {
+    document: DocumentId,
+    next_id: PersistentId,
+    #[serde(deserialize_with = "deserialize_spline_span_cursors")]
+    spline_span_cursors: BTreeMap<CurveId, u32>,
+}
+
+impl<'de> Deserialize<'de> for SketchPersistentIdentityHighWater {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let wire = SketchPersistentIdentityHighWaterWire::deserialize(deserializer)?;
+        let high_water = Self {
+            document: wire.document,
+            next_id: wire.next_id,
+            spline_span_cursors: wire.spline_span_cursors,
+        };
+        high_water.validate().map_err(serde::de::Error::custom)?;
+        Ok(high_water)
+    }
+}
+
+fn validate_persistent_spline_cursor_count(count: usize) -> Result<(), DocumentError> {
+    if count > MAX_PERSISTENT_SPLINE_SPAN_CURSORS {
+        return Err(DocumentError::ResourceLimit {
+            resource: "persistent spline span allocator cursors",
+            actual: count,
+            limit: MAX_PERSISTENT_SPLINE_SPAN_CURSORS,
+        });
+    }
+    Ok(())
+}
+
+fn deserialize_spline_span_cursors<'de, D>(
+    deserializer: D,
+) -> Result<BTreeMap<CurveId, u32>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    struct BoundedCursorMap;
+
+    impl<'de> serde::de::Visitor<'de> for BoundedCursorMap {
+        type Value = BTreeMap<CurveId, u32>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(
+                formatter,
+                "at most {MAX_PERSISTENT_SPLINE_SPAN_CURSORS} unique spline cursor entries"
+            )
+        }
+
+        fn visit_map<A>(self, mut access: A) -> Result<Self::Value, A::Error>
+        where
+            A: serde::de::MapAccess<'de>,
+        {
+            if access
+                .size_hint()
+                .is_some_and(|size| size > MAX_PERSISTENT_SPLINE_SPAN_CURSORS)
+            {
+                return Err(serde::de::Error::custom(
+                    "persistent spline span allocator cursor limit exceeded",
+                ));
+            }
+            let mut cursors = BTreeMap::new();
+            while let Some((curve, cursor)) = access.next_entry()? {
+                if !cursors.contains_key(&curve)
+                    && cursors.len() == MAX_PERSISTENT_SPLINE_SPAN_CURSORS
+                {
+                    return Err(serde::de::Error::custom(
+                        "persistent spline span allocator cursor limit exceeded",
+                    ));
+                }
+                if cursors.insert(curve, cursor).is_some() {
+                    return Err(serde::de::Error::custom(
+                        "duplicate persistent spline span allocator cursor",
+                    ));
+                }
+            }
+            Ok(cursors)
+        }
+    }
+
+    deserializer.deserialize_map(BoundedCursorMap)
+}
+
+#[cfg(test)]
+mod persistent_identity_high_water_tests {
+    use super::*;
+
+    #[test]
+    fn oversized_spline_cursor_history_rejects_merge_and_streaming_decode() {
+        let document = SketchDocument::new(1.0).expect("document");
+        let retained = document.persistent_identity_high_water();
+        let mut oversized = retained.clone();
+        for ordinal in 0..=MAX_PERSISTENT_SPLINE_SPAN_CURSORS {
+            oversized
+                .spline_span_cursors
+                .insert(CurveId(PersistentId::from_u128(ordinal as u128 + 1)), 1);
+        }
+
+        assert!(matches!(
+            retained.merged(&oversized),
+            Err(DocumentError::ResourceLimit {
+                resource: "persistent spline span allocator cursors",
+                actual,
+                limit: MAX_PERSISTENT_SPLINE_SPAN_CURSORS,
+            }) if actual == MAX_PERSISTENT_SPLINE_SPAN_CURSORS + 1
+        ));
+
+        let mut unchanged = document.clone();
+        let before = unchanged.clone();
+        assert!(matches!(
+            unchanged.retain_persistent_identity_high_water(&oversized),
+            Err(DocumentError::ResourceLimit {
+                resource: "persistent spline span allocator cursors",
+                actual,
+                limit: MAX_PERSISTENT_SPLINE_SPAN_CURSORS,
+            }) if actual == MAX_PERSISTENT_SPLINE_SPAN_CURSORS + 1
+        ));
+        assert_eq!(unchanged, before);
+
+        let encoded = serde_json::to_string(&oversized).expect("oversized test encoding");
+        assert!(
+            serde_json::from_str::<SketchPersistentIdentityHighWater>(&encoded).is_err(),
+            "streaming decode must stop before admitting an unbounded cursor map"
+        );
+    }
+
+    #[test]
+    fn duplicate_spline_cursor_keys_reject_during_streaming_decode() {
+        let document = SketchDocument::new(1.0).expect("document");
+        let high_water = document.persistent_identity_high_water();
+        let curve = PersistentId::from_u128(17).to_string();
+        let encoded = format!(
+            r#"{{"document":"{}","next_id":"{}","spline_span_cursors":{{"{curve}":4,"{curve}":5}}}}"#,
+            high_water.document.0, high_water.next_id
+        );
+
+        assert!(serde_json::from_str::<SketchPersistentIdentityHighWater>(&encoded).is_err());
+    }
+
+    #[test]
+    fn malformed_cursor_relationships_reject_decode_merge_and_retain() {
+        let mut document =
+            SketchDocument::with_id(1.0, DocumentId(PersistentId::from_u128(1))).expect("document");
+        let allocated = document.add_point("allocated", [0.0, 0.0]).expect("point");
+        let valid = document.persistent_identity_high_water();
+
+        let mut nonadvancing = valid.clone();
+        nonadvancing.next_id = nonadvancing.document.0;
+
+        let mut future_curve = valid.clone();
+        future_curve
+            .spline_span_cursors
+            .insert(CurveId(future_curve.next_id), 1);
+
+        let mut zero_span_cursor = valid.clone();
+        zero_span_cursor
+            .spline_span_cursors
+            .insert(CurveId(allocated.0), 0);
+
+        for malformed in [nonadvancing, future_curve, zero_span_cursor] {
+            let encoded = serde_json::to_string(&malformed).expect("malformed encoding");
+            assert!(
+                serde_json::from_str::<SketchPersistentIdentityHighWater>(&encoded).is_err(),
+                "semantic cursor invariants must be checked after field decoding"
+            );
+            assert!(matches!(
+                valid.merged(&malformed),
+                Err(DocumentError::InvalidField {
+                    field: "persistent identity high-water",
+                    ..
+                })
+            ));
+            let mut unchanged = document.clone();
+            assert!(matches!(
+                unchanged.retain_persistent_identity_high_water(&malformed),
+                Err(DocumentError::InvalidField {
+                    field: "persistent identity high-water",
+                    ..
+                })
+            ));
+            assert_eq!(unchanged, document);
+        }
+    }
+
+    #[test]
+    fn exhausted_object_cursor_rejects_allocation_without_mutation() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let mut high_water = document.persistent_identity_high_water();
+        high_water.next_id = PersistentId::from_u128(u128::MAX);
+        document
+            .retain_persistent_identity_high_water(&high_water)
+            .expect("retain exhausted cursor");
+        let before = document.clone();
+
+        assert!(matches!(
+            document.add_point("must not allocate", [0.0, 0.0]),
+            Err(DocumentError::IdExhausted)
+        ));
+        assert_eq!(document, before);
+    }
+
+    #[test]
+    fn exhausted_spline_cursor_rejects_refinement_without_topology_mutation() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let controls = [[0.0, 0.0], [1.0, 2.0], [2.0, -1.0], [3.0, 1.5], [4.0, 0.0]]
+            .map(|position| document.add_point("control", position).expect("control"))
+            .to_vec();
+        let curve = document
+            .add_curve(
+                "clamped cubic",
+                CurveDefinition::BSpline {
+                    form: DocumentBSplineForm::Clamped,
+                    degree: 3,
+                    controls,
+                    knots: vec![0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0],
+                    span_ids: vec![41, 73],
+                    next_span_id: 100,
+                },
+            )
+            .expect("B-spline");
+        let mut high_water = document.persistent_identity_high_water();
+        high_water.spline_span_cursors.insert(curve, u32::MAX);
+        document
+            .retain_persistent_identity_high_water(&high_water)
+            .expect("retain exhausted span cursor");
+        let before = document.clone();
+
+        assert!(matches!(
+            document.insert_bspline_knot(curve, 0.25),
+            Err(DocumentError::IdExhausted)
+        ));
+        assert_eq!(document, before);
+    }
+
+    #[test]
+    fn foreign_high_water_rejects_without_mutation() {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let foreign = SketchDocument::new(1.0)
+            .expect("foreign document")
+            .persistent_identity_high_water();
+        let before = document.clone();
+
+        assert!(matches!(
+            document.retain_persistent_identity_high_water(&foreign),
+            Err(DocumentError::InvalidField {
+                field: "persistent identity high-water",
+                ..
+            })
+        ));
+        assert_eq!(document, before);
+    }
+}
 
 /// Versioned persistent sketch graph. Runtime solver IDs never appear here.
 #[derive(Clone, Debug, PartialEq)]
@@ -8321,6 +8663,44 @@ impl SketchDocument {
 
     pub(crate) const fn allocator_cursor(&self) -> PersistentId {
         self.next_id
+    }
+
+    /// Captures every persistent identity allocator cursor owned by this sketch.
+    ///
+    /// The returned DTO keeps allocator fields private while allowing hosts to
+    /// serialize, deserialize and merge validated checkpoint state.
+    #[must_use]
+    pub fn persistent_identity_high_water(&self) -> SketchPersistentIdentityHighWater {
+        SketchPersistentIdentityHighWater {
+            document: self.id,
+            next_id: self.next_id,
+            spline_span_cursors: self.spline_span_allocator_cursors(),
+        }
+    }
+
+    /// Advances this document above allocator cursors retained by the same sketch.
+    ///
+    /// Existing persistent objects and curve topology are unchanged. Curves absent
+    /// from this particular historical graph simply cannot consume their retained
+    /// curve-local span cursor until a later restore reintroduces that curve.
+    ///
+    /// # Errors
+    ///
+    /// Rejects high-water metadata from a different persistent sketch namespace.
+    pub fn retain_persistent_identity_high_water(
+        &mut self,
+        high_water: &SketchPersistentIdentityHighWater,
+    ) -> Result<(), DocumentError> {
+        if self.id != high_water.document {
+            return invalid(
+                "persistent identity high-water",
+                "cursor belongs to a different sketch document",
+            );
+        }
+        high_water.validate()?;
+        self.advance_allocator(high_water.next_id);
+        self.advance_spline_span_allocators(&high_water.spline_span_cursors);
+        Ok(())
     }
 
     pub(crate) fn allocate_semantic_catalog_id(

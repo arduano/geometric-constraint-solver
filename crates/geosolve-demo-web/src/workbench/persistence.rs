@@ -6,7 +6,7 @@ use geosolve_constraint_editor::{RestoreCheckpoint, RetainedEditorCoordinator};
 use geosolve_core::SolverConfig;
 use geosolve_sketch::{
     DocumentSolveRequest, RetainedSketchDocumentSession, SketchDocument,
-    SketchLifecycleRevisionHighWater,
+    SketchLifecycleRevisionHighWater, SketchPersistentIdentityHighWater,
 };
 use geosolve_sketch_features::{
     ComputedEvaluationAllocator, ComputedEvaluationAllocatorHighWater, ComputedFeatureDocument,
@@ -14,11 +14,13 @@ use geosolve_sketch_features::{
 };
 
 #[cfg(target_arch = "wasm32")]
-pub(crate) const STORAGE_KEY: &str = "geosolve.workbench.session.v4";
+pub(crate) const STORAGE_KEY: &str = "geosolve.workbench.session.v5";
 #[cfg(target_arch = "wasm32")]
-pub(crate) const PREVIOUS_STORAGE_KEY: &str = "geosolve.workbench.session.v3";
+pub(crate) const PREVIOUS_STORAGE_KEY: &str = "geosolve.workbench.session.v4";
 #[cfg(target_arch = "wasm32")]
-pub(crate) const OLDER_STORAGE_KEY: &str = "geosolve.workbench.session.v2";
+pub(crate) const OLDER_STORAGE_KEY: &str = "geosolve.workbench.session.v3";
+#[cfg(target_arch = "wasm32")]
+pub(crate) const OLDER_V2_STORAGE_KEY: &str = "geosolve.workbench.session.v2";
 #[cfg(target_arch = "wasm32")]
 pub(crate) const LEGACY_STORAGE_KEY: &str = "geosolve.workbench.session.v1";
 
@@ -29,6 +31,7 @@ pub(crate) struct WorkspaceSnapshot {
     design: WorkspaceDocumentPayload,
     accepted: Option<WorkspaceDocumentPayload>,
     accepted_belongs_to_current_design: bool,
+    sketch_identity_high_water: SketchPersistentIdentityHighWater,
     features_json: String,
     feature_lifecycle_high_water: ComputedFeatureLifecycleHighWater,
     computed_evaluation_high_water: ComputedEvaluationAllocatorHighWater,
@@ -77,6 +80,19 @@ struct LegacyWorkspaceSnapshotV3 {
     revisions: WorkspaceRevisions,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LegacyWorkspaceSnapshotV4 {
+    version: u32,
+    design: WorkspaceDocumentPayload,
+    accepted: Option<WorkspaceDocumentPayload>,
+    accepted_belongs_to_current_design: bool,
+    features_json: String,
+    feature_lifecycle_high_water: ComputedFeatureLifecycleHighWater,
+    computed_evaluation_high_water: ComputedEvaluationAllocatorHighWater,
+    revisions: WorkspaceRevisions,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct WorkspaceRevisions {
@@ -98,7 +114,7 @@ impl WorkspaceSnapshot {
     fn from_checkpoint(checkpoint: &RestoreCheckpoint) -> Self {
         let revisions = checkpoint.revisions();
         Self {
-            version: 4,
+            version: 5,
             design: WorkspaceDocumentPayload {
                 encoding: if checkpoint.design_uses_draft_v5() {
                     WorkspaceDocumentEncoding::DraftV5
@@ -118,6 +134,7 @@ impl WorkspaceSnapshot {
                     json: json.to_owned(),
                 }),
             accepted_belongs_to_current_design: checkpoint.accepted_belongs_to_current_design(),
+            sketch_identity_high_water: checkpoint.sketch_identity_high_water().clone(),
             features_json: checkpoint.feature_json().to_owned(),
             feature_lifecycle_high_water: checkpoint.feature_lifecycle_high_water(),
             computed_evaluation_high_water: checkpoint.computed_evaluation_high_water(),
@@ -145,7 +162,7 @@ impl WorkspaceSnapshot {
 
     #[allow(
         clippy::too_many_lines,
-        reason = "the closed four-version migration matrix is clearer when audited in one dispatch"
+        reason = "the closed five-version migration matrix is clearer when audited in one dispatch"
     )]
     pub(crate) fn decode(input: &str) -> Result<Self, String> {
         let version = serde_json::from_str::<serde_json::Value>(input)
@@ -164,22 +181,28 @@ impl WorkspaceSnapshot {
                     .map_err(|error| error.to_string())?;
                 let (features_json, feature_lifecycle_high_water) =
                     empty_feature_bundle(&design_document)?;
-                Ok(Self {
-                    version: 4,
-                    design: WorkspaceDocumentPayload {
-                        encoding: WorkspaceDocumentEncoding::CanonicalV4,
-                        json: legacy.design_json,
-                    },
-                    accepted: legacy.accepted_json.map(|json| WorkspaceDocumentPayload {
-                        encoding: WorkspaceDocumentEncoding::CanonicalV4,
-                        json,
-                    }),
+                let design = WorkspaceDocumentPayload {
+                    encoding: WorkspaceDocumentEncoding::CanonicalV4,
+                    json: legacy.design_json,
+                };
+                let accepted = legacy.accepted_json.map(|json| WorkspaceDocumentPayload {
+                    encoding: WorkspaceDocumentEncoding::CanonicalV4,
+                    json,
+                });
+                let sketch_identity_high_water =
+                    derive_sketch_identity_high_water(&design, accepted.as_ref())?;
+                Self {
+                    version: 5,
+                    design,
+                    accepted,
                     accepted_belongs_to_current_design: false,
+                    sketch_identity_high_water,
                     features_json,
                     feature_lifecycle_high_water,
                     computed_evaluation_high_water: default_evaluation_high_water(),
                     revisions: legacy.revisions,
-                })
+                }
+                .validated()
             }
             2 => {
                 let legacy: LegacyWorkspaceSnapshotV2 =
@@ -189,16 +212,20 @@ impl WorkspaceSnapshot {
                 }
                 let design = decode_document(&legacy.design)?;
                 let (features_json, feature_lifecycle_high_water) = empty_feature_bundle(&design)?;
-                Ok(Self {
-                    version: 4,
+                let sketch_identity_high_water =
+                    derive_sketch_identity_high_water(&legacy.design, legacy.accepted.as_ref())?;
+                Self {
+                    version: 5,
                     design: legacy.design,
                     accepted: legacy.accepted,
                     accepted_belongs_to_current_design: false,
+                    sketch_identity_high_water,
                     features_json,
                     feature_lifecycle_high_water,
                     computed_evaluation_high_water: default_evaluation_high_water(),
                     revisions: legacy.revisions,
-                })
+                }
+                .validated()
             }
             3 => {
                 let legacy: LegacyWorkspaceSnapshotV3 =
@@ -213,51 +240,81 @@ impl WorkspaceSnapshot {
                 }
                 let design = decode_document(&legacy.design)?;
                 let (features_json, feature_lifecycle_high_water) = empty_feature_bundle(&design)?;
-                Ok(Self {
-                    version: 4,
+                let sketch_identity_high_water =
+                    derive_sketch_identity_high_water(&legacy.design, legacy.accepted.as_ref())?;
+                Self {
+                    version: 5,
                     design: legacy.design,
                     accepted: legacy.accepted,
                     accepted_belongs_to_current_design: legacy.accepted_belongs_to_current_design,
+                    sketch_identity_high_water,
                     features_json,
                     feature_lifecycle_high_water,
                     computed_evaluation_high_water: default_evaluation_high_water(),
                     revisions: legacy.revisions,
-                })
+                }
+                .validated()
             }
             4 => {
+                let legacy: LegacyWorkspaceSnapshotV4 =
+                    serde_json::from_str(input).map_err(|error| error.to_string())?;
+                if legacy.version != 4 {
+                    return Err("unsupported workbench snapshot version".into());
+                }
+                let sketch_identity_high_water =
+                    derive_sketch_identity_high_water(&legacy.design, legacy.accepted.as_ref())?;
+                Self {
+                    version: 5,
+                    design: legacy.design,
+                    accepted: legacy.accepted,
+                    accepted_belongs_to_current_design: legacy.accepted_belongs_to_current_design,
+                    sketch_identity_high_water,
+                    features_json: legacy.features_json,
+                    feature_lifecycle_high_water: legacy.feature_lifecycle_high_water,
+                    computed_evaluation_high_water: legacy.computed_evaluation_high_water,
+                    revisions: legacy.revisions,
+                }
+                .validated()
+            }
+            5 => {
                 let snapshot: Self =
                     serde_json::from_str(input).map_err(|error| error.to_string())?;
-                if snapshot.accepted_belongs_to_current_design && snapshot.accepted.is_none() {
-                    return Err(
-                        "current-design accepted provenance requires an accepted payload".into(),
-                    );
-                }
-                let design = snapshot.design_document()?;
-                let features = snapshot.feature_document()?;
-                if features.sketch_document() != design.id() {
-                    return Err("computed-feature sidecar belongs to a different sketch".into());
-                }
-                if snapshot.feature_lifecycle_high_water.revision < features.revision()
-                    || snapshot
-                        .feature_lifecycle_high_water
-                        .allocator
-                        .next_feature_id
-                        < features.allocator_high_water().next_feature_id
-                    || snapshot
-                        .feature_lifecycle_high_water
-                        .allocator
-                        .next_corner_id
-                        < features.allocator_high_water().next_corner_id
-                {
-                    return Err("computed-feature lifecycle high-water trails the sidecar".into());
-                }
-                if snapshot.computed_evaluation_high_water.next_revision.raw() == 0 {
-                    return Err("computed-feature evaluation high-water must be nonzero".into());
-                }
-                Ok(snapshot)
+                snapshot.validated()
             }
             _ => Err("unsupported workbench snapshot version".into()),
         }
+    }
+
+    fn validated(self) -> Result<Self, String> {
+        if self.version != 5 {
+            return Err("unsupported workbench snapshot version".into());
+        }
+        if self.accepted_belongs_to_current_design && self.accepted.is_none() {
+            return Err("current-design accepted provenance requires an accepted payload".into());
+        }
+        let design = self.design_document()?;
+        let accepted = self.accepted_document()?;
+        validate_sketch_identity_high_water(
+            &self.sketch_identity_high_water,
+            &design,
+            accepted.as_ref(),
+        )?;
+        let features = self.feature_document()?;
+        if features.sketch_document() != design.id() {
+            return Err("computed-feature sidecar belongs to a different sketch".into());
+        }
+        if self.feature_lifecycle_high_water.revision < features.revision()
+            || self.feature_lifecycle_high_water.allocator.next_feature_id
+                < features.allocator_high_water().next_feature_id
+            || self.feature_lifecycle_high_water.allocator.next_corner_id
+                < features.allocator_high_water().next_corner_id
+        {
+            return Err("computed-feature lifecycle high-water trails the sidecar".into());
+        }
+        if self.computed_evaluation_high_water.next_revision.raw() == 0 {
+            return Err("computed-feature evaluation high-water must be nonzero".into());
+        }
+        Ok(self)
     }
 
     pub(crate) fn design_document(&self) -> Result<SketchDocument, String> {
@@ -288,7 +345,7 @@ impl WorkspaceSnapshot {
         config: SolverConfig,
     ) -> Result<RetainedSketchDocumentSession, String> {
         let design = self.design_document()?;
-        let restored = if let Some(accepted) = self.accepted_document()? {
+        let mut restored = if let Some(accepted) = self.accepted_document()? {
             if self.accepted_belongs_to_current_design {
                 RetainedSketchDocumentSession::restore_current_design_with_accepted(
                     design,
@@ -308,9 +365,47 @@ impl WorkspaceSnapshot {
             }
         } else {
             RetainedSketchDocumentSession::restore_design(design, self.revisions(), request, config)
-        };
-        restored.map_err(|error| error.to_string())
+        }
+        .map_err(|error| error.to_string())?;
+        restored
+            .retain_persistent_identity_high_water(&self.sketch_identity_high_water)
+            .map_err(|error| error.to_string())?;
+        Ok(restored)
     }
+}
+
+fn derive_sketch_identity_high_water(
+    design: &WorkspaceDocumentPayload,
+    accepted: Option<&WorkspaceDocumentPayload>,
+) -> Result<SketchPersistentIdentityHighWater, String> {
+    let design = decode_document(design)?;
+    let mut high_water = design.persistent_identity_high_water();
+    if let Some(accepted) = accepted {
+        high_water = high_water
+            .merged(&decode_document(accepted)?.persistent_identity_high_water())
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(high_water)
+}
+
+fn validate_sketch_identity_high_water(
+    retained: &SketchPersistentIdentityHighWater,
+    design: &SketchDocument,
+    accepted: Option<&SketchDocument>,
+) -> Result<(), String> {
+    let mut required = design.persistent_identity_high_water();
+    if let Some(accepted) = accepted {
+        required = required
+            .merged(&accepted.persistent_identity_high_water())
+            .map_err(|error| error.to_string())?;
+    }
+    let merged = retained
+        .merged(&required)
+        .map_err(|error| error.to_string())?;
+    if &merged != retained {
+        return Err("persistent sketch identity high-water trails a stored document".into());
+    }
+    Ok(())
 }
 
 fn empty_feature_bundle(
@@ -343,13 +438,15 @@ mod tests {
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
-        AlphaScenarioIds, AlphaScenarioKind, ContactStateEdit, CurveDefinition, CurveSpan,
-        DesignPointId, DocumentConstraintDefinition, DocumentEdit, DocumentObjectId,
-        DocumentSolveRequest, GeometryRole, RetainedSketchDocumentSession, SketchDocument,
-        alpha_scenario,
+        AlphaScenarioIds, AlphaScenarioKind, ContactStateEdit, CurveDefinition, CurveId, CurveSpan,
+        DesignPointId, DocumentBSplineForm, DocumentCommandEffect, DocumentConstraintDefinition,
+        DocumentEdit, DocumentObjectId, DocumentSolveRequest, GeometryRole,
+        RetainedSketchDocumentSession, SketchDocument, alpha_scenario,
     };
 
-    use super::{WorkspaceSnapshot, default_evaluation_high_water};
+    use super::{
+        WorkspaceSnapshot, default_evaluation_high_water, derive_sketch_identity_high_water,
+    };
 
     fn computed_fillet_candidate(
         coordinator: &RetainedEditorCoordinator,
@@ -390,6 +487,31 @@ mod tests {
             .value
     }
 
+    fn clamped_bspline_document() -> (SketchDocument, CurveId) {
+        let mut document = SketchDocument::new(1.0).expect("document");
+        let controls = [[0.0, 0.0], [1.0, 2.0], [2.0, -1.0], [3.0, 1.5], [4.0, 0.0]]
+            .map(|position| {
+                document
+                    .add_point("clamped control", position)
+                    .expect("control")
+            })
+            .to_vec();
+        let curve = document
+            .add_curve(
+                "clamped cubic",
+                CurveDefinition::BSpline {
+                    form: DocumentBSplineForm::Clamped,
+                    degree: 3,
+                    controls,
+                    knots: vec![0.0, 0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0, 1.0],
+                    span_ids: vec![41, 73],
+                    next_span_id: 100,
+                },
+            )
+            .expect("B-spline");
+        (document, curve)
+    }
+
     #[test]
     fn checkpoint_codec_round_trips_design_accepted_and_revisions() {
         let session = RetainedSketchDocumentSession::new(
@@ -401,7 +523,7 @@ mod tests {
         let coordinator = RetainedEditorCoordinator::new(session).unwrap();
         let snapshot = WorkspaceSnapshot::from_coordinator(&coordinator).unwrap();
         let decoded = WorkspaceSnapshot::decode(&snapshot.encode().unwrap()).unwrap();
-        assert_eq!(snapshot.version, 4);
+        assert_eq!(snapshot.version, 5);
         assert!(snapshot.accepted_belongs_to_current_design);
         assert_eq!(
             decoded.accepted_belongs_to_current_design,
@@ -409,6 +531,10 @@ mod tests {
         );
         assert_eq!(decoded.design, snapshot.design);
         assert_eq!(decoded.accepted, snapshot.accepted);
+        assert_eq!(
+            decoded.sketch_identity_high_water,
+            snapshot.sketch_identity_high_water
+        );
         assert_eq!(decoded.features_json, snapshot.features_json);
         assert_eq!(
             decoded.feature_lifecycle_high_water,
@@ -430,7 +556,7 @@ mod tests {
     }
 
     #[test]
-    fn workspace_v4_round_trips_persistent_construction_role_without_a_new_schema() {
+    fn workspace_v5_round_trips_persistent_construction_role() {
         let mut document = SketchDocument::new(4.0).expect("document");
         let start = document.add_point("start", [0.0, 0.0]).expect("point");
         let end = document.add_point("end", [2.0, 0.0]).expect("point");
@@ -452,8 +578,8 @@ mod tests {
         )
         .expect("session");
         let coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
-        let snapshot = WorkspaceSnapshot::from_coordinator(&coordinator).expect("workspace v4");
-        assert_eq!(snapshot.version, 4);
+        let snapshot = WorkspaceSnapshot::from_coordinator(&coordinator).expect("workspace v5");
+        assert_eq!(snapshot.version, 5);
         let decoded =
             WorkspaceSnapshot::decode(&snapshot.encode().expect("encode")).expect("decode");
         let restored = decoded
@@ -478,7 +604,7 @@ mod tests {
         clippy::too_many_lines,
         reason = "one persistence oracle binds stable computed intent to regenerated revision-local output"
     )]
-    fn workspace_v4_round_trips_multiple_computed_sets_and_regenerates_output_ids() {
+    fn workspace_v5_round_trips_multiple_computed_sets_and_regenerates_output_ids() {
         let mut document = SketchDocument::new(10.0).expect("document");
         let points = [
             document.add_point("p0", [0.0, 0.0]).expect("p0"),
@@ -533,10 +659,10 @@ mod tests {
             .collect::<Vec<_>>();
 
         let encoded = WorkspaceSnapshot::from_coordinator(&coordinator)
-            .expect("capture workspace v4")
+            .expect("capture workspace v5")
             .encode()
-            .expect("encode workspace v4");
-        let decoded = WorkspaceSnapshot::decode(&encoded).expect("decode workspace v4");
+            .expect("encode workspace v5");
+        let decoded = WorkspaceSnapshot::decode(&encoded).expect("decode workspace v5");
         let decoded_features = decoded.feature_document().expect("feature sidecar");
         assert_eq!(decoded_features.features(), features_before.as_slice());
         assert_eq!(decoded_features.allocator_high_water(), allocator_before);
@@ -707,7 +833,79 @@ mod tests {
     }
 
     #[test]
-    fn v4_current_design_provenance_restores_flexible_fillet_bytes_exactly() {
+    fn process_reload_retains_an_undone_spline_cursor_after_the_curve_is_deleted() {
+        let (document, curve) = clamped_bspline_document();
+        let original_curve_graph = document.clone();
+        let session = RetainedSketchDocumentSession::new(
+            document,
+            DocumentSolveRequest::default(),
+            SolverConfig::default(),
+        )
+        .expect("session");
+        let mut coordinator = RetainedEditorCoordinator::new(session).expect("coordinator");
+
+        let insertion = coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::InsertBSplineKnot {
+                    curve,
+                    parameter: 0.25,
+                },
+            )
+            .expect("first insertion");
+        let DocumentCommandEffect::InsertedBSplineKnot(insertion) = insertion.value else {
+            panic!("expected B-spline insertion");
+        };
+        assert_eq!(insertion.new_span_id, Some(100));
+
+        coordinator.undo().expect("undo insertion");
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                DocumentEdit::Delete {
+                    object: DocumentObjectId::Curve(curve),
+                },
+            )
+            .expect("divergently delete curve");
+        assert!(
+            coordinator
+                .session()
+                .design_document()
+                .curve(curve)
+                .is_none()
+        );
+        assert!(!coordinator.can_redo());
+        let retained_before_reload = coordinator
+            .session()
+            .persistent_identity_high_water()
+            .clone();
+
+        let encoded = WorkspaceSnapshot::from_coordinator(&coordinator)
+            .expect("capture workspace v5")
+            .encode()
+            .expect("encode workspace v5");
+        let decoded = WorkspaceSnapshot::decode(&encoded).expect("decode workspace v5");
+        let restored = decoded
+            .restore_session(DocumentSolveRequest::default(), SolverConfig::default())
+            .expect("restore sketch session");
+        assert_eq!(
+            restored.persistent_identity_high_water(),
+            &retained_before_reload
+        );
+        assert!(restored.design_document().curve(curve).is_none());
+
+        let mut reintroduced_curve_graph = original_curve_graph;
+        reintroduced_curve_graph
+            .retain_persistent_identity_high_water(restored.persistent_identity_high_water())
+            .expect("merge process-restored high-water");
+        let divergent = reintroduced_curve_graph
+            .insert_bspline_knot(curve, 0.75)
+            .expect("divergent insertion after process reload");
+        assert_eq!(divergent.new_span_id, Some(101));
+    }
+
+    #[test]
+    fn v5_current_design_provenance_restores_flexible_fillet_bytes_exactly() {
         let fixture = alpha_scenario(AlphaScenarioKind::FilletLineCircle, 1.0)
             .expect("line-circle fillet fixture");
         let AlphaScenarioIds::FilletLineCircle(ids) = fixture.ids else {
@@ -763,10 +961,10 @@ mod tests {
             .to_canonical_json()
             .expect("accepted canonical bytes");
 
-        let snapshot = WorkspaceSnapshot::from_coordinator(&coordinator).expect("capture v4");
+        let snapshot = WorkspaceSnapshot::from_coordinator(&coordinator).expect("capture v5");
         assert!(snapshot.accepted_belongs_to_current_design);
         let decoded =
-            WorkspaceSnapshot::decode(&snapshot.encode().expect("encode v4")).expect("decode v4");
+            WorkspaceSnapshot::decode(&snapshot.encode().expect("encode v5")).expect("decode v5");
         assert!(decoded.accepted_belongs_to_current_design);
         let restored = decoded
             .restore_session(DocumentSolveRequest::default(), SolverConfig::default())
@@ -848,17 +1046,9 @@ mod tests {
             WorkspaceSnapshot::from_coordinator(&coordinator).expect("capture workspace");
         let decoded =
             WorkspaceSnapshot::decode(&snapshot.encode().expect("encode")).expect("decode");
-        let restored_session = RetainedSketchDocumentSession::restore_design_with_accepted(
-            decoded.design_document().expect("design document"),
-            decoded
-                .accepted_document()
-                .expect("accepted payload")
-                .expect("accepted document"),
-            decoded.revisions(),
-            DocumentSolveRequest::default(),
-            SolverConfig::default(),
-        )
-        .expect("restore session");
+        let restored_session = decoded
+            .restore_session(DocumentSolveRequest::default(), SolverConfig::default())
+            .expect("restore session");
         let mut restored =
             RetainedEditorCoordinator::new(restored_session).expect("restored coordinator");
         assert_eq!(restored.checkpoint().design_json(), authored_json);
@@ -999,11 +1189,104 @@ mod tests {
     }
 
     #[test]
+    fn workspace_v5_rejects_invalid_sketch_identity_high_water() {
+        let coordinator = RetainedEditorCoordinator::new(
+            RetainedSketchDocumentSession::new(
+                SketchDocument::new(1.0).expect("document"),
+                DocumentSolveRequest::default(),
+                SolverConfig::default(),
+            )
+            .expect("session"),
+        )
+        .expect("coordinator");
+        let snapshot = WorkspaceSnapshot::from_coordinator(&coordinator).expect("snapshot");
+        let encoded = snapshot.encode().expect("encoded snapshot");
+        let baseline: serde_json::Value = serde_json::from_str(&encoded).expect("snapshot value");
+        let assert_rejected = |value: serde_json::Value| {
+            let input = serde_json::to_string(&value).expect("test input");
+            assert!(
+                WorkspaceSnapshot::decode(&input).is_err(),
+                "accepted invalid high-water payload {input}"
+            );
+        };
+
+        let mut missing = baseline.clone();
+        missing
+            .as_object_mut()
+            .expect("workspace object")
+            .remove("sketch_identity_high_water");
+        assert_rejected(missing);
+
+        let mut unknown = baseline.clone();
+        unknown["sketch_identity_high_water"]
+            .as_object_mut()
+            .expect("high-water object")
+            .insert("extra".into(), serde_json::Value::Bool(true));
+        assert_rejected(unknown);
+
+        let mut foreign = baseline.clone();
+        foreign["sketch_identity_high_water"] = serde_json::to_value(
+            SketchDocument::new(1.0)
+                .expect("foreign document")
+                .persistent_identity_high_water(),
+        )
+        .expect("foreign high-water value");
+        assert_rejected(foreign);
+
+        let mut object_cursor_behind = baseline.clone();
+        object_cursor_behind["sketch_identity_high_water"]["next_id"] =
+            serde_json::Value::String("00000000000000000000000000000000".into());
+        assert_rejected(object_cursor_behind);
+
+        let (spline_document, curve) = clamped_bspline_document();
+        let spline_coordinator = RetainedEditorCoordinator::new(
+            RetainedSketchDocumentSession::new(
+                spline_document,
+                DocumentSolveRequest::default(),
+                SolverConfig::default(),
+            )
+            .expect("spline session"),
+        )
+        .expect("spline coordinator");
+        let spline_snapshot =
+            WorkspaceSnapshot::from_coordinator(&spline_coordinator).expect("spline snapshot");
+        let mut spline_cursor_behind: serde_json::Value =
+            serde_json::from_str(&spline_snapshot.encode().expect("encoded spline snapshot"))
+                .expect("spline snapshot value");
+        spline_cursor_behind["sketch_identity_high_water"]["spline_span_cursors"]
+            .as_object_mut()
+            .expect("spline cursor map")
+            .insert(curve.to_string(), serde_json::Value::from(99));
+        assert_rejected(spline_cursor_behind);
+
+        let mut accepted_cursor_ahead = snapshot;
+        let mut accepted = accepted_cursor_ahead
+            .accepted_document()
+            .expect("accepted payload")
+            .expect("accepted document");
+        accepted
+            .add_point("accepted-only point", [2.0, 3.0])
+            .expect("advance accepted cursor");
+        let accepted_payload = accepted_cursor_ahead
+            .accepted
+            .as_mut()
+            .expect("accepted workspace payload");
+        accepted_payload.json = accepted
+            .to_canonical_json()
+            .expect("accepted canonical payload");
+        assert_rejected(
+            serde_json::to_value(accepted_cursor_ahead).expect("accepted-ahead snapshot value"),
+        );
+
+        assert!(WorkspaceSnapshot::decode(&format!("{encoded} trailing")).is_err());
+    }
+
+    #[test]
     #[allow(
         clippy::too_many_lines,
         reason = "one regression follows all legacy versions through the same current sidecar invariant"
     )]
-    fn v4_round_trips_draft_v5_and_migrates_v3_v2_and_v1_to_empty_features() {
+    fn v5_round_trips_draft_v5_and_migrates_v4_v3_v2_and_v1() {
         use geosolve_sketch::{
             CurveDefinition, CurveSpan, DocumentCurveTrimView, DocumentTrimBoundary,
             DocumentTrimParameter,
@@ -1073,6 +1356,28 @@ mod tests {
         );
         assert_eq!(decoded.features_json, snapshot.features_json);
 
+        let v4 = serde_json::json!({
+            "version": 4,
+            "design": snapshot.design.clone(),
+            "accepted": snapshot.accepted.clone(),
+            "accepted_belongs_to_current_design": snapshot.accepted_belongs_to_current_design,
+            "features_json": snapshot.features_json.clone(),
+            "feature_lifecycle_high_water": snapshot.feature_lifecycle_high_water,
+            "computed_evaluation_high_water": snapshot.computed_evaluation_high_water,
+            "revisions": snapshot.revisions,
+        })
+        .to_string();
+        let migrated_v4 = WorkspaceSnapshot::decode(&v4).expect("migrate workspace v4");
+        assert_eq!(migrated_v4.version, 5);
+        assert_eq!(migrated_v4.design, snapshot.design);
+        assert_eq!(migrated_v4.accepted, snapshot.accepted);
+        assert_eq!(migrated_v4.features_json, snapshot.features_json);
+        assert_eq!(
+            migrated_v4.sketch_identity_high_water,
+            derive_sketch_identity_high_water(&snapshot.design, snapshot.accepted.as_ref())
+                .expect("derived legacy sketch high-water")
+        );
+
         let v3 = serde_json::json!({
             "version": 3,
             "design": snapshot.design.clone(),
@@ -1082,7 +1387,7 @@ mod tests {
         })
         .to_string();
         let migrated_v3 = WorkspaceSnapshot::decode(&v3).unwrap();
-        assert_eq!(migrated_v3.version, 4);
+        assert_eq!(migrated_v3.version, 5);
         assert!(
             migrated_v3
                 .feature_document()
@@ -1103,7 +1408,7 @@ mod tests {
         })
         .to_string();
         let migrated_v2 = WorkspaceSnapshot::decode(&v2).unwrap();
-        assert_eq!(migrated_v2.version, 4);
+        assert_eq!(migrated_v2.version, 5);
         assert!(!migrated_v2.accepted_belongs_to_current_design);
         assert_eq!(
             migrated_v2
@@ -1128,7 +1433,7 @@ mod tests {
             serde_json::to_string(&empty.to_canonical_json().unwrap()).unwrap()
         );
         let migrated = WorkspaceSnapshot::decode(&v1).unwrap();
-        assert_eq!(migrated.version, 4);
+        assert_eq!(migrated.version, 5);
         assert!(!migrated.accepted_belongs_to_current_design);
         assert_eq!(
             migrated.design.encoding,

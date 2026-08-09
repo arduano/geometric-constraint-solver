@@ -273,6 +273,13 @@ snapshot codec round-trips accepted A4 contact state; it does not claim to encod
 or cursor. Formatting, diff, workspace, Clippy, WASM and Trunk gates pass. Independent review
 passes and confirms the M49/M50 deletion boundary.
 
+Current supersession note (M70, 2026-08-10): the `ProvisionalInferenceCandidate` type and
+`staged_inference_is_non_authoritative_until_its_commit_effect_is_applied` test named above are
+historical M49 evidence, not the current architecture or test owner. ADR 0034 replaces that seam
+with `DraftInferenceEngine`, authenticated `ConstructionCommitPlan` publication and the focused
+M70 inference/coordinator plus native/WASM transition-parity regressions. The historical M49
+classification remains unchanged; see `docs/M70_IMPLEMENTATION.md` for the current ledger.
+
 ## Validation plan
 
 The final direct commands include focused sketch/linkage/editor/persistence owners,

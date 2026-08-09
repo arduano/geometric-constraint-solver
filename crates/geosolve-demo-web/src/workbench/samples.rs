@@ -3,7 +3,9 @@
 
 use std::fmt::Write as _;
 
-use geosolve_constraint_editor::RetainedEditorCoordinator;
+use geosolve_constraint_editor::{
+    ConstructionPoint, ConstructionProposal, NurbsConstructionOptions, RetainedEditorCoordinator,
+};
 use geosolve_core::SolverConfig;
 use geosolve_sketch::{
     AlphaScenarioIds, AlphaScenarioKind, ContactNeighborhood, CurveDefinition, CurveId, CurveSpan,
@@ -28,6 +30,7 @@ pub(crate) enum SampleId {
     Pantograph,
     DrawingArm,
     ConstraintSampler,
+    AutoConstraintDrafting,
     TangentRadialNormal,
     ContactBranch,
     AngleDimensions,
@@ -40,7 +43,7 @@ pub(crate) enum SampleId {
 }
 
 impl SampleId {
-    pub(crate) const ALL: [Self; 23] = [
+    pub(crate) const ALL: [Self; 24] = [
         Self::DraftingCompass,
         Self::BezierContinuityBridge,
         Self::TwinRollerCam,
@@ -55,6 +58,7 @@ impl SampleId {
         Self::Pantograph,
         Self::DrawingArm,
         Self::ConstraintSampler,
+        Self::AutoConstraintDrafting,
         Self::TangentRadialNormal,
         Self::ContactBranch,
         Self::AngleDimensions,
@@ -82,6 +86,7 @@ impl SampleId {
             Self::Pantograph => "pantograph-linkage",
             Self::DrawingArm => "three-link-drawing-arm",
             Self::ConstraintSampler => "constraint-dimension-sampler",
+            Self::AutoConstraintDrafting => "auto-constraint-drafting",
             Self::TangentRadialNormal => "tangent-radial-normal",
             Self::ContactBranch => "contact-branch-specimen",
             Self::AngleDimensions => "angle-dimension-annotations",
@@ -103,6 +108,7 @@ impl SampleId {
 enum SampleSource {
     Alpha(AlphaScenarioKind),
     ConstructionReference,
+    AutoConstraintDrafting,
     TangentRadialNormal,
     FilletWorkshop,
 }
@@ -188,12 +194,17 @@ const MECHANISMS: [SampleDefinition; 13] = [
     ),
 ];
 
-const CONSTRAINTS: [SampleDefinition; 6] = [
+const CONSTRAINTS: [SampleDefinition; 7] = [
     sample(
         SampleId::ConstraintSampler,
         "Constraint and dimension sampler",
         AlphaScenarioKind::Corpus,
     ),
+    SampleDefinition {
+        id: SampleId::AutoConstraintDrafting,
+        title: "Auto-constraint drafting playground",
+        source: SampleSource::AutoConstraintDrafting,
+    },
     SampleDefinition {
         id: SampleId::TangentRadialNormal,
         title: "Tangent and radial-normal construction",
@@ -337,12 +348,215 @@ fn coordinator_from_source(source: SampleSource) -> Result<RetainedEditorCoordin
             (fixture.document, fixture.request)
         }
         SampleSource::ConstructionReference => construction_reference_document()?,
+        SampleSource::AutoConstraintDrafting => auto_constraint_drafting_document()?,
         SampleSource::TangentRadialNormal => tangent_radial_normal_document()?,
         SampleSource::FilletWorkshop => fillet_workshop_document()?,
     };
     let session = RetainedSketchDocumentSession::new(document, request, SolverConfig::default())
         .map_err(|error| error.to_string())?;
     RetainedEditorCoordinator::new(session).map_err(|error| error.to_string())
+}
+
+#[allow(
+    clippy::too_many_lines,
+    reason = "one spatially separated ordinary-document drafting playground fixture"
+)]
+fn auto_constraint_drafting_document()
+-> Result<(SketchDocument, geosolve_sketch::DocumentSolveRequest), String> {
+    let mut document = workshop_document(0x7000_0000_0000_0000_0000_0000_0000_0001_u128)?;
+
+    let midpoint_line = add_line(
+        &mut document,
+        "Midpoint and affine reference line",
+        ("Midpoint reference start", [-11.0, 5.0]),
+        ("Midpoint reference end", [-3.0, 5.0]),
+    )?;
+    fix_curve_points(&mut document, midpoint_line, "midpoint reference")?;
+
+    let affine_polyline = add_polyline(
+        &mut document,
+        "Affine reference polyline",
+        &[
+            ("Affine polyline start", [-11.0, 1.0]),
+            ("Affine polyline corner", [-7.0, 3.0]),
+            ("Affine polyline end", [-3.0, 1.0]),
+        ],
+    )?;
+    fix_curve_points(&mut document, affine_polyline, "affine reference polyline")?;
+
+    add_point_specimen_marker(
+        &mut document,
+        "Profile point specimen marker",
+        "Profile point specimen",
+        [-11.0, -9.0],
+        0.75,
+        GeometryRole::Profile,
+        false,
+    )?;
+    add_point_specimen_marker(
+        &mut document,
+        "Construction point specimen marker",
+        "Construction point specimen",
+        [-7.0, -9.0],
+        0.75,
+        GeometryRole::Construction,
+        true,
+    )?;
+
+    // Drawing a line between these centers reuses both point identities.
+    // A construction reference over the same point pair already owns the
+    // Horizontal relation, so the inferred duplicate is deterministically
+    // rejected while the line draft remains correction-ready.
+    let mut rejection_points = Vec::new();
+    for (suffix, position) in [("start", [2.0, -9.0]), ("end", [10.0, -9.0])] {
+        rejection_points.push(add_point_specimen_marker(
+            &mut document,
+            &format!("Redundant inference rejection {suffix} marker"),
+            &format!("Redundant inference rejection {suffix} point"),
+            position,
+            0.65,
+            GeometryRole::Construction,
+            false,
+        )?);
+    }
+    let rejection_reference = document
+        .add_curve(
+            "Redundant inference rejection reference",
+            CurveDefinition::Line {
+                start: rejection_points[0],
+                end: rejection_points[1],
+                branch_direction: [1.0, 0.0],
+            },
+        )
+        .map_err(|error| error.to_string())?;
+    document
+        .set_geometry_role(rejection_reference, GeometryRole::Construction)
+        .map_err(|error| error.to_string())?;
+    document
+        .add_constraint(
+            "Prepared rejection reference is horizontal",
+            DocumentConstraintDefinition::Horizontal {
+                line: CurveSpan::line(rejection_reference),
+            },
+        )
+        .map_err(|error| error.to_string())?;
+
+    let circle_center = document
+        .add_point("Curve target circle center", [2.0, 5.0])
+        .map_err(|error| error.to_string())?;
+    fix_point_at_current(&mut document, circle_center, "curve target circle center")?;
+    let circle_radius = document
+        .add_scalar(
+            "Curve target circle radius",
+            2.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .map_err(|error| error.to_string())?;
+    let circle = document
+        .add_curve(
+            "Curve target circle",
+            CurveDefinition::Circle {
+                center: circle_center,
+                radius: circle_radius,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+    let circle_radius_target = document
+        .add_scalar(
+            "Curve target circle radius target",
+            2.0,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .map_err(|error| error.to_string())?;
+    document
+        .add_dimension(
+            "Curve target circle radius dimension",
+            DocumentDimensionDefinition::Radius {
+                curve: circle,
+                target: circle_radius_target,
+            },
+            DocumentDimensionMode::Driving,
+        )
+        .map_err(|error| error.to_string())?;
+
+    let bezier_controls = [
+        ("Curve target Bezier start", [6.0, 3.0]),
+        ("Curve target Bezier control 1", [8.0, 7.0]),
+        ("Curve target Bezier control 2", [10.0, 2.0]),
+        ("Curve target Bezier end", [12.0, 5.0]),
+    ]
+    .map(|(label, position)| document.add_point(label, position))
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|error| error.to_string())?
+    .try_into()
+    .map_err(|_| "auto-constraint Bezier requires four controls".to_owned())?;
+    let bezier = document
+        .add_curve(
+            "Curve target cubic Bezier",
+            CurveDefinition::CubicBezier {
+                controls: bezier_controls,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+    fix_curve_points(&mut document, bezier, "curve target cubic Bezier")?;
+
+    let nurbs = ConstructionProposal::Nurbs {
+        controls: vec![
+            ConstructionPoint::New([5.0, -1.0]),
+            ConstructionPoint::New([7.0, -4.0]),
+            ConstructionPoint::New([10.0, 0.0]),
+            ConstructionPoint::New([12.0, -3.0]),
+        ],
+        options: NurbsConstructionOptions::default(),
+    }
+    .apply_with_role(&mut document, GeometryRole::Profile)
+    .map_err(|error| error.to_string())?
+    .curves
+    .into_iter()
+    .next()
+    .ok_or_else(|| "auto-constraint NURBS construction created no curve".to_owned())?;
+    fix_curve_points(&mut document, nurbs, "curve target NURBS")?;
+
+    let overlap_profile = add_line(
+        &mut document,
+        "Profile overlap priority reference",
+        ("Profile overlap start", [-11.0, -3.0]),
+        ("Profile overlap end", [-3.0, -3.0]),
+    )?;
+    fix_curve_points(&mut document, overlap_profile, "profile overlap reference")?;
+    let overlap_construction = add_line(
+        &mut document,
+        "Construction overlap priority reference",
+        ("Construction overlap start", [-11.0, -3.0]),
+        ("Construction overlap end", [-3.0, -3.0]),
+    )?;
+    fix_curve_points(
+        &mut document,
+        overlap_construction,
+        "construction overlap reference",
+    )?;
+    document
+        .set_geometry_role(overlap_construction, GeometryRole::Construction)
+        .map_err(|error| error.to_string())?;
+
+    for suffix in ["A", "B"] {
+        let ambiguous = add_line(
+            &mut document,
+            &format!("Exact ambiguity reference {suffix}"),
+            (&format!("Exact ambiguity {suffix} start"), [2.0, -6.0]),
+            (&format!("Exact ambiguity {suffix} end"), [10.0, -6.0]),
+        )?;
+        fix_curve_points(
+            &mut document,
+            ambiguous,
+            &format!("exact ambiguity reference {suffix}"),
+        )?;
+    }
+
+    Ok((document, geosolve_sketch::DocumentSolveRequest::default()))
 }
 
 fn construction_reference_document()
@@ -730,6 +944,44 @@ fn add_line(
         .map_err(|error| error.to_string())
 }
 
+fn add_point_specimen_marker(
+    document: &mut SketchDocument,
+    curve_label: &str,
+    point_label: &str,
+    position: [f64; 2],
+    radius: f64,
+    role: GeometryRole,
+    fixed: bool,
+) -> Result<DesignPointId, String> {
+    let center = document
+        .add_point(point_label, position)
+        .map_err(|error| error.to_string())?;
+    if fixed {
+        fix_point_at_current(document, center, point_label)?;
+    }
+    let radius_scalar = document
+        .add_scalar(
+            format!("{curve_label} radius"),
+            radius,
+            ScalarUnit::Length,
+            ScalarDomain::Positive,
+        )
+        .map_err(|error| error.to_string())?;
+    let marker = document
+        .add_curve(
+            curve_label,
+            CurveDefinition::Circle {
+                center,
+                radius: radius_scalar,
+            },
+        )
+        .map_err(|error| error.to_string())?;
+    document
+        .set_geometry_role(marker, role)
+        .map_err(|error| error.to_string())?;
+    Ok(center)
+}
+
 fn fix_curve_points(
     document: &mut SketchDocument,
     curve: CurveId,
@@ -739,6 +991,10 @@ fn fix_curve_points(
         Some(CurveDefinition::Line { start, end, .. }) => vec![*start, *end],
         Some(CurveDefinition::Polyline { points, .. }) => points.clone(),
         Some(CurveDefinition::QuadraticBezier { controls }) => controls.to_vec(),
+        Some(CurveDefinition::CubicBezier { controls }) => controls.to_vec(),
+        Some(
+            CurveDefinition::BSpline { controls, .. } | CurveDefinition::Nurbs { controls, .. },
+        ) => controls.clone(),
         _ => return Err(format!("{label} does not expose fixable workshop controls")),
     };
     for (index, point) in points.into_iter().enumerate() {
@@ -800,11 +1056,11 @@ mod tests {
     use std::collections::HashSet;
 
     use geosolve_constraint_editor::{
-        ComputedFilletContinuationLimitKind, CoordinatorError, EditorHoverState, EditorScene,
-        FeatureAuthoringOptions, FeatureAuthoringOutcome, FeatureAuthoringState,
-        FeatureAuthoringTool, FeatureAuthoringWarningKind, GeometryInteractionPolicy,
-        GeometryPickScope, PickTolerance, RetainedEditorCoordinator, ScreenPoint, SelectionItem,
-        Viewport,
+        ComputedFilletContinuationLimitKind, CoordinatorError, EditorEffect, EditorHoverState,
+        EditorScene, EditorTool, FeatureAuthoringOptions, FeatureAuthoringOutcome,
+        FeatureAuthoringState, FeatureAuthoringTool, FeatureAuthoringWarningKind,
+        GeometryInteractionPolicy, GeometryPickScope, InferredRelation, Modifiers, PickTolerance,
+        PointerInput, RetainedEditorCoordinator, ScreenPoint, SelectionItem, Viewport,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -992,6 +1248,494 @@ mod tests {
     #[test]
     #[allow(
         clippy::too_many_lines,
+        reason = "one inventory test keeps every spatially separated M70 UAT specimen auditable"
+    )]
+    fn auto_constraint_playground_has_role_scope_and_rejection_specimens() {
+        let mut catalog = SampleCatalogState::default();
+        let coordinator = catalog
+            .open_key(SampleId::AutoConstraintDrafting.key())
+            .expect("auto-constraint drafting playground");
+        let document = coordinator.session().design_document();
+
+        for expected in [
+            "Midpoint and affine reference line",
+            "Affine reference polyline",
+            "Profile point specimen marker",
+            "Construction point specimen marker",
+            "Redundant inference rejection start marker",
+            "Redundant inference rejection end marker",
+            "Redundant inference rejection reference",
+            "Curve target circle",
+            "Curve target cubic Bezier",
+            "NURBS",
+            "Profile overlap priority reference",
+            "Construction overlap priority reference",
+            "Exact ambiguity reference A",
+            "Exact ambiguity reference B",
+        ] {
+            assert!(
+                document
+                    .curves()
+                    .iter()
+                    .any(|curve| curve.label == expected),
+                "missing drafting playground curve `{expected}`"
+            );
+        }
+        assert!(
+            document
+                .curves()
+                .iter()
+                .any(|curve| matches!(curve.definition, CurveDefinition::CubicBezier { .. }))
+        );
+        assert!(
+            document
+                .curves()
+                .iter()
+                .any(|curve| matches!(curve.definition, CurveDefinition::Nurbs { .. }))
+        );
+
+        let marker = |label: &str| {
+            let curve = document
+                .curves()
+                .iter()
+                .find(|curve| curve.label == label)
+                .unwrap_or_else(|| panic!("missing point marker `{label}`"));
+            let CurveDefinition::Circle { center, .. } = &curve.definition else {
+                panic!("point marker `{label}` must remain circular")
+            };
+            (curve.id, *center)
+        };
+        let (profile_marker, profile_point) = marker("Profile point specimen marker");
+        let (construction_marker, construction_point) =
+            marker("Construction point specimen marker");
+        assert_eq!(
+            document.geometry_role(profile_marker),
+            Some(GeometryRole::Profile)
+        );
+        assert_eq!(
+            document.geometry_role(construction_marker),
+            Some(GeometryRole::Construction)
+        );
+
+        let accepted = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("accepted playground scene");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            accepted.design_identity(),
+            accepted.document(),
+            document,
+            Viewport::new([1000.0, 700.0], [0.0, -2.0], 25.0).expect("playground viewport"),
+            0.25,
+        )
+        .expect("playground scene");
+        let scene_point = |point| {
+            scene
+                .points
+                .iter()
+                .find(|value| value.id == point)
+                .copied()
+                .expect("point specimen in accepted scene")
+        };
+        let profile_point = scene_point(profile_point);
+        let construction_point = scene_point(construction_point);
+        assert!(profile_point.role_incidence.profile);
+        assert!(!profile_point.role_incidence.construction);
+        assert!(!construction_point.role_incidence.profile);
+        assert!(construction_point.role_incidence.construction);
+        let profile_scope = GeometryInteractionPolicy {
+            scope: GeometryPickScope::Profile,
+            ..GeometryInteractionPolicy::default()
+        };
+        let construction_scope = GeometryInteractionPolicy {
+            scope: GeometryPickScope::Construction,
+            ..GeometryInteractionPolicy::default()
+        };
+        assert!(profile_point.is_interactive(profile_scope));
+        assert!(!profile_point.is_interactive(construction_scope));
+        assert!(!construction_point.is_interactive(profile_scope));
+        assert!(construction_point.is_interactive(construction_scope));
+
+        let rejection_points = [
+            "Redundant inference rejection start marker",
+            "Redundant inference rejection end marker",
+        ]
+        .map(|label| marker(label).1);
+        let rejection_positions = rejection_points.map(|point| {
+            document
+                .point(point)
+                .expect("rejection specimen point")
+                .position
+        });
+        assert_eq!(
+            rejection_positions[0][1].to_bits(),
+            rejection_positions[1][1].to_bits(),
+            "the prepared point-to-point horizontal inference must be algebraically redundant"
+        );
+        assert_ne!(
+            rejection_positions[0][0].to_bits(),
+            rejection_positions[1][0].to_bits()
+        );
+        assert!(rejection_points.into_iter().all(|point| {
+            document.constraints().iter().all(|constraint| {
+                !matches!(
+                    constraint.definition,
+                    DocumentConstraintDefinition::FixedPoint { point: fixed, .. } if fixed == point
+                )
+            })
+        }));
+        let rejection_reference = document
+            .curves()
+            .iter()
+            .find(|curve| curve.label == "Redundant inference rejection reference")
+            .expect("rejection reference")
+            .id;
+        assert!(document.constraints().iter().any(|constraint| matches!(
+            constraint.definition,
+            DocumentConstraintDefinition::Horizontal { line }
+                if line == CurveSpan::line(rejection_reference)
+        )));
+
+        let ambiguity =
+            ["Exact ambiguity reference A", "Exact ambiguity reference B"].map(|label| {
+                let curve = document
+                    .curves()
+                    .iter()
+                    .find(|curve| curve.label == label)
+                    .expect("exact ambiguity reference");
+                let CurveDefinition::Line { start, end, .. } = curve.definition else {
+                    panic!("exact ambiguity reference must remain a line")
+                };
+                [
+                    document.point(start).expect("ambiguity start").position,
+                    document.point(end).expect("ambiguity end").position,
+                ]
+            });
+        assert_eq!(ambiguity[0], ambiguity[1]);
+
+        assert!(coordinator.editor().selection().is_empty());
+        assert!(coordinator.feature_document().features().is_empty());
+        assert_eq!(coordinator.history_len(), 1);
+        assert!(!coordinator.can_undo());
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one rejection fixture proves displayed plan, atomic refusal, recoverable draft and retry"
+    )]
+    fn auto_constraint_rejection_specimen_preserves_the_recoverable_draft() {
+        let mut catalog = SampleCatalogState::default();
+        let mut coordinator = catalog
+            .open_key(SampleId::AutoConstraintDrafting.key())
+            .expect("auto-constraint drafting playground");
+        let accepted = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("accepted playground");
+        let scene = EditorScene::from_accepted_for_design(
+            accepted.identity().revision().get(),
+            accepted.design_identity(),
+            accepted.document(),
+            coordinator.session().design_document(),
+            Viewport::new([1000.0, 700.0], [0.0, -2.0], 25.0).expect("playground viewport"),
+            0.25,
+        )
+        .expect("playground scene")
+        .with_retained_session(coordinator.session())
+        .expect("bound playground scene");
+        let positions = [
+            "Redundant inference rejection start point",
+            "Redundant inference rejection end point",
+        ]
+        .map(|label| {
+            coordinator
+                .session()
+                .design_document()
+                .points()
+                .iter()
+                .find(|point| point.label == label)
+                .unwrap_or_else(|| panic!("missing rejection point `{label}`"))
+                .position
+        });
+
+        coordinator.editor_mut().activate_tool(EditorTool::Line);
+        let history = (coordinator.history_len(), coordinator.history_cursor());
+        let first = coordinator.pointer_down(
+            &scene,
+            PointerInput {
+                pointer_id: 170,
+                position: scene.viewport.model_to_screen(positions[0]),
+                modifiers: Modifiers::default(),
+            },
+        );
+        assert!(first.iter().all(|effect| !matches!(
+            effect,
+            EditorEffect::CommitConstruction { .. } | EditorEffect::CommitConstructionPlan { .. }
+        )));
+        let second = coordinator.pointer_down(
+            &scene,
+            PointerInput {
+                pointer_id: 170,
+                position: scene.viewport.model_to_screen(positions[1]),
+                modifiers: Modifiers::default(),
+            },
+        );
+        let (token, commit) = second
+            .iter()
+            .find_map(|effect| match effect {
+                EditorEffect::CommitConstructionPlan { token, plan, .. }
+                    if matches!(
+                        plan.relations.as_slice(),
+                        [InferredRelation::Horizontal { .. }]
+                    ) =>
+                {
+                    Some((*token, effect))
+                }
+                _ => None,
+            })
+            .expect("redundant horizontal plan");
+        let rejection = coordinator.apply_editor_effect(commit);
+        assert!(
+            matches!(
+                rejection,
+                Err(CoordinatorError::RedundantInferredConstruction { .. })
+            ),
+            "expected redundant inferred construction, got {rejection:?}"
+        );
+        assert_eq!(
+            (coordinator.history_len(), coordinator.history_cursor()),
+            history
+        );
+        assert!(
+            coordinator
+                .editor()
+                .pending_construction_commit_token()
+                .is_some()
+        );
+        assert!(
+            coordinator
+                .acknowledge_construction_commit(token, false)
+                .is_empty()
+        );
+        let corrected = [positions[1][0], positions[1][1] + 2.0];
+        let preview = coordinator.editor_mut().pointer_move(
+            &scene,
+            PointerInput {
+                pointer_id: 170,
+                position: scene.viewport.model_to_screen(corrected),
+                modifiers: Modifiers::default(),
+            },
+        );
+        assert!(
+            preview
+                .iter()
+                .any(|effect| matches!(effect, EditorEffect::PreviewConstruction(_)))
+        );
+        let retry = coordinator.pointer_down(
+            &scene,
+            PointerInput {
+                pointer_id: 170,
+                position: scene.viewport.model_to_screen(corrected),
+                modifiers: Modifiers::default(),
+            },
+        );
+        assert!(retry.iter().any(|effect| matches!(
+            effect,
+            EditorEffect::CommitConstructionPlan { plan, .. } if plan.relations.is_empty()
+        )));
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one direct sample lifecycle covers role, retained point, deletion, history, and workspace reload"
+    )]
+    fn auto_constraint_playground_remains_ordinary_editable_across_reload() {
+        let mut catalog = SampleCatalogState::default();
+        let mut coordinator = catalog
+            .open_key(SampleId::AutoConstraintDrafting.key())
+            .expect("auto-constraint drafting playground");
+        let (profile_marker, profile_point, construction_marker) = {
+            let document = coordinator.session().design_document();
+            let marker = |label: &str| {
+                let curve = document
+                    .curves()
+                    .iter()
+                    .find(|curve| curve.label == label)
+                    .unwrap_or_else(|| panic!("missing point marker `{label}`"));
+                let CurveDefinition::Circle { center, .. } = &curve.definition else {
+                    panic!("point marker `{label}` must remain circular")
+                };
+                (curve.id, *center)
+            };
+            let (profile_marker, profile_point) = marker("Profile point specimen marker");
+            let (construction_marker, _) = marker("Construction point specimen marker");
+            (profile_marker, profile_point, construction_marker)
+        };
+
+        coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::Curve(CurveSpan::line(profile_marker))]);
+        coordinator
+            .toggle_selected_geometry_role(coordinator.session().design_identity())
+            .expect("ordinary sample role edit");
+        assert_eq!(
+            coordinator
+                .session()
+                .design_document()
+                .geometry_role(profile_marker),
+            Some(GeometryRole::Construction)
+        );
+        coordinator.undo().expect("undo role edit");
+        assert_eq!(
+            coordinator
+                .session()
+                .design_document()
+                .geometry_role(profile_marker),
+            Some(GeometryRole::Profile)
+        );
+        coordinator.redo().expect("redo role edit");
+
+        let moved_position = [-10.5, -7.75];
+        coordinator
+            .apply_edit(
+                coordinator.session().design_identity(),
+                geosolve_sketch::DocumentEdit::SetPointPosition {
+                    point: profile_point,
+                    position: moved_position,
+                },
+            )
+            .expect("ordinary retained point mutation");
+        let accepted_position = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("accepted moved sample")
+            .document()
+            .point(profile_point)
+            .expect("moved profile point")
+            .position;
+        assert_eq!(
+            accepted_position.map(f64::to_bits),
+            moved_position.map(f64::to_bits)
+        );
+
+        coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::Curve(CurveSpan::line(construction_marker))]);
+        coordinator
+            .delete_selected(coordinator.session().design_identity())
+            .expect("delete ordinary sample curve");
+        assert!(
+            coordinator
+                .session()
+                .design_document()
+                .curve(construction_marker)
+                .is_none()
+        );
+        coordinator.undo().expect("undo sample deletion");
+        assert!(
+            coordinator
+                .session()
+                .design_document()
+                .curve(construction_marker)
+                .is_some()
+        );
+        coordinator.redo().expect("redo sample deletion");
+        assert!(
+            coordinator
+                .session()
+                .design_document()
+                .curve(construction_marker)
+                .is_none()
+        );
+        coordinator
+            .undo()
+            .expect("restore sample curve before save");
+
+        let design_json = coordinator
+            .session()
+            .design_document()
+            .to_draft_v5_json()
+            .expect("edited sample JSON");
+        let accepted_json = coordinator
+            .session()
+            .accepted_state_for_current_input()
+            .expect("accepted edited sample")
+            .document()
+            .to_draft_v5_json()
+            .expect("accepted edited sample JSON");
+        let snapshot =
+            WorkspaceSnapshot::from_coordinator(&coordinator).expect("capture edited sample");
+        let decoded = WorkspaceSnapshot::decode(
+            &snapshot
+                .encode()
+                .expect("encode edited auto-constraint playground"),
+        )
+        .expect("decode edited auto-constraint playground");
+        let session = decoded
+            .restore_session(
+                geosolve_sketch::DocumentSolveRequest::default(),
+                SolverConfig::default(),
+            )
+            .expect("restore edited sample session");
+        let mut restored = RetainedEditorCoordinator::with_features_and_high_water(
+            session,
+            decoded
+                .feature_document()
+                .expect("restore empty feature sidecar"),
+            decoded.feature_lifecycle_high_water(),
+            decoded.computed_evaluation_high_water(),
+        )
+        .expect("restore edited sample coordinator");
+        assert_eq!(
+            restored
+                .session()
+                .design_document()
+                .to_draft_v5_json()
+                .expect("restored sample JSON"),
+            design_json
+        );
+        assert_eq!(
+            restored
+                .session()
+                .accepted_state_for_current_input()
+                .expect("restored accepted sample")
+                .document()
+                .to_draft_v5_json()
+                .expect("restored accepted sample JSON"),
+            accepted_json
+        );
+        assert!(restored.feature_document().features().is_empty());
+        assert_eq!(restored.history_len(), 1);
+
+        let checkpoint = restored
+            .persistence_checkpoint()
+            .expect("restored sample persistence checkpoint");
+        restored
+            .editor_mut()
+            .set_selection([SelectionItem::Curve(CurveSpan::line(construction_marker))]);
+        restored
+            .delete_selected(restored.session().design_identity())
+            .expect("mutate restored sample before reload");
+        restored
+            .reload(&checkpoint)
+            .expect("reload exact edited sample checkpoint");
+        assert!(
+            restored
+                .session()
+                .design_document()
+                .curve(construction_marker)
+                .is_some()
+        );
+        assert_eq!(restored.history_len(), 1);
+        assert!(restored.editor().selection().is_empty());
+    }
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
         reason = "one focused M69 sample test owns roles, overlap priority and thin rendering metadata"
     )]
     fn construction_reference_sample_owns_shared_incidence_and_exact_overlap_priority() {
@@ -1078,6 +1822,7 @@ mod tests {
             &[],
             &[],
             EditorHoverState::default(),
+            None,
             None,
             None,
             None,
