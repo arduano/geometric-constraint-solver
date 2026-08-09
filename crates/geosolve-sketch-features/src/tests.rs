@@ -4,8 +4,9 @@ use geosolve_sketch::{
     CancellationToken, CurveDefinition, CurveSpan, DocumentArcSweep, DocumentCurveNormalSide,
     DocumentCurveTrimView, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint,
     DocumentObjectId, DocumentSolveRequest, DocumentTrimBoundary, DocumentTrimParameter,
-    OperationControl, OperationLimits, OperationOutcome, RetainedSketchDocumentSession,
-    ScalarDomain, ScalarUnit, SketchDocument, SolverConfig, cancellation_pair,
+    GeometryRole, OperationControl, OperationLimits, OperationOutcome,
+    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument, SolverConfig,
+    cancellation_pair,
 };
 
 use crate::{
@@ -803,6 +804,29 @@ fn arc_centers(snapshot: &crate::ComputedFeatureSnapshot) -> Vec<[u64; 2]> {
 type SourceGeometrySignature = (NativeCurveSpanSource, u64, u64);
 type ComputedGeometrySignature = (Vec<SourceGeometrySignature>, Vec<Vec<u64>>);
 
+fn construction_geometry_signature(
+    snapshot: &crate::ComputedFeatureSnapshot,
+) -> Vec<SourceGeometrySignature> {
+    let mut values = snapshot
+        .construction_fragments()
+        .iter()
+        .map(|fragment| {
+            (
+                fragment.source,
+                fragment.interval.start.to_bits(),
+                fragment.interval.end.to_bits(),
+            )
+        })
+        .collect::<Vec<_>>();
+    values.sort_unstable();
+    values
+}
+
+fn assert_interval(actual: crate::ComputedSourceInterval, expected_start: f64, expected_end: f64) {
+    assert_close(actual.start, expected_start, 1.0e-10);
+    assert_close(actual.end, expected_end, 1.0e-10);
+}
+
 fn geometry_signature(snapshot: &crate::ComputedFeatureSnapshot) -> ComputedGeometrySignature {
     let mut sources = Vec::new();
     let mut arcs = Vec::new();
@@ -1211,6 +1235,12 @@ fn adjacent_batch_composes_both_middle_endpoints_and_variable_output_count() {
     let mut allocator = ComputedEvaluationAllocator::default();
     let snapshot = evaluate(&session, &features, &mut allocator);
     assert_eq!(snapshot.edges().len(), 5);
+    assert!(
+        snapshot
+            .edges()
+            .iter()
+            .all(|edge| edge.role == GeometryRole::Profile)
+    );
     assert_eq!(arc_centers(&snapshot).len(), 2);
     let middle = snapshot
         .source_fragment_edges(source(fixture.spans[1]))
@@ -1228,6 +1258,64 @@ fn adjacent_batch_composes_both_middle_endpoints_and_variable_output_count() {
     assert!(start_claim.is_some() && end_claim.is_some());
     assert!((interval.start - 0.125).abs() < 1.0e-8);
     assert!((interval.end - 0.875).abs() < 1.0e-8);
+
+    let first_discarded = snapshot
+        .source_construction_fragments(source(fixture.spans[0]))
+        .collect::<Vec<_>>();
+    assert_eq!(first_discarded.len(), 1);
+    assert_interval(first_discarded[0].interval, 0.875, 1.0);
+    assert_eq!(
+        first_discarded[0].provenance.endpoint,
+        DocumentFilletTrimEndpoint::End
+    );
+
+    let middle_discarded = snapshot
+        .source_construction_fragments(source(fixture.spans[1]))
+        .collect::<Vec<_>>();
+    assert_eq!(middle_discarded.len(), 2);
+    assert_interval(middle_discarded[0].interval, 0.0, 0.125);
+    assert_interval(middle_discarded[1].interval, 0.875, 1.0);
+    assert_eq!(
+        middle_discarded[0].provenance.endpoint,
+        DocumentFilletTrimEndpoint::Start
+    );
+    assert_eq!(
+        middle_discarded[1].provenance.endpoint,
+        DocumentFilletTrimEndpoint::End
+    );
+
+    let last_discarded = snapshot
+        .source_construction_fragments(source(fixture.spans[2]))
+        .collect::<Vec<_>>();
+    assert_eq!(last_discarded.len(), 1);
+    assert_interval(last_discarded[0].interval, 0.0, 0.125);
+    assert_eq!(
+        last_discarded[0].provenance.endpoint,
+        DocumentFilletTrimEndpoint::Start
+    );
+
+    for fragment in snapshot.construction_fragments() {
+        assert_eq!(fragment.source_role, GeometryRole::Profile);
+        assert_interval(fragment.provenance.base_interval, 0.0, 1.0);
+        assert_eq!(snapshot.construction_fragment(fragment.id), Some(fragment));
+        assert_eq!(
+            snapshot
+                .fillet_construction_fragments(fragment.provenance.owner)
+                .count(),
+            2,
+            "each right-angle corner discards one complement from each parent"
+        );
+    }
+    assert!(
+        snapshot
+            .construction_fragment(crate::ComputedConstructionFragmentId {
+                evaluation: crate::ComputedEvaluationRevision::from_raw(
+                    snapshot.evaluation_revision().raw() + 1,
+                ),
+                ordinal: 0,
+            })
+            .is_none()
+    );
     let state = &snapshot
         .feature_evaluations()
         .iter()
@@ -1238,6 +1326,68 @@ fn adjacent_batch_composes_both_middle_endpoints_and_variable_output_count() {
         state,
         ComputedFeatureEvaluationState::Current { corner_edges } if corner_edges.len() == 2
     ));
+}
+
+#[test]
+fn effective_edge_roles_follow_native_sources_and_mixed_parent_fillet_semantics() {
+    let mut fixture = line_circle_fixture();
+    fixture
+        .document
+        .set_geometry_role(fixture.line.curve, GeometryRole::Construction)
+        .unwrap();
+    assert_eq!(
+        fixture.document.geometry_role(fixture.line.curve),
+        Some(GeometryRole::Construction)
+    );
+    assert_eq!(
+        fixture.document.geometry_role(fixture.circle.curve),
+        Some(GeometryRole::Profile)
+    );
+    let session = retained(fixture.document.clone());
+    let authoring = crate::ComputedFeatureAuthoringSnapshot::capture(&session).unwrap();
+    let resolved = complete(
+        authoring
+            .resolve_fillet_corner(
+                fixture.request,
+                0.75,
+                ComputedFeatureEvaluationPolicy::default(),
+                OperationControl::unlimited(),
+            )
+            .unwrap(),
+    );
+    let mut features = ComputedFeatureDocument::new(fixture.document.id());
+    features
+        .create_fillet_set("mixed roles", 0.75, vec![resolved.corner])
+        .unwrap();
+    let evaluated = evaluate(
+        &session,
+        &features,
+        &mut ComputedEvaluationAllocator::default(),
+    );
+
+    let line_fragment = evaluated
+        .source_fragment_edges(source(fixture.line))
+        .next()
+        .unwrap();
+    assert_eq!(line_fragment.role, GeometryRole::Construction);
+    let arc = evaluated
+        .edges()
+        .iter()
+        .find(|edge| matches!(edge.geometry, ComputedEdgeGeometry::CircularArc(_)))
+        .unwrap();
+    assert_eq!(arc.role, GeometryRole::Construction);
+    let discarded = evaluated
+        .source_construction_fragments(source(fixture.line))
+        .collect::<Vec<_>>();
+    assert_eq!(discarded.len(), 1);
+    assert_eq!(discarded[0].source_role, GeometryRole::Construction);
+    assert_eq!(
+        evaluated
+            .source_construction_fragments(source(fixture.circle))
+            .count(),
+        0,
+        "a full-period profile parent remains whole even in a mixed-role Fillet"
+    );
 }
 
 #[test]
@@ -1266,6 +1416,10 @@ fn sequential_sets_match_batch_geometry_and_suppression_is_local() {
         geometry_signature(&batch_snapshot),
         geometry_signature(&sequential_snapshot)
     );
+    assert_eq!(
+        construction_geometry_signature(&batch_snapshot),
+        construction_geometry_signature(&sequential_snapshot)
+    );
     assert_ne!(
         batch_snapshot.evaluation_revision(),
         sequential_snapshot.evaluation_revision()
@@ -1279,6 +1433,13 @@ fn sequential_sets_match_batch_geometry_and_suppression_is_local() {
     sequential.set_suppressed(first, true).unwrap();
     let suppressed = evaluate(&session, &sequential, &mut allocator);
     assert_eq!(arc_centers(&suppressed).len(), 1);
+    assert_eq!(suppressed.construction_fragments().len(), 2);
+    assert!(
+        suppressed
+            .construction_fragments()
+            .iter()
+            .all(|fragment| fragment.provenance.owner.feature != first)
+    );
     assert!(matches!(
         suppressed
             .feature_evaluations()
@@ -1305,6 +1466,7 @@ fn crossed_claims_fail_whole_set_atomically_and_radius_edit_recovers() {
     let mut allocator = ComputedEvaluationAllocator::default();
     let failed = evaluate(&session, &features, &mut allocator);
     assert!(arc_centers(&failed).is_empty());
+    assert!(failed.construction_fragments().is_empty());
     let failed_state = &failed
         .feature_evaluations()
         .iter()
@@ -1365,6 +1527,13 @@ fn missing_source_is_repairable_and_does_not_block_unrelated_feature() {
         ComputedFeatureEvaluationState::Current { .. }
     ));
     assert_eq!(arc_centers(&failed).len(), 1);
+    assert_eq!(failed.construction_fragments().len(), 2);
+    assert!(
+        failed
+            .construction_fragments()
+            .iter()
+            .all(|fragment| fragment.provenance.owner.feature == other)
+    );
     let recovered = evaluate(&original, &features, &mut allocator);
     assert!(recovered.feature_evaluations().iter().any(|value| {
         value.feature == missing
@@ -1374,6 +1543,7 @@ fn missing_source_is_repairable_and_does_not_block_unrelated_feature() {
         value.feature == other
             && matches!(value.state, ComputedFeatureEvaluationState::Current { .. })
     }));
+    assert_eq!(recovered.construction_fragments().len(), 4);
 }
 
 #[test]
@@ -1419,6 +1589,67 @@ fn evaluation_allocator_persists_nonreuse_and_control_stops_without_output() {
             .execute(OperationControl::new(CancellationToken::default(), limits))
             .unwrap(),
         OperationOutcome::WorkExhausted { .. }
+    ));
+}
+
+#[test]
+fn construction_fragments_are_policy_bounded_and_counted_as_publication_work() {
+    let fixture = polyline_fixture();
+    let session = retained(fixture.document.clone());
+    let mut features = ComputedFeatureDocument::new(fixture.document.id());
+    features
+        .create_fillet_set("one", 0.5, vec![first_corner(fixture.spans)])
+        .unwrap();
+    let mut allocator = ComputedEvaluationAllocator::default();
+
+    let snapshot = ComputedFeatureEvaluationSnapshot::capture(
+        &session,
+        &features,
+        ComputedFeatureEvaluationPolicy::default(),
+    )
+    .unwrap();
+    let OperationOutcome::Completed { value, report } = snapshot
+        .clone()
+        .prepare(&mut allocator)
+        .unwrap()
+        .execute(OperationControl::unlimited())
+        .unwrap()
+    else {
+        panic!("unlimited construction-fragment evaluation must complete");
+    };
+    assert_eq!(value.edges().len(), 3);
+    assert_eq!(value.construction_fragments().len(), 2);
+    assert_eq!(report.consumed.profile_fragments, 5);
+
+    let bounded = ComputedFeatureEvaluationPolicy {
+        max_construction_fragments: 1,
+        ..ComputedFeatureEvaluationPolicy::default()
+    };
+    let limited = ComputedFeatureEvaluationSnapshot::capture(&session, &features, bounded)
+        .unwrap()
+        .prepare(&mut allocator)
+        .unwrap()
+        .execute(OperationControl::unlimited());
+    assert!(matches!(
+        limited,
+        Err(crate::ComputedFeatureEvaluationError::PolicyLimitExceeded {
+            resource: "construction fragments",
+            actual: 2,
+            limit: 1,
+        })
+    ));
+
+    let mut limits = OperationLimits::unlimited();
+    limits.profile_fragments = 4;
+    let exhausted = snapshot
+        .prepare(&mut allocator)
+        .unwrap()
+        .execute(OperationControl::new(CancellationToken::default(), limits))
+        .unwrap();
+    assert!(matches!(
+        exhausted,
+        OperationOutcome::WorkExhausted { report }
+            if report.consumed.profile_fragments == 4
     ));
 }
 
@@ -2176,6 +2407,13 @@ fn line_line_continuation_reanchors_after_large_source_point_edits() {
     let feature = features
         .create_fillet_set("edited adjacent corners", 0.5, priors.to_vec())
         .unwrap();
+    let mut allocator = ComputedEvaluationAllocator::default();
+    let before_edit = evaluate(
+        &retained(fixture.document.clone()),
+        &features,
+        &mut allocator,
+    );
+    let before_discarded = construction_geometry_signature(&before_edit);
 
     // Keep both right-angle Fillets visibly regular while moving their line
     // contacts well outside the old one-eighth parameter neighbourhoods.
@@ -2188,7 +2426,6 @@ fn line_line_continuation_reanchors_after_large_source_point_edits() {
         .set_point_position(fixture.points[3], [5.0, 4.0])
         .unwrap();
     let session = retained(fixture.document);
-    let mut allocator = ComputedEvaluationAllocator::default();
     let evaluated = evaluate(&session, &features, &mut allocator);
     assert!(matches!(
         evaluated
@@ -2199,6 +2436,12 @@ fn line_line_continuation_reanchors_after_large_source_point_edits() {
             .state,
         ComputedFeatureEvaluationState::Current { .. }
     ));
+    assert_eq!(evaluated.construction_fragments().len(), 4);
+    assert_ne!(
+        construction_geometry_signature(&evaluated),
+        before_discarded,
+        "discarded complements must regenerate from the edited accepted sources"
+    );
 
     let authoring = crate::ComputedFeatureAuthoringSnapshot::capture(&session).unwrap();
     let rebased = complete(
@@ -2856,6 +3099,20 @@ fn full_periodic_fillet_parent_remains_complete_and_has_no_trim_direction_action
         0,
         "a full periodic parent remains visually complete"
     );
+    assert_eq!(
+        evaluated
+            .source_construction_fragments(source(fixture.circle))
+            .count(),
+        0,
+        "a full periodic parent has no artificial discarded complement"
+    );
+    assert_eq!(evaluated.construction_fragments().len(), 1);
+    assert!(
+        evaluated
+            .edges()
+            .iter()
+            .all(|edge| edge.role == GeometryRole::Profile)
+    );
     assert_eq!(evaluated.replaced_sources(), &[source(fixture.line)]);
 
     let alternatives = complete(
@@ -2886,6 +3143,105 @@ fn full_periodic_fillet_parent_remains_complete_and_has_no_trim_direction_action
             }
         )
     }));
+}
+
+#[test]
+fn open_periodic_parent_publishes_only_its_exact_visible_discarded_complement() {
+    let mut fixture = line_circle_fixture();
+    let visible = DocumentCurveTrimView {
+        support: fixture.circle,
+        start: DocumentTrimBoundary::Fixed(DocumentTrimParameter {
+            parameter: 0.1,
+            winding: 0,
+        }),
+        end: DocumentTrimBoundary::Fixed(DocumentTrimParameter {
+            parameter: 6.2,
+            winding: 0,
+        }),
+    };
+    fixture
+        .document
+        .replace_trim_views(fixture.circle, vec![visible])
+        .unwrap();
+    let session = retained(fixture.document.clone());
+    let authoring = crate::ComputedFeatureAuthoringSnapshot::capture(&session).unwrap();
+    let resolved = complete(
+        authoring
+            .resolve_fillet_corner(
+                fixture.request,
+                0.75,
+                ComputedFeatureEvaluationPolicy::default(),
+                OperationControl::unlimited(),
+            )
+            .unwrap(),
+    );
+    let mut features = ComputedFeatureDocument::new(fixture.document.id());
+    features
+        .create_fillet_set("open periodic parent", 0.75, vec![resolved.corner])
+        .unwrap();
+    let evaluated = evaluate(
+        &session,
+        &features,
+        &mut ComputedEvaluationAllocator::default(),
+    );
+
+    assert_eq!(
+        evaluated
+            .source_fragment_edges(source(fixture.circle))
+            .count(),
+        1,
+        "an explicitly open periodic view remains trim-capable"
+    );
+    let discarded = evaluated
+        .source_construction_fragments(source(fixture.circle))
+        .collect::<Vec<_>>();
+    assert_eq!(discarded.len(), 1);
+    let base_interval = discarded[0].provenance.base_interval;
+    assert!(base_interval.start >= 0.1);
+    assert!(base_interval.end <= 6.2);
+    assert!(base_interval.end - base_interval.start < std::f64::consts::TAU);
+    assert_eq!(
+        discarded[0].provenance.endpoint,
+        resolved.corner.second.retained_endpoint
+    );
+    let retained = evaluated
+        .source_fragment_edges(source(fixture.circle))
+        .next()
+        .unwrap();
+    let ComputedEdgeGeometry::NativeSourceFragment {
+        interval: retained_interval,
+        ..
+    } = retained.geometry
+    else {
+        panic!("expected retained periodic source fragment");
+    };
+    match discarded[0].provenance.endpoint {
+        DocumentFilletTrimEndpoint::Start => {
+            assert_eq!(
+                discarded[0].interval.start.to_bits(),
+                base_interval.start.to_bits()
+            );
+            assert_eq!(
+                discarded[0].interval.end.to_bits(),
+                retained_interval.start.to_bits()
+            );
+            assert_eq!(retained_interval.end.to_bits(), base_interval.end.to_bits());
+        }
+        DocumentFilletTrimEndpoint::End => {
+            assert_eq!(
+                retained_interval.start.to_bits(),
+                base_interval.start.to_bits()
+            );
+            assert_eq!(
+                retained_interval.end.to_bits(),
+                discarded[0].interval.start.to_bits()
+            );
+            assert_eq!(
+                discarded[0].interval.end.to_bits(),
+                base_interval.end.to_bits()
+            );
+        }
+    }
 }
 
 #[test]

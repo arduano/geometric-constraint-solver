@@ -24,9 +24,10 @@ pub use document::{
     NewComputedFilletCorner,
 };
 pub use evaluation::{
-    ComputedCircularArc, ComputedClaimEndpoint, ComputedCornerRef, ComputedEdge,
-    ComputedEdgeGeometry, ComputedEdgeId, ComputedEdgeProvenance, ComputedEvaluationAllocator,
-    ComputedEvaluationAllocatorHighWater, ComputedEvaluationRevision,
+    ComputedCircularArc, ComputedClaimEndpoint, ComputedConstructionFragment,
+    ComputedConstructionFragmentId, ComputedConstructionFragmentProvenance, ComputedCornerRef,
+    ComputedEdge, ComputedEdgeGeometry, ComputedEdgeId, ComputedEdgeProvenance,
+    ComputedEvaluationAllocator, ComputedEvaluationAllocatorHighWater, ComputedEvaluationRevision,
     ComputedFeatureAuthoringError, ComputedFeatureAuthoringSnapshot, ComputedFeatureEvaluation,
     ComputedFeatureEvaluationError, ComputedFeatureEvaluationInput,
     ComputedFeatureEvaluationPolicy, ComputedFeatureEvaluationSnapshot,

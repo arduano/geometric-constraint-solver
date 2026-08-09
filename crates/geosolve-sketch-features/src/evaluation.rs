@@ -5,9 +5,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use geosolve_sketch::{
     ContactDomain, ContactNeighborhood, CurveDefinition, CurveSpan, DocumentArcSweep,
     DocumentCurveNormalSide, DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint,
-    DocumentTrimBoundary, DocumentTrimParameter, OperationCheckpoint, OperationControl,
-    OperationController, OperationOutcome, OperationWorkCounter, PreparedSketchInput,
-    RetainedSketchDocumentSession, SketchAcceptedStateIdentity, SketchDocument,
+    DocumentTrimBoundary, DocumentTrimParameter, GeometryRole, OperationCheckpoint,
+    OperationControl, OperationController, OperationOutcome, OperationWorkCounter,
+    PreparedSketchInput, RetainedSketchDocumentSession, SketchAcceptedStateIdentity,
+    SketchDocument,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -46,6 +47,7 @@ pub struct ComputedFeatureEvaluationPolicy {
     pub max_features: usize,
     pub max_corners: usize,
     pub max_edges: usize,
+    pub max_construction_fragments: usize,
     pub root_seed_grid: usize,
     pub max_root_iterations: usize,
     pub max_line_search_steps: usize,
@@ -57,6 +59,7 @@ impl Default for ComputedFeatureEvaluationPolicy {
             max_features: 10_000,
             max_corners: 20_000,
             max_edges: 100_000,
+            max_construction_fragments: 100_000,
             root_seed_grid: 3,
             max_root_iterations: 32,
             max_line_search_steps: 8,
@@ -70,6 +73,10 @@ impl ComputedFeatureEvaluationPolicy {
             ("max_features", self.max_features),
             ("max_corners", self.max_corners),
             ("max_edges", self.max_edges),
+            (
+                "max_construction_fragments",
+                self.max_construction_fragments,
+            ),
             ("root_seed_grid", self.root_seed_grid),
             ("max_root_iterations", self.max_root_iterations),
             ("max_line_search_steps", self.max_line_search_steps),
@@ -976,6 +983,13 @@ pub struct ComputedEdgeId {
     pub ordinal: u32,
 }
 
+/// Generated construction-fragment identity scoped to one evaluation revision.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct ComputedConstructionFragmentId {
+    pub evaluation: ComputedEvaluationRevision,
+    pub ordinal: u32,
+}
+
 /// Stable source interval produced after composing all successful endpoint claims.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ComputedSourceInterval {
@@ -1043,8 +1057,34 @@ pub enum ComputedEdgeProvenance {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ComputedEdge {
     pub id: ComputedEdgeId,
+    /// Effective profile eligibility inherited from the accepted native sources.
+    pub role: GeometryRole,
     pub geometry: ComputedEdgeGeometry,
     pub provenance: ComputedEdgeProvenance,
+}
+
+/// Exact native-source attribution for one interval discarded by a successful
+/// computed Fillet claim.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ComputedConstructionFragmentProvenance {
+    /// Stable feature/corner that owns the successful endpoint claim.
+    pub owner: ComputedCornerRef,
+    /// Endpoint of the retained source interval created at the Fillet contact.
+    pub endpoint: DocumentFilletTrimEndpoint,
+    /// Complete accepted visible interval from which this complement was cut.
+    pub base_interval: ComputedSourceInterval,
+}
+
+/// One evaluation-local discarded native interval presented as implicit
+/// construction geometry outside the constrained sketch graph.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ComputedConstructionFragment {
+    pub id: ComputedConstructionFragmentId,
+    pub source: NativeCurveSpanSource,
+    pub interval: ComputedSourceInterval,
+    /// Persistent role of the native source before computed-feature composition.
+    pub source_role: GeometryRole,
+    pub provenance: ComputedConstructionFragmentProvenance,
 }
 
 /// Endpoint involved in a composition conflict.
@@ -1128,6 +1168,7 @@ pub struct ComputedFeatureSnapshot {
     input: ComputedFeatureEvaluationInput,
     evaluation: ComputedEvaluationRevision,
     edges: Vec<ComputedEdge>,
+    construction_fragments: Vec<ComputedConstructionFragment>,
     features: Vec<ComputedFeatureEvaluation>,
     replaced_sources: Vec<NativeCurveSpanSource>,
 }
@@ -1148,6 +1189,14 @@ impl ComputedFeatureSnapshot {
         &self.edges
     }
 
+    /// Returns all discarded source complements produced by successful
+    /// computed-feature composition. These are always implicit construction
+    /// geometry and never persistent sketch objects.
+    #[must_use]
+    pub fn construction_fragments(&self) -> &[ComputedConstructionFragment] {
+        &self.construction_fragments
+    }
+
     #[must_use]
     pub fn feature_evaluations(&self) -> &[ComputedFeatureEvaluation] {
         &self.features
@@ -1162,6 +1211,17 @@ impl ComputedFeatureSnapshot {
     pub fn edge(&self, id: ComputedEdgeId) -> Option<&ComputedEdge> {
         (id.evaluation == self.evaluation)
             .then(|| self.edges.get(id.ordinal as usize))
+            .flatten()
+    }
+
+    /// Resolves one revision-local discarded construction fragment.
+    #[must_use]
+    pub fn construction_fragment(
+        &self,
+        id: ComputedConstructionFragmentId,
+    ) -> Option<&ComputedConstructionFragment> {
+        (id.evaluation == self.evaluation)
+            .then(|| self.construction_fragments.get(id.ordinal as usize))
             .flatten()
     }
 
@@ -1188,6 +1248,26 @@ impl ComputedFeatureSnapshot {
                     if current == source
             )
         })
+    }
+
+    /// Resolves the discarded construction complements for one native source.
+    pub fn source_construction_fragments(
+        &self,
+        source: NativeCurveSpanSource,
+    ) -> impl Iterator<Item = &ComputedConstructionFragment> {
+        self.construction_fragments
+            .iter()
+            .filter(move |fragment| fragment.source == source)
+    }
+
+    /// Resolves discarded construction complements owned by one Fillet corner.
+    pub fn fillet_construction_fragments(
+        &self,
+        owner: ComputedCornerRef,
+    ) -> impl Iterator<Item = &ComputedConstructionFragment> {
+        self.construction_fragments
+            .iter()
+            .filter(move |fragment| fragment.provenance.owner == owner)
     }
 }
 
@@ -1295,6 +1375,7 @@ enum RootAttempt {
 #[derive(Clone, Debug)]
 struct EvaluatedCorner {
     owner: ComputedCornerRef,
+    role: GeometryRole,
     arc: ComputedCircularArc,
     claims: [EndpointClaim; 2],
 }
@@ -1321,6 +1402,18 @@ struct SourceComposition {
     base_interval: ComputedSourceInterval,
     start: Option<EndpointClaim>,
     end: Option<EndpointClaim>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct DiscardedSourceComplement {
+    interval: ComputedSourceInterval,
+    claim: EndpointClaim,
+}
+
+#[derive(Clone, Debug)]
+struct ComposedSourceOutput {
+    effective_interval: ComputedSourceInterval,
+    discarded: Vec<DiscardedSourceComplement>,
 }
 
 #[allow(
@@ -1369,8 +1462,16 @@ fn evaluate_snapshot(
 
     let compositions = compose_sources(&candidates);
     let mut edges = Vec::new();
+    let mut construction_fragments = Vec::new();
     let mut replaced_sources = Vec::new();
     for composition in compositions.values() {
+        let output = compose_source_output(composition)?;
+        let source_role = snapshot
+            .sketch
+            .geometry_role(composition.source.span.curve)
+            .ok_or(ComputedFeatureEvaluationError::InvalidGeneratedTopology {
+                resource: "source role",
+            })?;
         if controller
             .charge(
                 OperationWorkCounter::ProfileFragments,
@@ -1388,33 +1489,52 @@ fn evaluate_snapshot(
                 limit: snapshot.input.policy.max_edges,
             });
         }
-        let interval = ComputedSourceInterval {
-            start: composition
-                .start
-                .map_or(composition.base_interval.start, |claim| claim.parameter),
-            end: composition
-                .end
-                .map_or(composition.base_interval.end, |claim| claim.parameter),
-        };
-        if !strict_finite_interval(interval) {
-            return Err(ComputedFeatureEvaluationError::InvalidGeneratedTopology {
-                resource: "source interval",
-            });
-        }
         let id = edge_id(evaluation, edges.len())?;
         edges.push(ComputedEdge {
             id,
+            role: source_role,
             geometry: ComputedEdgeGeometry::NativeSourceFragment {
                 source: composition.source,
-                interval,
+                interval: output.effective_interval,
             },
             provenance: ComputedEdgeProvenance::SourceFragment {
                 source: composition.source,
-                interval,
+                interval: output.effective_interval,
                 start_claim: composition.start.map(|claim| claim.owner),
                 end_claim: composition.end.map(|claim| claim.owner),
             },
         });
+        for discarded in output.discarded {
+            if controller
+                .charge(
+                    OperationWorkCounter::ProfileFragments,
+                    1,
+                    OperationCheckpoint::DocumentLowering,
+                )
+                .is_err()
+            {
+                return Ok(empty_interrupted_snapshot(&snapshot.input, evaluation));
+            }
+            if construction_fragments.len() >= snapshot.input.policy.max_construction_fragments {
+                return Err(ComputedFeatureEvaluationError::PolicyLimitExceeded {
+                    resource: "construction fragments",
+                    actual: construction_fragments.len().saturating_add(1),
+                    limit: snapshot.input.policy.max_construction_fragments,
+                });
+            }
+            let id = construction_fragment_id(evaluation, construction_fragments.len())?;
+            construction_fragments.push(ComputedConstructionFragment {
+                id,
+                source: composition.source,
+                interval: discarded.interval,
+                source_role,
+                provenance: ComputedConstructionFragmentProvenance {
+                    owner: discarded.claim.owner,
+                    endpoint: discarded.claim.endpoint,
+                    base_interval: discarded.claim.base_interval,
+                },
+            });
+        }
         replaced_sources.push(composition.source);
     }
 
@@ -1441,6 +1561,7 @@ fn evaluate_snapshot(
             let id = edge_id(evaluation, edges.len())?;
             edges.push(ComputedEdge {
                 id,
+                role: corner.role,
                 geometry: ComputedEdgeGeometry::CircularArc(corner.arc.clone()),
                 provenance: ComputedEdgeProvenance::FilletArc {
                     owner: corner.owner,
@@ -1461,6 +1582,7 @@ fn evaluate_snapshot(
         input: snapshot.input,
         evaluation,
         edges,
+        construction_fragments,
         features: evaluations,
         replaced_sources,
     })
@@ -1474,6 +1596,7 @@ fn empty_interrupted_snapshot(
         input: *input,
         evaluation,
         edges: Vec::new(),
+        construction_fragments: Vec::new(),
         features: Vec::new(),
         replaced_sources: Vec::new(),
     }
@@ -1604,24 +1727,54 @@ fn evaluate_persistent_corner(
         })
     })?;
     let claims = [
-        EndpointClaim {
+        endpoint_claim(
             owner,
-            source: corner.first.source,
-            endpoint: corner.first.retained_endpoint,
-            parameter: solution.parameters[0],
-            base_interval: root_parents[0].topology.base_interval,
-            participates_in_trimming: root_parents[0].topology.participates_in_trimming(),
-        },
-        EndpointClaim {
+            corner.first,
+            solution.parameters[0],
+            root_parents[0].topology,
+        ),
+        endpoint_claim(
             owner,
-            source: corner.second.source,
-            endpoint: corner.second.retained_endpoint,
-            parameter: solution.parameters[1],
-            base_interval: root_parents[1].topology.base_interval,
-            participates_in_trimming: root_parents[1].topology.participates_in_trimming(),
-        },
+            corner.second,
+            solution.parameters[1],
+            root_parents[1].topology,
+        ),
     ];
-    Ok(EvaluatedCorner { owner, arc, claims })
+    Ok(EvaluatedCorner {
+        owner,
+        role: combined_source_role(sketch, parents),
+        arc,
+        claims,
+    })
+}
+
+fn endpoint_claim(
+    owner: ComputedCornerRef,
+    parent: ComputedFilletParent,
+    parameter: f64,
+    topology: SourceTopology,
+) -> EndpointClaim {
+    EndpointClaim {
+        owner,
+        source: parent.source,
+        endpoint: parent.retained_endpoint,
+        parameter,
+        base_interval: topology.base_interval,
+        participates_in_trimming: topology.participates_in_trimming(),
+    }
+}
+
+fn combined_source_role(
+    sketch: &SketchDocument,
+    parents: [ComputedFilletParent; 2],
+) -> GeometryRole {
+    if parents.into_iter().any(|parent| {
+        sketch.geometry_role(parent.source.span.curve) == Some(GeometryRole::Construction)
+    }) {
+        GeometryRole::Construction
+    } else {
+        GeometryRole::Profile
+    }
 }
 
 fn composition_failures(
@@ -1793,6 +1946,167 @@ fn compose_sources(
     compositions
 }
 
+fn compose_source_output(
+    composition: &SourceComposition,
+) -> Result<ComposedSourceOutput, ComputedFeatureEvaluationError> {
+    let effective_interval = ComputedSourceInterval {
+        start: composition
+            .start
+            .map_or(composition.base_interval.start, |claim| claim.parameter),
+        end: composition
+            .end
+            .map_or(composition.base_interval.end, |claim| claim.parameter),
+    };
+    let mut discarded = Vec::with_capacity(2);
+    if let Some(claim) = composition.start {
+        let interval = ComputedSourceInterval {
+            start: composition.base_interval.start,
+            end: claim.parameter,
+        };
+        if material_interval(interval, composition.base_interval) {
+            discarded.push(DiscardedSourceComplement { interval, claim });
+        }
+    }
+    if let Some(claim) = composition.end {
+        let interval = ComputedSourceInterval {
+            start: claim.parameter,
+            end: composition.base_interval.end,
+        };
+        if material_interval(interval, composition.base_interval) {
+            discarded.push(DiscardedSourceComplement { interval, claim });
+        }
+    }
+    let output = ComposedSourceOutput {
+        effective_interval,
+        discarded,
+    };
+    validate_composed_source_output(composition, &output)?;
+    Ok(output)
+}
+
+fn validate_composed_source_output(
+    composition: &SourceComposition,
+    output: &ComposedSourceOutput,
+) -> Result<(), ComputedFeatureEvaluationError> {
+    let invalid = || ComputedFeatureEvaluationError::InvalidGeneratedTopology {
+        resource: "source composition",
+    };
+    if !strict_finite_interval(composition.base_interval)
+        || !strict_finite_interval(output.effective_interval)
+    {
+        return Err(invalid());
+    }
+    let start_discarded = composition.start.map(|claim| ComputedSourceInterval {
+        start: composition.base_interval.start,
+        end: claim.parameter,
+    });
+    let end_discarded = composition.end.map(|claim| ComputedSourceInterval {
+        start: claim.parameter,
+        end: composition.base_interval.end,
+    });
+    let expected_count = usize::from(
+        start_discarded
+            .is_some_and(|interval| material_interval(interval, composition.base_interval)),
+    ) + usize::from(
+        end_discarded
+            .is_some_and(|interval| material_interval(interval, composition.base_interval)),
+    );
+    if output.discarded.len() != expected_count {
+        return Err(invalid());
+    }
+
+    let mut discarded_index = 0;
+    if let Some(claim) = composition.start {
+        if claim.source != composition.source
+            || claim.endpoint != DocumentFilletTrimEndpoint::Start
+            || !same_interval(claim.base_interval, composition.base_interval)
+            || !same_parameter(output.effective_interval.start, claim.parameter)
+        {
+            return Err(invalid());
+        }
+        if let Some(interval) = start_discarded
+            && material_interval(interval, composition.base_interval)
+        {
+            let complement = output.discarded.get(discarded_index).ok_or_else(invalid)?;
+            discarded_index += 1;
+            if !same_parameter(complement.interval.start, interval.start)
+                || !same_parameter(complement.interval.end, interval.end)
+                || !same_claim(complement.claim, claim)
+            {
+                return Err(invalid());
+            }
+        }
+    } else if !same_parameter(
+        output.effective_interval.start,
+        composition.base_interval.start,
+    ) {
+        return Err(invalid());
+    }
+
+    if let Some(claim) = composition.end {
+        if claim.source != composition.source
+            || claim.endpoint != DocumentFilletTrimEndpoint::End
+            || !same_interval(claim.base_interval, composition.base_interval)
+            || !same_parameter(output.effective_interval.end, claim.parameter)
+        {
+            return Err(invalid());
+        }
+        if let Some(interval) = end_discarded
+            && material_interval(interval, composition.base_interval)
+        {
+            let complement = output.discarded.get(discarded_index).ok_or_else(invalid)?;
+            discarded_index += 1;
+            if !same_parameter(complement.interval.start, interval.start)
+                || !same_parameter(complement.interval.end, interval.end)
+                || !same_claim(complement.claim, claim)
+            {
+                return Err(invalid());
+            }
+        }
+    } else if !same_parameter(output.effective_interval.end, composition.base_interval.end) {
+        return Err(invalid());
+    }
+    if discarded_index != output.discarded.len() {
+        return Err(invalid());
+    }
+
+    // The theoretical complements share exact boundaries with the retained
+    // interval. Every material complement that is actually published must
+    // remain strictly disjoint from that interval and from its sibling.
+    if output.discarded.iter().any(|complement| {
+        complement.interval.start < output.effective_interval.end
+            && output.effective_interval.start < complement.interval.end
+    }) {
+        return Err(invalid());
+    }
+    Ok(())
+}
+
+fn same_claim(first: EndpointClaim, second: EndpointClaim) -> bool {
+    first.owner == second.owner
+        && first.source == second.source
+        && first.endpoint == second.endpoint
+        && same_parameter(first.parameter, second.parameter)
+        && same_interval(first.base_interval, second.base_interval)
+        && first.participates_in_trimming == second.participates_in_trimming
+}
+
+fn same_interval(first: ComputedSourceInterval, second: ComputedSourceInterval) -> bool {
+    same_parameter(first.start, second.start) && same_parameter(first.end, second.end)
+}
+
+fn same_parameter(first: f64, second: f64) -> bool {
+    first.to_bits() == second.to_bits()
+}
+
+fn material_interval(
+    interval: ComputedSourceInterval,
+    base_interval: ComputedSourceInterval,
+) -> bool {
+    strict_finite_interval(interval)
+        && interval.end - interval.start > parameter_tolerance(base_interval)
+}
+
 fn edge_id(
     evaluation: ComputedEvaluationRevision,
     index: usize,
@@ -1802,6 +2116,22 @@ fn edge_id(
         ordinal: u32::try_from(index).map_err(|_| {
             ComputedFeatureEvaluationError::PolicyLimitExceeded {
                 resource: "edge ordinals",
+                actual: index,
+                limit: u32::MAX as usize,
+            }
+        })?,
+    })
+}
+
+fn construction_fragment_id(
+    evaluation: ComputedEvaluationRevision,
+    index: usize,
+) -> Result<ComputedConstructionFragmentId, ComputedFeatureEvaluationError> {
+    Ok(ComputedConstructionFragmentId {
+        evaluation,
+        ordinal: u32::try_from(index).map_err(|_| {
+            ComputedFeatureEvaluationError::PolicyLimitExceeded {
+                resource: "construction fragment ordinals",
                 actual: index,
                 limit: u32::MAX as usize,
             }
@@ -4147,6 +4477,60 @@ mod publication_tests {
         DocumentCurveTrimView, DocumentId, DocumentTrimBoundary, DocumentTrimParameter,
         PersistentId, ScalarDomain, ScalarUnit,
     };
+
+    #[test]
+    fn tolerance_empty_discarded_complements_preserve_effective_output_without_publication() {
+        let mut sketch =
+            SketchDocument::with_id(10.0, DocumentId(PersistentId::from_u128(0x5002))).unwrap();
+        let start = sketch.add_point("start", [0.0, 0.0]).unwrap();
+        let end = sketch.add_point("end", [4.0, 0.0]).unwrap();
+        let source = NativeCurveSpanSource {
+            span: CurveSpan::line(
+                sketch
+                    .add_curve(
+                        "line",
+                        CurveDefinition::Line {
+                            start,
+                            end,
+                            branch_direction: [1.0, 0.0],
+                        },
+                    )
+                    .unwrap(),
+            ),
+        };
+        let base_interval = ComputedSourceInterval {
+            start: 0.0,
+            end: 1.0,
+        };
+        let owner = ComputedCornerRef {
+            feature: ComputedFeatureId::from_raw(1),
+            corner: ComputedFeatureCornerId::from_raw(1),
+        };
+        let parameter = 0.5 * parameter_tolerance(base_interval);
+        let claim = EndpointClaim {
+            owner,
+            source,
+            endpoint: DocumentFilletTrimEndpoint::Start,
+            parameter,
+            base_interval,
+            participates_in_trimming: true,
+        };
+        let output = compose_source_output(&SourceComposition {
+            source,
+            base_interval,
+            start: Some(claim),
+            end: None,
+        })
+        .expect("a strictly interior claim remains valid");
+        assert_eq!(
+            output.effective_interval,
+            ComputedSourceInterval {
+                start: parameter,
+                end: base_interval.end,
+            }
+        );
+        assert!(output.discarded.is_empty());
+    }
 
     #[test]
     #[allow(
