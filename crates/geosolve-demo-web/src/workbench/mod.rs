@@ -416,10 +416,9 @@ impl FilletActionRenderAuthority {
 
 /// Browser event disposition for an element painted as a Fillet action.
 ///
-/// The headless scene still decides semantic priority. When a contact or radius
-/// affordance owns the same position, the adapter must fall through to the
-/// ordinary editor pointer route instead of consuming the event as a disabled
-/// branch action.
+/// The headless scene still decides semantic priority. An explicitly painted
+/// branch control is consumed only when its stable target and model-space
+/// control geometry independently agree with the pointer position.
 #[cfg(any(target_arch = "wasm32", test))]
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum CanvasFilletActionRoute {
@@ -876,8 +875,9 @@ pub(crate) mod wasm {
                     let super::CanvasFilletActionRoute::Action =
                         super::route_canvas_fillet_action(&scene, position, Some(&painted))
                     else {
-                        // Pointer-down already routed this crowded position to
-                        // the higher-priority contact/radius editor gesture.
+                        // Pointer-down already routed this position through the
+                        // ordinary editor because the painted action was stale,
+                        // spoofed or outside its headless control geometry.
                         return;
                     };
                     SceneFilletActionInput::Canvas {
@@ -4322,7 +4322,11 @@ mod tests {
     #[test]
     fn canvas_fillet_action_emphasis_requires_headless_preview_routing() {
         let css = include_str!("../../styles.css");
-        assert!(css.contains(".wb-fillet-action.previewed .wb-fillet-action-control path"));
+        assert!(css.contains(".wb-fillet-action.previewed .wb-fillet-retained-direction"));
+        assert!(css.contains(".wb-fillet-action-hit"));
+        assert!(css.contains("stroke-width: 24"));
+        let scene_source = include_str!("scene.rs");
+        assert!(scene_source.contains("fill=\\\"context-stroke\\\""));
         for browser_owned_selector in [".wb-fillet-action:hover", ".wb-fillet-action:focus"] {
             assert!(
                 !css.contains(browser_owned_selector),
@@ -5100,6 +5104,10 @@ mod tests {
             "Fillet branch actions must remain icons rather than handle-like circles"
         );
         assert!(
+            !markup.contains("<path d=\"M-4 0H4M-4 0l2-2M-4 0l2 2M4 0 2-2M4 0 2 2\"/>"),
+            "retained-direction arrows must not carry a redundant adjacent icon"
+        );
+        assert!(
             !markup.contains("wb-fillet-alternative-ghost"),
             "unpreviewed alternatives must not be painted as CSS-owned ghosts"
         );
@@ -5170,8 +5178,8 @@ mod tests {
         ] {
             assert_eq!(
                 route_canvas_fillet_action(&scene, crowded, Some(&canvas_target)),
-                CanvasFilletActionRoute::HeadlessPointer,
-                "contact/radius priority must fall through to the ordinary editor route"
+                CanvasFilletActionRoute::Action,
+                "a painted and independently verified action must not start a Fillet drag"
             );
         }
         let action_stamp = 73;

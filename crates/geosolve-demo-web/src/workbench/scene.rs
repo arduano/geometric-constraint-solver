@@ -289,7 +289,8 @@ pub(crate) fn svg_markup_with_computed_context_and_action_stamp(
         "<defs><marker id=\"wb-dimension-arrow\" markerWidth=\"6\" markerHeight=\"6\" ",
         "refX=\"3\" refY=\"3\" orient=\"auto-start-reverse\"><path d=\"M0 0L6 3L0 6Z\"/>",
         "</marker><marker id=\"wb-fillet-direction-arrow\" markerWidth=\"6\" markerHeight=\"6\" ",
-        "refX=\"5\" refY=\"3\" orient=\"auto\"><path d=\"M0 0L6 3L0 6Z\"/></marker></defs>"
+        "refX=\"5\" refY=\"3\" orient=\"auto\"><path fill=\"context-stroke\" ",
+        "d=\"M0 0L6 3L0 6Z\"/></marker></defs>"
     ));
     let origin = viewport.model_to_screen([0.0, 0.0]);
     let _ = write!(
@@ -663,10 +664,10 @@ fn render_fillet_affordances(
         }
         let owner = affordances.owner;
         let rail = affordances.radius_rail;
-        // Branch actions paint below the direct radius affordance. This mirrors
-        // the headless radius > action/native priority in native SVG hit
-        // targeting and prevents CSS hover from advertising an occluded branch
-        // action at a crowded grip or generated arc.
+        // Branch actions paint below the direct radius affordance, so the
+        // visible central grip remains the browser target where it truly covers
+        // an action. Elsewhere, the headless action resolver verifies the
+        // painted arrow before it can outrank an underlying arc or rail.
         for action in &affordances.actions {
             let target = scene.fillet_action_target(owner, action.id);
             render_fillet_canvas_action(
@@ -759,24 +760,27 @@ fn render_fillet_canvas_action(
         let _ = write!(
             output,
             concat!(
+                "<path class=\"wb-fillet-action-hit\" ",
+                "d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>",
                 "<path class=\"wb-fillet-retained-direction\" marker-end=\"url(#wb-fillet-direction-arrow)\" ",
                 "d=\"M{:.3} {:.3}L{:.3} {:.3}\"/>",
-                "<g class=\"wb-fillet-action-control\" transform=\"translate({:.3} {:.3})\">",
-                "{}</g></g>"
+                "</g>"
             ),
             control.screen_start.x,
             control.screen_start.y,
             control.screen_end.x,
             control.screen_end.y,
+            control.screen_start.x,
+            control.screen_start.y,
             control.screen_end.x,
             control.screen_end.y,
-            fillet_action_symbol(action.id),
         );
     } else {
         let _ = write!(
             output,
             concat!(
                 "<g class=\"wb-fillet-action-control\" transform=\"translate({:.3} {:.3})\">",
+                "<path class=\"wb-fillet-action-hit\" d=\"M-10 0H10\"/>",
                 "{}</g></g>"
             ),
             anchor.x,

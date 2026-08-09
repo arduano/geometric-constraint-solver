@@ -573,7 +573,13 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
 }
-#wb-fillet-direction-arrow path { fill: #e7ce8d; }
+.wb-fillet-action-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 24;
+  pointer-events: stroke;
+  vector-effect: non-scaling-stroke;
+}
 .wb-fillet-action-control path {
   fill: none;
   stroke: #f1d899;
@@ -582,10 +588,12 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
-.wb-fillet-action.previewed .wb-fillet-action-control path {
+.wb-fillet-action.previewed .wb-fillet-retained-direction,
+.wb-fillet-action.previewed .wb-fillet-action-control path:not(.wb-fillet-action-hit) {
   stroke: #fff0bd;
   filter: drop-shadow(0 0 3px rgb(239 184 86 / 65%));
 }
+.wb-fillet-action.previewed .wb-fillet-retained-direction { stroke-width: 3; }
 .wb-fillet-actions-panel .wb-fillet-continuation-limit {
   margin: 0;
   padding: 0.35rem 0.45rem;

@@ -1118,11 +1118,12 @@ impl EditorScene {
 
     /// Resolves canvas and accessible Fillet actions through one exact validator.
     ///
-    /// Canvas painted identity is a non-authoritative hint. Radius affordances
-    /// keep their higher hit priority, then branch controls are
-    /// independently tested against their paired model-space geometry. An
-    /// accessible target skips pointer proximity but retains identical scene,
-    /// owner, action and applicability checks.
+    /// Canvas painted identity is a non-authoritative hint. A painted branch
+    /// control that independently matches its paired model-space geometry wins
+    /// over an overlapping radius surface; otherwise the ordinary Fillet hit
+    /// resolver remains authoritative. An accessible target skips pointer
+    /// proximity but retains identical scene, owner, action and applicability
+    /// checks.
     #[must_use]
     pub fn resolve_fillet_action(
         &self,
@@ -1137,12 +1138,7 @@ impl EditorScene {
                 self.validated_fillet_action(&target).map(|_| target)
             }
             SceneFilletActionInput::Canvas { position, painted } => {
-                if !position.is_finite()
-                    || matches!(
-                        self.resolve_fillet_hit(position, tolerance),
-                        Some(SceneFilletHit::Radius { .. })
-                    )
-                {
+                if !position.is_finite() {
                     return None;
                 }
                 let expected = self.computed_input?;
@@ -5809,7 +5805,7 @@ mod tests {
 
     #[test]
     #[allow(clippy::too_many_lines)]
-    fn fillet_branch_resolution_rejects_spoofs_disabled_actions_and_higher_priority_hits() {
+    fn fillet_branch_resolution_rejects_spoofs_and_gives_painted_controls_precedence() {
         let mut fixture = fillet_interaction_fixture(50.0, [2.0, 0.0]);
         let (retained, _) = install_test_fillet_actions(&mut fixture);
         let retained_position = fixture.scene.viewport.model_to_screen([2.0, -0.75]);
@@ -5844,6 +5840,12 @@ mod tests {
             "painted and independently resolved owners must agree"
         );
         let contact = fixture.scene.fillet_affordances[0].contacts[0].screen_position;
+        assert!(matches!(
+            fixture
+                .scene
+                .resolve_fillet_hit(contact, PickTolerance::default()),
+            Some(SceneFilletHit::Radius { .. })
+        ));
         assert_eq!(
             fixture.scene.resolve_fillet_action(
                 SceneFilletActionInput::Canvas {
@@ -5852,20 +5854,8 @@ mod tests {
                 },
                 PickTolerance::default(),
             ),
-            None,
-            "contact handles retain priority over branch controls"
-        );
-        let radius = fixture.scene.fillet_affordances[0].radius_rail.screen_grip;
-        assert_eq!(
-            fixture.scene.resolve_fillet_action(
-                SceneFilletActionInput::Canvas {
-                    position: radius,
-                    painted: Some(retained),
-                },
-                PickTolerance::default(),
-            ),
-            None,
-            "radius affordances retain priority over branch controls"
+            Some(retained),
+            "an explicitly painted and independently verified arrow wins over the Fillet surface"
         );
 
         let disabled = fixture
