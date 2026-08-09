@@ -1350,6 +1350,39 @@ pub(crate) mod wasm {
         Ok(())
     }
 
+    fn schedule_pointer_move_frame(
+        document: &Document,
+        workbench: &Rc<RefCell<Workbench>>,
+        pointer_moves: &Rc<RefCell<super::PointerMoveQueue>>,
+        generation: u64,
+    ) {
+        let frame_document = document.clone();
+        let frame_workbench = Rc::clone(workbench);
+        let frame_pointer_moves = Rc::clone(pointer_moves);
+        let frame = Closure::once_into_js(move || {
+            let Some(input) = frame_pointer_moves.borrow_mut().take_for_frame(generation) else {
+                return;
+            };
+            let mut wb = frame_workbench.borrow_mut();
+            if wb.pan_gesture.is_some() || wb.authoring.active_tool().is_some() {
+                return;
+            }
+            let Some(scene) = editor_scene(&wb) else {
+                return;
+            };
+            let effects = wb.coordinator.editor_mut().pointer_move(&scene, input);
+            dispatch_effects(&mut wb, effects);
+            save(&wb);
+            drop(wb);
+            let _ = render(&frame_document, &frame_workbench);
+        });
+        let scheduled = super::platform::window()
+            .and_then(|window| window.request_animation_frame(frame.unchecked_ref()));
+        if scheduled.is_err() {
+            pointer_moves.borrow_mut().cancel_frame(generation);
+        }
+    }
+
     fn install_pointer_move_listener(
         document: &Document,
         workbench: &Rc<RefCell<Workbench>>,
@@ -1426,32 +1459,12 @@ pub(crate) mod wasm {
             let Some(generation) = callback_pointer_moves.borrow_mut().push(input) else {
                 return;
             };
-            let frame_document = callback_document.clone();
-            let frame_workbench = Rc::clone(&callback_workbench);
-            let frame_pointer_moves = Rc::clone(&callback_pointer_moves);
-            let frame = Closure::once_into_js(move || {
-                let Some(input) = frame_pointer_moves.borrow_mut().take_for_frame(generation)
-                else {
-                    return;
-                };
-                let mut wb = frame_workbench.borrow_mut();
-                if wb.pan_gesture.is_some() || wb.authoring.active_tool().is_some() {
-                    return;
-                }
-                let Some(scene) = editor_scene(&wb) else {
-                    return;
-                };
-                let effects = wb.coordinator.editor_mut().pointer_move(&scene, input);
-                dispatch_effects(&mut wb, effects);
-                save(&wb);
-                drop(wb);
-                let _ = render(&frame_document, &frame_workbench);
-            });
-            let scheduled = super::platform::window()
-                .and_then(|window| window.request_animation_frame(frame.unchecked_ref()));
-            if scheduled.is_err() {
-                callback_pointer_moves.borrow_mut().cancel_frame(generation);
-            }
+            schedule_pointer_move_frame(
+                &callback_document,
+                &callback_workbench,
+                &callback_pointer_moves,
+                generation,
+            );
         });
         viewport
             .add_event_listener_with_callback("pointermove", callback.as_ref().unchecked_ref())?;
@@ -3439,9 +3452,8 @@ pub(crate) mod wasm {
         let pressed = match selected_state {
             Some(GeometryRoleSelectionState::Construction) => "true",
             Some(GeometryRoleSelectionState::Mixed) => "mixed",
-            Some(GeometryRoleSelectionState::Profile) => "false",
             None if authoring_role == GeometryRole::Construction => "true",
-            None => "false",
+            Some(GeometryRoleSelectionState::Profile) | None => "false",
         };
         let button = required(document, "wb-geometry-role")?;
         button.set_attribute("aria-pressed", pressed)?;

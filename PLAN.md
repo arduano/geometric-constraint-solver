@@ -3416,8 +3416,8 @@ root enumeration, browser E2E, mobile behavior and legacy UI.
 
 ### M69
 
-Status: in progress. Scope and architecture were approved by the supervising user on 2026-08-09;
-implementation, qualification and focused human UAT are pending.
+Status: mechanically qualified implementation candidate, pending focused supervising-human UAT.
+Scope and architecture were approved by the supervising user on 2026-08-09.
 
 Goal: establish a clean CAD-facing semantic and interaction boundary between Profile geometry,
 user-authored explicit Construction geometry and evaluation-local implicit Construction geometry
@@ -3425,29 +3425,41 @@ discarded by computed Fillets. ADR 0033 keeps the persistent role curve-scoped a
 while every implicit fragment resolves to its full native source rather than becoming a new
 constraint-graph object.
 
-- [ ] Add atomic multi-curve role editing and role-aware geometry construction, preserving
+- [x] Add atomic multi-curve role editing and role-aware geometry construction, preserving
   Profile defaults and one history step for batch conversion.
-- [ ] Propagate roles through existing identity-retaining, copying, multi-source and source-free
+- [x] Propagate roles through existing identity-retaining, copying, multi-source and source-free
   sketch operations without changing solver equations or branch state.
-- [ ] Publish explicit roles on effective computed edges and separately publish exact bounded
+- [x] Publish explicit roles on effective computed edges and separately publish exact bounded
   Fillet-discarded construction complements with native-source and claim provenance.
-- [ ] Keep full-period parents whole and withhold discarded fragments for failed, suppressed,
+- [x] Keep full-period parents whole and withhold discarded fragments for failed, suppressed,
   conflicting, stale, interrupted, invalid or tolerance-empty output.
-- [ ] Carry persistent role, implicit-fragment provenance and point incidence through the headless
+- [x] Carry persistent role, implicit-fragment provenance and point incidence through the headless
   editor scene; implicit hits must select the complete native source and retain their parameter.
-- [ ] Add headless `All`/`Profile`/`Construction` interaction scopes, deterministic one-pixel
+- [x] Add headless `All`/`Profile`/`Construction` interaction scopes, deterministic one-pixel
   Profile overlap priority and compatibility-aware candidate resolution across hover, selection,
   dragging, snapping and ordinary/Fillet authoring.
-- [ ] Add the CAD-style Construction authoring/conversion action, Profile/Construction tree
+- [x] Add the CAD-style Construction authoring/conversion action, Profile/Construction tree
   grouping, separate explicit/implicit visibility and compact canvas pick-scope controls in the
   sole workbench.
-- [ ] Extend the ordinary Construction/reference and 2D Fillet playground samples for focused
+- [x] Extend the ordinary Construction/reference and 2D Fillet playground samples for focused
   direct qualification and human review without adding scenario-mode or guide state.
-- [ ] Pass focused owner tests plus formatting, warnings-denied all-feature Clippy, locked
+- [x] Pass focused owner tests plus formatting, warnings-denied all-feature Clippy, locked
   workspace tests, WASM, rustdoc, benchmarks, licence/package, release Trunk, static-workbench and
   Git-hygiene gates on one nominated source.
 - [ ] Publish and byte-verify a release Tailscale candidate and receive explicit supervising-human
   approval of `docs/M69_UAT.md`.
+
+Implementation note (2026-08-09): ADR 0033 is implemented across the sketch document and operation
+owners, computed-feature evaluation, the headless editor and the sole workbench. Persistent role
+edits remain ordinary transactional sketch edits; Fillet-discarded portions are finite
+evaluation-local metadata and always resolve back to their complete native curve.
+
+Qualification note (2026-08-09): focused owner tests, native/WASM checks and warnings-denied owner
+Clippy pass. The complete integrated release-gate result for the nominated consolidation source is
+`PENDING SUPERVISING RUN RESULT`; record that exact result in `docs/M69_IMPLEMENTATION.md` before
+freezing the served candidate. Mechanical implementation is ready for candidate publication, but
+M69 remains open until the release assets are byte-verified and the supervising human approves the
+focused UAT.
 
 Gate: persistent Construction remains solver-active and default-profile-ineligible; implicit
 construction is finite derived output with exact native provenance and no independent identity;
