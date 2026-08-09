@@ -3212,8 +3212,8 @@ UAT approval. That approval is recorded above and M67 is closed.
 ### M68
 
 Status: active. Implementation, focused direct qualification and complete release qualification
-are complete on frozen candidate `a1ed6ff`; explicit supervising-human UAT, including the
-`M68-F001` through `M68-F004` retests, remains pending.
+are complete on frozen candidate `edffb8a`; explicit supervising-human UAT, including the
+`M68-F001` through `M68-F005` retests, remains pending.
 
 Goal: close accepted limitation `M66-KL001` with a CAD-like, branch-preserving direct-
 manipulation model for ordinary computed Fillets, while establishing only the shared canvas
@@ -3258,6 +3258,9 @@ explicit branch action; pointer motion and numeric editing never auto-switch roo
   remove raw relative branch checkboxes, highlight all shared-radius arcs and capture/release the
   initiating pointer for point, Fillet and pan gestures. A camera change cancels/restores a live
   Fillet manipulation before navigation.
+- [x] Present automatically opened global/targeted problem details as a non-intercepting canvas
+  overlay so solver invalidity cannot add a grid row, resize the viewport or change pointer-to-
+  model mapping during a gesture.
 - [x] Add a friendly ordinary editable line-circle playground specimen away from a fold and retain
   the existing radius-`0.5` fold specimen separately as a stress case, with no guide, protected
   state or sample-specific coordinator.
@@ -3297,10 +3300,11 @@ strict web Clippy, WASM checking, release Trunk and a pressed-state Chromium rep
 Follow-up `a1ed6ff` validates every advertised action through complete feature composition and
 makes source-trim participation topology-explicit: full circles/ellipses remain whole, while arcs
 and explicitly open periodic views remain trim-capable. The focused suites now pass 37 feature
-tests, 170 editor unit tests, all 46 editor integration tests and 68 web tests, plus strict Clippy,
-warnings-denied WASM checking and release Trunk. The frozen
+tests, 170 editor unit tests and all 46 editor integration tests. Presentation follow-up `edffb8a`
+moves the problem live region from a layout-owning grid row into a non-intercepting canvas overlay;
+all 69 web tests, strict Clippy, warnings-denied WASM checking and release Trunk pass. The frozen
 `crates/geosolve-demo-web/dist/*` aggregate SHA-256 manifest is
-`e45a920c5bec48215b133d8d6b9ef26c1b4a958224c7c80cea5871b9f8166779`. Only explicit human
+`77d071d711255c2c2385cee04d3b6820e5a0ed2dc4d8ffa501abcbab97657c79`. Only explicit human
 approval of the frozen Tailscale candidate remains unchecked. The static distribution is served
 at `http://100.94.63.83:8080/`; all seven HTTP responses match their local release files by
 SHA-256.
@@ -3355,6 +3359,19 @@ their contact/branch state. Direct regressions cover the adjacent two-Fillet sha
 circle publication and retained-action catalog, full circle/ellipse topology, directed arcs and
 explicitly open periodic views. Focused native/WASM/release qualification passes and the
 replacement Tailscale bundle is byte-verified.
+
+Human retest remains pending.
+
+Finding checkpoint `M68-F005` (2026-08-09): automatically exposing the global Problems panel
+inserted an `auto` grid row beneath the canvas. Entering an invalid solver state therefore shrank
+the viewport while a pointer gesture was still expressed in the previous screen mapping, making
+the reported failure disturb subsequent interaction. Commit `edffb8a` nests the unchanged
+accessible live region inside the position-stable canvas panel, renders it as a bounded bottom-
+left overlay and gives it no pointer interception. The workbench now has fixed header/canvas/
+status rows whether the card is hidden or visible. A direct presentation regression owns DOM
+containment, absolute positioning, removal of grid-flow declarations and pointer transparency;
+69 web tests, strict Clippy, warnings-denied WASM checking, release Trunk and seven-asset
+Tailscale byte verification pass.
 
 Human retest remains pending.
 

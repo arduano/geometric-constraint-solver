@@ -3,8 +3,8 @@
 # M68 implementation — headless Fillet direct manipulation
 
 Status: implementation, focused direct qualification and complete release qualification are
-complete on frozen candidate `a1ed6ff`. Explicit supervising-human UAT, including the `M68-F001`
-through `M68-F004` retests, remains pending; M68 is not yet accepted.
+complete on frozen candidate `edffb8a`. Explicit supervising-human UAT, including the `M68-F001`
+through `M68-F005` retests, remains pending; M68 is not yet accepted.
 
 ## 1. Files and APIs
 
@@ -26,8 +26,10 @@ schema:
   render stamps, captures/releases point/Fillet/pan pointers and exposes the same actions in a
   compact accessible panel. The canvas renders one central radius handle per selected corner and
   no endpoint contact circles; typed contact/branch data remains in the headless interface, while
-  the compact panel exposes the branch actions. Its production terminal-route and pan-admission
-  policies own only browser capture bookkeeping; they do not select geometry or branches.
+  the compact panel exposes the branch actions. Solver/computed-feature problem detail is an
+  accessible live-region card positioned inside the canvas rather than a workbench grid row. Its
+  production terminal-route and pan-admission policies own only browser capture bookkeeping; they
+  do not select geometry or branches.
 
 The ordinary editable **2D Fillet playground** now contains a friendly line-circle island away
 from a fold and a separately labelled radius-`0.5` fold stress island. Both use the ordinary
@@ -85,7 +87,7 @@ when the exact replacement would conflict with another corner in whole-document 
 
 ## 3. Commands and outcomes
 
-The implementation and its UAT repairs are split into ten reviewable source commits:
+The implementation and its UAT repairs are split into eleven reviewable source commits:
 
 - `807d2f4` — feature-domain absolute continuation, analytic rail, bounded alternatives and
   atomic configuration replacement;
@@ -106,7 +108,8 @@ The implementation and its UAT repairs are split into ten reviewable source comm
 - `f5a17b9` — canvas-only suppression of Chrome's SVG pointer-focus outline while preserving
   keyboard focus indication on the accessible action panel; and
 - `a1ed6ff` — whole-document applicability for advertised Fillet actions plus topology-based
-  preservation of complete periodic parents.
+  preservation of complete periodic parents; and
+- `edffb8a` — non-intercepting canvas problem overlay with no solver-error layout shift.
 
 The latest integrated focused gate passed in the project Nix shell:
 
@@ -160,14 +163,14 @@ The presentation-only `f5a17b9` follow-up then passed formatting, all 68 demo-we
 demo-web Clippy, warnings-denied WASM checking and release Trunk. A real Chromium pressed-state
 check reported the focused canvas action's computed `outline-style` as `none`; the selector does
 not match the accessible-panel buttons. Follow-up `a1ed6ff` passed formatting, 37 feature tests,
-170 editor unit tests, all 46 editor integration tests, 68 web tests, strict feature/editor/web
-Clippy, warnings-denied WASM checking and release Trunk.
+170 editor unit tests and all 46 editor integration tests. Presentation follow-up `edffb8a` passes
+formatting, all 69 web tests, strict web Clippy, warnings-denied WASM checking and release Trunk.
 
 The frozen release distribution is identified by:
 
 ```text
 sha256sum crates/geosolve-demo-web/dist/* | sha256sum
-e45a920c5bec48215b133d8d6b9ef26c1b4a958224c7c80cea5871b9f8166779  -
+77d071d711255c2c2385cee04d3b6820e5a0ed2dc4d8ffa501abcbab97657c79  -
 ```
 
 The focused candidate is served from that exact distribution at
@@ -198,6 +201,8 @@ Focused direct evidence now covers:
   valid outer-segment actions retained for an adjacent two-Fillet set; and
 - full circles and ellipses retained as complete native parents while arcs and explicitly open
   periodic views remain trim-capable; and
+- automatic problem presentation leaving canvas size and pointer mapping unchanged, with the
+  bounded overlay unable to intercept the gesture it reports; and
 - unchanged native sketch identity, coordinates, residuals, rank and DOF for every feature-only
   edit.
 
@@ -214,7 +219,7 @@ that approval is recorded.
 ## 5. Known limitations or next blocker
 
 The sole remaining blocker is focused human UAT of the frozen candidate, including explicit
-retest of `M68-F001` through `M68-F004`. This is a scoped active milestone, not a completion record.
+retest of `M68-F001` through `M68-F005`. This is a scoped active milestone, not a completion record.
 M68 intentionally excludes Offset/Mirror authoring,
 two-non-affine-parent Fillets, computed-on-computed chaining, Bake/Explode, profile/topology
 consumption, cross-revision topological naming, computed arcs as constraint operands, schema

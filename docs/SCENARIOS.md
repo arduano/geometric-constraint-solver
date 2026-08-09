@@ -2175,6 +2175,9 @@ milestone-owned.
 The workbench captures/releases the initiating pointer for point, Fillet and pan gestures so a
 release outside the SVG cannot strand state. A camera change cancels/restores live Fillet
 manipulation before navigation, while pan/zoom stay available during collection/inspection.
+Any automatically exposed solver/computed-feature problem detail is a bounded, non-intercepting
+overlay inside the canvas panel. Entering or leaving invalidity cannot add a workbench grid row,
+resize the viewport or change pointer-to-model mapping during the captured gesture.
 Thin Rust/WASM presentation tests own event translation, pointer capture, overlay layout,
 accessibility and browser-default suppression. No browser E2E is restored. Human interaction feel
 is accepted only through the pending `docs/M68_UAT.md` Tailscale scorecard.

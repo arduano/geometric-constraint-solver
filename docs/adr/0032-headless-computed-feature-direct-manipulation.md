@@ -165,6 +165,10 @@ Fillet manipulation first cancels and restores that gesture. Pan and zoom remain
 Fillet authoring is only collecting or being inspected. These platform mechanics do not replace
 the headless pointer-ID and exact-stamp checks.
 
+Problem detail that appears during a gesture is an accessible live-region overlay inside the
+position-stable canvas panel, not a workbench grid row. Showing or hiding it may not resize the
+viewport, alter pointer-to-model mapping or intercept the gesture whose failure it reports.
+
 ### Scope boundary
 
 M68 is a focused Fillet interaction and shared-canvas-foundation cut. It adds no Offset or Mirror

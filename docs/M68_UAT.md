@@ -6,12 +6,12 @@ Status: ready for supervising-human UAT. Implementation, focused direct qualific
 release qualification pass. M68 remains open until this scorecard receives
 explicit human approval.
 
-Candidate source: `a1ed6ff`
+Candidate source: `edffb8a`
 
 Tailscale endpoint: `http://100.94.63.83:8080/`
 
 Release distribution manifest:
-`e45a920c5bec48215b133d8d6b9ef26c1b4a958224c7c80cea5871b9f8166779`
+`77d071d711255c2c2385cee04d3b6820e5a0ed2dc4d8ffa501abcbab97657c79`
 
 Delivery check: all seven served HTTP responses match the frozen local distribution by SHA-256.
 
@@ -51,14 +51,17 @@ Notes:
    then drag its restored rail back toward radius `0.5` with slow and fast pointer sampling.
 3. Move beyond the valid range, release while invalid, then try again and return to valid samples.
 4. Cancel an active drag with Escape and by beginning a camera change.
-5. Undo/Redo and reload after both rejected and accepted attempts.
+5. While dragging, deliberately enter and leave an invalid state as the global problem card
+   appears; watch the canvas framing and geometry under the stationary pointer.
+6. Undo/Redo and reload after both rejected and accepted attempts.
 
 Expected: the exact fold is truthful and rail-less; after numeric continuation reaches regular
 same-branch geometry, its rail appears. Solid geometry then stops at the last valid result and a
 concise typed limit/reason appears. No sample silently crosses to another root. Releasing without
 a current preview, cancelling or changing the camera publishes nothing and adds no history entry.
 Valid recovery resumes from the same absolute branch. One accepted gesture is exactly one Undo
-step and survives reload.
+step and survives reload. The problem appears as a bottom-left canvas overlay: it neither resizes
+the canvas nor changes pointer-to-model mapping, and it does not intercept the active gesture.
 
 Result: Pending
 
@@ -256,6 +259,30 @@ Retest: Pending. On a three-segment polyline with both corners Filleted, select 
 confirm no middle-segment arrow is shown for a direction the solver cannot accept, while the
 outer-segment arrows still work. Fillet a line against a circle or ellipse and confirm the closed
 parent remains complete; repeat with an arc and confirm the arc remains trim-capable.
+
+### M68-F005 — global error panel resized the canvas during invalid gestures
+
+Observation: entering an invalid solver state automatically inserted the Problems panel below the
+canvas. The resulting layout shift resized the viewport relative to the held pointer and could
+make an already invalid gesture diverge further.
+
+Root cause: `.wb-problems` owned an `auto` row in the workbench grid. Toggling its `hidden` state
+therefore changed the height of the central canvas row even though problem presentation is not
+geometry state.
+
+Disposition: fixed by `edffb8a`. The same accessible assertive live region now lives inside the
+position-stable canvas panel as a bounded bottom-left overlay. It is outside grid flow and does not
+accept pointer events, so appearing, disappearing or manually toggling Problems cannot resize the
+canvas or steal a gesture.
+
+Mechanical regression: all 69 web tests pass. A focused presentation test owns canvas DOM
+containment, absolute overlay positioning, absence of grid-flow sizing and pointer transparency.
+Formatting, strict web Clippy, warnings-denied WASM checking, release Trunk and byte verification
+of all seven Tailscale assets pass.
+
+Retest: Pending. During any drag that can cross into invalid geometry, hold the pointer still as
+the global card appears and disappears. Confirm the grid/canvas framing and geometry under the
+pointer do not jump, and that the drag continues through the overlaid corner without interception.
 
 ## Approval
 
