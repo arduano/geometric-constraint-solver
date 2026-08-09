@@ -836,11 +836,6 @@ fn fillet_action_symbol(action: SceneFilletActionId) -> &'static str {
     }
 }
 
-#[cfg(test)]
-pub(crate) fn fillet_action_panel_markup(scene: &EditorScene) -> String {
-    fillet_action_panel_markup_with_stamp(scene, None)
-}
-
 pub(crate) fn fillet_action_panel_markup_with_stamp(
     scene: &EditorScene,
     fillet_action_stamp: Option<u64>,

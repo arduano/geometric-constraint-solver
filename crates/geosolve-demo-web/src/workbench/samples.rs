@@ -1150,7 +1150,8 @@ mod tests {
                 .kind,
             ComputedFilletContinuationLimitKind::BranchFold,
         );
-        let status_markup = super::super::scene::fillet_action_panel_markup(&stress_scene);
+        let status_markup =
+            super::super::scene::fillet_action_panel_markup_with_stamp(&stress_scene, None);
         assert!(status_markup.contains("data-fillet-limit=\"branch-fold\""));
         assert!(status_markup.contains("<strong>Branch fold:</strong>"));
     }

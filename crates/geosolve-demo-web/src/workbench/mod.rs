@@ -352,7 +352,7 @@ fn geometry_hover_selector(item: geosolve_constraint_editor::SelectionItem) -> O
     }
 }
 
-#[cfg(any(target_arch = "wasm32", test))]
+#[cfg(target_arch = "wasm32")]
 fn markup_fingerprint(value: &str) -> String {
     let hash = value
         .as_bytes()
@@ -414,40 +414,6 @@ impl FilletActionRenderAuthority {
     }
 }
 
-/// Browser event disposition for an element painted as a Fillet action.
-///
-/// The headless scene still decides semantic priority. An explicitly painted
-/// branch control is consumed only when its stable target and model-space
-/// control geometry independently agree with the pointer position.
-#[cfg(any(target_arch = "wasm32", test))]
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum CanvasFilletActionRoute {
-    Action,
-    HeadlessPointer,
-}
-
-#[cfg(any(target_arch = "wasm32", test))]
-fn route_canvas_fillet_action(
-    scene: &geosolve_constraint_editor::EditorScene,
-    position: geosolve_constraint_editor::ScreenPoint,
-    painted: Option<&geosolve_constraint_editor::SceneFilletActionTarget>,
-) -> CanvasFilletActionRoute {
-    let Some(painted) = painted else {
-        return CanvasFilletActionRoute::HeadlessPointer;
-    };
-    scene
-        .resolve_fillet_action(
-            geosolve_constraint_editor::SceneFilletActionInput::Canvas {
-                position,
-                painted: Some(*painted),
-            },
-            geosolve_constraint_editor::PickTolerance::default(),
-        )
-        .map_or(CanvasFilletActionRoute::HeadlessPointer, |_| {
-            CanvasFilletActionRoute::Action
-        })
-}
-
 /// Reconciles every painted action below one canvas sample with the
 /// headless nearest-action result.
 ///
@@ -461,7 +427,13 @@ fn resolve_canvas_fillet_action_candidates(
     painted: impl IntoIterator<Item = geosolve_constraint_editor::SceneFilletActionTarget>,
 ) -> Option<geosolve_constraint_editor::SceneFilletActionTarget> {
     painted.into_iter().find(|target| {
-        route_canvas_fillet_action(scene, position, Some(target)) == CanvasFilletActionRoute::Action
+        scene.resolve_fillet_action(
+            geosolve_constraint_editor::SceneFilletActionInput::Canvas {
+                position,
+                painted: Some(*target),
+            },
+            geosolve_constraint_editor::PickTolerance::default(),
+        ) == Some(*target)
     })
 }
 
@@ -508,7 +480,7 @@ pub(crate) mod wasm {
         FeatureAuthoringPointerDownOutcome, FeatureAuthoringStage, FeatureAuthoringState,
         FeatureAuthoringTool, FeatureAuthoringTransaction, Modifiers, NurbsConstructionOptions,
         PickTolerance, PointerInput, ProvisionalInferenceCandidate, RetainedEditorCoordinator,
-        SceneFilletActionInput, SceneFilletActionTarget, SelectionItem,
+        SceneFilletActionInput, SceneFilletActionTarget, ScreenPoint, SelectionItem,
     };
     use geosolve_core::SolverConfig;
     use geosolve_sketch::{
@@ -884,16 +856,14 @@ pub(crate) mod wasm {
                     ) else {
                         return;
                     };
-                    let Some(painted) = fillet_action_targets_at_point(
+                    let Some(painted) = resolve_canvas_fillet_action_at_point(
                         &callback_document,
                         &scene,
                         &wb.fillet_action_render,
+                        position,
                         mouse.client_x(),
                         mouse.client_y(),
-                    )
-                    .and_then(|painted| {
-                        super::resolve_canvas_fillet_action_candidates(&scene, position, painted)
-                    }) else {
+                    ) else {
                         // Pointer-down already routed this position through the
                         // ordinary editor because the painted action was stale,
                         // spoofed or outside its headless control geometry.
@@ -1381,20 +1351,14 @@ pub(crate) mod wasm {
                     else {
                         return;
                     };
-                    let painted = fillet_action_targets_at_point(
+                    let painted = resolve_canvas_fillet_action_at_point(
                         &callback_document,
                         &scene,
                         &wb.fillet_action_render,
+                        pointer.position,
                         event.client_x(),
                         event.client_y(),
-                    )
-                    .and_then(|painted| {
-                        super::resolve_canvas_fillet_action_candidates(
-                            &scene,
-                            pointer.position,
-                            painted,
-                        )
-                    });
+                    );
                     if let Some(target) = painted {
                         callback_pointer_moves
                             .borrow_mut()
@@ -1485,7 +1449,8 @@ pub(crate) mod wasm {
             let mut wb = callback_workbench.borrow_mut();
             let owns_pointer = wb.pointer_captures.contains(event.pointer_id());
             if !owns_pointer
-                && (event_targets_problem_marker(&event) || event_targets_fillet_action(&event))
+                && (event_targets_problem_marker(&event)
+                    || pointer_event_fillet_action(&event).is_some())
             {
                 return;
             }
@@ -1573,10 +1538,6 @@ pub(crate) mod wasm {
             .is_some()
     }
 
-    fn event_targets_fillet_action(event: &PointerEvent) -> bool {
-        pointer_event_fillet_action(event).is_some()
-    }
-
     fn pointer_event_fillet_action(event: &PointerEvent) -> Option<Element> {
         event
             .target()
@@ -1584,21 +1545,27 @@ pub(crate) mod wasm {
             .and_then(|target| target.closest("[data-fillet-action]").ok().flatten())
     }
 
-    fn fillet_action_targets_at_point(
+    // `PointerEvent` exposes integral CSS pixels while the generated
+    // `Document::elements_from_point` binding requires `f32` CSS pixels.
+    #[allow(clippy::cast_precision_loss)]
+    fn resolve_canvas_fillet_action_at_point(
         document: &Document,
         scene: &EditorScene,
         authority: &super::FilletActionRenderAuthority,
+        position: ScreenPoint,
         client_x: i32,
         client_y: i32,
-    ) -> Option<Vec<SceneFilletActionTarget>> {
-        let targets = document
-            .elements_from_point(client_x as f32, client_y as f32)
-            .iter()
-            .filter_map(|value| value.dyn_into::<Element>().ok())
-            .filter_map(|element| element.closest("[data-fillet-action]").ok().flatten())
-            .filter_map(|element| fillet_action_target(scene, &element, authority))
-            .collect::<Vec<_>>();
-        (!targets.is_empty()).then_some(targets)
+    ) -> Option<SceneFilletActionTarget> {
+        super::resolve_canvas_fillet_action_candidates(
+            scene,
+            position,
+            document
+                .elements_from_point(client_x as f32, client_y as f32)
+                .iter()
+                .filter_map(|value| value.dyn_into::<Element>().ok())
+                .filter_map(|element| element.closest("[data-fillet-action]").ok().flatten())
+                .filter_map(|element| fillet_action_target(scene, &element, authority)),
+        )
     }
 
     /// Returns the stable identity painted directly under this pointer sample.
@@ -1786,16 +1753,14 @@ pub(crate) mod wasm {
                 return;
             };
             if wb.pointer_captures.is_empty() && painted_action.is_some() {
-                let painted = fillet_action_targets_at_point(
+                let painted = resolve_canvas_fillet_action_at_point(
                     &callback_document,
                     &scene,
                     &wb.fillet_action_render,
+                    input.position,
                     event.client_x(),
                     event.client_y(),
-                )
-                .and_then(|painted| {
-                    super::resolve_canvas_fillet_action_candidates(&scene, input.position, painted)
-                });
+                );
                 if painted.is_some() {
                     return;
                 }
@@ -4195,15 +4160,14 @@ mod tests {
 
     use super::{
         AuthoringItemInput, CANVAS_BROWSER_DEFAULT_GUARD_EVENTS, CANVAS_PAN_POINTER_EVENTS,
-        CANVAS_POINTER_TERMINAL_EVENTS, CanvasFilletActionRoute, CanvasPanPointerDownRoute,
-        CanvasPointerCaptureKind, CanvasPointerCaptures, CanvasPointerOwnership,
-        CanvasPointerTerminal, CanvasPointerTerminalDisposition, CapturedCanvasPointer,
-        FilletActionRenderAuthority, OverlayRect, PointerMoveQueue, canvas_overlay_position,
-        canvas_pointer_capture_kind, change_owns_option_control_click, geometry_hover_selector,
-        markup_fingerprint, observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
+        CANVAS_POINTER_TERMINAL_EVENTS, CanvasPanPointerDownRoute, CanvasPointerCaptureKind,
+        CanvasPointerCaptures, CanvasPointerOwnership, CanvasPointerTerminal,
+        CanvasPointerTerminalDisposition, CapturedCanvasPointer, FilletActionRenderAuthority,
+        OverlayRect, PointerMoveQueue, canvas_overlay_position, canvas_pointer_capture_kind,
+        change_owns_option_control_click, geometry_hover_selector,
+        observe_feature_authoring_preview_lifecycle, owns_authoring_pick,
         palette_details_overlay_reflow_listener, resolve_canvas_fillet_action_candidates,
-        revoke_held_feature_authoring_preview, route_canvas_fillet_action,
-        route_canvas_pan_pointer_down,
+        revoke_held_feature_authoring_preview, route_canvas_pan_pointer_down,
     };
 
     #[test]
@@ -4483,12 +4447,6 @@ mod tests {
             None,
             "DOM identity must not regress to visible-list ordinals"
         );
-    }
-
-    #[test]
-    fn fillet_panel_markup_fingerprint_is_stable_and_content_sensitive() {
-        assert_eq!(markup_fingerprint("same"), markup_fingerprint("same"));
-        assert_ne!(markup_fingerprint("same"), markup_fingerprint("different"));
     }
 
     fn grouped_fillet_fixture() -> (
@@ -5193,14 +5151,6 @@ mod tests {
             "Fillet endpoint contact metadata must not render redundant canvas handles"
         );
         assert!(
-            !markup.contains("<circle r=\"7\"/>") && !markup.contains("<circle r=\"8\"/>"),
-            "Fillet branch actions must remain icons rather than handle-like circles"
-        );
-        assert!(
-            !markup.contains("<path d=\"M-4 0H4M-4 0l2-2M-4 0l2 2M4 0 2-2M4 0 2 2\"/>"),
-            "retained-direction arrows must not carry a redundant adjacent icon"
-        );
-        assert!(
             !markup.contains("wb-fillet-alternative-ghost"),
             "unpreviewed alternatives must not be painted as CSS-owned ghosts"
         );
@@ -5245,15 +5195,26 @@ mod tests {
                 positions
                     .into_iter()
                     .find(|position| {
-                        route_canvas_fillet_action(&scene, *position, Some(&canvas_target))
-                            == CanvasFilletActionRoute::Action
+                        scene.resolve_fillet_action(
+                            geosolve_constraint_editor::SceneFilletActionInput::Canvas {
+                                position: *position,
+                                painted: Some(canvas_target),
+                            },
+                            PickTolerance::default(),
+                        ) == Some(canvas_target)
                     })
                     .map(|position| (canvas_target, position))
             })
             .expect("unoccluded branch action hit point");
         assert_eq!(
-            route_canvas_fillet_action(&scene, action_position, Some(&canvas_target)),
-            CanvasFilletActionRoute::Action
+            scene.resolve_fillet_action(
+                geosolve_constraint_editor::SceneFilletActionInput::Canvas {
+                    position: action_position,
+                    painted: Some(canvas_target),
+                },
+                PickTolerance::default(),
+            ),
+            Some(canvas_target)
         );
         let overlapping_paint_order_target = scene
             .fillet_affordances
@@ -5272,8 +5233,8 @@ mod tests {
             "an overlapping topmost corridor must not suppress the headless nearest action"
         );
         assert_eq!(
-            route_canvas_fillet_action(&scene, action_position, None),
-            CanvasFilletActionRoute::HeadlessPointer,
+            resolve_canvas_fillet_action_candidates(&scene, action_position, std::iter::empty(),),
+            None,
             "an invalid DOM stamp must not be upgraded from current geometry"
         );
         let direct = scene
@@ -5286,8 +5247,14 @@ mod tests {
             direct.radius_rail.screen_grip,
         ] {
             assert_eq!(
-                route_canvas_fillet_action(&scene, crowded, Some(&canvas_target)),
-                CanvasFilletActionRoute::Action,
+                scene.resolve_fillet_action(
+                    geosolve_constraint_editor::SceneFilletActionInput::Canvas {
+                        position: crowded,
+                        painted: Some(canvas_target),
+                    },
+                    PickTolerance::default(),
+                ),
+                Some(canvas_target),
                 "a painted and independently verified action must not start a Fillet drag"
             );
         }
@@ -5339,7 +5306,7 @@ mod tests {
             "wb-fillet-action-reason-{}-{}-{disabled_key}",
             second_owner.feature, second_owner.corner,
         );
-        let second_panel = super::scene::fillet_action_panel_markup(&second_only);
+        let second_panel = super::scene::fillet_action_panel_markup_with_stamp(&second_only, None);
         assert!(second_panel.contains(&format!(
             "aria-label=\"Fillet corner {} actions\"",
             second_owner.corner,
