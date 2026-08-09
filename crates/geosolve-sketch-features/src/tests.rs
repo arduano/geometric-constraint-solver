@@ -2811,6 +2811,84 @@ fn affine_non_affine_authoring_certifies_and_persists_periodic_branch_state() {
 }
 
 #[test]
+fn full_periodic_fillet_parent_remains_complete_and_has_no_trim_direction_action() {
+    let fixture = line_circle_fixture();
+    let session = retained(fixture.document.clone());
+    let authoring = crate::ComputedFeatureAuthoringSnapshot::capture(&session).unwrap();
+    let resolved = complete(
+        authoring
+            .resolve_fillet_corner(
+                fixture.request,
+                0.75,
+                ComputedFeatureEvaluationPolicy::default(),
+                OperationControl::unlimited(),
+            )
+            .unwrap(),
+    );
+    let mut features = ComputedFeatureDocument::new(fixture.document.id());
+    let feature = features
+        .create_fillet_set("line and full circle", 0.75, vec![resolved.corner])
+        .unwrap();
+    let mut allocator = ComputedEvaluationAllocator::default();
+    let evaluated = evaluate(&session, &features, &mut allocator);
+
+    assert!(matches!(
+        evaluated
+            .feature_evaluations()
+            .iter()
+            .find(|value| value.feature == feature)
+            .unwrap()
+            .state,
+        ComputedFeatureEvaluationState::Current { .. }
+    ));
+    assert_eq!(arc_centers(&evaluated).len(), 1);
+    assert_eq!(
+        evaluated
+            .source_fragment_edges(source(fixture.line))
+            .count(),
+        1,
+        "the bounded line remains trim-capable"
+    );
+    assert_eq!(
+        evaluated
+            .source_fragment_edges(source(fixture.circle))
+            .count(),
+        0,
+        "a full periodic parent remains visually complete"
+    );
+    assert_eq!(evaluated.replaced_sources(), &[source(fixture.line)]);
+
+    let alternatives = complete(
+        authoring
+            .local_fillet_corner_alternatives(
+                resolved.corner,
+                0.75,
+                ComputedFeatureEvaluationPolicy::default(),
+                OperationControl::unlimited(),
+            )
+            .unwrap(),
+    );
+    assert!(!alternatives.iter().any(|alternative| {
+        matches!(
+            alternative.kind,
+            ComputedFilletCornerAlternativeKind::RetainedEndpoint {
+                parent: ComputedFilletParentIndex::Second,
+                ..
+            }
+        )
+    }));
+    assert!(alternatives.iter().any(|alternative| {
+        matches!(
+            alternative.kind,
+            ComputedFilletCornerAlternativeKind::RetainedEndpoint {
+                parent: ComputedFilletParentIndex::First,
+                ..
+            }
+        )
+    }));
+}
+
+#[test]
 fn two_non_affine_parents_are_typed_unsupported_without_sketch_mutation() {
     let fixture = two_circle_fixture();
     let session = retained(fixture.document.clone());

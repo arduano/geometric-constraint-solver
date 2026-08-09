@@ -337,6 +337,59 @@ fn select_computed_fillet_alternative(
     })
 }
 
+fn computed_fillet_alternative_is_current(
+    session: &RetainedSketchDocumentSession,
+    features: &ComputedFeatureDocument,
+    owner: ComputedCornerRef,
+    radius: f64,
+    current_corners: &[(ComputedFeatureCornerId, NewComputedFilletCorner)],
+    replacement: NewComputedFilletCorner,
+) -> bool {
+    let corners = current_corners
+        .iter()
+        .map(|(id, corner)| {
+            (
+                *id,
+                if *id == owner.corner {
+                    replacement
+                } else {
+                    *corner
+                },
+            )
+        })
+        .collect::<Vec<_>>();
+    let mut candidate = features.clone();
+    if candidate
+        .replace_fillet_set(owner.feature, radius, corners)
+        .is_err()
+    {
+        return false;
+    }
+    let mut allocator = ComputedEvaluationAllocator::default();
+    let Ok(outcome) = evaluate_computed_features(
+        session,
+        &candidate,
+        &mut allocator,
+        computed_feature_authoring_control(),
+    ) else {
+        return false;
+    };
+    let OperationOutcome::Completed {
+        value: evaluated, ..
+    } = outcome
+    else {
+        return false;
+    };
+    matches!(
+        evaluated
+            .feature_evaluations()
+            .iter()
+            .find(|evaluation| evaluation.feature == owner.feature)
+            .map(|evaluation| &evaluation.state),
+        Some(ComputedFeatureEvaluationState::Current { .. })
+    )
+}
+
 fn computed_fillet_retained_control_geometry(
     scene: &EditorScene,
     snapshot: &ComputedFeatureAuthoringSnapshot,
@@ -1657,76 +1710,72 @@ impl RetainedEditorCoordinator {
                 Ok(OperationOutcome::Completed { value, .. }) => value,
                 Ok(_) | Err(_) => Vec::new(),
             };
-            let unavailable = SceneFilletActionAvailability::Disabled {
-                reason: "Unavailable on the current absolute branch".into(),
-            };
-            let first_retained_control = computed_fillet_retained_control_geometry(
-                scene,
-                &snapshot,
-                &continuation,
-                ComputedFilletParentIndex::First,
-            );
-            let second_retained_control = computed_fillet_retained_control_geometry(
-                scene,
-                &snapshot,
-                &continuation,
-                ComputedFilletParentIndex::Second,
-            );
-            let mut actions = vec![
-                SceneFilletAction {
-                    id: SceneFilletActionId::ReverseFirstRetainedDirection,
-                    owner,
-                    label: "Reverse first retained direction".into(),
-                    availability: unavailable.clone(),
-                    control_geometry: first_retained_control,
-                    dashed_alternative_arc: None,
-                },
-                SceneFilletAction {
-                    id: SceneFilletActionId::ReverseSecondRetainedDirection,
-                    owner,
-                    label: "Reverse second retained direction".into(),
-                    availability: unavailable.clone(),
-                    control_geometry: second_retained_control,
-                    dashed_alternative_arc: None,
-                },
-                SceneFilletAction {
-                    id: SceneFilletActionId::ComplementaryArc,
-                    owner,
-                    label: "Use complementary arc".into(),
-                    availability: unavailable,
-                    control_geometry: None,
-                    dashed_alternative_arc: None,
-                },
-            ];
+            let current_corners = fillet
+                .corners
+                .iter()
+                .map(|corner| (corner.id, corner.without_id()))
+                .collect::<Vec<_>>();
+            let mut actions = Vec::new();
             for alternative in alternatives {
                 let Some(id) = computed_fillet_alternative_action_id(alternative.kind) else {
                     continue;
                 };
-                let control_geometry =
-                    computed_fillet_alternative_control_geometry(scene, &alternative.resolved.arc);
+                if !computed_fillet_alternative_is_current(
+                    source,
+                    features,
+                    owner,
+                    fillet.radius,
+                    &current_corners,
+                    alternative.resolved.corner,
+                ) {
+                    continue;
+                }
+                let (label, control_geometry) = match id {
+                    SceneFilletActionId::ReverseFirstRetainedDirection => (
+                        "Reverse first retained direction".into(),
+                        computed_fillet_retained_control_geometry(
+                            scene,
+                            &snapshot,
+                            &continuation,
+                            ComputedFilletParentIndex::First,
+                        ),
+                    ),
+                    SceneFilletActionId::ReverseSecondRetainedDirection => (
+                        "Reverse second retained direction".into(),
+                        computed_fillet_retained_control_geometry(
+                            scene,
+                            &snapshot,
+                            &continuation,
+                            ComputedFilletParentIndex::Second,
+                        ),
+                    ),
+                    SceneFilletActionId::ComplementaryArc => (
+                        "Use complementary arc".into(),
+                        computed_fillet_alternative_control_geometry(
+                            scene,
+                            &alternative.resolved.arc,
+                        ),
+                    ),
+                    SceneFilletActionId::LocalAlternative { first, second } => (
+                        format!("Use local side branch {first:?}/{second:?}"),
+                        computed_fillet_alternative_control_geometry(
+                            scene,
+                            &alternative.resolved.arc,
+                        ),
+                    ),
+                };
                 let polyline = scene.tessellate_computed_fillet_arc(
                     &alternative.resolved.arc,
                     chord_tolerance_pixels,
                 )?;
-                if let Some(action) = actions.iter_mut().find(|action| action.id == id) {
-                    action.availability = SceneFilletActionAvailability::Applicable;
-                    if action.control_geometry.is_none() {
-                        action.control_geometry = control_geometry;
-                    }
-                    action.dashed_alternative_arc = Some(polyline);
-                } else {
-                    let SceneFilletActionId::LocalAlternative { first, second } = id else {
-                        return Err(CoordinatorError::StaleComputedFeatureCandidate);
-                    };
-                    actions.push(SceneFilletAction {
-                        id,
-                        owner,
-                        label: format!("Use local side branch {first:?}/{second:?}"),
-                        availability: SceneFilletActionAvailability::Applicable,
-                        control_geometry,
-                        dashed_alternative_arc: Some(polyline),
-                    });
-                }
+                actions.push(SceneFilletAction {
+                    id,
+                    owner,
+                    label,
+                    availability: SceneFilletActionAvailability::Applicable,
+                    control_geometry,
+                    dashed_alternative_arc: Some(polyline),
+                });
             }
             scene.set_fillet_corner_actions(owner, actions)?;
         }
@@ -17789,6 +17838,72 @@ mod tests {
                 .all(|affordances| affordances.affected_owners == owners),
             "every shared-radius rail must disclose every corner it changes"
         );
+    }
+
+    #[test]
+    fn grouped_fillet_omits_retained_direction_actions_rejected_by_whole_composition() {
+        let mut fixture = computed_fillet_editor_fixture();
+        let candidate =
+            grouped_fillet_candidate(&fixture.coordinator, fixture.points[1..=2].iter().copied());
+        let feature = apply_grouped_fillet(&mut fixture.coordinator, &candidate);
+        let ComputedFeatureDefinition::FilletSet(fillet) = &fixture
+            .coordinator
+            .feature_document()
+            .feature(feature)
+            .expect("published grouped Fillet")
+            .definition;
+        let owners = fillet
+            .corners
+            .iter()
+            .map(|corner| ComputedCornerRef {
+                feature,
+                corner: corner.id,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(owners.len(), 2);
+
+        fixture
+            .coordinator
+            .editor_mut()
+            .set_selection([SelectionItem::Feature(feature)]);
+        let scene = current_computed_scene(&fixture.coordinator);
+        let first_actions = &scene
+            .fillet_affordances
+            .iter()
+            .find(|affordances| affordances.owner == owners[0])
+            .expect("first corner affordances")
+            .actions;
+        let second_actions = &scene
+            .fillet_affordances
+            .iter()
+            .find(|affordances| affordances.owner == owners[1])
+            .expect("second corner affordances")
+            .actions;
+
+        assert!(first_actions.iter().any(|action| {
+            action.id == SceneFilletActionId::ReverseFirstRetainedDirection
+                && matches!(
+                    action.availability,
+                    SceneFilletActionAvailability::Applicable
+                )
+        }));
+        assert!(
+            !first_actions
+                .iter()
+                .any(|action| { action.id == SceneFilletActionId::ReverseSecondRetainedDirection })
+        );
+        assert!(
+            !second_actions
+                .iter()
+                .any(|action| { action.id == SceneFilletActionId::ReverseFirstRetainedDirection })
+        );
+        assert!(second_actions.iter().any(|action| {
+            action.id == SceneFilletActionId::ReverseSecondRetainedDirection
+                && matches!(
+                    action.availability,
+                    SceneFilletActionAvailability::Applicable
+                )
+        }));
     }
 
     #[test]

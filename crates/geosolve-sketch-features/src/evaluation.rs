@@ -562,6 +562,15 @@ impl ComputedFeatureAuthoringSnapshot {
             ComputedFilletParentIndex::Second,
         ] {
             let mut candidate = base.corner;
+            let intent = match parent {
+                ComputedFilletParentIndex::First => candidate.first,
+                ComputedFilletParentIndex::Second => candidate.second,
+            };
+            if !source_topology(&self.sketch, intent.source)
+                .is_ok_and(SourceTopology::participates_in_trimming)
+            {
+                continue;
+            }
             let endpoint = flip_trim_endpoint(match parent {
                 ComputedFilletParentIndex::First => candidate.first.retained_endpoint,
                 ComputedFilletParentIndex::Second => candidate.second.retained_endpoint,
@@ -1188,6 +1197,22 @@ struct SourceTopology {
     base_interval: ComputedSourceInterval,
 }
 
+impl SourceTopology {
+    fn participates_in_trimming(self) -> bool {
+        match self.domain {
+            SourceDomain::Bounded { .. } => true,
+            SourceDomain::Periodic { period } => {
+                let full_period = ComputedSourceInterval {
+                    start: 0.0,
+                    end: period,
+                };
+                (self.base_interval.end - self.base_interval.start - period).abs()
+                    > parameter_tolerance(full_period)
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 enum SourceDomain {
     Bounded { lower: f64, upper: f64 },
@@ -1287,6 +1312,7 @@ struct EndpointClaim {
     endpoint: DocumentFilletTrimEndpoint,
     parameter: f64,
     base_interval: ComputedSourceInterval,
+    participates_in_trimming: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -1584,6 +1610,7 @@ fn evaluate_persistent_corner(
             endpoint: corner.first.retained_endpoint,
             parameter: solution.parameters[0],
             base_interval: root_parents[0].topology.base_interval,
+            participates_in_trimming: root_parents[0].topology.participates_in_trimming(),
         },
         EndpointClaim {
             owner,
@@ -1591,6 +1618,7 @@ fn evaluate_persistent_corner(
             endpoint: corner.second.retained_endpoint,
             parameter: solution.parameters[1],
             base_interval: root_parents[1].topology.base_interval,
+            participates_in_trimming: root_parents[1].topology.participates_in_trimming(),
         },
     ];
     Ok(EvaluatedCorner { owner, arc, claims })
@@ -1605,7 +1633,9 @@ fn composition_failures(
         .flat_map(|candidate| candidate.corners.iter())
     {
         for claim in corner.claims {
-            claims.entry(claim.source).or_default().push(claim);
+            if claim.participates_in_trimming {
+                claims.entry(claim.source).or_default().push(claim);
+            }
         }
     }
     let mut failures = BTreeMap::new();
@@ -1745,6 +1775,7 @@ fn compose_sources(
         .iter()
         .flat_map(|candidate| candidate.corners.iter())
         .flat_map(|corner| corner.claims)
+        .filter(|claim| claim.participates_in_trimming)
     {
         let composition = compositions
             .entry(claim.source)
@@ -4112,7 +4143,133 @@ fn same_open_polyline_adjacent_spans(
 #[cfg(test)]
 mod publication_tests {
     use super::*;
-    use geosolve_sketch::{DocumentId, PersistentId};
+    use geosolve_sketch::{
+        DocumentCurveTrimView, DocumentId, DocumentTrimBoundary, DocumentTrimParameter,
+        PersistentId, ScalarDomain, ScalarUnit,
+    };
+
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one compact topology fixture compares every relevant open/closed source class"
+    )]
+    fn trim_participation_distinguishes_closed_periodic_loops_from_open_curves() {
+        let mut sketch =
+            SketchDocument::with_id(10.0, DocumentId(PersistentId::from_u128(0x5001))).unwrap();
+        let center = sketch.add_point("center", [0.0, 0.0]).unwrap();
+        let axis = sketch.add_point("ellipse axis", [2.0, 0.0]).unwrap();
+        let radius = sketch
+            .add_scalar("radius", 2.0, ScalarUnit::Length, ScalarDomain::Positive)
+            .unwrap();
+        let arc_radius = sketch
+            .add_scalar(
+                "arc radius",
+                2.0,
+                ScalarUnit::Length,
+                ScalarDomain::Positive,
+            )
+            .unwrap();
+        let ratio = sketch
+            .add_scalar(
+                "ellipse ratio",
+                0.5,
+                ScalarUnit::Parameter,
+                ScalarDomain::Bounded {
+                    lower: f64::from_bits(1),
+                    upper: 1.0,
+                },
+            )
+            .unwrap();
+        let start_angle = sketch
+            .add_scalar("arc start", 0.0, ScalarUnit::Angle, ScalarDomain::Finite)
+            .unwrap();
+        let end_angle = sketch
+            .add_scalar(
+                "arc end",
+                std::f64::consts::PI,
+                ScalarUnit::Angle,
+                ScalarDomain::Finite,
+            )
+            .unwrap();
+        let circle = sketch
+            .add_curve("circle", CurveDefinition::Circle { center, radius })
+            .unwrap();
+        let ellipse = sketch
+            .add_curve(
+                "ellipse",
+                CurveDefinition::Ellipse {
+                    center,
+                    major_axis_point: axis,
+                    minor_axis_ratio: ratio,
+                },
+            )
+            .unwrap();
+        let arc = sketch
+            .add_curve(
+                "arc",
+                CurveDefinition::CircularArc {
+                    center,
+                    radius: arc_radius,
+                    start_angle,
+                    end_angle,
+                    sweep: DocumentArcSweep::CounterClockwise,
+                },
+            )
+            .unwrap();
+
+        for curve in [circle, ellipse] {
+            assert!(
+                !source_topology(
+                    &sketch,
+                    NativeCurveSpanSource {
+                        span: CurveSpan::line(curve),
+                    }
+                )
+                .unwrap()
+                .participates_in_trimming(),
+                "full circles and ellipses remain complete"
+            );
+        }
+        assert!(
+            source_topology(
+                &sketch,
+                NativeCurveSpanSource {
+                    span: CurveSpan::line(arc),
+                }
+            )
+            .unwrap()
+            .participates_in_trimming(),
+            "a directed arc remains trim-capable"
+        );
+
+        sketch
+            .replace_trim_views(
+                CurveSpan::line(circle),
+                vec![DocumentCurveTrimView {
+                    support: CurveSpan::line(circle),
+                    start: DocumentTrimBoundary::Fixed(DocumentTrimParameter {
+                        parameter: 0.5,
+                        winding: 0,
+                    }),
+                    end: DocumentTrimBoundary::Fixed(DocumentTrimParameter {
+                        parameter: 2.0,
+                        winding: 0,
+                    }),
+                }],
+            )
+            .unwrap();
+        assert!(
+            source_topology(
+                &sketch,
+                NativeCurveSpanSource {
+                    span: CurveSpan::line(circle),
+                }
+            )
+            .unwrap()
+            .participates_in_trimming(),
+            "an explicitly open view of periodic support remains trim-capable"
+        );
+    }
 
     #[test]
     fn independent_arc_publication_rejects_parallel_parent_tangents() {
