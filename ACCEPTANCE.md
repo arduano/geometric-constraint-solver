@@ -1220,7 +1220,29 @@ M68 is accepted only when all of the following are true:
 The 2026-08-09 close decision accepts M68-U1 through M68-U6 and resolved findings `M68-F001`
 through `M68-F005` with no new blocker recorded. It records explicit approval of frozen candidate
 `edffb8a` without inventing a separate exhaustive replay of every scripted step. M68 is closed.
-M69 remains an empty unscoped placeholder without acceptance criteria.
+## M69 acceptance: Profile and construction geometry semantics
+
+- Persistent Construction remains ordinary solver-active, constrainable curve geometry and is
+  excluded only by the existing default Profile/topology scope.
+- Atomic role authoring/conversion changes no accepted coordinates, residuals, rank, DOF or branch
+  state and records one history step for any selected curve batch.
+- Successful open-parent Fillets publish finite, contained, non-overlapping discarded complements
+  as a separate implicit-construction collection with exact native source/corner/endpoint
+  provenance. They never become effective edges, persistent entities or independent constraint
+  operands.
+- Full-period parents, failed/suppressed/conflicting features and stale/interrupted/invalid output
+  publish no discarded construction fragments.
+- An implicit-fragment hit returns the full native curve identity and picked parameter. Selection,
+  hover, role editing, Delete, constraints and dimensions therefore address that complete curve.
+- `All`, `Profile` and `Construction` scopes and explicit/implicit visibility are headless and
+  apply consistently to hover, selection, dragging, snapping and ordinary/Fillet authoring.
+  Profile wins a cross-role overlap within one CSS pixel without making Construction inaccessible.
+- Existing workspace v4 round-trips persistent roles through its canonical-v4/draft-v5 choice;
+  M69 adds no sketch, feature or workspace persistence version.
+- Focused native/WASM owners, the complete release gate and explicit supervising-human approval of
+  `docs/M69_UAT.md` pass before closure.
+
+Status: implementation and qualification are pending.
 
 M68 explicitly excludes Offset/Mirror authoring, two-non-affine-parent Fillets,
 computed-on-computed chaining, Bake/Explode, profile/topology consumption, cross-revision

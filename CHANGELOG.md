@@ -92,8 +92,8 @@ versioning and deprecation policy in `docs/API_COMPATIBILITY.md`.
   developer cards while retaining Problems,
   canvas attribution and the reusable domain APIs/tests beneath those views. M50 had already
   removed the separately routed `/#/dev/lab` application. M68 subsequently completed the ADR 0032
-  Fillet-interaction cut and received explicit supervising-human approval on 2026-08-09. M69 is an
-  empty unscoped placeholder.
+  Fillet-interaction cut and received explicit supervising-human approval on 2026-08-09. M69 is
+  now scoped under ADR 0033 for Profile/Construction semantics and is in progress.
 - Consolidated M68 close-off code and tests without changing accepted behavior: one workbench
   painted-action resolver replaces three copies, redundant routing/panel wrappers and brittle
   presentation literals are gone, and two manual radius-transition sequences are superseded by

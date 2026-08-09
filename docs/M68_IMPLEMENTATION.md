@@ -264,8 +264,9 @@ claiming a separate exhaustive replay of every scripted step.
 
 ## 5. Known limitations or next blocker
 
-No blocker remains within the explicitly approved M68 scope. M69 is an empty unscoped placeholder
-awaiting supervising-user goals. M68 intentionally excludes Offset/Mirror authoring,
+No blocker remains within the explicitly approved M68 scope. M69 was subsequently scoped under
+ADR 0033 for Profile/Construction geometry semantics; that later work does not alter M68's close
+record. M68 intentionally excludes Offset/Mirror authoring,
 two-non-affine-parent Fillets, computed-on-computed chaining, Bake/Explode, profile/topology
 consumption, cross-revision topological naming, computed arcs as constraint operands, schema
 changes, global

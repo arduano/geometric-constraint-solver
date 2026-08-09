@@ -40,8 +40,9 @@ dimension presentation. M64 completes the approved editable-sample cleanup and f
 M65 completes approved predictable, bounded projected dragging for those ordinary editable
 samples; M66 completes the approved computed-feature cut for ordinary multi-corner 2D Fillets
 outside the constraint graph; M67 completes the approved legacy-surface and frozen-harness cleanup;
-and M68 completes approved ADR 0032 Fillet direct manipulation. M69 is an empty unscoped
-placeholder. M66's superseded solver-owned ordinary-UI source is preserved at
+and M68 completes approved ADR 0032 Fillet direct manipulation. M69 is active under ADR 0033 for
+Profile/Construction authoring, selection and computed Fillet-discarded geometry semantics. M66's
+superseded solver-owned ordinary-UI source is preserved at
 `origin/archive/m66-associative-fillet-2026-08-07` (`1034afc`), while the earlier three-tool
 candidate remains preserved at `origin/archive/m66-three-helper-tools-2026-08-02` (`80d4939`).
 This deliverable does not include a solid B-rep kernel, meshing or 3D sketch curves.
@@ -3415,9 +3416,49 @@ root enumeration, browser E2E, mobile behavior and legacy UI.
 
 ### M69
 
-Status: empty unscoped placeholder awaiting supervising-user goals.
+Status: in progress. Scope and architecture were approved by the supervising user on 2026-08-09;
+implementation, qualification and focused human UAT are pending.
 
-No goal, theme, checklist, acceptance gate, scenarios or implementation is assigned yet.
+Goal: establish a clean CAD-facing semantic and interaction boundary between Profile geometry,
+user-authored explicit Construction geometry and evaluation-local implicit Construction geometry
+discarded by computed Fillets. ADR 0033 keeps the persistent role curve-scoped and solver-active,
+while every implicit fragment resolves to its full native source rather than becoming a new
+constraint-graph object.
+
+- [ ] Add atomic multi-curve role editing and role-aware geometry construction, preserving
+  Profile defaults and one history step for batch conversion.
+- [ ] Propagate roles through existing identity-retaining, copying, multi-source and source-free
+  sketch operations without changing solver equations or branch state.
+- [ ] Publish explicit roles on effective computed edges and separately publish exact bounded
+  Fillet-discarded construction complements with native-source and claim provenance.
+- [ ] Keep full-period parents whole and withhold discarded fragments for failed, suppressed,
+  conflicting, stale, interrupted, invalid or tolerance-empty output.
+- [ ] Carry persistent role, implicit-fragment provenance and point incidence through the headless
+  editor scene; implicit hits must select the complete native source and retain their parameter.
+- [ ] Add headless `All`/`Profile`/`Construction` interaction scopes, deterministic one-pixel
+  Profile overlap priority and compatibility-aware candidate resolution across hover, selection,
+  dragging, snapping and ordinary/Fillet authoring.
+- [ ] Add the CAD-style Construction authoring/conversion action, Profile/Construction tree
+  grouping, separate explicit/implicit visibility and compact canvas pick-scope controls in the
+  sole workbench.
+- [ ] Extend the ordinary Construction/reference and 2D Fillet playground samples for focused
+  direct qualification and human review without adding scenario-mode or guide state.
+- [ ] Pass focused owner tests plus formatting, warnings-denied all-feature Clippy, locked
+  workspace tests, WASM, rustdoc, benchmarks, licence/package, release Trunk, static-workbench and
+  Git-hygiene gates on one nominated source.
+- [ ] Publish and byte-verify a release Tailscale candidate and receive explicit supervising-human
+  approval of `docs/M69_UAT.md`.
+
+Gate: persistent Construction remains solver-active and default-profile-ineligible; implicit
+construction is finite derived output with exact native provenance and no independent identity;
+Profile geometry predictably wins close overlap without making either construction kind
+unselectable; every canvas path consumes the same headless scope; role and feature edits are
+transactional; the complete mechanical gate and focused human UAT pass.
+
+M69 explicitly excludes persistent point roles, canonical sketch v5, workspace migration,
+marquee/cycling/search additions, Offset/Mirror UI, computed chaining, Bake/Explode,
+computed-feature production-topology consumption, new residuals, browser E2E, mobile behavior and
+legacy UI.
 
 ## Explicit non-goals
 

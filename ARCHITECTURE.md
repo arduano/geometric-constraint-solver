@@ -51,15 +51,18 @@ construction/NURBS UAT and certified all-family visual profiles.
   pointer-capture/rendering foundation needed by them. Implementation and focused direct
   qualification, the complete release gate and focused human UAT are complete. The supervising
   human explicitly approved M68 on 2026-08-09.
-- **Next placeholder:** M69 is empty and awaits supervising-user scope. No architecture, feature,
-  acceptance gate, scenario or implementation is assigned.
+- **Current target:** M69 implements ADR 0033's Profile/Construction geometry semantics. Persistent
+  Construction remains curve-scoped and solver-active; computed Fillets publish discarded source
+  complements as evaluation-local implicit Construction with exact native provenance. Headless
+  selection scopes and role-aware authoring own the interaction policy. Implementation,
+  qualification and focused human UAT are pending.
 
 A target statement must not be exposed as an implemented capability before its milestone gate passes.
 
 `PLAN.md` owns current execution numbering. Milestone labels in the preserved M8
 completion record and in ADRs accepted before the playground rebaseline describe the
 allocation at acceptance time; their architectural decisions remain accepted, but
-current ownership is the completed M10-M68 sequence and empty M69 placeholder listed in section 15.
+current ownership is the completed M10-M68 sequence and active M69 target listed in section 15.
 
 ## 3. Crate responsibilities
 
@@ -480,6 +483,22 @@ also withheld with typed “computed geometry not yet included” status wheneve
 geometry would make it misleading. At the M66 checkpoint the workbench remained a read-only
 production-topology consumer and did not pass computed output to that companion; M67 removed that
 raw developer presentation without changing either computed-feature or topology domain behavior.
+
+M69 adds an explicit semantic layer over that composition without changing the constraint graph.
+Effective computed edges carry Profile/Construction role metadata. A successful open-parent trim
+also publishes each materially non-empty discarded start/end complement through a separate
+evaluation-local construction-fragment collection. The fragment records exact source, interval,
+base interval, owning Fillet corner and claimed endpoint; it is never an effective edge or a
+persistent feature object. Full-period parents, failed/suppressed features and noncurrent work
+publish no discarded fragment.
+
+The editor maps an implicit construction fragment back to its native `CurveSpan` and picked
+parameter. It therefore remains inspectable and constrainable through the complete native source
+without inventing a fragment identity. Persistent source role and implicit presentation origin are
+orthogonal: a source can be explicitly Construction, while a Profile source's discarded Fillet
+tail is implicitly Construction only for that computed revision. The workbench renders these
+facts and exposes headless `All`/`Profile`/`Construction` scopes; it does not infer role from CSS or
+SVG paint order.
 
 M66 advances the application workspace envelope from version 3 to version 4. It retains the
 canonical-v4/draft-v5 document encoding and current-materialization provenance, then adds the
@@ -926,4 +945,7 @@ they do not enter canonical sketch JSON, runtime lowering or audit equations.
   coordinator-owned Current-only interaction/history, thin pointer capture and a dedicated human
   Tailscale UAT. Implementation, direct/release qualification and supervising-human acceptance are
   complete as of 2026-08-09.
-- M69: empty unscoped placeholder; no goal, gate, scenario or implementation is assigned.
+- M69: active ADR 0033 Profile/Construction semantics target: atomic role authoring/conversion,
+  role-aware operation output, explicit/implicit construction scene metadata, Fillet-discarded
+  complements, shared headless pick scopes and a focused human UAT. Implementation and
+  qualification are pending.

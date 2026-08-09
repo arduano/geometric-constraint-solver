@@ -32,8 +32,9 @@ code while preserving direct domain ownership and the ordinary workbench. M68 co
 branch-preserving Fillet radius rails, typed headless contact metadata/internal continuation seam,
 explicit retention/local-alternative actions, coordinator-owned Current-only transactions and the
 pointer-capture foundation needed by those interactions. The complete mechanical/release gate
-passed and the supervising human explicitly approved M68 on 2026-08-09. M69 is an empty unscoped
-placeholder awaiting supervising-user goals.
+passed and the supervising human explicitly approved M68 on 2026-08-09. M69 is now scoped and in
+progress under ADR 0033 for persistent Profile/Construction authoring, headless role-aware
+interaction and computed Fillet-discarded implicit construction geometry.
 The workbench is a non-authoritative demo consumer, not a production UI or third solver. Mobile
 support and physics remain outside future acceptance.
 
@@ -45,7 +46,7 @@ support and physics remain outside future acceptance.
 4. `ACCEPTANCE.md`
 5. `docs/SCENARIOS.md`
 6. `REFERENCES.md`
-7. `docs/adr/0001-*.md` through `docs/adr/0032-*.md`
+7. `docs/adr/0001-*.md` through `docs/adr/0033-*.md`
 
 `PLAN.md` is the authoritative execution order. `OVERNIGHT_REPORT.md` is a historical
 M1-M4 record, not current status.
@@ -230,7 +231,8 @@ M66 implementation or UI placeholder. M66 ended in its own scoped computed-Fille
 completed the legacy-surface and qualification-harness cleanup described in `PLAN.md`, changed no
 computed-feature behavior and received focused supervising-human approval. M68 completed the ADR
 0032 Fillet direct-manipulation cut, passed its complete release gate and received explicit
-supervising-human approval on 2026-08-09. M69 remains empty and unscoped.
+supervising-human approval on 2026-08-09. M69 is active under ADR 0033; implementation,
+qualification and focused human UAT remain pending.
 
 Durable milestone and cleanup records:
 
@@ -271,6 +273,8 @@ Durable milestone and cleanup records:
 - `docs/M68_IMPLEMENTATION.md` (completed Fillet direct-manipulation implementation ledger)
 - `docs/M68_UAT.md` (approved focused scorecard and finding ledger)
 - `docs/adr/0032-headless-computed-feature-direct-manipulation.md`
+- `docs/M69_UAT.md` (pending Profile/Construction focused scorecard)
+- `docs/adr/0033-profile-and-construction-geometry-semantics.md`
 
 The workspace-wide warnings-denied Clippy blocker formerly reported at
 `crates/geosolve-linkage/src/spatial.rs:2804` was cleared during M46 and the complete

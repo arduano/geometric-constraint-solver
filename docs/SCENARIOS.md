@@ -1280,7 +1280,8 @@ for the Fillet direct-manipulation scenarios below: branch-preserving radius rai
 branch/contact/
 retention actions, Current-only interaction history, pointer capture and separate friendly/fold
 specimens. Their implementation, focused direct qualification, clean full release gate and human
-UAT are complete. M69 is an empty unscoped placeholder with no assigned scenario.
+UAT are complete. M69 reuses the ordinary Construction/reference and 2D Fillet playground leaves
+for the Profile/construction scenarios below; it adds no scenario-mode state.
 Every new
 fixture must name its exact design, parameter, external-snapshot, activation and accepted-state
 revisions. The workbench remains a desktop-only public-API consumer; no mobile scenario is
@@ -1291,6 +1292,32 @@ cancellation, presentation-adapter and topology assertions are directly automate
 owning Rust/WASM layer. Old browser E2E is not a qualification path. Human review is
 recorded at completed M40.7, M53 and M61-M68. Every newly scoped milestone from M69 onward ends in
 its own UAT after direct automated qualification.
+
+### M69-PC1 - Explicit construction remains solver-active but interaction-distinct
+
+Use one closed Profile rectangle, a Construction diagonal sharing two rectangle points and a
+separate Construction guide exactly overlapping one Profile edge. The diagonal remains constrained
+through its shared native points, while default profile analysis still sees only the closed
+rectangle. In `All` picking, the Profile edge wins the exact overlap; `Construction` scope selects
+the guide. Batch role conversion, Undo/Redo and workspace reload preserve every curve ID and change
+no accepted coordinate, branch, residual, rank or DOF.
+
+Direct tests own the role/edit/profile facts. Human review uses **Samples → Curves & constructions
+→ Construction and reference geometry** for discoverability, overlap priority, scope/visibility,
+whole-curve conversion and dashed selection presentation.
+
+### M69-PC2 - Fillet-discarded geometry is implicit construction
+
+Apply one start trim, one end trim and two opposite-end Fillets to bounded/open native supports.
+Every materially discarded source complement is finite, contained in the prior visible interval
+and published outside effective computed edges with exact source, corner and endpoint provenance.
+Failed, suppressed, conflicting and full-period parent cases publish no implicit fragment.
+
+At the editor boundary, clicking a discarded portion returns the existing native `CurveSpan` and
+its parameter. The retained and discarded occurrences highlight as one complete source; no new
+tree row, persistent ID or constraint operand appears. Human review uses **Samples → Curves &
+constructions → 2D Fillet playground** and verifies the distinct implicit dash, Profile overlap
+priority, Construction-only access and unchanged full circles/ellipses.
 
 ### M40-ES1 - Headless persistent line selection and relation action
 
