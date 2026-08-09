@@ -7,10 +7,10 @@ use geosolve_sketch::{
     DesignPointId, DocumentArcSweep, DocumentConstraintDefinition, DocumentCurveNormalSide,
     DocumentCurveTrimView, DocumentDimensionMode, DocumentEdit, DocumentError,
     DocumentFilletEndpointOrder, DocumentFilletTrimEndpoint, DocumentObjectId,
-    DocumentSolveRequest, DocumentTrimBoundary, DocumentTrimParameter, OperationControl,
-    OperationLimits, OperationOutcome, PersistentId, RetainedSketchDocumentSession, ScalarDomain,
-    ScalarUnit, SketchDocument, SolverConfig, VisualProfileOptions, VisualProfileStatus,
-    cancellation_pair,
+    DocumentSolveRequest, DocumentTrimBoundary, DocumentTrimParameter, GeometryRole,
+    OperationControl, OperationLimits, OperationOutcome, PersistentId,
+    RetainedSketchDocumentSession, ScalarDomain, ScalarUnit, SketchDocument, SolverConfig,
+    VisualProfileOptions, VisualProfileStatus, cancellation_pair,
 };
 use geosolve_sketch_ops::{
     LineEndpoint, PreparedSketchOperation, SketchOperationApplyError,
@@ -309,6 +309,9 @@ fn exact_mirror_and_linear_pattern_expand_to_ordinary_geometry() {
     let mut document = SketchDocument::new(10.0).unwrap();
     let (source, _) = line(&mut document, "source", [1.0, 0.0], [2.0, 1.0]);
     let (axis, _) = line(&mut document, "axis", [0.0, -2.0], [0.0, 2.0]);
+    document
+        .set_geometry_role(source, GeometryRole::Construction)
+        .unwrap();
     let mut session = session(document);
     let mirrored = proposed(
         &session,
@@ -322,6 +325,12 @@ fn exact_mirror_and_linear_pattern_expand_to_ordinary_geometry() {
     .unwrap();
     assert!(mirrored.published_accepted_identity().is_some());
     assert_eq!(session.design_document().curves().len(), 3);
+    assert_eq!(
+        session
+            .design_document()
+            .geometry_role(session.design_document().curves().last().unwrap().id),
+        Some(GeometryRole::Construction)
+    );
 
     let patterned = proposed(
         &session,
@@ -336,6 +345,9 @@ fn exact_mirror_and_linear_pattern_expand_to_ordinary_geometry() {
     .unwrap();
     assert!(patterned.published_accepted_identity().is_some());
     assert_eq!(session.design_document().curves().len(), 5);
+    assert!(session.design_document().curves()[3..].iter().all(|curve| {
+        session.design_document().geometry_role(curve.id) == Some(GeometryRole::Construction)
+    }));
 }
 
 #[test]
@@ -399,6 +411,9 @@ fn chamfer_uses_ordinary_contacts_dimensions_and_owned_trim_boundaries() {
             },
         )
         .unwrap();
+    document
+        .set_geometry_role(first, GeometryRole::Construction)
+        .unwrap();
     let mut session = session(document);
     let outcome = proposed(
         &session,
@@ -414,6 +429,12 @@ fn chamfer_uses_ordinary_contacts_dimensions_and_owned_trim_boundaries() {
     .unwrap();
     assert!(outcome.published_accepted_identity().is_some());
     assert_eq!(session.design_document().curves().len(), 3);
+    assert_eq!(
+        session
+            .design_document()
+            .geometry_role(session.design_document().curves()[2].id),
+        Some(GeometryRole::Construction)
+    );
     assert!(matches!(
         session
             .design_document()
@@ -458,6 +479,9 @@ fn associative_fillet_is_only_a_public_sketch_transaction_wrapper() {
             },
         )
         .unwrap();
+    document
+        .set_geometry_role(second, GeometryRole::Construction)
+        .unwrap();
     let mut session = session(document);
     let request = geosolve_sketch::CurveCurveFilletRequest {
         first: CurveFilletParentRequest {
@@ -501,6 +525,12 @@ fn associative_fillet_is_only_a_public_sketch_transaction_wrapper() {
     let outcome = proposal.apply(&mut session).unwrap();
     assert!(outcome.published_accepted_identity().is_some());
     assert_eq!(session.design_document().constraints().len(), 1);
+    assert_eq!(
+        session
+            .design_document()
+            .geometry_role(session.design_document().curves()[2].id),
+        Some(GeometryRole::Construction)
+    );
 }
 
 #[test]
@@ -527,8 +557,32 @@ fn rectangle_polygon_and_slot_macros_are_ordinary_expansions() {
             radius: 1.0,
         },
     ] {
-        let outcome = proposed(&session, request).apply(&mut session).unwrap();
+        let before = session.design_document().curves().len();
+        let prepared = SketchOperationSnapshot::capture(&session)
+            .prepare_with_geometry_role(request, GeometryRole::Construction);
+        assert_eq!(
+            prepared.source_free_geometry_role(),
+            GeometryRole::Construction
+        );
+        let outcome = prepared.execute(OperationControl::default()).unwrap();
+        let OperationOutcome::Completed { value, .. } = outcome else {
+            panic!("uncontrolled operation must complete");
+        };
+        let SketchOperationResult::Proposed(proposal) = value else {
+            panic!("proposal expected");
+        };
+        assert_eq!(
+            proposal.source_free_geometry_role(),
+            GeometryRole::Construction
+        );
+        let outcome = proposal.apply(&mut session).unwrap();
         assert!(outcome.published_accepted_identity().is_some());
+        assert!(
+            session.design_document().curves()[before..]
+                .iter()
+                .all(|curve| session.design_document().geometry_role(curve.id)
+                    == Some(GeometryRole::Construction))
+        );
     }
     assert!(session.design_document().curves().len() >= 14);
 }

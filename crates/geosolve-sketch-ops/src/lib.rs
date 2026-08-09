@@ -12,10 +12,10 @@ use geosolve_sketch::{
     ContactNeighborhood, CurveCurveFilletRequest, CurveDefinition, CurveId, CurveSpan,
     DesignPointId, DocumentArcSweep, DocumentConstraintDefinition, DocumentCurveTrimView,
     DocumentDimensionDefinition, DocumentDimensionMode, DocumentElementId, DocumentError,
-    DocumentTrimBoundary, DocumentTrimParameter, OperationCheckpoint, OperationControl,
-    OperationController, OperationOutcome, OperationWorkCounter, PreparedSketchInput,
-    RetainedDocumentTransactionOutcome, RetainedSketchDocumentSession, ScalarDomain, ScalarUnit,
-    SketchAcceptedStateIdentity, SketchDesignIdentity, SketchDocument,
+    DocumentTrimBoundary, DocumentTrimParameter, GeometryRole, OperationCheckpoint,
+    OperationControl, OperationController, OperationOutcome, OperationWorkCounter,
+    PreparedSketchInput, RetainedDocumentTransactionOutcome, RetainedSketchDocumentSession,
+    ScalarDomain, ScalarUnit, SketchAcceptedStateIdentity, SketchDesignIdentity, SketchDocument,
 };
 use thiserror::Error;
 
@@ -197,9 +197,24 @@ impl SketchOperationSnapshot {
     /// Turns this immutable snapshot into a worker-movable operation job.
     #[must_use]
     pub fn prepare(self, request: SketchOperationRequest) -> PreparedSketchOperation {
+        self.prepare_with_geometry_role(request, GeometryRole::Profile)
+    }
+
+    /// Turns this snapshot into an operation job with an explicit role for source-free output.
+    ///
+    /// The requested role applies to `Rectangle`, `RegularPolygon`, and `Slot` output. Geometry
+    /// derived from existing curves retains its source-driven role policy instead: copies inherit
+    /// their source, while multi-source output is Construction when any parent is Construction.
+    #[must_use]
+    pub fn prepare_with_geometry_role(
+        self,
+        request: SketchOperationRequest,
+        source_free_role: GeometryRole,
+    ) -> PreparedSketchOperation {
         PreparedSketchOperation {
             snapshot: self,
             request,
+            source_free_role,
         }
     }
 }
@@ -210,6 +225,7 @@ impl SketchOperationSnapshot {
 pub struct PreparedSketchOperation {
     snapshot: SketchOperationSnapshot,
     request: SketchOperationRequest,
+    source_free_role: GeometryRole,
 }
 
 impl PreparedSketchOperation {
@@ -221,6 +237,12 @@ impl PreparedSketchOperation {
     #[must_use]
     pub const fn request(&self) -> &SketchOperationRequest {
         &self.request
+    }
+
+    /// Returns the requested role for source-free output geometry.
+    #[must_use]
+    pub const fn source_free_geometry_role(&self) -> GeometryRole {
+        self.source_free_role
     }
 
     /// Executes against captured scratch state and never mutates a live session.
@@ -260,7 +282,7 @@ impl PreparedSketchOperation {
         {
             return Ok(controller.outcome_unchecked());
         }
-        let result = build_result(&self.snapshot, self.request)?;
+        let result = build_result(&self.snapshot, self.request, self.source_free_role)?;
         if controller
             .checkpoint(OperationCheckpoint::BeforeFinalValidation)
             .is_err()
@@ -348,6 +370,7 @@ pub struct SketchOperationProposal {
     input: PreparedSketchInput,
     accepted: Option<SketchAcceptedStateIdentity>,
     request: SketchOperationRequest,
+    source_free_role: GeometryRole,
     plan: PlannedOperation,
     expected: SketchOperationApplication,
 }
@@ -366,6 +389,12 @@ impl SketchOperationProposal {
     #[must_use]
     pub const fn request(&self) -> &SketchOperationRequest {
         &self.request
+    }
+
+    /// Returns the requested role for source-free output geometry.
+    #[must_use]
+    pub const fn source_free_geometry_role(&self) -> GeometryRole {
+        self.source_free_role
     }
 
     #[must_use]
@@ -515,10 +544,12 @@ enum PlannedOperation {
         origin: [f64; 2],
         width: f64,
         height: f64,
+        role: GeometryRole,
     },
     Polygon {
         label: String,
         points: Vec<[f64; 2]>,
+        role: GeometryRole,
     },
     Slot(SlotPlan),
     Pattern {
@@ -551,12 +582,14 @@ struct SlotPlan {
     first_center: [f64; 2],
     second_center: [f64; 2],
     radius: f64,
+    role: GeometryRole,
 }
 
 #[allow(clippy::too_many_lines)]
 fn build_result(
     snapshot: &SketchOperationSnapshot,
     request: SketchOperationRequest,
+    source_free_role: GeometryRole,
 ) -> Result<SketchOperationResult, SketchOperationError> {
     let kind = request.kind();
     let (plan, accepted) = match &request {
@@ -854,6 +887,7 @@ fn build_result(
                     origin: *origin,
                     width: *width,
                     height: *height,
+                    role: source_free_role,
                 },
                 None,
             )
@@ -888,6 +922,7 @@ fn build_result(
                 PlannedOperation::Polygon {
                     label: label.clone(),
                     points,
+                    role: source_free_role,
                 },
                 None,
             )
@@ -913,6 +948,7 @@ fn build_result(
                     first_center: *first_center,
                     second_center: *second_center,
                     radius: *radius,
+                    role: source_free_role,
                 }),
                 None,
             )
@@ -976,6 +1012,7 @@ fn build_result(
             input: snapshot.input,
             accepted,
             request,
+            source_free_role,
             plan,
             expected,
         },
@@ -1099,12 +1136,17 @@ impl PlannedOperation {
                 origin,
                 width,
                 height,
+                role,
             } => {
-                document.add_rectangle(label, *origin, *width, *height)?;
+                document.add_rectangle_with_role(label, *origin, *width, *height, *role)?;
                 (SketchOperationKind::Rectangle, Vec::new())
             }
-            Self::Polygon { label, points } => {
-                apply_polygon(document, label, points)?;
+            Self::Polygon {
+                label,
+                points,
+                role,
+            } => {
+                apply_polygon(document, label, points, *role)?;
                 (SketchOperationKind::RegularPolygon, Vec::new())
             }
             Self::Slot(plan) => {
@@ -1158,6 +1200,7 @@ fn apply_polygon(
     document: &mut SketchDocument,
     label: &str,
     positions: &[[f64; 2]],
+    role: GeometryRole,
 ) -> Result<(), DocumentError> {
     let points = positions
         .iter()
@@ -1168,13 +1211,14 @@ fn apply_polygon(
         .collect::<Result<Vec<_>, _>>()?;
     for index in 0..points.len() {
         let next = (index + 1) % points.len();
-        document.add_curve(
+        document.add_curve_with_role(
             format!("{label}.edge_{}", index + 1),
             CurveDefinition::Line {
                 start: points[index],
                 end: points[next],
                 branch_direction: direction(positions[index], positions[next])?,
             },
+            role,
         )?;
     }
     Ok(())
@@ -1185,6 +1229,14 @@ fn apply_chamfer(
     document: &mut SketchDocument,
     plan: &ChamferPlan,
 ) -> Result<Vec<SketchOperationIdentityChange>, DocumentError> {
+    let role = if [plan.first.curve, plan.second.curve]
+        .into_iter()
+        .any(|curve| document.geometry_role(curve) == Some(GeometryRole::Construction))
+    {
+        GeometryRole::Construction
+    } else {
+        GeometryRole::Profile
+    };
     let first_point = document.add_point(
         format!("{}.first_endpoint", plan.label),
         plan.first_position,
@@ -1193,13 +1245,14 @@ fn apply_chamfer(
         format!("{}.second_endpoint", plan.label),
         plan.second_position,
     )?;
-    let chamfer = document.add_curve(
+    let chamfer = document.add_curve_with_role(
         format!("{}.edge", plan.label),
         CurveDefinition::Line {
             start: first_point,
             end: second_point,
             branch_direction: direction(plan.first_position, plan.second_position)?,
         },
+        role,
     )?;
     let first_contact = document.add_curve_contact(
         format!("{}.first_contact", plan.label),
@@ -1341,21 +1394,23 @@ fn apply_slot(document: &mut SketchDocument, plan: &SlotPlan) -> Result<(), Docu
         document.add_point(format!("{}.bottom_second", plan.label), bottom_second)?,
         document.add_point(format!("{}.bottom_first", plan.label), bottom_first)?,
     ];
-    document.add_curve(
+    document.add_curve_with_role(
         format!("{}.top", plan.label),
         CurveDefinition::Line {
             start: boundary_points[0],
             end: boundary_points[1],
             branch_direction: axis,
         },
+        plan.role,
     )?;
-    document.add_curve(
+    document.add_curve_with_role(
         format!("{}.bottom", plan.label),
         CurveDefinition::Line {
             start: boundary_points[2],
             end: boundary_points[3],
             branch_direction: [-axis[0], -axis[1]],
         },
+        plan.role,
     )?;
     let right = add_slot_arc(
         document,
@@ -1365,6 +1420,7 @@ fn apply_slot(document: &mut SketchDocument, plan: &SlotPlan) -> Result<(), Docu
         normal[1].atan2(normal[0]),
         (-normal[1]).atan2(-normal[0]),
         DocumentArcSweep::Clockwise,
+        plan.role,
     )?;
     let left = add_slot_arc(
         document,
@@ -1374,6 +1430,7 @@ fn apply_slot(document: &mut SketchDocument, plan: &SlotPlan) -> Result<(), Docu
         (-normal[1]).atan2(-normal[0]),
         normal[1].atan2(normal[0]),
         DocumentArcSweep::Clockwise,
+        plan.role,
     )?;
     for (index, (point, curve, parameter, neighborhood)) in [
         (boundary_points[1], right, 0.0, ContactNeighborhood::Start),
@@ -1407,6 +1464,7 @@ fn apply_slot(document: &mut SketchDocument, plan: &SlotPlan) -> Result<(), Docu
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn add_slot_arc(
     document: &mut SketchDocument,
     label: &str,
@@ -1415,6 +1473,7 @@ fn add_slot_arc(
     start: f64,
     end: f64,
     sweep: DocumentArcSweep,
+    role: GeometryRole,
 ) -> Result<CurveId, DocumentError> {
     let radius = document.add_scalar(
         format!("{label}.radius"),
@@ -1434,7 +1493,7 @@ fn add_slot_arc(
         ScalarUnit::Angle,
         ScalarDomain::Finite,
     )?;
-    document.add_curve(
+    document.add_curve_with_role(
         format!("{label}.arc"),
         CurveDefinition::CircularArc {
             center,
@@ -1443,6 +1502,7 @@ fn add_slot_arc(
             end_angle,
             sweep,
         },
+        role,
     )
 }
 
@@ -1452,6 +1512,9 @@ fn copy_point_defined_curve(
     source: CurveId,
     offset: [f64; 2],
 ) -> Result<CurveId, DocumentError> {
+    let role = document
+        .geometry_role(source)
+        .ok_or_else(|| unknown_curve(source))?;
     let definition = document
         .curve(source)
         .ok_or_else(|| unknown_curve(source))?
@@ -1480,7 +1543,7 @@ fn copy_point_defined_curve(
         })
         .collect::<Result<Vec<_>, _>>()?;
     let copied_definition = remap_point_defined_curve(&definition, &copied)?;
-    document.add_curve(format!("{label}.curve"), copied_definition)
+    document.add_curve_with_role(format!("{label}.curve"), copied_definition, role)
 }
 
 fn remap_point_defined_curve(
