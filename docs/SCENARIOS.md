@@ -2072,7 +2072,8 @@ displacement perpendicular to a frozen rail changes no radius, while radial disp
 invariant to coarse/fine event sampling and viewport scale.
 
 Status: mechanically implemented and directly qualified in `geosolve-sketch-features` and
-`geosolve-constraint-editor`; full release qualification and human UAT remain pending.
+`geosolve-constraint-editor`; clean release qualification is complete and explicit human UAT
+remains pending.
 
 ### M68-DM2 - Fold stop and bounded explicit alternatives
 
@@ -2087,8 +2088,8 @@ absolute replacement corner; a tied choice reports ambiguity. Hover/focus change
 intent, and click/activation commits only the named preview. No test asks for global root
 enumeration.
 
-Status: mechanically implemented and directly feature/editor-qualified; full release
-qualification and human UAT remain pending.
+Status: mechanically implemented and directly feature/editor-qualified; clean release
+qualification is complete and explicit human UAT remains pending.
 
 ### M68-DM3 - Current-only interaction transition model
 
@@ -2107,7 +2108,7 @@ numeric editing obey the same transition oracle.
 Status: mechanically implemented and directly qualified. The bounded reference model enumerates
 28 reachable states and all 240 applicable transitions, including invalid samples, delayed or
 duplicate acknowledgements, foreign pointers, same-position retry and terminal-coordinate
-validation. Full release qualification and human UAT remain pending.
+validation. Clean release qualification is complete and explicit human UAT remains pending.
 
 ### M68-DM4 - Shared action resolution and crowded priority
 
@@ -2121,8 +2122,8 @@ Canvas actions and the compact accessible panel expose identical stable IDs, lab
 applicability, disabled reasons, attribution and affected corners. A shared-radius action visibly
 identifies every affected arc. Hovering a ghost alternative never commits it.
 
-Status: mechanically implemented and directly editor/presentation-qualified; full release
-qualification and human UAT remain pending.
+Status: mechanically implemented and directly editor/presentation-qualified; clean release
+qualification is complete and explicit human UAT remains pending.
 
 ### M68-DM5 - Atomic history, persistence and sketch invariance
 
@@ -2136,8 +2137,8 @@ accepted identity, coordinates, residual vectors, numerical rank and DOF bit-for
 existing exact public contract. They remain unchanged. `M66-PF001` through `M66-PF004` and
 M27/M28/M30/M58 compatibility remain mandatory.
 
-Status: mechanically implemented and directly feature/coordinator/persistence-qualified; full
-release qualification and human UAT remain pending.
+Status: mechanically implemented and directly feature/coordinator/persistence-qualified; clean
+release qualification is complete and explicit human UAT remains pending.
 
 ### M68-DM6 - Friendly and fold specimens with captured pointers
 
@@ -2155,8 +2156,28 @@ Thin Rust/WASM presentation tests own event translation, pointer capture, overla
 accessibility and browser-default suppression. No browser E2E is restored. Human interaction feel
 is accepted only through the pending `docs/M68_UAT.md` Tailscale scorecard.
 
-Status: mechanically implemented and directly presentation-qualified; clean release publication
-and explicit human UAT remain pending.
+Status: mechanically implemented and directly presentation-qualified; clean release qualification
+is complete, and the distribution is published and byte-verified through Tailscale. Explicit human
+UAT remains pending.
+
+### M68-DM7 - Affine source edits preserve grouped-Fillet manipulation
+
+Create a four-point/three-span polyline and one shared-radius `FilletSet` over both adjacent
+corners. Publish an initial radius change, then move the first and last native source points far
+enough that at least one valid contact leaves the narrow neighbourhood of its persisted pre-edit
+parameter. Reselect the feature, expose both radius rails and publish a second grouped-radius
+change through the ordinary projected pointer transaction.
+
+Both computed corners remain `Current`, both rails are finite and no false continuation/fold
+status appears. The radius change creates one history step, preserves feature/corner IDs and
+leaves the accepted post-source-edit sketch identity, coordinates/JSON, residuals, rank and DOF
+unchanged. Affine/affine evaluation and continuation use the same complete certified cells;
+line-curve cases retain bounded seed-local root protection and the true-fold fixtures remain
+rail-less.
+
+Status: mechanically implemented and directly qualified by the `M68-F001` feature/editor
+regressions on `c82d420`; clean release qualification passes and explicit human retest remains
+pending.
 
 ### Archived solver-owned M66 scenario record
 

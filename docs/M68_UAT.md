@@ -2,16 +2,18 @@
 
 # M68 focused UAT — Fillet direct manipulation
 
-Status: ready for supervising-human UAT. Implementation, focused direct qualification and the
-complete clean release gate pass. M68 remains open until this scorecard receives explicit human
-approval.
+Status: ready for supervising-human UAT. Implementation and focused direct qualification are
+complete, and the clean release gate passes. M68 remains open until this scorecard receives
+explicit human approval.
 
-Candidate source: `b01e583`
+Candidate source: `c82d420`
 
 Tailscale endpoint: `http://100.94.63.83:8080/`
 
 Release distribution manifest:
-`36447a722f4ffd83a6e18530a9cc783efc72ba7be90680f6878d015d9d6cb81a`
+`def06be806f0d1d7465fb8102ed0ef5138eae1689298fe9140b5315f588d725b`
+
+Delivery check: all seven served HTTP responses match the frozen local distribution by SHA-256.
 
 Use only the ordinary GeoSolve Sketch Workbench. Direct Rust tests are the correctness authority;
 this scorecard assesses discoverability, continuity and interaction feel. It does not qualify an
@@ -136,9 +138,30 @@ Notes:
 
 ## Finding ledger
 
-No M68 human finding has been recorded yet. Add each finding here with a stable ID, reproduction,
-root cause, disposition, mechanical regression and explicit retest status; do not silently edit an
-Expected statement to hide a failure.
+### M68-F001 — false radius-rail branch fold after native source edits
+
+Reproduction: draw a four-point/three-segment polyline, apply Fillets to both corners, adjust a
+Fillet, move several source points and then try to adjust a Fillet again. The arcs remain visibly
+valid, but the frozen `b01e583` candidate can reject the radius gesture with “the Fillet radius
+rail is ill-conditioned at a branch fold.”
+
+Root cause: valid affine/affine feature evaluation used the complete unique line-intersection
+domain after source edits, while continuation reconstructed the radius rail only within ±12.5%
+of stale pre-edit parent-contact parameters. A moved valid contact outside that artificial window
+was mislabeled as an ill-conditioned fold.
+
+Disposition: fixed by `c82d420`. Evaluation and continuation now share one current-branch domain
+policy. Affine/affine supports search their complete certified cells; any non-affine parent keeps
+the prior seed-local guard, and genuine fold/near-parallel sensitivity checks are unchanged.
+
+Mechanical regression: feature, editor-unit, editor-integration and demo-web suites pass. Direct
+tests cover two regular grouped Fillets after large source-point drags, finite rails without a
+continuation status, radius preview/publication, one history step, stable IDs and unchanged native
+sketch identity, coordinates, residuals, rank and DOF. The full release gate passes on `c82d420`,
+and the replacement frozen distribution is byte-verified at the Tailscale endpoint.
+
+Retest: Pending. Repeat the reproduction on the candidate and confirm both Fillets remain
+adjustable after moving the polyline points.
 
 ## Approval
 

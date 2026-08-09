@@ -3212,7 +3212,8 @@ UAT approval. That approval is recorded above and M67 is closed.
 ### M68
 
 Status: active. Implementation, focused direct qualification and the clean full release gate are
-complete on frozen candidate `b01e583`; explicit supervising-human UAT remains pending.
+complete on frozen candidate `c82d420`; explicit supervising-human UAT, including the
+`M68-F001` retest, remains pending.
 
 Goal: close accepted limitation `M66-KL001` with a CAD-like, branch-preserving direct-
 manipulation model for ordinary computed Fillets, while establishing only the shared canvas
@@ -3259,27 +3260,40 @@ explicit branch action; pointer motion and numeric editing never auto-switch roo
 - [x] Pass formatting, warnings-denied Clippy, locked all-feature workspace tests, all-feature
   WASM, rustdoc, benchmark/licence/package checks, release Trunk build, static single-workbench
   inventory and Git hygiene on one nominated source.
-- [ ] Publish that release candidate through Tailscale and receive explicit supervising-human
-  approval of `docs/M68_UAT.md`.
+- [x] Publish the frozen release candidate through Tailscale and byte-verify every served release
+  asset against the local distribution.
+- [ ] Receive explicit supervising-human approval of `docs/M68_UAT.md`.
 
 Implementation checkpoint (2026-08-08): `807d2f4` implements the feature-domain continuation,
 rail, bounded alternatives and atomic configuration replacement; `0954e97` implements the thin
 workbench affordances, accessible actions, exact render stamps, friendly/fold specimens and
 pointer capture; and `240a174` completes the headless Current-only radius/contact transaction
-model and its stale/invalid/foreign-pointer hardening. Focused Nix qualification passes 34
-feature tests, 168 editor unit tests, 46 editor integration tests and 68 demo-web tests, with
+model and its stale/invalid/foreign-pointer hardening. Focused Nix qualification passes 35
+feature tests, 169 editor unit tests, 46 editor integration tests and 68 demo-web tests, with
 formatting, strict native/WASM Clippy and warnings-denied WASM checking. The bounded coordinator
 reference model enumerates 28 reachable states and all 240 applicable state/event transitions,
 including same-position retry and terminal-coordinate validation.
 
 Mechanical qualification record (2026-08-09): the complete clean
-`nix-shell shell.nix --run './scripts/release-gate.sh'` passes from source `b01e583`, including
+`nix-shell shell.nix --run './scripts/release-gate.sh'` passes from source `c82d420`, including
 formatting, warnings-denied workspace Clippy, locked all-feature tests, all-feature WASM, rustdoc,
 benchmarks, licence/package checks, the static single-workbench inventory, Git hygiene and release
-Trunk. The release-only 256-moving-body spatial sparse-crossover regression passes in `137.41s`.
+Trunk. The release-only 256-moving-body spatial sparse-crossover regression passes in `117.13s`.
 The frozen `crates/geosolve-demo-web/dist/*` aggregate SHA-256 manifest is
-`36447a722f4ffd83a6e18530a9cc783efc72ba7be90680f6878d015d9d6cb81a`. Only explicit human
-approval of the frozen Tailscale candidate remains unchecked.
+`def06be806f0d1d7465fb8102ed0ef5138eae1689298fe9140b5315f588d725b`. Only explicit human
+approval of the frozen Tailscale candidate remains unchecked. The static distribution is served
+at `http://100.94.63.83:8080/`; all seven HTTP responses match their local release files by
+SHA-256.
+
+Finding checkpoint `M68-F001` (2026-08-09): after large native point edits, valid affine/affine
+Fillets reevaluated over their complete unique-intersection cells, but radius-rail continuation
+incorrectly searched only a narrow neighbourhood around stale pre-edit contact parameters and
+reported a false branch fold. Commit `c82d420` gives evaluation and continuation one shared
+current-branch domain policy: two affine supports use their complete certified cells, while every
+non-affine case retains the bounded seed-local guard. Direct feature/editor regressions prove two
+grouped Fillets remain Current and adjustable after large source-point drags, retain stable IDs,
+publish one history step and leave native sketch identity, coordinates, residuals, rank and DOF
+unchanged. Independent review found no blocker; human retest remains pending.
 
 Gate: radius, contact, retention and local-branch manipulation are branch-explicit, independently
 validated and transactional at the headless boundary. Only an exact last-`Current` candidate may

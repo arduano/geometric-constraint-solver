@@ -3,8 +3,8 @@
 # M68 implementation — headless Fillet direct manipulation
 
 Status: implementation, focused direct qualification and the clean full release gate are complete
-on frozen candidate `b01e583`. Explicit supervising-human UAT remains pending; M68 is not yet
-accepted.
+on frozen candidate `c82d420`. Explicit supervising-human UAT, including the `M68-F001` retest,
+remains pending; M68 is not yet accepted.
 
 ## 1. Files and APIs
 
@@ -56,6 +56,13 @@ Only an explicit contact, retained-direction or bounded local alternative action
 absolute corner intent. One successful action publishes radius and any replacement corner intent
 atomically in one feature revision/history step.
 
+After a native-source edit, static evaluation and continuation now derive their search domains
+through one `current_branch_root_parents` policy. Two affine supports retain their complete
+certified cells because fixed-side transverse lines have one unique offset intersection; a case
+with any non-affine parent retains the narrow persisted-seed neighbourhood that prevents remote
+root hops. This keeps a valid moved line-line Fillet adjustable without weakening real fold,
+near-parallel or curved-parent branch protection.
+
 Ordinary pointer continuation deliberately withholds a rail at an exact fold. An explicit numeric
 edit may leave that fold only after independently validating the exact affine/non-affine origin,
 then resolving the target inside the persisted seed-connected branch cell. An absent, tied or
@@ -68,25 +75,28 @@ priority semantics, residual catalog and M27/M28 advanced Fillet APIs are unchan
 
 ## 3. Commands and outcomes
 
-The implementation is split into three reviewable source commits:
+The implementation and its first UAT repair are split into four reviewable source commits:
 
 - `807d2f4` — feature-domain absolute continuation, analytic rail, bounded alternatives and
   atomic configuration replacement;
 - `0954e97` — workbench affordances, accessible actions, exact render stamps, friendly/fold
-  specimens and point/Fillet/pan pointer capture; and
+  specimens and point/Fillet/pan pointer capture;
 - `240a174` — coordinator/editor Current-only radius/contact transactions, exact terminal-sample
-  checks and stale/invalid/foreign-pointer hardening.
+  checks and stale/invalid/foreign-pointer hardening; and
+- `c82d420` — shared affine-source re-anchoring for evaluation and continuation plus the
+  `M68-F001` feature/editor regressions.
 
 The latest integrated focused gate passed in the project Nix shell:
 
 ```text
 nix-shell shell.nix --run 'cargo fmt --all -- --check &&
-  cargo test --locked -p geosolve-constraint-editor -p geosolve-demo-web --all-features &&
+  cargo test --locked -p geosolve-sketch-features -p geosolve-constraint-editor \
+    -p geosolve-demo-web --all-features &&
   cargo clippy --locked -p geosolve-constraint-editor -p geosolve-demo-web \
     --all-targets --all-features -- -D warnings'
 ```
 
-Recorded direct results are 34/34 `geosolve-sketch-features` tests, 168/168 editor unit tests,
+Recorded direct results are 35/35 `geosolve-sketch-features` tests, 169/169 editor unit tests,
 17/17 M55 integration tests, 14/14 `m66_feature_authoring` tests, 15/15
 `m66_feature_authoring_matrix` tests (46/46 editor integration tests in total) and 68/68 demo-web
 tests. Formatting and strict native Clippy passed. After the final editor transition fix, the
@@ -105,7 +115,11 @@ terminal-coordinate matching, stale acknowledgements, foreign pointers and cance
 audit verified exact-once release ownership, outside-canvas terminal delivery, non-stealing pan,
 and camera/workspace cancellation ordering.
 
-The complete clean gate then passed from source `b01e583`:
+An additional independent review of `M68-F001` found no blocker: the repair aligns only the
+affine/affine reevaluation and continuation domains, while genuine fold conditioning and every
+non-affine seed-local guard remain unchanged.
+
+The complete clean gate then passed from source `c82d420`:
 
 ```text
 nix-shell shell.nix --run './scripts/release-gate.sh'
@@ -114,18 +128,19 @@ nix-shell shell.nix --run './scripts/release-gate.sh'
 The command exited successfully after formatting, warnings-denied workspace Clippy, locked
 all-feature tests, all-feature WASM, rustdoc, benchmark, licence/package, static single-workbench,
 Git-hygiene and release Trunk checks. The release-only 256-moving-body spatial sparse-crossover
-regression passed in `137.41s`. Cargo's repeated `license` plus `license-file` advisory is
+regression passed in `117.13s`. Cargo's repeated `license` plus `license-file` advisory is
 pre-existing and non-blocking; the explicit licence gate passed.
 
 The frozen release distribution is identified by:
 
 ```text
 sha256sum crates/geosolve-demo-web/dist/* | sha256sum
-36447a722f4ffd83a6e18530a9cc783efc72ba7be90680f6878d015d9d6cb81a  -
+def06be806f0d1d7465fb8102ed0ef5138eae1689298fe9140b5315f588d725b  -
 ```
 
 The focused candidate is served from that exact distribution at
-`http://100.94.63.83:8080/` for `docs/M68_UAT.md`.
+`http://100.94.63.83:8080/` for `docs/M68_UAT.md`. All seven served HTTP responses match their
+local release files by SHA-256.
 
 ## 4. Acceptance criteria
 
@@ -140,7 +155,8 @@ Focused direct evidence now covers:
 - identical Current-only semantics for authoring, published dragging and numeric editing;
 - pointer capture/release and camera-cancel event translation in the thin workbench adapter;
 - persistence, Undo/Redo/reload and the complete `M66-PF001` through `M66-PF004` regression set;
-  and
+- large native source-point edits followed by grouped-Fillet rail exposure, preview and
+  publication without a false fold; and
 - unchanged native sketch identity, coordinates, residuals, rank and DOF for every feature-only
   edit.
 
@@ -156,8 +172,9 @@ that approval is recorded.
 
 ## 5. Known limitations or next blocker
 
-The sole remaining blocker is focused human UAT of the frozen candidate. This is a scoped active
-milestone, not a completion record. M68 intentionally excludes Offset/Mirror authoring,
+The sole remaining blocker is focused human UAT of the frozen candidate, including explicit
+retest of `M68-F001`. This is a scoped active milestone, not a completion record. M68 intentionally
+excludes Offset/Mirror authoring,
 two-non-affine-parent
 Fillets, computed-on-computed chaining, Bake/Explode, profile/topology consumption,
 cross-revision topological naming, computed arcs as constraint operands, schema changes, global
