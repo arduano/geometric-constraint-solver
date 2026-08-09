@@ -75,6 +75,10 @@ fn geometry_role_batches_reject_empty_unknown_duplicate_and_conflicting_input_at
 }
 
 #[test]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one atomic role-edit sequence compares exact solve and branch evidence through apply, Undo and Redo"
+)]
 fn retained_batch_role_edit_is_one_history_step_and_changes_no_geometry_or_branch_state() {
     let mut document = SketchDocument::new(10.0).unwrap();
     let first = line(
