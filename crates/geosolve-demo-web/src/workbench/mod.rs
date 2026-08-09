@@ -4378,6 +4378,9 @@ mod tests {
         assert!(css.contains(".wb-fillet-action.previewed .wb-fillet-retained-direction"));
         assert!(css.contains(".wb-fillet-action-hit"));
         assert!(css.contains("stroke-width: 24"));
+        assert!(css.contains(
+            ".wb-fillet-action[data-fillet-action-input=\"canvas\"]:focus { outline: none; }"
+        ));
         let scene_source = include_str!("scene.rs");
         assert!(scene_source.contains("fill=\\\"context-stroke\\\""));
         for browser_owned_selector in [".wb-fillet-action:hover", ".wb-fillet-action:focus"] {

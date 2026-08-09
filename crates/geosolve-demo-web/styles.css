@@ -555,6 +555,7 @@ body { min-height: 100vh; margin: 0; background: #0d1215; }
   cursor: ew-resize;
 }
 .wb-fillet-action { cursor: pointer; }
+.wb-fillet-action[data-fillet-action-input="canvas"]:focus { outline: none; }
 .wb-fillet-action.disabled {
   opacity: 0.35;
   pointer-events: none;
